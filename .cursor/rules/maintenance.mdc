@@ -1,0 +1,469 @@
+---
+description: Pre/post implementation, refactors, deletion. Apply for features or refactors.
+alwaysApply: false
+---
+
+# Maintenance & Cleanup
+
+Rules for keeping a codebase healthy over time. Code rots if left alone. These routines ensure every project stays clean, up-to-date, and free of legacy debt - whether maintained by a solo developer or a large team.
+
+> All numeric values (cadences, percentages, durations) in this file are `[DEFAULT]` - adjust to your team's rhythm and project size.
+
+---
+
+## The Rule
+
+**Every codebase has regular maintenance, just like a car has oil changes. It should be scheduled, not ad-hoc.**
+
+---
+
+## Adding New Functionality
+
+When adding a new feature, follow this exact checklist BEFORE writing any code:
+
+### Pre-Implementation Checklist
+
+**Principle:** Before writing any code for a new feature or change, verify that the foundation is solid - understand the existing patterns, check for reusable pieces, and plan the integration.
+
+[REFERENCE] Pre-implementation checklist:
+
+```
+1. LOCATE where it belongs
+   - Which folder in the project structure? (see project-structure.md)
+   - Which existing files does it touch?
+   - Does a similar pattern already exist in the codebase? (reuse it)
+
+2. PLAN the interfaces
+   - What are the inputs and outputs?
+   - What types/interfaces are needed?
+   - What API endpoints (if any)?
+   - What database changes (if any)?
+
+3. CHECK for reuse
+   - Does a utility/helper already exist for part of this? (use it, don't duplicate)
+   - Does this belong in an existing service file or need a new one?
+   - Can an existing component be extended or does it need a new one?
+
+4. WRITE layers in sequence
+   a. Types/interfaces first
+   b. Database model/migration (if needed)
+   c. Business logic (services/lib)
+   d. API handler (if needed)
+   e. UI component (if needed)
+   f. Tests per `testing.md`: SHOULD add/update when a harness exists; otherwise only when the user asks
+```
+
+### After-Implementation Checklist
+
+```
+After the feature works:
+
+- [ ] Follows naming conventions (naming.md) - no non-idiomatic abbreviations, descriptive names
+- [ ] Follows code patterns (code-patterns.md) - correct anatomy for functions/components/handlers
+- [ ] Follows formatting (code-formatting.md) - linter passes, imports ordered
+- [ ] No duplicate logic - fix in task scope; **ask user before** extracting shared utilities outside scope
+- [ ] No hardcoded values - magic numbers extracted to constants, URLs from env
+- [ ] Error handling complete - all failure paths handled with user-friendly messages
+- [ ] Loading states - every async operation has loading/error/success states in UI
+- [ ] Types are correct - no `any` without justification
+- [ ] Tests per `testing.md`: SHOULD add/update when a harness exists; otherwise only when the user asks
+- [ ] Documentation updated - JSDoc on exported functions; README if behavior changed; docs/ if setup/env/architecture changed (see documentation.md)
+```
+
+---
+
+## Modifying Existing Functionality
+
+### Rules
+
+```
+1. UNDERSTAND before changing
+   - Read the existing code thoroughly
+   - Understand WHY it was written this way (check git blame, commit messages, comments)
+   - Identify all callers / consumers of what you're changing
+   - Search for the function/component name across the entire codebase
+
+2. MODIFY with discipline
+   - Change the minimum necessary to achieve the goal
+   - Don't "improve" unrelated code in the same change (separate PR)
+   - If renaming within stated scope, update all callers in the same change
+   - If rename/export blast radius exceeds task scope -> **ask user first**
+   - If changing a function signature, update all callers in the same commit (or ask if scope is unclear)
+   - Duplicate logic elsewhere -> fix task scope; **ask before** cross-file extract/refactor
+
+3. VERIFY after changing
+   - Run type checker (tsc --noEmit, mypy, etc.)
+   - Run all tests (not just the ones you think are relevant)
+   - Manually verify the specific flows that use this code
+   - Check that nothing else broke (run full test suite)
+```
+
+---
+
+## Removing Old / Legacy Code
+
+### When to Remove
+
+- Feature is no longer used (confirmed by stakeholder / documented decision)
+- Code is dead (no callers, no references, no imports)
+- Dependency is deprecated and replaced
+- Temporary workaround / hack whose issue is now fixed
+- Feature flag that's been 100% enabled for a full release cycle (remove the flag, keep the code). Kill-switch flags for critical features may stay longer.
+- A/B test that's been decided (remove the losing variant)
+
+### Removal Checklist
+
+```
+1. CONFIRM it's truly unused
+   - Search the ENTIRE codebase for references (function name, class name, file imports)
+   - Search for string references (API paths, route names, event names)
+   - Check if it's used dynamically (string interpolation building function names)
+   - Check if external systems call it (other services, cron jobs, webhooks)
+   - Check if it's referenced in configuration files, env vars, or documentation
+
+2. REMOVE completely
+   - Delete the code file (or remove the specific function/component)
+   - Delete associated tests
+   - Delete associated types/interfaces (if only used by the removed code)
+   - Remove from exports / barrel files (index.ts)
+   - Remove from route registrations
+   - Remove from navigation menus
+   - Remove unused imports in files that referenced it
+   - Remove unused dependencies (npm packages, pip packages) if this was the only consumer
+
+3. VERIFY nothing broke
+   - Run type checker - catches missing imports/references
+   - Run linter - catches unused imports
+   - Run all tests - catches broken functionality
+   - Build the project - catches compilation errors
+   - Do a quick smoke test of related features
+
+4. DOCUMENT the removal
+   - Commit message explains WHY it was removed (not just "removed old code")
+   - Update CHANGELOG.md
+   - Update any documentation that referenced the removed feature
+```
+
+### Rules
+
+- **Never comment out code** as a way to "remove" it - delete it. Git has the history.
+- **Remove in a dedicated PR** - don't mix removal with new feature work
+- **Keep removals focused** - a cleanup PR can batch related removals, but don't mix removals with new features in the same PR
+- **If unsure, add a deprecation warning first** - log a warning for 2 weeks, then remove if no hits
+
+---
+
+## Regular Cleanup Routines
+
+### Weekly (Every Developer)
+
+```
+During normal development, catch and fix these when you encounter them:
+
+- [ ] Unused imports in files you're editing (don't go hunting, but fix what you see)
+- [ ] Console.log / print statements left from debugging
+- [ ] Commented-out code (delete it)
+- [ ] TODO comments without an issue number (either create an issue or delete the TODO if it's no longer relevant)
+- [ ] Any `// eslint-disable` or `# noqa` that no longer needs to be there
+```
+
+### Monthly (or on a regular cadence that fits your team)
+
+**Agents:** Apply cleanup when touching a related area; **ask user first** before running broad scheduled audits (monthly/quarterly lists below) outside the stated task.
+
+```
+Schedule dedicated time regularly for codebase hygiene:
+
+1. DEPENDENCY AUDIT
+   - Run vulnerability scanner (npm audit, pip audit, etc.)
+   - Update patch versions (x.x.PATCH) - these should be safe
+   - Review minor version updates (x.MINOR.x) - check changelogs
+   - Plan major version updates (MAJOR.x.x) - schedule as a dedicated task
+
+2. DEAD CODE SCAN
+   - Run dead code detection tool (ts-prune, vulture, etc.)
+   - Review results - delete confirmed dead code
+   - Investigate ambiguous results (might be used dynamically)
+
+   DEAD FILE scan (separate from dead code - checks whole files, not just functions):
+   a. Search for files/directories whose names indicate lifecycle status rather than purpose
+      (apply the test from naming.md § Banned Filename Suffixes).
+      Any match is a deletion candidate unless there is a documented expiry date in the file.
+   b. Find source files with zero imports (and no entry point - not a route, script, or cron job).
+   c. Find .md / .txt files outside docs/ and rules/ - likely scratch notes that were accidentally committed.
+   d. Find route/config files that are not reachable from any navigation entry or entry point.
+   See `project-structure.md` § Dead File Policy for the full checklist.
+
+3. TYPE SAFETY CHECK
+   - Run strict type checker across the project
+   - Fix any new type errors introduced by dependency updates
+   - Replace any `any` types that now have proper types available
+
+4. TEST HEALTH
+   - Check for flaky tests (tests that sometimes pass, sometimes fail) - fix or delete
+   - Check test coverage report - are new files being tested?
+   - Delete tests for removed features (orphan tests)
+
+5. PERFORMANCE REVIEW
+   - Check for N+1 queries (database call inside a loop)
+   - Check for missing database indexes on frequently queried fields
+   - Check for large bundle sizes (frontend) - are there unused imports increasing build size?
+   - Check API response times - any new slow endpoints?
+```
+
+### Quarterly (or at a cadence that fits your project's release cycle)
+
+```
+Schedule a dedicated cleanup session periodically:
+
+1. DEPENDENCY MAJOR UPDATES
+   - Update to latest major versions of key dependencies
+   - Run full test suite after each major update
+   - Update code that uses deprecated APIs
+
+2. ARCHITECTURE REVIEW
+   - Are files in the right folders? (project structure still correct?)
+   - Are there files that have grown past their size limits? (see code-formatting.md for tiered limits by file type)
+   - Are there patterns that should be extracted into shared utilities?
+   - Is there duplicated logic across multiple files?
+
+3. DOCUMENTATION REFRESH
+   - Does README still match product behavior? (domain rules, flows, limits)
+   - Does docs/setup.md still work on a fresh machine?
+   - Are API docs current? (do they match the actual endpoints?)
+   - Are ADRs up to date? (any new decisions that need recording?)
+
+4. SECURITY AUDIT
+   - Review authentication flows
+   - Check that all endpoints have proper auth + permission checks
+   - Review rate limiting configuration
+   - Check for exposed secrets in code or configs
+   - Review CORS and CSP headers
+```
+
+---
+
+## Dependency Management
+
+### Adding a New Dependency
+
+```
+Before adding ANY new package/library:
+
+1. IS IT NECESSARY?
+   - Is the functionality simple enough to implement in-house? (consider effort vs. maintenance cost of a dependency - not just line count)
+   - Is the functionality already covered by an existing dependency?
+   - Is the library maintained? (check: last commit date, open issues, download count)
+
+2. EVALUATE THE LIBRARY
+   - License compatible with your project?
+   - Bundle size acceptable? (for frontend: check bundlephobia.com)
+   - Does it have TypeScript types? (for TS projects)
+   - Is it popular enough to trust? (avoid obscure packages with 10 downloads/week)
+   - Check for known vulnerabilities
+
+3. ADD CORRECTLY
+   - Install the latest stable version (not beta/alpha for production)
+   - Add to correct dependency type (dependencies vs devDependencies)
+   - Lock the version (package-lock.json / yarn.lock committed)
+   - Document WHY it was added (in commit message, not just "added axios")
+```
+
+### Removing a Dependency
+
+```
+1. Search entire codebase for imports from the package
+2. Remove all usages
+3. Uninstall the package (npm uninstall, pip uninstall, etc.)
+4. Remove from lock file (happens automatically with uninstall)
+5. Build and test
+6. Commit with message explaining what replaced it (if anything)
+```
+
+### Updating Dependencies
+
+```
+Patch updates (1.2.x):
+  - Safe to auto-update. Run tests to verify.
+
+Minor updates (1.x.0):
+  - Usually safe. Check changelog for new features. Run tests.
+
+Major updates (x.0.0):
+  - NEVER auto-update. Read migration guide. Plan as a task.
+  - Update in a dedicated branch and PR.
+  - Test thoroughly - breaking changes are expected.
+```
+
+---
+
+## Technical Debt Rules
+
+### Identifying Debt
+
+**Principle:** Technical debt is anything that slows down future development. Identify it by category so you can prioritize what to fix.
+
+[REFERENCE] Common categories of technical debt:
+
+- Duplicated logic (copy-pasted instead of shared)
+- Missing types (using type escape hatches or no types)
+- Missing tests (working code but untested)
+- Hardcoded values (magic numbers, inline URLs)
+- Outdated patterns (old way of doing things, before a better pattern was established)
+- Over-engineering (abstraction nobody uses, premature optimization)
+- Missing error handling (happy path only)
+- Missing loading/error states in UI
+
+### Tracking Debt
+
+```
+1. Create an issue for every known debt item
+2. Tag it: "tech-debt"
+3. Prioritize: critical (causes bugs) -> high (slows development) -> low (cosmetic)
+4. Allocate regular time to debt reduction (don't let it stack indefinitely)
+5. Review and address debt items periodically - the cadence depends on your project's pace
+```
+
+### Fixing Debt
+
+```
+Rules:
+  - Fix debt in SEPARATE PRs from feature work (easier to review, revert, and track)
+  - Each debt PR does ONE thing (rename, extract utility, add types, add tests)
+  - Verify all tests pass after each debt fix
+  - Update the debt tracking issue when fixed
+```
+
+---
+
+## Code Consistency Enforcement
+
+### How to Ensure Every Developer Produces Identical Code
+
+```
+1. AUTOMATED ENFORCEMENT (catches 80% of issues)
+   - Linter configured with project rules (ESLint, Ruff, etc.)
+   - Formatter auto-runs on save and pre-commit (Prettier, Black, etc.)
+   - Type checker in CI (tsc --noEmit, mypy --strict)
+   - Import order enforced by linter rule
+   - File length limits enforced by linter rule
+   - Naming convention checked by linter rule (where available)
+
+2. PR REVIEW CHECKLIST (catches the other 20%)
+   Every PR reviewer checks:
+   - [ ] Function anatomy follows the pattern (guards -> logic -> return)
+   - [ ] Component anatomy follows the pattern (hooks -> handlers -> early returns -> render)
+   - [ ] API handler follows the 7-step pattern
+   - [ ] No non-idiomatic abbreviations in names (see naming.md)
+   - [ ] No magic numbers (all extracted to constants)
+   - [ ] No duplicate logic (uses existing utilities)
+   - [ ] Error handling is complete (not just happy path)
+   - [ ] Types are explicit on exported functions
+   - [ ] Tests exist for new logic
+   - [ ] No console.log or debug artifacts
+
+3. NEW CONTRIBUTOR SETUP (prevents issues from day 1)
+   - New developer reads rules/ folder before writing any code
+   - First PR is reviewed against the full checklist (teaching moment)
+   - Pair on the second PR if first had many pattern violations
+   - After 3 PRs following the patterns, developer is autonomous
+
+4. PERIODIC ALIGNMENT (prevents drift over time)
+   - Monthly: spot-check 3 random files from each developer for pattern compliance
+   - If patterns are drifting: team discussion about which pattern to follow
+   - Update rules/ if the team agrees on a better pattern (don't just drift - decide and document)
+```
+
+---
+
+## Refactoring Rules
+
+### When to Refactor
+
+- Before adding a new feature to a messy area (clean first, then build)
+- When you see the same code copied in 3+ places (extract to shared utility)
+- When a file exceeds size limits (split into smaller modules)
+- When a function exceeds 50 lines (see code-formatting.md - consider extracting helper functions)
+- When tests are hard to write (usually means the code is too tightly coupled)
+
+### When NOT to Refactor
+
+- During a production hotfix (fix the bug, refactor later)
+- When you don't have tests for the area (add tests first, then refactor)
+- When the code is about to be replaced (don't polish what you're deleting)
+- When it's purely stylistic and the current code works fine (don't churn for no value)
+
+### Refactoring Checklist
+
+```
+1. Ensure tests exist for the code being refactored (add them first if they don't)
+2. Make the change in small, verifiable steps
+3. Run tests after EACH step (not just at the end)
+4. Don't change behavior - refactoring means same inputs -> same outputs
+5. If behavior needs to change, that's a separate PR (refactor first, then change behavior)
+6. Update all callers in the same PR (don't leave broken references)
+7. Commit message starts with "refactor:" and explains WHY
+```
+
+---
+
+## Migration Patterns
+
+### Database Migrations
+
+```
+When changing the database schema:
+
+1. Create a migration file (never edit the model directly for deployed databases)
+2. Migration has UP (apply change) and DOWN (revert change)
+3. Test migration on a copy of production data
+4. Migrations are backward-compatible:
+   - Adding a field: give it a default value (old code doesn't set it, should still work)
+   - Renaming a field: add new field, copy data, deploy code that uses new field, then remove old field (TWO deployments)
+   - Removing a field: deploy code that stops using it first, then remove the field (TWO deployments)
+5. Never delete data in a migration without a backup plan
+```
+
+### API Migrations
+
+```
+When changing an API endpoint:
+
+1. Add the new endpoint/behavior alongside the old one
+2. Update consumers (frontend, mobile, external clients) to use the new endpoint
+3. Monitor: confirm old endpoint traffic drops to zero
+4. Remove old endpoint (with deprecation notice period for external consumers)
+5. Never break existing clients without a versioned migration path
+```
+
+---
+
+## Summary: The Maintenance Calendar
+
+```
+EVERY COMMIT:
+  - Linter passes
+  - Type checker passes
+  - Tests pass
+  - No console.log or debug code
+
+EVERY PR:
+  - Reviewed against pattern checklist
+  - No new tech debt without tracking issue
+  - Documentation updated if behavior changed
+
+WEEKLY (during normal work):
+  - Clean up what you encounter (unused imports, old TODOs, commented code)
+
+REGULARLY (at a cadence that fits your team):
+  - Dependency vulnerability scan
+  - Dead code scan
+  - Test health check
+  - Performance review
+
+PERIODICALLY (less frequently - e.g. quarterly):
+  - Major dependency updates
+  - Architecture review
+  - Documentation refresh
+  - Security audit
+```

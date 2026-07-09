@@ -1,0 +1,163 @@
+---
+description: README vs docs/, setup, ADRs. Apply for docs changes.
+alwaysApply: true
+---
+
+# Documentation
+
+How every project documents **what the product does** (README) vs **how to work on it** (docs/).
+
+---
+
+## The Rule
+
+**README.md is the living domain specification.** It tells developers, stakeholders, and AI agents the business rules, flows, limits, and conditionals - in plain language with visuals where logic branches.
+
+**docs/ is everything operational.** Setup, onboarding, env vars, architecture, ADRs, and API reference live there - not in README.
+
+---
+
+## README vs docs/
+
+| Location | Purpose | Audience |
+|----------|---------|----------|
+| `README.md` | Domain rules, state machines, limits, user-visible behavior | Devs, stakeholders, AI agents |
+| `docs/` | Onboarding, install, env, scripts, repo map, ADRs, API docs | Devs joining the project |
+
+README **MUST** include a short **Documentation** section that links to relevant `docs/` files (at minimum `docs/setup.md` when it exists).
+
+---
+
+## When to Create or Update
+
+### Create README
+
+- **Wait** until the project has at least one real, user-visible feature or domain entity - no skeleton README on empty scaffolds.
+- **The README MUST be exhaustive from day one** for whatever features exist. Do not write brief summaries. Document every edge case, limit, state machine, and conditional.
+
+### Update README
+
+- **MUST** update when behavior users or clients will observe changes - flows, limits, states, permissions, validation, UX conditionals.
+- Infer rules from code and document them; do not leave gaps because something was not explicitly specified in the task.
+- If setup, env, or repo layout changes -> update `docs/`, not README (except the Documentation links section).
+
+### Update docs/
+
+- New/changed env vars -> update `docs/setup.md` and `.env.example`.
+- Architectural decisions -> add or update ADR in `docs/`.
+- API shape changes -> update API doc in `docs/`.
+
+---
+
+## README Style
+
+**Principle:** Less technical, still precise. Dense structure beats long paragraphs.
+
+### DO
+
+- **Be Exhaustive:** Document every corner of the domain. If a feature exists in code, its business rules must exist in the README.
+- Numbered sections grouped by domain or surface (e.g. catalog, storefront, admin, auth).
+- Bullet lists with **bold labels** and *Conditional:* / **Rule:** / **Limit:** prefixes where helpful.
+- Markdown **tables** for steps, roles, statuses, and numeric limits.
+- **Mermaid** when logic branches, states, or multi-actor timing matter:
+  - `flowchart` - decision cascades, gate checks
+  - `stateDiagram` - lifecycles and side effects
+  - `sequenceDiagram` - escalation, auth, multi-party flows
+- **ASCII diagrams** when Mermaid is unavailable or overkill for simple projects.
+- One opening line stating what the document covers.
+
+### DON'T
+
+- **No high-level summaries.** Do not gloss over details. If there is a validation rule, rate limit, or specific state transition, it must be documented.
+- **No fenced code blocks** in README unless the user explicitly asks for them.
+- No install commands, env lists, or script invocations - those belong in `docs/setup.md`.
+- No scratch notes, TODO dumps, or UI inventories - use `docs/` or a PM tool.
+- No lengthy prose paragraphs when a table or bullet list works.
+
+### Section guide (adapt - keep it simple)
+
+```
+1. Title + one-line scope
+2. Documentation - links to docs/ (setup, architecture, API, ADRs)
+3. Numbered domain sections - entities, flows, limits, admin rules
+   └── visuals only where they clarify branching or state
+```
+
+Skip sections that do not apply. CLI tools might have fewer surfaces; still document commands-as-behavior in domain terms, not shell snippets in README.
+
+---
+
+## docs/ Style & Standards
+
+**Principle:** Operational docs must be enriched, copy-pasteable, and exhaustive. Treat `docs/` with the same rigor and density as the domain README.
+
+### Layout `[DEFAULT]`
+
+```
+docs/
+├── setup.md                 # Clone, install, env, run, test, deploy
+├── architecture.md          # Optional - stack, folders, key boundaries
+├── engineering-handbook.md  # Optional - cross-cutting implementation patterns this codebase actually uses
+├── go-live.md               # Optional - first-launch runbook (see devops.md)
+├── api.md                   # Human API overview; MUST link to contracts/openapi.yaml when multi-client
+└── adr/                     # Optional - architecture decision records
+```
+
+When the repo has **multiple API clients** (web + admin, etc.), `contracts/openapi.yaml` is REQUIRED (`api-design.md` § OpenAPI Contract). `docs/api.md` summarizes domains and points to the spec - do not duplicate every path by hand.
+
+Create files as needed. README links only to files that exist.
+
+### Engineering Handbook (Optional but Recommended for Maturing Projects)
+
+The universal rulebook (`rules/` / `vibeCodingRules`) says HOW to build in general. A project's `docs/engineering-handbook.md` records **how THIS codebase actually implements those rules** - the concrete, reusable patterns a contributor must follow to match existing code. Create it once a project has settled patterns worth not re-deriving.
+
+**What it captures (project-specific, with file references):**
+
+- The exact API-handler sequence used here (auth helper, CSRF helper, rate-limit wrapper, response helpers, cache-bust calls) - name the real functions.
+- The caching pattern in use (which data is request-memoized, which is in the cross-request cache, which tags exist, where invalidation lives).
+- The client/server package boundary (which entry is client-safe, what lives server-only).
+- Money/stock/offer transaction patterns (if commerce - see `ecommerce.md`), with the real utilities.
+- Shared building blocks contributors must reuse instead of re-writing (response helpers, validators, serializers, skeleton primitives).
+
+**What it does NOT do:** restate universal rules verbatim. It points at them and shows the local implementation. Keep it in sync - when a pattern changes in code, update the handbook in the same change.
+
+### Rules-Alignment Audit
+
+A project should periodically check that its code and docs still match the universal rulebook AND that proven local patterns flow back upstream. Record the result (a `docs/rules-audit.md` or an ADR), not just a passing thought.
+
+- **Audit direction 1 - project follows rules:** walk the routing matrix; for each applicable rule file, confirm the code complies or log the gap with a fix owner.
+- **Audit direction 2 - rules learn from project:** when the project proves a cross-cutting pattern not yet in the rulebook (or better than it), promote it to `vibeCodingRules` via `cursor-sync.md` (edit root `*.md` -> mirror `.mdc` -> copy to projects). This very file's caching/commerce/skeleton sections came from such a promotion.
+- **Output is a checklist with status** (aligned / gap / promote-upstream), dated, so the next audit can diff against it.
+
+### DO
+
+- **Be Exhaustive:** Do not skip steps. Assume the reader knows nothing about the specific project.
+- **setup.md:** Must be a complete, zero-to-hero onboarding guide.
+  - Include exact prerequisites with versions (Node, Python, Docker, etc.).
+  - Provide copy-pasteable terminal commands for every step (clone, install, build, run).
+  - Use Markdown tables for Environment Variables (`Variable Name` | `Required?` | `Purpose` | `Where to get it`).
+  - Include a "Common Issues / Troubleshooting" section for known setup traps.
+- **architecture.md:** Use Mermaid diagrams (`graph` or `architecture`) to show system boundaries, database connections, and third-party integrations.
+- **Code Blocks:** Use fenced code blocks with the correct language tag (`bash`, `json`, `yaml`) for all commands and config snippets.
+
+### DON'T
+
+- No vague instructions like "set up your database" without the exact commands or scripts needed.
+- No missing environment variables. Every variable in `.env.example` must be documented in `setup.md`.
+
+---
+
+## Accuracy
+
+- Document behavior **from the codebase** when implementing or reviewing - treat README as derived from source of truth in code.
+- When code and README disagree after a change, **update README in the same task**.
+- Quarterly check: domain rules in README match product behavior; setup steps in `docs/setup.md` work on a fresh machine.
+
+---
+
+## Agents
+
+- Behavior-changing task -> check whether README domain sections need updates before finishing.
+- Setup/env-only task -> update `docs/` and `.env.example`; touch README only if Documentation links need new files.
+- User asks for README work -> follow this file's style; use Ibrahim Mobiles `README.md` as the reference tone and density, not as a mandatory section list.
+- Do **not** create or rewrite README/docs unless the task warrants it (see When to Create or Update) or the user asks.

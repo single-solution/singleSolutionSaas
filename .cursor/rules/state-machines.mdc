@@ -1,0 +1,288 @@
+---
+description: Status lifecycles. Apply for multi-state workflows.
+alwaysApply: false
+---
+
+# State Machines & Workflows
+
+Coding patterns for entities that move through a lifecycle of states. IF your project represents entity lifecycle using a `"status"` field (stateful records, not only a boolean), apply these patterns.
+
+All numeric values in this file are [DEFAULT] - adjust per project.
+
+---
+
+## When You Need a State Machine
+
+If ANY of these are true, you need explicit state management:
+
+- An entity has a `status` field with more than 2 values
+- Certain actions are only valid in certain states (can't activate a draft that hasn't been reviewed)
+- Status transitions trigger side effects (log transition, emit event, trigger webhook)
+- Multiple actors can change the status (user, admin, system/cron)
+- You need an audit trail of status changes
+
+---
+
+## State Machine Structure
+
+```
+Every state machine defines:
+  1. States         - all possible values the entity can be in
+  2. Transitions    - which state can move to which state
+  3. Guards         - conditions that must be true for a transition to happen
+  4. Actions        - side effects that run when a transition occurs
+  5. Actors         - who is allowed to trigger each transition
+```
+
+**MUST** reject illegal transitions in one place (service/guard) - not only in UI. UI may hide actions; API must enforce.
+
+### Example: Entity Lifecycle
+
+```
+States:
+  draft -> pending_review -> approved -> active -> archived
+  (any non-terminal state) -> rejected
+  (any non-terminal state) -> cancelled
+
+Transitions:
+  draft            -> pending_review  (actor: editor)      action: log transition, emit event
+  pending_review   -> approved         (actor: reviewer)    action: log transition, trigger webhook
+  pending_review   -> rejected         (actor: reviewer)    action: log transition, record outcome on related records
+  approved         -> active           (actor: admin)       action: log transition, emit event
+  active           -> archived         (actor: admin/system) action: log transition, close related resources
+  draft            -> cancelled        (actor: editor)      guard: not yet active
+  pending_review   -> cancelled        (actor: editor)      guard: not yet active
+  approved         -> cancelled        (actor: admin)       guard: not yet active
+```
+
+---
+
+## Implementation Pattern
+
+### Define States as Constants
+
+```
+Every possible state is defined in ONE place - never scattered across the codebase.
+
+ENTITY_STATES = {
+  DRAFT: "draft",
+  PENDING: "pending",
+  ACTIVE: "active",
+  IN_PROGRESS: "in_progress",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+  // ... add states specific to your entity
+}
+```
+
+### Define Allowed Transitions
+
+```
+ALLOWED_TRANSITIONS = {
+  draft:        ["pending", "cancelled"],
+  pending:      ["active", "cancelled"],
+  active:       ["in_progress", "cancelled"],
+  in_progress:  ["completed", "cancelled"],
+  completed:    [],        // terminal state
+  cancelled:    [],        // terminal state
+  // Each state maps to an array of states it can transition TO
+}
+```
+
+### Transition Function
+
+```
+function transitionEntity(entity, newStatus, actor):
+  1. Validate current state allows this transition
+     -> if not: throw "Cannot move from {current} to {newStatus}"
+
+  2. Validate actor has permission for this transition
+     -> if not: throw "You are not authorized to perform this action"
+
+  3. Run guards (business rules)
+     -> e.g., "Cannot cancel in current state"
+     -> if guard fails: throw a specific, actionable error
+
+  4. Update status in database
+     -> use transaction if multiple writes needed
+
+  5. Log the transition (audit trail)
+     -> { entity, from, to, actor, timestamp, reason }
+
+  6. Run side effects
+     -> emit event, invoke webhook, update related entities
+     -> side effects are async and don't block the response
+
+  7. Return updated entity
+```
+
+### Rules
+
+- **Single source of truth** for allowed transitions - one file, one map
+- **Transition function is the primary way** to change status in application code. Exception: migrations, support admin tools, and emergency recovery scripts may update status directly with audit logging.
+- **Validate at the database level too** - enum constraint on the status field
+- **Every transition is logged** - who changed what, from what state, to what state, when, why
+- **Side effects happen AFTER successful save** - don't trigger outbound callbacks then fail to save
+- **Terminal states are final by default** - once archived/cancelled/rejected, no more transitions unless your domain explicitly defines a "reopen" flow (see Common Transition Patterns)
+- **Guards prevent invalid transitions** even if the code allows them - business rules enforced server-side
+
+---
+
+## Audit Trail
+
+### Status History Schema
+
+```
+{
+  entityType: "<YourEntity>",
+  entityId: "entity-123",
+  fromStatus: "pending",
+  toStatus: "active",
+  actor: {
+    userId: "user-456",
+    role: "admin",
+    name: "Actor Name"
+  },
+  reason: "Approved after review",  // optional
+  metadata: { ... },                // optional context
+  timestamp: "2024-01-15T10:30:00Z"
+}
+```
+
+### Rules
+
+- **Append-only** - avoid editing or deleting status history records. Exception: GDPR erasure requests and PII redaction may require removal/anonymization.
+- **Every transition creates a history record** - high-frequency state churn (real-time counters, ranking changes) may batch/aggregate history instead of per-event logging.
+- **Include actor identity** - who triggered this change (user, system, cron job)
+- **Include reason** for manual transitions (admin adding a note)
+- **Queryable** - "show me all status changes for entity X" is a common need
+- **Displayable** - consider exposing a timeline/activity log of status changes if useful to users
+
+---
+
+## UI Patterns for Status
+
+### Status Badge
+
+```
+Every status has:
+  - Label: human-readable text ("Draft", "In Review", "Active")
+  - Color: semantic color from design system
+  - Icon: optional icon (clock for pending, check for completed)
+
+Color mapping (semantic):
+  Draft / Pending    -> gray or blue (neutral, waiting)
+  Active / In Progress -> blue or purple (ongoing)
+  Approved / Success -> green (positive outcome)
+  Completed / Done   -> green (final positive)
+  Needs Attention    -> amber/orange (action required)
+  Cancelled / Failed -> red (negative outcome)
+  Resolved / Closed  -> gray (no further action)
+```
+
+### Status Timeline
+
+```
+Show the full journey of an entity:
+
+  [x] Draft                  Jan 10, 10:00 AM    Created by John
+  [x] In Review              Jan 10, 10:05 AM    Submitted for review
+  [x] Approved               Jan 10, 10:07 AM    Reviewer signed off
+  [x] Active                 Jan 11, 09:00 AM    Published by admin
+  [ ] Archived               (expected Jan 12)
+  [ ] Closed
+
+  [x] = completed step    [ ] = upcoming step
+```
+
+### Available Actions Based on State
+
+```
+Only show buttons/actions that are valid for the current state:
+
+  Status: Draft
+    [Submit for Review]  [Discard Draft]     <- shown
+
+  Status: In Review
+    [Approve]  [Reject]                     <- shown
+    [Discard Draft]                          <- hidden (can't discard after submission)
+
+  Status: Active
+    [Archive]                                <- shown
+    (no other actions)                       <- nothing else applicable
+```
+
+**Rule**: Prefer hiding or disabling buttons for invalid transitions. In distributed systems, race conditions may still cause errors after render - handle gracefully with a retry or refresh.
+
+---
+
+## Common Transition Patterns
+
+These patterns appear in many domains - use them as starting templates:
+
+```
+Linear:     draft -> pending -> active -> completed
+Branching:  submitted -> approved | rejected (resubmit -> submitted)
+Cyclical:   active -> suspended -> active (admin toggle)
+Scheduled:  approved -> scheduled -> active (at trigger time)
+```
+
+**Rules for designing your states:**
+- Start from a draft/initial state
+- End at one or more terminal states (no transitions out)
+- Allow cancellation from non-terminal states
+- Consider "reopen" flows (terminal -> initial) if your domain needs them
+
+---
+
+## Concurrency & Race Conditions
+
+```
+Problem: Two admins click "Approve" at the same time
+
+Solution: Optimistic locking
+  1. Read entity with its current version/timestamp
+  2. Check transition is valid
+  3. Update with WHERE clause: status = expectedCurrentStatus AND version = expectedVersion
+  4. If 0 rows affected -> someone else changed it -> return conflict error (409)
+  5. Retry or show "This item was updated by someone else. Please refresh."
+```
+
+**Rules:**
+- **Use optimistic locking** for status transitions on entities that multiple users can modify. Pessimistic locking is preferred for dependent resources where correctness trumps throughput.
+- **Include a WHERE on current status** in UPDATE queries for transitions - prevents race conditions. Bulk remediation scripts under maintenance windows may use broader predicates.
+- **Return 409 Conflict** when a race condition is detected
+- **Show user-facing text** - "This record was just updated. Please refresh to see the latest status."
+
+---
+
+## Scheduled / Automatic Transitions
+
+```
+Some transitions happen automatically:
+  - Pending review -> expired (after 14 days without reviewer action)
+  - Active -> archived (after 14 days inactivity per config)
+  - Draft -> cancelled (after 30 minutes idle timeout per config)
+  - Session -> expired (after 24 hours of inactivity)
+
+Implementation:
+  - Cron job / scheduled task that runs periodically
+  - Queries for entities in a state past their deadline
+  - Transitions them using the same transition function (not direct DB update)
+  - Logged as actor: "system" in the audit trail
+```
+
+---
+
+## Rules Summary
+
+1. **All states defined in one place** - single source of truth
+2. **All transitions defined in one map** - no ad-hoc status updates in application code (migrations and emergency admin tools may update directly with audit logging - see exceptions above)
+3. **One transition function** gates all application status changes - bypass only for the documented exceptions above
+4. **Every transition logged** with actor, timestamp, from, to
+5. **Side effects after save** - not before
+6. **UI only shows valid actions** - based on current state + user permissions
+7. **Optimistic locking** for concurrent access
+8. **Terminal states are final by default** - no transitions out unless an explicit "reopen" flow is defined and audited
+9. **Status displayed consistently** - same colors, same badges, everywhere in the app
+10. **Timeline/history view** - consider exposing state history for entities with complex lifecycles

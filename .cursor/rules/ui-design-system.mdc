@@ -1,0 +1,192 @@
+---
+description: Design tokens, spacing, a11y. Apply for visual UI work.
+alwaysApply: false
+---
+
+# UI Design System
+
+Coding patterns for visual consistency WITHIN a project. IF your project has a UI, apply these patterns. This file does NOT dictate specific values (colors, sizes, spacing) - every project defines its own. This file ensures that whatever values you pick, you use them consistently everywhere.
+
+> All numeric values, tool names, and specific thresholds in this file are `[DEFAULT]` - recommended starting points, not rigid law. Adjust per project.
+
+---
+
+## Design Identity Is Per-Project (NEVER inherit a previous project's look)
+
+This file standardizes the **system and process** (tokens, scales, states, accessibility, consistency) - it deliberately prescribes **no** colors, fonts, or specific visual style. Every new project earns its own visual identity from its own brand and product context.
+
+- **Define a fresh identity per project.** Pick this project's own palette, typography, radius/shadow feel, motion personality, and iconography from scratch. Do not start from "what the last project looked like."
+- **NEVER copy another project's appearance.** Reusing another project's concrete color values, brand fonts, theme tokens, or component look just because it exists (or you built it before) is banned. It makes distinct products look identical and ignores the new brand.
+- **What you DO carry between projects:** the rules in this file (consistency, token discipline, interactive states, a11y baselines, z-index ordering) and shared component **architecture/primitives** (e.g. a `Button` API, a `Modal` behavior contract) - the structure, not the skin.
+- **What you do NOT carry:** specific hex/HSL values, brand typefaces, the particular visual style or "vibe" of another product.
+- **Bootstrap order for a new UI:** define the token set first (palette -> semantic tokens, type scale, spacing scale, radius, shadow, motion durations), then build components on those tokens. Everything below assumes you have done this for THIS project.
+
+All consistency rules in this file apply **within a single project**. They never mean "match our other projects."
+
+---
+
+## The Golden Rule
+
+**Every visual decision should come from a defined system, not arbitrary one-off values.** If you're typing a raw hex color, pixel value, or font size directly in a component - you should be referencing a token/variable/utility class instead.
+
+### CSS Variables vs Utility-First Frameworks (Tailwind, etc.)
+
+Both approaches are valid. Pick one per project:
+
+- **CSS Variables approach**: Define tokens as CSS custom properties (`--space-4`, `--color-primary`) and reference them in your styles
+- **Utility-first approach (Tailwind, UnoCSS, etc.)**: The framework IS your design system - its utility classes (`p-4`, `text-sm`, `bg-primary`) ARE your tokens. You configure the system in the framework's config file.
+- **Hybrid**: Use the framework's utilities for standard values, CSS variables for project-specific semantic tokens
+
+**The rule is the same either way:** Use system values, not arbitrary ones. `p-4` or `var(--space-4)` are both fine. `padding: 13px` is not.
+
+---
+
+## Spacing
+
+Define a spacing scale and use it for ALL padding, margin, and gap values.
+
+**Rules:**
+- Pick a base unit (4px or 8px are common) and build a scale from it
+- All spacing in the app comes from this scale - no arbitrary values
+- Exception: 1px hairlines, optical adjustments, and third-party component overrides
+- Be consistent within components - if cards use one padding value, ALL cards use that same value
+- Smaller scale values for dense UI (tables, toolbars), larger values for content areas
+
+---
+
+## Typography
+
+Define a type scale and use it consistently.
+
+**Rules:**
+- Define a set of named text sizes and use ONLY those throughout the app
+- Never use arbitrary font sizes - every text element maps to a scale step
+- Body text size stays the same on mobile and desktop - never reduce it for smaller screens
+- Heading hierarchy must be visually clear: h1 > h2 > h3 in size - never skip levels or reverse
+- Max 2 font families per project (one for headings if needed, one for body)
+- Set a max line width for reading comfort (roughly 65-75 characters)
+- Define font weight names (normal, medium, semibold, bold) and use them consistently
+
+---
+
+## Colors
+
+### Structure: Palette + Semantic Tokens
+
+Colors should be organized in two layers:
+
+1. **Palette**: Raw color values defined once (your blues, grays, greens, etc.)
+2. **Semantic tokens**: What colors MEAN - these are what components actually use (`color-primary`, `color-danger`, `color-background`, `color-text-primary`, etc.)
+
+Components reference semantic tokens, never raw palette values. This makes theming, dark mode, and branding changes possible by swapping the semantic layer.
+
+### Rules
+
+- Use semantic color tokens in component styles - never raw hex/rgb in components
+- Maintain consistent status colors across the entire app (one color for success, one for error, one for warning, one for info - whatever colors you pick, use them everywhere the same way)
+- Every clickable element needs distinct visual states: default, hover, active/pressed, focus, disabled
+- Contrast ratios: 4.5:1 for normal text, 3:1 for large text (WCAG AA)
+
+---
+
+## Border Radius
+
+Pick 2-3 radius values for your project and use them consistently. Don't use 5px on one card and 6px on another. Define named radius tokens (small, medium, large, full) and apply them uniformly.
+
+---
+
+## Shadows
+
+If your project uses shadows for elevation, define a small scale (2-4 levels) and use them consistently. Don't invent a new shadow for every component.
+
+If your project supports theming (light/dark), consider reducing shadow reliance in dark mode - shadows are less visible on dark backgrounds. Borders can supplement or replace shadows.
+
+---
+
+## Component Consistency
+
+These patterns apply to common UI elements. The goal is: every instance of the same component type looks and behaves the same.
+
+### Buttons
+
+- Define 2-3 button sizes and use them consistently (don't invent sizes per page)
+- Define button variants (primary, secondary, outline, danger, ghost) and use them for their intended purpose everywhere
+- Every button has states: default, hover, active, disabled, loading
+- Consistent action order - pick one convention per project (e.g. primary on the right, cancel on the left) and use it everywhere
+- Destructive actions use the danger variant + confirmation dialog
+- Icon-only buttons should have an accessible label (e.g. `aria-label` for web, accessibility label for native) and a tooltip or equivalent
+
+### Inputs
+
+- Input sizes should match button sizes (so they align when placed together)
+- Every input has states: default, focused, error, disabled
+- Visible label above every input (never placeholder-only)
+- Error text below the field, not in a tooltip
+- Required fields marked consistently (asterisk or other indicator)
+
+### Cards
+
+- Consistent padding, border radius, and shadow/border treatment across all cards
+- If clickable, consistent hover state
+- Structure: optional header, body, optional footer
+
+### Modals / Dialogs
+
+- Define 2-3 modal widths and use them consistently
+- Close on: X button, Escape key, overlay click (unless unsaved changes)
+- Focus trap: Tab stays within modal while open
+- Body scrolls independently; header and footer stay fixed
+
+### Tables / Data Grids
+
+- Striped rows OR hover highlight - not both (pick one)
+- Sticky header on scroll
+- Column alignment: text left, numbers right, status center
+- Responsive: horizontal scroll with fixed first column, or switch to card layout on mobile
+
+---
+
+## Layout
+
+- Use CSS Grid or Flexbox for layout - never floats
+- Define a consistent content max-width and use it across pages
+- Responsive: mobile-first approach - default styles are mobile, add complexity with `min-width` media queries
+- Consistent gap/gutter value between grid items (from your spacing scale)
+
+---
+
+## Icons
+
+- One primary icon library per project - don't mix icon sets
+- Consistent icon sizes that match your text scale
+- Consistent icon style: all outline OR all filled - never mix in the same UI
+- Color: inherit from text color by default (`currentColor`)
+- Icon-only interactive elements need accessible labels
+
+---
+
+## Animation & Motion
+
+- Every interactive state change should have a transition (no instant snaps)
+- Define 2-3 duration values (fast for hover states, normal for transitions, slow for page-level changes) and use them consistently
+- Respect `prefers-reduced-motion` - disable or simplify all animations for users who request it
+- Prefer animating `transform` and `opacity` for performance
+
+---
+
+## Theming (IF your project supports multiple themes)
+
+If your project needs light/dark mode or multiple color themes:
+
+- All color decisions must go through semantic tokens - components never reference raw colors
+- Set the theme before first paint (script in `<head>`) to prevent flash
+- Provide a manual toggle that overrides system preference
+- Test EVERY component in all themes - look for invisible text, missing borders, broken icons, disappeared shadows
+
+---
+
+## Z-Index
+
+Define a z-index scale with named layers and use ONLY those values. **MUST** include **toast above modal above overlay** (example order: base -> dropdown -> sticky -> overlay -> modal -> popover -> toast -> tooltip). Never use arbitrary z-index numbers. Third-party widgets may inject high z-index values - coordinate with your scale when overriding.
+
+Link `naming.md` for reusable primitives (`DataTable`, `Modal`) vs domain list screens (colocated with routes per `project-structure.md`).

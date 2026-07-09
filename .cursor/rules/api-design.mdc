@@ -1,0 +1,340 @@
+---
+description: REST/API handler flow, OpenAPI, errors, pagination. Apply when adding or changing HTTP routes.
+alwaysApply: false
+---
+
+# API Design
+
+Coding patterns for backend APIs. IF your project has an API, apply these patterns. Applies to REST, GraphQL, or RPC - REST is the default assumption.
+
+> All numeric values in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Stack split
+
+- **REST:** URL rules below apply to HTTP paths.
+- **GraphQL / RPC:** Verbs live in schema/operations - not in REST path segments.
+
+---
+
+## URL Structure
+
+**Nesting preference:** Default flat paths. **One** sub-resource segment under a collection is preferred (e.g. `/items/{id}/members`). Deeper nesting only when parent-child identity requires it in the path - not for folder convenience.
+
+- **Plural nouns** for resources: `/api/users`, `/api/records`
+- **kebab-case** for multi-word: `/api/activity-logs`, `/api/settings`
+- **Nested resources** for relationships: `/api/campaigns/{id}/members`
+- **Never verbs in URLs** - HTTP methods already carry the verb. Adding a verb to the path is always redundant or wrong.
+
+```
+METHOD   PATH                  MEANING
+GET      /api/items            list
+POST     /api/items            create
+GET      /api/items/{id}       read one
+PUT      /api/items/{id}       full replace
+PATCH    /api/items/{id}       partial update
+DELETE   /api/items/{id}       remove
+```
+
+**Verb exception - operation sub-paths:** Allowed only when ALL three conditions are true:
+1. The operation cannot be expressed with a standard HTTP method on the resource (it is not create/read/update/delete)
+2. The operation has no persistent resource representation - you cannot `GET` its result later
+3. The sub-path name is an **operation-type noun or hyphenated compound**, not a bare verb
+
+```
+ALLOWED (operation nouns - meet all 3 conditions):
+  POST /api/assets/bulk-archive     <- compound noun describing the operation type
+  POST /api/emails/force-sync       <- compound noun, no persistent result to GET
+  POST /api/sessions/bulk-close     <- compound noun on a collection
+
+Operation nouns (meet all 3 conditions - includes export-style compounds when naming the operation type):
+  POST /api/exports/run             <- noun compound for an export job (illustration)
+
+BANNED (bare verbs - fail condition 3):
+  POST /api/assets/export           <- bare verb alone; prefer noun compound for the operation type
+  POST /api/users/{id}/resend       <- bare verb; use noun: /api/users/{id}/invitation-resend or fold into PATCH
+  POST /api/logs/{id}/revert        <- bare verb; use noun: /api/logs/{id}/reversion
+  POST /api/assets/import           <- bare verb; use noun: /api/assets/imports (POST to start, GET to check status)
+
+BANNED (verbs disguised as anything):
+  /api/getUsers    /api/createRecord    /api/deleteAll    <- always wrong regardless of method
+```
+
+---
+
+## Handler Flow (Default Shape)
+
+**Principle:** Every API handler follows a predictable sequence: verify identity -> check permissions -> parse input -> validate -> execute -> respond.
+
+[REFERENCE] Default handler sequence:
+
+```
+1. AUTHENTICATE    -> Verify session; null -> 401
+2. AUTHORIZE       -> Check permission; denied -> 403
+3. PARSE INPUT     -> Parse body/params; invalid -> 400
+4. VALIDATE        -> Business rules; violation -> 400/422
+5. EXECUTE         -> Database operations, business logic
+6. SIDE EFFECTS    -> Socket emit, email, activity log
+7. RESPOND         -> Return data with proper status code
+```
+
+For authenticated endpoints, never skip steps 1-2. Exception: public endpoints (health check, public listings, webhooks with HMAC verification) skip auth and start at step 3.
+
+**State-changing requests (POST/PUT/PATCH/DELETE) add two guards early in the flow.** Both MUST complete before EXECUTE (step 5); running them at the very top, before AUTHENTICATE, is fine and is the cheapest place because they reject bad traffic before any session lookup. They are shown as steps 0a/0b below.
+
+- **Same-origin / CSRF check** - reject mutations whose `Origin`/`Referer` is not an allowed origin (see `security.md` § CSRF Prevention). For cookie-authenticated APIs this MUST run; token-only APIs called from non-browser clients may skip it.
+- **Rate limit** - apply the per-category limit (see `security.md` § Rate Limiting); over limit -> 429 with `Retry-After`.
+
+```
+0a. SAME-ORIGIN   -> Reject cross-origin mutation; bad origin -> 403
+0b. RATE LIMIT    -> Over the category limit -> 429 + Retry-After
+1. AUTHENTICATE   -> ... (continue the standard sequence through RESPOND)
+```
+
+---
+
+## Response Helpers (Centralized)
+
+Create a shared module of response helper functions. Every API handler uses these instead of manually constructing responses:
+
+```
+// lib/responseHelpers.ts (or equivalent)
+ok(data)           -> 200 + JSON body
+created(data)      -> 201 + JSON body
+badRequest(msg)    -> 400 + { error: msg }
+unauthorized()     -> 401 + { error: "Unauthorized" }
+forbidden(msg)     -> 403 + { error: msg }
+notFound(msg)      -> 404 + { error: msg }
+conflict(msg)      -> 409 + { error: msg }
+unprocessable(msg) -> 422 + { error: msg }
+parseBody(request) -> parsed JSON body (returns 400 if invalid)
+isValidId(id)      -> boolean (validates DB ID format)
+```
+
+**Why:** Consistent response format everywhere, no typos in status codes, easy to change structure globally.
+
+---
+
+## Database Error Mapper
+
+Create a shared function that maps known database errors to proper HTTP responses:
+
+```
+// lib/databaseErrors.ts (or equivalent)
+function handleDatabaseError(error):
+  -> Duplicate key (e.g. unique constraint violation)  -> 409 conflict("A record with this value already exists.")
+  -> Validation error             -> 400 badRequest(errorDetailsFrom(error))
+  -> Cast error / invalid ID      -> 400 badRequest("Invalid ID format.")
+  -> Unknown                      -> 500 + log the error (never expose raw error to client)
+```
+
+**Why:** Prevents inconsistent 500s for known error types. Every handler's catch block should call the shared mapper instead of writing custom error mapping per handler.
+
+---
+
+## Response Shapes
+
+### Success Responses
+
+Return the data directly by default. An envelope wrapper (`{ data, meta }`) is acceptable when you need to include tracing IDs, API versions, or partial error information alongside the response.
+
+```
+GET /api/resources
+-> 200: [{ "id": "...", "name": "..." }, ...]
+
+POST /api/resources
+-> 201: { "id": "...", "name": "..." }
+
+DELETE /api/resources/{id}
+-> 200: { "deleted": true }
+
+Note: Use "id" in API responses regardless of database convention (_id for MongoDB, id for SQL). Map at the boundary (see code-patterns.md, Data Transformation Pattern).
+```
+
+### Error Responses
+
+Default: `{ "error": "Human-readable summary" }` with proper HTTP status. For forms with multiple fields, use `{ "error": "Validation failed", "fields": { "email": "Required", "name": "Too short" } }` to support field-level error display.
+
+```
+401: { "error": "Unauthorized" }
+403: { "error": "You do not have permission to perform this action." }
+400: { "error": "Email is required." }
+404: { "error": "Resource not found." }
+409: { "error": "A record with this value already exists." }
+422: { "error": "Cannot delete a record with active references." }
+500: { "error": "An unexpected error occurred." }
+```
+
+### NEVER do this:
+
+```
+200: { "success": false, "error": "Something failed" }
+```
+
+Use proper HTTP status codes. A 200 means success - don't return errors with 200 status.
+
+---
+
+## Cache Headers & Invalidation (MUST)
+
+Every response is either cacheable or it is not - make it explicit. Do not ship handlers that leave caching to chance. See `caching.md` for the full audience table; the API-layer rules are:
+
+- **Response helpers set `Cache-Control` by default** - bake the header into the shared helpers, not each handler. `ok(data, { cache })` accepts an explicit policy; the default for authenticated/user-scoped data is `no-store`.
+- **Auth, session, account, cart, and any user-scoped response -> `Cache-Control: no-store`.** NEVER `public`. (Hard ban - see `security.md` / `caching.md`.)
+- **Mutations (POST/PUT/PATCH/DELETE) -> `no-store`** always.
+- **Public, same-for-all-users reads** (catalog, public listings, published content) MAY use `public, max-age=..., stale-while-revalidate=...` or a framework data cache with tags.
+- **Add `Vary: Authorization`** (or your auth header/cookie) on any response that differs per signed-in state.
+
+**Writes MUST invalidate the public read cache they affect.** An admin/staff mutation that changes data served from a cached public read (e.g. updating a product, price, or stock that a cached catalog endpoint returns) MUST bust the relevant cache tag in the same request, after a successful commit:
+
+```
+EXECUTE (commit write)
+  -> on success: revalidate / purge the affected cache tag(s)
+       e.g. revalidateTag("catalog"), purge("products:list:*")
+  -> then RESPOND
+```
+
+- Tag cached reads by domain (`catalog`, `product:{id}`, `offers`) so a write can purge precisely.
+- Never rely on TTL alone to clear stale public data after an admin edit - the edit MUST trigger invalidation.
+- Cache-bust is a side effect: if it fails, log it (WARN) - do not fail the user's write.
+
+---
+
+## Field Allowlists (API Projections)
+
+Never return full DB records to the client. Define a **field allowlist** per entity for API responses:
+
+```
+// lib/fieldAllowlists.ts (or equivalent - one per entity)
+const USER_PUBLIC_FIELDS = ["id", "name", "email", "image", "role"];
+const USER_ADMIN_FIELDS  = [...USER_PUBLIC_FIELDS, "createdAt", "lastLogin", "status"];
+
+function getFieldsForRole(entity, role) -> returns the appropriate field list
+```
+
+- Maintain one source of truth for which fields each role can see
+- Use DB projections/select to fetch only needed fields (don't fetch all then filter)
+- NEVER accidentally return `password`, `hashedToken`, `internalNotes`, or other sensitive fields
+- When entities grow, update the allowlist - not every handler individually
+
+---
+
+## Status Code Reference
+
+**Principle:** Use HTTP status codes semantically - the status code alone should tell the client what category of result occurred.
+
+[REFERENCE] Common status codes and when to use them:
+
+| Code | When to Use |
+|------|-------------|
+| 200 | Successful read, update, or delete |
+| 201 | Successful creation |
+| 400 | Invalid input (missing fields, wrong format) |
+| 401 | Not authenticated (no session / expired token) |
+| 403 | Authenticated but not authorized (insufficient permissions) |
+| 404 | Resource does not exist |
+| 409 | Conflict (duplicate unique field, version mismatch) |
+| 422 | Valid syntax but semantically wrong (business rule violation) |
+| 429 | Rate limited (too many requests) |
+| 500 | Unexpected server error (log it, don't expose details) |
+
+---
+
+## Pagination
+
+For list endpoints that can return many results:
+
+```
+GET /api/resources?page=1&limit=20
+
+Response:
+{
+  "records": [...],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 150,
+    "totalPages": 8
+  }
+}
+```
+
+- Default limit: `[DEFAULT]` 20
+- Max limit: `[DEFAULT]` 100 for public/user-facing APIs. Internal admin or export endpoints may use higher caps (500-1000) with proper auth.
+- Include total count when feasible. For very large tables (millions of rows), use cursor-based pagination or approximate counts instead of exact `COUNT(*)` which is expensive.
+
+---
+
+## Input Validation Rules
+
+1. **Validate on server** - NEVER trust client-side validation alone
+2. **Trim strings** before validation and storage
+3. **Reject empty required fields** with specific error text per field
+4. **Validate ID formats** before database lookups
+5. **Sanitize HTML** in user-provided rich text
+6. **Limit string lengths** (prevent massive payloads)
+7. **Validate enums** against allowed values (never accept arbitrary strings for status fields)
+8. **Centralize validation constants** - define max lengths, allowed types, and format patterns in a shared module (e.g., `lib/validation.ts`) so client and server use the same limits
+
+---
+
+## Query Patterns
+
+**Principle:** Provide consistent query parameter conventions for filtering, sorting, and searching across all list endpoints.
+
+[REFERENCE] Common query parameter patterns:
+
+- **Filtering**: `?status=active&group=featured`
+- **Sorting**: `?sort=createdAt&direction=desc`
+- **Search**: `?search=john` (full-text across relevant fields)
+- **Date ranges**: `?startDate=2024-01-01&endDate=2024-12-31`
+- **Includes**: `?include=group,creator` (related data)
+
+---
+
+## Bulk Operations
+
+For operations on multiple records:
+- `POST /api/resources/bulk-delete` with `{ "ids": ["...", "..."] }`
+- `PATCH /api/items/bulk-status` with `{ "ids": [...], "status": "done" }`
+- Always validate ALL IDs exist before modifying any (atomic)
+- Return count of affected records
+
+---
+
+## API Versioning
+
+IF your API will have external consumers or may introduce breaking changes:
+
+- **Pick one strategy per project** - URL path (`/api/v1/resources`) is the simplest and most common. Header-based (`Accept-Version: 2`) is cleaner but less visible.
+- **What counts as a breaking change:** removing a field, renaming a field, changing a field's type, removing an endpoint, changing authentication method
+- **What is NOT breaking:** adding a new optional field, adding a new endpoint, adding a new query parameter
+- **Support the previous version** for a documented deprecation period - don't break existing clients overnight
+- **Version at the API level**, not per-endpoint - all endpoints move together
+
+---
+
+## File Uploads
+
+- Use multipart/form-data for file uploads
+- Validate file type (MIME + extension)
+- Limit file size (configurable per type - see file-media.md for defaults: images `[DEFAULT]` 5MB, documents `[DEFAULT]` 25MB, videos `[DEFAULT]` 100MB)
+- Generate unique filename (never use user-provided name as-is)
+- Return file URL or ID in response
+- Choose storage strategy based on file size (see file-media.md § Storage Strategy Decision - base64 in DB for small files, object storage for larger)
+
+---
+
+## OpenAPI Contract (Multi-Client Monorepos)
+
+When **two or more clients** (web app, admin app, mobile app) share one API:
+
+- **`contracts/openapi.yaml` is REQUIRED** at repo root (or `packages/contracts/`).
+- **Single source of truth** - Website, Admin, and API implement against the same contract.
+- **Same PR rule** - API route change = OpenAPI change in the same PR. No drift.
+- **`shared/api-client`** (or generated client) MUST match OpenAPI - hand-maintained or codegen from the spec.
+- **`docs/api.md`** - human overview + link to OpenAPI; optional Redoc/Swagger UI in dev.
+- **Version breaking changes** - bump path prefix or document deprecation window in OpenAPI `info` / ADR.
+
+Skip OpenAPI only when the project has a single client and no shared contract need - document that choice in an ADR.

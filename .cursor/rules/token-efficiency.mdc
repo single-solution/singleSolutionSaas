@@ -1,0 +1,65 @@
+---
+description: Dense replies and tool discipline. Every AI session.
+alwaysApply: true
+---
+
+# Token Efficiency (AI Sessions)
+
+Minimize **tokens spent in chat and tool output** without lowering code quality. Applies to every AI-assisted task in every project.
+
+---
+
+## The Rule
+
+Optimize for **fewer tokens**, not for less work. Correctness, exploration, and implementation quality are non-negotiable.
+
+---
+
+## Responses
+
+- **Bullets only** - what changed, why (one line each), how to verify.
+- No filler, recap of the prompt, or step-by-step narration of actions already taken.
+- No restating file contents the user can open; cite paths, not walls of code in chat.
+- Use line-range code citations only when they aid a decision; skip decorative quotes.
+- Do not volunteer follow-ups every message; ask only when blocked or a choice is required.
+
+---
+
+## Code Changes
+
+- **Smallest correct diff** - prefer surgical edits over rewriting whole files.
+- **MUST align** every file you open or edit with applicable rules (`naming.md`, `code-patterns.md`, etc.) - fix violations in scope; no repo-wide drive-by renames or refactors.
+- **No verbose comments** - code should be self-explanatory; comment only non-obvious business logic (see `code-formatting.md` - token-efficiency wins for comment policy).
+- **No drive-by refactors** unrelated to the task.
+- Match existing conventions; reuse helpers instead of duplicating logic.
+
+---
+
+## Tool Use (Save Round-Trips, Not Rigor)
+
+- **Targeted exploration**: read/search what you need; do not re-read the same file unless it changed.
+- **Parallelize** independent reads, greps, and searches in one turn when possible.
+- **Do not skip exploration** when behavior, architecture, or edge cases are unclear.
+- Prefer exact search (`grep` / `glob`) for known symbols; use semantic search when location is unknown.
+- Avoid dumping large command outputs or full file reads into the reply - summarize findings.
+- If the project has a formatter/linter, run it on **touched files** - do not manually reformat whole files for style-only churn.
+
+---
+
+## What NOT to Cut
+
+- Investigation required to implement or fix correctly.
+- Tests, types, and error handling when required by `testing.md` or the user.
+- Commit/PR messages when requested - complete sentences, no padding.
+
+---
+
+## Conflicts
+
+If this conflicts with "be verbose in chat" elsewhere, **this rule wins for chat**. Commits and PRs stay clear and complete when requested.
+
+---
+
+## Cursor
+
+Drop-in copy: `cursor/token-efficiency.mdc` -> project `.cursor/rules/token-efficiency.mdc`

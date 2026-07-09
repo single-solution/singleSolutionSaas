@@ -1,0 +1,290 @@
+---
+description: Branches, commits, PRs. Apply when committing or opening PRs.
+alwaysApply: false
+---
+
+# Git Workflow
+
+Standard git practices for every project. Same branching model, same commit format, same PR process - regardless of team size or tech stack.
+
+> All numeric values in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Commits (agent policy)
+
+**ONLY create a git commit when the user explicitly says** done, ship, commit, or equivalent. Do not commit because the agent believes a feature is finished.
+
+**Message format `[DEFAULT]`:** Conventional Commits - e.g. `feat(checkout): validate cart before payment`.
+
+**Push / PR:** Only when the user requests. Do not push to remote unless asked.
+
+---
+
+## Branch Naming
+
+**Principle:** Branch names must be categorized, descriptive, and machine-parseable. Pick a prefix convention and enforce it.
+
+[REFERENCE] Common branch type prefixes:
+
+```
+Format: {type}/{short-description}
+
+  feature/    - new functionality
+  fix/        - bug fix
+  hotfix/     - urgent production fix (branches from main)
+  refactor/   - code improvement with no behavior change
+  chore/      - tooling, deps, config, CI changes
+  docs/       - documentation only
+  test/       - adding or fixing tests
+  experiment/ - throwaway exploration (never merged directly)
+
+Examples:
+  feature/search-filters
+  fix/api-rate-limit
+  hotfix/session-expiry-crash
+  refactor/extract-data-pipeline
+  chore/upgrade-typescript
+  docs/api-authentication-guide
+```
+
+**Rules:**
+- All lowercase, words separated by hyphens
+- Max 50 characters for the description part
+- Issue-tracker IDs in branch names are optional - some teams prefer `JIRA-123-feature-name` for automation; either style is fine, be consistent.
+- Avoid working directly on `main` or `master` - use feature branches. Exception: repo hygiene commits and break-glass hotfixes with immediate review.
+
+---
+
+## Commit Messages
+
+**Principle:** Commit messages follow a structured format so changelogs and release notes can be generated automatically.
+
+[REFERENCE] Common commit type prefixes (Conventional Commits style):
+
+```
+Format:
+  {type}: {short description}
+
+  {optional body - explain WHY, not WHAT}
+
+  {optional footer - references, breaking changes}
+
+  feature:   - new functionality
+  fix:       - bug fix
+  refactor:  - code change with no behavior change
+  chore:     - tooling, deps, config
+  docs:      - documentation
+  test:      - tests
+  style:     - formatting only (no logic change, no branch needed - commit directly)
+  perf:      - performance improvement (use refactor/ or feature/ branch)
+```
+
+**Examples:**
+
+```
+feature: add secure token verification flow
+
+Sends a time-limited verification link; token is hashed before storage
+to prevent DB-leak exploitation.
+```
+
+```
+fix: prevent duplicate form submission on rapid clicks
+
+The submit button was not disabled during the API call,
+allowing multiple records to be created.
+```
+
+```
+refactor: extract computation logic into shared pipeline
+
+Three routes duplicated the same shared computation logic.
+Centralizing it reduces drift and makes testing easier.
+```
+
+```
+chore: upgrade dependencies to latest and fix deprecated calls
+```
+
+**Rules:**
+- Subject line: imperative mood ("add", "fix", "remove" - NOT "added", "fixes", "removing")
+- Subject line: max 72 characters
+- Subject line: no period at the end
+- Body: wrap at 80 characters
+- Body: explain WHY the change was made, not what changed (the diff shows what)
+- One logical change per commit (don't bundle unrelated changes)
+- Never commit generated files, build artifacts, or secrets
+- Never commit with `--no-verify` unless explicitly justified
+
+---
+
+## Branching Strategy
+
+### For Solo / Small Team (1-3 developers)
+
+```
+main (production-ready)
+  └── feature/search-filters
+  └── fix/input-validation
+  └── feature/main-view
+```
+
+- Branch from `main`, merge back to `main` via PR
+- `main` is always deployable
+- Tag releases: `v1.0.0`, `v1.1.0`, etc.
+
+### For Larger Teams (4+ developers)
+
+Pick one strategy per project and be consistent:
+
+**Option A: Integration branch (Git Flow-style)**
+```
+main (production)
+  └── develop (integration branch)
+       └── feature/search-filters
+       └── fix/input-validation
+  └── hotfix/critical-auth-fix (branches from main, merges to both)
+```
+- Features branch from `develop`, merge to `develop` via PR
+- `develop` merges to `main` for releases
+- Hotfixes branch from `main`, merge to both `main` and `develop`
+
+**Option B: Trunk-based**
+```
+main (production)
+  └── feature/search-filters (short-lived)
+  └── fix/input-validation (short-lived)
+```
+- All features branch from `main`, merge back to `main` via PR
+- Feature flags for incomplete work that's already merged
+- Releases are tags on `main`
+
+---
+
+## Pull Request Process
+
+### PR Title Format
+
+Same as commit message format: `{type}: {short description}`
+
+### PR Body Template
+
+```markdown
+## Summary
+- What this PR does (1-3 bullet points)
+
+## Changes
+- List of significant changes
+
+## How to Test
+1. Step-by-step testing instructions
+2. Include edge cases to verify
+
+## Screenshots / Video
+(if UI changes - REQUIRED for frontend PRs)
+
+## Checklist
+- [ ] Code follows project naming conventions
+- [ ] No non-idiomatic abbreviations in variable/function names (see naming.md)
+- [ ] Loading states for all async operations
+- [ ] Error handling covers failure paths
+- [ ] Responsive layout tested (if applicable)
+- [ ] Configuration options tested (if applicable)
+- [ ] No console.log left in code
+- [ ] Types are correct (no `any` without justification)
+```
+
+### PR Rules
+
+1. **Keep PRs focused** - aim for under 500 lines changed. Mechanical refactors, dependency lockfiles, generated code, and i18n string dumps may be larger; what matters is "one logical change."
+2. **One concern per PR** - don't mix a feature with a refactor
+3. **Self-review first** - read your own diff before requesting review
+4. **No merge without review** - at least 1 approval (solo projects: self-review with a checklist)
+5. **Pick a merge strategy per project** (squash, rebase, or merge commits) and be consistent. Teams may use merge commits for long-lived branches and squash for features.
+6. **Delete branch** after merge (keep the repo clean)
+7. **CI must pass** before merge - emergency bypasses require a follow-up fix PR within the same day
+8. **Resolve all comments** before merging (don't merge with open threads)
+
+---
+
+## Release / Tagging
+
+### Semantic Versioning
+
+```
+Format: v{MAJOR}.{MINOR}.{PATCH}
+
+MAJOR: breaking changes (users must change their code / behavior)
+MINOR: new features (backward compatible)
+PATCH: bug fixes (backward compatible)
+
+Examples:
+  v1.0.0  - first stable release
+  v1.1.0  - added new feature module
+  v1.1.1  - fixed data sort stability bug
+  v2.0.0  - redesigned API (breaking changes)
+```
+
+### Release Process
+
+1. Merge all features to `main` (or `develop` -> `main`)
+2. Update version in package.json / pubspec.yaml / equivalent
+3. Update CHANGELOG.md
+4. Create git tag: `git tag v1.2.0`
+5. Push tag: `git push origin v1.2.0`
+6. CI deploys automatically from tag (or manual deploy trigger)
+
+---
+
+## .gitignore Essentials (Every Project)
+
+Include entries relevant to your stack. Common categories:
+
+```gitignore
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies (add your stack's dependency folder)
+# e.g. node_modules/, vendor/, venv/, __pycache__/, .gradle/
+
+# Build output (add your stack's build output)
+# e.g. dist/, build/, out/, *.pyc
+
+# IDE (decide per project whether to share workspace settings or ignore them)
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Coverage
+coverage/
+```
+
+**Rules:**
+- Commit `.gitignore` as one of the first files in any project
+- Never commit `.env` - always provide `.env.example` with dummy values
+- Never commit `node_modules/` or equivalent dependency folders
+- Never commit build output (CI builds fresh)
+- Never commit IDE-specific settings that aren't shared project config
+
+---
+
+## Hooks (Pre-Commit)
+
+Every project SHOULD have pre-commit hooks:
+
+1. **Lint check** - reject commits with linting errors
+2. **Type check** - reject commits with type errors (TypeScript, etc.)
+3. **Format check** - auto-format or reject unformatted code
+4. **Test check** - run affected tests (optional for speed, required in CI)
+
+Use tools like Husky (JS), pre-commit (Python), Overcommit (Ruby), or framework equivalent.

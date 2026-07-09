@@ -1,0 +1,330 @@
+---
+description: Test pyramid and CI tests. Apply when changing behavior.
+alwaysApply: false
+---
+
+# Testing
+
+Coding patterns for writing and organizing tests. IF your project has tests, follow these patterns. Start with critical paths and expand coverage over time.
+
+> All numeric values (thresholds, sizes, timings, percentages) in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Testing Pyramid
+
+```
+         /  E2E  \          <- Few: critical user flows only
+        /----------\
+       / Integration \      <- Moderate: API endpoints, service interactions
+      /----------------\
+     /    Unit Tests     \  <- Many: pure functions, utilities, business logic
+    /____________________\
+```
+
+- **Unit tests**: Fast, isolated, test one function/method. Mock external dependencies.
+- **Integration tests**: Test multiple units working together. Real database (test instance), real HTTP calls to your server.
+- **E2E tests**: Test full user flows through the actual UI. Slowest, most brittle, most valuable for critical paths.
+
+---
+
+## When to add tests (agents)
+
+| Situation | Policy |
+|-----------|--------|
+| Project has test harness | **SHOULD** add/update tests on behavior changes |
+| No test harness | **Do not** add tests unless the user asks |
+| Every change | **Consider** whether a test is warranted - use judgment (including CSS-only: manual verify may suffice) |
+
+---
+
+## What to Test
+
+### ALWAYS Test
+
+**Principle:** Test behavior that would cause user-visible bugs, security holes, or data corruption if broken.
+
+[REFERENCE] Scenarios that almost always warrant tests:
+
+- Authentication flows (if your app has auth: session creation, expiry, invalidation)
+- Permission checks (authorized vs. unauthorized access)
+- Input validation (valid, invalid, edge cases, empty, too long)
+- CRUD operations (prioritize by risk - critical entities first, not exhaustive coverage of every entity)
+- Business logic (calculations, state transitions, conditional behavior)
+- Error handling (network failure, invalid data, missing resources)
+- Edge cases (empty lists, max values, concurrent operations)
+
+### NEVER Test
+
+**Principle:** Don't test implementation details or things the framework already guarantees.
+
+[REFERENCE] Common testing anti-patterns:
+
+- Framework internals (React rendering, Express routing - the framework has its own tests)
+- Getter/setter methods with no logic
+- CSS/styling (use visual regression tools if needed, not unit tests)
+- Third-party library behavior (test YOUR usage of it, not the library itself). Exception: contract/smoke tests around critical integrations (third-party SDKs, external APIs) are valuable.
+- Private methods directly (test through the public API). Exception: complex internal algorithms may warrant direct tests when the public surface is too coarse.
+
+---
+
+## Test File Organization
+
+### Colocated Unit Tests (Preferred)
+
+```
+src/
+├── lib/
+│   ├── permissions.ts
+│   ├── permissions.test.ts    <- right next to the source
+│   ├── pagination.ts
+│   └── pagination.test.ts
+├── components/
+│   ├── ItemCard.tsx
+│   └── ItemCard.test.tsx
+```
+
+### Separate Integration & E2E Tests
+
+```
+tests/
+├── integration/
+│   ├── auth.test.ts           # Test auth API endpoints
+│   ├── resources.test.ts      # Test resource CRUD endpoints
+│   └── workflows.test.ts      # Test workflow features
+├── e2e/
+│   ├── auth.spec.ts           # Full authentication flow through UI (if your project has auth)
+│   ├── setup.spec.ts          # Full setup flow
+│   └── main-feature.spec.ts   # Primary feature data loading
+└── fixtures/                  # Shared test data
+    ├── users.ts
+    └── records.ts
+```
+
+---
+
+## Test Naming
+
+### File Names
+
+- Unit tests: `{source}.test.{ext}`
+- Integration tests: `{feature}.test.{ext}`
+- E2E tests: `{flow}.spec.{ext}`
+- **Convention**: `.test` for unit/integration (developer tests), `.spec` for E2E (behavior specs). Be consistent within a project - don't mix conventions for the same test type.
+
+### Test Descriptions
+
+Use the pattern: **"should {expected behavior} when {condition}"**
+
+```
+REQUIRED:
+  describe("processSubmission") {
+    it("should return success when input passes validation")
+    it("should return 400 when required field is missing")
+    it("should return 400 when identifier format is invalid")
+    it("should return 429 after repeated failures from same client")
+    it("should normalize comparable fields before validation")
+  }
+
+BANNED:
+  it("test submission")
+  it("works")
+  it("error case")
+  it("test 1")
+```
+
+### Describe Blocks
+
+Group tests logically by function, method, or scenario:
+
+```
+describe("DataService") {
+  describe("processEntries") {
+    describe("when adjustment rules apply") {
+      it("should apply percentage adjustment to running total")
+      it("should cap adjustment at maximum allowed value")
+    }
+    describe("when fee rules apply") {
+      it("should add fee based on locale rules")
+      it("should not double-apply fee to exempt entries")
+    }
+  }
+}
+```
+
+---
+
+## Test Structure (AAA Pattern)
+
+Every test follows **Arrange -> Act -> Assert**:
+
+```
+it("should return 403 when user lacks permission", async () => {
+  // Arrange: set up preconditions
+  const regularUser = createTestUser({ role: "viewer" });
+  const targetResource = createTestResource();
+
+  // Act: perform the action
+  const response = await request(app)
+    .delete(`/api/resources/${targetResource.id}`)
+    .set("Authorization", `Bearer ${regularUser.token}`);
+
+  // Assert: verify the result
+  expect(response.status).toBe(403);
+  expect(response.body.error).toBe("You do not have permission to perform this action.");
+});
+```
+
+**Rules:**
+- Prefer focused assertions - multiple asserts on the same result are fine (e.g., check status AND body). Avoid testing unrelated behaviors in one test.
+- Arrange section should be minimal - use factories/fixtures for complex setup
+- Act section should be ONE function call or ONE request
+- Minimize logic in tests - avoid complex conditionals. Table-driven tests and parameterized loops are fine for testing variations of the same behavior.
+
+---
+
+## Test Data
+
+### Factories / Fixtures
+
+Create reusable test data builders:
+
+```
+// Good: factory function with sensible defaults
+function createTestUser(overrides = {}) {
+  return {
+    name: "Test User",
+    email: `test-${Date.now()}@example.com`,
+    password: "SecurePassword123!",
+    role: "member",
+    ...overrides,
+  };
+}
+
+// Usage
+const admin = createTestUser({ role: "admin" });
+const disabledUser = createTestUser({ isActive: false });
+```
+
+**Rules:**
+- Never use production data in tests
+- Every test creates its own data (no shared mutable state between tests)
+- Use unique identifiers (timestamps, UUIDs) to prevent collisions
+- Clean up test data after each test (or use transactions that roll back)
+
+---
+
+## Mocking Rules
+
+- **Mock external services** (HTTP calls, email, file storage, external service integrations)
+- **Mock the database** in unit tests (test business logic, not the DB driver)
+- **Use real database** in integration tests (test instance, wiped between runs)
+- **Never mock the thing you're testing** (if testing UserService, don't mock UserService)
+- **Mock at the boundary** - mock the lowest external dependency, not intermediate layers
+
+```
+BANNED: Mocking internal functions to make tests pass
+  // This tests nothing meaningful
+  jest.mock("./calculateTotal", () => ({ calculateTotal: () => 100 }));
+  expect(calculateTotal()).toBe(100);
+
+REQUIRED: Mock external boundary, test real logic
+  jest.mock("./database", () => ({ query: jest.fn() }));
+  // Now test that YOUR code correctly processes the query result
+```
+
+---
+
+## Coverage
+
+### Minimum Thresholds
+
+**Principle:** Coverage targets prevent regressions but aren't a quality guarantee. Use them as a floor, not a ceiling.
+
+[REFERENCE] Typical coverage targets by layer:
+
+| Layer | Minimum Coverage |
+|-------|-----------------|
+| Business logic (lib/, services/) | 80% |
+| API handlers / controllers | 70% |
+| UI components | 60% |
+| Utilities | 90% |
+| Overall project | 70% |
+
+These are **targets for mature projects**, not day-one requirements. Start with critical paths and increase over time.
+
+### Rules
+
+- Coverage is measured in CI and reported on PRs
+- Coverage should trend upward. Small decreases from deleting dead code or replacing tests are acceptable - large unexplained drops are not.
+- 100% coverage is NOT the goal - meaningful tests are the goal
+- Don't write tests just to hit a number (testing getters/setters is pointless)
+- Uncovered code in critical paths should be either tested or have a documented reason
+
+---
+
+## CI Integration
+
+**Principle:** Tests must be fast enough that developers run them before every push. Slow tests delay feedback and get skipped.
+
+[REFERENCE] Typical CI timing targets:
+
+1. **Unit tests** run on every push (target: under 5 minutes)
+2. **Integration tests** run on every PR (target: under 15 minutes)
+3. **E2E tests** run before merge to main (target: under 45 minutes)
+4. **All tests must pass** before merge - emergency bypasses require a follow-up fix PR
+5. **Flaky tests** are treated as bugs - quarantine immediately, fix within the iteration. Don't delete tests that guard critical paths; fix the flakiness.
+
+---
+
+## Common Patterns
+
+### Testing API Endpoints
+
+```
+describe("Resource collection API - create") {
+  it("should create resource when authorized")
+  it("should return 401 when not authenticated")
+  it("should return 403 when not authorized")
+  it("should return 400 when required fields missing")
+  it("should return 400 when field format invalid")
+  it("should return 409 when unique constraint violated")
+}
+```
+
+### Testing Auth Flows (IF your project has authentication)
+
+```
+describe("Authentication") {
+  it("should authenticate with valid credentials")
+  it("should reject invalid credential secret")
+  it("should reject unknown user with same error as invalid secret")
+  it("should rate limit after repeated failures")
+  it("should issue valid signed token on successful auth")
+  it("should reject expired token")
+  it("should end session and invalidate credentials on logout")
+}
+```
+
+### Testing Permissions
+
+```
+describe("Permission checks") {
+  it("should allow admin to access all resources")
+  it("should restrict user to own data")
+  it("should allow scoped role to see filtered data")
+  it("should return 403 for cross-scope access")
+}
+```
+
+---
+
+## Tools
+
+**The principle:** Use the standard, most-adopted testing framework for your stack. If your language has a built-in test runner, prefer it. For E2E, use whatever the community has converged on for your platform (browser-based for web, native test frameworks for mobile).
+
+**Rules:**
+- Pick ONE unit/integration framework per project - don't mix
+- Pick ONE E2E framework per project - don't mix
+- Prefer frameworks with active maintenance and community adoption
+- If your stack has a built-in test runner (Go, Dart, Swift), use it over third-party alternatives

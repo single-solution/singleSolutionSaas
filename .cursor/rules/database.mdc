@@ -1,0 +1,228 @@
+---
+description: Schema, queries, migrations. Apply when touching persistence.
+alwaysApply: false
+---
+
+# Database Patterns
+
+Coding patterns for database design and usage. IF your project has a database, apply these patterns. Applies to SQL (PostgreSQL, MySQL) and NoSQL (MongoDB, DynamoDB) alike.
+
+> All numeric values in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Schema Design
+
+- **One entity per file** - User model in user file, Record model in record file
+- **Timestamps always** - every table/collection gets `createdAt` and `updatedAt`
+- **Soft delete** where appropriate - use `deletedAt: Date | null` (preferred: nullable timestamp is unambiguous and supports audit). Reserve `isActive` for business status (active/suspended entity), NOT for deletion.
+- **Consistent ID naming** - `id` or `_id` (pick one per project, never mix)
+- **References over embedding** for relational data (unless read performance demands embedding)
+
+---
+
+## Naming (Database Level)
+
+**Principle:** Pick one naming convention per database technology and be consistent. Document the convention in `docs/architecture.md` or the README entity section (see documentation.md).
+
+[REFERENCE] Common database naming conventions:
+
+- **SQL tables**: snake_case plural (`users`, `list_items`, `config_options`)
+- **SQL columns**: snake_case (`first_name`, `created_at`, `is_active`)
+- **NoSQL collections**: PascalCase singular or camelCase plural (match ORM convention)
+- **NoSQL fields**: camelCase (`firstName`, `createdAt`, `isActive`)
+- **Foreign keys**: `{entity}_id` in SQL (`user_id`, `category_id`)
+- **Junction tables**: `{entity1}_{entity2}` alphabetically (`roles_users`)
+
+---
+
+## Indexing
+
+**Principle:** Index based on query patterns - every frequently-queried field or filter condition should have an appropriate index.
+
+[REFERENCE] Common indexing patterns:
+
+**Index fields used in frequent WHERE/filter clauses.** Prioritize by query frequency and table size. Rarely-used ad-hoc filters and small tables don't need indexes - over-indexing hurts write performance.
+
+- Index foreign keys automatically
+- Compound indexes for common multi-field queries (key sequence matters)
+- Unique indexes for fields that must be unique (email, username, slug)
+- Text indexes for search fields
+- Avoid over-indexing (each index slows writes)
+
+---
+
+## Query Rules
+
+- **Select only needed fields** for API responses - avoid `SELECT *` in production queries. `SELECT *` is acceptable for admin tools, migrations, and small tables during prototyping.
+- **Paginate list queries** - never return unbounded results
+- **Validate IDs** before querying (reject invalid format with 400, don't hit DB)
+- **Use lean/plain objects** for API read responses (not full ORM instances)
+- **Parallel queries** where possible - use your language's concurrency primitives (e.g. `Promise.all` in JS, `asyncio.gather` in Python, `errgroup` in Go) for independent reads
+- **Avoid N+1** - use joins/populate/include, not loops with individual queries
+- **Centralize relation patterns** - define reusable populate/include/join configurations in a shared module rather than repeating join logic in every handler
+
+---
+
+## Transactions
+
+**Use transactions for any operation that writes to 2+ tables/collections.**
+
+When to use:
+- Creating an entity + its related records
+- Multi-record atomic update (increment + decrement)
+- Cascade operations (delete parent + children)
+- Status changes that affect multiple records
+
+Rules:
+- **Must-be-atomic** (money, inventory, paired writes): transaction rollback on failure
+- **Retryable side effects** (audit log, notification, webhook): primary write keeps; **retry** secondary; persist error if retry fails - do not default to rolling back step 1
+- Keep transactions short (don't do HTTP calls inside)
+- Pass the transaction/session to all operations within it
+
+---
+
+## Migrations
+
+- **Version-controlled** - migration files in source control
+- **Reversible** - every migration has an up AND down
+- **One purpose per file** - do not mix unrelated table changes
+- **Named descriptively** - reader knows purpose from filename (e.g. `add-phone-to-users`) - tool timestamps OK when paired with semantic suffix
+- **Dead fields:** when touching schema, audit unused columns - ask before drop
+- **Indexes:** align with filter/sort query patterns; revise when queries change
+- **Never edit** a migration that's been applied (create a new one)
+- **Failed migration with side effects:** fix forward or retry idempotent steps - do not assume `down` alone repairs external systems (email, webhooks, files)
+
+---
+
+## Security
+
+- **Never expose passwords** - exclude from all queries/responses
+- **Never expose tokens** (reset tokens, API keys) in responses
+- **Hash sensitive data** - passwords with a slow hash (bcrypt, argon2, or equivalent); tokens with a cryptographic hash before storage
+- **Encrypt at rest** for PII where required by compliance
+- **Parameterized queries** always - NEVER concatenate user input into queries (SQL injection)
+- **Limit query depth** for GraphQL / nested populate (prevent resource exhaustion)
+
+---
+
+## Connection Singleton (Serverless / HMR-Safe)
+
+In serverless environments or dev servers with hot module reloading, naive connection code creates duplicate connections on every request or reload. Use a singleton pattern:
+
+```
+// lib/db (or equivalent - adapt to your language/ORM)
+function connectDB():
+  -> Check global/module-level cache for existing connection
+  -> If cached and connected -> return cached
+  -> If no URI configured -> throw immediately (don't silently fail)
+  -> Connect with explicit timeouts (per your driver's options)
+  -> Store promise/future in global cache (so concurrent calls share one connection attempt)
+  -> Return connection
+```
+
+- Cache the **connection promise** (not just the client) to prevent race conditions during startup
+- In frameworks with HMR (hot module reloading), store the connection on a global/module-level variable so reloads don't create new pools
+- Configure your ORM/driver to fail fast when disconnected (rather than silently queuing commands)
+- Log connection events (connected, disconnected, error) at INFO level
+
+---
+
+## Performance
+
+- **Connection pooling** - reuse DB connections, don't create per-request (see Connection Singleton above)
+- **Query timeouts** - set max execution time to prevent runaway queries
+- **Caching** for expensive reads (TTL-based, invalidate on write)
+- **Denormalize** for read-heavy paths where joins are too expensive (maintain via triggers/hooks)
+- **Batch operations** - bulk insert/update instead of individual queries in loops
+
+---
+
+## Backups & Safety
+
+- **Automated backups** - daily minimum. Frequency for critical data depends on RPO requirements and cost constraints (managed DB services handle this well).
+- **Point-in-time recovery** capability
+- **Test restores** periodically (a backup you've never tested isn't a backup)
+- **Separate environments** - never point staging/dev at production DB
+- **Seed data** scripts for development (realistic but not real user data)
+
+---
+
+## Dead Field Policy
+
+**Every field in a schema must earn its place.** A column / property / enum value that no production code reads, writes, or filters by is dead weight - it pollutes serializers, migrations, validators, type hints, and the mental model. Dead fields must be removed.
+
+This is the schema-level parallel of `project-structure.md` § Dead File Policy. Dead-file audits catch unused source files; dead-field audits catch unused schema columns.
+
+### What Makes a Field "Dead"
+
+**Principle:** A field is dead if it serves no purpose in the running application. Apply the test to every field in every model on every audit.
+
+A field is dead if **any** of the following is true:
+
+- No production code reads it (no API serializer emits it, no query filters on it, no business rule branches on it)
+- No production code writes it (the only writes are migration backfills or seed data)
+- It is a snapshot of another field that is never used independently (e.g. `customerNameSnapshot` that is never read separately from `customerName`)
+- It is an enum value that no document holds anymore (legacy enum tail kept "for compatibility" after the migration that replaced it is complete)
+- It is a denormalized counter that no read path consumes
+- It duplicates a Mongoose / ORM-managed field (e.g. authoring `createdAt: Date` in an interface when the schema already sets `{ timestamps: true }` - the runtime field exists, the interface declaration is dead noise)
+- Its only purpose, per its inline comment, is to keep something else compiling that has itself been deleted
+
+### Detection - What the Audit Checks
+
+During every audit, for every schema, scan for:
+
+```
+1. Fields or enum values whose names indicate lifecycle status rather than purpose
+   (see naming.md § Banned Filename Suffixes - same principle applies to column names)
+
+2. Fields with zero read sites across the whole codebase
+   (grep for the field name; if it never appears outside the model file itself, it's dead)
+
+3. Enum members that no live document carries
+   (run a `distinct` query for the field in the dev/staging DB; values not present and not being written are dead)
+
+4. "Legacy" or "compatibility" fields whose comments explicitly say they exist
+   only for back-compat with code that has since been deleted
+
+5. Interface declarations that duplicate framework-managed fields
+   (e.g. `createdAt: Date; updatedAt: Date;` next to `{ timestamps: true }`)
+```
+
+### When You Find a Dead Field
+
+1. **Remove the field from the schema** in the same commit that removes the last reader (or in the immediately-following migration commit if the field needs an unset pass over existing documents first).
+2. **Remove the field from every TypeScript interface, Pydantic model, Go struct, or equivalent type** that declared it.
+3. **Drop the field from serializers and validators** so the API surface no longer claims it exists.
+4. **Write a migration to `$unset` / `DROP COLUMN`** the value from existing documents. Idempotent and gated by a marker.
+5. **For enum-value cuts**: backfill existing rows to a still-valid value *before* tightening the enum. The enum must accept every value present in the collection at the moment validation tightens.
+
+### Framework-Managed Fields
+
+Mongoose / Prisma / Sequelize / ActiveRecord / Django ORM all manage `createdAt` / `updatedAt` (and sometimes `id` / `_id`, `deletedAt`, version keys) automatically. **Never declare these in your interfaces or types.** They exist at runtime via the ORM; declaring them in TypeScript is duplicate noise.
+
+```
+BANNED (Mongoose example):
+  interface UserAttributes {
+    email: string;
+    name: string;
+    createdAt: Date;      // dead - Mongoose's { timestamps: true } adds this
+    updatedAt: Date;      // dead - same
+  }
+
+REQUIRED:
+  interface UserAttributes {
+    email: string;
+    name: string;
+  }
+  // schema uses { timestamps: true } - runtime carries createdAt + updatedAt
+```
+
+The same applies to `_id` / `id` on top-level documents: the ORM provides it, the interface doesn't declare it. Sub-document interfaces may declare an optional `_id?: ObjectId` if other code asserts on it.
+
+### What NOT to Do
+
+- **Don't keep a dead field "in case we need it later."** When the time comes, add it then. Git history preserves the deleted definition.
+- **Don't mark a dead field `deprecated` and ship it forever.** Deprecation is a one-deploy bridge, not a permanent state. Delete by the next deploy.
+- **Don't leave a dead enum value to "preserve sort order".** The runtime enum is unordered; sort orders live in `sortOrder` columns or display-side maps.
+- **Don't tolerate "snapshot" duplication that's never read.** If `customerName` and `customerNameSnapshot` always read together, drop the snapshot. If the snapshot exists because the source mutates, document the read path explicitly and confirm it has consumers.

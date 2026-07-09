@@ -1,0 +1,441 @@
+---
+description: Uploads and media storage. Apply when handling files or images.
+alwaysApply: false
+---
+
+# File & Media Handling
+
+Coding patterns for uploading, processing, storing, and serving files - images, documents, videos, or any user-generated content. IF your project handles file uploads or media, apply these patterns.
+
+> All numeric values (thresholds, sizes, timings, percentages) in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Trust test (uploads)
+
+**MUST** validate on server: size limits, allowlist, magic bytes - never trust client MIME/extension alone.
+
+**Access test:** unauthorized download must fail - signed URL or auth-gated stream (`security.md`).
+
+---
+
+## Storage Strategy Decision
+
+**Principle:** Storage and processing strategy should be determined by file size - small files can be handled differently than large ones.
+
+[REFERENCE] Typical file size tiers and handling strategies:
+
+Choose your storage approach based on file size and access patterns:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ File Size / Use Case        │ Storage Approach                      │
+├─────────────────────────────┼───────────────────────────────────────┤
+│ Tiny (< 100KB)              │ Base64 in DB field (inline)           │
+│   e.g., small icons, logos  │   Pro: No extra infrastructure       │
+│                             │   Con: Bloats DB, no CDN caching     │
+├─────────────────────────────┼───────────────────────────────────────┤
+│ Small (100KB - 2MB)         │ Base64 in DB OR object storage       │
+│   e.g., icons, thumbnails   │   Choose based on read frequency     │
+│                             │   and whether you need CDN/variants  │
+├─────────────────────────────┼───────────────────────────────────────┤
+│ Medium (2MB - 50MB)         │ Object storage (S3, R2, GCS)         │
+│   e.g., documents, photos   │   Store URL/path in DB               │
+│                             │   Serve via CDN for performance      │
+├─────────────────────────────┼───────────────────────────────────────┤
+│ Large (50MB+)               │ Object storage + chunked upload      │
+│   e.g., videos, exports     │   Resumable uploads required         │
+│                             │   Background processing pipeline     │
+└─────────────────────────────┴───────────────────────────────────────┘
+```
+
+### Base64 / Inline Storage Pattern (for small files)
+
+```
+When to use:
+  - Files are small (< 2MB typically)
+  - Few files per entity (1-3 images)
+  - No need for CDN, variants, or separate processing
+  - Simpler infrastructure is a priority
+
+Flow (example - adapt to your client platform):
+  Client: Convert file to base64 string (e.g. FileReader in browsers, native APIs on mobile)
+  Client: Send base64 string in JSON body
+  Server: Validate prefix (data:image/...) + estimate size from string length
+  Server: Store as string field on the entity document
+  Display: Use data URL directly as img src
+
+Rules:
+  - Mirror size limit on BOTH client and server
+  - Validate MIME prefix on server (data:image/jpeg, data:image/png, etc.)
+  - Estimate decoded size: Math.ceil(base64String.length * 3 / 4)
+  - Be aware: large base64 strings in JWT/session tokens hurt performance
+  - Consider: if images grow beyond 2-3 per entity, switch to object storage
+```
+
+### Object Storage Pattern (for medium/large files)
+
+```
+When to use:
+  - Files are > 2MB or many files per entity
+  - Need CDN delivery, variants (thumbnail/medium/large), or processing
+  - Multi-region delivery matters
+  - Need to serve files without loading from DB
+
+Flow:
+  Client: Upload via multipart form or presigned URL
+  Server: Validate, process, store in bucket
+  Server: Save file metadata (URL, size, type) in DB
+  Display: Serve from CDN URL
+```
+
+---
+
+## Upload Flow (Object Storage)
+
+```
+Client                              Server                          Storage
+  │                                    │                               │
+  ├─ Validate (type, size) ──────────>│                               │
+  │                                    ├─ Validate again (type, size)  │
+  │                                    ├─ Scan for malware (optional)  │
+  │                                    ├─ Generate unique filename     │
+  │                                    ├─ Process (resize, compress)   │
+  │                                    ├─ Upload to storage ──────────>│
+  │                                    ├─ Save file record to DB       │
+  │<─── Return file URL/ID ──────────┤                               │
+```
+
+---
+
+## Client-Side Rules
+
+### Before Upload
+
+- **Validate file type** - check extension AND MIME type (don't accept .exe renamed to .jpg)
+- **Validate file size** - reject before upload starts (don't waste bandwidth)
+- **Show preview** - image thumbnail, document name + icon, video first frame
+- **Show file info** - name, size, type before user confirms
+
+### During Upload
+
+- **Progress bar** - show actual upload progress (not indeterminate spinner)
+- **Cancel button** - user can abort upload at any time
+- **Disable submit** until upload completes (don't submit form with unfinished upload)
+- **Handle multiple files** - show individual progress for each file
+- **Retry on failure** - "Upload failed. [Retry]" (don't just show a generic error)
+
+### After Upload
+
+- **Show uploaded file** - thumbnail, filename, size, delete/replace button
+- **Confirm before replacing** - "This will replace the current file. Continue?"
+- **Success feedback** - brief toast or inline confirmation
+
+### Size Limits (Configurable Per Project)
+
+```
+Images (icon, photo):       5 MB default (adjust for high-res photography apps)
+Documents (PDF, DOCX):     25 MB default (adjust for legal/enterprise - up to 100MB)
+Videos:                     100 MB default, use chunked upload for larger (training/media apps may need 500MB+)
+General attachments:        10 MB default
+Bulk upload total:          500 MB per batch (adjust based on use case)
+```
+
+---
+
+## Server-Side Rules
+
+### Validation (NEVER Trust the Client)
+
+```
+1. Check MIME type by reading file header (magic bytes) - NOT just the extension
+   A file named "photo.jpg" could contain executable code
+
+2. Whitelist allowed MIME types per upload context:
+   Small image: image/jpeg, image/png, image/webp
+   Document:   application/pdf, application/msword, application/vnd.openxmlformats-officedocument.*
+   General:    (define per feature)
+
+3. Check file size against server limit (reject large files ASAP)
+   Return 413 Payload Too Large if exceeded
+
+4. Scan for malware (ClamAV or cloud scanning service) - recommended for user-uploaded files
+
+5. Strip EXIF metadata from images (GPS coordinates, camera info = privacy risk)
+```
+
+### Filename Handling
+
+```
+BANNED:
+  Use the original filename as-is
+  ../../etc/passwd    <- path traversal
+  file name (1).jpg   <- spaces and special chars
+  logo.jpg            <- collisions
+
+REQUIRED:
+  Generate a unique filename:
+    {uuid}.{extension}
+    a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg
+
+  Store the ORIGINAL filename in the database (for display) but NEVER use it for storage.
+```
+
+### Processing
+
+```
+Images:
+  1. Resize to needed dimensions (don't store 5000x5000 for a 200px inline display)
+  2. Generate variants:
+     thumbnail:  150x150  (lists, grids)
+     medium:     600x600  (detail views)
+     large:      1200x1200 (full view, zoom)
+  3. Compress (JPEG quality 80-85%, WebP preferred for web)
+  4. Optionally convert to modern format (WebP or AVIF) for web delivery
+
+Documents:
+  1. Extract text for search indexing (optional)
+  2. Generate PDF preview thumbnail (optional)
+  3. Validate document structure (don't accept corrupt files)
+
+Videos:
+  1. Transcode to web-friendly format (H.264 / MP4)
+  2. Generate thumbnail from first frame or middle frame
+  3. Create multiple quality variants (360p, 720p, 1080p)
+  4. Process asynchronously - don't block the upload response
+```
+
+---
+
+## Storage
+
+### Where to Store Files
+
+Refer to the **Storage Strategy Decision** table above to pick the right approach.
+
+```
+IN THE DATABASE (base64 string or small BLOB):
+  - Valid for: small files < 2MB per entity (small images, icons, signatures)
+  - Store as string field on the entity (e.g., entity.inlineImage)
+  - Simpler architecture - no separate storage service needed
+  - Trade-off: increases document/row size, no CDN, no variants
+
+OBJECT STORAGE (S3, R2, GCS, MinIO):
+  - Required for: files > 2MB, many files per entity, CDN delivery, variant generation
+  - Store URL/path in DB, serve from CDN
+  - Scales independently of the database
+
+NEVER:
+  - In the git repository
+  - In the application's file system for production (doesn't scale, lost on deploy)
+  - Large files (> 2MB) as base64 in session tokens or JWTs
+
+For development:
+  - Local file system is OK for dev/testing
+  - Use the same API interface as production (so switching needs no code change)
+```
+
+### Storage Structure
+
+```
+{bucket}/
+├── images/
+│   ├── {uuid}-thumbnail.webp
+│   ├── {uuid}-medium.webp
+│   └── {uuid}-large.webp
+├── files/
+│   ├── {uuid}.pdf
+│   └── {uuid}-preview.jpg
+├── misc/
+│   └── {uuid}.{ext}
+└── temp/
+    └── {uuid}.{ext}        <- cleaned up after 24 hours
+```
+
+### Database Record
+
+**For inline/base64 storage** - the file IS the field:
+
+```
+{
+  id: "entity-123",
+  name: "...",
+  inlineImage: "data:image/png;base64,iVBOR...",  // stored directly on the entity
+  // No separate file record needed
+}
+```
+
+**For object storage** - every file gets a separate record:
+
+```
+{
+  id: "file-uuid",
+  originalName: "quarterly-report.pdf",
+  storagePath: "files/a1b2c3d4.pdf",
+  mimeType: "application/pdf",
+  size: 2456789,                          // bytes
+  variants: {                             // for images
+    thumbnail: "images/a1b2c3d4-thumbnail.webp",
+    medium: "images/a1b2c3d4-medium.webp",
+    large: "images/a1b2c3d4-large.webp"
+  },
+  uploadedBy: "user-123",
+  entityType: "Resource",                  // what this file is attached to
+  entityId: "resource-456",
+  createdAt: "2024-01-15T10:30:00Z"
+}
+```
+
+---
+
+## Serving Files
+
+### Direct Serving (Public Files)
+
+```
+For files that don't need access control:
+  - Serve via CDN (CloudFront, Cloudflare, etc.)
+  - Long cache headers (images rarely change)
+  - Use image CDN for on-the-fly transforms (Cloudinary, imgix, Cloudflare Images)
+```
+
+### Signed URLs (Private Files)
+
+```
+For files that need access control:
+  1. User requests file access
+  2. Server checks permission (is this user allowed to see this file?)
+  3. Server generates a signed URL (expires in 15-60 minutes)
+  4. Client uses signed URL to download directly from storage
+  5. URL expires - can't be shared or bookmarked long-term
+
+Prefer signed URLs over proxying large files through your API server. Proxying is acceptable when you need virus scanning, audit logging, when the client can't follow redirects, or if your project requires watermarking or other per-request transforms.
+```
+
+### Image Optimization for Web
+
+```
+1. Use <picture> element with multiple sources:
+   <picture>
+     <source srcset="photo.avif" type="image/avif">
+     <source srcset="photo.webp" type="image/webp">
+     <img src="photo.jpg" alt="Description" loading="lazy">
+   </picture>
+
+2. Responsive images with srcset:
+   <img srcset="photo-400w.jpg 400w, photo-800w.jpg 800w, photo-1200w.jpg 1200w"
+        sizes="(max-width: 640px) 400px, (max-width: 1024px) 800px, 1200px"
+        src="photo-800w.jpg" alt="Description" loading="lazy">
+
+3. Lazy loading for images below the fold (loading="lazy")
+
+4. Blur-hash or low-quality placeholder while loading
+
+5. Specify width and height to prevent layout shift
+```
+
+---
+
+## Deletion
+
+### Soft Delete (Default)
+
+```
+1. Mark file record as deleted (deletedAt timestamp)
+2. Keep file in storage for retention period (30-90 days)
+3. Cron job permanently deletes expired soft-deleted files
+4. User sees "File deleted" - can be restored within retention period (optional)
+```
+
+### Hard Delete
+
+```
+When to hard delete:
+  - User requests account deletion (GDPR right to erasure)
+  - Compliance requirement
+  - Storage cost optimization after retention period
+
+Process:
+  1. Delete from storage (all variants)
+  2. Delete database record
+  3. Delete from CDN cache (purge)
+  4. Log deletion for audit trail
+```
+
+### Orphan Cleanup
+
+```
+Problem: Files uploaded but never attached (user started upload, didn't submit form)
+
+Solution:
+  - Upload to temp/ directory first
+  - Move to permanent location when form is submitted
+  - Cron job deletes temp files older than 24 hours
+  - Track file status: temp -> attached -> deleted
+```
+
+---
+
+## Security
+
+1. **Validate MIME by magic bytes** - not just extension or Content-Type header
+2. **Whitelist allowed types** - never blacklist (always incomplete)
+3. **Rename all files** - UUIDs only, never user-provided names
+4. **Store outside web root** - files should NOT be directly accessible via URL path traversal
+5. **Scan for malware** on upload (especially for user-generated content)
+6. **Strip metadata** from images (EXIF data contains GPS, device info)
+7. **Signed URLs for private files** - never expose raw storage paths
+8. **Rate limit uploads** - prevent abuse (configurable per role: e.g., 10/hour for regular users, higher for privileged roles)
+9. **Content-Disposition header** - set to `attachment` for downloadable files, `inline` for viewable files
+10. **X-Content-Type-Options: nosniff** - prevent MIME type sniffing
+11. **CSP for user content** - serve user-uploaded files from a different domain/subdomain to prevent XSS
+
+---
+
+## Chunked Upload (Large Files)
+
+For files over 10MB, use chunked upload:
+
+```
+1. Client requests upload session: POST /api/uploads/init { filename, totalSize, mimeType }
+   -> Server returns { uploadId, chunkSize: 5MB }
+
+2. Client splits file into chunks and uploads each:
+   PUT /api/uploads/{uploadId}/chunks/{chunkNumber}
+   -> Server stores chunk temporarily
+
+3. Client signals completion: POST /api/uploads/{uploadId}/complete
+   -> Server reassembles chunks, validates, processes
+
+4. Server returns final file record
+
+Benefits:
+  - Resumable uploads (retry only failed chunks)
+  - Progress tracking per chunk
+  - Works on slow/unreliable connections
+  - No timeout issues for large files
+```
+
+---
+
+## Checklist
+
+- [ ] Client-side validation (type, size) before upload
+- [ ] Server-side validation (magic bytes, size, whitelist)
+- [ ] Progress bar during upload
+- [ ] Cancel/retry capability
+- [ ] Unique generated filenames (UUIDs)
+- [ ] Original filename stored in DB (for display only)
+- [ ] Image resizing and variant generation
+- [ ] Modern format conversion (WebP/AVIF)
+- [ ] Appropriate storage strategy per file type (object storage for large files, DB for small inline data - see Storage Strategy Decision above)
+- [ ] CDN for public files
+- [ ] Signed URLs for private files
+- [ ] Metadata stripped from images
+- [ ] Lazy loading for images in UI
+- [ ] Blur-hash or placeholder while loading
+- [ ] Width/height set to prevent layout shift
+- [ ] Soft delete with retention period
+- [ ] Orphan file cleanup (temp files)
+- [ ] Rate limit on uploads
+- [ ] File records in database with upload tracking

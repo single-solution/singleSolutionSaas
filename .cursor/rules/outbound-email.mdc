@@ -1,0 +1,257 @@
+---
+description: Transactional email. Apply when sending email.
+alwaysApply: false
+---
+
+# Email & Transactional Outbound Channels
+
+**Capability test:** Skip this file unless the project sends email or other outbound subscriber channels.
+
+Coding patterns for sending emails and managing subscriber-facing channels. IF your project sends email or other outbound channels, apply these patterns.
+
+> [REFERENCE] Channel categories listed here describe PATTERNS (how to classify and implement), not a product backlog. Build what your project needs. All numeric values are [DEFAULT].
+
+---
+
+## Subscriber Channels
+
+IF your app has user-directed outbound communication, consider multiple channels. The subscriber's preference determines which channels are active.
+
+```
+Channel          When to Use                                Delivery Guarantee
+─────────────────────────────────────────────────────────────────────────────
+In-app           Always (primary for active users)          Best-effort
+Push (mobile)    User is not in-app (background/offline)    Best-effort
+Email            Important, non-urgent, or audit-worthy     Reliable
+SMS              Critical, time-sensitive (2FA, alerts)     Reliable, expensive
+```
+
+---
+
+## Email Categories (HOW to categorize)
+
+Use **three abstract buckets** so routing, consent, and batching stay consistent:
+
+### **Transactional**
+
+Immediate, usually triggered by a system or user action. High integrity: sent even when bulk is paused. Examples of the *pattern*: confirmations, auditable records of an action, credential or account events - implement only what your domain requires.
+
+### **Informational**
+
+Updates that matter but are not always urgent. Often batch-friendly. Examples of the *pattern*: state changes the subscriber should know about, summaries of activity - name and prioritize types for your domain.
+
+### **Bulk**
+
+Scheduled or broadcast sends to many subscribers. Requires explicit consent where applicable and stricter rate and unsubscribe handling.
+
+### Priority ladder (implementation hint)
+
+```
+High priority (process immediately, no batching):
+  - Security-sensitive events
+  - Time-sensitive, user-initiated flows that need a durable email record
+
+Normal priority (may be batched or delayed):
+  - Informational updates about entities the subscriber owns or follows
+
+Low priority (batch-friendly):
+  - Informational summaries
+  - Bulk sends (comply with consent and applicable regulations)
+```
+
+---
+
+## Email Template Structure
+
+### Every Email Contains
+
+```
+┌─────────────────────────────────────┐
+│  Logo / Brand header                │
+├─────────────────────────────────────┤
+│                                     │
+│  Greeting: "Hi {{firstName}},"      │
+│                                     │
+│  Body: Clear, concise copy          │
+│  explaining what happened and       │
+│  what action to take (if any).      │
+│                                     │
+│  ┌──────────────────────┐           │
+│  │   Primary Action     │           │ <- single CTA button
+│  └──────────────────────┘           │
+│                                     │
+│  Fallback: plain-text link below    │
+│  the button for email clients       │
+│  that don't render buttons.         │
+│                                     │
+├─────────────────────────────────────┤
+│  Footer:                            │
+│  - Company name / address           │
+│  - Unsubscribe link (REQUIRED)    │
+│  - User preferences endpoint link  │
+│  - "Why am I getting this?" note    │
+└─────────────────────────────────────┘
+```
+
+### Rules
+
+- **Plain text version** for every HTML email (some clients strip HTML)
+- **Responsive** - test on major clients and mobile
+- **Single primary CTA** per email - don't overwhelm with multiple actions
+- **Sender name** is recognizable: "AppName" or "Team at AppName" - not "noreply"
+- **Reply-to** set to a monitored address (even if the from address is noreply@)
+- **Subject line** is clear, specific, and under 50 characters:
+  - "Action required: [short description]" not "Update"
+  - "Your [resource] has been updated" not "Something changed"
+- **Preheader text** (preview text) supplements the subject - not a repeat of it
+- **No images for critical info** - some email clients block images; copy must be readable without them
+- **Contrast** - ensure text/background contrast is readable across common client rendering modes
+
+---
+
+## Email Sending Architecture
+
+```
+App Event -> Dispatch Service -> Queue -> Email Worker -> SMTP Provider -> Inbox
+
+Components:
+  1. Dispatch Service      - decides what to send, to whom, on which channel
+  2. Subscriber preferences - checks if the subscriber wants this category/channel
+  3. Template Renderer      - builds HTML + plain text from template + data
+  4. Queue                  - async job queue (don't send in the request cycle)
+  5. Email Worker           - pulls from queue, sends via SMTP/API
+  6. SMTP Provider          - SendGrid, AWS SES, Mailgun, etc.
+  7. Delivery Tracking      - bounce, open, click tracking
+```
+
+### Rules
+
+- **Queue emails** instead of sending synchronously in the API request handler - "send immediately" above means the queue processes it right away, not that you block the API response
+- **Retry failed sends** - 3 retries with exponential backoff (1min, 5min, 30min)
+- **Handle bounces** - mark email as invalid after hard bounce; suppress future sends
+- **Process opt-outs** - handle unsubscribe webhooks from the email provider
+- **Rate limit outbound email** - respect provider limits; follow deliverability best practices
+- **Log every email sent** - recipient (masked), template, timestamp, delivery status
+- **Test with real provider** in staging (not just console.log) - verify formatting before production
+
+---
+
+## Subscriber Preference Grid Pattern (IF your app has preference UI)
+
+**Principle:** Users should control which notifications they receive and through which channels. Provide granular opt-out.
+
+[REFERENCE] Common notification channel matrix:
+
+```
+Category / channel        In-App    Push    Email    SMS
+────────────────────────────────────────────────────────
+Critical / Security       yes *       yes       yes *     yes
+  (cannot disable)
+Category A                yes         yes       yes       off
+Category B                yes         yes       yes       off
+Category C                yes         yes       off       off
+Low-frequency summaries   n/a         n/a       yes       n/a
+
+yes = on by default    off = off by default    * = mandatory (cannot disable)    n/a = not applicable
+```
+
+### Rules
+
+- **Security-sensitive events** are always sent by default - subscribers should not be able to opt out of critical security alerts
+- **Sensible defaults** - don't enable everything by default; avoid long opt-out checklists
+- **Per-channel granularity** - let subscribers choose email vs push vs in-app per category
+- **Batch frequent updates** - batched updates beat many near-duplicate emails in a short window
+- **Quiet hours** - respect "do not disturb" settings (don't send push at 3 AM)
+- **Unsubscribe from email** - one-click unsubscribe in every bulk-capable send; comply with applicable regulations for bulk sending
+
+---
+
+## Email Template Management
+
+```
+Template storage:
+  Option A: In-code templates (version controlled, deployed with app)
+    templates/
+    ├── template-a.html
+    ├── template-a.txt
+    ├── template-b.html
+    ├── template-b.txt
+    └── ... (one pair per template id)
+
+  Option B: Email provider's template system (managed in their console)
+    Pro: Non-developers can edit
+    Con: Not version controlled, harder to test
+
+Recommended: Option A for critical transactional templates; Option B acceptable for large bulk programs if governance allows.
+```
+
+### Template Variables
+
+```
+Every template has access to:
+  {{appName}}           - "MyApp"
+  {{appUrl}}            - "https://myapp.com"
+  {{recipientName}}     - "Pat"
+  {{recipientEmail}}    - "pat@example.com"
+  {{currentYear}}       - "2024"
+  {{unsubscribeUrl}}    - one-click unsubscribe link
+  {{preferencesUrl}}    - user preferences endpoint URL
+
+Plus template-specific variables (whatever your feature needs):
+  e.g., {{actionUrl}}, {{expiryHours}}, {{entityTitle}}, {{actorName}}
+```
+
+---
+
+## Delivery Tracking
+
+```
+Track for every email:
+  - Queued: added to send queue
+  - Sent: accepted by email provider
+  - Delivered: reached recipient's mail server
+  - Bounced: delivery failed (hard bounce = invalid email, soft bounce = mailbox full)
+  - Opened: recipient opened (pixel tracking - unreliable with privacy proxies)
+  - Clicked: recipient clicked a link
+  - Unsubscribed: recipient clicked unsubscribe
+  - Recipient-reported abuse: flagged via the mailbox provider
+
+Actions:
+  - Hard bounce -> mark email as invalid, stop sending
+  - Soft bounce -> retry 3 times, then suppress for 7 days
+  - Abuse signals -> suppress immediately, review template and list hygiene
+  - Unsubscribe -> update preferences, confirm via UI
+```
+
+Apply **deliverability best practices**: list hygiene, authentication records (SPF, DKIM, DMARC), and provider feedback loops - without tying the section to a single jurisdiction's statute text.
+
+---
+
+## Security
+
+- **Never include sensitive data in email** - no secrets, no full tokens, no personal data beyond what's necessary
+- **Time-limited action links** - short expiry, single-use where appropriate
+- **Account existence privacy** - use neutral copy ("If an account exists, we sent instructions") instead of confirming or denying addresses
+- **SPF, DKIM, DMARC** records configured for sending domain (prevents spoofing)
+- **Track link URLs don't expose internal paths** - use redirects through your domain
+- **Sanitize dynamic content** in templates - prevent HTML injection via user-provided data
+
+---
+
+## Checklist
+
+Before going live with email:
+
+- [ ] All email categories your features need are implemented
+- [ ] Plain text version exists for every HTML email
+- [ ] Emails tested on Gmail, Outlook, Apple Mail, mobile
+- [ ] Readable contrast verified across common clients
+- [ ] Unsubscribe link works in every applicable email
+- [ ] Subscriber preferences accessible (if multi-channel)
+- [ ] SPF, DKIM, DMARC records configured
+- [ ] Bounce handling implemented
+- [ ] Emails queued (not sent synchronously)
+- [ ] Retry logic for failed sends
+- [ ] No sensitive data in email content
+- [ ] Subject lines are specific and under 50 chars
+- [ ] Sender name is recognizable (not "noreply")

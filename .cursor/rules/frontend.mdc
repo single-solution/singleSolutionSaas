@@ -1,0 +1,298 @@
+---
+description: UI components, fetch, forms, loading states. Apply for web UI work.
+alwaysApply: false
+---
+
+# Frontend Patterns
+
+Coding patterns for building user interfaces. Applies to React, Vue, Svelte, Angular, or plain HTML/CSS/JS. Examples use React/JSX syntax for illustration - adapt to your framework. IF your project has a UI, apply these patterns.
+
+> All numeric values in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Component Structure
+
+- **One primary export per file** - small helper components tightly coupled to the main component can live in the same file (e.g., a `Row` helper inside `Table.tsx`), but don't export them separately
+- **Colocate related code** - styles, tests, and types near the component
+- **File length** - follow the tiered limits in `code-formatting.md` (simple components ~200, complex modules up to 1500)
+- **Props over internal state** for configurable components
+- **Composition over inheritance** - build from smaller pieces
+
+---
+
+## Responsive Design (Mobile-First)
+
+**Default: every page should work from 375px to 4K.** Exception: specialized data-dense views and data-heavy tables (complex grids, analytics, multi-column reports) may target 768px+ minimum with a "best on desktop" note.
+
+- Start with mobile layout, add complexity for larger screens
+- Prefer relative units (rem, %, vw/vh) for layout. px is fine for hairlines, shadows, and specific design tokens.
+- Breakpoints: 640px (sm), 768px (md), 1024px (lg), 1280px (xl)
+- Test on: iPhone SE (375px), iPad (768px), Desktop (1440px)
+- Touch targets: minimum 44x44px on mobile
+- Avoid horizontal scroll on content pages. Data tables, Gantt charts, and code blocks may use horizontal scroll with proper scroll indicators.
+- Navigation: hamburger/drawer on mobile, full nav on desktop
+
+---
+
+## State Management
+
+**Principle:** Classify state by ownership and lifetime - where it originates and how long it lives determines where it should be stored.
+
+[REFERENCE] Common state categories:
+
+- **Local state** for: form inputs, toggles, modals, dropdowns, UI-only concerns
+- **Global state** for: current user, permissions, theme, app-wide data shared across routes
+- **Server state** for: API data - use a caching fetch hook (SWR/React Query/equivalent)
+- **URL state** for: filters, pagination, active tabs - anything the user might share/bookmark
+
+**Rules:**
+- Avoid duplicating server data in global state - use caching fetch hooks (SWR/React Query) as the source of truth
+- Form state belongs in local/component state by default. Multi-step wizards or cross-page drafts may use global or URL state.
+- Derive computed values - don't store them separately
+- Clear global state on session end
+
+---
+
+## Data Fetching
+
+- **Centralized fetch hook** with built-in caching, revalidation, and error handling
+- **Loading state** for every async operation (no blank screens)
+- **Error state** with retry button for failed requests
+- **Optimistic updates** for instant-feeling mutations (revert on failure)
+- **Prefetch** on hover/focus for likely navigation targets
+- **Deduplicate** concurrent identical requests
+
+---
+
+## Loading States
+
+**Every async UI should handle three states: loading, success, error.** Stale-while-revalidate patterns (show cached data + background refresh) count as handling all three.
+
+- **Page loads**: Full skeleton matching content shape
+- **Button actions**: Spinner inside button + disabled state
+- **Inline updates**: Subtle loading indicator near the affected area
+- **Transitions**: Smooth fade/slide between states (no jumps)
+
+**Never:**
+- Show a blank white page while loading
+- Show content then jump when data arrives (layout shift)
+- Use a full-page spinner for partial updates
+
+### Skeletons MUST Match the Loaded Shape
+
+A skeleton is not a generic gray box - it is a low-fidelity copy of the real layout. A skeleton that does not match what loads causes the exact layout shift it was meant to prevent.
+
+- **Same layout primitives** - build the skeleton from the same grid/flex container, column count, gaps, and section padding as the real component. Prefer extracting the layout so the skeleton and the loaded view share it.
+- **Same dimensions** - card width/height, image aspect ratio, number of placeholder rows/items, and hero/section heights match the real content (or its typical size). Reserve the space the content will occupy.
+- **Same breakpoints** - the skeleton is responsive the same way the content is (mobile grid vs desktop grid must match).
+- **Match count, within reason** - render roughly the number of items the first paint shows (e.g. a product grid skeleton shows a full row, not one card).
+- **No CLS on hydration** - when real data replaces the skeleton, nothing should move. If it moves, the skeleton was the wrong shape.
+- **Keep it in sync** - when you change a component's layout, update its skeleton in the same change. A drifted skeleton is a bug.
+
+---
+
+## Forms
+
+Forms are where most UX is won or lost. These are the default best practices - apply them unless a specific design overrides one.
+
+### Structure & Inputs
+
+- **Controlled inputs** - state drives the value, always.
+- **Right input type for the data** - `email`, `tel`, `number`, `url`, `date`, `password`. This gets free validation, correct mobile keyboards, and pickers.
+- **Set `autocomplete` / `name` attributes** (e.g. `email`, `current-password`, `new-password`, `one-time-code`, address tokens) so browsers and password managers autofill correctly. Never break password managers.
+- **Visible label above every field** (never placeholder-only). Placeholder is an example, not a label.
+- **Mark optional or required consistently** - pick one (usually mark optional when most fields are required) and show it the same way everywhere.
+- **Helper text and constraints up front** - show format/limits before the user errs (e.g. "8+ characters"), not only after.
+- **Sensible defaults and smart ordering** - prefill what you know, order fields logically, group related fields, one column for linear flows.
+- **Input affordances** - character counters near limits, input masking for structured data (phone, card), units and prefixes inside the field.
+
+### Validation
+
+- **Credential/security fields** (username, password, etc.): validate on **blur** and on **submit**.
+- **Other fields:** validate on **submit** only (avoid noisy inline validation while typing).
+- **Once a field has errored, re-validate as the user fixes it** so the error clears live.
+- **Validate on the server too** - client validation is UX, never the security boundary (see `security.md`).
+
+### Error UX
+
+- **Errors inline below the field**, tied to it with `aria-describedby`; mark the field `aria-invalid`.
+- **Focus the first invalid field** on failed submit (no top-of-form summary block).
+- **Specific, human messages** - "Enter a valid email" not "Invalid input"; never dump raw server errors.
+- **Map server/API errors back to the offending field** when possible; toast only for non-field or unexpected failures.
+- **Never clear what the user typed** on a failed submit.
+
+### Submission
+
+- **Disable the submit button while the request is in progress** and show a spinner in it - prevents double submit.
+- **Idempotent submit** - guard against duplicate creates from rapid clicks/retries (see `ecommerce.md` / `api-design.md` for money paths).
+- **Mutation feedback is mandatory** - MUST give user-visible success. Channel test: cart/add/remove -> toast; settings/password/profile -> inline success OK.
+- **Keep the user oriented after submit** - clear feedback, then navigate or reset deliberately; do not leave them guessing.
+
+### Longer & Multi-step Forms
+
+- **Autosave / draft** long or important forms so a refresh or crash does not lose work; restore the draft on return.
+- **Unsaved-changes warning** when closing modals/drawers or navigating away from a dirty form.
+- **Multi-step:** show progress, validate per step, let users go back without losing data, summarize before final submit.
+
+### Accessibility & Mobile
+
+- **Auto-focus** the first field on page load / modal open (skip auto-focus if it would scroll past important context).
+- **Keyboard support** - Enter submits, Tab order is logical, Escape closes a form modal (with dirty-check).
+- **Touch targets** at least the project's minimum (commonly 44px); enough spacing to avoid mis-taps.
+- **Do not disable zoom**; keep font-size large enough that mobile browsers do not auto-zoom inputs.
+
+---
+
+## UX Defaults (never ignore these)
+
+The rulebook is not just "make it work" - these baseline experiences MUST be present unless a design explicitly removes one. Skipping them is a defect, not a shortcut.
+
+- **Every async path has loading + error + empty states** - never a blank screen, never a spinner with no escape. Empty states show a message and (usually) an action.
+- **Every action gives feedback within one frame** - a press state, spinner, or optimistic update; the user never wonders if the click registered.
+- **Optimistic updates** for quick mutations, with revert on failure.
+- **Destructive actions confirm** and use danger styling; offer undo where feasible instead of a scary dialog.
+- **No dead ends** - error and empty screens always offer a next step (retry, go back, contact, create first item).
+- **Disabled controls explain why** (tooltip/helper text) - never a dead button with no reason.
+- **Preserve user context** - keep scroll position, selected filters, and tabs in the URL so refresh/back/share work (see `search-filtering.md`); back button does what users expect.
+- **Remember reasonable choices** - last-used settings, dismissed banners, theme, table density - within privacy limits.
+- **Copy/clipboard and similar quiet actions confirm** ("Copied").
+- **Respect system preferences** - reduced motion, color scheme, language, reduced data.
+- **Responsive and touch-friendly by default** - mobile-first, real touch targets, no hover-only interactions.
+- **Instant-feeling navigation** - prefetch likely routes, keep layout stable, avoid full reloads (see `performance.md`).
+- **Forgiving by default** - confirm before data loss, support undo, autosave drafts, never punish a mis-click.
+
+---
+
+## Toast / Notifications
+
+Every mutation should have feedback (toast or inline per channel test above).
+
+**API errors:** map to form fields when possible; toast only for non-field or unexpected failures.
+
+**Accessibility:** toast region MUST use `aria-live` (polite for success, assertive for errors).
+
+- **Success**: Auto-dismissing notification - `[DEFAULT]` 3 seconds
+- **Error**: Persistent notification (stays longer or until dismissed) - `[DEFAULT]` 8 seconds
+- **Info**: Brief notification for informational messages
+- **Position**: Pick one position and be consistent across the app - `[DEFAULT]` top-right or bottom-right
+- **Stack**: Multiple notifications stack vertically, not overlap
+- **Colors/styling**: Follow your design system tokens (see `ui-design-system.md`), not hardcoded colors
+
+---
+
+## Theming / Dark Mode (IF your project supports theming or multiple visual themes)
+
+Patterns for implementing theme support when your project includes it:
+
+- **CSS variables** for all colors - avoid hardcoding hex values (makes theming easier even without dark mode)
+- **System preference** detection on first load (`prefers-color-scheme`)
+- **Manual toggle** that overrides system preference
+- **Persist choice** in localStorage
+- **No flash** on page load (apply theme before paint via script in `<head>`)
+- **Test both modes** - no invisible text, missing borders, or broken contrast
+
+---
+
+## Accessibility (MUST in touched files)
+
+Apply to every file the agent opens or edits for UI - not a whole-app backfill mandate.
+
+- **Semantic HTML**: Use `<button>`, `<nav>`, `<main>`, `<form>`, `<label>` - not div-for-everything
+- **Labels on every input**: Visible label or aria-label (no placeholder-only inputs)
+- **Focus management**: Visible focus ring on all interactive elements
+- **Keyboard navigation**: Every feature usable without mouse (Tab, Enter, Escape)
+- **Color contrast**: 4.5:1 minimum for text, 3:1 for large text/icons
+- **Alt text** on meaningful images (empty alt for decorative)
+- **aria-live** for dynamic content updates (toast, loading status)
+- **Modals/drawers:** focus trap while open; restore focus to trigger on close
+- **Icon-only controls:** accessible name (`aria-label`); tooltip SHOULD supplement, not replace the name
+- **Destructive actions:** danger styling + confirm before irreversible delete
+- **Escape key** closes modals/dropdowns
+- **Skip navigation** link for keyboard users
+- **Reduced motion**: MUST respect `prefers-reduced-motion` - provide static alternative
+- **Empty states**: MUST show message ± action when lists/grids have zero results - not blank UI
+- **Error boundaries**: PREFER per route/feature segment - not only a root error page
+
+---
+
+## Animations
+
+- **Purposeful only** - animation must communicate something (entry, exit, state change)
+- **Fast**: 100-200ms for UI feedback (hover, toggle), 200-300ms for page transitions - use your project's defined duration tokens consistently
+- **Ease curves**: ease-out for entries, ease-in for exits
+- **No animation** for reduced-motion preference
+- **Never block interaction** waiting for animation to finish
+- **Consistent** - same type of elements animate the same way everywhere
+
+---
+
+## Server-Side Data Bootstrap (SSR / RSC)
+
+IF your framework supports server-side rendering or server components, pass **initial data** from server to client to avoid redundant fetches on hydration:
+
+```
+Pattern:
+  Server Component / getServerSideProps:
+    -> Load current session + permissions + initial data in parallel
+    -> Pass as props / initialData to client Provider components
+
+  Client Provider:
+    -> Accepts initialData prop
+    -> Uses it as starting cache value (skip first fetch)
+    -> Revalidates in background as normal
+```
+
+- Fetch auth state + initial data in a single `Promise.all` on the server - don't waterfall
+- Client providers should accept `initialData` and treat it as pre-filled cache
+- The client still revalidates normally after hydration - the bootstrap just prevents a loading flash
+- Keep server-only imports (DB, secrets) out of shared code - use dynamic imports or separate files if needed
+
+---
+
+## Client-Side Data Cache (Inflight Deduplication)
+
+Whether you use a library (SWR, React Query, Apollo) or a custom hook, your client data layer should handle:
+
+```
+Requirements:
+  1. Cache by key      -> same key returns cached data instantly
+  2. Stale time        -> cached data older than N seconds triggers background refetch
+  3. Inflight dedup    -> 5 components requesting the same key = 1 HTTP call
+  4. Invalidation      -> after a mutation, invalidate related cache keys (by prefix or exact)
+  5. Subscribers       -> components re-render when their key's data changes
+```
+
+- Every data-fetching component uses the same cache layer - never mix raw `fetch` and cached hooks
+- Invalidation by key prefix (e.g., invalidate all keys starting with `resources:`) after mutations
+- Prefetch on hover/focus for likely navigation targets (reuses the same cache)
+- On session end, clear the entire cache
+
+### Polling: One Subscriber, Many Consumers
+
+When several mounted components need the same periodically-refreshed data (unread counts, chat/notification badges, live status, presence), do NOT let each component run its own `setInterval` + fetch. That multiplies identical requests by the number of mounts.
+
+- **Single shared poller** - one interval per data key (in a context/provider, store, or a module-level singleton). Mounted components subscribe and read from it; they do not each poll.
+- **Reference-count the interval** - start the timer when the first subscriber mounts, stop it when the last unmounts. No background polling with zero consumers.
+- **Pause when hidden** - stop or slow the poll while the tab is backgrounded (`visibilitychange`); resume + refetch immediately on focus.
+- **Prefer push when it exists** - if the data has a realtime channel (WebSocket/SSE), use it instead of polling (see `realtime.md`); poll only as a fallback.
+- **Back off on error** - on repeated failures, widen the interval instead of hammering the server.
+
+---
+
+## Error Boundaries
+
+- **Global error boundary** catches unhandled errors, shows 500 page
+- **Feature-level boundaries** catch errors in specific sections without killing the whole app
+- **Never show raw errors** to users - log them, show safe user-facing text
+- **Retry mechanism** for transient failures (network errors)
+
+---
+
+## Images & Media
+
+- **Lazy load** images below the fold
+- **Responsive images** with srcset or equivalent
+- **Placeholder** while loading (blur hash, solid color, or skeleton)
+- **Max file size** indication on upload forms
+- **Fallback** for broken images (default placeholder graphic)

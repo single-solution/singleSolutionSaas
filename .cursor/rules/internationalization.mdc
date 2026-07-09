@@ -1,0 +1,320 @@
+---
+description: Locales and i18n. Apply only when project enables multiple locales.
+alwaysApply: false
+---
+
+# Internationalization (i18n) & Localization (l10n)
+
+**Capability test:** Agents skip this file until the project enables multiple locales. When single-locale is documented, literals on new UI are OK; use keys when i18n is planned.
+
+Coding patterns for apps that support multiple languages/regions. IF your project needs i18n, apply these patterns. Starting early is easier than retrofitting.
+
+All numeric values in this file are [DEFAULT] - adjust per project.
+
+---
+
+## The Golden Rule
+
+**Never hardcode user-facing strings in source code.** Every string the user sees - labels, buttons, inline copy, errors, placeholders - lives in a translation file, not inline in the component.
+
+---
+
+## Architecture
+
+```
+Source code          Translation files          Runtime
+  │                      │                        │
+  │  t("greeting") ──>  en.json: "Hello"    ──>  "Hello"
+  │                      ar.json: "أهلاً"    ──>  "أهلاً"
+  │                      es.json: "Bienvenido"──> "Bienvenido"
+```
+
+### Translation File Structure
+
+```
+locales/
+├── en/
+│   ├── common.json        # Shared strings (buttons, labels, navigation)
+│   ├── feature-a.json      # Feature A strings
+│   ├── feature-b.json      # Feature B strings
+│   ├── errors.json         # User-visible fault text
+│   └── validation.json     # Form validation copy
+├── ar/
+│   ├── common.json
+│   ├── auth.json
+│   └── ...
+└── es/
+    ├── common.json
+    └── ...
+```
+
+**Rules:**
+- One JSON file per feature/domain (don't dump everything in one file)
+- Keys are descriptive, dot-namespaced: `auth.entry.title`, `common.buttons.save`, `errors.notFound`
+- Pick one source/default language per project (English is the most common default, but use whatever fits your primary market)
+- Translation files are version-controlled (committed to git)
+- Never auto-translate for production - use professional translators or verified AI translation with human review
+
+---
+
+## String Rules
+
+### Never Hardcode
+
+```
+BANNED:
+  <button>Save Changes</button>
+  <h1>Example Page Title</h1>
+  toast("Record created successfully");
+  return { error: "This field is required." };
+
+REQUIRED:
+  <button>{t("common.buttons.save")}</button>
+  <h1>{t("common.pageTitle")}</h1>
+  toast(t("resources.created"));
+  return { error: t("validation.fieldRequired") };
+```
+
+### Never Concatenate Strings
+
+```
+BANNED:
+  t("hello") + " " + userName + ", " + t("youHave") + " " + count + " " + t("items")
+
+REQUIRED (use interpolation):
+  t("greeting", { name: userName, count: itemCount })
+
+  // en.json: "Hello {{name}}, you have {{count}} items"
+  // ar.json: "أهلاً {{name}}، لديك {{count}} عناصر"
+```
+
+Why: Sentence structure differs between languages. Arabic might put the count before the name.
+
+### Pluralization
+
+```
+BANNED:
+  `${count} item${count !== 1 ? "s" : ""}`
+
+REQUIRED (use ICU / i18n plural rules):
+  t("items.count", { count: itemCount })
+
+  // en.json:
+  {
+    "items": {
+      "count_zero": "No items",
+      "count_one": "{{count}} item",
+      "count_other": "{{count}} items"
+    }
+  }
+
+  // ar.json (Arabic has 6 plural forms):
+  {
+    "items": {
+      "count_zero": "لا عناصر",
+      "count_one": "عنصر واحد",
+      "count_two": "عنصران",
+      "count_few": "{{count}} عناصر",
+      "count_many": "{{count}} عنصراً",
+      "count_other": "{{count}} عنصر"
+    }
+  }
+```
+
+Why: English has 2 plural forms. Arabic has 6. Russian has 3. Don't assume `singular/plural` is universal.
+
+---
+
+## Date, Time & Number Formatting
+
+### Never Format Manually
+
+```
+BANNED:
+  `${month}/${day}/${year}`
+  `${value.toFixed(2)} USD`    // IF your project handles monetary values - still use Intl, not manual concatenation
+  `${hours}:${minutes} AM`
+
+REQUIRED (use Intl API or equivalent):
+  new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date)
+  // IF your project handles monetary values:
+  new Intl.NumberFormat(locale, { style: "currency", currency: "USD" }).format(amount)
+  new Intl.DateTimeFormat(locale, { timeStyle: "short" }).format(date)
+```
+
+### Format Examples by Locale
+
+```
+Date: January 15, 2024
+  en-US:  1/15/2024
+  en-GB:  15/01/2024
+  de-DE:  15.01.2024
+  ja-JP:  2024/01/15
+  ar-SA:  ١٥/٠١/٢٠٢٤
+
+Number: 1,234,567.89
+  en-US:  1,234,567.89
+  de-DE:  1.234.567,89
+  fr-FR:  1 234 567,89
+  ar-SA:  ١٬٢٣٤٬٥٦٧٫٨٩
+
+Currency (IF your project handles monetary values; skip if not applicable):
+  Example input: major units 1,500.00 with USD
+  en-US:  $1,500.00
+  de-DE:  1.500,00 $
+  ja-JP:  $1,500.00
+  ar-SA:  ١٬٥٠٠٫٠٠ US$
+```
+
+### Rules
+
+- **Always use Intl API** (built into every modern runtime) or the framework's equivalent
+- **Store dates as UTC** in the database; convert to user's timezone on display
+- **IF your project handles money:** store amounts as integers in the smallest currency unit (or fixed-scale decimal) to avoid floating-point errors
+- **Let the locale drive the format** - never assume MM/DD/YYYY or comma-as-thousands-separator
+- **Relative time** ("3 hours ago", "yesterday") must also be locale-aware
+
+---
+
+## RTL (Right-to-Left) Language Support
+
+### Languages That Are RTL
+
+**Principle:** Support RTL layouts for any language that reads right-to-left. Detect direction from the locale, don't hardcode a list.
+
+[REFERENCE] Languages commonly requiring RTL support:
+
+Arabic, Hebrew, Persian (Farsi), Urdu, Pashto, Sindhi, Kurdish (Sorani)
+
+### Layout Rules (Web - CSS/HTML)
+
+For web applications, use CSS logical properties. Mobile/native frameworks handle RTL via their own layout systems.
+
+```
+HTML:
+  <html dir="rtl" lang="ar">    <- set at document level
+
+CSS:
+  BANNED:
+    margin-left: 16px;
+    padding-right: 8px;
+    text-align: left;
+    float: left;
+
+  REQUIRED (logical properties):
+    margin-inline-start: 16px;
+    padding-inline-end: 8px;
+    text-align: start;
+    float: inline-start;
+
+  Or use shorthand:
+    margin-inline: 16px 0;     <- start: 16px, end: 0
+    padding-block: 8px 16px;   <- top: 8px, bottom: 16px
+```
+
+### What Flips in RTL
+
+- Text alignment (left -> right)
+- Reading direction (left-to-right -> right-to-left)
+- Navigation (sidebar on left -> sidebar on right)
+- Icons with direction (arrows, back buttons, progress bars)
+- Form labels (label left of input -> label right of input)
+- Lists and bullet points
+- Breadcrumbs and pagination
+
+### What Does NOT Flip
+
+- Images and photos (unless they contain text)
+- Video playback controls (play button stays play button)
+- Phone numbers
+- Code blocks
+- Mathematical formulas
+- Brand logos
+
+### Rules
+
+1. **Use CSS logical properties everywhere** - `margin-inline-start` not `margin-left`
+2. **Test every page in RTL** - set `dir="rtl"` and visually check every component
+3. **Mirror directional icons** - back arrow, forward arrow, checkmarks in lists
+4. **Don't mirror non-directional icons** - search, close, settings, account menu
+5. **Font fallbacks** - include fonts that support Arabic/Hebrew characters
+6. **Bidirectional text** - handle mixed LTR+RTL content (e.g., English proper noun or brand name in Arabic sentence) with `unicode-bidi` and `direction` attributes
+
+---
+
+## Language Selection
+
+### Detection Priority
+
+```
+1. User's explicit preference (stored in settings) - highest
+2. URL parameter or path prefix (/en/, /ar/, ?lang=en)
+3. Cookie from previous visit
+4. Accept-Language header (browser/OS setting)
+5. GeoIP-based guess (least reliable) - lowest
+```
+
+### Rules
+
+- **Always allow manual override** - never lock someone into a detected language
+- **Persist the choice** (cookie + stored preference if the app has accounts)
+- **Language switcher** should be accessible from any page (typically in header/footer)
+- **Don't use flags for languages** - flags represent countries, not languages (Spanish is spoken in 20+ countries; which flag?)
+- **Use native language names** in the switcher: "العربية" not "Arabic", "Español" not "Spanish"
+- **Redirect or reload** on language change - don't mix languages on one page
+- **URL reflects language** - e.g. `/en/app`, `/ar/app` (helps sharing; add locale hints for web search when applicable)
+
+---
+
+## Translation Management
+
+### Workflow
+
+```
+1. Developer adds key to source language (en.json)
+2. Key flagged as "needs translation" for other locales
+3. Translator provides translations
+4. Translations reviewed and merged
+5. Untranslated keys fall back to the source language
+6. CI warns about missing translations (don't block, but track)
+```
+
+### Rules
+
+- **Never release with mixed languages** on one screen (if a key is untranslated, fall back to the source language entirely, don't show a mix)
+- **Context for translators** - include descriptions or screenshots so translators understand where the string appears
+- **Max string length** - some languages expand (German is ~30% longer than English; plan for it in UI)
+- **Avoid gendered language** where possible ("They submitted" not "He/She submitted")
+- **Variable naming in translations** - use descriptive names: `{{userName}}` not `{{0}}`
+
+---
+
+## Mobile-Specific i18n
+
+- **Platform-specific listings** (if applicable) - localize title, description, screenshots for each target market
+- **All user-visible outbound copy** - use the user's preferred language
+- **Date/time in alerts** - always user's locale and timezone
+- **System locale changes** - app responds immediately when user changes device language (no restart required, or minimal restart)
+- **Keyboard layout** - support language-specific keyboards (Arabic keyboard for Arabic, etc.)
+
+---
+
+## Checklist Before Adding a New Language
+
+**Principle:** Test every user-facing string and layout in at least two diverse locales before releasing.
+
+[REFERENCE] Common i18n QA checks:
+
+- [ ] All user-facing strings extracted to translation files
+- [ ] Translation file created and reviewed by native speaker
+- [ ] Pluralization rules correct for the language
+- [ ] Date/time/number formatting uses Intl API with correct locale
+- [ ] RTL layout tested (if RTL language)
+- [ ] Font supports the language's character set
+- [ ] Language switcher includes the new language
+- [ ] URL routing handles the new language prefix
+- [ ] **IF your project is web-facing:** locale/meta tags (e.g. hreflang) set for the new language
+- [ ] Form validation copy translated
+- [ ] Fault text translated
+- [ ] Outgoing notifications and email bodies translated
+- [ ] All user-facing content available in new language

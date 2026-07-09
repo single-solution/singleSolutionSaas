@@ -1,0 +1,104 @@
+---
+description: Plain typography for generated prose. Apply for docs and comments.
+alwaysApply: false
+---
+
+# Writing Style (Generated Prose & Docs)
+
+House style for every piece of human-readable text the agent produces: documents, READMEs, the rule files in this repo, reports, research papers, commit and PR bodies, chat prose, and code comments. The goal is clean, plainly-typed, natural writing - not decorative, machine-flavored output.
+
+> This is a readability/house-style rule. It is not a tool for passing AI-generated work off as solely human-authored; follow your institution's or employer's AI-disclosure policy.
+
+---
+
+## The Rule
+
+Write like a person typing on a normal keyboard. Plain ASCII typography. Direct, specific wording. No decorative Unicode and no AI-cliche filler. This applies to the rulebook itself: these `.md` and `.mdc` files MUST follow the same typography they require of everything else. A rule that breaks its own rule is a conflict, and conflicts are banned (see Conflict and Precedence below).
+
+---
+
+## Scope - what this governs
+
+This rule governs **prose**: any human-readable sentence, heading, bullet, table cell, or comment the agent writes. It covers, without exception:
+
+- Product docs, READMEs, `docs/` files, ADRs, changelogs.
+- The rule files in this repo (`*.md`) and their Cursor mirrors (`*.mdc`).
+- Commit messages, PR titles and bodies, issue and review comments.
+- Generated reports, papers, summaries, and chat replies.
+- Code comments and docstrings.
+
+It does **not** govern code semantics. See Scope and Exceptions at the end for the precise carve-outs (operators, identifiers, real data, quoted source material).
+
+---
+
+## Typography - NEVER use these characters
+
+Each banned character has a plain ASCII replacement. When in doubt, type what a US keyboard produces.
+
+The left column below is the one place this file deliberately shows the banned characters: they are examples, and Conflict and Precedence rule 2 keeps example characters literal. Never copy them into prose.
+
+| Banned (do not type) | Name | Use instead |
+|---|---|---|
+| `—` | em dash | a spaced hyphen ` - `, a comma, parentheses, or split the sentence |
+| `–` | en dash | a plain hyphen `-` (e.g. `Diffie-Hellman`, `pages 10-12`, `1-5`) |
+| `“ ” ‘ ’` | curly / smart quotes | straight quotes `"` and `'` |
+| `…` | ellipsis character | three periods `...` |
+| `→ ← ⇒` etc. | arrows | `->`, `<-`, `=>` |
+| `×` | multiplication sign | the letter `x` (e.g. `2x`, `1920x1080`) |
+| `· •` | middle dot / bullet glyph | a Markdown `-` list item, or `*` inline |
+| `½ ² ₙ` | fancy fractions / sub / superscripts | `1/2`, `^2`, `_n`, `^T`, `_1` |
+| NBSP, thin space, hair space | invisible whitespace | a normal space |
+
+Additional rules:
+
+- **One space after a period.** Never double spaces.
+- **No trailing whitespace** at end of lines; end every file with exactly one newline (see `code-formatting.md`).
+- **Why this matters:** these glyphs are the clearest fingerprint of machine-pasted text, they break in plain-text terminals, diffs, and grep, and they make `.env`, code, and config copy-paste unreliable. ASCII is portable; fancy typography is not.
+
+When generating files programmatically (building a `.docx`, Markdown, HTML, or any export), run a final pass that rewrites every character above to its ASCII equivalent before saving.
+
+---
+
+## Wording - avoid AI-cliche filler
+
+- **Banned filler words/phrases:** delve, underscore(s) (as a verb), crucial, pivotal, realm, landscape, tapestry, robust (as filler), leverage (as a verb), foster, navigate (figurative), testament, seamless, "it is worth noting", "it is worth stressing", "in essence", "against this backdrop", "plays a vital role", "in today's world", "ever-evolving", "a powerful endorsement".
+- **No stacked formulaic transitions** at the start of consecutive paragraphs: Moreover, Furthermore, Additionally, Notably.
+- **No empty summarizing flourishes:** "In conclusion, it is clear that...", "Ultimately, this demonstrates...".
+
+---
+
+## DO
+
+- Short, concrete sentences. State the point plainly.
+- Vary sentence length and shape; do not make every sentence the same rhythm.
+- Pick the specific word over the inflated one: `show` not `underscore`, `key` not `crucial`, `use` not `leverage`, `handle` not `navigate`.
+- Cut a sentence that only restates the previous one.
+
+---
+
+## Conflict and Precedence (no opposite rules)
+
+The rulebook must never tell the agent two opposite things. When wording or typography guidance appears in more than one file, resolve it in this order:
+
+1. **`writing-style.md` (this file) is the single authority on typography and prose wording.** No other rule file may contradict it. If another file shows an em dash or banned glyph in its own prose, that is a defect in that file, not a license to use the glyph.
+2. **Example payloads win locally.** If a code block, sample log line, regex, or data fixture must contain a specific character to be correct (for example, demonstrating input that itself contains a curly quote), that example keeps the real character. Prose around the example still follows this rule.
+3. **External, quoted material is verbatim.** Proper names, standards identifiers, license text, and direct quotations keep their original spelling and punctuation even if it includes banned glyphs.
+
+There is no "prose vs rulebook" exemption. The rulebook is prose and follows this file.
+
+---
+
+## Applying to existing files (migration, not churn)
+
+- **Files you touch:** when you edit any file, convert banned glyphs to ASCII in the sections you change. Do not leave a new em dash behind, and fix obvious ones adjacent to your edit.
+- **No unrelated style-only churn:** do not open files you are not working on just to swap dashes. That creates noisy diffs and merge pain.
+- **Explicit cleanup is allowed:** a user-requested, repo-wide normalization pass (like converting the whole rulebook to ASCII) is a legitimate task, not "churn." Run it deliberately, in one pass, and re-mirror the `.mdc` copies afterward (see `cursor-sync.md`).
+
+---
+
+## Scope and Exceptions (code and data)
+
+- **Code and math** use whatever characters the syntax requires (operators, identifiers, real symbols). This rule governs prose, not code semantics. A `>=` in code stays `>=`; a multiplication in a math expression stays whatever the notation needs.
+- **Real data and fixtures** keep their true bytes. If a test asserts on a string that contains a curly quote, the fixture is correct as written.
+- **Proper names, quotes, and standards identifiers** keep their real spelling.
+- **ASCII-art structure inside fenced code blocks** (directory trees, flow and sequence diagrams) MAY use box-drawing line characters (`─ │ ├ └ ┌ ┐ ┘ ┤ ┬ ┴`) - they are structure, not prose. This exemption covers line characters only. It does NOT cover arrowheads, checkmarks, or symbol glyphs: still use `->`, `<-`, `yes`/`no`, not `►`, `◄`, `✓`, `○`. In prose (outside code fences), use ASCII for everything.

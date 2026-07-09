@@ -1,0 +1,347 @@
+---
+description: WebSocket/SSE/polling. Apply for live sync or push.
+alwaysApply: false
+---
+
+# Real-Time & WebSocket Patterns
+
+Coding patterns for real-time features. IF your project has real-time features or any server-to-client push - apply these patterns.
+
+> This file defines HOW to implement real-time communication, not WHAT features to build. The patterns apply to any server-to-client push scenario.
+
+All numeric values (connection limits, heartbeat intervals, timeouts) in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## When to Use Real-Time
+
+**Principle:** Choose the simplest real-time transport that meets your latency and bidirectionality requirements.
+
+[REFERENCE] Transport selection guide:
+
+| Use Case | Approach |
+|----------|----------|
+| Two-way communication (client sends + receives) | WebSocket (persistent connection) |
+| Server pushes updates, client only listens | SSE (Server-Sent Events) - simpler, auto-reconnects |
+| Infrequent updates (< once per minute) | Polling or long-polling |
+| One-time request/response | Standard HTTP - don't over-engineer with WebSocket |
+| Data that changes every few minutes | Polling (30-60s) or SSE |
+| Static content | Normal HTTP - no real-time needed |
+
+**Rule**: Don't use WebSockets where HTTP polling or Server-Sent Events (SSE) would suffice. WebSockets add complexity - earn that complexity.
+
+### Event naming test
+
+Name events **`resource:action`** (e.g. `message:created`, `order:statusChanged`). Payload carries ids and deltas - not full unauthorized records.
+
+### Feature Flag for Real-Time
+
+Real-time features should be globally toggleable without redeploying:
+
+```
+Pattern:
+  1. Store a "live updates enabled" flag in config/DB/env
+  2. Server: check flag before setting up WebSocket listeners
+  3. Client: check flag before attempting connection (skip entirely if disabled)
+  4. Gracefully degrade - show static data with manual refresh when real-time is off
+```
+
+This lets you disable real-time during incidents, high load, or when the feature isn't needed.
+
+---
+
+## Architecture
+
+```
+Client                        Server
+  │                              │
+  ├── connect() ────────────────>│ authenticate (token/cookie)
+  │                              │ join user-specific room
+  │<──────────────────── accept  │
+  │                              │
+  ├── join("room:entity:123") ──>│ verify permission to join
+  │                              │ add to room
+  │<──────── room:joined         │
+  │                              │
+  ├── emit("entity:update") ───>│ validate payload
+  │                              │ persist to database
+  │                              │ broadcast to room
+  │<──── "entity:updated" ───────│ (all room members receive)
+  │                              │
+  ├── heartbeat (ping/pong) ───>│ update last-seen timestamp
+  │                              │
+  ├── disconnect ───────────────>│ update presence to offline
+  │                              │ notify relevant rooms
+```
+
+---
+
+## Connection Management
+
+### Client-Side
+
+```
+Connection Lifecycle:
+  1. Authenticate via HTTP first (get session token)
+  2. Connect to WebSocket with auth token
+  3. Handle connection success -> join default rooms
+  4. Handle reconnection automatically (with exponential backoff)
+  5. Handle disconnect -> show offline indicator to user
+  6. Clean up on page unload / app background
+```
+
+### Reconnection Strategy
+
+```
+Attempt 1:  wait 1 second       [DEFAULT] - all backoff values
+Attempt 2:  wait 2 seconds
+Attempt 3:  wait 4 seconds
+Attempt 4:  wait 8 seconds
+Attempt 5:  wait 16 seconds
+Attempt 6+: wait 30 seconds (cap)
+
+After [DEFAULT] 10 failed attempts: show persistent "Connection lost" banner with manual retry button
+```
+
+**Rules:**
+- Always implement automatic reconnection - never require manual page refresh
+- Show connection status to user (connected / reconnecting / disconnected)
+- Queue outgoing commands during disconnect, send on reconnect
+- Re-join rooms after reconnect
+- Fetch missed events after reconnect (gap fill from REST API)
+
+---
+
+## Authentication
+
+```
+REQUIRED:
+  1. Client connects with auth token (JWT or session ID)
+  2. Server verifies token on EVERY connection (not just first)
+  3. Invalid/expired token -> reject connection with error
+  4. Token refresh during long-lived connections
+  5. Disconnect on logout (server-initiated)
+
+BANNED:
+  - Connecting without authentication
+  - Passing credentials in the WebSocket URL as query params (visible in logs)
+  - Trusting the client to self-identify (userId in payload without server verification)
+```
+
+### Server-Side Auth Middleware
+
+```
+On every connection:
+  1. Extract token from handshake (auth header or cookie)
+  2. Verify token -> get user object
+  3. Attach user to socket instance (socket.user = verifiedUser)
+  4. If invalid -> disconnect with "unauthorized" error
+  5. Join user's personal room: `user:{userId}`
+```
+
+---
+
+## Event Naming
+
+### Convention: `{resource}:{action}`
+
+**Principle:** Event names follow a consistent, predictable pattern so subscribers can filter by entity or action.
+
+[REFERENCE] Common event naming conventions:
+
+```
+Client -> Server (commands):
+  entity:create
+  entity:update
+  entity:delete
+  activity:start
+  activity:stop
+  room:join
+  room:leave
+  presence:update
+  data:sync
+
+Server -> Client (events):
+  entity:created
+  entity:updated
+  entity:deleted
+  activity:active
+  activity:inactive
+  room:joined
+  room:left
+  presence:changed
+  data:changed
+  error:validation
+  error:permission
+```
+
+**Rules:**
+- Lowercase, colon-separated: `{noun}:{verb}`
+- Past tense for server-to-client events (something happened): `entity:deleted`
+- Present tense / imperative for client-to-server commands (do something): `entity:delete`
+- Never use bare generic names like `data`, `update`, `event` - always namespace them (e.g. `data:sync` not just `data`)
+- Namespace by feature: `feature:entity:action` for complex apps
+
+---
+
+## Room Management
+
+### Room Naming Convention
+
+```
+Format: {type}:{identifier}
+
+Examples:
+  user:{userId}              - personal room (user-specific events)
+  entity:{entityId}          - entity-scoped room (all subscribers)
+  group:{groupId}            - group-wide broadcasts
+  resource:{resourceId}      - live resource updates
+  global:{channel}           - app-wide broadcasts
+```
+
+### Rules
+
+- **Verify permission** before allowing a user to join any room
+- **Leave rooms** when user navigates away from that context
+- **Limit room subscriptions** - don't keep users in rooms they're not viewing
+- **Server manages rooms** - clients request to join, server decides
+- **Track who is in each room** server-side for event delivery guarantees
+
+---
+
+## Real-Time Event Flow (Generic Pattern)
+
+Every real-time feature follows this flow:
+
+```
+Client Action -> Server:
+  1. Client emits event with payload
+  2. Server authenticates (from socket session, NEVER trust client-provided identity)
+  3. Server validates payload (same rules as REST: type, length, permissions)
+  4. Server persists to database
+  5. Server broadcasts to relevant room(s)
+  6. Server triggers side effects (outbound webhooks, job queues) if needed
+
+Server Update -> Client:
+  1. Client receives event
+  2. Client updates local state (optimistic UI already shown, or append new data)
+  3. Client acknowledges if needed (acknowledgment patterns, sync confirmations)
+
+Mutations (Edit / Delete):
+  1. Server enforces access and permission checks
+  2. Server persists change
+  3. Server broadcasts update/delete event to room
+  4. Clients update their local state accordingly
+```
+
+### Activity Indicators
+
+```
+  1. Client emits "activity:start" when user begins an activity (editing, viewing, drawing, etc.)
+  2. Server broadcasts "activity:active" to other room members
+  3. Client debounce: don't emit more than once per 2 seconds
+  4. Client emits "activity:stop" when activity ends (3 second timeout)
+  5. Server broadcasts "activity:inactive"
+  6. Client auto-clears activity indicator after 5 seconds (safety net)
+  7. Auto-clear "Someone is active..." after 10-15 seconds of no new activity events (users pause - don't be too aggressive)
+```
+
+### Acknowledgment patterns
+
+```
+  1. When user focuses a channel, emit "entity:ack" with { channelId, lastSeenSequence }
+  2. Server updates acknowledgment cursor in database
+  3. Server broadcasts "entity:ack" to publisher (optional visibility)
+  4. Batch acknowledgments - don't emit per row; emit per channel with the latest cursor
+```
+
+---
+
+## Presence System
+
+```
+Online Detection:
+  1. User connects -> status: "online"
+  2. Heartbeat every 30 seconds (client pings, server pongs)
+  3. No heartbeat for 60 seconds -> status: "away"
+  4. Socket disconnects -> status: "offline"
+  5. Broadcast presence changes to relevant rooms (group, channel members)
+
+Presence Data:
+  {
+    userId: string,
+    status: "online" | "away" | "offline" | "do-not-disturb",
+    lastSeen: Date,
+    currentScreen: string | null,  // optional: current view identifier
+  }
+```
+
+**Rules:**
+- Update presence in database AND broadcast to rooms
+- Don't broadcast every heartbeat - only broadcast STATUS CHANGES
+- On reconnect, re-fetch presence for visible users (don't trust stale cache)
+- Store last-seen timestamp for offline users if presence is relevant
+
+---
+
+## Delivering Updates to Offline Users
+
+```
+Pattern:
+  1. Server event triggers an update
+  2. Check if recipient is connected (has active socket)
+  3. If online: deliver via WebSocket to user's personal room
+  4. If offline: queue for delivery via another channel (push, email, etc.)
+  5. On reconnect: client fetches missed events (gap-fill from REST API)
+```
+
+---
+
+## Error Handling
+
+**Principle:** Define a finite set of error codes for real-time connections so clients can handle failures programmatically.
+
+[REFERENCE] Common WebSocket/real-time error codes:
+
+```
+Server -> Client error events:
+  {
+    event: "error",
+    data: {
+      code: "VALIDATION_ERROR" | "PERMISSION_DENIED" | "RATE_LIMITED" | "INTERNAL_ERROR",
+      text: "Human-readable error text",
+      details: { ... }  // optional field-level errors
+    }
+  }
+
+Client handling:
+  - VALIDATION_ERROR: show inline error (e.g., "Payload exceeds allowed size")
+  - PERMISSION_DENIED: show toast error
+  - RATE_LIMITED: show cooldown indicator
+  - INTERNAL_ERROR: show generic error toast
+```
+
+---
+
+## Security
+
+1. **Authenticate every connection** - no anonymous sockets unless explicitly designed for public features
+2. **Authorize every room join** - verify the user has access to that channel/group/resource
+3. **Validate every incoming event** - same validation rules as REST APIs (never trust client data)
+4. **Rate limit events** - sensible defaults: 10 `entity:*` events/sec per user, 1 activity event per 2 seconds. Bots, integrations, and bulk ops may need higher limits with proper auth.
+5. **Sanitize content** - strip HTML/scripts from user-supplied text before storage and broadcast
+6. **Never trust client-provided identity** - always use `socket.user` set during authentication
+7. **Limit payload size** - reject events with payloads exceeding a maximum (e.g., 10KB for typical payloads)
+8. **Log connection events** - connect, disconnect, room joins for audit trail
+
+---
+
+## Performance
+
+- **Don't broadcast to everyone** - use rooms to target only relevant users
+- **Batch updates** - group rapid-fire events (e.g., multiple activity indicators) into periodic broadcasts
+- **Compress payloads** - enable WebSocket compression for large payloads
+- **Paginate history** - never send full history on room join; send latest 50 entries, load more on scroll
+- **Limit concurrent connections** - default 5 per user (phone + tablet + laptop + browser + watch). If exceeded, disconnect the oldest idle connection. Adjust based on your user base and device patterns.
+- **Use Redis adapter** (or equivalent) for multi-server WebSocket scaling
+- **Monitor connection counts** - alert if connections spike abnormally

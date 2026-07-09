@@ -1,0 +1,339 @@
+---
+description: Desktop/CLI apps. Apply when building Electron, Tauri, or CLI tools.
+alwaysApply: false
+---
+
+# Desktop & CLI Patterns
+
+**Capability test:** Skip this file unless the task targets a desktop or CLI codebase.
+
+Coding patterns for desktop applications (Electron, Tauri, native) and CLI tools. IF your project is a desktop app or CLI, apply these patterns.
+
+All numeric values (timings, sizes) in this file are [DEFAULT] - adjust per project.
+
+---
+
+## PART 1: DESKTOP APPLICATIONS
+
+---
+
+### Architecture
+
+```
+Desktop App Architecture (typical for Electron/Tauri-style apps - adapt to your framework):
+
+Main Process (Native Shell):
+  - Window management (create, resize, position, close)
+  - System tray integration
+  - Native menus
+  - File system access
+  - System notifications
+  - Auto-updater
+  - IPC bridge to renderer
+
+Renderer (UI Process):
+  - Full web frontend (follows all web rules from frontend.md and ui-design-system.md)
+  - Communicates with main process via IPC only
+  - NO direct access to system APIs from the renderer (security boundary)
+```
+
+### Window Management
+
+```
+Rules:
+  - Remember window size and position on close -> restore on next launch
+  - Respect minimum window size (don't let app become unusable)
+  - Minimum: [DEFAULT] 800x600 for feature apps, [DEFAULT] 400x300 for utilities
+  - Support multiple windows where it makes sense (settings in separate window)
+  - Properly handle display changes (monitor disconnect, DPI change)
+  - Graceful close: prompt to save unsaved work before quitting
+```
+
+### Native Menu Bar (IF your app has a menu bar)
+
+Not all desktop apps need a full menu bar (kiosks, single-purpose utilities, games may skip or customize). IF your app uses a native menu bar:
+
+**Rules:**
+- **Follow platform conventions** - macOS: app name menu with Preferences and Quit; Windows/Linux: File menu typically first
+- **Platform-standard keyboard shortcuts** - don't override Cmd+C, Cmd+V, Cmd+Q, etc.
+- **Include only relevant menus** - a document-based app needs File (New/Open/Save); a dashboard app may not
+- **Every menu item has a keyboard shortcut** where applicable
+- **Disable menu items** when not applicable (gray out, don't hide)
+- **Edit menu** should always include Undo/Redo, Cut/Copy/Paste, Find (these are user expectations on desktop)
+- **Help menu** with documentation link and version info
+
+### System Tray
+
+```
+When to use:
+  - App runs in background (background tasks, monitoring, sync)
+  - Quick-access actions without opening main window
+  - Status indication (connected/disconnected, sync status)
+
+Tray menu:
+  ├── Open {App Name}
+  ├── Status: Connected yes
+  ├── ─────────────
+  ├── Preferences
+  ├── Check for Updates
+  ├── ─────────────
+  └── Quit
+
+Rules:
+  - Tray icon changes to reflect status (active, syncing, error)
+  - Click on tray icon: show/hide main window (macOS: show menu)
+  - Right-click: always show context menu
+  - Minimize to tray option (configurable in settings)
+  - Show badge count on tray icon (if app has notifications)
+```
+
+### Auto-Updates (IF your app supports self-updating)
+
+```
+Flow:
+  1. Check for updates on launch (silent, background)
+  2. Check periodically (every 6 hours)
+  3. If update available: show non-intrusive notification ("Update available")
+  4. User clicks "Update" -> download in background with progress
+  5. When ready: "Restart to update" button (don't force-restart)
+  6. On next launch: apply update -> show "What's new" changelog
+
+Rules:
+  - Avoid force-updating while user is working - notify and let them choose when. Exception: regulated environments with MDM may require forced security updates.
+  - Avoid auto-restarting without user consent
+  - Show download progress
+  - Allow "Skip this version" for non-critical updates
+  - Critical security updates: more prominent notification, but still don't force
+  - Sign all updates (code signing) - never distribute unsigned binaries
+```
+
+### IPC (Inter-Process Communication)
+
+```
+Rules:
+  - Define ALL IPC channel names as constants in a shared file
+  - Renderer should not directly call Node.js APIs - use IPC. Exception: preload scripts with controlled `contextBridge` exposure for specific APIs.
+  - Validate all IPC payloads on both sides
+  - Use typed IPC (type-safe channel -> payload mapping)
+  - Minimize data transferred over IPC (don't send entire files, send paths)
+  - Handle IPC errors gracefully (main process crashed, channel not found)
+```
+
+**Principle:** IPC channels follow a consistent naming convention so both processes can discover and validate messages.
+
+[REFERENCE] Common IPC channel naming patterns:
+
+```
+Channel naming:
+  {domain}:{action}
+
+  file:open
+  file:save
+  file:export
+  settings:get
+  settings:set
+  update:check
+  update:install
+  window:minimize
+  window:close
+```
+
+### Desktop-Specific UX
+
+- **Drag and drop** for files: support dropping files onto the app window
+- **Native dialogs** for file open/save (not custom file pickers)
+- **Right-click context menus** on relevant elements
+- **Keyboard shortcuts** for all common actions (display in menu + tooltips)
+- **Multi-select** in lists (Shift+click for range, Cmd/Ctrl+click for individual)
+- **Undo/Redo** for destructive actions (Cmd/Ctrl+Z)
+- **Clipboard integration** - copy/paste works everywhere as expected
+- **Window title** reflects current context ("{Current View} - {App Name}")
+- **Loading indicator** in window title bar or status bar for background operations
+
+---
+
+## PART 2: CLI TOOLS
+
+---
+
+### Command Structure
+
+```
+Format: {tool} {command} [subcommand] [arguments] [flags]
+
+Examples:
+  mycli init
+  mycli deploy --env production
+  mycli records list --role admin --format json
+  mycli items create "Fix rendering issue" --priority high
+```
+
+### Naming Rules
+
+- **Tool name**: short, memorable, lowercase, no spaces: `mycli`, `deployer`, `taskr`
+- **Commands**: verbs or verb-noun: `init`, `build`, `deploy`, `list`, `create`, `delete`
+- **Subcommands**: noun then verb: `records list`, `items create`, `config set`
+- **Flags**: full words with `--`, single letter shortcuts with `-`:
+  - `--verbose` / `-v`
+  - `--output` / `-o`
+  - `--force` / `-f`
+  - `--help` / `-h`
+  - `--version` / `-V`
+
+### Standard Commands (Recommended for CLI Tools)
+
+**Principle:** Every CLI tool provides a consistent set of standard commands and flags that users expect.
+
+[REFERENCE] Commonly expected CLI commands:
+
+```
+{tool} --help              Show usage for the tool
+{tool} --version           Print version number
+{tool} {command} --help    Show usage for a specific command
+{tool} init                Initialize / setup (if applicable)
+```
+
+### Help Text Format
+
+```
+Usage: mycli <command> [options]
+
+Commands:
+  init            Initialize a new project
+  build           Build the project for production
+  deploy          Deploy to target environment
+  config          Manage configuration
+
+Options:
+  -h, --help      Show help
+  -V, --version   Show version
+  -v, --verbose   Enable verbose output
+  --no-color      Disable colored output
+
+Examples:
+  mycli init my-project
+  mycli deploy --env staging
+  mycli config set api-key abc123
+
+Run 'mycli <command> --help' for more information on a command.
+```
+
+**Rules:**
+- Help text is the FIRST thing a new user sees - make it excellent
+- Show real examples (not only abstract forms)
+- Group related flags together
+- Show default values for flags that have them
+- Document every flag - no hidden/undocumented options
+
+### Output Formatting
+
+```
+Normal output:
+  Human-readable, well-formatted text
+  yes Task created successfully
+  no Error: User not found
+
+Machine-readable output (when --format json or piped):
+  {"status": "success", "item": {"id": "123", "title": "Fix rendering issue"}}
+
+Table output (for list commands):
+  ID    Name          Role      Status
+  001   John Doe      Admin     Active
+  002   Jane Smith    Editor    Active
+  003   Bob Wilson    Viewer    Inactive
+```
+
+### Rules
+
+- **Default to human output** - detect if stdout is a terminal vs pipe
+- **Support JSON output** via `--format json` or `--json` flag for scripting
+- **Colors only in terminal** - disable when piped or `--no-color` is set
+- **Progress indicators** for long operations (spinner, progress bar)
+- **Respect terminal width** - don't write lines wider than terminal
+
+### Exit Codes
+
+```
+Follow platform conventions for exit codes. Common Unix/POSIX codes:
+0:   Success
+1:   General error
+2:   Invalid usage / bad arguments
+```
+
+**Rule**: Always exit with non-zero code on failure - scripts depend on this.
+
+### Interactive vs Non-Interactive
+
+```
+Interactive (terminal):
+  - Prompt for missing required inputs
+  - Show colorful output with icons
+  - Show progress spinners
+  - Ask for confirmation on destructive actions
+
+Non-Interactive (piped / CI):
+  - Fail if required inputs missing (don't hang waiting for input)
+  - Plain text output (no colors, no spinners)
+  - No confirmation prompts - use --force flag
+  - JSON output for machine parsing
+```
+
+### Configuration
+
+```
+Config file location (highest priority first):
+  1. Command-line flags (highest priority)
+  2. Environment variables (MY_TOOL_API_KEY)
+  3. Local project config (.myclirc or mycli.config.json in project root)
+  4. Global user config (~/.config/mycli/config.json)
+  5. Default values (lowest priority)
+
+Rules:
+  - Config file format: JSON, YAML, or TOML (pick one, be consistent)
+  - Provide `config` command for managing settings:
+    mycli config set key value
+    mycli config get key
+    mycli config list
+  - NEVER store secrets in config files - use environment variables or system keychain
+  - Document all config options with `mycli config --help`
+```
+
+### Error Messages
+
+```
+REQUIRED format:
+  Error: {what went wrong}
+  Hint: {how to fix it}
+
+REQUIRED:
+  Error: File "config.json" not found
+  Hint: Run 'mycli init' to create a default config file
+
+  Error: Permission denied for /var/log/app.log
+  Hint: Run with sudo or change file permissions
+
+  Error: Invalid email format "not-an-email"
+  Hint: Provide a valid email address (e.g., user@example.com)
+
+BANNED:
+  Error: ENOENT
+  Error: Something went wrong
+  Error: null reference exception at line 42
+```
+
+**Rules:**
+- Write errors to stderr (not stdout)
+- Include the value that caused the error (show "not-an-email", not just "invalid format")
+- Always suggest a fix or next step
+- Link to documentation for complex errors
+- Never show stack traces unless `--verbose` or `--debug` flag is set
+
+### CLI UX Polish
+
+- **Fast startup** - CLI tools should start in under `[DEFAULT]` 200ms
+- **Ctrl+C handling** - clean up resources, show partial results if possible
+- **Confirmation for destructive actions**: "This will delete 47 files. Continue? [y/N]"
+- **Dry run mode** (`--dry-run`): show what WOULD happen without doing it
+- **Idempotent operations**: running the same command twice produces the same result
+- **Verbose mode** (`--verbose`): show detailed step-by-step progress for debugging
+- **Quiet mode** (`--quiet`): suppress all output except errors

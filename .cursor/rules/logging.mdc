@@ -1,0 +1,329 @@
+---
+description: Structured logs and observability. Apply for backend/worker logging.
+alwaysApply: false
+---
+
+# Logging & Monitoring
+
+Coding patterns for application logging, error tracking, and observability. IF your project has a deployed backend, apply these patterns.
+
+> All numeric values in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Commits (agents)
+
+**MUST NOT** leave `console.log`, `print` debug, or temporary trace statements in committed code. Use structured logging at the right level; remove diagnostics before commit unless the user keeps them for active debugging.
+
+---
+
+## Log Levels
+
+**Principle:** Use structured log levels to distinguish severity. Every log statement should have the correct level so filtering works in production.
+
+[REFERENCE] Standard log levels and when to use them:
+
+```
+FATAL:   App cannot continue. Process will exit. (database connection lost, out of memory)
+ERROR:   Operation failed, but app continues. Requires attention. (API call failed, validation error in unexpected place)
+WARN:    Something unexpected but handled. Worth investigating later. (deprecated API used, slow query, retry succeeded)
+INFO:    Normal significant events. (server started, session activity, deployment completed)
+DEBUG:   Detailed diagnostic info. Development/troubleshooting only. (query parameters, function entry/exit, variable values)
+TRACE:   Most granular. Rarely used. (step-by-step execution path)
+```
+
+### Which Level in Which Environment
+
+**Principle:** Production logs should be quieter (warnings and errors); development logs can be verbose. Configure log level per environment.
+
+[REFERENCE] Typical per-environment configuration:
+
+```
+Production:   INFO and above (INFO, WARN, ERROR, FATAL)
+Staging:      DEBUG and above
+Development:  DEBUG and above (TRACE if actively debugging)
+Tests:        WARN and above (don't clutter test output)
+```
+
+**Rule:** Avoid DEBUG/TRACE in production by default - it generates massive volume and can expose sensitive data. Short-lived, sampled debug logging for active incident investigation is acceptable with guardrails (auto-revert after N minutes).
+
+---
+
+## Structured Logging
+
+### Output: stdout / stderr (Never to Files)
+
+Write all logs to **stdout** (or stderr for errors). Never write to log files directly from your application. Let the runtime (Docker, cloud platform, process manager) handle log routing, rotation, and persistence. This keeps your app stateless and lets infrastructure handle log aggregation.
+
+### Format: Structured (Always in Production)
+
+Use a **structured, machine-parseable format** in production (JSON, logfmt, or whatever your log aggregation platform expects). The specific format depends on your infrastructure - pick one per project and be consistent.
+
+```
+Example structure (fields, not format):
+  timestamp     -> ISO 8601
+  level         -> ERROR, WARN, INFO, etc.
+  summary       -> Human-readable description
+  service       -> Service/app name
+  requestId     -> Correlation ID
+  userId        -> Actor identifier
+  method        -> HTTP method (for request logs)
+  path          -> Request path
+  statusCode    -> Response status
+  error         -> { name, code, detail } (for error logs)
+  duration      -> Request/operation duration in ms
+```
+
+### Rules
+
+- **Structured format in production** - parseable by log aggregation tools (JSON is the most common, but match your infrastructure)
+- **Human-readable in development** - pretty-printed with colors
+- **Every log entry includes**: timestamp, level, summary (or equivalent body field), service name
+- **Request logs include**: requestId, userId, method, path, statusCode, duration
+- **Error logs include**: error name, error code, error detail, stack trace (in debug context, not in response)
+- **NEVER log**: passwords, tokens, sensitive tokens, PII, secrets, or full request bodies with sensitive fields
+
+---
+
+## What to Log
+
+### ALWAYS Log
+
+**Principle:** Log anything that helps answer "what happened?" during an incident and anything needed for security audits. If a production system broke and you only had logs, you should be able to reconstruct the timeline.
+
+[REFERENCE] Typical mandatory log categories:
+
+- **Application lifecycle** - startup, shutdown, critical connection events (INFO/FATAL)
+- **Authentication events** (if applicable) - session creation, session end, failed attempts, token issues (INFO/WARN/ERROR)
+- **Request activity** - completed requests with method/path/status/duration; flag slow ones (INFO/WARN)
+- **Failures** - failed requests, failed queries, failed external calls - with enough context to reproduce (ERROR)
+- **Business events** - significant domain actions that would matter in an audit or support ticket (INFO)
+- **Permission denials** - any time access is blocked; useful for both security monitoring and debugging user-reported issues (WARN)
+- **External service health** - slow or failed calls to third-party services (WARN/ERROR)
+
+**What context to include:** Always attach enough structured data (identifiers, durations, status codes, operation names) to make the log searchable and actionable. Never log just a message without context.
+
+### NEVER Log
+
+**Principle:** Never log anything that would cause harm if the log storage were exposed. Apply this test: *"If an attacker gained read access to our logs, would this field let them impersonate users, access accounts, or violate privacy?"* If yes, don't log it.
+
+[REFERENCE] Commonly banned log content:
+
+- **Authentication material** - anything that could be used to gain access (passwords, tokens, keys, secrets, session identifiers in full)
+- **Personally identifiable information (PII)** - anything that identifies a person beyond what's needed for the log context (full names + government IDs together, full unmasked contact details)
+- **Raw request/response bodies of sensitive endpoints** - these often contain credentials or private data
+- **Raw database queries with user input interpolated** - reveals both schema and user data
+- **Environment variables or secrets** - never print config that contains credentials
+
+**When in doubt, redact.** Log a masked/truncated version or just the identifier (user ID, token ID) instead of the full value.
+
+### Masking Sensitive Data
+
+```
+REQUIRED:
+  email: "j***@example.com"          (show first char + domain)
+  phone: "***-***-4567"              (show last 4)
+  token: "...abc12345"               (show last 8 chars)
+  ip:    logged as-is (needed for security)
+  secretRef: "****-****-****-4242"   (show last 4 only)
+```
+
+---
+
+## Request ID / Correlation ID
+
+```
+Every incoming request gets a unique ID:
+  1. Check for X-Request-ID header (forwarded from upstream proxy)
+  2. If missing, generate a UUID
+  3. Attach to the request context
+  4. Include in EVERY log entry for that request
+  5. Include in the response as X-Request-ID header
+  6. Pass to downstream service calls (distributed tracing)
+```
+
+**Why:** When a user reports an error, the request ID lets you find every log entry for that exact request across all services.
+
+---
+
+## Error Tracking
+
+### Rules
+
+- Use a dedicated error tracking service (Sentry, Bugsnag, Datadog, etc.)
+- **Capture unhandled exceptions** automatically
+- **Capture handled errors** that indicate bugs (not validation errors)
+- **Include context**: user ID, request path, OS/browser, app version
+- **Group by root cause** (not by surface text alone - same root cause should group into one issue regardless of variation in error messages)
+- **Alert on new errors** (errors that have never been seen before)
+- **Alert on error spikes** (error rate jumps significantly)
+- **Assign and track** - every error in tracking must be assigned and resolved
+
+### What to Send to Error Tracker
+
+**Principle:** Send enough context to the error tracker to reproduce the issue, but never send sensitive data.
+
+[REFERENCE] Typical error tracker payload configuration:
+
+```
+Send:
+  - Unhandled exceptions / promise rejections
+  - 500 errors from API handlers
+  - Database connection failures
+  - External service failures
+  - Client-side crashes (JS errors, native crashes)
+
+Don't send:
+  - 400 errors (expected validation failures)
+  - 401/403 errors (expected auth failures)
+  - 404 errors (expected missing resources)
+  - Rate limit hits (429)
+```
+
+---
+
+## Performance Monitoring
+
+### Key Metrics to Track
+
+**Principle:** Track metrics that tell you whether the system is healthy and whether users are experiencing problems.
+
+[REFERENCE] Common metric categories:
+
+```
+API:
+  - Response time (p50, p95, p99)
+  - Request rate (requests per second)
+  - Error rate (% of 5xx responses)
+  - Apdex score (% of requests under threshold)
+
+Database:
+  - Query time (p50, p95, p99)
+  - Connection pool usage (% active connections)
+  - Slow queries (threshold per query class - 500ms for CRUD, higher for analytics)
+
+Infrastructure:
+  - CPU usage (%)
+  - Memory usage (%)
+  - Disk usage (%)
+  - Network I/O
+
+Client (web/mobile):
+  - Page load time / Time to Interactive
+  - First Contentful Paint (FCP)
+  - Largest Contentful Paint (LCP)
+  - Cumulative Layout Shift (CLS)
+  - Crash-free rate (mobile)
+```
+
+### Alerting Thresholds
+
+```
+WARNING (investigate soon):
+  - API p95 response time > 2s
+  - Error rate > 1%
+  - CPU > 70% for 5 minutes
+  - Memory > 80%
+  - Disk > 80%
+  - Slow queries > 10/minute
+
+CRITICAL (investigate immediately):
+  - API p95 response time > 5s
+  - Error rate > 5%
+  - CPU > 90% for 2 minutes
+  - Memory > 90%
+  - Disk > 90%
+  - Service health check failing
+  - Database connection failing
+  - 0 requests/sec (service might be down)
+```
+
+---
+
+## Side Effects: Never Block the Primary Response
+
+Side effects (audit logging, analytics, external API calls, event broadcasting) must NEVER block the primary request/response cycle:
+
+```
+Pattern:
+  // CORRECT - fire-and-forget with error swallowing
+  void logActivity(actor.id, "resource:create", record.id);
+  void broadcastEvent("resource:created", record);
+  return ok(record); // responds immediately
+
+  // Inside logActivity:
+  try {
+    await writeAuditLog(...);
+  } catch (error) {
+    logger.warn("Audit log failed", { error }); // swallow - don't crash the request
+  }
+```
+
+- Use `void` (or equivalent) to express "fire and forget" - the caller doesn't await the result
+- Wrap ALL side-effect logic in try/catch - a failed audit log or analytics call must NEVER cause a 500 for the user
+- For critical side effects (must eventually complete), use a job queue instead of inline execution
+- Log side-effect failures at WARN level - they need attention but aren't request-blocking errors
+
+---
+
+## Audit Logging
+
+IF your project has compliance/security requirements, log these events to a tamper-proof audit trail:
+
+```
+Audit log events:
+  - Authentication success / failure (if your app has auth)
+  - Permission changes (role assigned/revoked)
+  - Data creation / modification / deletion (for sensitive entities)
+  - Settings changes
+  - Admin actions (user creation, sensitive action completion)
+  - API key creation / revocation
+  - Data export / download
+
+Audit log fields:
+  {
+    timestamp,
+    actor: { userId, role, ip },
+    action: "resource:delete",
+    target: { type: "Resource", id: "res-123" },
+    changes: { before: {...}, after: {...} },  // for updates
+    result: "success" | "denied"
+  }
+```
+
+**Rules:**
+- Audit logs are **append-only** - never update or delete
+- Store separately from application logs (different retention, different access)
+- Retain for the required compliance period (`[DEFAULT]` minimum 1 year, often 7 years - adjust per regulation)
+- Access to audit logs requires elevated permissions
+
+---
+
+## Log Aggregation
+
+```
+Rules:
+  - ALL services write logs to stdout/stderr (not files)
+  - Container runtime / orchestrator collects and forwards logs
+  - Centralized log storage with search capability (ELK, Loki, CloudWatch, Datadog)
+  - Retention: [DEFAULT] 30 days minimum for application logs, [DEFAULT] 1+ year for audit logs
+  - Log rotation: automatic, prevent disk fill
+  - Searchable by: requestId, userId, service, level, timestamp range, summary text
+```
+
+---
+
+## Monitoring interface
+
+IF your app is in production, observability views should show:
+
+```
+1. Service health (up/down for each component)
+2. Request rate (current and trend)
+3. Error rate (current and trend)
+4. Response time percentiles (p50, p95, p99)
+5. Active sessions / connections
+6. Database health and query performance
+7. Infrastructure metrics (CPU, memory, disk)
+8. Recent errors (last 10, with links to error tracker)
+```

@@ -1,0 +1,331 @@
+---
+description: React Native / mobile apps. Apply for mobile codebases.
+alwaysApply: false
+---
+
+# Mobile Application Patterns
+
+**Capability test:** Skip this file unless the task targets a mobile app codebase (native or cross-platform).
+
+Coding patterns specific to mobile app development. These extend the universal rules (naming, auth, API, testing, etc.) with mobile-specific concerns. IF you're building a mobile app, apply these patterns.
+
+All numeric values (launch times, memory thresholds, list sizes) in this file are `[DEFAULT]` - adjust per project and target devices.
+
+---
+
+## Platform Coverage
+
+These rules apply to:
+- **React Native** (JavaScript/TypeScript)
+- **Flutter** (Dart)
+- **SwiftUI / UIKit** (iOS native)
+- **Jetpack Compose / XML** (Android native)
+- **Kotlin Multiplatform** (KMP)
+- **Any cross-platform framework**
+
+The principles are the same. Implementation adapts to the framework.
+
+---
+
+## Navigation
+
+### Structure Pattern
+
+```
+App Entry
+  ├── Initial Screen (determine app state)
+  │   ├── State A -> Navigator A (stack)
+  │   └── State B -> Navigator B (stack)
+  │
+  └── Main Navigator (tabs or drawer)
+      ├── Tab 1: Primary feature (stack)
+      ├── Tab 2: Secondary feature (stack)
+      ├── Tab 3-5: Additional features (stack each)
+```
+
+### Rules
+
+- **Tab bar** for 3-5 main sections (mobile standard) - bottom tabs are most common, but choose the navigation pattern that fits your app's information architecture
+- **Drawer** for 6+ sections (less discoverable, use if necessary)
+- **Stack navigation** within each tab (push/pop, with back button)
+- **Active tab indicator** clearly visible (color + icon state change)
+- **Badge on tab icon** for pending item counts (if applicable to your feature)
+- **Deep linking** for every screen that makes sense to share/bookmark
+- **Back button** behavior: Android hardware back works correctly; iOS swipe-back gesture works
+- **Modal presentation** for creation flows, filters, and actions that break the current context
+- **Never lose scroll position** when navigating back to a tab
+
+---
+
+## Screen Structure
+
+Every screen follows this template:
+
+```
+Screen Component
+  ├── Loading state (skeleton or spinner - shown first)
+  ├── Error state (retry button - shown on failure)
+  ├── Empty state (illustration + copy - shown when no data)
+  └── Content state (actual UI - shown when data loaded)
+```
+
+**Rules:**
+- **Safe area handling**: Content respects notch, status bar, home indicator on all devices
+- **Keyboard avoidance**: Form fields scroll into view when keyboard opens; keyboard never covers inputs
+- **Pull-to-refresh** on data-fetching list screens (skip for real-time features with live connections, maps, and read-only archives)
+- **Infinite scroll or pagination** for lists (never load all records at once)
+- **Scroll to top** on tab bar tap (when already on that tab)
+
+---
+
+## Offline Support
+
+### Levels of Offline Support
+
+```
+Level 1 (minimum): Graceful degradation
+  - Show cached data when offline
+  - Show offline indicator banner
+  - Disable actions that require network
+  - Queue actions when possible, sync on reconnect
+
+Level 2: Offline-first
+  - Local database as source of truth
+  - Sync engine pushes/pulls changes
+  - Conflict resolution strategy defined
+  - App fully functional without network
+
+Level 3: Real-time sync
+  - Level 2 + WebSocket for live updates
+  - Optimistic updates + server reconciliation
+```
+
+### Recommended Patterns (IF your app handles offline)
+
+1. **Detect connectivity changes** - show/hide offline banner
+2. **Cache critical data** locally (frequently accessed data, recent items, etc.)
+3. **Queue failed requests** - retry automatically when back online
+4. **Avoid blank screens** when offline - fall back to cache when available. First launch with no cache should show a clear "No connection" screen, not a blank page.
+5. **Show "last updated" timestamp** on cached data
+6. **Graceful error messages** - user-friendly, not raw error codes
+
+---
+
+## Secure Storage
+
+```
+REQUIRED for sensitive data:
+  iOS:      Keychain (via expo-secure-store, flutter_secure_storage, or native Keychain API)
+  Android:  EncryptedSharedPreferences or Keystore
+
+Store in secure storage:
+  - Auth tokens (JWT, refresh token)
+  - API keys
+  - Biometric credentials
+
+Store in regular storage (AsyncStorage / SharedPreferences):
+  - Theme preference
+  - Initial setup completion flag
+  - Non-sensitive settings
+  - Cached non-sensitive data
+
+NEVER store in regular storage:
+  - Passwords
+  - Tokens
+  - Personal data (government IDs, sensitive identifiers)
+```
+
+---
+
+## Push Notifications (IF your app uses push notifications)
+
+### Setup
+
+```
+1. Request push permission at an appropriate moment (on launch if push is core to the experience, or contextually when the user first encounters a feature that benefits from it)
+2. Send device token to backend on authentication
+3. Update device token on refresh (tokens can change)
+4. Remove device token on session end
+5. Handle multiple devices per user (store all active tokens)
+```
+
+### Handling
+
+```
+Foreground (app is open):
+  - Prefer in-app UI over system notification for most cases. Exception: critical, safety, and time-sensitive alerts should use system notifications even in foreground.
+  - Show in-app banner/toast instead
+  - Update relevant UI (badge count, primary list for the notification type)
+
+Background (app is in background):
+  - System notification appears
+  - Tapping notification -> open the relevant screen (deep link)
+
+Killed (app not running):
+  - System notification appears
+  - Tapping notification -> launch app -> navigate to relevant screen
+```
+
+### Rules
+
+- **Never spam notifications** - user can disable per-type in settings
+- **Rich notifications** where supported (images, action buttons)
+- **Group notifications** by type/source (avoid spamming users with individual items)
+- **Badge count** on app icon matches pending items
+- **Clear badge** when user opens the relevant section
+- **Silent push** for background data sync (no user notification)
+- **User preferences for notifications** in settings (per-type toggle)
+
+---
+
+## Gestures & Touch
+
+### Standard Gestures
+
+**Principle:** Map gestures to actions consistently - the same gesture should mean the same thing across the entire app.
+
+[REFERENCE] Common gesture-to-action mappings:
+
+```
+Tap:         Select, navigate, activate
+Long press:  Context menu, multi-select mode, drag-to-arrange
+Swipe right: Go back (iOS navigation standard)
+Swipe left:  Reveal action buttons on list items (delete, archive)
+Pull down:   Refresh list content
+Pinch:       Zoom on images/maps
+Double tap:  Zoom in on images, or contextual action
+```
+
+### Rules
+
+- **Minimum touch target**: `[DEFAULT]` 44x44 points (iOS) / `[DEFAULT]` 48x48dp (Android)
+- **Spacing between targets**: Minimum `[DEFAULT]` 8px to prevent mis-taps
+- **Visual feedback on every tap**: highlight, ripple, opacity change (never feel unresponsive)
+- **Haptic feedback** for important actions (destructive, confirmation, toggle)
+- **Swipe actions must be discoverable** - show hint on first use or have an alternative button
+- **Never rely solely on gestures** - always provide a visible button alternative
+
+---
+
+## Performance
+
+### App Launch
+
+- **Cold start to interactive**: Target under `[DEFAULT]` 3 seconds. Heavy apps (Flutter/React Native with large bundles) on low-end devices may take longer - optimize progressively.
+- **Splash screen** covers initialization (don't show blank screen)
+- **Defer non-critical work**: load preferences immediately, fetch data after first paint
+- **Pre-load critical data** during splash (permissions, frequently accessed context)
+
+### Lists
+
+- **Virtualized/recycled lists** for any list over 50 items (FlatList, RecyclerView, ListView.builder). Smaller static lists on capable devices are fine without virtualization.
+- **Avoid rendering all items** at once for large lists (100+ items will jank)
+- **Image caching** - download once, serve from cache forever (until cache eviction)
+- **Placeholder images** while loading (blur hash or solid color)
+- **Smooth 60fps scrolling** - no janky frames
+
+### Images
+
+- **Resize server-side** - never send full-resolution to mobile
+- **Multiple resolutions**: thumbnail (list), medium (detail), full (zoom)
+- **Lazy load** images below the fold
+- **Cache aggressively** (disk cache + memory cache)
+- **Progressive JPEG** for large images (loads blurry -> sharp)
+
+### Memory
+
+- **Release resources** when screens are not visible (unsubscribe, cancel requests)
+- **Monitor memory usage** - alert thresholds depend on device tier and app type (image/video/map-heavy apps use more; set per your target devices)
+- **Large images**: Stream from disk, don't hold all in memory
+- **Pagination**: Don't accumulate all pages in memory; window the dataset
+
+---
+
+## App Lifecycle
+
+```
+Foreground:
+  - Connect WebSocket (if applicable)
+  - Resume data sync
+  - Update presence to "active"
+
+Background:
+  - Disconnect WebSocket (or reduce heartbeat frequency)
+  - Pause non-critical sync
+  - Update presence to "idle"
+  - Save draft state (unsent data, form progress)
+
+Terminated:
+  - Save critical state to local storage before death
+  - On next launch: restore state, re-authenticate, re-sync
+```
+
+---
+
+## Biometric Authentication
+
+```
+Flow:
+  1. User enables biometric in settings (requires credential confirmation)
+  2. Store auth token in secure storage with biometric protection
+  3. On app launch: prompt biometric -> unlock stored token -> auto-authenticate
+  4. Fallback: credential entry if biometric fails 3 times
+  5. Re-prompt biometric for sensitive actions (if applicable)
+
+Rules:
+  - NEVER store the password itself - store a token that can be revoked
+  - Always provide password fallback
+  - Respect user preference - biometric is optional
+  - Re-authenticate fully if token expires (don't just re-prompt biometric)
+```
+
+---
+
+## Platform-Specific UX
+
+### iOS Conventions
+
+- Tab bar at bottom, navigation bar at top
+- Swipe from left edge = back navigation
+- Large title in navigation bar (collapsible on scroll)
+- Action sheets from bottom (not centered dialogs for actions)
+- Haptic feedback on toggles, destructive actions
+- SF Symbols for icons (or consistent alternative)
+
+### Android Conventions
+
+- Bottom navigation bar OR navigation drawer
+- Material Design 3 components and motion
+- FAB (Floating Action Button) for primary creation action
+- Snackbar for non-blocking feedback (instead of toast)
+- System back button/gesture works throughout
+- Material You dynamic color (optional but modern)
+
+### Rules
+
+- **Follow platform conventions** - an iOS user expects iOS patterns, Android expects Android patterns
+- **Cross-platform frameworks**: Use platform-adaptive components where possible (different look on iOS vs Android)
+- **Never fight the platform** - if iOS does back-swipe, don't disable it; if Android has hardware back, support it
+- **Test on BOTH platforms** if cross-platform - never release iOS-only tested builds to Android
+
+---
+
+## Distribution Readiness
+
+### Before Submission
+
+- [ ] App icon at all required sizes
+- [ ] Splash/launch screen (not blank white)
+- [ ] Screenshots for all required device sizes
+- [ ] Privacy policy URL
+- [ ] Terms of service URL
+- [ ] App description (clear, no keyword stuffing)
+- [ ] Permissions explained (camera, location, notifications - justified in review notes)
+- [ ] No test/debug data visible
+- [ ] No placeholder text or images
+- [ ] Crash-free rate above 99%
+- [ ] Works without network (graceful degradation)
+- [ ] Deep links tested
+- [ ] Push notifications tested on real device
+- [ ] Theme variants tested (if app supports multiple themes)
+- [ ] Accessibility basics: VoiceOver/TalkBack navigation works

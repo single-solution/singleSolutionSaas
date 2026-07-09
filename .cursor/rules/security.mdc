@@ -1,0 +1,322 @@
+---
+description: Auth, validation, secrets, client data path. Apply for API/auth/data code.
+alwaysApply: false
+---
+
+# Security Rules
+
+Baseline security practices for every application. These are the defaults you should start with - adjust thresholds and specific techniques to your product's threat model. Apply the sections relevant to your project's technology. (See AGENTS.md Enforcement table for how to read MUST/NEVER language.)
+
+> All numeric values (thresholds, sizes, timings, percentages) in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Decision tests
+
+### Audience test (responses)
+
+Who receives this JSON? Maintain an **allowlist per audience** (admin, public, internal). Never use one serializer for all channels.
+
+### Input test (mutations)
+
+Parse body with the project's **shared schema** (Zod, Joi, etc.). Never spread raw client JSON into updates (mass-assignment / injection risk).
+
+### Logging test
+
+**Never** log secret values. **May** log actor id + correlation/request id + stack on server. See `logging.md`.
+
+---
+
+## Authentication Security
+
+- **bcrypt** with cost factor `[DEFAULT]` 12+ for password hashing (NEVER MD5, SHA-1, SHA-256 alone, or plaintext)
+- **Same client-visible text** for invalid credentials - never reveal which part of the credential pair failed (avoid account enumeration)
+- **httpOnly cookies** for session tokens in web apps - preferred over localStorage/sessionStorage. Mobile apps and non-browser clients use secure storage (Keychain, EncryptedSharedPreferences) or short-lived tokens with rotation.
+- **Secure flag** on cookies in production (HTTPS only)
+- **SameSite=Lax** minimum on auth cookies (prevents most CSRF)
+- **Token rotation** on privilege escalation (password change, role change)
+- **Session invalidation** on credential change (kill all active sessions tied to the compromised or rotated secret)
+- **Constant-time comparison** for tokens and hashes (prevent timing attacks)
+
+---
+
+## Rate Limiting
+
+| Category | Limit `[DEFAULT]` | Window | Notes |
+|----------|-------------------|--------|-------|
+| High-sensitivity endpoints (credential checks, recovery-style flows, bulk sensitive mutations) | 5-10 attempts | 15 minutes | Optional parallel hourly cap where needed; CAPTCHA vs hard lockout on shared IPs; tune per flow |
+| API (authenticated - standard) | 300 requests | 1 minute | Tune per workload - data-intensive or real-time endpoints often need higher ceilings |
+| API (unauthenticated - public) | 30 requests | 1 minute | Raise or lower when exposing intentional public APIs |
+| File upload | configurable per role | - | See file-media.md |
+
+> These are **starting defaults**, not fixed values. Tune based on usage patterns, threat model, and client mix (consumer vs. enterprise networks, shared IPs, etc.).
+
+- Rate limit by IP + identifier (email/user ID)
+- Return `429 Too Many Requests` with `Retry-After` header
+- Show user-friendly notice with wait time
+
+---
+
+## Input Validation & Sanitization
+
+- **Validate EVERYTHING server-side** - client validation is UX only, not security
+- **Whitelist allowed values** - don't blacklist bad ones (always incomplete)
+- **Trim and normalize** strings before validation
+- **Limit string lengths** - set max length on all text inputs (prevent payload abuse)
+- **Validate file types** by content (magic bytes), not just extension
+- **Limit file sizes** (enforce both client and server side)
+- **Reject unexpected fields** - only accept known properties
+- **Type coercion** - ensure numbers are numbers, booleans are booleans
+- **Sanitize HTML** in rich text inputs (strip script tags, event handlers)
+
+---
+
+## SQL Injection Prevention
+
+- **ALWAYS use parameterized queries** / prepared statements
+- **NEVER concatenate** user input into query strings
+- **Use ORM/query builders** that auto-parameterize
+- **Validate and type-cast** user-provided IDs before queries
+- **Audit raw queries** - if you must write raw SQL, review it for injection
+
+---
+
+## XSS Prevention
+
+- **Escape all output** by default (most frameworks do this)
+- **Content Security Policy** header - restrict script sources
+
+**Principle:** Never bind user-controlled data to raw HTML rendering APIs. Use your framework's safe rendering by default.
+
+[REFERENCE] Common dangerous bindings by framework:
+
+- **Never bind unsanitized user content** to raw HTML rendering (e.g. `innerHTML` in DOM, `dangerouslySetInnerHTML` in React, `v-html` in Vue)
+- **Always sanitize** user-generated HTML before rendering (use a vetted sanitizer appropriate to your platform) - sanitized content in raw HTML rendering is acceptable for rich text editors, CMS content, etc.
+- **HttpOnly** cookies prevent session theft even if XSS exists
+- **X-Content-Type-Options: nosniff** header
+
+---
+
+## CSRF Prevention
+
+- **SameSite cookies** (Lax or Strict) - first line of defense
+- **CSRF tokens** for forms if SameSite isn't sufficient (legacy browser support)
+- **Check Origin/Referer header** on state-changing requests
+- **Custom header requirement** for API calls (X-Requested-With) - browsers won't send these cross-origin
+
+---
+
+## Client Data Path (MUST)
+
+When the product has a browser client that talks to your backend:
+
+- **Browser clients call your API (+ identity provider for login) only** - never vendor APIs, database drivers, Redis, or internal service URLs directly from the bundle.
+- **Secrets and vendor keys live on the server/workers** - env vars, secret managers, or server-only config. Nothing sensitive in client env vars that ship to the browser.
+- **Server validates and proxies** - if the UI needs third-party data (headlines, link previews, AI chat), the API fetches or forwards it; the browser never holds vendor credentials.
+- **Authorization before data** - privileged content (paid tiers, admin-only fields, role-gated resources) is enforced on the server on every request, not hidden-only in UI.
+
+Document the allowed client origins and API base URL in `docs/setup.md` and `.env.example`.
+
+---
+
+## Multi-Origin Frontends (When Applicable)
+
+Not every project splits app and admin across domains. **Ask at project start** (see `feature-discovery.md` § New Project Bootstrap).
+
+When the product has **separate browser apps on separate origins** (e.g. trader app + admin app + API):
+
+- **Separate origins** - prefer distinct subdomains or domains over path-only separation when apps have different audiences and cookie scopes.
+- **Separate auth clients** - each SPA gets its own OAuth/OIDC app client (or equivalent) when the identity provider supports it.
+- **CORS allowlist** - API allows only the known frontend origins; never `*` on authenticated routes.
+- **Cookies and CSP** - configure per origin; do not share session cookies across unrelated apps unless explicitly designed.
+- **Privileged routes** - role gates enforced server-side on every API call, not UI-only hide.
+
+---
+
+## CORS (Cross-Origin Resource Sharing)
+
+- **Explicit origins only** - never `Access-Control-Allow-Origin: *` on authenticated APIs
+- **Whitelist specific domains** that should access your API
+- **Limit methods** - only allow methods your API actually uses
+- **Limit headers** - only expose headers the client actually needs
+- **Credentials: true** only for origins that need cookie-based auth
+
+---
+
+## Security Headers (Set on All Responses)
+
+Every web application should set security headers. The **specific values depend on your app** (CDNs, third-party scripts, iframe requirements, API integrations), but every project should explicitly configure:
+
+**Principle:** Set security headers that prevent common browser-based attacks. The specific headers depend on your platform and deployment.
+
+[REFERENCE] Common security headers for web applications:
+
+| Header | Purpose | Notes |
+|--------|---------|-------|
+| `X-Content-Type-Options` | Prevent MIME-type sniffing | Typically `nosniff` |
+| `X-Frame-Options` | Control iframe embedding | `DENY` or `SAMEORIGIN` based on your needs |
+| `Strict-Transport-Security` | Force HTTPS | Set `max-age` and `includeSubDomains` per your domain setup |
+| `Content-Security-Policy` | Restrict script/style/resource sources | **Project-specific** - depends on CDNs, inline scripts, third-party embeds. Start restrictive, widen as needed. |
+| `Referrer-Policy` | Control referrer leakage | Choose based on your privacy needs |
+| `Permissions-Policy` | Restrict browser features (camera, mic, etc.) | Deny everything you don't use |
+
+**Rules:**
+- **Define headers per project** - never copy-paste a CSP from another project; each app has different third-party integrations and inline requirements
+- **Start restrictive, then widen** - deny by default, add exceptions as needed
+- **Test headers after every deploy** that changes resource sources (new CDN, new analytics script, etc.)
+- **Disable `X-XSS-Protection`** (set to `0`) - rely on CSP instead; the legacy filter causes its own vulnerabilities
+
+---
+
+## Data Exposure Prevention
+
+- **Never expose** internal IDs if they reveal information (use UUIDs or opaque tokens for public-facing)
+- **Never expose** stack traces, file paths, or server versions in error responses
+- **Never expose** database field names that reveal schema structure
+- **Never expose** other users' data without explicit permission check
+- **Never log** passwords, tokens, sensitive data (PII, secrets, recovery artifacts), or full credential material
+- **Redact sensitive fields** in audit logs
+
+---
+
+## File Upload Security
+
+- **Validate MIME type** by reading file header (magic bytes), not just extension
+- **Rename files** - never use user-provided filenames as-is
+- **Store outside web root** - files shouldn't be directly accessible
+- **Scan for malware** on upload (use a scanning solution appropriate for your infrastructure)
+- **Limit file size** (server rejects before full upload if possible)
+- **Restrict allowed types** - whitelist specific MIME types
+
+---
+
+## Environment & Configuration
+
+- **Never commit secrets** - use environment variables or secret managers
+- **Different secrets** per environment (dev/staging/prod)
+- **.env files** in .gitignore (provide .env.example with dummy values)
+- **Rotate secrets** periodically (API keys, JWT secrets)
+- **Audit access** - know who has access to production secrets
+
+---
+
+## Dependency Security
+
+**Principle:** Treat dependencies as attack surface. Keep them updated, minimal, and audited.
+
+[REFERENCE] Dependency security checklist:
+
+- **Keep dependencies updated** - check for vulnerabilities regularly
+- **Audit tools** - use your ecosystem's vulnerability scanner (e.g. `npm audit`, `pip audit`, `bundler-audit`, Dependabot, or equivalent)
+- **Lock files** - commit package-lock.json / yarn.lock / Pipfile.lock
+- **Minimal dependencies** - every dependency is an attack surface
+- **Review major updates** before applying (check changelogs for breaking changes)
+
+---
+
+## Session Verification Pattern
+
+Every backend with authentication should have a **single session verification function**:
+
+```
+function getVerifiedSession():
+  -> Extract token from cookie/header
+  -> Verify signature (JWT) or lookup session in DB
+  -> Load user record (confirm still active)
+  -> Return typed user object OR null
+```
+
+- Called as the **first line** of every protected API route
+- Returns a strongly-typed user object (not `any`)
+- A single source of truth - never duplicate this logic across handlers
+
+---
+
+## Authorization / Permission Pattern
+
+IF your project has role-based access control (RBAC) or permissions:
+
+**Principle:** Centralize permission definitions and checks. Every permission check in the app should reference a single source of truth.
+
+[REFERENCE] Example file/module layout (framework-specific):
+
+```
+Structure:
+  permissions.shared    -> Types, keys, constants (importable by BOTH client and server)
+  permissions           -> Server-only logic (DB lookups, hierarchy resolution, scope filters)
+  usePermissions        -> Client hook/context (loads permissions, exposes hasPermission())
+
+Rules:
+  - Permission keys are typed constants (not magic strings) - shared between client and server
+  - Server checks are the authority (client checks are for UX only - hide/show UI)
+  - Every API handler checks permissions AFTER authentication, BEFORE execution
+  - Reusable helper: hasPermission(actor, "resource:action") -> boolean
+  - Scope-aware: some permissions apply to "own" data, others to "all" data - handle both
+```
+
+---
+
+## Secure Time-Limited Token Handling
+
+When implementing **any** one-time or short-lived token (recovery, verification, magic link, invite, etc.):
+
+1. Generate a **cryptographically random** token (sufficient entropy, e.g. `[DEFAULT]` 32+ random bytes) - use your language's CSPRNG (e.g. `crypto.randomBytes` in Node, `secrets` in Python)
+2. Store the **hash** of the token in the database (never store raw)
+3. Deliver the **raw** token to the recipient through your chosen channel (e.g. signed deep link, out-of-band delivery) - never log the raw value
+4. On verification: hash the submitted token, compare to stored hash (constant-time)
+5. **One-time use** - delete/invalidate the token after successful use
+6. **Expiry** - token expires after `[DEFAULT]` 1 hour (tune per risk)
+7. On successful redemption for a **credential or account change**: invalidate ALL existing sessions for that principal (force fresh authentication everywhere)
+
+---
+
+## Authorization as Query Filters (Scope Builders)
+
+When different roles see different subsets of data, encode authorization into the **database query itself** - don't fetch all records and filter in code:
+
+```
+// lib/scopeBuilder.ts (or equivalent)
+function buildScopedFilter(actor):
+  -> If admin -> return {} (no filter)
+  -> If scoped role -> return filter for actor's scope (e.g. team, group, org)
+  -> If basic role -> return { createdBy: actor.id }
+  -> Else -> return impossible filter (empty result)
+
+// Usage in handler:
+  const filter = buildScopedFilter(actor);
+  const records = await db.find("Resource", { ...filter, ...userFilters });
+```
+
+- Pure functions that take the actor and return a query filter - reusable across all list/read endpoints
+- Combine scope filters with user-provided filters (search, status, date range)
+- Never fetch all records then filter by role in application code (wasteful and risky if the filter has a bug)
+- Test scope builders in isolation - verify each role produces the correct filter shape
+
+---
+
+## Session Enrichment (Don't Trust JWT Alone)
+
+JWT tokens carry claims, but those claims can become stale (role changed, account deactivated, permissions updated). For fine-grained authorization:
+
+```
+getVerifiedSession():
+  -> Verify JWT signature
+  -> Load user from DB (confirm isActive, not deleted)
+  -> Attach current permissions / memberships from DB
+  -> Return enriched actor object
+```
+
+- The JWT proves identity; the **DB lookup proves current state**
+- Cache enriched sessions briefly (`[DEFAULT]` 30s-60s) to avoid hitting DB on every request
+- On permission change or role change, invalidate the cache so the next request picks up new state
+- Never make authorization decisions based solely on JWT claims for anything beyond "is this a valid session"
+
+---
+
+## Monitoring & Incident Response
+
+- **Log security events** - failed authentication, permission denials, rate limits hit
+- **Alert on anomalies** - unusual authentication patterns, mass data access
+- **Incident response plan** - know what to do when breached
+- **Regular security audits** - at least annually
+- **Penetration testing** before major launches

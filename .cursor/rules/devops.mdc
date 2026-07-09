@@ -1,0 +1,466 @@
+---
+description: Env, Docker, CI/CD, deploy. Apply for deploy, env vars, or infra.
+alwaysApply: false
+---
+
+# DevOps & Deployment
+
+Coding patterns for environment management, containerization, CI/CD pipelines, and deployment. IF your project has a deployment pipeline, apply these patterns.
+
+> All numeric values in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Environment Management
+
+**MUST** update `.env.example` when adding or changing environment variables (placeholders only - never secrets). Details: `security.md` for secret handling in logs.
+
+**CI capability test:** Apply CI/CD sections below only when the project has a pipeline (e.g. `.github/workflows/`, GitLab CI, etc.). If no CI exists, do not invent pipelines unless the task is to add CI. When CI exists, change only what the task requires; **ask user first** for unrelated workflow edits.
+
+---
+
+### Environment Tiers
+
+```
+local       Developer machine - runs everything locally
+development Shared dev server - latest code, test data, may break
+staging     Pre-production - mirrors production, final testing
+production  Live users - zero tolerance for unverified changes
+```
+
+**Rules:**
+- Every tier has its OWN database (never share databases between environments)
+- Every tier has its OWN secrets (different API keys, JWT secrets, etc.)
+- Staging mirrors production as closely as possible (same OS, same services, same config)
+- Code flows one direction: local -> development -> staging -> production
+
+### Environment Variables
+
+```
+Recommended structure:
+
+.env.example          <- Committed. Template with dummy values and comments.
+.env                  <- NOT committed. Local overrides.
+.env.local            <- NOT committed. Machine-specific overrides.
+.env.development      <- NOT committed. Development tier values.
+.env.staging          <- NOT committed. Staging tier values.
+.env.production       <- NEVER on disk. Managed by secret manager / hosting platform.
+```
+
+### .env.example Format
+
+The `.env.example` file should follow this **structure** - the actual variables depend on your stack and services:
+
+```bash
+# Application
+APP_ENV=development
+PORT=3000
+APP_URL=http://localhost:3000
+
+# Database (your database's connection string format)
+DATABASE_URL=<connection-string-for-your-database>
+
+# Authentication (if applicable)
+JWT_SECRET=replace-with-64-char-random-string
+SESSION_EXPIRY_HOURS=24
+
+# External Services (only include sections your project actually uses)
+# SMTP_HOST=...
+# STORAGE_BUCKET=...
+# CACHE_URL=...
+```
+
+**Rules:**
+- **Every** environment variable used in code MUST appear in `.env.example`
+- Group variables by service with section comments
+- Include brief description for non-obvious variables
+- Use a validation function at app startup that checks all required env vars exist and crashes immediately with a clear error if any are missing
+- Critical env vars (like `JWT_SECRET`, `DATABASE_URL`) should have no fallback - the app should refuse to start with a clear error. Non-critical vars (like `LOG_LEVEL`, feature flags) can have sensible defaults.
+
+### URL / Config Fallback Chains
+
+When a URL or config value can come from multiple sources (deploy platform, env var, default), use a deterministic fallback chain:
+
+```
+Pattern:
+  function getBaseUrl():
+    -> process.env.PRIMARY_URL          // explicit config (highest priority)
+    -> process.env.PLATFORM_URL         // auto-set by hosting platform (Vercel, Railway, etc.)
+    -> "http://localhost:3000"           // local dev fallback (lowest priority)
+```
+
+- Document the priority sequence in a comment next to the function
+- Log which source was used at startup (INFO level) so you can debug config issues
+- Never silently fall through to localhost in production - add a WARN log if using the fallback in non-dev environments
+
+---
+
+## Config Classification (Bootstrap vs Product)
+
+When the product has an **Admin UI** or ops-editable settings:
+
+| Class | Lives in | Examples | Change requires |
+|-------|----------|----------|-----------------|
+| **Bootstrap / secrets** | Env, secret manager | `DATABASE_URL`, auth signing secrets, vendor API keys | Deploy + ops approval |
+| **Product config** | Database | Feature flags, integration mappings, content lists, public IdP client IDs, toggles | Admin save; API/workers reload from DB |
+
+**Rules:**
+
+- **Never require SSH or redeploy** to change product config that ops should edit in Admin.
+- **Workers and API read product config from the database** - poll on interval or invalidate cache when Admin writes.
+- **`.env.example` documents bootstrap vars only** - not ops-editable lists or integration mappings.
+- **Seed data** (`shared/seed` or migrations) bootstraps first deploy; ongoing edits go through Admin + API.
+
+Document the split in `docs/architecture.md` and `docs/setup.md`.
+
+---
+
+## Graceful Shutdown
+
+Every deployed process should handle termination signals cleanly:
+
+```
+On SIGTERM / SIGINT:
+  1. Stop accepting new connections
+  2. Finish in-flight requests (with a timeout - [DEFAULT] 30 seconds)
+  3. Close database connections, flush logs
+  4. Exit with code 0
+```
+
+- Never kill processes abruptly in production - always allow drain time
+- Set Docker `STOPSIGNAL SIGTERM` and `stop_grace_period` to match your drain timeout
+- Listen for termination signals in your application and trigger a clean shutdown (language/framework-specific)
+- Log the shutdown event at INFO level so you can verify clean shutdowns in production
+
+---
+
+## Docker
+
+### Dockerfile Standards
+
+The specific base image, package manager, and build commands depend on your stack. The **structural rules** below are universal:
+
+```
+# Multi-stage build pattern (adapt to your stack)
+# Stage 1: Install dependencies
+FROM <base-image>:<pinned-version> AS dependencies
+  -> Copy dependency manifest files first (for layer caching)
+  -> Install production dependencies only
+
+# Stage 2: Build
+FROM <base-image>:<pinned-version> AS build
+  -> Install all dependencies (including dev)
+  -> Copy source code
+  -> Run build step
+
+# Stage 3: Production
+FROM <base-image>:<pinned-version> AS production
+  -> Create non-root user
+  -> Copy only production dependencies + built artifacts
+  -> Switch to non-root user
+  -> Set HEALTHCHECK
+  -> Define CMD
+```
+
+**Rules:**
+- **Multi-stage builds** always (separate build and runtime stages)
+- **Non-root user** in the final image (never run as root)
+- **Minimal base images** when possible (Alpine, slim, distroless). Use fuller images when compatibility requires it (native modules, system libraries).
+- **Pin base image versions** - never use `:latest`
+- **HEALTHCHECK** in every Dockerfile
+- **Copy dependency files first, install, then copy source** (layer caching)
+- **`.dockerignore`** file to exclude: dependency folders, `.env`, `.git`, build output, `coverage`, etc.
+- **No secrets in images** - pass via environment variables at runtime
+
+### docker-compose.yml (Development)
+
+Structure your development compose file based on your project's actual services. The **rules** are what matter, not the specific services:
+
+**Rules:**
+- Health checks on ALL services
+- Named volumes for persistent data (never bind-mount database data directories)
+- `depends_on` with `condition: service_healthy` (not just `depends_on` without condition)
+- Separate compose files for dev and production if they differ significantly
+- Pin service image versions (same principle as Dockerfiles)
+
+---
+
+## CI/CD Pipeline
+
+### Pipeline Stages
+
+**Principle:** Every code change passes through an automated pipeline that validates quality before reaching production.
+
+[REFERENCE] Typical pipeline stages:
+
+```
+1. INSTALL       -> Install dependencies (cached)
+2. LINT          -> Run linter (ESLint, Ruff, etc.)
+3. TYPE CHECK    -> Run type checker (tsc, mypy, etc.)
+4. UNIT TEST     -> Run unit tests with coverage
+5. BUILD         -> Build production artifacts
+6. INTEGRATION   -> Run integration tests (if applicable)
+7. E2E           -> Run E2E tests (if applicable)
+8. SECURITY      -> Dependency audit (npm audit, etc.)
+9. DEPLOY        -> Deploy to target environment (if triggered)
+```
+
+### CI Triggers
+
+**Principle:** Define which pipeline stages run on which branches. Not every check needs to run on every push.
+
+[REFERENCE] Common trigger configuration:
+
+```
+On every push to any branch:
+  -> Stages 1-4 (lint, type, unit test)
+
+On PR to main/develop:
+  -> Stages 1-8 (full pipeline)
+
+On merge to main:
+  -> Stages 1-8 + deploy to staging
+
+On tag (v*.*.*):
+  -> Stages 1-8 + deploy to production
+```
+
+### Rules
+
+- **CI MUST pass before merge** - emergency bypasses require a follow-up fix PR within the same day (aligned with git-workflow.md)
+- **Run the real production build in CI** - for SSR/SSG frameworks (Next.js, Nuxt, SvelteKit, etc.) a passing type check is NOT enough; the production build catches RSC/server-client boundary errors, bad imports, and build-time data failures that only surface at build. Build every deployable app.
+- **Cache dependencies** between runs (node_modules, pip cache, etc.)
+- **Parallel jobs** where possible (lint and type check run simultaneously)
+- **Fail fast** - if lint fails, don't bother running tests
+- **Branch protection** on main: require CI pass + PR review
+- **Artifacts** - store build output, test reports, coverage reports
+- **Timeouts** - set max duration for each stage (prevent hanging CI)
+- **Alerts** - notify on CI failure (via configured channel: webhook, team notifier, etc.)
+
+### CI Configuration
+
+Use your CI platform's configuration format (GitHub Actions, GitLab CI, CircleCI, Jenkins, etc.). The **structural pattern** is:
+
+```
+Job 1 - Quality:
+  -> Checkout code
+  -> Set up runtime (pinned version, with dependency cache)
+  -> Install dependencies
+  -> Run linter
+  -> Run type checker
+  -> Run tests with coverage
+  -> Run dependency audit
+
+Job 2 - Build (depends on Quality):
+  -> Checkout code
+  -> Install dependencies
+  -> Build production artifacts
+```
+
+**Rules:**
+- Pin runtime/tool versions in CI (same as local development)
+- Cache dependencies between runs (speeds up CI significantly)
+- Use your CI platform's secret management for credentials (never inline)
+
+---
+
+## Deployment
+
+### Deployment Strategies
+
+```
+Rolling Update (default):
+  - Replace instances one at a time
+  - Zero downtime
+  - Easy rollback (keep previous version running)
+
+Blue-Green:
+  - Two identical environments (blue = current, green = new)
+  - Switch traffic from blue to green
+  - Instant rollback (switch back)
+  - Requires 2x resources
+
+Canary:
+  - Route small % of traffic to new version
+  - Monitor for errors
+  - Gradually increase traffic
+  - Rollback if errors spike
+```
+
+### Deployment Checklist
+
+```
+Before every production deploy:
+  - [ ] All CI checks pass
+  - [ ] Tested in staging environment
+  - [ ] Database migrations run successfully (if applicable)
+  - [ ] Environment variables set in production
+  - [ ] Rollback plan documented
+  - [ ] Team notified of deployment window
+  - [ ] Observability tools ready
+
+After every production deploy:
+  - [ ] Smoke test critical flows (core system paths / critical endpoints)
+  - [ ] Check error rates in monitoring
+  - [ ] Check response times
+  - [ ] Verify database connectivity
+  - [ ] Tag the release in git
+  - [ ] Update changelog
+```
+
+### First Launch / Go-Live Runbook
+
+The **first** production launch needs more than the per-deploy checklist - there is no "previous version" to fall back to and no traffic history. Keep a project-specific go-live runbook (a `docs/go-live.md`) and run it once before the first public release. Template categories:
+
+```
+PRE-LAUNCH (days before):
+  - [ ] All production env vars set in the secret manager / host (cross-checked against .env.example)
+  - [ ] Production database provisioned, migrated, seeded with real reference data; backups enabled
+  - [ ] Custom domain + TLS configured; HTTPS forced; www/apex redirect decided
+  - [ ] Security headers verified on production (CSP, HSTS, etc. - see security.md)
+  - [ ] Third-party services in LIVE mode (payments, email, storage) with production keys + webhooks pointed at prod
+  - [ ] Error tracking + uptime monitoring + log aggregation receiving production events
+  - [ ] Rate limits, robots/sitemap, and legal pages (privacy, terms) in place
+  - [ ] Load/perf sanity check on the hot paths
+
+LAUNCH:
+  - [ ] Deploy from a tagged release; smoke test every critical user + admin flow on prod
+  - [ ] Place a real end-to-end transaction (if commerce) and confirm money + webhook + receipt
+  - [ ] Confirm cache warm/invalidation behaves on prod (no stale public data after an admin edit)
+
+POST-LAUNCH (first 24-72h):
+  - [ ] Watch error rate, latency, and resource use closely; have rollback ready
+  - [ ] Verify scheduled jobs / cron actually run in prod (check last-run timestamps)
+  - [ ] Verify worker processes stay up, reconnect after deploy, and log heartbeats
+  - [ ] Confirm backups ran and are restorable
+```
+
+Adapt and prune per project; the point is a single, reviewed checklist owned in `docs/` so launch is not improvised.
+
+### Rollback
+
+```
+Rules:
+  - Deployments should be rollback-able quickly (target: under [DEFAULT] 10 minutes). Irreversible data migrations require a separate, carefully-planned rollback strategy.
+  - Keep previous version's artifacts/images for at least [DEFAULT] 5 releases
+  - Database migrations must be backward-compatible (new code works with old schema AND new schema)
+  - Feature flags for risky features (disable without rollback)
+  - Document rollback steps for each deployment method
+```
+
+---
+
+## Static SPA + API Deploy (When Applicable)
+
+When frontends are **static SPAs** (Vite, CRA, etc.) and the API runs on compute:
+
+```
+Browser  ->  CloudFront / CDN  ->  S3 bucket (HTML/JS/CSS)
+Browser  ->  api.example.com   ->  EC2 / container (Express, etc.)
+Workers  ->  (no public URL)   ->  EC2 / container (private subnet)
+```
+
+**Frontend (S3 + CloudFront):**
+
+- Private S3 bucket; CloudFront Origin Access Control (OAC) - no public bucket ACLs.
+- `index.html` cache policy: short TTL or invalidation on deploy; hashed assets: long cache.
+- TLS via ACM on CloudFront; redirect HTTP to HTTPS.
+- Separate distribution per app when origins differ (trader app vs admin app).
+
+**API + workers:**
+
+- API behind ALB or nginx with TLS.
+- Workers: no public IP; outbound-only to vendors + DB/Redis.
+
+**Selective deploy script** - support deploying components independently:
+
+```
+pnpm deploy --prod --website     # build SPA -> S3 sync -> CloudFront invalidation
+pnpm deploy --prod --admin       # same for admin bucket
+pnpm deploy --prod --server      # API only
+pnpm deploy --prod --workers     # all worker packages
+pnpm deploy --prod               # everything
+```
+
+CI may mirror this with separate workflows per artifact or one script with flags - document which in `docs/setup.md`.
+
+**Rules:**
+
+- Build every deployable app in CI before merge (see CI/CD § Rules).
+- Frontends never embed API keys - only public API base URL and IdP client IDs.
+- Smoke test API health + one critical SPA route after each prod deploy.
+
+---
+
+## Health Checks
+
+IF your service is deployed, expose:
+
+```
+GET /health
+  -> 200: { "status": "healthy", "timestamp": "..." }
+  -> 503: { "status": "unhealthy", "checks": { ... } }
+
+Checks (include those relevant to your project):
+  - Database connectivity
+  - Cache connectivity (if applicable)
+  - Disk space
+  - Memory usage
+  - Critical external service connectivity
+```
+
+**Rules:**
+- Health endpoint does NOT require authentication
+- Health checks are lightweight (don't run expensive queries)
+- Load balancer polls health endpoint (unhealthy -> remove from rotation)
+- Kubernetes readiness/liveness probes point to health endpoint
+
+---
+
+## Infrastructure as Code
+
+```
+Rules:
+  - Define ALL infrastructure in code (Terraform, Pulumi, CloudFormation, etc.)
+  - Version control infrastructure code alongside application code
+  - Review infrastructure changes like code changes (PR + review)
+  - NEVER make manual changes to production infrastructure (always through code)
+  - Use modules/templates for common patterns (don't repeat server configs)
+  - Tag all resources with: environment, project, owner, cost-center
+```
+
+---
+
+## Secrets Management
+
+```
+Hierarchy (least to most secure):
+  1. .env files (development only - NEVER production)
+  2. CI/CD secrets (GitHub Secrets, GitLab CI Variables)
+  3. Cloud secret managers (AWS Secrets Manager, GCP Secret Manager, HashiCorp Vault)
+
+Rules:
+  - Production secrets ONLY in a managed secret store
+  - Rotate secrets on a schedule (at minimum: quarterly)
+  - Audit secret access (who accessed what, when)
+  - Revoke immediately on team member departure or suspected breach
+  - Different secrets per environment (dev JWT secret !== prod JWT secret)
+  - Secrets in CI: use built-in secret variables, never echo/print them in logs
+```
+
+---
+
+## Monitoring & Alerting Setup
+
+```
+Recommended capabilities for production deployments:
+  1. Error tracking (dedicated service - e.g., Sentry, Bugsnag, or your platform's equivalent)
+  2. Uptime monitoring (regular health check polling)
+  3. Performance monitoring (response times, CPU, memory)
+  4. Log aggregation (centralized, searchable)
+  5. Alerts - define thresholds per project for:
+     - Error rate spikes (warning and critical tiers)
+     - Response time degradation (separate SLOs for interactive vs heavy endpoints)
+     - Service downtime
+     - Resource exhaustion (disk, memory, CPU)
+```

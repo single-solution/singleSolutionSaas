@@ -1,0 +1,95 @@
+---
+description: Universal rule: feature-discovery. See AGENTS.md routing matrix.
+alwaysApply: true
+---
+
+# Feature Discovery (AI Sessions)
+
+**Grill the user** before implementing new or ambiguous work - do not guess and build.
+
+---
+
+## When to Grill
+
+**MUST grill** (3-5 questions) before coding when the task **changes behavior** users or clients will observe - including small UX, validation, API shape, or permission changes.
+
+### Skip grilling (any one true)
+
+- User **explicitly waives** discovery (e.g. "just implement", "no questions", "ship as described").
+- **Clear bugfix** with reproduction steps - no design choice required.
+- **Mechanical** work only: dependency bump, formatter/linter, copying rules, config sync with no product logic.
+- **Typo, copy, or formatting-only** - no behavior change.
+- **Rename or move** with **zero** behavior change.
+
+If none apply -> grill.
+
+### Unclear references
+
+If the user says "like the other screen" / "same pattern" without naming it: ask **one** tight question, then proceed with best effort.
+
+---
+
+## How to Grill
+
+- Ask **3-5 focused questions** in one message (use structured choice UI when options are finite).
+- Cover: goal, acceptance criteria, out of scope, data/permissions, UX/error cases, preferred approach if options exist.
+- If the user says "just do it" or answers, **stop grilling** and implement.
+- If still unclear after answers, ask **one** more tight question - do not loop.
+
+---
+
+## Explicit spec (opt-out only)
+
+File paths, component names, or a one-line goal are helpful context but **do not** replace grilling unless the user also **waives questions** in the same message.
+
+---
+
+## After Clarity
+
+- Explore the codebase as needed (targeted + parallel tools).
+- Then implement with minimal diff and concise completion bullets.
+
+---
+
+## User Signal
+
+If the user says **"grill me"**, treat the task as ambiguous and run discovery even if it looked specified.
+
+---
+
+## Rule disagreements
+
+If a MUST rule seems wrong for the task: **grill the user** and propose a rulebook change. Agents MUST NOT silently override rules (no undocumented inline exceptions).
+
+Complements `maintenance.md` § Pre-Implementation Checklist - that checklist is for **codebase** readiness; this file is for **requirements** clarity before coding.
+
+---
+
+## New Project Bootstrap (Ask Before Scaffold)
+
+When starting a **new repo or major greenfield scaffold**, ask these in the first message (alongside any feature questions). Skip only when the user already documented answers in `docs/architecture.md`.
+
+### Frontend stack
+
+- **Framework:** Next.js (App Router) vs Vite + React Router vs other? File-based routing vs explicit `router.tsx`?
+- **If Vite SPA:** confirm route folder layout (URL-mirror under `routes/` or `pages/` with colocated components per `project-structure.md`).
+
+### Origins and clients
+
+- **Single origin or multi-origin?** One domain for everything vs separate app/admin/API subdomains?
+- **If multi-origin:** separate IdP app clients? CORS allowlist? Which origins call the API?
+- **How many browser apps?** Trader web, admin, embed/widget only?
+
+### Backend shape
+
+- **Background jobs:** list each job (integrations, polls, cleanup, digests, async user work). For **each**, choose cron-in-API vs separate worker vs queue - use `project-structure.md` § Background Work + Job queue. Most projects use **more than one** model.
+- **Admin-editable config?** -> product config in DB, bootstrap in env (`devops.md` § Config Classification).
+- **Multiple API clients?** -> `contracts/openapi.yaml` required (`api-design.md`).
+
+Record answers in `docs/architecture.md` (include a **Background jobs** table: job name | cron vs worker | why) before generating folder trees.
+
+---
+
+## Cursor
+
+Drop-in copy: `cursor/feature-discovery.mdc` -> project `.cursor/rules/feature-discovery.mdc`

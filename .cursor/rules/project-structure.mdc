@@ -1,0 +1,600 @@
+---
+description: Folders, monorepo, cron/worker/queue. Apply when adding files or modules.
+alwaysApply: false
+---
+
+# Project Structure
+
+Standard folder layouts for every project type. Adapt to the framework - the logical grouping should be consistent, but framework conventions (Remix loaders, Nest modules, Rails engines) take precedence over this template.
+
+> Folder names and example files below are `[DEFAULT]` illustrations - adapt to your project's domain and framework. Feature-grouping is preferred when features are self-contained; type-grouping (routes/, controllers/, services/) is acceptable when the framework or team convention calls for it. Be consistent within each project.
+
+---
+
+## The Golden Rule
+
+**A stranger should open the project and instantly know where everything lives.** If someone has to search for "where do API routes go?" - the structure has failed.
+
+---
+
+## Placement tests (every web app)
+
+### URL mirror test
+
+Route folders follow **URL segments**: `/login` -> route folder `login/`; `/auth/settings` -> under `auth/`. Do not pile unrelated screens at the app root.
+
+### Colocation test
+
+Feature-specific UI lives **beside its route** (framework colocation: `_components/`, route-local `components/`, or equivalent) - not domain screen modules at a shared `components/` root.
+
+### Shared components root
+
+At `components/` (or equivalent) top level, allow only **shared** areas:
+
+- `ui/` - primitives (`Button`, `DataTable`, `Modal`)
+- `layout/` - shell (`Shell`, `Header`, `Footer`)
+- `forms/` - shared fields (`TextField`, `SelectField`)
+- `shared/` - cross-feature widgets reused by 2+ unrelated routes (NOT single-feature screens, which colocate with their route)
+
+**Ban** domain-named screen files at root (e.g. a single-resource list module sitting next to `Button.tsx`). Domain code belongs under the route or a domain folder. The `shared/` area is only for genuinely cross-feature widgets - if a component serves one feature, colocate it with that route.
+
+### Monorepo test
+
+Multiple deployable apps -> `apps/*` + shared `packages/*` when shapes are reused. Match **siblings** in the same app before inventing a new layout.
+
+### Serializers / server lib
+
+When DTO shapes are identical across apps -> shared package. Otherwise per-app `lib/serializers/` (or equivalent). Avoid redundant nested folder names under `lib/` when the app package already implies context (`lib/queries/`, `lib/cached/` - not `lib/storefront/storefront/`).
+
+---
+
+## Universal Root Layout (Every Project)
+
+```
+project-root/
+├── .env.example           # Environment template (NEVER commit .env)
+├── .gitignore
+├── README.md              # Domain rules, flows, limits (see documentation.md)
+├── LICENSE                # If open-source
+├── rules/                 # This rulebook (copy to every project)
+├── docs/                  # Setup, onboarding, architecture, ADRs, API docs
+├── scripts/               # Build, deploy, seed, migration scripts
+├── tests/                 # Integration / E2E tests (unit tests colocated)
+└── src/                   # All application source code
+```
+
+---
+
+## Web Application (React / Next.js / Vue / Svelte / Angular)
+
+Example structure - adapt folder names and conventions to your framework (e.g. Next.js uses `app/` with file-based routing, Vue/Nuxt uses `pages/`, Angular uses `src/app/`):
+
+```
+src/
+├── app/                   # Pages / routes / views (framework convention)
+│   ├── (public)/          # Public pages group (unauthenticated routes)
+│   ├── (main)/            # Protected pages group
+│   ├── layout.*           # Root layout (shell, providers, metadata)
+│   └── not-found.*        # 404 page
+│
+├── components/            # Shared UI components
+│   ├── ui/                # Primitives: Button, Input, Modal, Card, Badge, Tooltip
+│   ├── layout/            # Shell: Header, Sidebar, Footer, Navigation
+│   └── shared/            # Cross-feature widgets (not domain list screens - those colocate with routes)
+│
+├── lib/                   # Core business logic (NO UI code)
+│   ├── auth.ts            # Auth configuration, session helpers
+│   ├── api.ts             # API client / fetch wrapper
+│   ├── permissions.ts     # Permission definitions and check utilities
+│   ├── constants.ts       # App-wide constants
+│   ├── utils.ts           # Pure utility functions (formatDate, slugify, etc.)
+│   └── validators.ts      # Shared validation schemas (using your schema library of choice)
+│
+├── hooks/                 # Custom hooks (React) or composables (Vue)
+│   ├── useAuth.ts         # Authentication state hook
+│   ├── usePermissions.ts  # Permission check hook
+│   └── useDebounce.ts     # Utility hooks
+│
+├── services/              # External service integrations
+│   ├── socket.ts          # WebSocket client (if applicable)
+│   ├── storage.ts         # File upload / cloud storage client
+│   └── tracking.ts        # Optional usage/telemetry client (omit if unused)
+│
+├── store/                 # Global state (using your state management library)
+│   ├── slices/            # State slices / modules
+│   └── index.ts           # Store configuration
+│
+├── types/                 # TypeScript types / interfaces (or language equivalent)
+│   ├── models.ts          # Database model types
+│   ├── api.ts             # API request/response types
+│   └── index.ts           # Re-exports
+│
+├── styles/                # Global styles, CSS variables, theme
+│   ├── globals.css        # Reset, CSS variables, base styles
+│   ├── theme.ts           # Theme constants (if CSS-in-JS)
+│   └── fonts/             # Custom font files
+│
+└── assets/                # Static assets (images, icons, animations)
+    ├── icons/
+    └── images/
+```
+
+---
+
+## SPA (Vite / CRA / Vue CLI + client router)
+
+When the frontend is a **separate static SPA** (not Next.js/Nuxt file-based routing):
+
+```
+src/
+├── main.tsx               # Entry, providers
+├── App.tsx
+├── router.tsx             # React Router (or equivalent)
+├── auth/                  # Session, login, role guards
+├── layouts/               # Shell layouts (nav, header, outlet)
+├── components/
+│   ├── ui/                # Primitives not yet in shared package
+│   ├── layout/            # Optional app-local layout pieces
+│   └── forms/             # Shared form fields
+├── hooks/                 # Cross-route hooks only
+├── lib/                   # Client helpers (if not in shared api-client)
+└── routes/                # URL-mirror - one folder per route segment
+    ├── dashboard/
+    │   ├── DashboardPage.tsx
+    │   ├── components/    # Route-local UI only
+    │   └── hooks/
+    └── settings/
+```
+
+**Rules:** Same placement tests as other web apps (URL mirror, colocation, shared root limited to `ui/`, `layout/`, `forms/`). Data fetching via shared cache layer (`frontend.md`). API base URL from env at build time - never vendor secrets in the bundle.
+
+**Monorepo:** SPA may live at `apps/web`, `website/`, or `packages/web/` - document the chosen name in `docs/architecture.md`.
+
+---
+
+## API / Backend (Express / Fastify / Django / Rails / Spring / Laravel)
+
+```
+src/
+├── config/                # App configuration
+│   ├── database.ts        # DB connection, pool settings
+│   ├── auth.ts            # JWT secret, bcrypt rounds, session config
+│   ├── cors.ts            # Allowed origins, methods, headers
+│   ├── rateLimit.ts       # Rate limit rules per endpoint category
+│   └── environment.ts     # Environment variable validation and export
+│
+├── routes/                # Route definitions (thin - delegate to controllers)
+│   ├── auth.routes.ts     # /api/auth/*
+│   ├── users.routes.ts    # /api/users/*
+│   ├── resources.routes.ts # /api/resources/*
+│   └── index.ts           # Route aggregator
+│
+├── controllers/           # Request handlers (parse input -> call service -> return response)
+│   ├── auth.controller.ts
+│   ├── users.controller.ts
+│   └── resources.controller.ts
+│
+├── services/              # Business logic (NO request/response objects here)
+│   ├── auth.service.ts
+│   ├── users.service.ts
+│   └── resources.service.ts
+│
+├── models/                # Database models / entities / schemas
+│   ├── User.ts
+│   ├── Resource.ts
+│   └── index.ts           # Re-exports all models
+│
+├── middleware/             # Express/framework middleware
+│   ├── authenticate.ts    # Session verification middleware
+│   ├── authorize.ts       # Permission check middleware
+│   ├── validate.ts        # Request body validation middleware
+│   ├── rateLimiter.ts     # Rate limiting middleware
+│   └── errorHandler.ts    # Global error handler (catches all unhandled errors)
+│
+├── lib/                   # Shared utilities (same concept as frontend lib/)
+│   ├── permissions.ts     # Permission definitions and check functions
+│   ├── pagination.ts      # Pagination utility
+│   ├── databaseErrors.ts  # Database error -> HTTP response mapper
+│   ├── validators.ts      # Validation schemas
+│   └── utils.ts           # Pure helper functions
+│
+├── types/                 # Shared types/interfaces
+│
+├── jobs/                  # Background jobs / cron tasks
+│   ├── cleanExpiredRecords.ts
+│   └── runScheduledJobs.ts
+│
+└── seeds/                 # Database seed data for development
+    ├── users.seed.ts
+    └── index.ts
+```
+
+**Framework Exceptions:**
+- **Next.js / SvelteKit / Nuxt**: Use file-based routing in `app/` or `pages/` - no separate `routes/` and `controllers/` folders. Business logic still lives in `lib/` or `services/`.
+- **Django**: Follow `apps/` convention but keep the same logical grouping inside each app.
+- **Rails**: Follow `app/controllers`, `app/models`, `app/services` convention.
+- **Laravel**: Follow `app/Http/Controllers`, `app/Models`, `app/Services` convention.
+
+---
+
+## Mobile Application (React Native / Flutter / Swift / Kotlin)
+
+```
+src/
+├── screens/               # Full-page views (equivalent of pages/)
+│   ├── feature-a/         # FeatureAScreen, FeatureADetailScreen
+│   ├── feature-b/         # FeatureBListScreen, FeatureBDetailScreen
+│   ├── settings/          # SettingsScreen, PreferencesScreen
+│   └── common/            # SplashScreen, WelcomeScreen, NotFoundScreen
+│
+├── components/            # Reusable UI components
+│   ├── ui/                # Primitives: Button, Input, Card, Modal, Badge
+│   ├── layout/            # Navigation shells, tab bars, headers
+│   └── shared/            # Domain components: IconDisplay, StatusBadge
+│
+├── navigation/            # Navigation configuration
+│   ├── RootNavigator.ts   # Top-level navigator (auth vs. main)
+│   ├── PublicNavigator.ts  # Public/unauthenticated flow stack
+│   ├── MainNavigator.ts   # Main tabs/drawer: home, feature-a, settings
+│   └── linking.ts         # Deep link configuration
+│
+├── services/              # External integrations
+│   ├── api.ts             # HTTP client (Axios / fetch wrapper)
+│   ├── socket.ts          # WebSocket / real-time client
+│   ├── storage.ts         # Secure storage (Keychain / EncryptedPrefs)
+│   ├── background.ts      # Background task handler
+│   └── tracking.ts       # Optional telemetry / crash reporting (omit if unused)
+│
+├── store/                 # State management
+│   ├── slices/
+│   └── index.ts
+│
+├── hooks/                 # Custom hooks
+├── lib/                   # Business logic, utilities, constants
+├── types/                 # TypeScript types
+├── styles/                # Theme, colors, typography, spacing constants
+│   ├── theme.ts           # Color palette, spacing scale, typography scale
+│   ├── colors.ts          # Theme color maps (if applicable)
+│   └── typography.ts      # Font families, sizes, weights
+│
+└── assets/                # Images, icons, fonts, animations
+    ├── icons/
+    ├── images/
+    ├── fonts/
+    └── animations/        # Lottie files, etc.
+```
+
+---
+
+## Desktop Application (Electron / Tauri)
+
+```
+src/
+├── main/                  # Main process (Node.js / Rust)
+│   ├── index.ts           # App entry, window creation
+│   ├── ipc/               # IPC handler definitions (main <-> renderer)
+│   ├── menu.ts            # Native menu bar configuration
+│   ├── tray.ts            # System tray (if applicable)
+│   ├── updater.ts         # Auto-update logic
+│   └── services/          # Main-process services (file system, native APIs)
+│
+├── renderer/              # Frontend (same structure as Web Application above)
+│   ├── app/
+│   ├── components/
+│   ├── lib/
+│   ├── hooks/
+│   ├── store/
+│   ├── types/
+│   └── styles/
+│
+├── shared/                # Types/constants shared between main and renderer
+│   ├── ipcChannels.ts     # IPC channel name constants
+│   └── types.ts           # Shared type definitions
+│
+└── preload/               # Preload scripts (secure bridge)
+    └── index.ts           # Expose safe IPC methods to renderer
+```
+
+---
+
+## CLI Tool
+
+```
+src/
+├── commands/              # One file per command
+│   ├── init.ts            # `mycli init`
+│   ├── build.ts           # `mycli build`
+│   ├── deploy.ts          # `mycli deploy`
+│   └── index.ts           # Command registry
+│
+├── lib/                   # Business logic
+│   ├── config.ts          # Config file reading/writing
+│   ├── logger.ts          # Formatted console output (colors, spinners)
+│   ├── prompts.ts         # Interactive prompts / questions
+│   └── utils.ts           # Pure utilities
+│
+├── types/                 # TypeScript types
+└── templates/             # Scaffold templates (if generating code)
+```
+
+---
+
+## Monorepo (Multiple Apps Sharing Code)
+
+```
+project-root/
+├── apps/
+│   ├── web/               # Web app (follows Web Application structure)
+│   ├── mobile/            # Mobile app (follows Mobile structure)
+│   ├── api/               # Backend API (follows API structure)
+│   └── admin/             # IF your project has admin features (follows Web Application structure)
+│
+├── packages/              # Shared libraries
+│   ├── ui/                # Shared UI components
+│   ├── types/             # Shared TypeScript types
+│   ├── utils/             # Shared utility functions
+│   ├── validators/        # Shared validation schemas
+│   └── config/            # Shared configuration (ESLint, Prettier, TS)
+│
+├── scripts/               # Workspace-level scripts
+├── docs/                  # Shared documentation
+├── contracts/             # OpenAPI / shared API contract (when multiple clients)
+└── rules/                 # This rulebook
+```
+
+**Naming:** `apps/web` + `packages/*` and `website/` + `admin/` + `server/` + `shared/` are both valid. Pick one layout per repo and document it in `docs/architecture.md`. Do not mix naming schemes.
+
+### Shared packages (monorepo) `[REFERENCE]`
+
+When multiple deployables share types and UI, split shared code by concern - not one grab-bag package:
+
+```
+shared/   (or packages/)
+├── types/         # Zod schemas, DTO types - client-safe
+├── constants/     # HTTP codes, roles, route paths - client-safe
+├── api-client/    # Single fetch surface for all browser apps
+├── ui/            # Shared components: DataTable, Modal, forms, layout primitives
+└── seed/          # Bootstrap JSON/SQL for first deploy (server/dev only)
+```
+
+- **`types` + `constants`** - importable from API, workers, and SPAs.
+- **`api-client`** - used by every browser app; wraps auth headers, error parsing, base URL.
+- **`ui`** - only components reused by 2+ apps or 2+ unrelated routes; route-specific UI colocates with the route (see Rules below).
+- **`seed`** - never imported from browser bundles.
+
+Add `config/` (ESLint, Prettier, TS) at workspace root when tooling is shared.
+
+### Client-Safe vs Server-Only Code (MUST)
+
+A shared package consumed by both client and server MUST keep server-only code (DB clients, secrets, Node built-ins, ORM, payment SDKs) out of any path the client bundle can import. Leaking it bloats the bundle and risks shipping secrets to the browser.
+
+```
+packages/shared/
+├── src/
+│   ├── index.ts        # CLIENT-SAFE entry - types, pure utils, constants, validators
+│   └── server/
+│       └── index.ts    # SERVER-ONLY entry - DB queries, secret access, Node APIs
+└── package.json        # exports map: "." -> client-safe, "./server" -> server-only
+```
+
+- **Two entry points** via the package `exports` map: the default/client entry exposes only browser-safe code; a separate `./server` (or `*-server`) subpath holds everything that touches the DB, secrets, or Node built-ins.
+- **Client code imports the default entry; server code imports `./server`.** A client file importing the server entry is a bug - catch it with lint (e.g. `server-only` marker / import boundary rules) or a build that fails on Node built-ins in the client graph.
+- **Shared types and pure functions are client-safe** and live in the default entry so both sides reuse them without dragging in server deps.
+- **Never re-export server-only modules from the client entry** - not even "just the types" if it pulls the implementation into the graph; use type-only exports if needed.
+
+---
+
+## Background Work: Cron vs Worker (Choose Per Job)
+
+**Principle:** Both **in-process cron** and **separate worker processes** are valid. Most projects use **both** - pick the smallest model **per job**, not one winner for the whole repo. Document every background job in `docs/architecture.md` with its choice and one-line rationale.
+
+```
+Per job ask:
+  1. Does it need a persistent connection or always-on loop?
+  2. Must it survive API deploy/restart?
+  3. Does it finish in seconds and exit?
+  -> cron | worker | (rare) platform scheduler / queue
+```
+
+**MUST NOT:** default everything to workers (overkill for nightly cleanup) or cram bots/bridges into the API because cron worked on a past project.
+
+---
+
+### In-process cron (inside API or a single Node app)
+
+**Good for:** scheduled, finite tasks that touch your DB/cache and exit.
+
+Use when **all** of the following are true:
+
+- Job finishes in seconds (or a few minutes max) and exits cleanly
+- No persistent outbound connection (chat gateway, WebSocket client, streaming consumer)
+- OK to pause during API deploy/restart
+- No need for a separate scale unit or private network role
+
+```
+server/api/src/jobs/
+  cleanExpiredSessions.ts    # runs on schedule, calls DB, exits
+  sendDailyDigest.ts         # batch email, exits
+  runScheduledJobs.ts        # dispatches due jobs from DB queue
+```
+
+**Cron rules:**
+
+- Schedule with `node-cron`, platform cron (GitHub Actions, AWS EventBridge), or a DB-backed job table - not unbounded `setInterval` without backoff.
+- **Idempotent** - safe if the same window runs twice (deploy overlap, clock skew).
+- **Timeout** - abort jobs that exceed a max duration; log and alert.
+- **No persistent sockets** - if the job opens a WebSocket "just to fetch once", that still belongs here; if it **stays connected**, use a worker.
+- **Structured logs** - job name, duration, outcome (`logging.md`).
+- **Verify in prod** - cron silently failing is common; health check or "last run at" metric (`devops.md` § Post-launch).
+
+**Also valid:** external scheduler hits an internal admin-only HTTP endpoint or runs a one-shot CLI - document auth on that path.
+
+---
+
+### Separate worker process
+
+**Good for:** long-lived integrations, continuous polls, anything that must outlive the API.
+
+Use when **any** of the following are true:
+
+- **Persistent connection** to a third party (chat platform, Slack, MQTT, vendor WebSocket)
+- Must **stay up while API redeploys** (bots, bridges, stream monitors)
+- **Long-running loop** or tight poll that should not share memory/CPU with request handlers
+- **No public HTTP** - worker only talks outbound + reads/writes DB/Redis
+- Different deploy cadence or instance sizing from the API
+
+```
+server/
+├── api/                    # Public HTTP - request/response only
+└── workers/
+    └── {worker-name}/      # One package per worker
+        ├── package.json
+        ├── Dockerfile
+        └── src/
+            └── index.ts    # connect, load config, graceful shutdown
+```
+
+**Worker rules:**
+
+- **One package per worker** - own `package.json`, entrypoint, Dockerfile, health signal (log heartbeat or internal metric).
+- **No inbound HTTP** from the internet - config and commands come from database/cache, not public routes.
+- **Load config from the database** when ops can change behavior via Admin (see `devops.md` § Config Classification). Poll or subscribe for config changes; do not require redeploy for integration mappings, feature flags, or content lists.
+- **Graceful shutdown** - on SIGTERM: close connections, finish in-flight work within timeout, flush logs (`devops.md` § Graceful Shutdown).
+- **Idempotency** - bridges and relays use dedup keys so retries do not double-post.
+- **Observability** - structured logs with worker name; surface status on admin dashboard when the product has one.
+
+---
+
+### Decision table (per job)
+
+| Signal | Cron in API | Separate worker |
+|--------|-------------|-----------------|
+| Chat bot / WebSocket client / messaging bridge | No | **Yes** |
+| Hourly DB aggregation, no open socket | **Yes** | Optional |
+| Status poll every 1-5 min, API deploys often | Maybe | **Yes** |
+| Status poll every 1-5 min, rare API deploys | **Yes** | Optional |
+| One-shot nightly cleanup / expiry purge | **Yes** | Overkill |
+| Must survive API restart independently | No | **Yes** |
+| Heavy CPU (PDF render, ML batch) blocking requests | No | **Yes** (or job queue) |
+| User-triggered async work (email, export) | Queue + cron/worker | Prefer **queue** over either |
+
+**Mixed project example** (document like this in `docs/architecture.md`):
+
+| Job | Choice | Why |
+|-----|--------|-----|
+| Expire stale sessions | Cron in API | Nightly, DB-only, OK to pause on deploy |
+| Third-party messaging bridge | Worker | Persistent gateway connection |
+| Cache warm / metadata prefetch | Cron in API | Periodic HTTP fetch, exits |
+
+When unsure for a **specific job**, ask one focused question (`feature-discovery.md`) - do not copy what a previous project did without checking the table.
+
+---
+
+### Job queue (when cron or worker alone is not enough)
+
+**Good for:** user-triggered async work (exports, emails, image processing), retry with backoff, many parallel jobs, work that must not block the HTTP request.
+
+Use a **queue** (Redis-backed, SQS, database outbox, or platform queue) when:
+
+- User action enqueues work; completion is later (seconds to hours)
+- Job must retry on failure with dead-letter handling
+- Volume or concurrency exceeds safe in-process cron limits
+
+```
+Pattern:
+  API handler -> enqueue job record -> return 202 / job id
+  Worker or cron consumer -> dequeue -> process -> mark complete / failed
+```
+
+**Rules:**
+
+- **Never** run heavy or unbounded work inline in a request handler.
+- **Idempotent** consumers - duplicate delivery must be safe.
+- **Visibility timeout / lease** - crashed worker must not lose the job permanently.
+- Pick **one** queue pattern per project; document in `docs/architecture.md`.
+- Queue complements cron and workers - not a replacement for persistent-connection workers.
+
+---
+
+## File Naming Quick Reference
+
+**Principle:** File names must describe what the file contains and follow the project's casing convention consistently.
+
+[REFERENCE] Typical file naming conventions by artifact type:
+
+| What | Convention | Example |
+|------|-----------|---------|
+| Components | PascalCase | `UserCard.tsx`, `StatusBadge.vue` |
+| Pages/Screens | PascalCase + suffix | `AuthScreen.tsx`, `MainPage.vue` |
+| Hooks / Composables | camelCase with prefix | `useAuth.ts`, `useDebounce.ts` |
+| Services | camelCase for files, PascalCase for classes | `authService.ts` exports `AuthService` class or `authService` functions |
+| Utilities | camelCase | `formatDate.ts`, `validators.ts` |
+| Models | PascalCase singular | `User.ts`, `Record.ts` |
+| Constants | camelCase file, SCREAMING_SNAKE contents | `constants.ts` -> `MAX_RETRIES` |
+| Styles | camelCase or kebab-case | `globals.css`, `theme.ts` |
+| Tests | Same as source + `.test` or `.spec` | `UserCard.test.tsx`, `auth.spec.ts` |
+| Config | camelCase or kebab-case | `database.ts`, `tsconfig.json` |
+
+---
+
+## Rules
+
+1. **Avoid deep nesting** from `src/` - deep trees make navigation harder (a reasonable limit is around 4-5 levels, but large feature domains may need more)
+2. **Colocate tests** with source files (not in a separate top-level `tests/` for unit tests; `tests/` is for integration/E2E)
+3. **One primary export per file** for components; small tightly-coupled helpers can share a file. Multiple exports fine for utilities.
+4. **index.ts barrel files** for re-exporting public APIs - but only at package/module boundaries, not everywhere
+5. **No circular imports** - if A imports B and B imports A, extract shared logic to C
+6. **Group by feature, not by type** when a feature grows beyond 3 files (e.g., a feature folder with its own components, hooks, types)
+7. **Colocate feature-specific components with their route** - if a component is only used by one page/route, keep it next to that route file. Shared components go in a dedicated `components/` directory.
+8. **Keep business logic out of components when practical** - extract to hooks, services, or lib/. Thin orchestration in components is fine for simple features.
+9. **lib/ is primarily pure logic** - design-system tokens, PDF layout code, or email templates may blur the line; keep UI rendering in components.
+
+---
+
+## Dead File Policy
+
+**Every file in the repository must earn its place.** A file that is not actively called, rendered, or executed is dead weight and must be deleted.
+
+> **See also:** `database.md` § Dead Field Policy - the schema-level parallel. Apply both audits together: a model file passes the file audit if any code imports it, but its individual columns / properties / enum values must each pass the field audit too.
+
+### What Makes a File "Dead"
+
+**Principle:** A file is dead if it serves no purpose in the running application. Dead files mislead developers and should be removed.
+
+[REFERENCE] Common indicators of dead files:
+
+A file is dead if **any** of the following is true:
+
+- No other file imports it (and it has no direct entry point such as a route, script, or cron job)
+- It is a copy, variant, or backup of another file (see `naming.md` § Banned Filename Suffixes)
+- It was created for exploration or experimentation and was never promoted to production use
+- It was scaffolded automatically and was never edited or connected to real logic
+- It is an inventory, scratch, or notes file committed to the repo by mistake (`UI_INVENTORY.md`, `SCRATCH.md`, `TODO.txt`)
+
+### Detection - What the Audit Checks
+
+During every audit, scan for:
+
+```
+1. Files or directories whose names indicate lifecycle status rather than purpose
+   (see naming.md § Banned Filename Suffixes for the principle and test)
+
+2. Source files with zero imports across the whole codebase
+   (and no entry point - not a route, script, or cron job)
+
+3. Markdown / documentation files outside docs/ or rules/
+   (.md files committed to app/, lib/, components/ - likely scratch notes)
+
+4. Config or scaffold files that were never wired up
+   (defined but unreachable from any entry point)
+```
+
+### What To Do With Experimental Code
+
+| Wrong | Right |
+|-------|-------|
+| Copy a page and suffix it with `-copy` | Use a feature branch |
+| Create `workspace-c/` as a playground | Build behind a feature flag |
+| Commit `UI_INVENTORY.md` to track design notes | Use a project management tool or `docs/` |
+| Keep `-old` version alongside new one | Delete old version - git `show <commit>:<path>` recovers it |
+| Suffix with `-v2` when redesigning | Rename in place on a branch, merge when ready |

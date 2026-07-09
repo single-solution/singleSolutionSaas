@@ -1,0 +1,331 @@
+---
+description: Cache layers and invalidation. Apply when touching cache headers, Redis, or CDN behavior.
+alwaysApply: false
+---
+
+# Caching Strategy
+
+Coding patterns for caching at every layer - browser, application, API, database, CDN. IF your project needs caching, apply these patterns.
+
+> All numeric values (thresholds, sizes, timings, percentages) in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## Audience test (HTTP / API)
+
+| Data | Cache |
+|------|--------|
+| Same for all users (catalog, public config) | `public` + short TTL or framework cache where safe |
+| User-specific (cart, account, permissions) | `private` / `no-store` - never shared-cache |
+| Auth/session/token responses | **`no-store`** always |
+| Mutations | **`no-store`** |
+
+When in doubt, prefer freshness over aggressive cache.
+
+---
+
+## Caching Layers
+
+```
+User ──> Browser Cache ──> CDN / Edge ──> API Server ──> App Cache ──> Database Cache ──> Database
+                                                         (Redis/memory)   (query cache)
+
+Each layer catches requests before they hit the next, reducing load and latency.
+```
+
+---
+
+## Browser Cache
+
+### Static Assets (CSS, JS, Images, Fonts)
+
+```
+Strategy: Cache forever, bust on change
+
+Headers:
+  Cache-Control: public, max-age=31536000, immutable
+  (= cache for 1 year, never revalidate)
+
+Cache busting:
+  style.abc123.css     <- hash in filename changes when content changes
+  app.def456.js        <- build tool generates unique hash per build
+
+Rule: Static assets should have content-hash in filename + long max-age for optimal caching. Legacy stacks and dynamically injected scripts may need different strategies.
+```
+
+### API Responses
+
+```
+Strategy: Short-lived or no-cache for dynamic data
+
+Public data (same for all users):
+  Cache-Control: public, max-age=60, stale-while-revalidate=300
+  (= cache 1 minute, serve stale for 5 more minutes while refreshing)
+
+Private data (user-specific):
+  Cache-Control: private, no-cache
+  (= don't cache in shared caches, always revalidate with server)
+
+Mutations (POST, PUT, DELETE):
+  Cache-Control: no-store
+  (= never cache)
+```
+
+### Rules
+
+- **Static assets**: Long cache + content hash = always fast, always fresh
+- **API data**: Short or no cache - stale data is worse than slow data for most apps
+- **Auth-related responses**: NEVER cache (`no-store`) - token, session, permissions
+- **ETag / Last-Modified**: Use for conditional requests (304 Not Modified saves bandwidth)
+- **Vary header**: Include `Vary: Authorization` if response differs per user
+
+---
+
+## CDN / Edge Cache
+
+### What to Cache at the Edge
+
+```
+CACHE (static, same for everyone):
+  - CSS, JS bundles (with content hash)
+  - Images, fonts, icons
+  - Public pages (static pages, infrequently changing content)
+  - API responses for public data (with short TTL)
+
+DON'T CACHE (dynamic, user-specific):
+  - API responses with user data
+  - Auth endpoints
+  - Pages behind login (unless using edge auth)
+  - Real-time data (WebSocket, SSE)
+```
+
+### Rules
+
+- **Purge on deploy** - clear CDN cache when deploying new static assets
+- **Use cache tags** - tag cached items by type so you can selectively purge ("purge all uploaded images")
+- **Regional caching** - CDN serves from nearest edge location (no config needed, built-in)
+- **HTTPS only** at the edge - never cache over plain HTTP
+- **Custom cache keys** - include relevant query params, exclude tracking params
+
+---
+
+## Application Cache (Redis / In-Memory)
+
+This layer is the per-user-aware server cache (Redis or in-process), keyed explicitly per user where needed. It is NOT the framework Tier 2 data cache (see Framework Data Cache below), which is shared across requests and must never hold user-scoped data.
+
+### What to Cache
+
+```
+CACHE (expensive to compute, changes infrequently):
+  - User session data (permissions, basic display fields) - keyed per user (e.g. users:permissions:user-123), never in a shared/global key
+  - Configuration / feature flags
+  - Aggregated data (summary stats, report data)
+  - Frequently accessed records (hot data, popular items)
+  - External API responses (geocoding, exchange rates)
+  - Computed results (expensive calculations, report data)
+
+DON'T CACHE (changes frequently or is critical to be real-time):
+  - Real-time presence / online status
+  - Counters that must be real-time accurate
+  - Frequently changing counters (if accuracy is critical)
+  - Critical real-time values (if accuracy is critical)
+```
+
+### Cache Key Naming
+
+```
+Format: {service}:{entity}:{identifier}:{variant}
+
+Examples:
+  actors:metadata:user-123
+  users:permissions:user-123
+  resources:list:group-456:page-1
+  stats:summary:scope-789:daily
+  config:feature-flags:global
+  external:exchange-rates:USD
+```
+
+**Rules:**
+- Descriptive, hierarchical keys (easy to debug and selectively flush)
+- Include all parameters that affect the cached value
+- Consistent prefix per service (users:*, resources:*, stats:*)
+
+### TTL (Time-To-Live) Guidelines
+
+**Principle:** Set cache TTLs based on how frequently the underlying data changes and how stale the consumer can tolerate.
+
+[REFERENCE] Typical TTL values by data type:
+
+```
+Data Type                          TTL
+────────────────────────────────────────────────
+Feature flags / config             5 minutes
+User permissions                   5-15 minutes
+Summary/aggregate data              1-5 minutes
+Basic display fields for actors     15-30 minutes
+External API responses             1-60 minutes (depends on source)
+Static reference data              1-24 hours
+Search autocomplete suggestions    1 hour
+```
+
+**Rule**: Pick the shortest TTL you can tolerate. When in doubt, shorter is safer.
+
+---
+
+## Framework Data Cache (RSC / Next.js / Server Components)
+
+IF your framework has a built-in server data cache (Next.js `unstable_cache` / `fetch` cache + `revalidateTag`, Remix loaders, Nuxt `useAsyncData`, etc.), treat it as **two tiers** and use tags for invalidation. Pattern (Next.js shown - adapt to your framework):
+
+```
+Tier 1 - Per-request memoization (dedupe within ONE request/render)
+  -> React `cache()` / request-scoped memo
+  -> Same query called by 3 components in one render -> 1 DB hit
+  -> Lives for the request only; never serves stale data across requests
+
+Tier 2 - Cross-request data cache (shared across users/requests)
+  -> unstable_cache(fn, keyParts, { tags: ["catalog"], revalidate })
+  -> Survives between requests; keyed + tagged
+  -> Public, same-for-all-users data only - NEVER user-scoped data
+```
+
+### Rules
+
+- **Wrap public read queries in BOTH tiers** - request memo (Tier 1) inside the cached function, persistent cache (Tier 2) around it - so one render dedupes and repeat renders skip the DB.
+- **Tag every cached read by domain** (`catalog`, `product:{id}`, `offers`) so writes can purge precisely with `revalidateTag(tag)`.
+- **NEVER put user-scoped data in Tier 2** - cart, account, orders, permissions, session. Tier 2 is shared across requests; a per-user value would leak to other users. Use Tier 1 (request memo) only for those.
+- **Writes invalidate tags after commit** - admin/staff mutation that changes cached public data calls `revalidateTag(...)` after a successful write (mirror of `api-design.md` § Cache Headers & Invalidation). Never rely on `revalidate` TTL alone for admin edits.
+- **ISR / page revalidation** - public pages built from cached data use time-based `revalidate` as a safety net AND on-demand `revalidateTag`/`revalidatePath` on write for freshness. Pick the longest TTL the page can tolerate; rely on tag busting for immediacy.
+- **Boot warm (optional)** - for a small set of always-needed hot reads (home catalog, active offers, feature flags), warm the cache once on server boot so the first user does not pay the cold-cache cost. Keep the warm set tiny; everything else fills lazily.
+
+---
+
+## Cache Invalidation
+
+### Strategies
+
+```
+1. TTL-based (time expiry)
+   Pro: Simple, automatic
+   Con: Data can be stale for up to TTL duration
+   Use when: Staleness for a few minutes is acceptable
+
+2. Write-through (invalidate on write)
+   Pro: Always fresh after writes
+   Con: More complex, cache and DB must stay in sync
+   Use when: Data must be fresh immediately after the user updates it
+
+3. Write-behind (update cache, sync to DB later)
+   Pro: Fastest writes
+   Con: Risk of data loss if cache fails before sync
+   Use when: High write volume, eventual consistency acceptable
+
+4. Event-driven (pub/sub invalidation)
+   Pro: Scales across services
+   Con: Added infrastructure (pub/sub or broker)
+   Use when: Microservices architecture, multiple consumers
+```
+
+### Rules
+
+1. **Invalidate on write** - when a record is updated, delete its cache entry immediately
+2. **Invalidate related caches** - updating a resource should also invalidate any parent list caches that include it
+3. **Don't cache and forget** - every cached item must have a TTL (even if long) as a safety net
+4. **Graceful degradation** - if cache is down, the app falls through to the database (slower, not broken)
+5. **Cache stampede protection** - when cache expires and 100 requests hit simultaneously, only ONE should compute the new value; others wait for it (use locking/coalescing)
+6. **Log cache miss rates** - high miss rates may indicate wrong TTL or wrong data being cached. Long-tail/personalized data naturally has lower hit rates - what matters is that **hot paths** have high hit rates.
+
+---
+
+## Client-Side Cache (SWR / React Query / Equivalent)
+
+### Rules
+
+- **Stale-while-revalidate pattern** - show cached data immediately, refresh in background
+- **Revalidate on focus** - when user returns to the tab, refetch stale data
+- **Revalidate on reconnect** - when network comes back, refetch
+- **Deduplicate requests** - if 3 components request the same data, send 1 request
+- **Optimistic updates** - update the cache immediately on mutation, revert on failure
+- **Cache key = API URL + params** - consistent, predictable cache keys
+- **Invalidate related queries** - after creating a resource, invalidate the relevant list queries
+- **Don't cache auth-sensitive data** longer than the session
+- **Clear all caches on logout** - prevent data leaking to the next user on shared devices
+
+### Cache Lifecycle
+
+```
+1. Component mounts -> check cache
+2. Cache hit (fresh) -> render immediately
+3. Cache hit (stale) -> render immediately + refetch in background -> re-render with fresh data
+4. Cache miss -> show loading state -> fetch -> cache result -> render
+5. Mutation -> optimistic update cache -> send request -> on success: keep cache -> on failure: revert cache
+6. Related data changes -> invalidate affected cache keys -> trigger refetch when needed
+```
+
+---
+
+## Database Query Cache
+
+### Rules
+
+- **Don't rely on database query cache** as your primary caching layer - it's a last resort
+- **Use application-level caching** (Redis) for repeated queries
+- **Materialized views** for expensive aggregations that don't change often
+- **Connection pooling** is NOT caching but prevents connection overhead (always use it)
+- **Prepared statements** are cached by the DB driver - use parameterized queries (you should be doing this for security anyway)
+
+---
+
+## What to NEVER Cache
+
+**Principle:** Never cache data that must always reflect the latest state or that is security-sensitive.
+
+[REFERENCE] Data types commonly excluded from caching:
+
+```
+NEVER cache:
+  - Passwords or tokens (even encrypted)
+  - Full API responses from auth endpoints
+  - Data that changes every request (nonce, CSRF tokens)
+  - Personally identifiable information (PII) in shared caches
+  - Sensitive data (tokens, secrets, credentials)
+  - Data that MUST be real-time accurate (counters where stale data causes incorrect behavior)
+```
+
+---
+
+## Monitoring
+
+```
+Track these cache metrics:
+  - Hit rate (target depends on workload - 80%+ for hot-path data, lower for long-tail/personalized data)
+  - Miss rate
+  - Eviction rate (cache full?)
+  - Latency (local cache: < 1ms, remote cache same-AZ: < 5ms, cross-AZ: < 15ms - adjust for your topology)
+  - Memory usage
+  - Key count
+  - TTL distribution
+
+Alert on:
+  - Hit rate drops below 50% -> cache may be misconfigured
+  - Memory usage > 80% -> need to increase cache size or reduce TTL
+  - Latency significantly above your baseline -> cache server may be overloaded
+  - Cache unavailable -> app should degrade gracefully, not crash
+```
+
+---
+
+## Checklist
+
+- [ ] Static assets cached with content hash + long max-age
+- [ ] CDN configured for static assets
+- [ ] API responses have appropriate Cache-Control headers
+- [ ] Application cache (Redis/memory) for expensive queries
+- [ ] Cache keys are descriptive and consistent
+- [ ] Every cached item has a TTL
+- [ ] Cache invalidated on writes (not just TTL expiry)
+- [ ] Related caches invalidated together
+- [ ] Client-side SWR/React Query for API data
+- [ ] Cache cleared on logout
+- [ ] Graceful degradation when cache is down
+- [ ] Cache metrics monitored (hit rate, memory, latency)
+- [ ] Auth/session data NEVER in shared cache

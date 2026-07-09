@@ -1,0 +1,56 @@
+---
+description: Cursor rule install and sync policy. Apply when editing .cursor/rules or vibeCodingRules.
+alwaysApply: false
+---
+
+# Cursor & AI Rules Sync
+
+`vibeCodingRules` is the **canonical store** for universal AI-session rules. Projects use `.cursor/rules/*.mdc` copies.
+
+---
+
+## Source of Truth
+
+| Location | Role |
+|----------|------|
+| `vibeCodingRules/*.md` | Human-readable rules; listed in `AGENTS.md` |
+| `vibeCodingRules/AGENTS.md` | Routing authority for all rule files |
+| `vibeCodingRules/cursor/*.mdc` | Cursor drop-in (frontmatter + body or AGENTS pointer) |
+| `<project>/.cursor/rules/*.mdc` | Per-project install |
+
+Body text in paired `.md` and `.mdc` files MUST stay aligned (`.mdc` adds YAML frontmatter only). `cursor/vibe-rulebook.mdc` is the exception: it is a pointer to `AGENTS.md`, not a duplicate source.
+
+---
+
+## When to Update
+
+Update `vibeCodingRules` whenever you:
+
+- Add, change, or remove a Cursor rule in any project
+- Change token-efficiency or discovery/grill policy
+- Add a new always-on AI behavior rule
+
+**Order:** edit `vibeCodingRules` first -> copy `cursor/*.mdc` to project `.cursor/rules/`.
+
+---
+
+## Adding a New Rule
+
+1. Create `vibeCodingRules/<name>.md` with sections (The Rule, DO, DON'T).
+2. Create `vibeCodingRules/cursor/<name>.mdc` with `description`, `alwaysApply` or `globs`.
+3. Update `AGENTS.md` - Rule Catalog tables, task routing row, and per-edit checklist if behavior is universal.
+4. Copy `.mdc` into active projects.
+
+## Full rulebook mirror (Cursor)
+
+**Minimum install** (every project): `vibe-rulebook.mdc`, `token-efficiency.mdc`, `feature-discovery.mdc`, `naming.mdc`, `documentation.mdc`, plus per-project sync rule.
+
+**Full mirror:** For each universal behavior agents must follow without opening the repo, maintain a paired `cursor/<topic>.mdc` whose body matches the root `*.md` (YAML frontmatter only). `vibe-rulebook.mdc` stays a pointer to `AGENTS.md` - not a duplicate of all chapters.
+
+When grilling updates policy, edit root `*.md` first, then update the paired `.mdc`, then copy to projects.
+
+---
+
+## Repo Path
+
+`[DEFAULT]` canonical clone path is machine-specific (e.g. `~/Github/vibeCodingRules`). Override per machine; keep the relative layout (`cursor/`, root `*.md`) the same.

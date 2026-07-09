@@ -1,0 +1,179 @@
+---
+description: Perf budgets and optimization. Apply for perf-sensitive work.
+alwaysApply: false
+---
+
+# Performance & Optimization
+
+The default optimization techniques for every project so speed does not have to be re-specified each time. This file consolidates the cross-cutting rules; layer-specific detail lives in `caching.md` (cache layers), `database.md` (query/index perf), `file-media.md` (asset processing), `frontend.md` (loading/skeletons), and `logging.md` (perf metrics). Apply the sections that match your stack.
+
+> All numeric values (budgets, thresholds, timings) in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## The Rule
+
+**Measure first, optimize the hot path, then verify the win.** The three cheapest optimizations, in order, are: do less work, do it later (defer), do it once (cache/memoize). Reach for those before clever micro-optimizations. Never optimize on a guess - profile, change one thing, measure again.
+
+- **No premature optimization** - do not complicate code for speed you have not proven is needed.
+- **No unmeasured optimization** - if you cannot show a before/after number, you do not know it helped.
+- **Optimize what users feel** - the hot path (first load, the main interaction, the biggest list) beats shaving milliseconds off cold paths.
+
+---
+
+## Performance Budgets (set once, enforce in CI)
+
+Pick budgets at project start and fail the build when they regress.
+
+| Metric `[DEFAULT]` | Target | Notes |
+|---|---|---|
+| LCP (Largest Contentful Paint) | < 2.5s | Main content visible |
+| INP (Interaction to Next Paint) | < 200ms | Responsiveness to input |
+| CLS (Cumulative Layout Shift) | < 0.1 | No jumping; reserve space (see `frontend.md` skeletons) |
+| TTFB (Time To First Byte) | < 0.8s | Server + network |
+| Initial JS (gzipped) | < 200KB | Route-level budget; split the rest |
+| API p95 latency | per endpoint | See `logging.md` thresholds |
+
+- **Enforce in CI** - a budget that is not checked will be exceeded. Use Lighthouse CI, bundle-size checks, or your platform's budget tooling.
+- **Budget per route**, not just globally - a heavy admin screen should not blow the public landing budget.
+
+---
+
+## Frontend Delivery (bundle & network)
+
+- **Code-split by route** - load each route's JS on demand, not in one bundle. Lazy-load heavy, below-the-fold, or rarely-used components.
+- **Dynamic-import heavy libraries** (charts, editors, PDF, maps) only where used - never in the global bundle.
+- **Tree-shake and drop dead deps** - prefer small focused libraries; check bundle impact before adding a dependency (see `maintenance.md`).
+- **Defer non-critical JS** - analytics, chat widgets, and non-essential scripts load after interaction or on idle.
+- **Preload/prefetch deliberately** - preload the critical font and hero asset; prefetch likely next routes on hover/focus. Do not prefetch everything.
+- **Cache static assets hard** - content-hashed filenames + long `max-age, immutable` (see `caching.md`).
+- **Analyze the bundle** when it grows - know what the largest modules are before shipping.
+
+---
+
+## Dependency Weight (fewest, lightest)
+
+Every dependency is code you ship, a thing you patch, and an attack surface. The fastest dependency is the one you do not add.
+
+- **Default to the platform** - use built-in language/runtime/standard-library features before reaching for a package (native `fetch`, `Intl`, `crypto`, date APIs, array methods).
+- **Do not add a library for a few lines** - a one-function helper you can write in 10 lines does not justify a dependency tree.
+- **Check the cost before adding** - bundle size, transitive deps, maintenance, and license. Prefer small, focused, tree-shakeable packages over kitchen-sink frameworks pulled in for one feature.
+- **One library per job** - never ship two date libraries, two HTTP clients, or two state managers. Pick one and standardize (see `AGENTS.md` Hard Bans - one pattern per concern).
+- **Prune relentlessly** - remove a dependency the moment its last usage is deleted; run a dead-dependency scan periodically (see `maintenance.md`).
+- **Lazy-load heavy optional deps** - if a big library powers a rarely-used screen, dynamic-import it there, not globally.
+
+---
+
+## Images, Fonts & Media
+
+- **Serve right-sized, modern-format images** (responsive `srcset`, WebP/AVIF where supported); never ship a 3000px image into a 300px slot.
+- **Lazy-load below-the-fold media**; eager-load only the LCP image.
+- **Always set width/height (or aspect-ratio)** so images do not cause layout shift.
+- **Fonts:** subset, `font-display: swap`, preload the one critical font; cap families per `ui-design-system.md`.
+- Heavy upload/transcode/processing rules live in `file-media.md`.
+
+---
+
+## Runtime & CPU
+
+- **Memoize expensive pure computation** keyed on its inputs; do not recompute on every render/call.
+- **Debounce or throttle high-frequency events** - input, scroll, resize, mousemove, live search (see `search-filtering.md`).
+- **Virtualize long lists** - render only visible rows for large tables/feeds instead of thousands of DOM nodes.
+- **Avoid O(n^2) over user-sized data** - use maps/sets for lookups inside loops; precompute indexes.
+- **Move heavy work off the main thread** - web workers (web), background isolates/threads (mobile/desktop) for parsing, crypto, image work.
+- **Do not block paint** - keep synchronous work small; chunk or defer big tasks so input stays responsive.
+
+---
+
+## Resource Cleanup & Clearance
+
+Leaks make a fast app slow over time. Everything you start, you must stop; everything you hold, you must release.
+
+- **Tear down on unmount/dispose** - clear timers and intervals, remove event listeners, unsubscribe from stores/sockets, cancel animation frames. A `setInterval` or listener that outlives its component is a leak (see `frontend.md` polling - one ref-counted poller).
+- **Abort in-flight work** - cancel stale requests (AbortController/cancel tokens) when a component unmounts or a newer request supersedes it; do not let dead responses update state.
+- **Release large objects** - drop references to big buffers, images, parsed blobs, and result sets once used so they can be garbage-collected; do not keep growing in-memory arrays/maps without bounds.
+- **Bound caches** - every in-memory cache has a max size and/or TTL and an eviction policy; an unbounded cache is a slow memory leak (see `caching.md`).
+- **Clear on logout / context switch** - flush client caches, query caches, and any user data on sign-out so memory is freed and data does not leak to the next user (see `caching.md`, `security.md`).
+- **Close what you open** - DB connections, file handles, streams, workers, and subscriptions are closed/returned to the pool in a `finally`/teardown path, including on error.
+- **Debounced/scheduled work is cancellable** - pending debounced callbacks and queued tasks are cancelled when no longer relevant.
+
+---
+
+## Warmups & Cold Starts
+
+The first request should not pay for everything. Warm the paths users hit first.
+
+- **Warm hot caches on boot** - precompute or fetch the always-needed reads (home data, active config/feature flags, popular items) once at startup so the first user is not the one who fills a cold cache (see `caching.md` Framework Data Cache, the Boot warm bullet). Keep the warm set small; everything else fills lazily.
+- **Pre-open expensive resources** - establish the DB connection pool and any long-lived clients at startup, not on the first request.
+- **Mitigate serverless cold starts** - keep functions small, lazy-import heavy modules, and use provisioned concurrency / min-instances / scheduled pings for latency-critical endpoints. Avoid heavy top-level module work that runs on every cold init.
+- **Prewarm the critical render path** - preload the critical route, font, and hero asset; prefetch the likely next route on hover/focus (see Frontend Delivery).
+- **Warm after deploy** - hit key endpoints/pages right after release so the first real user gets a warm system (tie into the post-deploy smoke test in `devops.md`).
+- **Do not over-warm** - warming everything wastes memory and startup time; warm the few paths that measurably hurt when cold.
+
+---
+
+## Data & Network
+
+- **Parallelize independent requests** - never waterfall calls that do not depend on each other (see `code-patterns.md` Async).
+- **Fetch only what you need** - field allowlists/projections, pagination on every list (see `api-design.md`, `database.md`).
+- **Deduplicate and cache client reads** - one in-flight request per key; stale-while-revalidate (see `frontend.md`, `caching.md`).
+- **Batch chatty calls** where possible; avoid the client making N requests to render one screen.
+- **Bootstrap initial data on the server** (SSR/RSC) to avoid a fetch-on-hydrate flash (see `frontend.md`).
+
+---
+
+## Backend & Database
+
+- **Kill N+1 queries** - load relations in a set, not in a loop (see `database.md`).
+- **Index the columns you filter/sort/join on**; verify with the query planner. Do not over-index writes.
+- **Paginate and stream** large result sets and responses instead of loading everything in memory.
+- **Use connection pooling**; reuse clients, do not open a connection per request.
+- **Cache expensive reads** at the right layer with tagged invalidation (see `caching.md`).
+- **Run side effects out of band** - audit logs, email, analytics never block the response (see `logging.md`).
+
+---
+
+## Perceived Performance
+
+Often the fastest win is making the wait feel shorter:
+
+- **Skeletons that match the loaded shape** (see `frontend.md`) - reserve space, no layout shift.
+- **Optimistic updates** for mutations - reflect the change instantly, revert on failure.
+- **Instant feedback** on every action - disabled/loading button state within the same frame.
+- **Stale-while-revalidate** - show cached data immediately, refresh in the background.
+- **Stream/progressively render** above-the-fold content first instead of waiting for the whole page.
+
+---
+
+## Animation Performance
+
+- **Animate only `transform` and `opacity`** for 60fps; avoid animating layout properties (width, top, left) that trigger reflow.
+- **Promote sparingly** (`will-change`/`transform: translateZ(0)`) only on elements that actually animate; overuse wastes memory.
+- **Respect `prefers-reduced-motion`** - provide a static alternative (mandatory; see `frontend.md` and `ui-design-system.md`).
+- Keep durations on the project's motion scale; never block interaction waiting for an animation to finish.
+
+---
+
+## Measurement
+
+- **Profile before optimizing** - browser performance panel, framework profiler, DB query planner, server flamegraph.
+- **Field data over lab data** - real-user monitoring (RUM) for Core Web Vitals tells you what users actually experience; lab tests catch regressions in CI.
+- **Track the budget metrics over time** (see `logging.md`) and alert on regressions, not just absolute breaches.
+- **One change at a time** - isolate the variable so you know what moved the number.
+
+---
+
+## Checklist (apply to perf-sensitive work)
+
+- [ ] Budgets defined and checked in CI (bundle size + Core Web Vitals).
+- [ ] Routes code-split; heavy libs dynamically imported; non-critical JS deferred.
+- [ ] Images right-sized + lazy + dimensioned; critical font preloaded with `swap`.
+- [ ] No layout shift (skeletons/space reserved); LCP asset eager, rest lazy.
+- [ ] Expensive compute memoized; high-frequency events debounced/throttled; long lists virtualized.
+- [ ] No leaks: timers/listeners/subscriptions torn down, in-flight requests aborted, caches bounded, cleared on logout.
+- [ ] Hot caches + connection pool warmed on boot; cold-start path minimized; warmed after deploy.
+- [ ] Dependencies minimal: platform-first, no library for a few lines, one library per job, dead deps pruned.
+- [ ] Independent requests parallelized; lists paginated; reads cached/deduped.
+- [ ] No N+1; indexes on filtered/sorted/joined columns; large responses streamed.
+- [ ] Optimistic UI + instant feedback on mutations.
+- [ ] Optimization verified with a before/after measurement.

@@ -1,0 +1,97 @@
+---
+description: Cart, checkout, payments. Apply for commerce flows.
+alwaysApply: false
+---
+
+# E-commerce & Transactions
+
+Coding patterns for anything that takes money or moves inventory: carts, checkout, pricing, stock, coupons/offers, orders, and payment callbacks. IF your project sells, books, reserves, or charges, apply these patterns. They sit on top of `security.md`, `api-design.md`, `database.md`, and `state-machines.md`.
+
+> All numeric values in this file are `[DEFAULT]` - adjust per project.
+
+---
+
+## The Rule
+
+**The client proposes; the server decides.** Price, availability, discounts, and totals are computed and enforced on the server from trusted data - never accepted from the request body. Every money-moving or stock-moving operation is **atomic** and **idempotent**.
+
+---
+
+## Server-Authoritative Pricing (MUST)
+
+- **Never trust client-sent prices, totals, discounts, or tax.** The client may send product IDs, quantities, a chosen variant/grade, and a coupon code - nothing more about money.
+- **Recompute every amount server-side** at quote time and again at checkout from the current catalog/price records. If the recomputed total differs from what the client showed, return the corrected quote - do not silently charge the old or the client number.
+- **One pricing function is the single source of truth** - the same server code computes the cart preview, the checkout quote, and the final order. Never duplicate pricing math in the client.
+- **The cart is a draft.** It holds intent (items + quantities), not authoritative price or stock. Re-validate price and availability at checkout, not from the stored cart.
+- **A quote/preview endpoint is the contract** - the UI shows totals by calling the server quote, so the displayed number always equals the server number.
+
+---
+
+## Money Handling
+
+- **Store and compute money in integer minor units** (paisa, cents) or a fixed-precision decimal type - NEVER floating-point currency math.
+- **Round once, at a defined boundary** (per line, then sum, per your tax rules) - document where rounding happens.
+- **Always pair an amount with its currency.** No bare numbers crossing layers.
+- **Persist the charged amount + currency on the order** - never recompute a historical order's total from today's prices.
+
+---
+
+## Idempotency (MUST for checkout & payments)
+
+A retried request - double-click, network retry, webhook redelivery - MUST NOT create a second order, double-charge, or double-decrement stock.
+
+- **Require an idempotency key** for checkout / order creation / payment capture (client-generated UUID, or a natural key like cart-id + version).
+- **First request wins; later identical requests return the SAME result** (the original order/response), not a new one.
+- **Enforce at the database**, not just in app code - a unique constraint on the idempotency key (or order natural key) is the real guard against races.
+- **Payment webhooks are idempotent** - store the processed provider event id; ignore replays of an event you already applied.
+
+---
+
+## Atomic Stock / Inventory (MUST)
+
+Read-then-write on stock oversells under concurrency. Make the decrement a single conditional operation.
+
+- **Decrement with a guard in one atomic statement** - `UPDATE ... SET stock = stock - :qty WHERE id = :id AND stock >= :qty` (or DB-equivalent / transaction). If zero rows changed, it is out of stock -> fail the operation; do not proceed to charge.
+- **Reserve, then confirm or release.** Reserve stock when an order/checkout starts; confirm on payment success; release on cancel, payment failure, or reservation timeout. Expired reservations MUST be auto-released (job or TTL).
+- **Never "check availability" then "decrement" as two separate awaited steps** without a transaction or conditional update between them - that window is the oversell bug.
+- **Charge only after stock is secured** (reserved/decremented). Securing stock after a successful charge risks charging for unavailable goods.
+
+---
+
+## Discounts, Coupons & Offers (MUST)
+
+- **Validate the coupon/offer server-side at apply AND at checkout** - eligibility, active window, min spend, product scope, and per-user / global usage caps. The client never decides validity.
+- **Usage counters increment atomically with a cap** - `UPDATE ... SET used = used + 1 WHERE id = :id AND used < :max` (or transaction). Zero rows changed -> offer exhausted; reject. Prevents over-redemption under concurrency.
+- **Bind redemption to the order** so a refund/cancel can release the use, and a retried checkout does not consume the offer twice (ties into Idempotency above).
+- **Stack rules are explicit and server-enforced** - define which offers combine; never let the client send a final discount amount.
+
+---
+
+## Order Lifecycle
+
+- **Orders use an explicit state machine** with guarded transitions and an audit trail - see `state-machines.md`. (Typical: `pending -> paid -> fulfilled -> completed`, with `cancelled` / `refunded` branches.)
+- **Side effects fire on transition, not on request** - confirmation email, stock confirm, receipt, fulfillment trigger happen when the state actually changes, and exactly once per transition.
+- **An order is immutable history** - corrections create new records (refund, adjustment), they do not rewrite the original totals.
+
+---
+
+## Payment Integration (MUST)
+
+- **Verify payment outcome server-side** - trust the payment provider's server-to-server signal (verified webhook / server-side capture API), never the browser redirect or a client "success" flag.
+- **Verify webhook authenticity** - check the provider signature (HMAC) AND that the amount + currency match the order before marking it paid. Reject mismatches; log and alert.
+- **Webhook handler is idempotent** (see Idempotency) and returns 2xx fast - do heavy work async so the provider does not retry a slow-but-successful call.
+- **Never log full card/PAN, CVV, or raw payment credentials** (see `security.md` / `logging.md`). Store only provider tokens/ids.
+- **Reconcile** - handle the case where the webhook is delayed or lost: a status poll or reconciliation job confirms orders stuck in `pending`.
+
+---
+
+## Per-Edit Checklist (money / stock paths)
+
+- [ ] No price, discount, or total read from the request body - all recomputed server-side from trusted data.
+- [ ] Checkout / payment path is idempotent, enforced by a DB constraint.
+- [ ] Stock change is a single atomic conditional update (or transaction); oversell impossible.
+- [ ] Coupon/offer usage increments atomically against its cap; validated at apply and checkout.
+- [ ] Charge happens only after stock is secured; order persists the charged amount + currency.
+- [ ] Payment confirmed via verified webhook/server capture (signature + amount checked), not client redirect.
+- [ ] Order transitions go through the state machine; side effects fire once per transition.
+- [ ] No card/payment secrets in logs; cache headers on cart/checkout/order responses are `no-store` (see `caching.md`).

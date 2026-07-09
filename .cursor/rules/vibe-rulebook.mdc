@@ -1,0 +1,20 @@
+---
+description: Always-on pointer to the universal coding rulebook (vibeCodingRules/AGENTS.md). Routing authority for every coding task.
+alwaysApply: true
+---
+
+# Universal Coding Rulebook - Pointer
+
+This project follows the universal rulebook in `vibeCodingRules/AGENTS.md` (path is machine-specific; see `cursor-sync.md`).
+
+Before any code change, the agent MUST:
+
+1. Read `AGENTS.md` to determine which rule files apply to the task.
+2. Run `feature-discovery.md` grilling (3-5 questions) unless a skip trigger fires.
+3. Open every REQUIRED file from the routing matrix and skim mandatory sections.
+4. Apply the per-edit checklist (sections A-H) to every line touched.
+5. Sync `cursor/*.mdc` after any rule/cursor change (`cursor-sync.md`).
+
+**Universal only:** Product domains and stack overrides live in project `docs/` - not in the rulebook.
+
+Hard bans: see `AGENTS.md` § Hard Bans.
