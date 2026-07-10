@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/crons/email-outbox",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/crons/subscription-reconciliations",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/crons/tenant-databases",
+      "schedule": "30 4 * * *"
+    }
+  ]
+}

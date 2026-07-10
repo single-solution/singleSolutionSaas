@@ -19,8 +19,11 @@ import type {
 import { formatCurrency } from "./currency";
 
 function StatusBadge({ product }: { product: SubscriptionSummary }) {
-  if (!product.planCode) {
+  if (product.status === "unassigned") {
     return <Badge>No plan</Badge>;
+  }
+  if (product.status === "archived") {
+    return <Badge tone="danger">Archived</Badge>;
   }
   return (
     <Badge tone={product.status === "active" ? "success" : "danger"}>
@@ -76,9 +79,11 @@ function ProductActions({
   onToggleStatus: (product: SubscriptionSummary) => void;
 }) {
   const toast = useToast();
-  const canToggle = isPlatformAdmin && Boolean(product.planCode);
+  const canToggle =
+    isPlatformAdmin &&
+    (product.status === "active" || product.status === "suspended");
   const canTest =
-    isPlatformAdmin && Boolean(product.planCode) && product.status === "active";
+    isPlatformAdmin && product.status === "active" && Boolean(product.planCode);
 
   async function handleTestSite() {
     try {

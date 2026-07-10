@@ -11,7 +11,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const identity = readAdminSession();
+  const identity = await readAdminSession();
 
   if (!identity) {
     return (

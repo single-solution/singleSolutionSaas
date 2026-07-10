@@ -13,6 +13,7 @@ import {
   badRequest,
   created,
   serverError,
+  serviceUnavailable,
   tooManyRequests,
 } from "@/lib/api/responses";
 import { getChatSettings } from "@/lib/chat/settings";
@@ -21,6 +22,7 @@ import {
   toThreadLatestPage,
   type ConversationLean,
 } from "@/lib/chat/serializer";
+import { CONVERSATION_SUMMARY_SELECT } from "@/lib/chat/messageStorage";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +34,18 @@ export function OPTIONS(request: Request) {
 
 export async function POST(request: Request) {
   return withCors(request, async () => {
-    const caller = await resolveChatCaller(request);
+    const caller = await resolveChatCaller(request, { rateLimitPolicy: "fail_closed" });
     if (caller instanceof Response) return caller;
 
-    const createLimit = checkRateLimit(
+    const createLimit = await checkRateLimit(
       `chat-conv:ip:${getClientIp(request)}`,
       CREATE_MAX_PER_MINUTE,
       60_000,
+      "fail_closed",
     );
+    if (createLimit.unavailable) {
+      return serviceUnavailable("Rate limiting is temporarily unavailable.");
+    }
     if (!createLimit.allowed) {
       return tooManyRequests(createLimit.retryAfterSeconds);
     }
@@ -50,13 +56,16 @@ export async function POST(request: Request) {
     }
 
     const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
+    const dataDbName = caller.entitlement.dataDbName;
     try {
       const existing = await Conversation.findOne({
         siteId: caller.entitlement.siteId,
         visitorId: caller.visitorId,
-      }).lean<ConversationLean>();
+      })
+        .select(CONVERSATION_SUMMARY_SELECT)
+        .lean<ConversationLean>();
       if (existing) {
-        return created(toThreadLatestPage(existing));
+        return created(await toThreadLatestPage(dataDbName, existing));
       }
 
       const now = new Date();
@@ -74,17 +83,23 @@ export async function POST(request: Request) {
         messages: [],
       });
 
-      const lean = await Conversation.findById(
-        doc._id,
-      ).lean<ConversationLean>();
+      const lean = await Conversation.findById(doc._id)
+        .select(CONVERSATION_SUMMARY_SELECT)
+        .lean<ConversationLean>();
       if (!lean) {
         return serverError("Conversation vanished after creation.");
       }
-      void dispatchWebhook(caller.entitlement.dataDbName, caller.entitlement.siteId, "conversation.created", {
-        conversationId: doc._id.toString(),
-        visitorId: caller.visitorId,
-      });
-      return created(toThreadLatestPage(lean));
+      void dispatchWebhook(
+        dataDbName,
+        caller.entitlement.siteId,
+        "conversation.created",
+        {
+          conversationId: doc._id.toString(),
+          visitorId: caller.visitorId,
+        },
+        `webhook:conversation.created:${doc._id.toString()}`,
+      );
+      return created(await toThreadLatestPage(dataDbName, lean));
     } catch {
       return serverError("Could not start chat. Please try again.");
     }

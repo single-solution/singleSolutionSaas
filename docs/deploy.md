@@ -4,78 +4,148 @@ The platform and the `ecommerceChatBot` product are **two separate Next.js apps 
 
 ## Prerequisites
 
-- A MongoDB Atlas cluster reachable from Vercel. In Atlas → Network Access, allow Vercel: add `0.0.0.0/0` (any IP) for a quick start, or the documented Vercel egress ranges for a tighter setup.
-- This repository pushed to GitHub (done: connected to your GitHub account).
-- A Vercel account connected to that GitHub account.
+- MongoDB Atlas cluster reachable from Vercel (Network Access: `0.0.0.0/0` or Vercel egress ranges)
+- Upstash Redis database (REST API enabled)
+- GitHub repository connected to Vercel
+- Generated secrets: `JWT_SECRET`, `INTERNAL_API_SECRET`, `SSO_SIGNING_SECRET`, `PREVIEW_SIGNING_SECRET`, `EMBED_SIGNING_SECRET`, `CRON_SECRET`, config encryption key
 
 ## Projects
 
-| Project           | Root directory              | Framework | Node |
-| ----------------- | --------------------------- | --------- | ---- |
-| Platform (portal) | `.` (repo root)             | Next.js   | 20.x |
-| Chatbot product   | `products/ecommerceChatBot` | Next.js   | 20.x |
+| Project | Root directory | `vercel.json` |
+| --- | --- | --- |
+| Platform (portal) | `.` | Root `vercel.json` (3 crons) |
+| Chatbot product | `products/ecommerceChatBot` | Product `vercel.json` (3 crons) |
 
-Vercel auto-detects Next.js; no `vercel.json` is required. Just set the Root Directory per project when importing.
+Framework: Next.js. Node: **20.x**.
 
-## Environment variables
+## Environment variables — platform project
 
-Set these in each Vercel project (Settings → Environment Variables), for the Production (and Preview) environments.
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `MONGODB_URI` | Yes | Atlas SRV string |
+| `MONGODB_PLATFORM_DB` | No | Default `platform` |
+| `JWT_SECRET` | Yes | 32+ random chars |
+| `INTERNAL_API_SECRET` | Yes | **Must match product** |
+| `SSO_SIGNING_SECRET` | Yes | **Must match product** |
+| `PREVIEW_SIGNING_SECRET` | Yes | Preview iframe tokens |
+| `EMBED_SIGNING_SECRET` | Yes | **Must match product** |
+| `APP_URL` | Yes | Platform public URL |
+| `UPSTASH_REDIS_REST_URL` | Yes | Upstash REST URL |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes | Upstash REST token |
+| `CRON_SECRET` | Yes | `openssl rand -hex 24` |
+| `CONFIG_ENCRYPTION_KEYS` | Yes | JSON `{"v1":"<base64-32-byte-key>"}` |
+| `CONFIG_ENCRYPTION_ACTIVE_KEY_ID` | Yes | e.g. `v1` |
+| `LOG_LEVEL` | No | `info` recommended in prod |
+| `ERROR_TRACKING_DSN` | No | Optional |
+| `BOOTSTRAP_ADMIN_EMAIL` | First run | Seed admin |
+| `BOOTSTRAP_ADMIN_PASSWORD` | First run | Seed password |
+| `SMTP_*` / `EMAIL_*` | No | Invite/recovery email |
+| `ECOMMERCE_CHATBOT_PUBLIC_URL` | Recommended | Product URL for demo link |
 
-### Platform project
+## Environment variables — product project
 
-| Variable                                                                  | Required    | Value / notes                                                                             |
-| ------------------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                                                             | Yes         | Atlas SRV connection string                                                               |
-| `MONGODB_PLATFORM_DB`                                                     | No          | Defaults to `platform`                                                                    |
-| `JWT_SECRET`                                                              | Yes         | Random string, 32+ chars (session signing)                                                |
-| `INTERNAL_API_SECRET`                                                     | Yes         | Random string. **Must be identical** in the product project                               |
-| `APP_URL`                                                                 | Yes         | The platform's public URL, e.g. `https://YOUR-PLATFORM.vercel.app` (used in invite links) |
-| `BOOTSTRAP_ADMIN_EMAIL`                                                   | First run   | Seeds the first admin when the users collection is empty                                  |
-| `BOOTSTRAP_ADMIN_PASSWORD`                                                | First run   | Seed admin password                                                                       |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` / `SMTP_USER` / `SMTP_PASSWORD` | No          | For invite emails. Unset = portal shows a copyable invite link instead                    |
-| `EMAIL_FROM` / `EMAIL_REPLY_TO`                                           | No          | Sender identity for invite emails                                                         |
-| `ECOMMERCE_CHATBOT_PUBLIC_URL`                                            | Recommended | Chatbot product origin used by the login page's **Try live demo** action                  |
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `MONGODB_URI` | Yes | Same cluster |
+| `MONGODB_CHATBOT_DB` | No | Default `chatbot` |
+| `PLATFORM_API_URL` | Yes | Platform public URL |
+| `INTERNAL_API_SECRET` | Yes | **Must match platform** |
+| `SSO_SIGNING_SECRET` | Yes | **Must match platform** |
+| `EMBED_SIGNING_SECRET` | Yes | **Must match platform** |
+| `UPSTASH_REDIS_REST_URL` | Yes | Same Upstash DB recommended |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes | |
+| `CRON_SECRET` | Yes | **Must match platform** |
+| `LOG_LEVEL` | No | |
+| `ERROR_TRACKING_DSN` | No | |
+| `DEMO_DATA_RETENTION_DAYS` | No | Default 30 |
+| `PUBLIC_DEMO_PRODUCT_TOKEN` | Recommended | From `scripts/seed-demo.mjs` |
+| `PRODUCT_CATALOG_SLUG` | No | Default `ecommerce-chatbot` |
 
-### Chatbot product project
-
-| Variable                    | Required    | Value / notes                                                                           |
-| --------------------------- | ----------- | --------------------------------------------------------------------------------------- |
-| `MONGODB_URI`               | Yes         | Same Atlas cluster is fine (isolated DB via `MONGODB_CHATBOT_DB`)                       |
-| `MONGODB_CHATBOT_DB`        | No          | Defaults to `chatbot` (separate database from the platform)                             |
-| `PLATFORM_API_URL`          | Yes         | The platform's public URL, e.g. `https://YOUR-PLATFORM.vercel.app`                      |
-| `INTERNAL_API_SECRET`       | Yes         | **Must match** the platform's value exactly                                             |
-| `PUBLIC_DEMO_PRODUCT_TOKEN` | Recommended | Restricted publishable token produced by `scripts/seed-demo.mjs`; powers `/public-demo` |
-
-> The two apps authenticate to each other with `INTERNAL_API_SECRET`. If they differ, token verification, config delivery, the agent inbox, and the admin SSO all fail with 401.
+> Mismatched `INTERNAL_API_SECRET`, `SSO_SIGNING_SECRET`, `EMBED_SIGNING_SECRET`, or `CRON_SECRET` breaks verification, SSO, embed sessions, and crons.
 
 ## Deploy steps
 
-1. **Import the platform project** in Vercel from this GitHub repo, Root Directory `.`. Add the platform env vars. Deploy. Note its URL (e.g. `https://your-platform.vercel.app`).
-2. **Import the product project** from the _same_ repo, Root Directory `products/ecommerceChatBot`. Set `PLATFORM_API_URL` to the platform URL from step 1 and the matching `INTERNAL_API_SECRET`. Deploy. Note its URL (e.g. `https://your-chatbot.vercel.app`).
-3. Set the platform's `APP_URL` to its own deployed URL and redeploy if you changed it.
+1. Import **platform** project, root `.`, add env vars, deploy. Note URL.
+2. Import **product** project, root `products/ecommerceChatBot`, set `PLATFORM_API_URL` to platform URL, matching shared secrets, deploy. Note URL.
+3. Update platform `APP_URL` and `ECOMMERCE_CHATBOT_PUBLIC_URL`; redeploy platform.
+4. Update product catalog **Base URL** to product URL; run **Test connection**.
 
-## Post-deploy: connect the product
+## Post-deploy wiring
 
-1. Sign in to the platform (bootstrap admin) at `https://your-platform.vercel.app`.
-2. **Products → Register** the chatbot; set **Base URL** = the product's deployed URL (`https://your-chatbot.vercel.app`).
-3. Open the product (`/products/ecommerce-chatbot`) → **Test connection & sync config**. This pulls the product's config schema over the internal API and confirms the two apps can talk.
-4. Set **product defaults**, then create a merchant from `/merchants`. Add a site and use its guided **Assign product** modal; assignment provisions the tenant database and issues a domain-bound key.
-5. **Embed** on the merchant site:
+1. Sign in as bootstrap admin.
+2. Register chatbot; set Base URL to product deployment.
+3. Test connection and sync config schema.
+4. Set product defaults; publish config.
+5. Create merchant, assign product on site (provisions tenant DB + token).
+6. Embed on merchant site with `embed.js` and domain-bound token.
+7. Open **advanced dashboard** via SSO to configure webhooks/automation.
+8. Seed demo token for `/public-demo` if needed.
 
-```html
-<script
-  src="https://your-chatbot.vercel.app/embed.js"
-  data-product-token="pk_live_xxx"
-  async
-></script>
+## Cron jobs (automatic on Vercel)
+
+Platform:
+
+| Schedule | Route |
+| --- | --- |
+| `*/5 * * * *` | `/api/crons/email-outbox` |
+| `0 3 * * *` | `/api/crons/subscription-reconciliations` |
+| `30 4 * * *` | `/api/crons/tenant-databases` |
+
+Product:
+
+| Schedule | Route |
+| --- | --- |
+| `*/5 * * * *` | `/api/crons/webhook-outbox` |
+| `*/5 * * * *` | `/api/crons/usage-outbox` |
+| `0 5 * * *` | `/api/crons/demo-cleanups` |
+
+Vercel sends `Authorization: Bearer {CRON_SECRET}` automatically when `CRON_SECRET` is set.
+
+## Migrations on production
+
+Run from operator machine with production `.env` (never commit):
+
+```bash
+npm run migrate:config-secrets
+npm run migrate:config-secrets -- --apply
+
+npm run migrate:conversation-messages
+npm run migrate:conversation-messages -- --apply
+
+npm run reconcile:subscriptions
+npm run reconcile:subscriptions -- --apply
 ```
 
-6. **Advanced dashboard:** on the product page click **Open advanced dashboard** to SSO into the product's `/admin` (overview, moderation, assistant tuning, webhooks, data).
-7. **Public demo:** run the demo seed, set the chatbot's `PUBLIC_DEMO_PRODUCT_TOKEN`, set the platform's `ECOMMERCE_CHATBOT_PUBLIC_URL`, and redeploy both projects. Verify `/login` -> **Try live demo** opens the restricted `/public-demo` sandbox.
+Review JSON counts each dry-run. Repeat `--apply` until batch remainder is zero.
 
-## Notes & limits
+## Encryption key rotation
 
-- **HTTPS cookies:** production sets `secure` cookies; Vercel provides HTTPS, so sessions and the admin SSO cookie work out of the box.
-- **In-memory state:** rate-limit counters and the product's token-verification cache live in process memory, so they reset per serverless instance. Correct for testing; move to Redis before serious scale.
-- **Secrets at rest:** product config `secret` fields are not yet encrypted at rest (follow-up).
-- **Custom domains:** add them per Vercel project. Update `APP_URL`, `PLATFORM_API_URL`, the product **Base URL** in the catalog, and each token's allowed domains accordingly.
+1. Generate new key: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`
+2. Add to `CONFIG_ENCRYPTION_KEYS` JSON (keep old keys for decrypt).
+3. Set `CONFIG_ENCRYPTION_ACTIVE_KEY_ID` to new id.
+4. Redeploy platform.
+5. Run `npm run migrate:config-secrets -- --apply` until all documents re-encrypted.
+6. After verification, remove retired key id from JSON (only when no envelopes reference it).
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| 401 on internal API | Align `INTERNAL_API_SECRET` |
+| SSO redirect then 401 | Align `SSO_SIGNING_SECRET`; check clock skew |
+| Widget works once then fails | Embed session expired (30 min); check `EMBED_SIGNING_SECRET` |
+| Cron never runs | Confirm `CRON_SECRET` set; check Vercel cron logs |
+| Health 503 redis | Upstash URL/token wrong or DB paused |
+| Health 503 platform (product) | `PLATFORM_API_URL` wrong or platform down |
+| Config secrets unreadable | Missing old key in `CONFIG_ENCRYPTION_KEYS` after rotation |
+| Tenant data not isolated | Re-assign product to reprovision `dataDbName` |
+
+## Custom domains
+
+Add per Vercel project. Update `APP_URL`, `PLATFORM_API_URL`, product catalog Base URL, token allowed domains, and demo seed domain allowlist.
+
+## Limits
+
+- Serverless instances reset in-process caches; Redis is required for consistent rate limits.
+- HTTPS enables `secure` cookies for sessions and admin SSO.
+- Archived tenant DBs delete after 30-day retention via cron — plan backups before offboarding.

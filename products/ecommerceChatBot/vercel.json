@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/crons/webhook-outbox",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/crons/usage-outbox",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/crons/demo-cleanups",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}

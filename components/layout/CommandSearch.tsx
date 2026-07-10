@@ -7,6 +7,7 @@ import { Boxes, Globe, Search, Users } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { platformApi } from "@/lib/api/client";
+import { COMMAND_SEARCH_OPEN_EVENT } from "@/lib/portal/commandSearch";
 import type {
   MerchantSummary,
   ProductSummary,
@@ -113,8 +114,15 @@ export function CommandSearch({ user }: { user: UserSummary }) {
         openSearch();
       }
     }
+    function handleOpenEvent() {
+      openSearch();
+    }
     window.addEventListener("keydown", handleShortcut);
-    return () => window.removeEventListener("keydown", handleShortcut);
+    window.addEventListener(COMMAND_SEARCH_OPEN_EVENT, handleOpenEvent);
+    return () => {
+      window.removeEventListener("keydown", handleShortcut);
+      window.removeEventListener(COMMAND_SEARCH_OPEN_EVENT, handleOpenEvent);
+    };
   }, [openSearch]);
 
   const icons = { Merchant: Users, Site: Globe, Product: Boxes };
@@ -124,12 +132,20 @@ export function CommandSearch({ user }: { user: UserSummary }) {
       <button
         type="button"
         onClick={openSearch}
-        className="hidden h-9 items-center gap-2 rounded-md border border-line bg-surface-subtle px-3 text-sm text-ink-muted transition-colors hover:border-brand-300 hover:text-ink sm:flex"
+        className="grid size-11 place-items-center rounded-md border border-line bg-surface-subtle text-ink-muted transition-colors hover:border-brand-300 hover:text-ink sm:hidden"
+        aria-label="Search the platform"
+      >
+        <Search className="h-4 w-4" aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        onClick={openSearch}
+        className="hidden h-11 items-center gap-2 rounded-md border border-line bg-surface-subtle px-3 text-sm text-ink-muted transition-colors hover:border-brand-300 hover:text-ink sm:flex"
       >
         <Search className="h-4 w-4" aria-hidden="true" />
         Search
         <kbd className="ml-3 rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-ink-faint">
-          ⌘K
+          Cmd K
         </kbd>
       </button>
       <Modal

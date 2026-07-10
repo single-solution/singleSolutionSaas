@@ -3,6 +3,8 @@ import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
 
 import { loadEnvironment } from "@/lib/env";
+import { maskEmail } from "@/lib/logging/redact";
+import { logger } from "@/lib/logging/logger";
 
 export interface OutboundEmail {
   to: string;
@@ -56,16 +58,10 @@ export async function sendEmail(message: OutboundEmail): Promise<boolean> {
     });
     return true;
   } catch (error) {
-    console.error("Email send failed", { to: maskEmail(message.to), error: (error as Error).message });
+    logger.error("Email send failed", {
+      to: maskEmail(message.to),
+      error: error instanceof Error ? error.message : "unknown",
+    });
     return false;
   }
-}
-
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!domain) {
-    return "***";
-  }
-  const head = local.slice(0, 2);
-  return `${head}***@${domain}`;
 }

@@ -12,7 +12,10 @@ export function ensurePlatformReady(): Promise<void> {
       if (environment.BOOTSTRAP_ADMIN_EMAIL && environment.BOOTSTRAP_ADMIN_PASSWORD) {
         await bootstrapPlatformAdmin(environment.BOOTSTRAP_ADMIN_EMAIL, environment.BOOTSTRAP_ADMIN_PASSWORD);
       }
-    })();
+    })().catch((error) => {
+      readyPromise = null;
+      throw error;
+    });
   }
   return readyPromise;
 }

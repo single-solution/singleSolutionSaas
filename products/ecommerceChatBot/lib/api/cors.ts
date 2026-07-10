@@ -1,15 +1,11 @@
 /**
  * CORS for the embeddable widget. The widget runs on the merchant's origin and
  * calls this product cross-origin, so responses must carry CORS headers.
- *
- * Reflecting the requesting origin here is safe: no cookies/credentials are used
- * (the token travels in a header), and the real security boundary is the
- * per-token domain allowlist enforced in the handler (see `origin.ts`). A
- * disallowed origin still gets a 403 from the handler.
  */
 
 const ALLOW_METHODS = "GET, POST, OPTIONS";
-const ALLOW_HEADERS = "content-type, x-product-token, x-visitor-id, if-none-match";
+const ALLOW_HEADERS =
+  "content-type, authorization, if-none-match";
 
 export function requestOrigin(request: Request): string | null {
   const origin = request.headers.get("origin");

@@ -1,5 +1,5 @@
 /**
- * Public sandbox demo configuration. The publishable product access token may be
+ * Public sandbox demo configuration. The publishable product access token is
  * injected into demo pages server-side; privileged secrets stay in server env only.
  */
 
@@ -15,11 +15,7 @@ let cached: PublicDemoConfig | null = null;
 
 function readConfiguredToken(): string | null {
   const serverToken = process.env.PUBLIC_DEMO_PRODUCT_TOKEN?.trim();
-  if (serverToken) {
-    return serverToken;
-  }
-  const legacyToken = process.env.NEXT_PUBLIC_DEMO_PRODUCT_TOKEN?.trim();
-  return legacyToken || null;
+  return serverToken || null;
 }
 
 export function loadPublicDemoConfig(): PublicDemoConfig {
@@ -36,12 +32,4 @@ export function loadPublicDemoConfig(): PublicDemoConfig {
 
 export function buildPublicDemoPath(): string {
   return "/public-demo";
-}
-
-export function buildTokenDemoPath(token: string): string {
-  const trimmed = token.trim();
-  if (!trimmed) {
-    return "/demo";
-  }
-  return `/demo?token=${encodeURIComponent(trimmed)}`;
 }

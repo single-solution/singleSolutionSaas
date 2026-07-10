@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 
+import { getRequestId } from "@/lib/logging/requestContext";
+
 type ResponseOptions = {
   cache?: "no-store" | "public";
   varyCookie?: boolean;
   retryAfterSeconds?: number;
+  requestId?: string;
 };
 
 function applyResponseHeaders(response: NextResponse, options: ResponseOptions = {}) {
   const cacheControl = options.cache === "public" ? "public, max-age=60" : "no-store";
   response.headers.set("Cache-Control", cacheControl);
+  const requestId = options.requestId ?? getRequestId();
+  if (requestId) {
+    response.headers.set("X-Request-ID", requestId);
+  }
   if (options.varyCookie) {
     response.headers.set("Vary", "Cookie");
   }
@@ -26,8 +33,14 @@ export function jsonCreated<T>(data: T, options: ResponseOptions = { cache: "no-
   return applyResponseHeaders(NextResponse.json(data, { status: 201 }), options);
 }
 
-export function jsonError(message: string, status: number, options: ResponseOptions = { cache: "no-store" }) {
-  return applyResponseHeaders(NextResponse.json({ error: message }, { status }), options);
+export function jsonError(
+  message: string,
+  status: number,
+  options: ResponseOptions = { cache: "no-store" },
+  code?: string,
+) {
+  const body = code ? { error: message, code } : { error: message };
+  return applyResponseHeaders(NextResponse.json(body, { status }), options);
 }
 
 export function jsonUnauthorized() {
@@ -40,6 +53,13 @@ export function jsonForbidden(message = "Forbidden") {
 
 export function jsonTooManyRequests(retryAfterSeconds: number) {
   return jsonError("Too many requests", 429, { cache: "no-store", retryAfterSeconds });
+}
+
+export function jsonServiceUnavailable(
+  message = "Service temporarily unavailable. Please try again shortly.",
+  options: ResponseOptions = { cache: "no-store" },
+) {
+  return jsonError(message, 503, options);
 }
 
 export async function parseJsonBody<T>(request: Request): Promise<T | Response> {

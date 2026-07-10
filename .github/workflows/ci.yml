@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm audit --audit-level=high
+      - run: npm run validate:openapi
+      - run: npm run build
+        env:
+          MONGODB_URI: mongodb://127.0.0.1:27017/ci
+          MONGODB_PLATFORM_DB: platform
+          JWT_SECRET: ci-jwt-secret-with-at-least-32-characters
+          INTERNAL_API_SECRET: ci-internal-secret
+          CRON_SECRET: ci-cron-secret-min-16
+
+  product:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: products/ecommerceChatBot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: products/ecommerceChatBot/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm audit --audit-level=high
+      - run: npm run build
+        env:
+          MONGODB_URI: mongodb://127.0.0.1:27017/ci
+          INTERNAL_API_SECRET: ci-internal-secret
+          SSO_SIGNING_SECRET: ci-sso-signing-secret
+          EMBED_SIGNING_SECRET: ci-embed-signing-secret
+          CRON_SECRET: ci-cron-secret-min-16

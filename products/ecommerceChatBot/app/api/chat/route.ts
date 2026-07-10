@@ -12,6 +12,7 @@ import { preflight, withCors } from "@/lib/api/cors";
 import { ok } from "@/lib/api/responses";
 import { getChatSettings } from "@/lib/chat/settings";
 import { summariseThread, type ConversationLean } from "@/lib/chat/serializer";
+import { CONVERSATION_SUMMARY_SELECT } from "@/lib/chat/messageStorage";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,9 @@ export async function GET(request: Request) {
     const doc = await Conversation.findOne({
       siteId: caller.entitlement.siteId,
       visitorId: caller.visitorId,
-    }).lean<ConversationLean>();
+    })
+      .select(CONVERSATION_SUMMARY_SELECT)
+      .lean<ConversationLean>();
 
     return ok({
       enabled: true,

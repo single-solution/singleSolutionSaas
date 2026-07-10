@@ -57,6 +57,10 @@ export async function getRequestAuth(): Promise<RequestAuth | null> {
     return null;
   }
 
+  if (user.status !== "active" || !user.passwordHash) {
+    return null;
+  }
+
   if (user.sessionVersion !== payload.sessionVersion) {
     return null;
   }

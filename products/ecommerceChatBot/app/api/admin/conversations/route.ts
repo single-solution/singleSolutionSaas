@@ -5,6 +5,7 @@ import { badRequest, ok } from "@/lib/api/responses";
 import { getTenantModels } from "@/lib/db/tenant";
 import { CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
 import { summariseThread, type ConversationLean } from "@/lib/chat/serializer";
+import { CONVERSATION_SUMMARY_SELECT } from "@/lib/chat/messageStorage";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
 
   const [docs, total] = await Promise.all([
     Conversation.find(filter)
+      .select(CONVERSATION_SUMMARY_SELECT)
       .sort({ lastMessageAt: -1 })
       .skip((page - 1) * PAGE_SIZE)
       .limit(PAGE_SIZE)

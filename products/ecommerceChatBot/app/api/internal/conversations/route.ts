@@ -1,5 +1,5 @@
 /**
- * GET /api/internal/conversations?siteId=...&status=...&page=...&pageSize=...
+ * GET /api/internal/conversations?siteId=...&productSlug=...&status=...&page=...&pageSize=...
  *
  * Platform-only: lists a site's conversations for the agent inbox.
  */
@@ -7,8 +7,11 @@
 import { getTenantModels } from "@/lib/db/tenant";
 import { CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
 import { requireInternalAuth } from "@/lib/api/internalAuth";
-import { badRequest, ok } from "@/lib/api/responses";
+import { badRequest, notFound, ok } from "@/lib/api/responses";
+import { loadEnvironment } from "@/lib/env";
+import { resolveTenantBindingFromPlatform } from "@/lib/platform/tenantBinding";
 import { summariseThread, type ConversationLean } from "@/lib/chat/serializer";
+import { CONVERSATION_SUMMARY_SELECT } from "@/lib/chat/messageStorage";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +27,16 @@ export async function GET(request: Request) {
   if (!siteId) {
     return badRequest("siteId is required.");
   }
-  const dataDbName = url.searchParams.get("dataDbName")?.trim();
-  if (!dataDbName) {
-    return badRequest("dataDbName is required.");
+  const productSlug =
+    url.searchParams.get("productSlug")?.trim() || loadEnvironment().productSlug;
+
+  const binding = await resolveTenantBindingFromPlatform({
+    siteId,
+    productSlug,
+    requireBridgeAccess: true,
+  });
+  if (!binding) {
+    return notFound("Tenant binding not found or subscription is not active.");
   }
 
   const statusParam = url.searchParams.get("status");
@@ -34,10 +44,11 @@ export async function GET(request: Request) {
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(url.searchParams.get("pageSize")) || DEFAULT_PAGE_SIZE));
 
-  const { Conversation } = await getTenantModels(dataDbName);
+  const { Conversation } = await getTenantModels(binding.dataDbName);
   const filter = { siteId, ...(status ? { status } : {}) };
   const [docs, total] = await Promise.all([
     Conversation.find(filter)
+      .select(CONVERSATION_SUMMARY_SELECT)
       .sort({ lastMessageAt: -1 })
       .skip((page - 1) * pageSize)
       .limit(pageSize)

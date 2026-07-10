@@ -1,6 +1,6 @@
 /** POST /api/admin/webhooks/test - send a test delivery to the site's webhook. */
 
-import { requireAdminApi, resolveAdminDataDb } from "@/lib/admin/guard";
+import { requireAdminMutation, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
 import { sendTestWebhook } from "@/lib/admin/webhooks";
 
@@ -11,7 +11,7 @@ interface Body {
 }
 
 export async function POST(request: Request) {
-  const identity = requireAdminApi(request);
+  const identity = await requireAdminMutation(request);
   if (identity instanceof Response) return identity;
 
   let parsed: Body;

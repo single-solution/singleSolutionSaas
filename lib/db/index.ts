@@ -1,4 +1,4 @@
-export { Types, connectDb, disconnectDb, isValidObjectId } from "./connection";
+export { Types, connectDb, disconnectDb, getDbConnectionState, isValidObjectId, pingDb } from "./connection";
 export { User, type UserDocument } from "./models/User";
 export { Merchant, type MerchantDocument } from "./models/Merchant";
 export { MerchantMembership, type MerchantMembershipDocument } from "./models/MerchantMembership";
@@ -9,4 +9,9 @@ export { ProductDefaultConfig, type ProductDefaultConfigDocument } from "./model
 export { Product, type ProductDocument } from "./models/Product";
 export { ProductAccessToken, type ProductAccessTokenDocument } from "./models/ProductAccessToken";
 export { ProductUsage, type ProductUsageDocument } from "./models/ProductUsage";
+export { ProductUsageEvent, type ProductUsageEventDocument } from "./models/ProductUsageEvent";
+export { EmailOutbox, type EmailOutboxDocument } from "./models/EmailOutbox";
 export { AuditLog, type AuditLogDocument } from "./models/AuditLog";
+export { SsoExchange, type SsoExchangeDocument } from "./models/SsoExchange";
+export { PreviewTokenConsumption, type PreviewTokenConsumptionDocument } from "./models/PreviewTokenConsumption";
+export { ExportOutbox, type ExportOutboxDocument } from "./models/ExportOutbox";

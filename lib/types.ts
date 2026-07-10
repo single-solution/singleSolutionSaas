@@ -37,11 +37,15 @@ export interface MerchantSummary {
   currency?: string | null;
 }
 
+export type SiteDomainVerificationStatus = "unverified" | "verified";
+
 export interface SiteSummary {
   id: SiteId;
   name: string;
   slug: string;
   primaryDomain: string;
+  domainVerifiedAt?: string | null;
+  domainVerificationStatus?: SiteDomainVerificationStatus;
   merchantId: MerchantId;
   createdAt: string;
   merchantName?: string;
@@ -152,7 +156,7 @@ export interface ProductSubscriber {
   merchantName: string;
   planCode: string | null;
   planName: string | null;
-  status: "active" | "suspended";
+  status: "active" | "suspended" | "archived";
 }
 
 /**
@@ -198,7 +202,14 @@ export interface ProductDefaultConfigSummary {
   draftUpdatedAt: string | null;
 }
 
-export type SubscriptionStatus = "active" | "suspended" | "unassigned";
+export type ProductConfigApiErrorCode =
+  | "CONFIG_PUBLISH_CONFLICT"
+  | "CONFIG_ENCRYPTION_UNAVAILABLE"
+  | "CONFIG_DECRYPTION_FAILED"
+  | "CONFIG_ENCRYPTION_MISCONFIGURED"
+  | "CONFIG_PAYLOAD_INVALID";
+
+export type SubscriptionStatus = "active" | "suspended" | "archived" | "unassigned";
 
 export interface SubscriptionSummary {
   productSlug: string;
@@ -213,6 +224,10 @@ export interface SubscriptionSummary {
   scopes: string[];
   quotas: ProductPlanQuota[];
   availablePlans: ProductPlan[];
+  scopeOverrides?: string[] | null;
+  quotaOverrides?: ProductPlanQuota[] | null;
+  deletionEligibleAt?: string | null;
+  canRestore?: boolean;
 }
 
 export interface ProductAccessTokenSummary {
@@ -296,4 +311,81 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
   total: number;
+}
+
+export interface SiteDomainReadiness {
+  siteId: SiteId;
+  primaryDomain: string;
+  domainReady: boolean;
+  tokenCount: number;
+  mismatchedTokens: Array<{
+    tokenId: string;
+    productSlug: string;
+    allowedDomains: string[];
+  }>;
+  hasMismatch: boolean;
+}
+
+export interface MerchantBillingLineItem {
+  siteId: SiteId;
+  siteName: string;
+  productSlug: string;
+  productName: string;
+  planCode: string;
+  planName: string;
+  amount: number;
+  currency: string;
+}
+
+export interface MerchantBillingSummary {
+  merchantId: MerchantId;
+  totals: Array<{ currency: string; amount: number }>;
+  lineItems: MerchantBillingLineItem[];
+}
+
+export interface MerchantMemberSummary {
+  userId: UserId;
+  email: string;
+  name: string;
+  role: MerchantMemberRole;
+  status: "invited" | "active";
+  invited: boolean;
+}
+
+export interface SubscriptionHistoryEntry {
+  id: string;
+  siteId: SiteId;
+  siteName: string;
+  productSlug: string;
+  productName: string;
+  fromStatus: string | null;
+  toStatus: string;
+  reason: string;
+  actorUserId: UserId | null;
+  at: string;
+}
+
+export type MerchantLifecycleStatus =
+  | "active"
+  | "offboarding"
+  | "deletion_scheduled";
+
+export interface MerchantOffboardingSummary {
+  merchantId: MerchantId;
+  lifecycleStatus: MerchantLifecycleStatus;
+  offboardingStartedAt: string | null;
+  deletionEligibleAt: string | null;
+  exportRequestedAt: string | null;
+  exportStatus: string | null;
+  activeSubscriptions: number;
+  activeTokens: number;
+  canRestore: boolean;
+  canDelete: boolean;
+  retentionDays: number;
+}
+
+export interface ProductAccessTokenRotation {
+  newToken: ProductAccessTokenCreated;
+  previousTokenId: string;
+  previousRevoked: boolean;
 }

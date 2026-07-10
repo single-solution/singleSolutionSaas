@@ -12,6 +12,7 @@ const siteSchema = new Schema(
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, lowercase: true, trim: true },
     primaryDomain: { type: String, trim: true, lowercase: true, default: "" },
+    domainVerifiedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

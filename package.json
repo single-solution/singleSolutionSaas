@@ -8,9 +8,14 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "migrate:merchants": "node --env-file=.env scripts/migrate-to-merchants-sites.mjs",
-    "seed:chatbot-config": "node --env-file=.env scripts/seed-chatbot-config-schema.mjs"
+    "migrate:config-secrets": "node --env-file=.env scripts/migrate-config-secrets.mjs",
+    "migrate:conversation-messages": "node --env-file=.env scripts/migrate-conversation-messages.mjs",
+    "reconcile:subscriptions": "node --env-file=.env scripts/reconcile-subscriptions.mjs",
+    "seed:chatbot-config": "node --env-file=.env scripts/seed-chatbot-config-schema.mjs",
+    "validate:openapi": "npx --yes @redocly/cli@1 lint contracts/openapi.yaml"
   },
   "dependencies": {
+    "@upstash/redis": "^1.38.0",
     "autoprefixer": "^10.5.2",
     "bcryptjs": "^3.0.2",
     "clsx": "^2.1.1",

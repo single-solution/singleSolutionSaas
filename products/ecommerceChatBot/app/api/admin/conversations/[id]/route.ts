@@ -6,9 +6,11 @@
 import { Types } from "@/lib/db/connection";
 import { getTenantModels } from "@/lib/db/tenant";
 import { CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
-import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
+import { requireAdminApi, requireAdminMutation, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, notFound, ok, serverError } from "@/lib/api/responses";
-import { toThreadLatestPage, type ConversationLean } from "@/lib/chat/serializer";
+import { toThreadLatestPage, toThreadPage, type ConversationLean } from "@/lib/chat/serializer";
+import { CONVERSATION_SUMMARY_SELECT } from "@/lib/chat/messageStorage";
+import { CHAT_MESSAGE_PAGE_SIZE } from "@/lib/chat/messagePagination";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +34,25 @@ export async function GET(request: Request, { params }: RouteContext) {
     return badRequest("Unknown site.");
   }
 
+  const url = new URL(request.url);
+  const beforeId = url.searchParams.get("before");
+
   const { Conversation } = await getTenantModels(dataDbName);
-  const conversation = await Conversation.findOne({ _id: new Types.ObjectId(id), siteId }).lean<ConversationLean>();
+  const conversation = await Conversation.findOne({
+    _id: new Types.ObjectId(id),
+    siteId,
+  })
+    .select(CONVERSATION_SUMMARY_SELECT)
+    .lean<ConversationLean>();
   if (!conversation) {
     return notFound("Conversation not found.");
   }
-  return ok(toThreadLatestPage(conversation));
+  return ok(
+    await toThreadPage(dataDbName, conversation, {
+      beforeId,
+      limit: CHAT_MESSAGE_PAGE_SIZE,
+    }),
+  );
 }
 
 interface PatchBody {
@@ -47,7 +62,7 @@ interface PatchBody {
 }
 
 export async function PATCH(request: Request, { params }: RouteContext) {
-  const identity = requireAdminApi(request);
+  const identity = await requireAdminMutation(request);
   if (identity instanceof Response) return identity;
 
   let parsed: PatchBody;
@@ -97,11 +112,13 @@ export async function PATCH(request: Request, { params }: RouteContext) {
       { _id: new Types.ObjectId(id), siteId },
       { ...(Object.keys(set).length ? { $set: set } : {}), ...(Object.keys(unset).length ? { $unset: unset } : {}) },
       { new: true },
-    ).lean<ConversationLean>();
+    )
+      .select(CONVERSATION_SUMMARY_SELECT)
+      .lean<ConversationLean>();
     if (!updated) {
       return notFound("Conversation not found.");
     }
-    return ok(toThreadLatestPage(updated));
+    return ok(await toThreadLatestPage(dataDbName, updated));
   } catch {
     return serverError("Could not update the conversation.");
   }

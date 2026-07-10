@@ -17,7 +17,16 @@ export function PortalLayoutClient({ user, children }: { user: UserSummary; chil
       user={user}
       onSignOut={async () => {
         try {
-          await logout();
+          await logout("current");
+          router.replace("/login");
+          router.refresh();
+        } catch {
+          toast.showError("Sign out failed", "Try again in a moment.");
+        }
+      }}
+      onSignOutEverywhere={async () => {
+        try {
+          await logout("all");
           router.replace("/login");
           router.refresh();
         } catch {

@@ -6,11 +6,19 @@ import {
   Activity,
   CreditCard,
   Globe,
+  History,
   LayoutDashboard,
   Plus,
+  Shield,
+  Users,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
+import { MerchantBilling } from "@/components/merchants/MerchantBilling";
+import { MerchantOffboarding } from "@/components/merchants/MerchantOffboarding";
+import { MerchantOverview } from "@/components/merchants/MerchantOverview";
+import { MerchantTeam } from "@/components/merchants/MerchantTeam";
+import { SubscriptionHistory } from "@/components/merchants/SubscriptionHistory";
 import { MerchantActivity } from "@/components/products/MerchantActivity";
 import { SitesOverview } from "@/components/products/SitesOverview";
 import { useMerchantOverview } from "@/components/products/useMerchantOverview";
@@ -18,7 +26,6 @@ import { useToast } from "@/components/providers/ToastProvider";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
@@ -42,6 +49,7 @@ export default function AdminMerchantDetailPage() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [showCreateSite, setShowCreateSite] = useState(false);
+  const createSiteDirty = Boolean(siteName.trim() || primaryDomain.trim());
 
   useEffect(() => {
     let active = true;
@@ -131,6 +139,7 @@ export default function AdminMerchantDetailPage() {
         title="Add a site"
         description="Provision a deployment, then continue directly to product assignment."
         onClose={() => setShowCreateSite(false)}
+        dirty={createSiteDirty}
       >
         {formError ? (
           <Alert tone="danger" title="Could not create" className="mb-4">
@@ -173,31 +182,14 @@ export default function AdminMerchantDetailPage() {
             label: "Overview",
             icon: LayoutDashboard,
             content: (
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Card>
-                  <p className="text-sm text-ink-muted">Sites</p>
-                  <p className="mt-1 text-2xl font-semibold text-ink">
-                    {overview.sites.length}
-                  </p>
-                </Card>
-                <Card>
-                  <p className="text-sm text-ink-muted">Active products</p>
-                  <p className="mt-1 text-2xl font-semibold text-ink">
-                    {overview.sites.reduce(
-                      (sum, site) => sum + site.activeProducts,
-                      0,
-                    )}
-                  </p>
-                </Card>
-                <Card>
-                  <p className="text-sm text-ink-muted">Onboarding</p>
-                  <p className="mt-1 text-lg font-semibold text-ink">
-                    {merchant.pendingInvite
-                      ? "Invite pending"
-                      : "Account active"}
-                  </p>
-                </Card>
-              </div>
+              <MerchantOverview
+                merchantId={merchantId}
+                merchant={merchant}
+                sites={overview.sites}
+                loading={overview.loading}
+                error={overview.error}
+                onRetry={() => void overview.reload()}
+              />
             ),
           },
           {
@@ -229,18 +221,31 @@ export default function AdminMerchantDetailPage() {
             id: "billing",
             label: "Billing",
             icon: CreditCard,
+            content: <MerchantBilling merchantId={merchantId} />,
+          },
+          {
+            id: "team",
+            label: "Team",
+            icon: Users,
             content: (
-              <Card>
-                <p className="text-sm text-ink-muted">
-                  Monthly recurring spend across active subscriptions
-                </p>
-                <p className="mt-2 text-2xl font-semibold text-ink">
-                  {merchant.monthlySpend && merchant.currency
-                    ? `${merchant.currency} ${merchant.monthlySpend.toFixed(2)}`
-                    : "No paid subscriptions"}
-                </p>
-              </Card>
+              <MerchantTeam
+                merchantId={merchantId}
+                ownerEmail={merchant.ownerEmail}
+                pendingInvite={merchant.pendingInvite}
+              />
             ),
+          },
+          {
+            id: "history",
+            label: "Subscription history",
+            icon: History,
+            content: <SubscriptionHistory merchantId={merchantId} />,
+          },
+          {
+            id: "offboarding",
+            label: "Offboarding",
+            icon: Shield,
+            content: <MerchantOffboarding merchantId={merchantId} />,
           },
           {
             id: "activity",

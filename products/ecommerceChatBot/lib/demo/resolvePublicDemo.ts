@@ -10,11 +10,9 @@ export interface PublicDemoResolution {
   status: PublicDemoRuntimeStatus;
 }
 
-export async function resolvePublicDemo(
-  tokenOverride?: string | null,
-): Promise<PublicDemoResolution> {
+export async function resolvePublicDemo(): Promise<PublicDemoResolution> {
   const configured = loadPublicDemoConfig();
-  const token = tokenOverride?.trim() || configured.productToken;
+  const token = configured.productToken;
   if (!token) {
     return { token: null, status: "unconfigured" };
   }

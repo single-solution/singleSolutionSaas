@@ -1,7 +1,6 @@
 /**
- * Minimal HS256 JWT sign/verify using node:crypto. Kept dependency-free and
- * wire-compatible with the platform's `jose` HS256 tokens so the admin SSO
- * handshake works both ways with the shared internal secret.
+ * Minimal HS256 JWT sign/verify using node:crypto. Admin dashboard sessions are
+ * signed with SSO_SIGNING_SECRET (shared with the platform in production).
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";

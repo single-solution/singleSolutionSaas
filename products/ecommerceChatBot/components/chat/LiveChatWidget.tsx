@@ -91,26 +91,6 @@ export function LiveChatWidget({
   const activeThreadRef = useRef<ChatThread | null>(null);
   const pollCursorRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    if (isPreview || !productToken) return;
-    initChatSession(productToken);
-  }, [productToken, isPreview]);
-
-  // When hosted inside the embed iframe, tell the loader how big to make the
-  // frame so a closed widget doesn't cover (and block clicks on) the host page.
-  useEffect(() => {
-    if (typeof window === "undefined" || window.parent === window) return;
-    window.parent.postMessage(
-      { source: "ecommerce-chatbot", type: "resize", open: isOpen },
-      "*",
-    );
-  }, [isOpen]);
-
-  useEffect(() => {
-    activeThreadIdRef.current = activeThreadId;
-    activeThreadRef.current = activeThread;
-  }, [activeThreadId, activeThread]);
-
   const refreshBootstrap = useCallback(async () => {
     try {
       const data = await fetchChatBootstrap();
@@ -126,20 +106,48 @@ export function LiveChatWidget({
   }, []);
 
   useEffect(() => {
-    if (isPreview) return;
+    if (isPreview || !productToken) return;
+    let cancelled = false;
     void (async () => {
-      const data = await refreshBootstrap();
-      setBootstrapLoaded(true);
-      if (!data) return;
-      if (data.threads.length === 0) {
-        setView("compose");
-      } else {
-        setActiveThreadId(data.threads[0].id);
-        setUnread(data.threads[0].unreadByCustomer);
-        setView("thread");
+      try {
+        await initChatSession(productToken);
+        if (cancelled) return;
+        const data = await refreshBootstrap();
+        setBootstrapLoaded(true);
+        if (!data) return;
+        if (data.threads.length === 0) {
+          setView("compose");
+        } else {
+          setActiveThreadId(data.threads[0].id);
+          setUnread(data.threads[0].unreadByCustomer);
+          setView("thread");
+        }
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "Could not start chat.";
+        setBootstrapError(message);
+        setBootstrapLoaded(true);
       }
     })();
-  }, [refreshBootstrap]);
+    return () => {
+      cancelled = true;
+    };
+  }, [productToken, isPreview, refreshBootstrap]);
+
+  // When hosted inside the embed iframe, tell the loader how big to make the
+  // frame so a closed widget doesn't cover (and block clicks on) the host page.
+  useEffect(() => {
+    if (typeof window === "undefined" || window.parent === window) return;
+    window.parent.postMessage(
+      { source: "ecommerce-chatbot", type: "resize", open: isOpen },
+      "*",
+    );
+  }, [isOpen]);
+
+  useEffect(() => {
+    activeThreadIdRef.current = activeThreadId;
+    activeThreadRef.current = activeThread;
+  }, [activeThreadId, activeThread]);
 
   useEffect(() => {
     if (isPreview || !activeThreadId) return;
@@ -158,7 +166,7 @@ export function LiveChatWidget({
     return () => {
       cancelled = true;
     };
-  }, [activeThreadId]);
+  }, [activeThreadId, isPreview]);
 
   useEffect(() => {
     if (isPreview || !settings) return;
@@ -207,7 +215,7 @@ export function LiveChatWidget({
       document.removeEventListener("visibilitychange", onVisible);
       transport.stop();
     };
-  }, [settings, isOpen]);
+  }, [settings, isOpen, isPreview]);
 
   async function handlePreviewSend() {
     setBootstrapError(

@@ -22,8 +22,11 @@ import type {
 import { randomBytes } from "node:crypto";
 
 import { generateInviteToken, hashApiKey } from "@/lib/crypto";
-import { sendInviteEmail } from "@/lib/email/invite";
 import { loadEnvironment } from "@/lib/env";
+import {
+  enqueueInviteEmail,
+  inviteEmailIdempotencyKey,
+} from "@/lib/services/emailOutbox.service";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { slugify } from "@/lib/slugify";
 import { getPagination } from "@/lib/utils";
@@ -57,14 +60,22 @@ function mapSite(site: {
   name: string;
   slug: string;
   primaryDomain?: string | null;
+  domainVerifiedAt?: Date | null;
   createdAt: Date;
 }): SiteSummary {
+  const primaryDomain = site.primaryDomain ?? "";
+  const domainVerifiedAt = site.domainVerifiedAt
+    ? toIso(site.domainVerifiedAt)
+    : null;
   return {
     id: site._id.toString(),
     merchantId: site.merchantId.toString(),
     name: site.name,
     slug: site.slug,
-    primaryDomain: site.primaryDomain ?? "",
+    primaryDomain,
+    domainVerifiedAt,
+    domainVerificationStatus:
+      primaryDomain && domainVerifiedAt ? "verified" : "unverified",
     createdAt: toIso(site.createdAt),
   };
 }
@@ -115,6 +126,10 @@ export async function getUserById(userId: string): Promise<UserSummary | null> {
   return user ? mapUser(user) : null;
 }
 
+export async function invalidateAllUserSessions(userId: string): Promise<void> {
+  await User.findByIdAndUpdate(userId, { $inc: { sessionVersion: 1 } });
+}
+
 export async function updateUserProfile(
   userId: string,
   input: { name: string; email?: string },
@@ -123,6 +138,7 @@ export async function updateUserProfile(
   if (!user) {
     return null;
   }
+  let identityChanged = false;
   if (input.email) {
     const email = input.email.toLowerCase();
     if (email !== user.email) {
@@ -134,9 +150,15 @@ export async function updateUserProfile(
         throw new Error("EMAIL_TAKEN");
       }
       user.email = email;
+      identityChanged = true;
     }
   }
-  user.name = input.name;
+  if (user.name !== input.name) {
+    user.name = input.name;
+  }
+  if (identityChanged) {
+    user.sessionVersion += 1;
+  }
   await user.save();
   return mapUser(user);
 }
@@ -324,23 +346,50 @@ function buildInviteUrl(token: string): string | null {
   return `${APP_URL.replace(/\/$/, "")}/accept-invite?token=${encodeURIComponent(token)}`;
 }
 
+async function queueInviteEmail(input: {
+  userId: string;
+  tokenHash: string;
+  ownerEmail: string;
+  ownerName: string;
+  merchantName: string;
+  inviteUrl: string;
+}): Promise<void> {
+  await enqueueInviteEmail({
+    idempotencyKey: inviteEmailIdempotencyKey(input.userId, input.tokenHash),
+    to: input.ownerEmail,
+    recipientName: input.ownerName,
+    merchantName: input.merchantName,
+    inviteUrl: input.inviteUrl,
+    expiresInDays: INVITE_TTL_DAYS,
+  });
+}
+
+interface InviteDeliveryResult {
+  emailSent: boolean;
+  emailQueued: boolean;
+}
+
 async function deliverInvite(input: {
+  userId: string;
+  tokenHash: string;
   token: string;
   ownerEmail: string;
   ownerName: string;
   merchantName: string;
-}): Promise<boolean> {
+}): Promise<InviteDeliveryResult> {
   const inviteUrl = buildInviteUrl(input.token);
   if (!inviteUrl) {
-    return false;
+    return { emailSent: false, emailQueued: false };
   }
-  return sendInviteEmail({
-    to: input.ownerEmail,
-    recipientName: input.ownerName,
+  await queueInviteEmail({
+    userId: input.userId,
+    tokenHash: input.tokenHash,
+    ownerEmail: input.ownerEmail,
+    ownerName: input.ownerName,
     merchantName: input.merchantName,
     inviteUrl,
-    expiresInDays: INVITE_TTL_DAYS,
   });
+  return { emailSent: false, emailQueued: true };
 }
 
 async function generateUniqueMerchantSlug(name: string): Promise<string> {
@@ -407,6 +456,7 @@ export async function createMerchant(
   owner: UserSummary;
   inviteToken: string;
   emailSent: boolean;
+  emailQueued: boolean;
 }> {
   const email = input.ownerEmail.toLowerCase();
   if ((await reclaimOrphanedOwner(email)) === "CONFLICT") {
@@ -450,7 +500,9 @@ export async function createMerchant(
       primaryDomain: "",
     });
 
-    const emailSent = await deliverInvite({
+    const inviteDelivery = await deliverInvite({
+      userId: user._id.toString(),
+      tokenHash,
       token,
       ownerEmail: email,
       ownerName: user.name,
@@ -467,7 +519,8 @@ export async function createMerchant(
         name: merchant.name,
         slug: merchant.slug,
         ownerEmail: email,
-        emailSent,
+        emailSent: inviteDelivery.emailSent,
+        emailQueued: inviteDelivery.emailQueued,
       },
     });
 
@@ -482,7 +535,8 @@ export async function createMerchant(
       },
       owner: mapUser(user),
       inviteToken: token,
-      emailSent,
+      emailSent: inviteDelivery.emailSent,
+      emailQueued: inviteDelivery.emailQueued,
     };
   } catch (error) {
     if (created.merchantId) {
@@ -501,7 +555,7 @@ export async function resendMerchantInvitation(
   actor: RequestActor,
   merchantId: string,
 ): Promise<
-  | { inviteToken: string; emailSent: boolean; ownerEmail: string }
+  | { inviteToken: string; emailSent: boolean; emailQueued: boolean; ownerEmail: string }
   | "NOT_FOUND"
   | "ALREADY_ACTIVE"
 > {
@@ -529,7 +583,9 @@ export async function resendMerchantInvitation(
   owner.inviteTokenExpiresAt = new Date(Date.now() + INVITE_TTL_MS);
   await owner.save();
 
-  const emailSent = await deliverInvite({
+  const inviteDelivery = await deliverInvite({
+    userId: owner._id.toString(),
+    tokenHash,
     token,
     ownerEmail: owner.email,
     ownerName: owner.name,
@@ -542,10 +598,19 @@ export async function resendMerchantInvitation(
     action: "merchant.invite_resent",
     resourceType: "merchant",
     resourceId: merchant._id.toString(),
-    metadata: { ownerEmail: owner.email, emailSent },
+    metadata: {
+      ownerEmail: owner.email,
+      emailSent: inviteDelivery.emailSent,
+      emailQueued: inviteDelivery.emailQueued,
+    },
   });
 
-  return { inviteToken: token, emailSent, ownerEmail: owner.email };
+  return {
+    inviteToken: token,
+    emailSent: inviteDelivery.emailSent,
+    emailQueued: inviteDelivery.emailQueued,
+    ownerEmail: owner.email,
+  };
 }
 
 export async function getInvitation(
@@ -701,7 +766,12 @@ export async function updateSite(
     update.name = input.name;
   }
   if (input.primaryDomain !== undefined) {
-    update.primaryDomain = normalizeDomain(input.primaryDomain);
+    const nextDomain = normalizeDomain(input.primaryDomain);
+    const current = await Site.findById(siteId).select("primaryDomain").lean();
+    update.primaryDomain = nextDomain;
+    if (current && normalizeDomain(current.primaryDomain ?? "") !== nextDomain) {
+      update.domainVerifiedAt = null;
+    }
   }
   const site = await Site.findByIdAndUpdate(siteId, update, {
     new: true,
@@ -768,19 +838,11 @@ export async function writeAuditLog(input: {
   resourceType: string;
   resourceId?: string;
   metadata?: Record<string, unknown>;
+  actorRole?: string | null;
+  actorIp?: string | null;
 }): Promise<void> {
-  await AuditLog.create({
-    merchantId: input.merchantId
-      ? new Types.ObjectId(input.merchantId)
-      : undefined,
-    actorUserId: input.actorUserId
-      ? new Types.ObjectId(input.actorUserId)
-      : undefined,
-    action: input.action,
-    resourceType: input.resourceType,
-    resourceId: input.resourceId,
-    metadata: input.metadata,
-  });
+  const { writeAuditLogSafe } = await import("@/lib/audit/writeAuditLog");
+  await writeAuditLogSafe(input);
 }
 
 async function listSiteSummaries(filter: {
@@ -859,7 +921,7 @@ async function listSiteSummaries(filter: {
     if (!rollup) {
       continue;
     }
-    if (subscription.status === "active") {
+    if (subscription.status === "active" && subscription.planCode) {
       rollup.activeProducts += 1;
       const plan = subscription.planCode
         ? pricesByProduct
@@ -870,7 +932,7 @@ async function listSiteSummaries(filter: {
         rollup.monthlySpend += plan.price;
         rollup.currency ??= plan.currency;
       }
-    } else {
+    } else if (subscription.status === "suspended") {
       rollup.suspendedProducts += 1;
     }
   }

@@ -2,19 +2,25 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
-import { Copy, PackagePlus } from "lucide-react";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
+import { Copy, PackagePlus, Settings2 } from "lucide-react";
 
 import { useAuth } from "@/components/AuthProvider";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ProductsView } from "@/components/products/ProductsView";
+import { SiteSettings } from "@/components/sites/SiteSettings";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { SiteDetailSkeleton } from "@/components/ui/portalSkeletons";
-import { platformApi } from "@/lib/api/client";
+import { PlatformApiError, platformApi } from "@/lib/api/client";
 import type {
   MerchantSummary,
   ProductAccessTokenCreated,
@@ -24,6 +30,8 @@ import type {
 
 export default function SiteDetailPage() {
   const params = useParams<{ siteId: string }>();
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const siteId = params.siteId;
   const { user } = useAuth();
@@ -32,6 +40,7 @@ export default function SiteDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [productViewKey, setProductViewKey] = useState(0);
+  const [showSettings, setShowSettings] = useState(false);
   const [showAssignment, setShowAssignment] = useState(
     searchParams.get("assign") === "1",
   );
@@ -48,6 +57,21 @@ export default function SiteDetailPage() {
     availableProducts.find(
       (product) => product.productSlug === selectedProductSlug,
     ) ?? null;
+
+  const clearAssignParam = useCallback(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("assign");
+    router.replace(`${pathname}${next.size ? `?${next.toString()}` : ""}`, {
+      scroll: false,
+    });
+  }, [pathname, router, searchParams]);
+
+  const closeAssignment = useCallback(() => {
+    setShowAssignment(false);
+    setCreatedToken(null);
+    setAssignmentError(null);
+    clearAssignParam();
+  }, [clearAssignParam]);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -89,7 +113,22 @@ export default function SiteDetailPage() {
     });
   }, [showAssignment, siteId, user?.isPlatformAdmin]);
 
+  function openAssignment() {
+    if (!site?.primaryDomain?.trim()) {
+      setAssignmentError(null);
+      setShowAssignment(true);
+      return;
+    }
+    setShowAssignment(true);
+  }
+
   async function handleAssignProduct() {
+    if (!site?.primaryDomain?.trim()) {
+      setAssignmentError(
+        "Save a primary domain in site settings before assigning products.",
+      );
+      return;
+    }
     if (!selectedProductSlug || !selectedPlanCode) {
       setAssignmentError("Choose a product and plan.");
       return;
@@ -101,22 +140,27 @@ export default function SiteDetailPage() {
         planCode: selectedPlanCode,
         status: "active",
       });
-      if (site?.primaryDomain) {
-        const response = await platformApi.createProductToken(
-          siteId,
-          selectedProductSlug,
-          "Production",
-          [site.primaryDomain],
-        );
-        setCreatedToken(response.token);
-      } else {
-        setShowAssignment(false);
-      }
-      setProductViewKey((current) => current + 1);
-    } catch {
-      setAssignmentError(
-        "Could not assign this product. Check the plan and try again.",
+      const response = await platformApi.createProductToken(
+        siteId,
+        selectedProductSlug,
+        "Production",
+        [site.primaryDomain],
       );
+      setCreatedToken(response.token);
+      setProductViewKey((current) => current + 1);
+    } catch (caughtError) {
+      if (
+        caughtError instanceof PlatformApiError &&
+        caughtError.code === "DOMAIN_REQUIRED"
+      ) {
+        setAssignmentError(caughtError.message);
+      } else {
+        setAssignmentError(
+          caughtError instanceof PlatformApiError
+            ? caughtError.message
+            : "Could not assign this product. Check the plan and try again.",
+        );
+      }
     } finally {
       setAssigning(false);
     }
@@ -149,6 +193,7 @@ export default function SiteDetailPage() {
   }
 
   const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
+  const domainReady = Boolean(site.primaryDomain?.trim());
 
   return (
     <div className="page-stack">
@@ -157,7 +202,7 @@ export default function SiteDetailPage() {
         description={
           site.primaryDomain
             ? `Products & keys · ${site.primaryDomain}`
-            : "Products & keys"
+            : "Products & keys · domain required"
         }
         breadcrumbs={[
           { label: "Sites", href: "/sites" },
@@ -168,12 +213,56 @@ export default function SiteDetailPage() {
         ]}
         action={
           isPlatformAdmin ? (
-            <Button onClick={() => setShowAssignment(true)}>
-              <PackagePlus className="h-4 w-4" aria-hidden="true" />
-              Assign product
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                className="min-h-11"
+                onClick={() => setShowSettings(true)}
+              >
+                <Settings2 className="h-4 w-4" aria-hidden="true" />
+                Site settings
+              </Button>
+              <Button className="min-h-11" onClick={openAssignment}>
+                <PackagePlus className="h-4 w-4" aria-hidden="true" />
+                Assign product
+              </Button>
+            </div>
           ) : undefined
         }
+      />
+
+      {!domainReady && isPlatformAdmin ? (
+        <Alert tone="warning" title="Primary domain required">
+          Configure a valid primary domain before assigning products or issuing
+          keys.
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="min-h-11"
+              onClick={() => setShowSettings(true)}
+            >
+              Open site settings
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
+
+      <SiteSettings
+        site={site}
+        open={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSaved={(nextSite) => {
+          setSite(nextSite);
+          setProductViewKey((current) => current + 1);
+          if (!nextSite.primaryDomain?.trim()) {
+            setAssignmentError(
+              "Save a primary domain in site settings before assigning products.",
+            );
+          } else {
+            setAssignmentError(null);
+          }
+        }}
       />
 
       <Modal
@@ -182,17 +271,35 @@ export default function SiteDetailPage() {
         description={
           createdToken
             ? "The domain-bound publishable key is shown once. Copy it before closing."
-            : "Choose access and provision the tenant database. A domain-bound key is issued next."
+            : domainReady
+              ? "Choose access and provision the tenant database. A domain-bound key is issued next."
+              : "A primary domain is required before products can be assigned."
         }
         onClose={() => {
-          setShowAssignment(false);
-          setCreatedToken(null);
-          setAssignmentError(null);
+          if (createdToken) {
+            closeAssignment();
+            return;
+          }
+          closeAssignment();
         }}
       >
         {assignmentError ? (
-          <Alert tone="danger" title="Assignment failed" className="mb-4">
+          <Alert tone="danger" title="Assignment blocked" className="mb-4">
             {assignmentError}
+            {!domainReady ? (
+              <div className="mt-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="min-h-11"
+                  onClick={() => {
+                    setShowSettings(true);
+                  }}
+                >
+                  Configure domain
+                </Button>
+              </div>
+            ) : null}
           </Alert>
         ) : null}
         {createdToken ? (
@@ -201,7 +308,7 @@ export default function SiteDetailPage() {
               {createdToken.plaintextToken}
             </code>
             <Button
-              className="mt-3"
+              className="mt-3 min-h-11"
               variant="outline"
               size="sm"
               onClick={() => void copyCreatedToken()}
@@ -209,6 +316,21 @@ export default function SiteDetailPage() {
               <Copy className="h-4 w-4" aria-hidden="true" />
               Copy key
             </Button>
+          </Alert>
+        ) : !domainReady ? (
+          <Alert tone="warning" title="Add a primary domain first">
+            Product assignment stays blocked until the site has a valid primary
+            domain. Save it in site settings, then return here.
+            <div className="mt-3">
+              <Button
+                className="min-h-11"
+                onClick={() => {
+                  setShowSettings(true);
+                }}
+              >
+                Open site settings
+              </Button>
+            </div>
           </Alert>
         ) : (
           <div className="grid gap-4">
@@ -267,6 +389,7 @@ export default function SiteDetailPage() {
               </div>
             ) : null}
             <Button
+              className="min-h-11"
               loading={assigning}
               onClick={() => void handleAssignProduct()}
             >

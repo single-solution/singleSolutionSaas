@@ -40,6 +40,8 @@ export interface ConversationAttributes {
   assistantMuted?: boolean;
   assistantMuteReason?: AssistantMuteReason;
   assistantMutedAt?: Date;
+  /** When set, message bodies are read from the Message collection. */
+  messagesMigratedAt?: Date;
   messages: ConversationMessageAttributes[];
 }
 
@@ -75,6 +77,7 @@ export const conversationSchema = new Schema<ConversationAttributes>(
     assistantMuted: { type: Boolean, default: false },
     assistantMuteReason: { type: String, enum: ASSISTANT_MUTE_REASONS, required: false },
     assistantMutedAt: { type: Date },
+    messagesMigratedAt: { type: Date },
     messages: { type: [messageSchema], default: [] },
   },
   { timestamps: true },

@@ -3,12 +3,14 @@ import {
   Product,
   ProductAccessToken,
   ProductUsage,
+  ProductUsageEvent,
   Site,
   Subscription,
   Types,
 } from "@/lib/db";
 import type {
   ProductAccessTokenCreated,
+  ProductAccessTokenRotation,
   ProductAccessTokenSummary,
   ProductConfigSection,
   ProductPlan,
@@ -17,6 +19,7 @@ import type {
   ProductTestAction,
   ProductUsageMetric,
   ProductUsageSummary,
+  SubscriptionStatus,
   SubscriptionSummary,
 } from "@/lib/types";
 import {
@@ -26,11 +29,15 @@ import {
   resolvePublishedConfig,
 } from "@/lib/services/productConfig.service";
 import { generateProductToken, hashApiKey } from "@/lib/crypto";
+import { loadEnvironment } from "@/lib/env";
+import mongoose from "mongoose";
 import { ensureSubscriptionDataDb } from "@/lib/services/tenantDb";
 import {
   type RequestActor,
   writeAuditLog,
 } from "@/lib/services/platform.service";
+import { OutboundUrlError, validateOutboundUrl } from "@/lib/security/outboundUrl";
+import { isProduction } from "@/lib/utils";
 import {
   fetchProductConversation,
   fetchProductConversations,
@@ -39,7 +46,57 @@ import {
   postProductTest,
   ProductBridgeError,
 } from "@/lib/services/productBridge";
+import {
+  assignSubscriptionPlan,
+  isRetentionActive,
+  normalizeLegacySubscriptionStatus,
+  resolvePlanOnProduct,
+  restoreSubscription,
+  SubscriptionLifecycleError,
+  transitionSubscription,
+  unassignSubscription,
+} from "@/lib/services/subscriptionLifecycle.service";
+import {
+  countAssignedSubscriptionsForProduct,
+  findRemovedPlanConflicts,
+} from "@/lib/services/subscriptionReconciliation.service";
+import { resolveTenantBinding, TenantBindingError } from "@/lib/services/tenantBinding.service";
 import type { ProductConnectionStatus, ProductSubscriber } from "@/lib/types";
+
+export class ProductCatalogConflictError extends Error {
+  constructor(
+    message: string,
+    readonly conflicts: { planCode: string; count: number }[],
+  ) {
+    super(message);
+    this.name = "ProductCatalogConflictError";
+  }
+}
+
+export class ProductBaseUrlError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ProductBaseUrlError";
+  }
+}
+
+async function assertAllowedProductBaseUrl(baseUrl: string): Promise<void> {
+  const trimmed = baseUrl.trim();
+  if (!trimmed) {
+    return;
+  }
+  const environment = loadEnvironment();
+  try {
+    await validateOutboundUrl(trimmed, {
+      isProduction: isProduction(environment),
+      allowLocalhost: true,
+    });
+  } catch (error) {
+    const message =
+      error instanceof OutboundUrlError ? error.message : "Product Base URL is not allowed.";
+    throw new ProductBaseUrlError(message);
+  }
+}
 
 function toIso(value: Date): string {
   return value.toISOString();
@@ -146,7 +203,7 @@ function mapProduct(
     testActions?: unknown;
     createdAt: Date;
   },
-  counts?: { active: number; suspended: number },
+  counts?: { active: number; suspended: number; archived: number },
 ): ProductSummary {
   return {
     slug: product.slug,
@@ -161,7 +218,7 @@ function mapProduct(
     createdAt: toIso(product.createdAt),
     ...(counts
       ? {
-          subscriberCount: counts.active + counts.suspended,
+          subscriberCount: counts.active + counts.suspended + counts.archived,
           activeSubscriberCount: counts.active,
           suspendedSubscriberCount: counts.suspended,
         }
@@ -227,7 +284,7 @@ export async function listProducts(): Promise<ProductSummary[]> {
   const [products, subscriptionCounts] = await Promise.all([
     Product.find().sort({ createdAt: -1 }).lean(),
     Subscription.aggregate<{
-      _id: { productSlug: string; status: "active" | "suspended" };
+      _id: { productSlug: string; status: "active" | "suspended" | "archived" };
       count: number;
     }>([
       { $match: { planCode: { $ne: null } } },
@@ -241,12 +298,13 @@ export async function listProducts(): Promise<ProductSummary[]> {
   ]);
   const countsByProduct = new Map<
     string,
-    { active: number; suspended: number }
+    { active: number; suspended: number; archived: number }
   >();
   for (const entry of subscriptionCounts) {
     const counts = countsByProduct.get(entry._id.productSlug) ?? {
       active: 0,
       suspended: 0,
+      archived: 0,
     };
     counts[entry._id.status] = entry.count;
     countsByProduct.set(entry._id.productSlug, counts);
@@ -254,7 +312,11 @@ export async function listProducts(): Promise<ProductSummary[]> {
   return products.map((product) =>
     mapProduct(
       product,
-      countsByProduct.get(product.slug) ?? { active: 0, suspended: 0 },
+      countsByProduct.get(product.slug) ?? {
+        active: 0,
+        suspended: 0,
+        archived: 0,
+      },
     ),
   );
 }
@@ -387,7 +449,7 @@ export async function listProductSubscribers(
         merchantName: merchant?.name ?? "Unknown",
         planCode: subscription.planCode ?? null,
         planName: plan?.name ?? null,
-        status: subscription.status,
+        status: normalizeLegacySubscriptionStatus(subscription),
       } satisfies ProductSubscriber;
     })
     .filter((entry): entry is ProductSubscriber => entry !== null);
@@ -406,6 +468,9 @@ export async function registerProduct(
     testActions?: ProductTestAction[];
   },
 ): Promise<ProductSummary> {
+  if (input.baseUrl) {
+    await assertAllowedProductBaseUrl(input.baseUrl);
+  }
   const product = await Product.create({
     slug: input.slug.toLowerCase(),
     name: input.name,
@@ -443,6 +508,39 @@ export async function updateProduct(
     testActions?: ProductTestAction[];
   },
 ): Promise<ProductSummary | null> {
+  const existing = await Product.findOne({ slug: slug.toLowerCase() }).lean();
+  if (!existing) {
+    return null;
+  }
+
+  if (input.baseUrl !== undefined) {
+    await assertAllowedProductBaseUrl(input.baseUrl);
+  }
+
+  if (input.plans) {
+    const nextPlanCodes = input.plans.map((plan) => plan.code);
+    const conflicts = await findRemovedPlanConflicts(existing.slug, nextPlanCodes);
+    if (conflicts.length > 0) {
+      const summary = conflicts
+        .map((conflict) => `${conflict.planCode} (${conflict.count} subscriptions)`)
+        .join(", ");
+      throw new ProductCatalogConflictError(
+        `Cannot remove or rename plans still assigned to subscriptions: ${summary}. Reassign those sites first.`,
+        conflicts,
+      );
+    }
+  }
+
+  if (input.status === "inactive") {
+    const assignedCount = await countAssignedSubscriptionsForProduct(existing.slug);
+    if (assignedCount > 0) {
+      throw new ProductCatalogConflictError(
+        `Cannot deactivate product while ${assignedCount} active or suspended subscriptions remain. Unassign those sites first.`,
+        [{ planCode: "*", count: assignedCount }],
+      );
+    }
+  }
+
   const product = await Product.findOneAndUpdate(
     { slug: slug.toLowerCase() },
     input,
@@ -483,19 +581,37 @@ export async function listSiteProducts(
     const subscription = subscriptionBySlug.get(product.slug) ?? null;
     const plans = product.plans.map(mapPlan);
     const entitlement = resolveEntitlement(plans, subscription);
+    let status: SubscriptionStatus = "unassigned";
+    if (subscription) {
+      status = normalizeLegacySubscriptionStatus(subscription);
+    }
     return {
       productSlug: product.slug,
       displayName: product.name,
       description: product.description ?? "",
       productStatus: product.status,
-      status: subscription ? subscription.status : "unassigned",
+      status,
       planCode: entitlement.planCode,
       planName: entitlement.planName,
       priceMonthly: entitlement.priceMonthly,
       currency: entitlement.currency,
       scopes: entitlement.scopes,
       quotas: entitlement.quotas,
+      scopeOverrides: subscription?.scopeOverrides ?? null,
+      quotaOverrides: subscription?.quotaOverrides
+        ? subscription.quotaOverrides.map((quota) => ({
+            metric: quota.metric,
+            limit: quota.limit,
+          }))
+        : null,
       availablePlans: plans,
+      deletionEligibleAt: subscription?.deletionEligibleAt
+        ? toIso(subscription.deletionEligibleAt)
+        : null,
+      canRestore:
+        subscription?.status === "archived" &&
+        isRetentionActive(subscription.deletionEligibleAt) &&
+        Boolean(subscription.planCode),
     };
   });
 }
@@ -504,7 +620,13 @@ export async function setSiteProductPlan(
   actor: RequestActor,
   siteId: string,
   productSlug: string,
-  input: { planCode?: string | null; status?: "active" | "suspended" },
+  input: {
+    planCode?: string | null;
+    status?: "active" | "suspended";
+    action?: "restore" | "unassign";
+    scopeOverrides?: string[] | null;
+    quotaOverrides?: { metric: string; limit: number; unit?: string }[] | null;
+  },
 ): Promise<SubscriptionSummary | null> {
   const [site, product] = await Promise.all([
     Site.findById(siteId).lean(),
@@ -517,46 +639,133 @@ export async function setSiteProductPlan(
     return null;
   }
 
-  if (
-    input.planCode &&
-    !product.plans.some((plan) => plan.code === input.planCode)
-  ) {
-    throw new Error("PLAN_NOT_FOUND");
+  const transitionActor = {
+    userId: actor.userId,
+    reason: "portal subscription update",
+  };
+
+  let subscription = await Subscription.findOne({
+    siteId: new Types.ObjectId(siteId),
+    productSlug: product.slug,
+  });
+
+  if (input.action === "unassign") {
+    if (!subscription) {
+      return null;
+    }
+    await unassignSubscription(subscription, transitionActor);
+    const summaries = await listSiteProducts(siteId);
+    return (
+      summaries.find((summary) => summary.productSlug === product.slug) ?? null
+    );
   }
 
-  const update: Record<string, unknown> = { merchantId: site.merchantId };
-  if (input.planCode !== undefined) {
-    update.planCode = input.planCode;
-  }
-  if (input.status !== undefined) {
-    update.status = input.status;
+  if (input.action === "restore") {
+    if (!subscription) {
+      throw new SubscriptionLifecycleError(
+        "No archived subscription to restore.",
+        "NOT_FOUND",
+      );
+    }
+    await restoreSubscription(subscription, transitionActor);
+    const summaries = await listSiteProducts(siteId);
+    return (
+      summaries.find((summary) => summary.productSlug === product.slug) ?? null
+    );
   }
 
-  const subscription = await Subscription.findOneAndUpdate(
-    { siteId: new Types.ObjectId(siteId), productSlug: product.slug },
-    { $set: update },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  ).lean();
+  if (input.planCode === null) {
+    if (!subscription) {
+      return null;
+    }
+    await unassignSubscription(subscription, transitionActor);
+    const summaries = await listSiteProducts(siteId);
+    return (
+      summaries.find((summary) => summary.productSlug === product.slug) ?? null
+    );
+  }
 
-  // Provision the tenant's dedicated product data database on first assignment.
-  if (subscription && !subscription.dataDbName) {
-    await ensureSubscriptionDataDb({
-      _id: subscription._id,
-      merchantId: subscription.merchantId,
-      siteId: subscription.siteId,
-      productSlug: subscription.productSlug,
-      dataDbName: subscription.dataDbName,
+  if (input.planCode) {
+    if (!site.primaryDomain?.trim()) {
+      throw new SubscriptionLifecycleError(
+        "Configure a primary domain before assigning products.",
+        "DOMAIN_REQUIRED",
+      );
+    }
+    await assignSubscriptionPlan({
+      siteId,
+      merchantId: site.merchantId as unknown as Types.ObjectId,
+      productSlug: product.slug,
+      planCode: input.planCode,
+      actor: transitionActor,
+    });
+    await writeAuditLog({
+      merchantId: site.merchantId.toString(),
+      actorUserId: actor.userId,
+      action: "subscription.plan_changed",
+      resourceType: "subscription",
+      resourceId: product.slug,
+      metadata: { siteId, productSlug: product.slug, planCode: input.planCode },
+    });
+    subscription = await Subscription.findOne({
+      siteId: new Types.ObjectId(siteId),
+      productSlug: product.slug,
     });
   }
 
-  await writeAuditLog({
-    merchantId: site.merchantId.toString(),
-    actorUserId: actor.userId,
-    action: "subscription.plan_changed",
-    resourceType: "subscription",
-    resourceId: product.slug,
-    metadata: { siteId, productSlug: product.slug, ...input },
-  });
+  if (input.scopeOverrides !== undefined && subscription) {
+    subscription.scopeOverrides = input.scopeOverrides;
+    await subscription.save();
+    await writeAuditLog({
+      merchantId: site.merchantId.toString(),
+      actorUserId: actor.userId,
+      action: "subscription.scopes_overridden",
+      resourceType: "subscription",
+      resourceId: product.slug,
+      metadata: { siteId, productSlug: product.slug },
+    });
+  }
+
+  if (input.quotaOverrides !== undefined && subscription) {
+    subscription.set(
+      "quotaOverrides",
+      input.quotaOverrides?.map((quota) => ({
+        metric: quota.metric,
+        limit: quota.limit,
+      })) ?? null,
+    );
+    await subscription.save();
+    await writeAuditLog({
+      merchantId: site.merchantId.toString(),
+      actorUserId: actor.userId,
+      action: "subscription.quotas_overridden",
+      resourceType: "subscription",
+      resourceId: product.slug,
+      metadata: { siteId, productSlug: product.slug },
+    });
+  }
+
+  if (input.status && subscription) {
+    const currentStatus = normalizeLegacySubscriptionStatus(subscription);
+    if (currentStatus !== input.status) {
+      await transitionSubscription(
+        subscription,
+        input.status,
+        transitionActor,
+      );
+      await writeAuditLog({
+        merchantId: site.merchantId.toString(),
+        actorUserId: actor.userId,
+        action:
+          input.status === "suspended"
+            ? "subscription.suspended"
+            : "subscription.resumed",
+        resourceType: "subscription",
+        resourceId: product.slug,
+        metadata: { siteId, productSlug: product.slug },
+      });
+    }
+  }
 
   const summaries = await listSiteProducts(siteId);
   return (
@@ -613,6 +822,7 @@ export async function createProductToken(
   productSlug: string,
   name: string,
   allowedDomains: string[] = [],
+  expiresInDays?: number,
 ): Promise<ProductAccessTokenCreated> {
   const [site, product, subscription] = await Promise.all([
     Site.findById(siteId).lean(),
@@ -632,8 +842,11 @@ export async function createProductToken(
   if (
     !subscription ||
     !subscription.planCode ||
-    subscription.status !== "active"
+    normalizeLegacySubscriptionStatus(subscription) !== "active"
   ) {
+    throw new Error("PRODUCT_NOT_GRANTED");
+  }
+  if (!resolvePlanOnProduct(product, subscription.planCode)) {
     throw new Error("PRODUCT_NOT_GRANTED");
   }
 
@@ -649,6 +862,10 @@ export async function createProductToken(
         : [],
   );
   const generated = generateProductToken();
+  const expiresAt =
+    expiresInDays && expiresInDays > 0
+      ? new Date(Date.now() + expiresInDays * 24 * 60 * 60_000)
+      : null;
   const token = await ProductAccessToken.create({
     merchantId: site.merchantId,
     siteId: site._id,
@@ -658,6 +875,7 @@ export async function createProductToken(
     tokenHash: generated.tokenHash,
     scopes: entitlement.scopes,
     allowedDomains: domains,
+    expiresAt,
   });
 
   await writeAuditLog({
@@ -675,6 +893,67 @@ export async function createProductToken(
   });
 
   return { ...mapToken(token), plaintextToken: generated.plaintextToken };
+}
+
+export async function rotateProductToken(
+  actor: RequestActor,
+  siteId: string,
+  productSlug: string,
+  tokenId: string,
+  input: {
+    name?: string;
+    revokePrevious?: boolean;
+    expiresInDays?: number;
+  } = {},
+): Promise<ProductAccessTokenRotation | null> {
+  const previous = await ProductAccessToken.findOne({
+    _id: new Types.ObjectId(tokenId),
+    siteId: new Types.ObjectId(siteId),
+    productSlug: productSlug.toLowerCase(),
+    revokedAt: null,
+  });
+  if (!previous) {
+    return null;
+  }
+
+  const newToken = await createProductToken(
+    actor,
+    siteId,
+    productSlug,
+    input.name ?? `${previous.name} (rotated)`,
+    [...(previous.allowedDomains ?? [])],
+    input.expiresInDays,
+  );
+
+  let previousRevoked = false;
+  if (input.revokePrevious !== false) {
+    previousRevoked = await revokeProductToken(
+      actor,
+      siteId,
+      productSlug,
+      tokenId,
+    );
+  }
+
+  await writeAuditLog({
+    merchantId: previous.merchantId.toString(),
+    actorUserId: actor.userId,
+    action: "product_token.rotated",
+    resourceType: "product_token",
+    resourceId: tokenId,
+    metadata: {
+      siteId,
+      productSlug,
+      newTokenId: newToken.id,
+      previousRevoked,
+    },
+  });
+
+  return {
+    newToken,
+    previousTokenId: tokenId,
+    previousRevoked,
+  };
 }
 
 export async function revokeProductToken(
@@ -805,8 +1084,9 @@ export async function verifyProductToken(plaintextToken: string) {
     !site ||
     !merchant ||
     !subscription ||
-    subscription.status !== "active" ||
-    !subscription.planCode
+    normalizeLegacySubscriptionStatus(subscription) !== "active" ||
+    !subscription.planCode ||
+    !resolvePlanOnProduct(product, subscription.planCode)
   ) {
     return null;
   }
@@ -859,68 +1139,57 @@ export async function verifyProductToken(plaintextToken: string) {
   };
 }
 
-export async function recordProductUsage(input: {
-  token?: string;
-  siteId?: string;
-  productSlug?: string;
-  metric: string;
-  quantity: number;
-}): Promise<{
+export type UsageRecordResult = {
   metric: string;
   used: number;
   limit: number | null;
   withinQuota: boolean;
-} | null> {
-  let siteId = input.siteId;
-  let productSlug = input.productSlug;
-  let merchantId: string | undefined;
+  denied?: boolean;
+};
 
-  if (input.token) {
-    const token = await ProductAccessToken.findOne({
-      tokenHash: hashApiKey(input.token),
-      revokedAt: null,
-    }).lean();
-    if (!token) {
-      return null;
-    }
-    siteId = token.siteId.toString();
-    productSlug = token.productSlug;
-    merchantId = token.merchantId.toString();
+export async function recordProductUsage(input: {
+  token: string;
+  metric: string;
+  quantity: number;
+  idempotencyKey: string;
+}): Promise<UsageRecordResult | null> {
+  const token = await ProductAccessToken.findOne({
+    tokenHash: hashApiKey(input.token),
+    revokedAt: null,
+  }).lean();
+  if (!token) {
+    return null;
   }
 
-  if (!siteId || !productSlug) {
-    return null;
+  const existingEvent = await ProductUsageEvent.findOne({
+    idempotencyKey: input.idempotencyKey,
+  }).lean();
+  if (existingEvent) {
+    return {
+      metric: existingEvent.metric,
+      used: existingEvent.usedAfter,
+      limit: existingEvent.limit ?? null,
+      withinQuota: existingEvent.withinQuota,
+      denied: existingEvent.denied,
+    };
   }
 
   const [product, subscription] = await Promise.all([
-    Product.findOne({ slug: productSlug.toLowerCase() }).lean(),
+    Product.findOne({ slug: token.productSlug.toLowerCase() }).lean(),
     Subscription.findOne({
-      siteId: new Types.ObjectId(siteId),
-      productSlug: productSlug.toLowerCase(),
+      siteId: token.siteId,
+      productSlug: token.productSlug,
     }).lean(),
   ]);
-  if (!product || !subscription || subscription.status !== "active") {
+  if (
+    !product ||
+    !subscription ||
+    normalizeLegacySubscriptionStatus(subscription) !== "active" ||
+    !subscription.planCode ||
+    !resolvePlanOnProduct(product, subscription.planCode)
+  ) {
     return null;
   }
-  merchantId = merchantId ?? subscription.merchantId.toString();
-
-  const period = currentPeriod();
-  const usage = await ProductUsage.findOneAndUpdate(
-    {
-      siteId: new Types.ObjectId(siteId),
-      productSlug: product.slug,
-      metric: input.metric,
-      period,
-    },
-    {
-      $inc: { quantity: input.quantity },
-      $set: {
-        lastEventAt: new Date(),
-        merchantId: new Types.ObjectId(merchantId),
-      },
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  ).lean();
 
   const entitlement = resolveEntitlement(
     product.plans.map(mapPlan),
@@ -929,13 +1198,121 @@ export async function recordProductUsage(input: {
   const quota =
     entitlement.quotas.find((candidate) => candidate.metric === input.metric) ??
     null;
+  const period = currentPeriod();
+  const siteObjectId = token.siteId;
+  const productSlug = token.productSlug;
+  const limit = quota?.limit ?? null;
 
-  return {
-    metric: input.metric,
-    used: usage.quantity,
-    limit: quota ? quota.limit : null,
-    withinQuota: quota ? usage.quantity <= quota.limit : true,
-  };
+  const session = await mongoose.startSession();
+  try {
+    let result: UsageRecordResult | null = null;
+    await session.withTransaction(async () => {
+      const duplicate = await ProductUsageEvent.findOne({
+        idempotencyKey: input.idempotencyKey,
+      })
+        .session(session)
+        .lean();
+      if (duplicate) {
+        result = {
+          metric: duplicate.metric,
+          used: duplicate.usedAfter,
+          limit: duplicate.limit ?? null,
+          withinQuota: duplicate.withinQuota,
+          denied: duplicate.denied,
+        };
+        return;
+      }
+
+      const currentUsage = await ProductUsage.findOne({
+        siteId: siteObjectId,
+        productSlug,
+        metric: input.metric,
+        period,
+      })
+        .session(session)
+        .lean();
+      const usedBefore = currentUsage?.quantity ?? 0;
+      const wouldExceed =
+        limit !== null && usedBefore + input.quantity > limit;
+
+      if (wouldExceed) {
+        await ProductUsageEvent.create(
+          [
+            {
+              idempotencyKey: input.idempotencyKey,
+              merchantId: token.merchantId,
+              siteId: siteObjectId,
+              productSlug,
+              tokenId: token._id,
+              metric: input.metric,
+              period,
+              quantity: input.quantity,
+              usedAfter: usedBefore,
+              limit: limit ?? null,
+              withinQuota: false,
+              denied: true,
+            },
+          ],
+          { session },
+        );
+        result = {
+          metric: input.metric,
+          used: usedBefore,
+          limit: limit ?? null,
+          withinQuota: false,
+          denied: true,
+        };
+        return;
+      }
+
+      const usage = await ProductUsage.findOneAndUpdate(
+        {
+          siteId: siteObjectId,
+          productSlug,
+          metric: input.metric,
+          period,
+        },
+        {
+          $inc: { quantity: input.quantity },
+          $set: {
+            lastEventAt: new Date(),
+            merchantId: token.merchantId,
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true, session },
+      ).lean();
+
+      const withinQuota = quota ? usage.quantity <= quota.limit : true;
+      await ProductUsageEvent.create(
+        [
+          {
+            idempotencyKey: input.idempotencyKey,
+            merchantId: token.merchantId,
+            siteId: siteObjectId,
+            productSlug,
+            tokenId: token._id,
+            metric: input.metric,
+            period,
+            quantity: input.quantity,
+            usedAfter: usage.quantity,
+            limit: limit ?? null,
+            withinQuota,
+            denied: false,
+          },
+        ],
+        { session },
+      );
+      result = {
+        metric: input.metric,
+        used: usage.quantity,
+        limit,
+        withinQuota,
+      };
+    });
+    return result;
+  } finally {
+    await session.endSession();
+  }
 }
 
 async function resolveProductBaseUrl(productSlug: string): Promise<string> {
@@ -957,15 +1334,9 @@ async function resolveProductBaseUrl(productSlug: string): Promise<string> {
 async function resolveProductBridge(
   siteId: string,
   productSlug: string,
-): Promise<{ baseUrl: string; dataDbName: string }> {
+): Promise<{ baseUrl: string }> {
   const slug = productSlug.toLowerCase();
-  const [product, subscription] = await Promise.all([
-    Product.findOne({ slug }).lean(),
-    Subscription.findOne({
-      siteId: new Types.ObjectId(siteId),
-      productSlug: slug,
-    }).lean(),
-  ]);
+  const product = await Product.findOne({ slug }).lean();
   if (!product) {
     throw new ProductBridgeError("Product not found.", 404);
   }
@@ -975,20 +1346,15 @@ async function resolveProductBridge(
       409,
     );
   }
-  if (!subscription) {
-    throw new ProductBridgeError(
-      "This site is not subscribed to the product.",
-      409,
-    );
+  try {
+    await resolveTenantBinding(siteId, slug, { requireBridgeAccess: true });
+  } catch (error) {
+    if (error instanceof TenantBindingError) {
+      throw new ProductBridgeError(error.message, error.status);
+    }
+    throw error;
   }
-  const dataDbName = await ensureSubscriptionDataDb({
-    _id: subscription._id,
-    merchantId: subscription.merchantId,
-    siteId: subscription.siteId,
-    productSlug: subscription.productSlug,
-    dataDbName: subscription.dataDbName,
-  });
-  return { baseUrl: product.baseUrl, dataDbName };
+  return { baseUrl: product.baseUrl };
 }
 
 export async function listSiteProductConversations(
@@ -996,11 +1362,8 @@ export async function listSiteProductConversations(
   productSlug: string,
   query: { status?: string; page: number; pageSize: number },
 ) {
-  const { baseUrl, dataDbName } = await resolveProductBridge(
-    siteId,
-    productSlug,
-  );
-  return fetchProductConversations(baseUrl, siteId, dataDbName, query);
+  const { baseUrl } = await resolveProductBridge(siteId, productSlug);
+  return fetchProductConversations(baseUrl, siteId, productSlug, query);
 }
 
 export async function getSiteProductConversation(
@@ -1008,11 +1371,8 @@ export async function getSiteProductConversation(
   productSlug: string,
   conversationId: string,
 ) {
-  const { baseUrl, dataDbName } = await resolveProductBridge(
-    siteId,
-    productSlug,
-  );
-  return fetchProductConversation(baseUrl, siteId, dataDbName, conversationId);
+  const { baseUrl } = await resolveProductBridge(siteId, productSlug);
+  return fetchProductConversation(baseUrl, siteId, productSlug, conversationId);
 }
 
 export async function replyToSiteProductConversation(
@@ -1022,14 +1382,11 @@ export async function replyToSiteProductConversation(
   body: string,
   agentName: string,
 ) {
-  const { baseUrl, dataDbName } = await resolveProductBridge(
-    siteId,
-    productSlug,
-  );
+  const { baseUrl } = await resolveProductBridge(siteId, productSlug);
   return postProductConversationReply(
     baseUrl,
     siteId,
-    dataDbName,
+    productSlug,
     conversationId,
     body,
     agentName,

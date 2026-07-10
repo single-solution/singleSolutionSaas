@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
+import { Checkbox } from "@/components/ui/Checkbox";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   DETAIL_FIRST_MAX_COUNT,
@@ -100,7 +101,9 @@ export function ProductsView({
                     </span>
                     <span className="block text-xs">
                       {product.planName ?? "No plan"} /{" "}
-                      {product.planCode ? product.status : "unassigned"}
+                      {product.status === "unassigned"
+                        ? "unassigned"
+                        : product.status}
                     </span>
                   </button>
                 );
@@ -126,6 +129,9 @@ export function ProductsView({
             tokenDomains={
               products.tokenDomainsBySlug[selectedProduct.productSlug] ?? ""
             }
+            tokenExpires={
+              products.tokenExpiresBySlug[selectedProduct.productSlug] ?? ""
+            }
             showBack={!isDetailFirst}
             onBack={() => {
               setSelectedSlug(null);
@@ -134,12 +140,18 @@ export function ProductsView({
             onPlanChange={(planCode) =>
               void products.changePlan(selectedProduct.productSlug, planCode)
             }
-            onStatusToggle={() => void products.toggleStatus(selectedProduct)}
+            onRestore={() =>
+              products.restoreProduct(selectedProduct.productSlug)
+            }
+            onStatusToggle={() => products.toggleStatus(selectedProduct)}
             onTokenNameChange={(value) =>
               products.setTokenName(selectedProduct.productSlug, value)
             }
             onTokenDomainsChange={(value) =>
               products.setTokenDomains(selectedProduct.productSlug, value)
+            }
+            onTokenExpiresChange={(value) =>
+              products.setTokenExpires(selectedProduct.productSlug, value)
             }
             onCreateToken={(event) =>
               void products.createToken(event, selectedProduct.productSlug)
@@ -148,6 +160,12 @@ export function ProductsView({
             onDismissCreated={() => products.setCreatedToken(null)}
             onRevoke={(tokenId) =>
               products.requestRevoke(selectedProduct.productSlug, tokenId)
+            }
+            onRotate={(tokenId) =>
+              products.requestRotate(selectedProduct.productSlug, tokenId)
+            }
+            onSaveOverrides={(input) =>
+              void products.saveOverrides(selectedProduct.productSlug, input)
             }
           />
         </div>
@@ -175,6 +193,68 @@ export function ProductsView({
         loading={products.revoking}
         onCancel={products.cancelRevoke}
         onConfirm={() => void products.confirmRevoke()}
+      />
+      <ConfirmDialog
+        open={products.pendingRotate !== null}
+        title="Rotate access key?"
+        description="Issues a replacement key with the same domains. Copy the new key before closing."
+        confirmLabel="Issue replacement"
+        loading={products.rotating}
+        onCancel={products.cancelRotate}
+        onConfirm={() => void products.confirmRotate()}
+      >
+        <label className="inline-flex items-center gap-2 text-sm text-ink-secondary">
+          <Checkbox
+            checked={products.revokePreviousOnRotate}
+            onChange={(event) =>
+              products.setRevokePreviousOnRotate(event.target.checked)
+            }
+          />
+          Revoke previous key immediately
+        </label>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={products.pendingStatusProduct !== null}
+        title={
+          products.pendingStatusProduct?.status === "active"
+            ? "Suspend this subscription?"
+            : "Resume this subscription?"
+        }
+        description={
+          products.pendingStatusProduct?.status === "active"
+            ? "Runtime token verification will stop granting access for this site. Existing keys remain recorded but cannot authorize requests."
+            : "Existing active keys will authorize the product again for this site."
+        }
+        confirmLabel={
+          products.pendingStatusProduct?.status === "active"
+            ? "Suspend subscription"
+            : "Resume subscription"
+        }
+        loading={
+          products.pendingStatusProduct
+            ? products.savingPlanSlug === products.pendingStatusProduct.productSlug
+            : false
+        }
+        onCancel={products.cancelStatusToggle}
+        onConfirm={() => void products.confirmStatusToggle()}
+      />
+      <ConfirmDialog
+        open={products.pendingUnassignSlug !== null}
+        title="Unassign this product?"
+        description="Removes the plan and archives tenant data per retention policy. Keys stop working immediately."
+        confirmLabel="Unassign product"
+        loading={products.savingPlanSlug === products.pendingUnassignSlug}
+        onCancel={products.cancelUnassign}
+        onConfirm={() => void products.confirmUnassign()}
+      />
+      <ConfirmDialog
+        open={products.pendingRestoreSlug !== null}
+        title="Restore archived subscription?"
+        description="Reactivates the product within the retention window. You may need to issue new keys."
+        confirmLabel="Restore subscription"
+        loading={products.savingPlanSlug === products.pendingRestoreSlug}
+        onCancel={products.cancelRestore}
+        onConfirm={() => void products.confirmRestore()}
       />
     </>
   );

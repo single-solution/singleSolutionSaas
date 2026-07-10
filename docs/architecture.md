@@ -1,215 +1,193 @@
 # Architecture
 
-Single deployable: **Next.js App Router** portal for Single Solution operations.
+Two deployable **Next.js App Router** applications in one repository:
 
-## What lives here
+| Deployable | Root directory | Purpose |
+| --- | --- | --- |
+| Platform portal | `.` | Merchant/site/product control plane, billing, config, SSO minting |
+| Ecommerce chatbot | `products/ecommerceChatBot` | Widget, embed, product admin, tenant runtime data |
 
-- Merchant management (merchants, sites)
+Each is a separate Vercel project with its own `vercel.json` cron schedule.
+
+## What lives in the platform
+
+- Merchant management (merchants, sites, teams, offboarding)
 - Product registry metadata and per-site subscriptions
 - Platform admin view of all merchants
-- Internal API for external SaaS apps to verify product access tokens and report usage
+- Internal API for products to verify tokens, report usage, exchange SSO codes
+- Config editor, preview tokens, agent inbox bridge
+- Email and export outboxes
 
-## What does not live here
+## What lives in the product
 
-- SaaS product UIs or business logic
-- Product-specific databases (those apps use their own storage)
-- Multiple deployables or monorepo apps
+- Widget (`/embed`, `embed.js`, visitor sessions)
+- Chat API (`/api/chat/*`)
+- Product admin dashboard (`/admin/*`) after SSO exchange
+- Per-tenant databases: conversations, messages, site settings, webhooks, usage mirrors, usage/webhook outboxes
+- Demo sandbox and retention cleanup
 
 ## Stack
 
-| Layer     | Choice                                       |
-| --------- | -------------------------------------------- |
-| Framework | Next.js 15 (App Router)                      |
-| UI        | React 19, client components for dashboards   |
-| API       | Next.js Route Handlers (`app/api/[...path]`) |
-| Database  | MongoDB Atlas via Mongoose                   |
-| Auth      | Email/password, JWT in httpOnly cookie       |
+| Layer | Choice |
+| --- | --- |
+| Framework | Next.js 15 for both deployables |
+| UI | React 19, client components for dashboards |
+| API | Next.js Route Handlers |
+| Database | MongoDB Atlas via Mongoose |
+| Cache / rate limits | Upstash Redis (required in production) |
+| Auth | Email/password JWT cookie (portal); HS256 SSO/embed sessions (product) |
+| Observability | Structured logs, optional error-tracking DSN |
 
 ## Folder layout
 
 ```
-app/
-  login/              Shared sign-in + public demo entry
-  (portal)/
-    dashboard/        Role-aware operational overview
-    merchants/        Admin merchant directory and details
-    sites/            Shared, scope-filtered site directory and details
-    products/         Admin product catalog and details
-    settings/         Shared account settings
-  api/[...path]/      REST API (auth, merchants, sites, products, audit)
-components/           Shared client components (AuthProvider, products/*)
+app/                          Platform pages and API
+components/                   Portal UI
 lib/
-  db/                 Mongoose models + connection
-  services/           Business logic
-  api/                Router, auth helpers, browser client
-scripts/              One-off migrations
-docs/
+  db/                         Platform Mongoose models
+  services/                   Business logic
+  api/                        Router, auth, cron handlers
+  redis/                      Upstash client and rate limits
+  security/                   Config encryption, auth secrets, outbound URL policy
+  outbox/                     Shared outbox utilities
+products/ecommerceChatBot/    Product app (mirror structure)
+contracts/openapi.yaml        Combined API contract
+scripts/                      Idempotent migrations (dry-run default)
+docs/                         Operational documentation
 ```
 
 ## Request flow
 
 ```mermaid
 flowchart LR
-  Browser --> NextUI[Next.js pages]
-  Browser --> NextAPI[Next.js API routes]
-  NextAPI --> Service[platform.service / product.service]
-  Service --> MongoDB[(MongoDB Atlas)]
-  ExternalProduct[External SaaS app] --> VerifyAPI[POST /api/internal/product-tokens/verifications]
-  VerifyAPI --> Service
+  Browser --> PortalUI[Platform pages]
+  Browser --> PortalAPI[Platform /api]
+  PortalAPI --> Service[platform.service / product.service]
+  Service --> Mongo[(MongoDB platform DB)]
+  Service --> Redis[(Upstash Redis)]
+  Widget[Merchant site embed.js] --> ProductAPI[Product /api/chat]
+  ProductAPI --> TenantDB[(Per-tenant DB)]
+  ProductAPI -->|verify token / usage| PortalAPI
+  PortalAPI -->|inbox / schema / test| ProductAPI
 ```
 
 ## Auth model
 
 - **Platform admin**: `User.isPlatformAdmin === true`
-- **Merchant**: user with `MerchantMembership`
-- Same `/login` page; `/` redirects signed-in users to `/dashboard`, which renders admin or merchant content based on role
-- Merchants and sites use shared canonical routes. Authorization is encoded in API query scope rather than duplicated admin/merchant route trees.
-- Only platform admins mutate merchants, sites, catalog products, plans, subscriptions, tokens, and configuration. Merchants see their scoped sites, existing key metadata, usage, billing, and allowed conversations.
+- **Merchant**: user with `MerchantMembership` (`owner` / `admin` / `member`)
+- Same `/login` page; role-aware dashboard and API scope
+- Only platform admins mutate merchants, sites, catalog, subscriptions, tokens, config, offboarding
+- Merchants see scoped sites, key metadata, usage, billing, allowed conversations
 
-## Data model
+## Data model (platform DB)
 
-There is no organization concept. A **merchant** is a tenant; it owns **sites**; each (merchant + product + site) is a **subscription** with its own plan, tokens, usage, and billing.
+| Collection | Purpose |
+| --- | --- |
+| `merchants` | Tenant; `lifecycleStatus`, `deletionEligibleAt` for offboarding |
+| `merchantmemberships` | User-to-merchant role |
+| `sites` | Deployment under merchant; `primaryDomain`, domain verification timestamps |
+| `products` | Catalog: slug, `baseUrl`, plans, `configSchema`, `testActions` |
+| `subscriptions` | Per (merchant + product + site): `planCode`, status, `dataDbName`, `lifecycleHistory`, `deletionEligibleAt` |
+| `productaccesstokens` | Hashed token, scopes, domain allowlist, optional `expiresAt` |
+| `productusages` | Monthly aggregate per (site + product + metric) |
+| `productusageevents` | Idempotent usage ledger (`idempotencyKey` unique) |
+| `subscriptionconfigs` / `productdefaultconfigs` | Draft/published config with encrypted secrets |
+| `ssoexchanges` | One-time hashed SSO codes |
+| `emailoutboxes` / `exportoutboxes` | Platform async jobs |
+| `auditlogs` | Merchant-scoped actions |
 
-| Collection             | Purpose                                                                                                                                                |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Merchant`             | Tenant: globally unique slug                                                                                                                           |
-| `MerchantMembership`   | Links a user to a merchant with a role (`owner`/`admin`/`member`)                                                                                      |
-| `Site`                 | Deployment under a merchant: name + `primaryDomain`; slug unique per merchant                                                                          |
-| `Product`              | Catalog: slug, status, `baseUrl`, `availableScopes`, embedded `plans[]`                                                                                |
-| `Subscription`         | Per (merchant + product + site): `planCode`, `status`, optional scope/quota overrides, and `dataDbName` (the tenant's dedicated product data database) |
-| `ProductAccessToken`   | Hashed token per (site + product) with frozen scopes and domain allowlist; shown once                                                                  |
-| `ProductUsage`         | Monthly aggregate per (site + product + metric)                                                                                                        |
-| `SubscriptionConfig`   | Per (site + product) `draft`/`published` override values + `lockedFields`; unique on `siteId+productSlug`                                              |
-| `ProductDefaultConfig` | Per product `draft`/`published` default values + `lockedFields` (enforced across sites); unique on `productSlug`                                       |
-| `AuditLog`             | Merchant-scoped actions                                                                                                                                |
+## Per-tenant product databases
 
-`Product` also carries a `configSchema` (sections of typed fields the portal renders generically) and `testActions` (dry-run harness actions), both synced from the product via `GET /api/internal/config-schema`.
+**Authority:** the platform owns `Subscription.dataDbName`. Products resolve it via `resolveTenantBinding` / token verification — never self-assign DB names.
 
-### Per-tenant product databases
+- Provisioned on product assignment (`ensureSubscriptionDataDb`)
+- Named dynamically (max 38 chars for Atlas), stored on subscription
+- Dropped by platform cron after archived subscription passes 30-day retention
 
-A product has two kinds of database:
+Inside each **tenant data DB**:
 
-- **Permanent (shared) DB** - the platform control plane (`single-solution-saas`) and the product's own base connection. Holds the registry, admin config, and the authoritative billing usage counters.
-- **Tenant data DB** - one **dedicated database per subscription** (merchant + site + product), on the same cluster, named dynamically (e.g. `t-northwin-storef-ecommerc-<id>`, capped at 38 bytes for Atlas). It is provisioned when the admin assigns the product to a site, its name is stored on the `Subscription` (`dataDbName`), and it is the only place a tenant's runtime data lives - so tenants are physically isolated, not just filtered by `siteId`.
+| Collection | Purpose |
+| --- | --- |
+| `conversations` | Chat threads; may still hold embedded `messages[]` during migration |
+| `messages` | Split storage after `messagesMigratedAt` backfill |
+| `sitesettings` | Advanced automation + webhook config |
+| `webhookdeliveries` | Delivery audit log |
+| `webhookoutboxes` / `usageoutboxes` | Async delivery to merchants / platform |
+| `usages` | Local usage mirror (platform `productusages` authoritative for billing) |
 
-The product resolves its tenant DB at request time from the name the platform delivers: in the token-verification response for widget traffic, and passed explicitly on internal (agent inbox) and admin-dashboard calls. All product models bind to that tenant connection (`lib/db/tenant.ts`).
+`getTenantModels(dataDbName)` in `products/ecommerceChatBot/lib/db/tenant.ts` binds models per request.
 
-Inside each **tenant data DB** the product owns: `Conversation` (chat threads + messages), `SiteSettings` (per-site advanced automation + webhook config), `WebhookDelivery` (outbound delivery log), and `Usage` (a local mirror of the metered counter; the platform's `ProductUsage` stays authoritative for billing).
+## Message dual migration
 
-## Multi-tenancy
+1. Legacy: messages embedded on `Conversation`.
+2. Migration script inserts parallel `Message` documents with `clientMessageId: legacy:{conversationId}:{messageId}`.
+3. Sets `messagesMigratedAt` on conversation; **does not delete** embedded arrays.
+4. Runtime dual-read in `messageStorage.ts` until all conversations migrated.
 
-| Scope                        | Key                                |
-| ---------------------------- | ---------------------------------- |
-| Merchant                     | `merchantId`                       |
-| Site                         | `siteId` (belongs to one merchant) |
-| Subscription / token / usage | `siteId` + `productSlug`           |
+## Redis
 
-Platform admins bypass merchant membership checks for support operations.
+Both deployables use Upstash REST for:
+
+- Distributed API rate limits (`lib/redis/rateLimit.ts`)
+- Product entitlement / verification cache (`products/ecommerceChatBot/lib/redis/entitlementCache.ts`)
+
+Production boot fails without Redis env vars.
+
+## Outboxes and crons
+
+| Job | Deployable | Schedule | Handler |
+| --- | --- | --- | --- |
+| Email outbox | Platform | `*/5 * * * *` | `app/api/crons/email-outbox` |
+| Subscription reconciliation | Platform | `0 3 * * *` | `app/api/crons/subscription-reconciliations` |
+| Tenant DB cleanup | Platform | `30 4 * * *` | `app/api/crons/tenant-databases` |
+| Webhook outbox | Product | `*/5 * * * *` | `products/ecommerceChatBot/app/api/crons/webhook-outbox` |
+| Usage outbox | Product | `*/5 * * * *` | `products/ecommerceChatBot/app/api/crons/usage-outbox` |
+| Demo cleanup | Product | `0 5 * * *` | `products/ecommerceChatBot/app/api/crons/demo-cleanups` |
+
+Cron auth: `Authorization: Bearer {CRON_SECRET}` via `lib/api/cronAuth.ts`.
+
+## SSO exchange
+
+```mermaid
+sequenceDiagram
+  participant Admin
+  participant Portal
+  participant Product
+  Admin->>Portal: Open advanced dashboard
+  Portal->>Portal: Create SsoExchange (hashed code, 2min TTL)
+  Admin->>Product: GET /admin/sso?code=
+  Product->>Portal: POST /api/internal/sso/exchanges
+  Portal->>Product: Claims + consume code
+  Product->>Product: Set admin cookie (SSO_SIGNING_SECRET)
+```
+
+## Config encryption
+
+- AES-256-GCM envelopes in config documents (`lib/security/configEncryption.ts`)
+- AAD binds scope, product slug, site id, field key
+- Up to 5 keys in `CONFIG_ENCRYPTION_KEYS`; `CONFIG_ENCRYPTION_ACTIVE_KEY_ID` selects writer
+- Portal decrypts for verification delivery; products receive plaintext only over S2S channel
+
+## Observability
+
+- `lib/logging/logger.ts` — structured JSON, request context, redaction
+- `lib/observability/errorTracking.ts` — optional DSN adapter
+- Health routes aggregate Mongo, Redis, and (product) platform checks
 
 ## External product integration
 
-Products are isolated apps (separate repo, separate database). The portal is the control plane for access, usage, and billing only.
+See README **Product integration** and `docs/api.md`. Tenant binding flows through verification and `productBridge.ts`.
 
-**Product access tokens** (per site+product; entitlement + runtime credential):
+## Widget security
 
-1. Platform admin registers the product with plans, scopes, and quotas at `/products` (persisted in the `Product` collection).
-2. A platform admin assigns a plan to a product on a site, creating a `Subscription` and provisioning its tenant database.
-3. The platform admin issues a domain-bound product access token for that site+product; scopes are frozen from the plan. Merchants can view existing key metadata but cannot issue or revoke keys.
-4. Product app calls `POST /api/internal/product-tokens/verifications` (Bearer `INTERNAL_API_SECRET`) to resolve merchant, site, plan, scopes, quotas, current usage, and `withinQuota`.
-5. Product app reports usage via `POST /api/internal/product-usage`, incrementing the current-month `ProductUsage` aggregate.
+| Control | Mechanism |
+| --- | --- |
+| Domain binding | Token allowlist on Origin/Referer host |
+| Embed session | Short-lived bearer signed with `EMBED_SIGNING_SECRET` |
+| Rate limits | Redis-backed per-IP and per-visitor caps |
+| Quota | Platform-enforced via usage API + idempotency |
+| Tenant isolation | Physical DB per subscription |
 
-**Agent inbox** (portal -> product, reverse direction):
+## Migrations
 
-1. Merchant opens the inbox for a subscribed product on a site.
-2. Portal resolves the product's `baseUrl` from the `Product` catalog and calls the product's own internal endpoints with Bearer `INTERNAL_API_SECRET`: `GET/POST /api/internal/conversations[...]`, scoped by `siteId`.
-3. The portal holds no product data; the product stays the source of truth. Replies post as an `agent` message and pause the product's assistant.
-
-```mermaid
-flowchart LR
-  Merchant[Merchant in portal] --> Portal[Portal API]
-  Portal -->|Bearer INTERNAL_API_SECRET, baseUrl| ProductInbox[Product /api/internal/conversations]
-  ProductInbox --> ProductDb[(Product database)]
-```
-
-## Product configuration control plane
-
-This is a **hybrid** model. The portal owns admin-only configuration (`lib/services/productConfig.service.ts`, `components/products/ProductConfigEditor.tsx`); deep operations live in the product's own admin dashboard reached by SSO. Merchants are read-only (stats, keys, billing).
-
-**Store & schema.** Products declare a `configSchema` (synced via `GET /api/internal/config-schema`). Config lives at two scopes: `ProductDefaultConfig` (one per product) and `SubscriptionConfig` (per site + product), each with `draft`/`published` copies and `lockedFields`. Validation is dynamic (against the product's schema).
-
-**Editing (admin only).** Product defaults are edited at `GET/PATCH /api/admin/products/{slug}/config` + `POST .../config/publish`; per-site overrides at `GET/PATCH /api/sites/{siteId}/products/{slug}/config` + publish. The same `ProductConfigEditor` renders both via a `scope` prop. A site stores only overridden fields; `clearKeys` resets a field to inherit. `saveProductConfigDraft` skips fields enforced by the product default. `secret` fields are write-only (blank keeps stored value; masked as `{ set }`).
-
-**Resolution (`resolveEffectiveConfig`).** Effective value per field: enforced default > per-site value > product default > schema default.
-
-**Delivery (pull-based).** Effective published values are folded into the token verification response (`verifyProductToken`), so the product receives config on the same server-to-server call it already makes; no push. The chatbot layers this over `CHAT_SETTINGS_DEFAULTS` in `getChatSettings(config)`, then merges per-site `SiteSettings` (advanced automation) before driving `generateAssistantReplies`.
-
-**Advanced dashboard (SSO).** Admins open `POST /api/admin/products/{slug}/dashboard-session` -> a ~2-min HS256 token -> browser redirect to the product's `GET /admin/sso`, which mints an ~8h httpOnly admin cookie. The product dashboard (overview, moderation, assistant tuning, webhook diagnostics, raw data) is guarded by that cookie and uses `GET /api/internal/product-sites` for its site switcher. Webhook dispatch (signed HMAC) and its delivery log are product-owned.
-
-**Preview.** `POST /api/sites/{siteId}/products/{slug}/preview` mints a short-lived JWT (signed with `INTERNAL_API_SECRET`, 15 min) and returns `{{baseUrl}}/embed?preview={{token}}`. The product's `/embed` page calls the platform's `POST /api/internal/product-config` with that token to fetch **draft** config and renders an appearance-only preview (no persistence). The portal shows it in an iframe.
-
-**Harness.** `POST /api/sites/{siteId}/products/{slug}/test` proxies a declared `testAction` to the product's `POST /api/internal/test` with the site's draft config; the product runs a dry-run (e.g. the chatbot's `assistant-reply`) and returns a result. Nothing is stored.
-
-**Connections/integrations** are `configSchema` sections of `kind: connection`/`integration` using `url`/`secret` fields; secrets are write-only in the API and only reach the product over the verification/config channel. Encryption-at-rest for secrets is a follow-up.
-
-```mermaid
-flowchart LR
-  Editor[Portal config editor] -->|PATCH draft / publish| ConfigApi[Portal config routes]
-  ConfigApi --> ConfigDb[(SubscriptionConfig)]
-  Product[Product app] -->|verify token| Verify[Portal verification]
-  Verify -->|published config| Product
-  Editor -->|preview token| Embed[Product /embed?preview]
-  Embed -->|draft config| Portal[Portal /api/internal/product-config]
-```
-
-## Merchant onboarding
-
-No public sign-up. `POST /api/admin/merchants` (platform admin only) creates an invited owner `User` (no password, `status: "invited"`) + `Merchant` + owner `MerchantMembership` + a **Default site** in one flow (`createMerchant`), then emails the owner a one-time invite link and returns the token. The admin never sets a password. If SMTP or `APP_URL` is not configured, the email is skipped and the admin relays the `/accept-invite?token=...` link manually. While the owner is still `invited`, `POST /api/admin/merchants/{id}/invitation` reissues the token and re-sends it.
-
-Invite tokens are SHA-256 hashed at rest with a 7-day expiry. `GET /api/auth/invitations/{token}` (public, rate-limited) resolves the invitee for display; `POST /api/auth/invitations/acceptance` (public, rate-limited) sets the chosen password, flips `status` to `active`, bumps `sessionVersion`, clears the token, and issues the session cookie. Invited users are rejected by `authenticateUser` until acceptance. The merchant slug is auto-generated from the name and de-duplicated server-side (numeric suffix on clash); site slugs are auto-generated per merchant; owner email is unique (409 on clash).
-
-## Portal UI system
-
-- The portal uses a floating, wide top-navigation shell with no permanent sidebar. Admin navigation exposes Dashboard, Merchants, Sites, and Products as equal entries; merchant navigation exposes Dashboard and Sites.
-- Search/filter/view/tab/pagination state uses URL query parameters. `Cmd/Ctrl+K` opens global navigation search by merchant, owner email, site/domain, or product.
-- Shared primitives under `components/ui` provide semantic controls, modal focus trapping/restoration, keyboard tabs, dropdown menus, resource cards, data tables, progress semantics, and loading/error/empty page states.
-- Quick edits and guided workflows use center modals. Destructive lifecycle changes explain runtime and token consequences before confirmation.
-- The standalone chatbot admin applies the same light-indigo semantic language, accessible controls, reduced-motion handling, responsive states, and page-state patterns while retaining product-specific navigation.
-
-## Public demo sandbox
-
-The chatbot exposes `/public-demo` for a dedicated restricted demo subscription. `scripts/seed-demo.mjs` issues the publishable demo token with a product-host/localhost domain allowlist and marks its token metadata as the demo credential. The chatbot server receives that token through `PUBLIC_DEMO_PRODUCT_TOKEN`; the platform login reaches it through `ECOMMERCE_CHATBOT_PUBLIC_URL`.
-
-- Public demo requests use stricter rate limits and cannot enter internal or product-admin APIs.
-- The page falls back to a non-interactive sample when no demo token is configured.
-- `/demo?token=...` remains the explicit token-testing route for operators; `/public-demo` never accepts privileged platform credentials.
-- Guest demo and admin tenant preview are labeled separately: guest sandbox uses the restricted tenant, while **Test site** mints a short-lived preview for the selected real subscription.
-
-## Widget embedding
-
-```mermaid
-flowchart LR
-  Site[Merchant site + embed.js] -->|iframe /embed?token=| Embed[Product /embed page]
-  Embed -->|verify token, gate by Referer host vs allowed domains| Widget[LiveChatWidget]
-  Widget -->|same-origin fetch| ProductApi[Product /api/chat]
-```
-
-- `embed.js` (static, in `public/`) injects a floating iframe and resizes it via `postMessage` from the widget (closed bubble vs open panel).
-- `/embed` verifies the token server-side and blocks framing when the iframe `Referer` host is not in the token's allowed domains (fails closed in production).
-- Widget API calls are same-origin to the product; `resolveChatCaller` allows same-origin and applies the domain allowlist only to cross-origin (direct-mount) callers.
-
-## Embeddable widget security
-
-The chatbot widget is embedded in merchant sites, so its product token (`pk_live_...`) is a **publishable key** visible in page source. Defense in depth on the product's widget endpoints:
-
-| Control           | Mechanism                                                                                                                                                                                           |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Domain binding    | Each token has an allowlist; requests are checked by `Origin` (fallback `Referer`) host. No domains configured = blocked (secure by default); supports `*.example.com`.                             |
-| CORS              | Widget endpoints reflect the caller origin for cross-origin embeds; the domain allowlist (not CORS) is the security boundary.                                                                       |
-| Per-IP rate limit | All widget requests capped per IP; conversation creation and message sending have tighter per-IP caps on top of the per-visitor cap (a self-asserted `visitorId` cannot be rotated to bypass them). |
-| Quota             | Server-enforced plan quota blocks messages once exhausted, capping the merchant's cost from a leaked token.                                                                                         |
-| Tenant isolation  | Each subscription's runtime data lives in its own database (`Subscription.dataDbName`); within it, reads/writes are scoped by `siteId` + `visitorId`. No cross-visitor or cross-tenant access.      |
-| Internal secret   | `INTERNAL_API_SECRET` compared in constant time on both platform and product internal endpoints.                                                                                                    |
-
-## Migration
-
-`scripts/migrate-to-merchants-sites.mjs` (run via `npm run migrate:merchants`) migrates legacy organization-model data: it renames collections (`organizations` -> `merchants`, `organizationmemberships` -> `merchantmemberships`, `organizationproducts` -> `subscriptions`), renames `organizationId` -> `merchantId`, creates one default site per merchant, backfills `siteId` on subscriptions/tokens/usage, and remaps chatbot conversations from `organizationId` to `siteId`. Idempotent.
+All under `scripts/`, dry-run by default, `--apply` for writes. See `docs/setup.md` for commands and order.

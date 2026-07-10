@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent } from "react";
 import {
   ArrowLeft,
   Copy,
@@ -9,6 +9,7 @@ import {
   KeyRound,
   MessagesSquare,
   Play,
+  RotateCcw,
 } from "lucide-react";
 
 import { useToast } from "@/components/providers/ToastProvider";
@@ -16,7 +17,6 @@ import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Progress } from "@/components/ui/Progress";
@@ -31,6 +31,7 @@ import type {
 
 import { formatCurrency } from "./currency";
 import { ProductConfigEditor } from "./ProductConfigEditor";
+import { ProductSubscriptionOverrides } from "./ProductSubscriptionOverrides";
 
 export interface ProductPanelProps {
   siteId: string;
@@ -45,16 +46,24 @@ export interface ProductPanelProps {
   createdToken: ProductAccessTokenCreated | null;
   tokenName: string;
   tokenDomains: string;
+  tokenExpires: string;
   showBack?: boolean;
   onBack: () => void;
   onPlanChange: (planCode: string) => void;
+  onRestore?: () => void;
   onStatusToggle: () => void;
   onTokenNameChange: (value: string) => void;
   onTokenDomainsChange: (value: string) => void;
+  onTokenExpiresChange: (value: string) => void;
   onCreateToken: (event: FormEvent) => void;
   onCopyToken: () => void;
   onDismissCreated: () => void;
   onRevoke: (tokenId: string) => void;
+  onRotate: (tokenId: string) => void;
+  onSaveOverrides: (input: {
+    scopeOverrides: string[] | null;
+    quotaOverrides: Array<{ metric: string; limit: number; unit?: string }> | null;
+  }) => void;
 }
 
 function MiniStat({ label, value }: { label: string; value: string }) {
@@ -70,9 +79,8 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 export function ProductPanel(props: ProductPanelProps) {
   const toast = useToast();
-  const [showStatusConfirmation, setShowStatusConfirmation] = useState(false);
   const { product, usage, tokens, isPlatformAdmin } = props;
-  const granted = Boolean(product.planCode) && product.status === "active";
+  const granted = product.status === "active" && Boolean(product.planCode);
   const activeTokens = tokens.filter((token) => !token.revokedAt);
   const totalUsage =
     usage?.metrics.reduce((sum, metric) => sum + metric.used, 0) ?? 0;
@@ -130,9 +138,21 @@ export function ProductPanel(props: ProductPanelProps) {
             ) : (
               <Badge>No plan</Badge>
             )}
-            {product.planCode ? (
-              <Badge tone={product.status === "active" ? "success" : "danger"}>
-                {product.status === "active" ? "Active" : "Suspended"}
+            {product.status !== "unassigned" ? (
+              <Badge
+                tone={
+                  product.status === "active"
+                    ? "success"
+                    : product.status === "archived"
+                      ? "danger"
+                      : "danger"
+                }
+              >
+                {product.status === "active"
+                  ? "Active"
+                  : product.status === "archived"
+                    ? "Archived"
+                    : "Suspended"}
               </Badge>
             ) : null}
           </div>
@@ -236,18 +256,41 @@ export function ProductPanel(props: ProductPanelProps) {
                     ))}
                   </Select>
                 </Field>
-                {product.planCode ? (
+                {product.status === "active" || product.status === "suspended" ? (
                   <Button
                     type="button"
                     variant="outline"
                     size="sm"
+                    className="min-h-11"
                     loading={props.savingPlan}
-                    onClick={() => setShowStatusConfirmation(true)}
+                    onClick={props.onStatusToggle}
                   >
                     {product.status === "active" ? "Suspend" : "Resume"}
                   </Button>
                 ) : null}
+                {product.status === "archived" && product.canRestore ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11"
+                    loading={props.savingPlan}
+                    onClick={() => props.onRestore?.()}
+                  >
+                    Restore
+                  </Button>
+                ) : null}
               </div>
+            ) : null}
+
+            {product.status === "archived" && product.deletionEligibleAt ? (
+              <p className="text-[12px] text-ink-muted">
+                Tenant data retained until{" "}
+                {new Date(product.deletionEligibleAt).toLocaleDateString()}.
+                {product.canRestore
+                  ? " Restore reactivates the subscription within the retention window."
+                  : " Deletion eligibility has passed."}
+              </p>
             ) : null}
 
             {product.scopes.length > 0 ? (
@@ -392,6 +435,11 @@ export function ProductPanel(props: ProductPanelProps) {
                       ? ` / used ${new Date(token.lastUsedAt).toLocaleDateString()}`
                       : " / never used"}
                   </p>
+                  {token.expiresAt ? (
+                    <p className="mt-0.5 text-xs text-ink-faint">
+                      Expires {new Date(token.expiresAt).toLocaleDateString()}
+                    </p>
+                  ) : null}
                   {token.allowedDomains.length > 0 ? (
                     <p className="mt-0.5 truncate text-xs text-ink-faint">
                       {token.allowedDomains.join(", ")}
@@ -402,19 +450,32 @@ export function ProductPanel(props: ProductPanelProps) {
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={token.revokedAt ? "danger" : "success"}>
                     {token.revokedAt ? "Revoked" : "Active"}
                   </Badge>
                   {isPlatformAdmin && !token.revokedAt ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => props.onRevoke(token.id)}
-                    >
-                      Revoke
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11"
+                        onClick={() => props.onRotate(token.id)}
+                      >
+                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                        Rotate
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="min-h-11"
+                        onClick={() => props.onRevoke(token.id)}
+                      >
+                        Revoke
+                      </Button>
+                    </>
                   ) : null}
                 </div>
               </li>
@@ -457,7 +518,24 @@ export function ProductPanel(props: ProductPanelProps) {
                 }
               />
             </Field>
-            <Button type="submit" size="sm" loading={props.creatingToken}>
+            <Field
+              label="Expires in (days)"
+              htmlFor={`token-expires-${product.productSlug}`}
+              hint="Optional. Leave blank for no expiry."
+              className="w-full max-w-[10rem]"
+            >
+              <Input
+                id={`token-expires-${product.productSlug}`}
+                type="number"
+                min={1}
+                value={props.tokenExpires}
+                placeholder="90"
+                onChange={(event) =>
+                  props.onTokenExpiresChange(event.target.value)
+                }
+              />
+            </Field>
+            <Button type="submit" size="sm" loading={props.creatingToken} className="min-h-11">
               <KeyRound className="h-4 w-4" aria-hidden="true" />
               Issue key
             </Button>
@@ -466,37 +544,20 @@ export function ProductPanel(props: ProductPanelProps) {
       </Card>
 
       {granted && isPlatformAdmin ? (
-        <ProductConfigEditor
-          scope={{ kind: "site", siteId: props.siteId }}
-          productSlug={product.productSlug}
-          canManage={isPlatformAdmin}
-          isPlatformAdmin={isPlatformAdmin}
-        />
+        <>
+          <ProductSubscriptionOverrides
+            product={product}
+            saving={props.savingPlan}
+            onSave={(input) => props.onSaveOverrides(input)}
+          />
+          <ProductConfigEditor
+            scope={{ kind: "site", siteId: props.siteId }}
+            productSlug={product.productSlug}
+            canManage={isPlatformAdmin}
+            isPlatformAdmin={isPlatformAdmin}
+          />
+        </>
       ) : null}
-      <ConfirmDialog
-        open={showStatusConfirmation}
-        title={
-          product.status === "active"
-            ? "Suspend this subscription?"
-            : "Resume this subscription?"
-        }
-        description={
-          product.status === "active"
-            ? "Runtime token verification will stop granting access for this site. Existing keys remain recorded but cannot authorize requests."
-            : "Existing active keys will authorize the product again for this site."
-        }
-        confirmLabel={
-          product.status === "active"
-            ? "Suspend subscription"
-            : "Resume subscription"
-        }
-        loading={props.savingPlan}
-        onConfirm={() => {
-          props.onStatusToggle();
-          setShowStatusConfirmation(false);
-        }}
-        onCancel={() => setShowStatusConfirmation(false)}
-      />
     </div>
   );
 }

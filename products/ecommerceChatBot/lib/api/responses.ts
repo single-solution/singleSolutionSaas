@@ -59,6 +59,12 @@ export function tooManyRequests(
   );
 }
 
+export function serviceUnavailable(
+  message = "Service temporarily unavailable. Please try again shortly.",
+): Response {
+  return Response.json({ error: message }, { status: 503 });
+}
+
 export function serverError(message = "Something went wrong"): Response {
   return Response.json({ error: message }, { status: 500 });
 }

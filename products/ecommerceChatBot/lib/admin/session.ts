@@ -1,8 +1,7 @@
 /**
- * Admin dashboard session. The platform deep-links here with a short-lived SSO
- * token (scope `admin-dashboard`); we exchange it for a longer-lived httpOnly
- * cookie (scope `admin-session`) that guards every `/admin` surface. Both are
- * HS256 signed with the shared `INTERNAL_API_SECRET`.
+ * Admin dashboard session. The platform deep-links here with a one-time SSO code;
+ * the product exchanges it server-to-server, then sets a short-lived httpOnly
+ * admin cookie that guards every `/admin` surface.
  */
 
 import { cookies } from "next/headers";
@@ -11,41 +10,29 @@ import { loadEnvironment } from "@/lib/env";
 import { signJwt, verifyJwt } from "./jwt";
 
 export const ADMIN_COOKIE_NAME = "chatbot_admin_session";
-const ADMIN_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const ADMIN_SESSION_TTL_SECONDS = 30 * 60;
 
 export interface AdminIdentity {
   userId: string;
   name: string;
   productSlug: string;
+  platformSessionVersion: number;
 }
 
 export interface SsoClaims extends AdminIdentity {
   siteId: string | null;
 }
 
-/** Verify the platform-issued deep-link token. Returns null when invalid. */
-export function verifySsoToken(token: string): SsoClaims | null {
-  const claims = verifyJwt(token, loadEnvironment().internalApiSecret);
-  if (!claims || claims.scope !== "admin-dashboard") {
-    return null;
-  }
-  const userId = typeof claims.sub === "string" ? claims.sub : "";
-  const productSlug = typeof claims.productSlug === "string" ? claims.productSlug : "";
-  if (!userId || !productSlug) {
-    return null;
-  }
-  return {
-    userId,
-    name: typeof claims.name === "string" ? claims.name : "Administrator",
-    productSlug,
-    siteId: typeof claims.siteId === "string" ? claims.siteId : null,
-  };
-}
-
 export function mintAdminSessionToken(identity: AdminIdentity): string {
   return signJwt(
-    { sub: identity.userId, name: identity.name, productSlug: identity.productSlug, scope: "admin-session" },
-    loadEnvironment().internalApiSecret,
+    {
+      sub: identity.userId,
+      name: identity.name,
+      productSlug: identity.productSlug,
+      platformSessionVersion: identity.platformSessionVersion,
+      scope: "admin-session",
+    },
+    loadEnvironment().ssoSigningSecret,
     ADMIN_SESSION_TTL_SECONDS,
   );
 }
@@ -58,7 +45,10 @@ export function readAdminSessionFromRequest(request: Request): AdminIdentity | n
   if (!cookieHeader) {
     return null;
   }
-  const match = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${ADMIN_COOKIE_NAME}=`));
+  const match = cookieHeader
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${ADMIN_COOKIE_NAME}=`));
   if (!match) {
     return null;
   }
@@ -66,21 +56,27 @@ export function readAdminSessionFromRequest(request: Request): AdminIdentity | n
 }
 
 /** Read + verify the admin cookie from server components (layout guard). */
-export function readAdminSession(): AdminIdentity | null {
-  const token = cookies().get(ADMIN_COOKIE_NAME)?.value;
+export async function readAdminSession(): Promise<AdminIdentity | null> {
+  const token = (await cookies()).get(ADMIN_COOKIE_NAME)?.value;
   return token ? parseSession(token) : null;
 }
 
 function parseSession(token: string): AdminIdentity | null {
-  const claims = verifyJwt(token, loadEnvironment().internalApiSecret);
+  const claims = verifyJwt(token, loadEnvironment().ssoSigningSecret);
   if (!claims || claims.scope !== "admin-session") {
     return null;
   }
-  const userId = typeof claims.sub === "string" ? claims.sub : "admin";
+  const userId = typeof claims.sub === "string" ? claims.sub : "";
   const productSlug = typeof claims.productSlug === "string" ? claims.productSlug : "";
+  const platformSessionVersion =
+    typeof claims.platformSessionVersion === "number" ? claims.platformSessionVersion : -1;
+  if (!userId || !productSlug || platformSessionVersion < 0) {
+    return null;
+  }
   return {
     userId,
     name: typeof claims.name === "string" ? claims.name : "Administrator",
     productSlug,
+    platformSessionVersion,
   };
 }

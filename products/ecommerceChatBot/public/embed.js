@@ -13,7 +13,6 @@
   if (!script) return;
   var token = script.getAttribute("data-product-token");
   if (!token) {
-    console.error("[ecommerce-chatbot] Missing data-product-token on the embed script.");
     return;
   }
 
@@ -21,7 +20,6 @@
   try {
     origin = new URL(script.src).origin;
   } catch (error) {
-    console.error("[ecommerce-chatbot] Could not resolve the embed origin.", error);
     return;
   }
 

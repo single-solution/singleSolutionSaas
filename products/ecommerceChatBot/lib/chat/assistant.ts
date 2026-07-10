@@ -1,15 +1,19 @@
 /**
  * Automated reply engine.
  *
- * This is a rule-based assistant: it answers common intents (greeting, pricing,
- * shipping, returns, thanks) and hands off to a human when the visitor asks for
- * one. It is intentionally catalog-agnostic — a real LLM or the merchant's
- * product catalog can plug in behind `generateAssistantReplies` later without
- * changing the API or widget.
+ * Rule-based assistant that answers common intents and hands off to humans.
  */
 
-import { getTenantModels } from "@/lib/db/tenant";
 import { getSiteSettings, mergeAssistantConfig } from "@/lib/admin/siteSettings";
+import {
+  createAssistantClientMessageId,
+} from "@/lib/chat/clientMessageId";
+import { appendConversationMessage } from "@/lib/chat/messageService";
+import {
+  CONVERSATION_SUMMARY_SELECT,
+  findMessageByClientMessageId,
+} from "@/lib/chat/messageStorage";
+import { getTenantModels } from "@/lib/db/tenant";
 import { getChatSettings } from "./settings";
 import { statusPatchAfterMessage } from "./status";
 import type { ConversationLean } from "./serializer";
@@ -47,11 +51,6 @@ const RULES: Rule[] = [
 const FALLBACK = "Thanks for your message! I've noted it and our team will follow up here shortly. Meanwhile, feel free to add any more details.";
 const HANDOFF_REPLY = "Sure — I'm connecting you with a teammate. They'll reply right here in this chat. Feel free to leave any details in the meantime.";
 
-/**
- * Portal-managed rules take the form `pattern::reply`. `pattern` is matched
- * case-insensitively as a regular expression against the customer message.
- * Invalid patterns are skipped so bad config can never break the assistant.
- */
 function rulesFromConfig(config?: Record<string, unknown>): Rule[] {
   const raw = config?.autoReplyRules;
   if (!Array.isArray(raw)) {
@@ -85,7 +84,6 @@ function stringConfig(config: Record<string, unknown> | undefined, key: string, 
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : fallback;
 }
 
-/** Config-defined keywords that force a handoff, in addition to the built-in pattern. */
 function matchesEscalationKeyword(text: string, config?: Record<string, unknown>): boolean {
   const keywords = config?.escalationKeywords;
   if (!Array.isArray(keywords)) {
@@ -95,7 +93,6 @@ function matchesEscalationKeyword(text: string, config?: Record<string, unknown>
   return keywords.some((keyword) => typeof keyword === "string" && keyword.trim() && lower.includes(keyword.trim().toLowerCase()));
 }
 
-/** Decide the assistant's reply bubbles for a customer message. */
 export function generateAssistantReplies(
   customerBody: string,
   config?: Record<string, unknown>,
@@ -113,25 +110,26 @@ export function generateAssistantReplies(
   return { replies: [stringConfig(config, "fallbackMessage", FALLBACK)], escalate: false };
 }
 
-/**
- * Append an automated reply to a conversation after a customer message, unless
- * the assistant is disabled or already paused (a human has taken over).
- */
 export async function maybeReplyWithAssistant(
   dataDbName: string,
   conversation: ConversationLean,
+  parentClientMessageId: string,
   config?: Record<string, unknown>,
 ): Promise<void> {
   const settings = getChatSettings(config);
   if (!settings.assistantEnabled || conversation.assistantMuted) {
     return;
   }
-  const lastCustomer = [...conversation.messages].reverse().find((message) => message.author === "customer");
+
+  const lastCustomer = await findMessageByClientMessageId(
+    dataDbName,
+    conversation._id,
+    parentClientMessageId,
+  );
   if (!lastCustomer) {
     return;
   }
 
-  // Portal config is the base; advanced per-site automation overrides it.
   const siteSettings = await getSiteSettings(dataDbName, conversation.siteId);
   const effectiveConfig = mergeAssistantConfig(config, siteSettings);
   const { replies, escalate } = generateAssistantReplies(lastCustomer.body, effectiveConfig);
@@ -139,28 +137,43 @@ export async function maybeReplyWithAssistant(
     return;
   }
 
-  const { Conversation } = await getTenantModels(dataDbName);
   const now = new Date();
-  const messages = replies.map((body, index) => ({
-    author: "assistant" as const,
-    authorName: settings.assistantName,
-    body,
-    createdAt: new Date(now.getTime() + index),
-  }));
-  const lastBody = replies[replies.length - 1];
+  let currentConversation = conversation;
 
-  await Conversation.updateOne(
-    { _id: conversation._id },
-    {
-      $push: { messages: { $each: messages } },
-      $set: {
-        lastMessageAt: messages[messages.length - 1].createdAt,
-        lastMessagePreview: lastBody.slice(0, 280),
+  for (let index = 0; index < replies.length; index += 1) {
+    const body = replies[index];
+    const createdAt = new Date(now.getTime() + index);
+    const isLast = index === replies.length - 1;
+    await appendConversationMessage({
+      dataDbName,
+      conversation: currentConversation,
+      clientMessageId: createAssistantClientMessageId(parentClientMessageId, index),
+      author: "assistant",
+      authorName: settings.assistantName,
+      body,
+      createdAt,
+      conversationPatch: {
+        lastMessageAt: createdAt,
+        lastMessagePreview: body.slice(0, 280),
         lastMessageAuthor: "assistant",
-        ...statusPatchAfterMessage(conversation.status, "assistant"),
-        ...(escalate ? { assistantMuted: true, assistantMuteReason: "escalation", assistantMutedAt: now } : {}),
+        unreadByCustomer: 1,
+        unreadByTeam: escalate && isLast ? 1 : 0,
+        statusPatch: statusPatchAfterMessage(currentConversation.status, "assistant"),
+        ...(escalate && isLast
+          ? {
+              assistantMuted: true,
+              assistantMuteReason: "escalation" as const,
+              assistantMutedAt: now,
+            }
+          : {}),
       },
-      $inc: { unreadByCustomer: replies.length, unreadByTeam: escalate ? 1 : 0 },
-    },
-  );
+    });
+    const { Conversation } = await getTenantModels(dataDbName);
+    const refreshed = await Conversation.findById(currentConversation._id)
+      .select(CONVERSATION_SUMMARY_SELECT)
+      .lean<ConversationLean>();
+    if (refreshed) {
+      currentConversation = refreshed;
+    }
+  }
 }

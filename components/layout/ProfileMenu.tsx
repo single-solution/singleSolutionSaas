@@ -20,19 +20,22 @@ export function ProfileMenu({
   user,
   settingsHref,
   onSignOut,
+  onSignOutEverywhere,
 }: {
   user: UserSummary;
   settingsHref: string;
   onSignOut: () => Promise<void>;
+  onSignOutEverywhere?: () => Promise<void>;
 }) {
   const [signingOut, setSigningOut] = useState(false);
+  const [signingOutEverywhere, setSigningOutEverywhere] = useState(false);
 
-  async function handleSignOut() {
-    setSigningOut(true);
+  async function handleSignOut(run: () => Promise<void>, setBusy: (value: boolean) => void) {
+    setBusy(true);
     try {
-      await onSignOut();
+      await run();
     } finally {
-      setSigningOut(false);
+      setBusy(false);
     }
   }
 
@@ -49,9 +52,19 @@ export function ProfileMenu({
         {
           label: signingOut ? "Signing out..." : "Sign out",
           icon: LogOut,
-          disabled: signingOut,
-          onSelect: () => void handleSignOut(),
+          disabled: signingOut || signingOutEverywhere,
+          onSelect: () => void handleSignOut(onSignOut, setSigningOut),
         },
+        ...(onSignOutEverywhere
+          ? [
+              {
+                label: signingOutEverywhere ? "Signing out everywhere..." : "Sign out everywhere",
+                icon: LogOut,
+                disabled: signingOut || signingOutEverywhere,
+                onSelect: () => void handleSignOut(onSignOutEverywhere, setSigningOutEverywhere),
+              },
+            ]
+          : []),
       ]}
       trigger={({ open, toggle }) => (
         <button

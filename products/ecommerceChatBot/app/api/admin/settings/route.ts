@@ -3,9 +3,9 @@
  * PUT /api/admin/settings          - save them.
  */
 
-import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
+import { requireAdminApi, requireAdminMutation, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
-import { getSiteSettings, saveSiteSettings, type SiteSettingsValues } from "@/lib/admin/siteSettings";
+import { getSiteSettings, saveSiteSettings, SiteSettingsError, type SiteSettingsValues } from "@/lib/admin/siteSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ interface PutBody extends Partial<SiteSettingsValues> {
 }
 
 export async function PUT(request: Request) {
-  const identity = requireAdminApi(request);
+  const identity = await requireAdminMutation(request);
   if (identity instanceof Response) return identity;
 
   let parsed: PutBody;
@@ -52,6 +52,13 @@ export async function PUT(request: Request) {
   if (!dataDbName) {
     return badRequest("Unknown site.");
   }
-  const settings = await saveSiteSettings(dataDbName, siteId, parsed);
-  return ok({ settings: present(settings) });
+  try {
+    const settings = await saveSiteSettings(dataDbName, siteId, parsed);
+    return ok({ settings: present(settings) });
+  } catch (error) {
+    if (error instanceof SiteSettingsError) {
+      return badRequest(error.message);
+    }
+    throw error;
+  }
 }

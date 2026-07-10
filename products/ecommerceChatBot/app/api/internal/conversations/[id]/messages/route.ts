@@ -10,7 +10,15 @@ import { Types } from "@/lib/db/connection";
 import { getTenantModels } from "@/lib/db/tenant";
 import { requireInternalAuth } from "@/lib/api/internalAuth";
 import { badRequest, created, notFound, serverError } from "@/lib/api/responses";
-import { toThreadLatestPage, type ConversationLean } from "@/lib/chat/serializer";
+import { loadEnvironment } from "@/lib/env";
+import { resolveTenantBindingFromPlatform } from "@/lib/platform/tenantBinding";
+import {
+  createAgentClientMessageId,
+  normalizeClientMessageId,
+} from "@/lib/chat/clientMessageId";
+import { appendConversationMessage } from "@/lib/chat/messageService";
+import { CONVERSATION_SUMMARY_SELECT } from "@/lib/chat/messageStorage";
+import type { ConversationLean } from "@/lib/chat/serializer";
 import { statusPatchAfterMessage } from "@/lib/chat/status";
 import { CHAT_MESSAGE_BODY_MAX } from "@/lib/chat/types";
 
@@ -22,9 +30,10 @@ interface RouteContext {
 
 interface PostBody {
   siteId?: unknown;
-  dataDbName?: unknown;
+  productSlug?: unknown;
   body?: unknown;
   agentName?: unknown;
+  clientMessageId?: unknown;
 }
 
 export async function POST(request: Request, { params }: RouteContext) {
@@ -39,14 +48,16 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const siteId = typeof parsed.siteId === "string" ? parsed.siteId.trim() : "";
-  const dataDbName = typeof parsed.dataDbName === "string" ? parsed.dataDbName.trim() : "";
+  const productSlug =
+    (typeof parsed.productSlug === "string" ? parsed.productSlug.trim() : "") ||
+    loadEnvironment().productSlug;
   const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
-  const agentName = typeof parsed.agentName === "string" && parsed.agentName.trim() ? parsed.agentName.trim().slice(0, 160) : "Agent";
+  const agentName =
+    typeof parsed.agentName === "string" && parsed.agentName.trim()
+      ? parsed.agentName.trim().slice(0, 160)
+      : "Agent";
   if (!siteId) {
     return badRequest("siteId is required.");
-  }
-  if (!dataDbName) {
-    return badRequest("dataDbName is required.");
   }
   if (!body) {
     return badRequest("Message cannot be empty.");
@@ -55,41 +66,55 @@ export async function POST(request: Request, { params }: RouteContext) {
     return badRequest("Message too long.");
   }
 
+  const binding = await resolveTenantBindingFromPlatform({
+    siteId,
+    productSlug,
+    requireBridgeAccess: true,
+  });
+  if (!binding) {
+    return notFound("Tenant binding not found or subscription is not active.");
+  }
+
   const { id } = await params;
   if (!Types.ObjectId.isValid(id)) {
     return notFound("Conversation not found.");
   }
 
-  const { Conversation } = await getTenantModels(dataDbName);
-  const conversation = await Conversation.findOne({ _id: new Types.ObjectId(id), siteId }).lean<ConversationLean>();
+  const clientMessageId =
+    normalizeClientMessageId(parsed.clientMessageId) ?? createAgentClientMessageId();
+
+  const { Conversation } = await getTenantModels(binding.dataDbName);
+  const conversation = await Conversation.findOne({
+    _id: new Types.ObjectId(id),
+    siteId,
+  })
+    .select(CONVERSATION_SUMMARY_SELECT)
+    .lean<ConversationLean>();
   if (!conversation) {
     return notFound("Conversation not found.");
   }
 
   try {
     const now = new Date();
-    await Conversation.updateOne(
-      { _id: conversation._id },
-      {
-        $push: { messages: { author: "agent", authorName: agentName, body, createdAt: now } },
-        $set: {
-          lastMessageAt: now,
-          lastMessagePreview: body.slice(0, 280),
-          lastMessageAuthor: "agent",
-          unreadByTeam: 0,
-          assistantMuted: false,
-          ...statusPatchAfterMessage(conversation.status, "team"),
-        },
-        $unset: { assistantMuteReason: "", assistantMutedAt: "" },
-        $inc: { unreadByCustomer: 1 },
+    const result = await appendConversationMessage({
+      dataDbName: binding.dataDbName,
+      conversation: { ...conversation, messages: [] },
+      clientMessageId,
+      author: "agent",
+      authorName: agentName,
+      body,
+      createdAt: now,
+      conversationPatch: {
+        lastMessageAt: now,
+        lastMessagePreview: body.slice(0, 280),
+        lastMessageAuthor: "agent",
+        unreadByTeam: 0,
+        unreadByCustomer: 1,
+        statusPatch: statusPatchAfterMessage(conversation.status, "team"),
+        clearAssistantMute: true,
       },
-    );
-
-    const refreshed = await Conversation.findById(conversation._id).lean<ConversationLean>();
-    if (!refreshed) {
-      return serverError("Conversation vanished while replying.");
-    }
-    return created(toThreadLatestPage(refreshed));
+    });
+    return created(result.thread);
   } catch {
     return serverError("Could not send the reply. Please try again.");
   }

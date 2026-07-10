@@ -14,7 +14,7 @@ import { PlatformApiError, platformApi } from "@/lib/api/client";
 import { validatePassword } from "@/lib/forms/validation";
 
 export function AccountSettings() {
-  const { user, refresh } = useAuth();
+  const { user, refresh, logout } = useAuth();
   const router = useRouter();
   const toast = useToast();
 
@@ -29,6 +29,7 @@ export function AccountSettings() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const [signingOutEverywhere, setSigningOutEverywhere] = useState(false);
 
   async function handleSaveName(event: FormEvent) {
     event.preventDefault();
@@ -44,7 +45,15 @@ export function AccountSettings() {
     }
     setSavingName(true);
     try {
-      await platformApi.updateProfile(canEditEmail ? { name: trimmed, email: email.trim() } : { name: trimmed });
+      const result = await platformApi.updateProfile(
+        canEditEmail ? { name: trimmed, email: email.trim() } : { name: trimmed },
+      );
+      if (result.sessionInvalidated) {
+        toast.showSuccess("Email updated", result.message ?? "Sign in again on all devices.");
+        router.replace("/login");
+        router.refresh();
+        return;
+      }
       await refresh();
       router.refresh();
       toast.showSuccess("Profile updated", "Your details have been changed.");
@@ -80,7 +89,7 @@ export function AccountSettings() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      toast.showSuccess("Password changed", "Use your new password next time you sign in.");
+      toast.showSuccess("Password changed", "Other devices have been signed out.");
     } catch (caughtError) {
       const message = caughtError instanceof PlatformApiError ? caughtError.message : "Try again in a moment.";
       setPasswordErrors({ currentPassword: message });
@@ -150,6 +159,36 @@ export function AccountSettings() {
             Update password
           </Button>
         </form>
+      </Card>
+
+      <Card className="shadow-sm border-line bg-surface h-fit">
+        <CardHeader
+          title="Sessions"
+          description="Sign out on this browser or invalidate every active portal session."
+        />
+        <Button
+          type="button"
+          variant="secondary"
+          loading={signingOutEverywhere}
+          onClick={async () => {
+            setSigningOutEverywhere(true);
+            try {
+              await logout("all");
+              router.replace("/login");
+              router.refresh();
+            } catch (caughtError) {
+              const message =
+                caughtError instanceof PlatformApiError
+                  ? caughtError.message
+                  : "Try again in a moment.";
+              toast.showError("Sign out failed", message);
+            } finally {
+              setSigningOutEverywhere(false);
+            }
+          }}
+        >
+          Sign out everywhere
+        </Button>
       </Card>
     </div>
   );

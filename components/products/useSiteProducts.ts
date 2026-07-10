@@ -26,10 +26,17 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
   const [savingPlanSlug, setSavingPlanSlug] = useState<string | null>(null);
   const [tokenNameBySlug, setTokenNameBySlug] = useState<Record<string, string>>({});
   const [tokenDomainsBySlug, setTokenDomainsBySlug] = useState<Record<string, string>>({});
+  const [tokenExpiresBySlug, setTokenExpiresBySlug] = useState<Record<string, string>>({});
   const [creatingTokenSlug, setCreatingTokenSlug] = useState<string | null>(null);
   const [createdToken, setCreatedToken] = useState<ProductAccessTokenCreated | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<{ productSlug: string; tokenId: string } | null>(null);
+  const [pendingRotate, setPendingRotate] = useState<{ productSlug: string; tokenId: string } | null>(null);
+  const [pendingUnassignSlug, setPendingUnassignSlug] = useState<string | null>(null);
+  const [pendingRestoreSlug, setPendingRestoreSlug] = useState<string | null>(null);
+  const [pendingStatusProduct, setPendingStatusProduct] = useState<SubscriptionSummary | null>(null);
+  const [revokePreviousOnRotate, setRevokePreviousOnRotate] = useState(true);
   const [revoking, setRevoking] = useState(false);
+  const [rotating, setRotating] = useState(false);
 
   const loadDetails = useCallback(
     async (granted: SubscriptionSummary[]) => {
@@ -64,7 +71,14 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
     try {
       const response = await platformApi.listSiteProducts(siteId);
       setProducts(response.items);
-      await loadDetails(response.items.filter((product) => product.planCode));
+      await loadDetails(
+        response.items.filter(
+          (product) =>
+            product.status === "active" ||
+            product.status === "suspended" ||
+            product.status === "archived",
+        ),
+      );
     } catch {
       setError("Could not load products.");
     } finally {
@@ -78,10 +92,14 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
 
   const changePlan = useCallback(
     async (productSlug: string, planCode: string) => {
+      if (planCode === "") {
+        setPendingUnassignSlug(productSlug);
+        return;
+      }
       setSavingPlanSlug(productSlug);
       try {
         await platformApi.setSiteProductPlan(siteId, productSlug, {
-          planCode: planCode === "" ? null : planCode,
+          planCode,
         });
         toast.showSuccess("Plan updated");
         onChanged?.();
@@ -96,23 +114,81 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
     [siteId, onChanged, reload, toast],
   );
 
+  const confirmUnassign = useCallback(async () => {
+    if (!pendingUnassignSlug) {
+      return;
+    }
+    setSavingPlanSlug(pendingUnassignSlug);
+    try {
+      await platformApi.setSiteProductPlan(siteId, pendingUnassignSlug, {
+        action: "unassign",
+      });
+      toast.showSuccess("Product unassigned");
+      onChanged?.();
+      await reload();
+      setPendingUnassignSlug(null);
+    } catch (caughtError) {
+      const message = caughtError instanceof PlatformApiError ? caughtError.message : "Try again in a moment.";
+      toast.showError("Could not unassign product", message);
+    } finally {
+      setSavingPlanSlug(null);
+    }
+  }, [siteId, onChanged, pendingUnassignSlug, reload, toast]);
+
+  const restoreProduct = useCallback((productSlug: string) => {
+    setPendingRestoreSlug(productSlug);
+  }, []);
+
+  const confirmRestore = useCallback(async () => {
+    if (!pendingRestoreSlug) {
+      return;
+    }
+    setSavingPlanSlug(pendingRestoreSlug);
+    try {
+      await platformApi.setSiteProductPlan(siteId, pendingRestoreSlug, {
+        action: "restore",
+      });
+      toast.showSuccess("Product restored");
+      onChanged?.();
+      await reload();
+      setPendingRestoreSlug(null);
+    } catch (caughtError) {
+      const message = caughtError instanceof PlatformApiError ? caughtError.message : "Try again in a moment.";
+      toast.showError("Could not restore product", message);
+    } finally {
+      setSavingPlanSlug(null);
+    }
+  }, [siteId, onChanged, pendingRestoreSlug, reload, toast]);
+
   const toggleStatus = useCallback(
     async (product: SubscriptionSummary) => {
-      const nextStatus = product.status === "active" ? "suspended" : "active";
-      setSavingPlanSlug(product.productSlug);
-      try {
-        await platformApi.setSiteProductPlan(siteId, product.productSlug, { status: nextStatus });
-        toast.showSuccess(nextStatus === "active" ? "Product resumed" : "Product suspended");
-        onChanged?.();
-        await reload();
-      } catch {
-        toast.showError("Could not update product", "Try again in a moment.");
-      } finally {
-        setSavingPlanSlug(null);
+      if (product.status !== "active" && product.status !== "suspended") {
+        return;
       }
+      setPendingStatusProduct(product);
     },
-    [siteId, onChanged, reload, toast],
+    [],
   );
+
+  const confirmStatusToggle = useCallback(async () => {
+    const product = pendingStatusProduct;
+    if (!product) {
+      return;
+    }
+    const nextStatus = product.status === "active" ? "suspended" : "active";
+    setSavingPlanSlug(product.productSlug);
+    try {
+      await platformApi.setSiteProductPlan(siteId, product.productSlug, { status: nextStatus });
+      toast.showSuccess(nextStatus === "active" ? "Product resumed" : "Product suspended");
+      onChanged?.();
+      await reload();
+      setPendingStatusProduct(null);
+    } catch {
+      toast.showError("Could not update product", "Try again in a moment.");
+    } finally {
+      setSavingPlanSlug(null);
+    }
+  }, [siteId, onChanged, pendingStatusProduct, reload, toast]);
 
   const createToken = useCallback(
     async (event: FormEvent, productSlug: string) => {
@@ -132,7 +208,15 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
       }
       setCreatingTokenSlug(productSlug);
       try {
-        const response = await platformApi.createProductToken(siteId, productSlug, name, allowedDomains);
+        const expiresRaw = (tokenExpiresBySlug[productSlug] ?? "").trim();
+        const expiresInDays = expiresRaw ? Number(expiresRaw) : undefined;
+        const response = await platformApi.createProductToken(
+          siteId,
+          productSlug,
+          name,
+          allowedDomains,
+          expiresInDays && expiresInDays > 0 ? expiresInDays : undefined,
+        );
         setCreatedToken(response.token);
         setTokenNameBySlug((current) => ({ ...current, [productSlug]: "" }));
         setTokenDomainsBySlug((current) => ({ ...current, [productSlug]: "" }));
@@ -147,7 +231,63 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
         setCreatingTokenSlug(null);
       }
     },
-    [siteId, onChanged, tokenDomainsBySlug, tokenNameBySlug, toast],
+    [siteId, onChanged, tokenDomainsBySlug, tokenExpiresBySlug, tokenNameBySlug, toast],
+  );
+
+  const confirmRotate = useCallback(async () => {
+    if (!pendingRotate) {
+      return;
+    }
+    setRotating(true);
+    try {
+      const response = await platformApi.rotateProductToken(
+        siteId,
+        pendingRotate.productSlug,
+        pendingRotate.tokenId,
+        { revokePrevious: revokePreviousOnRotate },
+      );
+      setCreatedToken(response.rotation.newToken);
+      toast.showSuccess(
+        "Replacement key issued",
+        revokePreviousOnRotate
+          ? "Copy the new key now. The previous key was revoked."
+          : "Copy the new key now. Revoke the previous key when ready.",
+      );
+      onChanged?.();
+      const tokens = await platformApi.listProductTokens(siteId, pendingRotate.productSlug);
+      setTokensBySlug((current) => ({ ...current, [pendingRotate.productSlug]: tokens.items }));
+      setPendingRotate(null);
+      setRevokePreviousOnRotate(true);
+    } catch (caughtError) {
+      const message = caughtError instanceof PlatformApiError ? caughtError.message : "Try again in a moment.";
+      toast.showError("Could not rotate key", message);
+    } finally {
+      setRotating(false);
+    }
+  }, [siteId, onChanged, pendingRotate, revokePreviousOnRotate, toast]);
+
+  const saveOverrides = useCallback(
+    async (
+      productSlug: string,
+      input: {
+        scopeOverrides?: string[] | null;
+        quotaOverrides?: Array<{ metric: string; limit: number }> | null;
+      },
+    ) => {
+      setSavingPlanSlug(productSlug);
+      try {
+        await platformApi.setSiteProductPlan(siteId, productSlug, input);
+        toast.showSuccess("Overrides saved");
+        onChanged?.();
+        await reload();
+      } catch (caughtError) {
+        const message = caughtError instanceof PlatformApiError ? caughtError.message : "Try again in a moment.";
+        toast.showError("Could not save overrides", message);
+      } finally {
+        setSavingPlanSlug(null);
+      }
+    },
+    [siteId, onChanged, reload, toast],
   );
 
   const confirmRevoke = useCallback(async () => {
@@ -185,6 +325,10 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
     (productSlug: string, value: string) => setTokenDomainsBySlug((current) => ({ ...current, [productSlug]: value })),
     [],
   );
+  const setTokenExpires = useCallback(
+    (productSlug: string, value: string) => setTokenExpiresBySlug((current) => ({ ...current, [productSlug]: value })),
+    [],
+  );
 
   return {
     products,
@@ -198,17 +342,37 @@ export function useSiteProducts(siteId: string, onChanged?: () => void) {
     createdToken,
     tokenNameBySlug,
     tokenDomainsBySlug,
+    tokenExpiresBySlug,
     pendingRevoke,
+    pendingRotate,
+    pendingUnassignSlug,
+    pendingRestoreSlug,
+    pendingStatusProduct,
+    revokePreviousOnRotate,
     revoking,
+    rotating,
     changePlan,
+    restoreProduct,
+    confirmRestore,
     toggleStatus,
     createToken,
     confirmRevoke,
+    confirmRotate,
+    confirmUnassign,
+    confirmStatusToggle,
     copyToken,
     setTokenName,
     setTokenDomains,
+    setTokenExpires,
+    saveOverrides,
     setCreatedToken,
     requestRevoke: (productSlug: string, tokenId: string) => setPendingRevoke({ productSlug, tokenId }),
+    requestRotate: (productSlug: string, tokenId: string) => setPendingRotate({ productSlug, tokenId }),
     cancelRevoke: () => setPendingRevoke(null),
+    cancelRotate: () => setPendingRotate(null),
+    cancelUnassign: () => setPendingUnassignSlug(null),
+    cancelRestore: () => setPendingRestoreSlug(null),
+    cancelStatusToggle: () => setPendingStatusProduct(null),
+    setRevokePreviousOnRotate,
   };
 }

@@ -1,5 +1,6 @@
 import { unauthorized } from "@/lib/api/responses";
 import { isPublicDemoToken, demoForbiddenMessage } from "@/lib/demo/safety";
+import { verifyPlatformAdminSession } from "@/lib/platform/client";
 import { resolveSiteDataDb } from "@/lib/platform/client";
 import { readAdminSessionFromRequest, type AdminIdentity } from "./session";
 
@@ -21,6 +22,24 @@ export function requireAdminApi(request: Request): AdminIdentity | Response {
   const identity = readAdminSessionFromRequest(request);
   if (!identity) {
     return unauthorized("Admin session required.");
+  }
+  return identity;
+}
+
+/** Guard sensitive admin mutations with a live platform session check. */
+export async function requireAdminMutation(
+  request: Request,
+): Promise<AdminIdentity | Response> {
+  const identity = requireAdminApi(request);
+  if (identity instanceof Response) {
+    return identity;
+  }
+  const valid = await verifyPlatformAdminSession(
+    identity.userId,
+    identity.platformSessionVersion,
+  );
+  if (!valid) {
+    return unauthorized("Platform administrator session is no longer valid.", "platform_session_expired");
   }
   return identity;
 }

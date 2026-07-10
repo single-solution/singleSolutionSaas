@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/portalSkeletons";
 import { StatCard } from "@/components/ui/StatCard";
 import { PlatformApiError, platformApi } from "@/lib/api/client";
+import { useDebounce } from "@/hooks/useDebounce";
 import type { MerchantSummary, ProductSummary } from "@/lib/types";
 
 interface AdminOverviewProps {
@@ -72,7 +73,9 @@ export function AdminOverview({ mode = "directory" }: AdminOverviewProps) {
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [showOnboard, setShowOnboard] = useState(false);
+  const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
   const search = searchParams.get("search") ?? "";
+  const debouncedSearchInput = useDebounce(searchInput, 300);
   const view = searchParams.get("view") === "table" ? "table" : "grid";
 
   async function load() {
@@ -100,6 +103,23 @@ export function AdminOverview({ mode = "directory" }: AdminOverviewProps) {
     void load();
   }, []);
 
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    const normalized = debouncedSearchInput.trim();
+    if (!normalized) {
+      next.delete("search");
+    } else {
+      next.set("search", normalized);
+    }
+    const current = searchParams.get("search") ?? "";
+    if (normalized === current) {
+      return;
+    }
+    router.replace(`${pathname}${next.size ? `?${next.toString()}` : ""}`, {
+      scroll: false,
+    });
+  }, [debouncedSearchInput, pathname, router, searchParams]);
+
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
@@ -121,6 +141,11 @@ export function AdminOverview({ mode = "directory" }: AdminOverviewProps) {
         toast.showSuccess(
           "Invitation sent",
           `We emailed ${result.owner.email} a link to set up their account.`,
+        );
+      } else if (result.emailQueued) {
+        toast.showSuccess(
+          "Invitation queued",
+          `We queued an email to ${result.owner.email}. Copy the link below if delivery is delayed.`,
         );
       } else {
         toast.showInfo(
@@ -163,6 +188,11 @@ export function AdminOverview({ mode = "directory" }: AdminOverviewProps) {
         toast.showSuccess(
           "Invitation resent",
           `We emailed ${result.ownerEmail} a fresh link.`,
+        );
+      } else if (result.emailQueued) {
+        toast.showSuccess(
+          "Invitation queued",
+          `We queued a fresh email to ${result.ownerEmail}. The link is copied to your clipboard.`,
         );
       } else {
         toast.showInfo(
@@ -281,9 +311,9 @@ export function AdminOverview({ mode = "directory" }: AdminOverviewProps) {
               aria-hidden="true"
             />
             <Input
-              value={search}
-              onChange={(event) => updateQuery("search", event.target.value)}
-              className="pl-9"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              className="min-h-11 pl-9"
               aria-label="Search merchants"
               placeholder="Search by merchant, owner email, or slug..."
             />

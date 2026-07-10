@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ScrollText } from "lucide-react";
 
@@ -11,24 +12,31 @@ import { MerchantActivitySkeleton } from "@/components/ui/portalSkeletons";
 import { platformApi } from "@/lib/api/client";
 import type { AuditLogSummary } from "@/lib/types";
 
+const SUMMARY_LIMIT = 5;
+const FULL_PAGE_SIZE = 20;
+
 export function MerchantActivity({
   merchantId,
   refreshSignal = 0,
+  mode = "full",
 }: {
   merchantId: string;
   refreshSignal?: number;
+  mode?: "full" | "summary";
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isSummary = mode === "summary";
   const [entries, setEntries] = useState<AuditLogSummary[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const page = Math.max(
-    1,
-    Number(searchParams.get("activityPage") ?? "1") || 1,
-  );
-  const pageSize = 20;
+  const [error, setError] = useState<string | null>(null);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const page = isSummary
+    ? 1
+    : Math.max(1, Number(searchParams.get("activityPage") ?? "1") || 1);
+  const pageSize = isSummary ? SUMMARY_LIMIT : FULL_PAGE_SIZE;
 
   function setPage(nextPage: number) {
     const next = new URLSearchParams(searchParams.toString());
@@ -44,17 +52,21 @@ export function MerchantActivity({
 
   useEffect(() => {
     let active = true;
+    setError(null);
     setLoading(true);
     void platformApi
       .listAuditLogs(merchantId, page, pageSize)
       .then((response) => {
-        if (active) {
-          setEntries(response.items);
-          setTotal(response.total);
+        if (!active) {
+          return;
         }
+        setEntries(response.items);
+        setTotal(response.total);
       })
       .catch(() => {
-        // Activity is best-effort; product actions surface their own toasts.
+        if (active) {
+          setError("Could not load activity.");
+        }
       })
       .finally(() => {
         if (active) {
@@ -64,10 +76,76 @@ export function MerchantActivity({
     return () => {
       active = false;
     };
-  }, [merchantId, page, refreshSignal]);
+  }, [merchantId, page, pageSize, refreshSignal, reloadNonce]);
 
   if (loading) {
-    return <MerchantActivitySkeleton />;
+    return <MerchantActivitySkeleton compact={isSummary} />;
+  }
+
+  if (error) {
+    return (
+      <div
+        className={
+          isSummary
+            ? "rounded-md border border-danger-border bg-danger-soft px-3 py-3 text-sm"
+            : "rounded-xl border border-line bg-surface p-5 shadow-sm"
+        }
+        role="alert"
+      >
+        <p className="font-medium text-danger">{error}</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 min-h-11"
+          onClick={() => setReloadNonce((value) => value + 1)}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  if (isSummary) {
+    if (entries.length === 0) {
+      return (
+        <p className="rounded-md border border-dashed border-line bg-surface px-3 py-3 text-[13px] text-ink-muted">
+          No recent activity for this merchant.
+        </p>
+      );
+    }
+
+    return (
+      <div className="space-y-1">
+        <ul className="divide-y divide-line rounded-md border border-line bg-surface">
+          {entries.map((entry) => (
+            <li key={entry.id} className="px-3 py-2">
+              <p className="truncate text-[13px] font-medium text-ink">
+                {humanizeAction(entry.action)}
+              </p>
+              <time
+                dateTime={entry.createdAt}
+                className="text-[11px] text-ink-faint"
+              >
+                {new Date(entry.createdAt).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </time>
+            </li>
+          ))}
+        </ul>
+        {total > SUMMARY_LIMIT ? (
+          <Link
+            href={`/merchants/${merchantId}?tab=activity`}
+            className="inline-flex min-h-11 items-center text-[13px] font-medium text-brand-700 hover:text-brand-800"
+          >
+            View all activity
+          </Link>
+        ) : null}
+      </div>
+    );
   }
 
   return (

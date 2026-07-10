@@ -72,8 +72,22 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             role="status"
             className={cn("pointer-events-auto rounded-lg border px-4 py-3 shadow-panel", toneStyles[toast.tone])}
           >
-            <p className="text-sm font-medium">{toast.title}</p>
-            {toast.description ? <p className="mt-1 text-sm text-ink-secondary">{toast.description}</p> : null}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{toast.title}</p>
+                {toast.description ? (
+                  <p className="mt-1 text-sm text-ink-secondary">{toast.description}</p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="grid size-11 shrink-0 place-items-center rounded-md text-current/70 transition-colors hover:bg-black/5 hover:text-current"
+                aria-label="Dismiss notification"
+                onClick={() => dismissToast(toast.id)}
+              >
+                ×
+              </button>
+            </div>
           </div>
         ))}
       </div>

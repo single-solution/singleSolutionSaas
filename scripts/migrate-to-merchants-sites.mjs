@@ -1,18 +1,22 @@
 /**
  * Migrates the legacy "organization" model to the "merchant + site" model.
  *
- * Idempotent: safe to re-run. It renames collections/fields, creates one
- * default site per merchant, backfills siteId on subscriptions/tokens/usage,
- * and remaps chatbot conversations from organizationId to siteId.
+ * Dry-run by default. Pass --apply to execute writes.
+ * Idempotent: safe to re-run with --apply.
  *
- * Run (Node 20+):
+ * Usage:
  *   node --env-file=.env scripts/migrate-to-merchants-sites.mjs
+ *   node --env-file=.env scripts/migrate-to-merchants-sites.mjs --apply
  */
 import mongoose from "mongoose";
 
+const SCRIPT_VERSION = "1.0.0";
+const CONNECT_TIMEOUT_MS = 15_000;
 const { Types } = mongoose;
 
-const uri = process.env.MONGODB_URI;
+const uri = process.env.MONGODB_URI?.trim();
+const apply = process.argv.includes("--apply");
+
 if (!uri) {
   console.error("MONGODB_URI is required.");
   process.exit(1);
@@ -20,60 +24,181 @@ if (!uri) {
 const platformDbName = process.env.MONGODB_PLATFORM_DB?.trim() || "platform";
 const chatbotDbName = process.env.MONGODB_CHATBOT_DB?.trim() || "chatbot";
 
-async function listCollectionNames(db) {
-  const collections = await db.listCollections().toArray();
+async function listCollectionNames(connection) {
+  const database = connection.db ?? connection;
+  const cursor = database.listCollections();
+  const collections = typeof cursor.toArray === "function" ? await cursor.toArray() : await cursor;
   return new Set(collections.map((collection) => collection.name));
 }
 
-async function renameCollection(db, from, to) {
+async function planRenameCollection(db, from, to, report) {
   const names = await listCollectionNames(db);
   if (names.has(to)) {
-    console.log(`  skip rename ${from} -> ${to} (target exists)`);
+    report.skipped.push(`rename ${from} -> ${to} (target exists)`);
     return;
   }
   if (!names.has(from)) {
-    console.log(`  skip rename ${from} -> ${to} (source missing)`);
+    report.skipped.push(`rename ${from} -> ${to} (source missing)`);
     return;
   }
+  report.planned.push(`rename collection ${from} -> ${to}`);
+}
+
+async function executeRenameCollection(db, from, to) {
   await db.collection(from).rename(to);
   console.log(`  renamed ${from} -> ${to}`);
 }
 
-async function renameField(db, collection, from, to) {
+async function countFieldRename(db, collection, from) {
   const names = await listCollectionNames(db);
   if (!names.has(collection)) {
-    return;
+    return 0;
   }
-  const result = await db.collection(collection).updateMany({ [from]: { $exists: true } }, { $rename: { [from]: to } });
-  if (result.modifiedCount > 0) {
-    console.log(`  ${collection}: renamed field ${from} -> ${to} on ${result.modifiedCount} doc(s)`);
+  return db.collection(collection).countDocuments({ [from]: { $exists: true } });
+}
+
+async function resolveCollectionName(db, preferred, legacy) {
+  const names = await listCollectionNames(db);
+  if (names.has(preferred)) {
+    return preferred;
   }
+  if (names.has(legacy)) {
+    return legacy;
+  }
+  return null;
 }
 
 async function run() {
-  await mongoose.connect(uri.replace(/\/$/, ""));
+  const startedAt = Date.now();
+  await mongoose.connect(uri.replace(/\/$/, ""), {
+    serverSelectionTimeoutMS: CONNECT_TIMEOUT_MS,
+    connectTimeoutMS: CONNECT_TIMEOUT_MS,
+  });
   const conn = mongoose.connection;
   const platform = conn.useDb(platformDbName, { useCache: true });
   const chatbot = conn.useDb(chatbotDbName, { useCache: true });
 
-  console.log(`Platform DB: ${platformDbName}`);
-  console.log(`Chatbot DB:  ${chatbotDbName}`);
+  const report = {
+    version: SCRIPT_VERSION,
+    dryRun: !apply,
+    platformDb: platformDbName,
+    chatbotDb: chatbotDbName,
+    planned: [],
+    skipped: [],
+    counts: {},
+    durationMs: 0,
+  };
 
-  console.log("1. Renaming collections...");
-  await renameCollection(platform, "organizations", "merchants");
-  await renameCollection(platform, "organizationmemberships", "merchantmemberships");
-  await renameCollection(platform, "organizationproducts", "subscriptions");
+  await planRenameCollection(platform, "organizations", "merchants", report);
+  await planRenameCollection(platform, "organizationmemberships", "merchantmemberships", report);
+  await planRenameCollection(platform, "organizationproducts", "subscriptions", report);
 
-  console.log("2. Renaming organizationId -> merchantId...");
-  await renameField(platform, "merchantmemberships", "organizationId", "merchantId");
-  await renameField(platform, "subscriptions", "organizationId", "merchantId");
-  await renameField(platform, "productaccesstokens", "organizationId", "merchantId");
-  await renameField(platform, "auditlogs", "organizationId", "merchantId");
+  const membershipCollection = await resolveCollectionName(
+    platform,
+    "merchantmemberships",
+    "organizationmemberships",
+  );
+  const subscriptionCollection = await resolveCollectionName(
+    platform,
+    "subscriptions",
+    "organizationproducts",
+  );
 
-  console.log("3. Ensuring a default site per merchant...");
-  const merchants = await platform.collection("merchants").find({}, { projection: { _id: 1 } }).toArray();
-  const siteByMerchant = new Map();
+  for (const [collection, from, to] of [
+    [membershipCollection, "organizationId", "merchantId"],
+    [subscriptionCollection, "organizationId", "merchantId"],
+    ["productaccesstokens", "organizationId", "merchantId"],
+    ["auditlogs", "organizationId", "merchantId"],
+  ]) {
+    if (!collection) {
+      continue;
+    }
+    const count = await countFieldRename(platform, collection, from);
+    if (count > 0) {
+      report.planned.push(`${collection}: rename field ${from} -> ${to} (${count} docs)`);
+    }
+    report.counts[`${collection}.${from}`] = count;
+  }
+
+  const merchantCollection = (await listCollectionNames(platform)).has("merchants")
+    ? "merchants"
+    : (await listCollectionNames(platform)).has("organizations")
+      ? "organizations"
+      : null;
+  const merchants = merchantCollection
+    ? await platform.collection(merchantCollection).find({}, { projection: { _id: 1 } }).toArray()
+    : [];
+  let sitesToCreate = 0;
   for (const merchant of merchants) {
+    const existing = await platform.collection("sites").findOne({ merchantId: merchant._id });
+    if (!existing) {
+      sitesToCreate += 1;
+    }
+  }
+  report.counts.defaultSitesToCreate = sitesToCreate;
+
+  for (const collection of [subscriptionCollection, "productaccesstokens"]) {
+    if (!collection) {
+      continue;
+    }
+    const count = await platform.collection(collection).countDocuments({ siteId: { $exists: false } });
+    report.counts[`${collection}.missingSiteId`] = count;
+    if (count > 0) {
+      report.planned.push(`${collection}: backfill siteId (${count} docs)`);
+    }
+  }
+
+  const usageCount = await platform.collection("productusages").countDocuments({ organizationId: { $exists: true } });
+  report.counts.productusagesWithOrganizationId = usageCount;
+  if (usageCount > 0) {
+    report.planned.push(`productusages: remap organizationId -> siteId (${usageCount} docs)`);
+  }
+
+  const chatbotCollections = await listCollectionNames(chatbot);
+  if (chatbotCollections.has("conversations")) {
+    const convoCount = await chatbot.collection("conversations").countDocuments({ organizationId: { $exists: true } });
+    report.counts.conversationsWithOrganizationId = convoCount;
+    if (convoCount > 0) {
+      report.planned.push(`chatbot conversations: remap organizationId -> siteId (${convoCount} docs)`);
+    }
+  }
+
+  console.log(JSON.stringify(report, null, 2));
+
+  if (!apply) {
+    if (report.planned.length > 0) {
+      console.log("Re-run with --apply to execute planned changes.");
+    }
+    report.durationMs = Date.now() - startedAt;
+    await mongoose.disconnect();
+    return;
+  }
+
+  console.log("Applying migration...");
+  await executeRenameCollection(platform, "organizations", "merchants");
+  await executeRenameCollection(platform, "organizationmemberships", "merchantmemberships");
+  await executeRenameCollection(platform, "organizationproducts", "subscriptions");
+
+  for (const [collection, from, to] of [
+    ["merchantmemberships", "organizationId", "merchantId"],
+    ["subscriptions", "organizationId", "merchantId"],
+    ["productaccesstokens", "organizationId", "merchantId"],
+    ["auditlogs", "organizationId", "merchantId"],
+  ]) {
+    const names = await listCollectionNames(platform);
+    if (!names.has(collection)) {
+      continue;
+    }
+    const result = await platform
+      .collection(collection)
+      .updateMany({ [from]: { $exists: true } }, { $rename: { [from]: to } });
+    if (result.modifiedCount > 0) {
+      console.log(`  ${collection}: renamed field ${from} -> ${to} on ${result.modifiedCount} doc(s)`);
+    }
+  }
+
+  const siteByMerchant = new Map();
+  for (const merchant of await platform.collection("merchants").find({}, { projection: { _id: 1 } }).toArray()) {
     const existing = await platform.collection("sites").findOne({ merchantId: merchant._id });
     if (existing) {
       siteByMerchant.set(merchant._id.toString(), existing._id);
@@ -94,7 +219,6 @@ async function run() {
     console.log(`  created default site for merchant ${merchant._id.toString()}`);
   }
 
-  console.log("4. Backfilling siteId on subscriptions / tokens...");
   for (const collection of ["subscriptions", "productaccesstokens"]) {
     const docs = await platform.collection(collection).find({ siteId: { $exists: false } }).toArray();
     for (const doc of docs) {
@@ -108,7 +232,6 @@ async function run() {
     console.log(`  ${collection}: backfilled ${docs.length} doc(s)`);
   }
 
-  console.log("5. Remapping productusages organizationId -> siteId...");
   const usageDocs = await platform.collection("productusages").find({ organizationId: { $exists: true } }).toArray();
   for (const doc of usageDocs) {
     const siteId = siteByMerchant.get(doc.organizationId?.toString());
@@ -122,9 +245,8 @@ async function run() {
   }
   console.log(`  productusages: remapped ${usageDocs.length} doc(s)`);
 
-  console.log("6. Remapping chatbot conversations organizationId -> siteId...");
-  const chatbotCollections = await listCollectionNames(chatbot);
-  if (chatbotCollections.has("conversations")) {
+  const chatbotNames = await listCollectionNames(chatbot);
+  if (chatbotNames.has("conversations")) {
     const convoDocs = await chatbot.collection("conversations").find({ organizationId: { $exists: true } }).toArray();
     for (const doc of convoDocs) {
       const siteId = siteByMerchant.get(doc.organizationId?.toString());
@@ -137,11 +259,10 @@ async function run() {
         .updateOne({ _id: doc._id }, { $set: { siteId }, $unset: { organizationId: "" } });
     }
     console.log(`  conversations: remapped ${convoDocs.length} doc(s)`);
-  } else {
-    console.log("  skip (no conversations collection)");
   }
 
   console.log("Done.");
+  report.durationMs = Date.now() - startedAt;
   await mongoose.disconnect();
 }
 

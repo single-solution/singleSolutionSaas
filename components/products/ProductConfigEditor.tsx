@@ -32,6 +32,26 @@ import type {
 
 type ValueMap = Record<string, unknown>;
 
+function configErrorCopy(
+  fallbackTitle: string,
+  error: unknown,
+  fallbackMessage = "Try again.",
+): { title: string; message: string } {
+  if (!(error instanceof PlatformApiError)) {
+    return { title: fallbackTitle, message: fallbackMessage };
+  }
+  if (error.code === "CONFIG_PUBLISH_CONFLICT" || error.status === 409) {
+    return { title: "Publish conflict", message: error.message };
+  }
+  if (error.code === "CONFIG_ENCRYPTION_UNAVAILABLE" || error.status === 503) {
+    return { title: "Encryption unavailable", message: error.message };
+  }
+  if (error.code === "CONFIG_PAYLOAD_INVALID" || error.status === 400) {
+    return { title: "Invalid configuration", message: error.message };
+  }
+  return { title: fallbackTitle, message: error.message };
+}
+
 /** Where the config is edited: a merchant site (overrides) or the product catalog (defaults). */
 export type ConfigScope =
   { kind: "site"; siteId: string } | { kind: "product" };
@@ -297,12 +317,8 @@ export function ProductConfigEditor({
       setLocked(response.config.lockedFields);
       toast.showSuccess("Draft saved", "Publish to make it live.");
     } catch (caughtError) {
-      toast.showError(
-        "Could not save draft",
-        caughtError instanceof PlatformApiError
-          ? caughtError.message
-          : "Try again.",
-      );
+      const copy = configErrorCopy("Could not save draft", caughtError);
+      toast.showError(copy.title, copy.message);
     } finally {
       setSaving(false);
     }
@@ -365,12 +381,8 @@ export function ProductConfigEditor({
       );
       setShowPublishConfirmation(false);
     } catch (caughtError) {
-      toast.showError(
-        "Could not publish",
-        caughtError instanceof PlatformApiError
-          ? caughtError.message
-          : "Try again.",
-      );
+      const copy = configErrorCopy("Could not publish", caughtError);
+      toast.showError(copy.title, copy.message);
     } finally {
       setPublishing(false);
     }

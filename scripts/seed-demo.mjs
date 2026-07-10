@@ -511,8 +511,6 @@ async function run() {
   console.log(`\nAllowed domains: ${ALLOWED_DOMAINS.join(", ")}`);
   console.log(`\nOpen the guest public demo:`);
   console.log(`  ${productBaseUrl}/public-demo`);
-  console.log(`\nOpen a manual token demo:`);
-  console.log(`  ${productBaseUrl}/demo?token=${plaintextToken}`);
   console.log(`\n${line}\n`);
 }
 

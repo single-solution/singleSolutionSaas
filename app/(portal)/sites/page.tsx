@@ -19,6 +19,7 @@ import {
   SiteDirectorySkeleton,
 } from "@/components/ui/portalSkeletons";
 import { platformApi } from "@/lib/api/client";
+import { useDebounce } from "@/hooks/useDebounce";
 import type { SiteSummary } from "@/lib/types";
 
 export default function SitesPage() {
@@ -27,10 +28,14 @@ export default function SitesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [sites, setSites] = useState<SiteSummary[]>([]);
+  const [merchants, setMerchants] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
   const search = searchParams.get("search") ?? "";
+  const debouncedSearchInput = useDebounce(searchInput, 300);
   const status = searchParams.get("status") ?? "all";
+  const merchantFilter = searchParams.get("merchantId") ?? "";
 
   const filteredSites = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -65,8 +70,17 @@ export default function SitesPage() {
         return;
       }
       const merchants = await platformApi.listMerchants();
+      setMerchants(merchants.items.map((merchant) => ({
+        id: merchant.id,
+        name: merchant.name,
+      })));
+      const scopedMerchants =
+        merchantFilter &&
+        merchants.items.some((merchant) => merchant.id === merchantFilter)
+          ? merchants.items.filter((merchant) => merchant.id === merchantFilter)
+          : merchants.items;
       const siteResponses = await Promise.all(
-        merchants.items.map((merchant) => platformApi.listSites(merchant.id)),
+        scopedMerchants.map((merchant) => platformApi.listSites(merchant.id)),
       );
       setSites(siteResponses.flatMap((response) => response.items));
     } catch {
@@ -74,7 +88,7 @@ export default function SitesPage() {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, merchantFilter]);
 
   function updateQuery(key: "search" | "status", value: string) {
     const next = new URLSearchParams(searchParams.toString());
@@ -91,6 +105,42 @@ export default function SitesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (user?.isPlatformAdmin || merchants.length <= 1) {
+      return;
+    }
+    if (merchantFilter) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("merchantId", merchants[0].id);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  }, [
+    merchantFilter,
+    merchants,
+    pathname,
+    router,
+    searchParams,
+    user?.isPlatformAdmin,
+  ]);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams.toString());
+    const normalized = debouncedSearchInput.trim();
+    if (!normalized) {
+      next.delete("search");
+    } else {
+      next.set("search", normalized);
+    }
+    const current = searchParams.get("search") ?? "";
+    if (normalized === current) {
+      return;
+    }
+    router.replace(`${pathname}${next.size ? `?${next.toString()}` : ""}`, {
+      scroll: false,
+    });
+  }, [debouncedSearchInput, pathname, router, searchParams]);
 
   if (loading) {
     return <SiteDirectorySkeleton />;
@@ -116,9 +166,41 @@ export default function SitesPage() {
         description={
           user?.isPlatformAdmin
             ? "Manage every merchant deployment, subscription, key, and domain."
-            : "Review the deployments provisioned by your platform administrator."
+            : merchants.length > 1
+              ? "Deployments for your selected workspace."
+              : "Review the deployments provisioned by your platform administrator."
         }
       />
+
+      {!user?.isPlatformAdmin && merchants.length > 1 ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <label htmlFor="sites-merchant-filter" className="text-sm font-medium text-ink">
+            Workspace
+          </label>
+          <select
+            id="sites-merchant-filter"
+            value={merchantFilter || merchants[0]?.id || ""}
+            onChange={(event) => {
+              const next = new URLSearchParams(searchParams.toString());
+              if (event.target.value) {
+                next.set("merchantId", event.target.value);
+              } else {
+                next.delete("merchantId");
+              }
+              router.replace(`${pathname}${next.size ? `?${next.toString()}` : ""}`, {
+                scroll: false,
+              });
+            }}
+            className="min-h-11 max-w-md flex-1 rounded-md border border-line bg-surface px-3 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+          >
+            {merchants.map((merchant) => (
+              <option key={merchant.id} value={merchant.id}>
+                {merchant.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface-subtle/50 p-3 sm:flex-row sm:items-center">
         <div className="relative min-w-0 flex-1">
@@ -127,9 +209,9 @@ export default function SitesPage() {
             aria-hidden="true"
           />
           <Input
-            value={search}
-            onChange={(event) => updateQuery("search", event.target.value)}
-            className="pl-9"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            className="min-h-11 pl-9"
             aria-label="Search sites"
             placeholder="Search by site, domain, merchant, or slug..."
           />
@@ -137,7 +219,7 @@ export default function SitesPage() {
         <select
           value={status}
           onChange={(event) => updateQuery("status", event.target.value)}
-          className="h-10 rounded-md border border-line bg-surface px-3 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+          className="min-h-11 rounded-md border border-line bg-surface px-3 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
           aria-label="Filter site status"
         >
           <option value="all">All sites</option>

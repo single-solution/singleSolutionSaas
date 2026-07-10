@@ -23,6 +23,11 @@ export function generateInviteToken(): { token: string; tokenHash: string } {
   return { token, tokenHash: hashApiKey(token) };
 }
 
+export function generateRecoveryToken(): { token: string; tokenHash: string } {
+  const token = randomBytes(32).toString("base64url");
+  return { token, tokenHash: hashApiKey(token) };
+}
+
 export function hashApiKey(plaintextKey: string): string {
   return createHash("sha256").update(plaintextKey).digest("hex");
 }

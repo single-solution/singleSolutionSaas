@@ -1,0 +1,1054 @@
+openapi: 3.1.0
+info:
+  title: Single Solution SaaS API
+  version: 1.0.0
+  description: |
+    Combined contract for the platform portal API and the ecommerce chatbot product API.
+    Paths are relative to each deployable's `/api` prefix unless noted.
+servers:
+  - url: http://localhost:3000/api
+    description: Platform portal (local)
+  - url: http://localhost:3002/api
+    description: Ecommerce chatbot product (local)
+tags:
+  - name: Health
+  - name: Auth
+  - name: Merchants
+  - name: Sites
+  - name: Products
+  - name: Admin
+  - name: Internal
+  - name: SSO
+  - name: Preview
+  - name: Widget
+  - name: Cron
+  - name: ProductAdmin
+  - name: ProductChat
+  - name: ProductEmbed
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: portal_session
+    internalBearer:
+      type: http
+      scheme: bearer
+      description: INTERNAL_API_SECRET
+    cronBearer:
+      type: http
+      scheme: bearer
+      description: CRON_SECRET
+    productToken:
+      type: apiKey
+      in: header
+      name: X-Product-Token
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+    HealthCheck:
+      type: object
+      required: [ok, latencyMs]
+      properties:
+        ok:
+          type: boolean
+        latencyMs:
+          type: integer
+        detail:
+          type: string
+    PlatformHealth:
+      type: object
+      required: [status, timestamp, checks]
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        timestamp:
+          type: string
+          format: date-time
+        checks:
+          type: object
+          required: [mongo, redis]
+          properties:
+            mongo:
+              $ref: '#/components/schemas/HealthCheck'
+            redis:
+              $ref: '#/components/schemas/HealthCheck'
+    ProductHealth:
+      allOf:
+        - $ref: '#/components/schemas/PlatformHealth'
+        - type: object
+          properties:
+            checks:
+              type: object
+              required: [mongo, redis, platform]
+              properties:
+                mongo:
+                  $ref: '#/components/schemas/HealthCheck'
+                redis:
+                  $ref: '#/components/schemas/HealthCheck'
+                platform:
+                  $ref: '#/components/schemas/HealthCheck'
+    UserSummary:
+      type: object
+      required: [id, email, name, isPlatformAdmin]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        isPlatformAdmin:
+          type: boolean
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    CronJobSummary:
+      type: object
+      required: [job, requestId, timestamp, durationMs, summary]
+      properties:
+        job:
+          type: string
+        requestId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        durationMs:
+          type: integer
+        summary:
+          type: object
+          additionalProperties: true
+    LoginBody:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    ProductEntitlement:
+      type: object
+      properties:
+        merchantId:
+          type: string
+        siteId:
+          type: string
+        productSlug:
+          type: string
+        dataDbName:
+          type: string
+        withinQuota:
+          type: boolean
+  parameters:
+    merchantId:
+      name: merchantId
+      in: path
+      required: true
+      schema:
+        type: string
+    siteId:
+      name: siteId
+      in: path
+      required: true
+      schema:
+        type: string
+    productSlug:
+      name: productSlug
+      in: path
+      required: true
+      schema:
+        type: string
+    page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    pageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 20
+  responses:
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: Dependency unavailable
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness and dependency readiness
+      responses:
+        '200':
+          description: Healthy
+          headers:
+            X-Request-ID:
+              schema:
+                type: string
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/PlatformHealth'
+                  - $ref: '#/components/schemas/ProductHealth'
+        '503':
+          description: Unhealthy dependency
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/PlatformHealth'
+                  - $ref: '#/components/schemas/ProductHealth'
+  /auth/sessions:
+    post:
+      tags: [Auth]
+      summary: Create session (login)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginBody'
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/UserSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    delete:
+      tags: [Auth]
+      summary: End session (logout)
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Logged out
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/me:
+    get:
+      tags: [Auth]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/UserSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      tags: [Auth]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                email:
+                  type: string
+      responses:
+        '200':
+          description: Updated profile
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/password:
+    post:
+      tags: [Auth]
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password changed
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/invitations/{token}:
+    get:
+      tags: [Auth]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invitation metadata
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /auth/invitations/acceptance:
+    post:
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Invitation accepted
+        '400':
+          description: Invalid body
+  /merchants:
+    get:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Merchant list for current user
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /merchants/{merchantId}:
+    get:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Merchant detail
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Merchant updated
+  /merchants/{merchantId}/sites:
+    get:
+      tags: [Sites]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Sites for merchant
+    post:
+      tags: [Sites]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '201':
+          description: Site created
+  /merchants/{merchantId}/audit-logs:
+    get:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Paginated audit log entries
+  /merchants/{merchantId}/billing:
+    get:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Billing summary
+  /merchants/{merchantId}/members:
+    get:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Team members
+    post:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '201':
+          description: Invitation queued
+  /merchants/{merchantId}/members/{memberId}:
+    patch:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member role updated
+    delete:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+        - name: memberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Member removed
+  /merchants/{merchantId}/offboarding:
+    get:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Offboarding status
+    post:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Offboarding started
+  /merchants/{merchantId}/offboarding/restorations:
+    post:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Merchant restored during retention
+  /merchants/{merchantId}/offboarding/exports:
+    post:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Export requested
+  /merchants/{merchantId}/offboarding/deletions:
+    post:
+      tags: [Merchants]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/merchantId'
+      responses:
+        '200':
+          description: Deletion scheduled after retention
+  /sites/{siteId}:
+    get:
+      tags: [Sites]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+      responses:
+        '200':
+          description: Site detail
+    patch:
+      tags: [Sites]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+      responses:
+        '200':
+          description: Site updated
+  /sites/{siteId}/products:
+    get:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+      responses:
+        '200':
+          description: Subscribed products for site
+  /sites/{siteId}/products/{productSlug}:
+    get:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Subscription detail
+    patch:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Subscription updated
+  /sites/{siteId}/products/{productSlug}/configs:
+    get:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Published product config
+    patch:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Draft config saved
+  /sites/{siteId}/products/{productSlug}/configs/publications:
+    post:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Config published
+  /sites/{siteId}/products/{productSlug}/previews:
+    post:
+      tags: [Preview]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Preview token minted
+  /sites/{siteId}/products/{productSlug}/tokens:
+    get:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Access tokens
+    post:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '201':
+          description: Token created (plaintext shown once)
+  /sites/{siteId}/products/{productSlug}/conversations:
+    get:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/siteId'
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Bridged conversation list
+  /products:
+    get:
+      tags: [Products]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Product catalog
+  /admin/products:
+    get:
+      tags: [Admin]
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Admin product catalog
+    post:
+      tags: [Admin]
+      security:
+        - sessionCookie: []
+      responses:
+        '201':
+          description: Product registered
+  /admin/products/{productSlug}:
+    get:
+      tags: [Admin]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Product detail
+    patch:
+      tags: [Admin]
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/productSlug'
+      responses:
+        '200':
+          description: Product updated
+  /admin/subscriptions/reconciliations:
+    post:
+      tags: [Admin]
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: dryRun
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Reconciliation report
+  /internal/tenant-bindings:
+    get:
+      tags: [Internal]
+      security:
+        - internalBearer: []
+      parameters:
+        - name: siteId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: productSlug
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: bridge
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+      responses:
+        '200':
+          description: Tenant binding resolved
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /internal/product-tokens/verifications:
+    post:
+      tags: [Internal]
+      security:
+        - internalBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Entitlement payload
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entitlement:
+                    $ref: '#/components/schemas/ProductEntitlement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /internal/product-config:
+    post:
+      tags: [Internal, Preview]
+      security:
+        - internalBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [previewToken]
+              properties:
+                previewToken:
+                  type: string
+      responses:
+        '200':
+          description: Draft config for preview
+  /internal/product-sites:
+    get:
+      tags: [Internal]
+      security:
+        - internalBearer: []
+      parameters:
+        - name: slug
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Subscribed sites for product
+  /internal/product-usage:
+    post:
+      tags: [Internal]
+      security:
+        - internalBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, metric, idempotencyKey]
+              properties:
+                token:
+                  type: string
+                metric:
+                  type: string
+                quantity:
+                  type: integer
+                idempotencyKey:
+                  type: string
+      responses:
+        '200':
+          description: Usage recorded
+  /internal/sso/exchanges:
+    post:
+      tags: [Internal, SSO]
+      security:
+        - internalBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, productSlug]
+              properties:
+                code:
+                  type: string
+                productSlug:
+                  type: string
+      responses:
+        '200':
+          description: SSO claims
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /internal/platform-sessions/verifications:
+    post:
+      tags: [Internal, SSO]
+      security:
+        - internalBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, sessionVersion]
+              properties:
+                userId:
+                  type: string
+                sessionVersion:
+                  type: integer
+      responses:
+        '200':
+          description: Session validity
+  /crons/email-outbox:
+    post:
+      tags: [Cron]
+      security:
+        - cronBearer: []
+      responses:
+        '200':
+          description: Batch processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /crons/subscription-reconciliations:
+    post:
+      tags: [Cron]
+      security:
+        - cronBearer: []
+      responses:
+        '200':
+          description: Cron batch summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /crons/tenant-databases:
+    post:
+      tags: [Cron]
+      security:
+        - cronBearer: []
+      responses:
+        '200':
+          description: Cron batch summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /crons/webhook-outbox:
+    post:
+      tags: [Cron]
+      security:
+        - cronBearer: []
+      responses:
+        '200':
+          description: Cron batch summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /crons/usage-outbox:
+    post:
+      tags: [Cron]
+      security:
+        - cronBearer: []
+      responses:
+        '200':
+          description: Cron batch summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /crons/demo-cleanups:
+    post:
+      tags: [Cron]
+      security:
+        - cronBearer: []
+      responses:
+        '200':
+          description: Cron batch summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CronJobSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /chat:
+    post:
+      tags: [ProductChat, Widget]
+      summary: Start widget conversation (product host)
+      responses:
+        '201':
+          description: Conversation created
+  /chat/conversations:
+    get:
+      tags: [ProductChat, Widget]
+      responses:
+        '200':
+          description: List conversations for token-bound site
+  /chat/{conversationId}:
+    get:
+      tags: [ProductChat, Widget]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Conversation detail
+  /chat/{conversationId}/messages:
+    post:
+      tags: [ProductChat, Widget]
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '201':
+          description: Message accepted
+  /embed/sessions:
+    post:
+      tags: [ProductEmbed]
+      responses:
+        '201':
+          description: Embed session minted
+  /admin/overview:
+    get:
+      tags: [ProductAdmin]
+      responses:
+        '200':
+          description: Admin dashboard metrics
+  /admin/conversations:
+    get:
+      tags: [ProductAdmin]
+      responses:
+        '200':
+          description: Conversation inbox
+  /admin/settings:
+    get:
+      tags: [ProductAdmin]
+      responses:
+        '200':
+          description: Site settings
+    patch:
+      tags: [ProductAdmin]
+      responses:
+        '200':
+          description: Settings updated
+  /admin/webhooks:
+    get:
+      tags: [ProductAdmin]
+      responses:
+        '200':
+          description: Webhook config
+    patch:
+      tags: [ProductAdmin]
+      responses:
+        '200':
+          description: Webhook config updated
+  /internal/conversations:
+    get:
+      tags: [Internal]
+      security:
+        - internalBearer: []
+      responses:
+        '200':
+          description: Bridge conversation list
+  /internal/config-schema:
+    get:
+      tags: [Internal]
+      security:
+        - internalBearer: []
+      responses:
+        '200':
+          description: Product config schema
+  /internal/test:
+    post:
+      tags: [Internal]
+      security:
+        - internalBearer: []
+      responses:
+        '200':
+          description: Test action result

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/Button";
@@ -14,6 +14,7 @@ export function ConfirmDialog({
   description,
   confirmLabel,
   loading = false,
+  children,
   onConfirm,
   onCancel,
 }: {
@@ -22,6 +23,7 @@ export function ConfirmDialog({
   description: string;
   confirmLabel: string;
   loading?: boolean;
+  children?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -96,6 +98,7 @@ export function ConfirmDialog({
         <p id="confirm-dialog-description" className="mt-2 text-sm text-ink-secondary">
           {description}
         </p>
+        {children ? <div className="mt-4">{children}</div> : null}
         <div className="mt-5 flex justify-end gap-3">
           <Button ref={cancelButtonRef} type="button" variant="outline" onClick={onCancel} disabled={loading}>
             Cancel

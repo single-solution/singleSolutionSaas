@@ -7,22 +7,21 @@
  */
 
 import { Types } from "@/lib/db/connection";
-import { type ConversationMessageAttributes } from "@/lib/db/models/Conversation";
 import { getTenantModels } from "@/lib/db/tenant";
 import { resolveChatCaller } from "@/lib/api/productAuth";
 import { preflight, withCors } from "@/lib/api/cors";
 import { notFound, notModified, ok } from "@/lib/api/responses";
+import { CHAT_MESSAGE_PAGE_SIZE } from "@/lib/chat/messagePagination";
 import {
-  CHAT_MESSAGE_PAGE_SIZE,
-  sliceChatMessages,
-} from "@/lib/chat/messagePagination";
+  CONVERSATION_SUMMARY_SELECT,
+  markTeamMessagesReadByCustomer,
+} from "@/lib/chat/messageStorage";
 import {
   isThreadUnchangedForPoll,
   parsePollSince,
   threadPollEtag,
 } from "@/lib/chat/poll";
-import { toThread, type ConversationLean } from "@/lib/chat/serializer";
-import { asArray } from "@/lib/chat/wireCoercion";
+import { toThreadPage, type ConversationLean } from "@/lib/chat/serializer";
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +43,15 @@ export async function GET(request: Request, { params }: RouteContext) {
       return notFound("Conversation not found.");
     }
 
-    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
+    const dataDbName = caller.entitlement.dataDbName;
+    const { Conversation } = await getTenantModels(dataDbName);
     const conversation = await Conversation.findOne({
       _id: new Types.ObjectId(id),
       siteId: caller.entitlement.siteId,
       visitorId: caller.visitorId,
-    }).lean<ConversationLean>();
+    })
+      .select(CONVERSATION_SUMMARY_SELECT)
+      .lean<ConversationLean>();
     if (!conversation) {
       return notFound("Conversation not found.");
     }
@@ -74,46 +76,23 @@ export async function GET(request: Request, { params }: RouteContext) {
       return notModified(etag);
     }
 
-    let toReturn: ConversationLean = conversation;
+    let toReturn = conversation;
     if (!isPoll && !isOlderPage && conversation.unreadByCustomer > 0) {
-      const now = new Date();
-      await Conversation.updateOne(
-        { _id: conversation._id },
-        {
-          $set: {
-            unreadByCustomer: 0,
-            "messages.$[unread].readByCustomerAt": now,
-          },
-        },
-        {
-          arrayFilters: [
-            {
-              "unread.author": { $in: ["agent", "assistant"] },
-              "unread.readByCustomerAt": { $exists: false },
-            },
-          ],
-        },
-      );
-      const refreshed = await Conversation.findById(
-        conversation._id,
-      ).lean<ConversationLean>();
-      if (refreshed) toReturn = refreshed;
+      await markTeamMessagesReadByCustomer(dataDbName, conversation);
+      const refreshed = await Conversation.findById(conversation._id)
+        .select(CONVERSATION_SUMMARY_SELECT)
+        .lean<ConversationLean>();
+      if (refreshed) {
+        toReturn = refreshed;
+      }
     }
 
-    const allMessages = asArray<ConversationMessageAttributes>(
-      toReturn.messages,
-    );
-    const slice = sliceChatMessages(allMessages, {
+    const thread = await toThreadPage(dataDbName, toReturn, {
       beforeId,
       sinceMillis: since ? since.getTime() : null,
       limit: CHAT_MESSAGE_PAGE_SIZE,
     });
-    const response = ok(
-      toThread(toReturn, {
-        messages: allMessages.slice(slice.start, slice.end),
-        hasMoreOlder: slice.hasMoreOlder,
-      }),
-    );
+    const response = ok(thread);
     response.headers.set("ETag", etag);
     return response;
   });

@@ -108,7 +108,7 @@ export const adminApi = {
     return request<{ deliveries: WebhookDeliveryRow[] }>(`/webhooks?siteId=${encodeURIComponent(siteId)}`);
   },
   testWebhook(siteId: string) {
-    return request<{ configured: boolean; delivered: boolean }>("/webhooks/test", {
+    return request<{ configured: boolean; delivered: boolean; queued: boolean }>("/webhooks/test", {
       method: "POST",
       body: JSON.stringify({ siteId }),
     });

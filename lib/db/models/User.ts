@@ -10,6 +10,8 @@ const userSchema = new Schema(
     status: { type: String, enum: ["invited", "active"], required: true, default: "active" },
     inviteTokenHash: { type: String, default: null, index: true },
     inviteTokenExpiresAt: { type: Date, default: null },
+    recoveryTokenHash: { type: String, default: null, index: true },
+    recoveryTokenExpiresAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

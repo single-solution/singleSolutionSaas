@@ -239,7 +239,42 @@ export function MerchantDetailSkeleton() {
   return (
     <div className="page-stack" aria-hidden="true" aria-busy="true">
       <PageHeaderSkeleton withAction />
-      <TabsSkeleton />
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2 border-b border-line pb-3">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <Skeleton key={index} className="h-9 w-28 rounded-md" />
+          ))}
+        </div>
+        <MerchantOverviewSkeleton />
+      </div>
+    </div>
+  );
+}
+
+export function MerchantOverviewSkeleton() {
+  return (
+    <div className="space-y-5" aria-hidden="true" aria-busy="true">
+      <StatCardsSkeleton count={4} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-sm">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-20 w-full rounded-lg" />
+          <Skeleton className="h-20 w-full rounded-lg" />
+        </div>
+        <div className="space-y-3">
+          <div className="rounded-xl border border-line bg-surface p-4 shadow-sm">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="mt-3 h-4 w-full" />
+            <Skeleton className="mt-2 h-4 w-3/4" />
+            <Skeleton className="mt-2 h-4 w-1/2" />
+          </div>
+          <div className="rounded-xl border border-line bg-surface p-4 shadow-sm">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-3 h-8 w-16" />
+            <Skeleton className="mt-2 h-4 w-full" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -360,7 +395,24 @@ export function ProductConfigEditorSkeleton() {
   );
 }
 
-export function MerchantActivitySkeleton() {
+export function MerchantActivitySkeleton({ compact = false }: { compact?: boolean }) {
+  if (compact) {
+    return (
+      <div
+        className="divide-y divide-line rounded-md border border-line bg-surface"
+        aria-hidden="true"
+        aria-busy="true"
+      >
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="space-y-1.5 px-3 py-2">
+            <Skeleton className="h-3.5 w-full max-w-[12rem]" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div
       className="rounded-xl border border-line bg-surface p-5 shadow-sm h-fit"

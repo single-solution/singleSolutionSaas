@@ -8,6 +8,17 @@ const quotaOverrideSchema = new Schema(
   { _id: false },
 );
 
+const lifecycleTransitionSchema = new Schema(
+  {
+    fromStatus: { type: String, trim: true, default: null },
+    toStatus: { type: String, required: true, trim: true },
+    actorUserId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    reason: { type: String, trim: true, default: "" },
+    at: { type: Date, required: true, default: Date.now },
+  },
+  { _id: false },
+);
+
 /**
  * A merchant's subscription to a product on a specific site. One product can be
  * subscribed on many of a merchant's sites, each with its own plan and status.
@@ -18,13 +29,17 @@ const subscriptionSchema = new Schema(
     siteId: { type: Schema.Types.ObjectId, ref: "Site", required: true, index: true },
     productSlug: { type: String, required: true, trim: true },
     planCode: { type: String, trim: true, default: null },
-    status: { type: String, enum: ["active", "suspended"], required: true, default: "active" },
+    status: {
+      type: String,
+      enum: ["active", "suspended", "archived"],
+      required: true,
+      default: "active",
+    },
     scopeOverrides: { type: [String], default: null },
     quotaOverrides: { type: [quotaOverrideSchema], default: null },
-    // Dedicated per-tenant product data database name (merchant + site + product),
-    // on the shared cluster. Provisioned when the subscription is created. The
-    // running product resolves its data store from this value.
     dataDbName: { type: String, trim: true, default: null },
+    lifecycleHistory: { type: [lifecycleTransitionSchema], default: [] },
+    deletionEligibleAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

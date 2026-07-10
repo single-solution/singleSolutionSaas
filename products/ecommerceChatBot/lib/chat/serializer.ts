@@ -1,7 +1,13 @@
 import type { Types } from "mongoose";
 
 import type { ConversationAttributes, ConversationMessageAttributes } from "@/lib/db/models/Conversation";
-import { CHAT_MESSAGE_PAGE_SIZE, sliceChatMessages } from "./messagePagination";
+import {
+  loadConversationMessages,
+} from "./messageStorage";
+import {
+  CHAT_MESSAGE_PAGE_SIZE,
+  type ChatMessageSliceParams,
+} from "./messagePagination";
 import type { ChatMessage, ChatThread, ChatThreadSummary } from "./types";
 import { asArray, asString, normalizeChatMessageAuthor, normalizeChatStatus, objectIdString, toIsoDate } from "./wireCoercion";
 
@@ -49,12 +55,31 @@ export function toThread(conversation: ConversationLean, page?: { messages: Conv
   };
 }
 
+export async function toThreadPage(
+  dataDbName: string,
+  conversation: ConversationLean,
+  sliceParams: ChatMessageSliceParams = { limit: CHAT_MESSAGE_PAGE_SIZE },
+): Promise<ChatThread> {
+  const page = await loadConversationMessages(dataDbName, conversation, sliceParams);
+  return toThread(conversation, page);
+}
+
 /** Serialize a thread carrying only its most recent message page. */
-export function toThreadLatestPage(conversation: ConversationLean): ChatThread {
-  const all = asArray<ConversationMessageAttributes>(conversation.messages);
-  const slice = sliceChatMessages(all, { limit: CHAT_MESSAGE_PAGE_SIZE });
-  return toThread(conversation, {
-    messages: all.slice(slice.start, slice.end),
-    hasMoreOlder: slice.hasMoreOlder,
+export async function toThreadLatestPage(
+  dataDbName: string,
+  conversation: ConversationLean,
+): Promise<ChatThread> {
+  return toThreadPage(dataDbName, conversation, { limit: CHAT_MESSAGE_PAGE_SIZE });
+}
+
+export async function toThreadFromSummary(
+  dataDbName: string,
+  conversation: ConversationLean,
+  embeddedMessages: ConversationMessageAttributes[] = [],
+): Promise<ChatThread> {
+  const page = await loadConversationMessages(dataDbName, {
+    ...conversation,
+    messages: embeddedMessages,
   });
+  return toThread(conversation, page);
 }

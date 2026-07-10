@@ -2,6 +2,7 @@
 
 /** Client fetch wrappers for the chat API (polling today). */
 
+import { createClientMessageId } from "./clientMessageId";
 import { getChatSessionHeaders } from "./session";
 import type { ChatSettings } from "./settings";
 import type { ChatMessage, ChatThread, ChatThreadSummary } from "./types";
@@ -122,13 +123,14 @@ export async function startChatThread(): Promise<ChatThread> {
 export async function sendChatMessage(
   threadId: string,
   body: string,
+  clientMessageId: string = createClientMessageId(),
 ): Promise<ChatThread> {
   const res = await fetch(
     `/api/chat/${encodeURIComponent(threadId)}/messages`,
     {
       method: "POST",
       headers: headers({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, clientMessageId }),
     },
   );
   return (await jsonOrThrow(res)) as ChatThread;

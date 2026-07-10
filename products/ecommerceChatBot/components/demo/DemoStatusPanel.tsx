@@ -27,7 +27,7 @@ function copyForStatus(status: PublicDemoRuntimeStatus | DemoWidgetIssue): {
     return {
       title: "Preview storefront only",
       detail:
-        "Live chat is not configured for this environment. Operators can still open a manual demo with /demo?token=pk_live_… after issuing a product access token.",
+        "Live chat is not configured for this environment. Set PUBLIC_DEMO_PRODUCT_TOKEN on the server to enable the guest sandbox.",
     };
   }
   if (status === "invalid") {

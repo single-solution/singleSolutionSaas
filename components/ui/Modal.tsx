@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/cn";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const FOCUSABLE =
   'a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])';
@@ -17,6 +18,7 @@ export function Modal({
   children,
   footer,
   width = "lg",
+  dirty = false,
 }: {
   open: boolean;
   title: string;
@@ -25,8 +27,10 @@ export function Modal({
   children: React.ReactNode;
   footer?: React.ReactNode;
   width?: "md" | "lg" | "xl";
+  dirty?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descriptionId = useId();
@@ -41,7 +45,11 @@ export function Modal({
     const previouslyFocused = document.activeElement as HTMLElement | null;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        onClose();
+        if (dirty) {
+          setShowDiscardConfirm(true);
+        } else {
+          onClose();
+        }
         return;
       }
       if (event.key === "Tab" && panelRef.current) {
@@ -68,7 +76,15 @@ export function Modal({
       window.removeEventListener("keydown", onKeyDown);
       previouslyFocused?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open, onClose, dirty]);
+
+  function requestClose() {
+    if (dirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onClose();
+  }
 
   // Lock body scroll while open.
   useEffect(() => {
@@ -90,13 +106,14 @@ export function Modal({
     width === "md" ? "max-w-md" : width === "xl" ? "max-w-2xl" : "max-w-xl";
 
   return createPortal(
-    <div className="fixed inset-0 z-modal flex items-center justify-center px-4 py-6 sm:px-6">
-      <button
-        type="button"
-        aria-label="Close panel"
-        className="absolute inset-0 bg-ink/40 animate-fade-in motion-reduce:animate-none"
-        onClick={onClose}
-      />
+    <>
+      <div className="fixed inset-0 z-modal flex items-center justify-center px-4 py-6 sm:px-6">
+        <button
+          type="button"
+          aria-label="Close panel"
+          className="absolute inset-0 bg-ink/40 animate-fade-in motion-reduce:animate-none"
+          onClick={requestClose}
+        />
       <div
         ref={panelRef}
         role="dialog"
@@ -124,8 +141,8 @@ export function Modal({
           </div>
           <button
             type="button"
-            onClick={onClose}
-            className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink"
+            onClick={requestClose}
+            className="grid size-11 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-subtle hover:text-ink"
             aria-label="Close"
           >
             <X className="h-4 w-4" aria-hidden="true" />
@@ -140,7 +157,19 @@ export function Modal({
           </div>
         ) : null}
       </div>
-    </div>,
+      </div>
+      <ConfirmDialog
+        open={showDiscardConfirm}
+        title="Discard unsaved changes?"
+        description="Your edits will be lost if you close now."
+        confirmLabel="Discard"
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={() => {
+          setShowDiscardConfirm(false);
+          onClose();
+        }}
+      />
+    </>,
     document.body,
   );
 }

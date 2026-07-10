@@ -6,6 +6,28 @@
  */
 
 import { loadEnvironment } from "@/lib/env";
+import {
+  invalidateEntitlementCache,
+  invalidatePlatformSessionCache,
+  invalidateSiteBindingCache,
+  readEntitlementCache,
+  readPlatformSessionCache,
+  readSiteBindingCache,
+  writeEntitlementCache,
+  writePlatformSessionCache,
+  writeSiteBindingCache,
+} from "@/lib/redis/entitlementCache";
+import { getRequestId } from "@/lib/logging/requestContext";
+
+function buildInternalHeaders(): Record<string, string> {
+  const { internalApiSecret } = loadEnvironment();
+  const requestId = getRequestId();
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${internalApiSecret}`,
+    ...(requestId ? { "X-Request-ID": requestId } : {}),
+  };
+}
 
 export interface ProductEntitlement {
   merchantId: string;
@@ -25,43 +47,50 @@ export interface ProductEntitlement {
   dataDbName: string;
 }
 
-interface CacheEntry {
-  entitlement: ProductEntitlement | null;
-  expiresAt: number;
-}
-
-const CACHE_TTL_MS = 30_000;
-const cache = new Map<string, CacheEntry>();
-
 export async function verifyProductToken(token: string): Promise<ProductEntitlement | null> {
-  const now = Date.now();
-  const cached = cache.get(token);
-  if (cached && cached.expiresAt > now) {
-    return cached.entitlement;
+  const cached = await readEntitlementCache(token);
+  if (cached) {
+    if (cached.kind === "valid") {
+      return cached.entitlement ?? null;
+    }
+    if (cached.kind === "invalid") {
+      return null;
+    }
+    if (cached.kind === "transient") {
+      return null;
+    }
   }
 
-  const { platformApiUrl, internalApiSecret } = loadEnvironment();
+  const { platformApiUrl } = loadEnvironment();
   let entitlement: ProductEntitlement | null = null;
+  let cacheKind: "valid" | "invalid" | "transient" = "invalid";
   try {
-    const res = await fetch(`${platformApiUrl}/api/internal/product-tokens/verifications`, {
+    const response = await fetch(`${platformApiUrl}/api/internal/product-tokens/verifications`, {
       method: "POST",
       cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${internalApiSecret}`,
-      },
+      headers: buildInternalHeaders(),
       body: JSON.stringify({ token }),
     });
-    if (res.ok) {
-      const data = (await res.json()) as { entitlement?: ProductEntitlement };
+    if (response.ok) {
+      const data = (await response.json()) as { entitlement?: ProductEntitlement };
       entitlement = data.entitlement ?? null;
+      cacheKind = entitlement ? "valid" : "invalid";
+    } else if (response.status >= 500) {
+      cacheKind = "transient";
+      entitlement = null;
+    } else {
+      cacheKind = "invalid";
+      entitlement = null;
     }
   } catch {
-    // Platform unreachable — treat as unverified for this window.
+    cacheKind = "transient";
     entitlement = null;
   }
 
-  cache.set(token, { entitlement, expiresAt: now + CACHE_TTL_MS });
+  await writeEntitlementCache(token, {
+    kind: cacheKind,
+    entitlement: entitlement ?? undefined,
+  });
   return entitlement;
 }
 
@@ -73,21 +102,18 @@ export async function verifyProductToken(token: string): Promise<ProductEntitlem
 export async function fetchPreviewConfig(
   previewToken: string,
 ): Promise<{ siteId: string; productSlug: string; config: Record<string, unknown> } | null> {
-  const { platformApiUrl, internalApiSecret } = loadEnvironment();
+  const { platformApiUrl } = loadEnvironment();
   try {
-    const res = await fetch(`${platformApiUrl}/api/internal/product-config`, {
+    const response = await fetch(`${platformApiUrl}/api/internal/product-config`, {
       method: "POST",
       cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${internalApiSecret}`,
-      },
+      headers: buildInternalHeaders(),
       body: JSON.stringify({ previewToken }),
     });
-    if (!res.ok) {
+    if (!response.ok) {
       return null;
     }
-    return (await res.json()) as { siteId: string; productSlug: string; config: Record<string, unknown> };
+    return (await response.json()) as { siteId: string; productSlug: string; config: Record<string, unknown> };
   } catch {
     return null;
   }
@@ -101,61 +127,134 @@ export interface ProductSiteRef {
   dataDbName: string;
 }
 
+export interface PlatformSsoClaims {
+  userId: string;
+  name: string;
+  productSlug: string;
+  siteId: string | null;
+  sessionVersion: number;
+}
+
+export async function exchangePlatformSsoCode(
+  code: string,
+  productSlug: string,
+): Promise<PlatformSsoClaims | null> {
+  const trimmedCode = code.trim();
+  if (!trimmedCode) {
+    return null;
+  }
+  const { platformApiUrl } = loadEnvironment();
+  try {
+    const response = await fetch(`${platformApiUrl}/api/internal/sso/exchanges`, {
+      method: "POST",
+      cache: "no-store",
+      headers: buildInternalHeaders(),
+      body: JSON.stringify({ code: trimmedCode, productSlug }),
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = (await response.json()) as { claims?: PlatformSsoClaims };
+    return data.claims ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function verifyPlatformAdminSession(
+  userId: string,
+  sessionVersion: number,
+): Promise<boolean> {
+  const cached = await readPlatformSessionCache(userId, sessionVersion);
+  if (cached) {
+    return cached.valid;
+  }
+
+  const { platformApiUrl } = loadEnvironment();
+  let valid = false;
+  try {
+    const response = await fetch(`${platformApiUrl}/api/internal/platform-sessions/verifications`, {
+      method: "POST",
+      cache: "no-store",
+      headers: buildInternalHeaders(),
+      body: JSON.stringify({ userId, sessionVersion }),
+    });
+    if (response.ok) {
+      const data = (await response.json()) as { valid?: boolean };
+      valid = Boolean(data.valid);
+    }
+  } catch {
+    valid = false;
+  }
+
+  await writePlatformSessionCache(userId, sessionVersion, valid);
+  return valid;
+}
+
 /** List sites subscribed to a product, for the admin dashboard site switcher. */
 export async function fetchProductSites(productSlug: string): Promise<ProductSiteRef[]> {
-  const { platformApiUrl, internalApiSecret } = loadEnvironment();
+  const { platformApiUrl } = loadEnvironment();
   try {
-    const res = await fetch(`${platformApiUrl}/api/internal/product-sites?slug=${encodeURIComponent(productSlug)}`, {
+    const response = await fetch(`${platformApiUrl}/api/internal/product-sites?slug=${encodeURIComponent(productSlug)}`, {
       method: "GET",
       cache: "no-store",
-      headers: { Authorization: `Bearer ${internalApiSecret}` },
+      headers: buildInternalHeaders(),
     });
-    if (!res.ok) {
+    if (!response.ok) {
       return [];
     }
-    const data = (await res.json()) as { sites?: ProductSiteRef[] };
+    const data = (await response.json()) as { sites?: ProductSiteRef[] };
     return data.sites ?? [];
   } catch {
     return [];
   }
 }
 
-const siteDbCache = new Map<string, { dataDbName: string; expiresAt: number }>();
-const SITE_DB_CACHE_TTL_MS = 60_000;
-
 /**
  * Resolve a site's tenant data database from the platform (cached). Used by the
  * in-product admin dashboard, whose requests carry only a `siteId`.
  */
 export async function resolveSiteDataDb(productSlug: string, siteId: string): Promise<string | null> {
-  const key = `${productSlug}:${siteId}`;
-  const now = Date.now();
-  const cached = siteDbCache.get(key);
-  if (cached && cached.expiresAt > now) {
-    return cached.dataDbName || null;
+  const cached = await readSiteBindingCache(productSlug, siteId);
+  if (cached?.dataDbName) {
+    return cached.dataDbName;
   }
-  const sites = await fetchProductSites(productSlug);
-  for (const site of sites) {
-    siteDbCache.set(`${productSlug}:${site.siteId}`, { dataDbName: site.dataDbName, expiresAt: now + SITE_DB_CACHE_TTL_MS });
+
+  const { resolveTenantBindingFromPlatform } = await import("@/lib/platform/tenantBinding");
+  const binding = await resolveTenantBindingFromPlatform({ siteId, productSlug });
+  if (!binding) {
+    return null;
   }
-  return siteDbCache.get(key)?.dataDbName || null;
+  await writeSiteBindingCache(productSlug, siteId, binding.dataDbName);
+  return binding.dataDbName;
 }
 
 /** Report metered usage to the platform. Fire-and-forget; failures are swallowed. */
-export async function reportProductUsage(token: string, metric: string, quantity = 1): Promise<void> {
-  const { platformApiUrl, internalApiSecret } = loadEnvironment();
+export async function reportProductUsage(
+  token: string,
+  metric: string,
+  quantity = 1,
+  idempotencyKey?: string,
+): Promise<void> {
+  const { platformApiUrl } = loadEnvironment();
+  const key =
+    idempotencyKey ??
+    `chatbot:${metric}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
   try {
     await fetch(`${platformApiUrl}/api/internal/product-usage`, {
       method: "POST",
       cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${internalApiSecret}`,
-      },
-      body: JSON.stringify({ token, metric, quantity }),
+      headers: buildInternalHeaders(),
+      body: JSON.stringify({ token, metric, quantity, idempotencyKey: key }),
     });
-    cache.delete(token);
+    await invalidateEntitlementCache(token);
   } catch {
     // Metering is best-effort; a dropped event must not block the reply.
   }
 }
+
+export {
+  invalidateEntitlementCache,
+  invalidatePlatformSessionCache,
+  invalidateSiteBindingCache,
+};

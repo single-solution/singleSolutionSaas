@@ -1,0 +1,8 @@
+extends:
+  - recommended
+rules:
+  operation-summary: off
+  operation-operationId: off
+  tag-description: off
+  no-server-example.com: off
+  info-license: off

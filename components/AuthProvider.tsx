@@ -16,7 +16,7 @@ interface AuthContextValue {
   user: UserSummary | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<UserSummary>;
-  logout: () => Promise<void>;
+  logout: (scope?: "current" | "all") => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -61,8 +61,8 @@ export function AuthProvider({
         setUser(response.user);
         return response.user;
       },
-      async logout() {
-        await platformApi.logout();
+      async logout(scope: "current" | "all" = "current") {
+        await platformApi.logout(scope);
         setUser(null);
       },
       refresh,

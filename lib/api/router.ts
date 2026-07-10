@@ -11,15 +11,25 @@ import {
 } from "@/lib/api/guards";
 import { checkRateLimit, getClientIp } from "@/lib/api/rateLimit";
 import {
+  attachActorContext,
+} from "@/lib/api/cronHandler";
+import {
   jsonCreated,
   jsonError,
   jsonForbidden,
   jsonOk,
+  jsonServiceUnavailable,
   jsonTooManyRequests,
   jsonUnauthorized,
   parseJsonBody,
 } from "@/lib/api/responses";
 import { ensurePlatformReady } from "@/lib/db/ready";
+import { getPlatformHealthReport } from "@/lib/services/health.service";
+import { logger } from "@/lib/logging/logger";
+import {
+  resolveRequestId,
+  runWithRequestContext,
+} from "@/lib/logging/requestContext";
 import {
   acceptInvitationBodySchema,
   changePasswordBodySchema,
@@ -27,9 +37,11 @@ import {
   createProductBodySchema,
   createProductTokenBodySchema,
   createSiteBodySchema,
+  exchangeSsoBodySchema,
   idParamSchema,
   loadEnvironment,
   loginBodySchema,
+  logoutSessionBodySchema,
   merchantIdParamSchema,
   paginationQuerySchema,
   productSlugParamSchema,
@@ -43,7 +55,11 @@ import {
   updateProfileBodySchema,
   updateSiteBodySchema,
   updateSubscriptionBodySchema,
+  verifyPlatformSessionBodySchema,
   verifyProductTokenBodySchema,
+  rotateProductTokenBodySchema,
+  inviteMerchantMemberBodySchema,
+  updateMerchantMemberBodySchema,
 } from "@/lib/env";
 import {
   acceptInvitation,
@@ -63,6 +79,7 @@ import {
   updateMerchant,
   updateSite,
   updateUserProfile,
+  invalidateAllUserSessions,
 } from "@/lib/services/platform.service";
 import type { MerchantMemberRole, SiteSummary } from "@/lib/types";
 import {
@@ -81,18 +98,24 @@ import {
   registerProduct,
   replyToSiteProductConversation,
   revokeProductToken,
+  rotateProductToken,
   runSiteProductTest,
   setSiteProductPlan,
   updateProduct,
   verifyProductToken,
+  ProductCatalogConflictError,
+  ProductBaseUrlError,
 } from "@/lib/services/product.service";
+import { SubscriptionLifecycleError } from "@/lib/services/subscriptionLifecycle.service";
+import { reconcileSubscriptions } from "@/lib/services/subscriptionReconciliation.service";
+import { resolveTenantBinding, TenantBindingError } from "@/lib/services/tenantBinding.service";
 import {
   getProductConfig,
   getProductDefaults,
   ProductConfigError,
   publishProductConfig,
   publishProductDefaults,
-  resolveDraftConfig,
+  resolveDraftConfigForPreview,
   saveProductConfigDraft,
   saveProductDefaultsDraft,
   verifyPreviewToken,
@@ -100,9 +123,29 @@ import {
 import { ProductBridgeError } from "@/lib/services/productBridge";
 import {
   DashboardSsoError,
+  exchangeDashboardSsoCode,
   listProductSitesForSwitcher,
   mintDashboardSession,
+  verifyPlatformAdminSession,
 } from "@/lib/services/dashboardSso.service";
+import {
+  getMerchantBilling,
+  getMerchantDetailForAdmin,
+  getMerchantOffboarding,
+  getSiteDomainReadiness,
+  inviteMerchantMember,
+  listMerchantMembers,
+  listSubscriptionHistory,
+  removeMerchantMember,
+  requestMerchantExport,
+  restoreMerchant,
+  scheduleMerchantDeletion,
+  sendOwnerRecovery,
+  startMerchantOffboarding,
+  syncSiteTokenDomains,
+  updateMerchantMemberRole,
+  verifySiteDomain,
+} from "@/lib/services/merchantWorkflow.service";
 
 const MUTATION_METHODS = new Set(["POST", "PATCH", "DELETE"]);
 
@@ -119,13 +162,31 @@ function applyBrowserMutationGuards(
   return assertMutationHeaders(request);
 }
 
-function applyAuthenticatedRateLimit(
+async function applyAuthenticatedRateLimit(
   request: Request,
   actorUserId?: string,
-): Response | null {
+): Promise<Response | null> {
   const ip = getClientIp(request);
   const key = actorUserId ? `api:user:${actorUserId}` : `api:ip:${ip}`;
-  const result = checkRateLimit(key, 300, 60_000);
+  const result = await checkRateLimit(key, 300, 60_000);
+  if (result.unavailable) {
+    return jsonServiceUnavailable();
+  }
+  if (!result.allowed) {
+    return jsonTooManyRequests(result.retryAfterSeconds ?? 60);
+  }
+  return null;
+}
+
+async function enforceSensitiveRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number,
+): Promise<Response | null> {
+  const result = await checkRateLimit(key, limit, windowMs);
+  if (result.unavailable) {
+    return jsonServiceUnavailable();
+  }
   if (!result.allowed) {
     return jsonTooManyRequests(result.retryAfterSeconds ?? 60);
   }
@@ -137,7 +198,13 @@ async function requireAuthenticated(request: Request) {
   if (!auth) {
     return jsonUnauthorized();
   }
-  const rateLimit = applyAuthenticatedRateLimit(request, auth.actor.userId);
+  attachActorContext({
+    userId: auth.actor.userId,
+    isPlatformAdmin: auth.actor.isPlatformAdmin,
+    merchantRole: auth.merchantRole,
+    clientIp: getClientIp(request),
+  });
+  const rateLimit = await applyAuthenticatedRateLimit(request, auth.actor.userId);
   if (rateLimit) {
     return rateLimit;
   }
@@ -165,7 +232,31 @@ export async function handleApiRequest(
   request: Request,
   pathSegments: string[],
 ): Promise<Response> {
-  await ensurePlatformReady();
+  const requestId = resolveRequestId(request.headers.get("x-request-id"));
+  return runWithRequestContext(
+    {
+      requestId,
+      method: request.method,
+      path: pathSegments.join("/"),
+      clientIp: getClientIp(request),
+    },
+    async () => handleApiRequestInner(request, pathSegments, requestId),
+  );
+}
+
+async function handleApiRequestInner(
+  request: Request,
+  pathSegments: string[],
+  requestId: string,
+): Promise<Response> {
+  try {
+    await ensurePlatformReady();
+  } catch (error) {
+    logger.error("Platform readiness failed", {
+      error: error instanceof Error ? error.message : "unknown",
+    });
+    return jsonServiceUnavailable(undefined, { requestId });
+  }
 
   const method = request.method;
   const path = pathSegments.join("/");
@@ -177,17 +268,20 @@ export async function handleApiRequest(
   }
 
   if (method === "GET" && path === "health") {
-    return jsonOk({ status: "ok" }, 200, {
+    const report = await getPlatformHealthReport();
+    const status = report.status === "healthy" ? 200 : 503;
+    return jsonOk(report, status, {
       cache: "public",
       varyCookie: false,
+      requestId,
     });
   }
 
   if (method === "POST" && path === "auth/sessions") {
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(`login:ip:${ip}`, 10, 15 * 60_000);
-    if (!ipLimit.allowed) {
-      return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
+    const ipLimitResponse = await enforceSensitiveRateLimit(`login:ip:${ip}`, 10, 15 * 60_000);
+    if (ipLimitResponse) {
+      return ipLimitResponse;
     }
 
     const body = await parseJsonBody<unknown>(request);
@@ -199,13 +293,13 @@ export async function handleApiRequest(
       return jsonUnauthorized();
     }
 
-    const emailLimit = checkRateLimit(
+    const emailLimitResponse = await enforceSensitiveRateLimit(
       `login:email:${parsed.data.email.toLowerCase()}`,
       10,
       15 * 60_000,
     );
-    if (!emailLimit.allowed) {
-      return jsonTooManyRequests(emailLimit.retryAfterSeconds ?? 60);
+    if (emailLimitResponse) {
+      return emailLimitResponse;
     }
 
     const user = await authenticateUser(
@@ -226,9 +320,9 @@ export async function handleApiRequest(
     pathSegments.length === 3
   ) {
     const ip = getClientIp(request);
-    const limit = checkRateLimit(`invite-lookup:ip:${ip}`, 30, 15 * 60_000);
-    if (!limit.allowed) {
-      return jsonTooManyRequests(limit.retryAfterSeconds ?? 60);
+    const limitResponse = await enforceSensitiveRateLimit(`invite-lookup:ip:${ip}`, 30, 15 * 60_000);
+    if (limitResponse) {
+      return limitResponse;
     }
     const invitation = await getInvitation(pathSegments[2]);
     if (!invitation) {
@@ -239,9 +333,9 @@ export async function handleApiRequest(
 
   if (method === "POST" && path === "auth/invitations/acceptance") {
     const ip = getClientIp(request);
-    const limit = checkRateLimit(`invite-accept:ip:${ip}`, 10, 15 * 60_000);
-    if (!limit.allowed) {
-      return jsonTooManyRequests(limit.retryAfterSeconds ?? 60);
+    const limitResponse = await enforceSensitiveRateLimit(`invite-accept:ip:${ip}`, 10, 15 * 60_000);
+    if (limitResponse) {
+      return limitResponse;
     }
     const body = await parseJsonBody<unknown>(request);
     if (body instanceof Response) {
@@ -267,8 +361,19 @@ export async function handleApiRequest(
     if (auth instanceof Response) {
       return auth;
     }
+    const body = await parseJsonBody<unknown>(request);
+    let scope: "current" | "all" = "current";
+    if (!(body instanceof Response)) {
+      const parsed = logoutSessionBodySchema.safeParse(body ?? {});
+      if (parsed.success) {
+        scope = parsed.data.scope;
+      }
+    }
+    if (scope === "all") {
+      await invalidateAllUserSessions(auth.actor.userId);
+    }
     await clearSessionCookie();
-    return jsonOk({ success: true });
+    return jsonOk({ success: true, scope });
   }
 
   if (method === "GET" && path === "auth/me") {
@@ -296,9 +401,18 @@ export async function handleApiRequest(
       return jsonForbidden("Only administrators can change their email.");
     }
     try {
+      const previousEmail = auth.user.email;
       const user = await updateUserProfile(auth.actor.userId, parsed.data);
       if (!user) {
         return jsonError("Could not update profile", 500);
+      }
+      if (parsed.data.email && parsed.data.email.toLowerCase() !== previousEmail.toLowerCase()) {
+        await clearSessionCookie();
+        return jsonOk({
+          user,
+          sessionInvalidated: true,
+          message: "Email updated. Sign in again on all devices.",
+        });
       }
       return jsonOk({ user });
     } catch (error) {
@@ -314,13 +428,13 @@ export async function handleApiRequest(
     if (auth instanceof Response) {
       return auth;
     }
-    const limit = checkRateLimit(
+    const limitResponse = await enforceSensitiveRateLimit(
       `password-change:${auth.actor.userId}`,
       5,
       15 * 60_000,
     );
-    if (!limit.allowed) {
-      return jsonTooManyRequests(limit.retryAfterSeconds ?? 60);
+    if (limitResponse) {
+      return limitResponse;
     }
     const body = await parseJsonBody<unknown>(request);
     if (body instanceof Response) {
@@ -378,7 +492,10 @@ export async function handleApiRequest(
     try {
       const product = await registerProduct(auth.actor, parsed.data);
       return jsonCreated({ product });
-    } catch {
+    } catch (error) {
+      if (error instanceof ProductBaseUrlError) {
+        return jsonError(error.message, 400);
+      }
       return jsonError("Product slug already exists", 409);
     }
   }
@@ -415,15 +532,25 @@ export async function handleApiRequest(
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
     }
-    const product = await updateProduct(
-      auth.actor,
-      params.data.productSlug,
-      parsed.data,
-    );
-    if (!product) {
-      return jsonError("Not found", 404);
+    try {
+      const product = await updateProduct(
+        auth.actor,
+        params.data.productSlug,
+        parsed.data,
+      );
+      if (!product) {
+        return jsonError("Not found", 404);
+      }
+      return jsonOk({ product });
+    } catch (error) {
+      if (error instanceof ProductCatalogConflictError) {
+        return jsonError(error.message, 409);
+      }
+      if (error instanceof ProductBaseUrlError) {
+        return jsonError(error.message, 400);
+      }
+      return jsonError("Unable to update product", 400);
     }
-    return jsonOk({ product });
   }
 
   const adminProductSubscribersMatch = path.match(
@@ -501,7 +628,7 @@ export async function handleApiRequest(
         return jsonOk({ config });
       } catch (error) {
         if (error instanceof ProductConfigError) {
-          return jsonError(error.message, error.status);
+          return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
         }
         return jsonError("Could not load defaults", 500);
       }
@@ -524,7 +651,7 @@ export async function handleApiRequest(
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
-        return jsonError(error.message, error.status);
+        return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
       }
       return jsonError("Could not save defaults", 500);
     }
@@ -595,7 +722,7 @@ export async function handleApiRequest(
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
-        return jsonError(error.message, error.status);
+        return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
       }
       return jsonError("Could not publish defaults", 500);
     }
@@ -711,7 +838,9 @@ export async function handleApiRequest(
       if (roleCheck instanceof Response) {
         return roleCheck;
       }
-      const merchant = await getMerchantById(params.data.merchantId);
+      const merchant = auth.actor.isPlatformAdmin
+        ? await getMerchantDetailForAdmin(params.data.merchantId)
+        : await getMerchantById(params.data.merchantId);
       if (!merchant) {
         return jsonError("Not found", 404);
       }
@@ -835,6 +964,302 @@ export async function handleApiRequest(
     return jsonOk(result);
   }
 
+  const merchantBillingMatch = path.match(/^merchants\/([^/]+)\/billing$/);
+  if (merchantBillingMatch && method === "GET") {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: merchantBillingMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const billing = await getMerchantBilling(params.data.merchantId);
+    if (!billing) {
+      return jsonError("Not found", 404);
+    }
+    return jsonOk({ billing });
+  }
+
+  const merchantMembersMatch = path.match(/^merchants\/([^/]+)\/members$/);
+  if (merchantMembersMatch && (method === "GET" || method === "POST")) {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: merchantMembersMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    if (method === "GET") {
+      const items = await listMerchantMembers(params.data.merchantId);
+      return jsonOk({ items });
+    }
+    const body = await parseJsonBody<unknown>(request);
+    if (body instanceof Response) {
+      return body;
+    }
+    const parsed = inviteMerchantMemberBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+    }
+    const member = await inviteMerchantMember(
+      auth.actor,
+      params.data.merchantId,
+      parsed.data,
+    );
+    if (member === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (member === "EMAIL_TAKEN") {
+      return jsonError("This email is already on the team", 409);
+    }
+    return jsonCreated({ member });
+  }
+
+  const merchantMemberMatch = path.match(
+    /^merchants\/([^/]+)\/members\/([^/]+)$/,
+  );
+  if (merchantMemberMatch && (method === "PATCH" || method === "DELETE")) {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: merchantMemberMatch[1],
+    });
+    const userParams = idParamSchema.safeParse({ id: merchantMemberMatch[2] });
+    if (!params.success || !userParams.success) {
+      return jsonError("Invalid id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    if (method === "DELETE") {
+      const result = await removeMerchantMember(
+        auth.actor,
+        params.data.merchantId,
+        userParams.data.id,
+      );
+      if (result === "NOT_FOUND") {
+        return jsonError("Not found", 404);
+      }
+      if (result === "OWNER_PROTECTED") {
+        return jsonError("The owner cannot be removed", 409);
+      }
+      return jsonOk({ success: true });
+    }
+    const body = await parseJsonBody<unknown>(request);
+    if (body instanceof Response) {
+      return body;
+    }
+    const parsed = updateMerchantMemberBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+    }
+    const member = await updateMerchantMemberRole(
+      auth.actor,
+      params.data.merchantId,
+      userParams.data.id,
+      parsed.data.role,
+    );
+    if (member === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (member === "OWNER_PROTECTED") {
+      return jsonError("The owner role cannot be changed here", 409);
+    }
+    return jsonOk({ member });
+  }
+
+  const ownerRecoveryMatch = path.match(
+    /^merchants\/([^/]+)\/owner-recoveries$/,
+  );
+  if (ownerRecoveryMatch && method === "POST") {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: ownerRecoveryMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const result = await sendOwnerRecovery(auth.actor, params.data.merchantId);
+    if (result === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (result === "NOT_ACTIVE") {
+      return jsonError("Owner has not accepted their invitation yet", 409);
+    }
+    return jsonOk(result);
+  }
+
+  const subscriptionHistoryMatch = path.match(
+    /^merchants\/([^/]+)\/subscription-histories$/,
+  );
+  if (subscriptionHistoryMatch && method === "GET") {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: subscriptionHistoryMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const query = paginationQuerySchema.safeParse({
+      page: url.searchParams.get("page") ?? undefined,
+      pageSize: url.searchParams.get("pageSize") ?? undefined,
+    });
+    if (!query.success) {
+      return jsonError("Invalid pagination", 400);
+    }
+    const result = await listSubscriptionHistory(
+      params.data.merchantId,
+      query.data.page,
+      query.data.pageSize,
+    );
+    return jsonOk(result);
+  }
+
+  const merchantOffboardingMatch = path.match(/^merchants\/([^/]+)\/offboarding$/);
+  if (merchantOffboardingMatch && (method === "GET" || method === "POST")) {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: merchantOffboardingMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    if (method === "GET") {
+      const summary = await getMerchantOffboarding(params.data.merchantId);
+      if (!summary) {
+        return jsonError("Not found", 404);
+      }
+      return jsonOk({ offboarding: summary });
+    }
+    const summary = await startMerchantOffboarding(
+      auth.actor,
+      params.data.merchantId,
+    );
+    if (summary === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (summary === "ALREADY_OFFBOARDING") {
+      return jsonError("Merchant is already offboarding", 409);
+    }
+    return jsonOk({ offboarding: summary });
+  }
+
+  const offboardingRestoreMatch = path.match(
+    /^merchants\/([^/]+)\/offboarding\/restorations$/,
+  );
+  if (offboardingRestoreMatch && method === "POST") {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: offboardingRestoreMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const summary = await restoreMerchant(auth.actor, params.data.merchantId);
+    if (summary === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (summary === "NOT_ELIGIBLE") {
+      return jsonError("Restore window has expired", 409);
+    }
+    return jsonOk({ offboarding: summary });
+  }
+
+  const offboardingExportMatch = path.match(
+    /^merchants\/([^/]+)\/offboarding\/exports$/,
+  );
+  if (offboardingExportMatch && method === "POST") {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: offboardingExportMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const summary = await requestMerchantExport(
+      auth.actor,
+      params.data.merchantId,
+    );
+    if (summary === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    return jsonOk({ offboarding: summary });
+  }
+
+  const offboardingDeletionMatch = path.match(
+    /^merchants\/([^/]+)\/offboarding\/deletions$/,
+  );
+  if (offboardingDeletionMatch && method === "POST") {
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: offboardingDeletionMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid merchant id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const summary = await scheduleMerchantDeletion(
+      auth.actor,
+      params.data.merchantId,
+    );
+    if (summary === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (summary === "NOT_ELIGIBLE") {
+      return jsonError("Deletion is not eligible yet", 409);
+    }
+    return jsonOk({ offboarding: summary });
+  }
+
   const siteMatch = path.match(/^sites\/([^/]+)$/);
   if (siteMatch) {
     const params = siteIdParamSchema.safeParse({ siteId: siteMatch[1] });
@@ -891,6 +1316,105 @@ export async function handleApiRequest(
       }
       return jsonOk({ site: updated });
     }
+  }
+
+  const siteDomainReadinessMatch = path.match(
+    /^sites\/([^/]+)\/domain-readiness$/,
+  );
+  if (siteDomainReadinessMatch && method === "GET") {
+    const params = siteIdParamSchema.safeParse({
+      siteId: siteDomainReadinessMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid site id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
+    if (resolved instanceof Response) {
+      return resolved;
+    }
+    const readiness = await getSiteDomainReadiness(params.data.siteId);
+    if (!readiness) {
+      return jsonError("Not found", 404);
+    }
+    return jsonOk({ readiness });
+  }
+
+  const siteDomainVerificationMatch = path.match(
+    /^sites\/([^/]+)\/domain-verifications$/,
+  );
+  if (siteDomainVerificationMatch && method === "POST") {
+    const params = siteIdParamSchema.safeParse({
+      siteId: siteDomainVerificationMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid site id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
+    if (resolved instanceof Response) {
+      return resolved;
+    }
+    const result = await verifySiteDomain(auth.actor, params.data.siteId);
+    if (result === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (result === "NO_DOMAIN") {
+      return jsonError("Configure a primary domain first", 409);
+    }
+    return jsonOk(result);
+  }
+
+  const siteTokenDomainSyncMatch = path.match(
+    /^sites\/([^/]+)\/token-domain-syncs$/,
+  );
+  if (siteTokenDomainSyncMatch && method === "POST") {
+    const params = siteIdParamSchema.safeParse({
+      siteId: siteTokenDomainSyncMatch[1],
+    });
+    if (!params.success) {
+      return jsonError("Invalid site id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
+    if (resolved instanceof Response) {
+      return resolved;
+    }
+    const result = await syncSiteTokenDomains(auth.actor, params.data.siteId);
+    if (result === "NOT_FOUND") {
+      return jsonError("Not found", 404);
+    }
+    if (result === "NO_DOMAIN") {
+      return jsonError("Configure a primary domain first", 409);
+    }
+    return jsonOk(result);
   }
 
   const siteProductsMatch = path.match(/^sites\/([^/]+)\/products$/);
@@ -969,6 +1493,7 @@ export async function handleApiRequest(
         slugParams.data.productSlug,
         parsed.data.name,
         parsed.data.allowedDomains,
+        parsed.data.expiresInDays,
       );
       return jsonCreated({ token });
     } catch (error) {
@@ -1021,6 +1546,56 @@ export async function handleApiRequest(
       return jsonError("Not found", 404);
     }
     return jsonOk({ success: true });
+  }
+
+  const rotateTokenMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/tokens\/([^/]+)\/rotations$/,
+  );
+  if (rotateTokenMatch && method === "POST") {
+    const params = siteIdParamSchema.safeParse({
+      siteId: rotateTokenMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: rotateTokenMatch[2],
+    });
+    const tokenParams = idParamSchema.safeParse({ id: rotateTokenMatch[3] });
+    if (!params.success || !slugParams.success || !tokenParams.success) {
+      return jsonError("Invalid id", 400);
+    }
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
+    if (resolved instanceof Response) {
+      return resolved;
+    }
+    const body = await parseJsonBody<unknown>(request);
+    if (body instanceof Response) {
+      return body;
+    }
+    const parsed = rotateProductTokenBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+    }
+    const rotation = await rotateProductToken(
+      auth.actor,
+      params.data.siteId,
+      slugParams.data.productSlug,
+      tokenParams.data.id,
+      parsed.data,
+    );
+    if (!rotation) {
+      return jsonError("Not found", 404);
+    }
+    return jsonCreated({ rotation });
   }
 
   const productUsageMatch = path.match(
@@ -1093,7 +1668,7 @@ export async function handleApiRequest(
         return jsonOk({ config });
       } catch (error) {
         if (error instanceof ProductConfigError) {
-          return jsonError(error.message, error.status);
+          return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
         }
         return jsonError("Could not load configuration", 500);
       }
@@ -1120,7 +1695,7 @@ export async function handleApiRequest(
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
-        return jsonError(error.message, error.status);
+        return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
       }
       return jsonError("Could not save configuration", 500);
     }
@@ -1163,7 +1738,7 @@ export async function handleApiRequest(
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
-        return jsonError(error.message, error.status);
+        return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
       }
       return jsonError("Could not publish configuration", 500);
     }
@@ -1250,6 +1825,9 @@ export async function handleApiRequest(
       );
       return jsonOk({ result });
     } catch (error) {
+      if (error instanceof ProductConfigError) {
+        return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
+      }
       if (error instanceof ProductBridgeError) {
         return jsonError(error.message, error.status);
       }
@@ -1444,24 +2022,82 @@ export async function handleApiRequest(
       }
       return jsonOk({ product });
     } catch (error) {
-      const reason = error instanceof Error ? error.message : "";
-      if (reason === "PLAN_NOT_FOUND") {
-        return jsonError("Unknown plan for this product", 400);
+      if (error instanceof SubscriptionLifecycleError) {
+        if (error.code === "PLAN_NOT_FOUND") {
+          return jsonError("Unknown plan for this product", 400);
+        }
+        if (error.code === "RETENTION_EXPIRED") {
+          return jsonError(error.message, 409);
+        }
+        if (error.code === "DOMAIN_REQUIRED") {
+          return jsonError(error.message, 409, undefined, "DOMAIN_REQUIRED");
+        }
+        return jsonError(error.message, 400);
       }
       return jsonError("Unable to update product", 400);
+    }
+  }
+
+  if (method === "POST" && path === "admin/subscriptions/reconciliations") {
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const dryRun = new URL(request.url).searchParams.get("dryRun") !== "false";
+    const report = await reconcileSubscriptions({ dryRun });
+    return jsonOk({ report });
+  }
+
+  if (method === "GET" && path === "internal/tenant-bindings") {
+    const environment = loadEnvironment();
+    const ip = getClientIp(request);
+    const ipLimitResponse = await enforceSensitiveRateLimit(
+      `internal:tenant-bindings:ip:${ip}`,
+      120,
+      60_000,
+    );
+    if (ipLimitResponse) {
+      return ipLimitResponse;
+    }
+    const authorization = request.headers.get("authorization");
+    if (
+      !isValidInternalAuthorization(authorization, environment.INTERNAL_API_SECRET)
+    ) {
+      return jsonUnauthorized();
+    }
+    const requestUrl = new URL(request.url);
+    const siteId = requestUrl.searchParams.get("siteId")?.trim() ?? "";
+    const productSlug = requestUrl.searchParams.get("productSlug")?.trim() ?? "";
+    const bridgeAccess = requestUrl.searchParams.get("bridge") === "true";
+    if (!siteId || !productSlug) {
+      return jsonError("siteId and productSlug are required", 400);
+    }
+    try {
+      const binding = await resolveTenantBinding(siteId, productSlug, {
+        requireBridgeAccess: bridgeAccess,
+      });
+      return jsonOk({ binding });
+    } catch (error) {
+      if (error instanceof TenantBindingError) {
+        return jsonError(error.message, error.status);
+      }
+      return jsonError("Could not resolve tenant binding", 500);
     }
   }
 
   if (method === "POST" && path === "internal/product-tokens/verifications") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(
+    const ipLimitResponse = await enforceSensitiveRateLimit(
       `internal:product-verify:ip:${ip}`,
       120,
       60_000,
     );
-    if (!ipLimit.allowed) {
-      return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
+    if (ipLimitResponse) {
+      return ipLimitResponse;
     }
     const authorization = request.headers.get("authorization");
     if (
@@ -1480,23 +2116,30 @@ export async function handleApiRequest(
     if (!parsed.success) {
       return jsonError("Invalid body", 400);
     }
-    const verified = await verifyProductToken(parsed.data.token);
-    if (!verified) {
-      return jsonUnauthorized();
+    try {
+      const verified = await verifyProductToken(parsed.data.token);
+      if (!verified) {
+        return jsonUnauthorized();
+      }
+      return jsonOk({ entitlement: verified });
+    } catch (error) {
+      if (error instanceof ProductConfigError) {
+        return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
+      }
+      return jsonError("Could not verify product token", 500);
     }
-    return jsonOk({ entitlement: verified });
   }
 
   if (method === "POST" && path === "internal/product-config") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(
+    const ipLimitResponse = await enforceSensitiveRateLimit(
       `internal:product-config:ip:${ip}`,
       120,
       60_000,
     );
-    if (!ipLimit.allowed) {
-      return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
+    if (ipLimitResponse) {
+      return ipLimitResponse;
     }
     const authorization = request.headers.get("authorization");
     if (
@@ -1518,7 +2161,7 @@ export async function handleApiRequest(
       return jsonUnauthorized();
     }
     try {
-      const config = await resolveDraftConfig(
+      const config = await resolveDraftConfigForPreview(
         claims.siteId,
         claims.productSlug,
       );
@@ -1529,7 +2172,7 @@ export async function handleApiRequest(
       });
     } catch (error) {
       if (error instanceof ProductConfigError) {
-        return jsonError(error.message, error.status);
+        return jsonError(error.message, error.status, { cache: "no-store" }, error.code);
       }
       return jsonError("Could not load draft configuration", 500);
     }
@@ -1538,13 +2181,13 @@ export async function handleApiRequest(
   if (method === "GET" && path === "internal/product-sites") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(
+    const ipLimitResponse = await enforceSensitiveRateLimit(
       `internal:product-sites:ip:${ip}`,
       120,
       60_000,
     );
-    if (!ipLimit.allowed) {
-      return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
+    if (ipLimitResponse) {
+      return ipLimitResponse;
     }
     const authorization = request.headers.get("authorization");
     if (
@@ -1566,13 +2209,13 @@ export async function handleApiRequest(
   if (method === "POST" && path === "internal/product-usage") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(
+    const ipLimitResponse = await enforceSensitiveRateLimit(
       `internal:product-usage:ip:${ip}`,
       600,
       60_000,
     );
-    if (!ipLimit.allowed) {
-      return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
+    if (ipLimitResponse) {
+      return ipLimitResponse;
     }
     const authorization = request.headers.get("authorization");
     if (
@@ -1595,7 +2238,70 @@ export async function handleApiRequest(
     if (!recorded) {
       return jsonError("Unknown token or product", 404);
     }
+    if (recorded.denied) {
+      return jsonError("Quota exceeded for this metric", 429);
+    }
     return jsonOk({ usage: recorded });
+  }
+
+  if (method === "POST" && path === "internal/sso/exchanges") {
+    const environment = loadEnvironment();
+    const ip = getClientIp(request);
+    const ipLimitResponse = await enforceSensitiveRateLimit(
+      `internal:sso-exchange:ip:${ip}`,
+      60,
+      60_000,
+    );
+    if (ipLimitResponse) {
+      return ipLimitResponse;
+    }
+    const authorization = request.headers.get("authorization");
+    if (!isValidInternalAuthorization(authorization, environment.INTERNAL_API_SECRET)) {
+      return jsonUnauthorized();
+    }
+    const body = await parseJsonBody<unknown>(request);
+    if (body instanceof Response) {
+      return body;
+    }
+    const parsed = exchangeSsoBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+    }
+    const claims = await exchangeDashboardSsoCode(parsed.data.code, parsed.data.productSlug);
+    if (!claims) {
+      return jsonError("SSO code is invalid or expired.", 401);
+    }
+    return jsonOk({ claims });
+  }
+
+  if (method === "POST" && path === "internal/platform-sessions/verifications") {
+    const environment = loadEnvironment();
+    const ip = getClientIp(request);
+    const ipLimitResponse = await enforceSensitiveRateLimit(
+      `internal:platform-session:ip:${ip}`,
+      120,
+      60_000,
+    );
+    if (ipLimitResponse) {
+      return ipLimitResponse;
+    }
+    const authorization = request.headers.get("authorization");
+    if (!isValidInternalAuthorization(authorization, environment.INTERNAL_API_SECRET)) {
+      return jsonUnauthorized();
+    }
+    const body = await parseJsonBody<unknown>(request);
+    if (body instanceof Response) {
+      return body;
+    }
+    const parsed = verifyPlatformSessionBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+    }
+    const valid = await verifyPlatformAdminSession(
+      parsed.data.userId,
+      parsed.data.sessionVersion,
+    );
+    return jsonOk({ valid });
   }
 
   return jsonError("Not found", 404);

@@ -9,6 +9,10 @@ import { getTenantModels } from "@/lib/db/tenant";
 import { resolveChatCaller } from "@/lib/api/productAuth";
 import { preflight, withCors } from "@/lib/api/cors";
 import { noContent, notFound } from "@/lib/api/responses";
+import {
+  CONVERSATION_SUMMARY_SELECT,
+  markTeamMessagesReadByCustomer,
+} from "@/lib/chat/messageStorage";
 import type { ConversationLean } from "@/lib/chat/serializer";
 
 export const dynamic = "force-dynamic";
@@ -31,35 +35,21 @@ export async function POST(request: Request, { params }: RouteContext) {
       return notFound("Conversation not found.");
     }
 
-    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
+    const dataDbName = caller.entitlement.dataDbName;
+    const { Conversation } = await getTenantModels(dataDbName);
     const conversation = await Conversation.findOne({
       _id: new Types.ObjectId(id),
       siteId: caller.entitlement.siteId,
       visitorId: caller.visitorId,
-    }).lean<ConversationLean>();
+    })
+      .select(CONVERSATION_SUMMARY_SELECT)
+      .lean<ConversationLean>();
     if (!conversation) {
       return notFound("Conversation not found.");
     }
 
     if (conversation.unreadByCustomer > 0) {
-      const now = new Date();
-      await Conversation.updateOne(
-        { _id: conversation._id },
-        {
-          $set: {
-            unreadByCustomer: 0,
-            "messages.$[unread].readByCustomerAt": now,
-          },
-        },
-        {
-          arrayFilters: [
-            {
-              "unread.author": { $in: ["agent", "assistant"] },
-              "unread.readByCustomerAt": { $exists: false },
-            },
-          ],
-        },
-      );
+      await markTeamMessagesReadByCustomer(dataDbName, conversation);
     }
     return noContent();
   });

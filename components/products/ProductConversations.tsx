@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Inbox, MessagesSquare, RefreshCw, Send } from "lucide-react";
 
 import { useToast } from "@/components/providers/ToastProvider";
@@ -39,6 +40,12 @@ const STATUS_TONE: Record<
   resolved: "success",
 };
 
+const STATUS_LABELS: Record<ProductConversationStatus, string> = {
+  open: "Open",
+  "awaiting-customer": "Waiting on customer",
+  resolved: "Resolved",
+};
+
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     month: "short",
@@ -58,15 +65,16 @@ export function ProductConversations({
   canReply: boolean;
 }) {
   const toast = useToast();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [conversations, setConversations] = useState<
     ProductConversationSummary[]
   >([]);
-  const [statusFilter, setStatusFilter] = useState<
-    ProductConversationStatus | "all"
-  >("all");
+  const statusFilter = (searchParams.get("status") as ProductConversationStatus | "all" | null) ?? "all";
+  const selectedId = searchParams.get("conversation") ?? null;
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [thread, setThread] = useState<ProductConversation | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
   const [threadError, setThreadError] = useState<string | null>(null);
@@ -97,6 +105,18 @@ export function ProductConversations({
       setLoadingList(false);
     }
   }, [siteId, productSlug, statusFilter]);
+
+  function updateQuery(key: "status" | "conversation", value: string | null) {
+    const next = new URLSearchParams(searchParams.toString());
+    if (!value || (key === "status" && value === "all")) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+    router.replace(`${pathname}${next.size ? `?${next.toString()}` : ""}`, {
+      scroll: false,
+    });
+  }
 
   useEffect(() => {
     void loadList();
@@ -194,9 +214,9 @@ export function ProductConversations({
                 <button
                   key={filter.value}
                   type="button"
-                  onClick={() => setStatusFilter(filter.value)}
+                  onClick={() => updateQuery("status", filter.value)}
                   className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                    "min-h-11 rounded-md px-3 py-2 text-xs font-medium transition-colors",
                     statusFilter === filter.value
                       ? "bg-brand-600 text-white"
                       : "text-ink-muted hover:bg-surface-subtle",
@@ -209,7 +229,7 @@ export function ProductConversations({
             <button
               type="button"
               onClick={() => void loadList()}
-              className="rounded-md p-1.5 text-ink-muted transition-colors hover:bg-surface-subtle"
+              className="grid size-11 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-subtle"
               aria-label="Refresh conversations"
             >
               <RefreshCw
@@ -252,9 +272,9 @@ export function ProductConversations({
                   <li key={conversation.id}>
                     <button
                       type="button"
-                      onClick={() => setSelectedId(conversation.id)}
+                      onClick={() => updateQuery("conversation", conversation.id)}
                       className={cn(
-                        "flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors",
+                        "flex min-h-11 w-full flex-col gap-1 px-4 py-3 text-left transition-colors",
                         selectedId === conversation.id
                           ? "bg-surface-subtle"
                           : "hover:bg-surface-subtle",
@@ -275,7 +295,7 @@ export function ProductConversations({
                       </p>
                       <div className="flex items-center gap-2">
                         <Badge tone={STATUS_TONE[conversation.status]}>
-                          {conversation.status}
+                          {STATUS_LABELS[conversation.status]}
                         </Badge>
                         <span className="text-xs text-ink-faint">
                           {formatTime(conversation.lastMessageAt)}
@@ -328,7 +348,9 @@ export function ProductConversations({
                     </p>
                   ) : null}
                 </div>
-                <Badge tone={STATUS_TONE[thread.status]}>{thread.status}</Badge>
+                <Badge tone={STATUS_TONE[thread.status]}>
+                  {STATUS_LABELS[thread.status]}
+                </Badge>
               </div>
 
               <div
@@ -382,7 +404,11 @@ export function ProductConversations({
                   onSubmit={handleSend}
                   noValidate
                 >
+                  <label htmlFor="conversation-reply" className="sr-only">
+                    Reply to customer
+                  </label>
                   <textarea
+                    id="conversation-reply"
                     value={reply}
                     onChange={(event) => setReply(event.target.value)}
                     onKeyDown={(event) => {
@@ -394,11 +420,13 @@ export function ProductConversations({
                     rows={2}
                     placeholder="Type a reply... (Enter to send, Shift+Enter for a new line)"
                     className="min-h-11 flex-1 resize-none rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors focus:border-brand-600 focus:outline-none"
+                    aria-label="Reply to customer"
                   />
                   <Button
                     type="submit"
                     loading={sending}
                     disabled={!reply.trim()}
+                    className="min-h-11"
                   >
                     <Send className="h-4 w-4" aria-hidden="true" />
                     Send

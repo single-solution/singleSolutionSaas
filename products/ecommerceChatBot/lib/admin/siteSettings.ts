@@ -1,5 +1,6 @@
 import { getTenantModels } from "@/lib/db/tenant";
 import { type SiteSettingsAttributes } from "@/lib/db/models/SiteSettings";
+import { OutboundUrlError, validateOutboundUrl } from "@/lib/security/outboundUrl";
 
 export type SiteSettingsValues = Omit<SiteSettingsAttributes, "siteId">;
 
@@ -12,6 +13,13 @@ const EMPTY: SiteSettingsValues = {
   webhookUrl: "",
   webhookSecret: "",
 };
+
+export class SiteSettingsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SiteSettingsError";
+  }
+}
 
 /** Load a site's advanced settings, falling back to empty defaults. */
 export async function getSiteSettings(dataDbName: string, siteId: string): Promise<SiteSettingsValues> {
@@ -49,13 +57,25 @@ export async function saveSiteSettings(
   input: Partial<SiteSettingsValues>,
 ): Promise<SiteSettingsValues> {
   const { SiteSettings } = await getTenantModels(dataDbName);
+  const webhookUrl = cleanString(input.webhookUrl, 2_000);
+  if (webhookUrl) {
+    try {
+      await validateOutboundUrl(webhookUrl, {
+        allowLocalhost: true,
+      });
+    } catch (error) {
+      const message =
+        error instanceof OutboundUrlError ? error.message : "Webhook URL is not allowed.";
+      throw new SiteSettingsError(message);
+    }
+  }
   const update: Record<string, unknown> = {
     autoReplyRules: cleanList(input.autoReplyRules),
     cannedReplies: cleanList(input.cannedReplies),
     handoffMessage: cleanString(input.handoffMessage, 2_000),
     fallbackMessage: cleanString(input.fallbackMessage, 2_000),
     escalationKeywords: cleanList(input.escalationKeywords),
-    webhookUrl: cleanString(input.webhookUrl, 2_000),
+    webhookUrl,
   };
   // Write-only secret: only overwrite when a fresh value is supplied.
   const secret = cleanString(input.webhookSecret, 512);

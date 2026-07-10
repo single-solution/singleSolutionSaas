@@ -1,47 +1,90 @@
 "use client";
 
 /**
- * Anonymous visitor session. The widget is embedded with a merchant product
- * token; each browser also gets a stable random `visitorId` (persisted in
- * localStorage, scoped by token) so a visitor keeps the same conversation
- * across reloads without any login. Both travel as request headers to the
- * product API, which resolves the merchant from the token and checks visitor
- * ownership from the id.
+ * Anonymous visitor session. The widget bootstraps a signed embed session from
+ * the publishable product token and browser origin. The bearer session authorizes
+ * widget APIs; a raw visitor id alone is never accepted as authority.
  */
 
-const STORAGE_PREFIX = "ecommerce-chatbot:visitor:";
+const STORAGE_PREFIX = "ecommerce-chatbot:embed-session:";
 
-let activeToken = "";
+let activeProductToken = "";
+let activeSessionToken = "";
 let activeVisitorId = "";
+let bootstrapPromise: Promise<void> | null = null;
 
-function randomId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+async function bootstrapEmbedSession(productToken: string): Promise<void> {
+  const storageKey = `${STORAGE_PREFIX}${productToken}`;
+  let cachedToken = "";
+  try {
+    cachedToken = window.sessionStorage.getItem(storageKey) ?? "";
+  } catch {
+    cachedToken = "";
   }
-  return `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
+  const response = await fetch("/api/embed/sessions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(cachedToken ? { Authorization: `Bearer ${cachedToken}` } : {}),
+    },
+    body: JSON.stringify({ productToken }),
+  });
+
+  if (!response.ok) {
+    let message = "Could not start chat session.";
+    try {
+      const body = (await response.json()) as { error?: string };
+      if (body.error) {
+        message = body.error;
+      }
+    } catch {
+      // ignore
+    }
+    throw new Error(message);
+  }
+
+  const data = (await response.json()) as {
+    sessionToken: string;
+    visitorId: string;
+  };
+  activeSessionToken = data.sessionToken;
+  activeVisitorId = data.visitorId;
+  try {
+    window.sessionStorage.setItem(storageKey, activeSessionToken);
+  } catch {
+    // sessionStorage blocked in some iframe contexts
+  }
 }
 
-export function initChatSession(token: string): void {
-  activeToken = token;
-  const storageKey = `${STORAGE_PREFIX}${token}`;
-  let visitorId = "";
-  try {
-    visitorId = window.localStorage.getItem(storageKey) ?? "";
-    if (!visitorId) {
-      visitorId = randomId();
-      window.localStorage.setItem(storageKey, visitorId);
-    }
-  } catch {
-    // localStorage blocked (private mode / third-party) — fall back to an
-    // in-memory id for this session only.
-    visitorId = visitorId || randomId();
+export function initChatSession(productToken: string): Promise<void> {
+  if (activeProductToken === productToken && activeSessionToken) {
+    return Promise.resolve();
   }
-  activeVisitorId = visitorId;
+  activeProductToken = productToken;
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrapEmbedSession(productToken)
+      .catch((error) => {
+        activeSessionToken = "";
+        activeVisitorId = "";
+        throw error;
+      })
+      .finally(() => {
+        bootstrapPromise = null;
+      });
+  }
+  return bootstrapPromise;
 }
 
 export function getChatSessionHeaders(): Record<string, string> {
+  if (!activeSessionToken) {
+    return {};
+  }
   return {
-    "x-product-token": activeToken,
-    "x-visitor-id": activeVisitorId,
+    Authorization: `Bearer ${activeSessionToken}`,
   };
+}
+
+export function getVisitorId(): string {
+  return activeVisitorId;
 }

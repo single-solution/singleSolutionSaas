@@ -4,27 +4,19 @@ import { DemoStorefront } from "@/components/demo/DemoStorefront";
 import { resolvePublicDemo } from "@/lib/demo/resolvePublicDemo";
 
 /**
- * Live test storefront. Open with a real product access token to see the widget
- * embedded exactly as it would run on a merchant site:
- *   /demo?token=pk_live_xxx
- * Without a query token, falls back to the configured public demo sandbox.
+ * Live test storefront using the server-configured public demo sandbox.
  */
 export const dynamic = "force-dynamic";
 
-export default async function DemoStore({
-  searchParams,
-}: {
-  searchParams: Promise<{ token?: string }>;
-}) {
-  const { token: queryToken } = await searchParams;
-  const demo = await resolvePublicDemo(queryToken);
+export default async function DemoStore() {
+  const demo = await resolvePublicDemo();
 
   return (
-    <DemoStorefront badge={queryToken ? "Token demo" : "Live demo sandbox"}>
+    <DemoStorefront badge="Live demo sandbox">
       {demo.status === "ready" && demo.token ? (
         <ChatWidgetEmbed token={demo.token} />
       ) : (
-        <DemoStatusPanel status={demo.status} showTokenHint={!queryToken} />
+        <DemoStatusPanel status={demo.status} showTokenHint />
       )}
     </DemoStorefront>
   );
