@@ -1,13 +1,13 @@
 import { Suspense } from "react";
 
 import { DataClient } from "./DataClient";
-import { PageLoader } from "@/components/admin/ui";
+import { DataPageSkeleton } from "@/components/admin/ui";
 
 export const dynamic = "force-dynamic";
 
 export default function AdminDataPage() {
   return (
-    <Suspense fallback={<PageLoader label="Loading data..." />}>
+    <Suspense fallback={<DataPageSkeleton />}>
       <DataClient />
     </Suspense>
   );

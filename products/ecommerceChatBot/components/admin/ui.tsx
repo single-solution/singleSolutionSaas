@@ -301,12 +301,29 @@ export function EmptyState({
   title,
   description,
   action,
+  compact = false,
 }: {
   icon: LucideIcon | React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   action?: React.ReactNode;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="flex flex-col items-center rounded-lg border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-4 py-5 text-center">
+        <Icon className="h-5 w-5 text-[var(--brand-700)]" aria-hidden="true" />
+        <h3 className="mt-2 text-sm font-semibold text-[var(--ink)]">
+          {title}
+        </h3>
+        <p className="mt-0.5 max-w-sm text-xs text-[var(--ink-muted)]">
+          {description}
+        </p>
+        {action ? <div className="mt-3">{action}</div> : null}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] px-6 py-10 text-center">
       <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md bg-[var(--brand-100)] text-[var(--brand-700)]">
@@ -370,54 +387,345 @@ export function StatCard({
   );
 }
 
-export function Skeleton({ className }: { className?: string }) {
+export function Skeleton({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <div
       className={cn(
         "animate-pulse rounded-md bg-[var(--line)] motion-reduce:animate-none",
         className,
       )}
+      style={style}
       aria-hidden="true"
     />
   );
 }
 
-export function ListSkeleton({ rows = 4 }: { rows?: number }) {
+function PageHeadingSkeleton({ action = false }: { action?: boolean }) {
   return (
-    <div className="space-y-3" aria-hidden="true">
-      {Array.from({ length: rows }).map((_, index) => (
-        <div
-          key={index}
-          className="flex items-center justify-between rounded-lg border border-[var(--line)] px-4 py-3"
-        >
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-3 w-24" />
-          </div>
-          <Skeleton className="h-6 w-16 rounded-full" />
-        </div>
-      ))}
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="space-y-2">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-3.5 w-64 max-w-full" />
+      </div>
+      {action ? <Skeleton className="h-9 w-28 shrink-0 rounded-md" /> : null}
     </div>
   );
 }
 
-export function DetailSkeleton() {
+export function OverviewSkeleton() {
   return (
-    <div className="admin-page-stack" aria-hidden="true">
-      <Skeleton className="h-5 w-56" />
-      <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow-card)]">
-        <Skeleton className="mb-2 h-8 w-48" />
-        <Skeleton className="h-4 w-32" />
+    <div
+      className="admin-page-stack"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading overview"
+    >
+      <PageHeadingSkeleton />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div
+            key={index}
+            className="rounded-lg border border-[var(--line)] bg-[var(--surface)] p-3.5 shadow-[var(--shadow-card)]"
+          >
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="mt-3 h-6 w-12" />
+          </div>
+        ))}
       </div>
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow-card)]">
-          <Skeleton className="mb-4 h-6 w-24" />
-          <ListSkeleton />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)] md:p-5 lg:col-span-2">
+          <Skeleton className="h-3.5 w-36" />
+          <div className="mt-4 flex h-40 items-end gap-1">
+            {Array.from({ length: 14 }).map((_, index) => (
+              <Skeleton
+                key={index}
+                className="flex-1 rounded-t"
+                style={{ height: `${30 + (index % 5) * 12}%` }}
+              />
+            ))}
+          </div>
         </div>
-        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-[var(--shadow-card)]">
-          <Skeleton className="mb-4 h-6 w-24" />
-          <Skeleton className="h-24 w-full" />
+        <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)] md:p-5">
+          <Skeleton className="h-3.5 w-32" />
+          <Skeleton className="mt-4 h-10 w-24" />
+          <Skeleton className="mt-2 h-3.5 w-full" />
         </div>
+      </div>
+    </div>
+  );
+}
+
+export function AssistantFormSkeleton() {
+  return (
+    <div
+      className="admin-page-stack max-w-3xl"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading assistant settings"
+    >
+      <PageHeadingSkeleton />
+      {[
+        { labelWidth: "w-28", rows: 5 },
+        { labelWidth: "w-24", rows: 4 },
+        { labelWidth: "w-32", rows: 3 },
+      ].map((field, index) => (
+        <div key={index} className="flex flex-col gap-1.5">
+          <Skeleton className={cn("h-4", field.labelWidth)} />
+          <Skeleton
+            className="w-full rounded-md"
+            style={{ height: `${field.rows * 1.5 + 1}rem` }}
+          />
+          <Skeleton className="h-3 w-4/5 max-w-md" />
+        </div>
+      ))}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div key={index} className="flex flex-col gap-1.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-[4.5rem] w-full rounded-md" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)] md:p-5">
+        <div className="mb-4 space-y-1">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-3 w-72 max-w-full" />
+        </div>
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1.5">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-10 w-full rounded-md" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-10 w-full rounded-md" />
+            <Skeleton className="h-3 w-48" />
+          </div>
+        </div>
+      </div>
+      <Skeleton className="h-9 w-32 rounded-md" />
+    </div>
+  );
+}
+
+export function ConversationListSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <ul className="divide-y divide-[var(--line)]" aria-hidden="true">
+      {Array.from({ length: rows }).map((_, index) => (
+        <li key={index} className="flex flex-col gap-1.5 px-4 py-3">
+          <div className="flex items-center justify-between gap-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-5 w-16 rounded-md" />
+          </div>
+          <Skeleton className="h-3 w-48 max-w-full" />
+          <Skeleton className="h-2.5 w-24" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function ConversationThreadSkeleton({
+  messageCount = 3,
+}: {
+  messageCount?: number;
+}) {
+  return (
+    <div
+      className="flex max-h-[70vh] flex-col"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading conversation"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] p-4">
+        <div className="space-y-1">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-16 rounded-md" />
+          <Skeleton className="h-8 w-24 rounded-md" />
+          <Skeleton className="h-8 w-28 rounded-md" />
+        </div>
+      </div>
+      <div className="space-y-3 p-4">
+        {Array.from({ length: messageCount }).map((_, index) => (
+          <Skeleton
+            key={index}
+            className={cn(
+              "h-14 rounded-lg",
+              index % 2 === 0 ? "w-[70%]" : "ml-auto w-[60%]",
+            )}
+          />
+        ))}
+      </div>
+      <div className="border-t border-[var(--line)] p-3">
+        <div className="flex items-end gap-2">
+          <Skeleton className="h-[3.25rem] flex-1 rounded-md" />
+          <Skeleton className="h-9 w-20 shrink-0 rounded-md" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ConversationsPageSkeleton() {
+  return (
+    <div
+      className="admin-page-stack"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading conversations"
+    >
+      <PageHeadingSkeleton />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <Skeleton className="h-9 w-72 max-w-full rounded-lg" />
+        <Skeleton className="h-9 w-full rounded-md sm:w-64" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
+        <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
+          <ConversationListSkeleton />
+        </div>
+        <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
+          <ConversationThreadSkeleton />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const WEBHOOK_TABLE_COLUMNS = [
+  "Event",
+  "Status",
+  "Code",
+  "Duration",
+  "When",
+] as const;
+
+export function WebhookTableSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, rowIndex) => (
+        <tr key={rowIndex} aria-hidden="true">
+          <td>
+            <Skeleton className="h-4 w-28" />
+          </td>
+          <td>
+            <Skeleton className="h-5 w-16 rounded-md" />
+          </td>
+          <td>
+            <Skeleton className="h-4 w-8" />
+          </td>
+          <td>
+            <Skeleton className="h-4 w-12" />
+          </td>
+          <td>
+            <Skeleton className="h-4 w-32" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+export function WebhooksPageSkeleton() {
+  return (
+    <div
+      className="admin-page-stack"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading webhooks"
+    >
+      <PageHeadingSkeleton action />
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow-card)] md:p-5">
+        <div className="min-w-0 space-y-1.5">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-3.5 w-64 max-w-full" />
+        </div>
+        <Skeleton className="h-9 w-28 shrink-0 rounded-md" />
+      </div>
+      <div className="overflow-hidden rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              {WEBHOOK_TABLE_COLUMNS.map((column) => (
+                <th key={column}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <WebhookTableSkeleton />
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+export function DataTableSkeleton({
+  columns = 5,
+  rows = 4,
+}: {
+  columns?: number;
+  rows?: number;
+}) {
+  return (
+    <>
+      {Array.from({ length: rows }).map((_, rowIndex) => (
+        <tr key={rowIndex} aria-hidden="true">
+          {Array.from({ length: columns }).map((__, columnIndex) => (
+            <td key={columnIndex}>
+              <Skeleton
+                className="h-4"
+                style={{
+                  width: `${4 + ((rowIndex + columnIndex) % 4) * 2}rem`,
+                }}
+              />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+export function DataPageSkeleton() {
+  return (
+    <div
+      className="admin-page-stack"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading raw data"
+    >
+      <PageHeadingSkeleton />
+      <Skeleton className="h-9 w-72 max-w-full rounded-lg" />
+      <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-[var(--shadow-card)]">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <th key={index}>
+                  <Skeleton className="h-3 w-16" />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <DataTableSkeleton />
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Skeleton className="h-8 w-20 rounded-md" />
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-8 w-14 rounded-md" />
       </div>
     </div>
   );
@@ -549,15 +857,20 @@ export function FilterGroup<T extends string>({
 export function TableEmptyRow({
   colSpan,
   children,
+  compact = false,
 }: {
   colSpan: number;
   children: React.ReactNode;
+  compact?: boolean;
 }) {
   return (
     <tr>
       <td
         colSpan={colSpan}
-        className="px-4 py-8 text-center text-[var(--ink-faint)]"
+        className={cn(
+          "px-4 text-center text-[var(--ink-faint)]",
+          compact ? "py-4" : "py-8",
+        )}
       >
         {children}
       </td>

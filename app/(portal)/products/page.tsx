@@ -31,7 +31,10 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
-import { ListSkeleton } from "@/components/ui/Skeleton";
+import {
+  DETAIL_FIRST_MAX_COUNT,
+  ProductCatalogSkeleton,
+} from "@/components/ui/portalSkeletons";
 import { StatCard } from "@/components/ui/StatCard";
 import { PlatformApiError, platformApi } from "@/lib/api/client";
 import type { ProductSummary } from "@/lib/types";
@@ -65,6 +68,9 @@ export default function AdminProductsPage() {
         (status === "all" || product.status === status),
     );
   }, [products, search, status]);
+  const isDetailFirst =
+    filteredProducts.length > 0 &&
+    filteredProducts.length <= DETAIL_FIRST_MAX_COUNT;
 
   async function load() {
     setError(null);
@@ -177,6 +183,10 @@ export default function AdminProductsPage() {
   );
   const editingProduct =
     products.find((product) => product.slug === editingSlug) ?? null;
+
+  if (loading) {
+    return <ProductCatalogSkeleton />;
+  }
 
   return (
     <div className="page-stack">
@@ -327,9 +337,7 @@ export default function AdminProductsPage() {
         </Alert>
       ) : null}
 
-      {loading ? (
-        <ListSkeleton />
-      ) : products.length === 0 ? (
+      {products.length === 0 ? (
         <EmptyState
           icon={Boxes}
           title="No products yet"
@@ -342,14 +350,28 @@ export default function AdminProductsPage() {
           description="Clear the search or change the status filter."
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div
+          className={
+            isDetailFirst
+              ? "space-y-3"
+              : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+          }
+        >
           {filteredProducts.map((product, index) => (
             <div
               key={product.slug}
               style={{ animationDelay: `${index * 0.04}s` }}
-              className="flex animate-fade-in-up flex-col rounded-xl border border-line bg-surface p-5 shadow-sm"
+              className={`flex animate-fade-in-up rounded-xl border border-line bg-surface p-5 shadow-sm ${
+                isDetailFirst
+                  ? "flex-col gap-4 lg:flex-row lg:items-center"
+                  : "flex-col"
+              }`}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div
+                className={`flex items-start justify-between gap-3 ${
+                  isDetailFirst ? "lg:w-64 lg:shrink-0" : ""
+                }`}
+              >
                 <div className="flex min-w-0 items-center gap-3">
                   <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
                     <Boxes className="h-5 w-5" aria-hidden="true" />
@@ -362,7 +384,7 @@ export default function AdminProductsPage() {
                       {product.name}
                     </Link>
                     <p className="truncate text-[13px] text-ink-muted">
-                      {product.slug} · {product.plans.length} plan
+                      {product.slug} / {product.plans.length} plan
                       {product.plans.length === 1 ? "" : "s"}
                     </p>
                   </div>
@@ -374,11 +396,23 @@ export default function AdminProductsPage() {
                 </Badge>
               </div>
 
-              <p className="mt-4 line-clamp-2 min-h-[2.5rem] text-[13px] leading-5 text-ink-secondary">
+              <p
+                className={`line-clamp-2 text-[13px] leading-5 text-ink-secondary ${
+                  isDetailFirst
+                    ? "lg:min-w-48 lg:flex-1"
+                    : "mt-4 min-h-[2.5rem]"
+                }`}
+              >
                 {product.description || "No description."}
               </p>
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-4 text-[12.5px] text-ink-muted">
+              <div
+                className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12.5px] text-ink-muted ${
+                  isDetailFirst
+                    ? "rounded-lg border border-line bg-surface-subtle/40 px-3 py-3 lg:shrink-0"
+                    : "mt-4 border-t border-line pt-4"
+                }`}
+              >
                 <span className="inline-flex items-center gap-1.5">
                   <ShieldCheck
                     className="h-3.5 w-3.5 text-ink-faint"
@@ -411,7 +445,13 @@ export default function AdminProductsPage() {
                 </span>
               </div>
 
-              <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
+              <div
+                className={`flex items-center gap-2 ${
+                  isDetailFirst
+                    ? "flex-wrap lg:shrink-0"
+                    : "mt-3 border-t border-line pt-3"
+                }`}
+              >
                 <Button
                   type="button"
                   variant="ghost"

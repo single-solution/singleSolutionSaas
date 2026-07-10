@@ -30,7 +30,10 @@ import { Modal } from "@/components/ui/Modal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
-import { ListSkeleton } from "@/components/ui/Skeleton";
+import {
+  DashboardAdminSkeleton,
+  MerchantDirectorySkeleton,
+} from "@/components/ui/portalSkeletons";
 import { StatCard } from "@/components/ui/StatCard";
 import { PlatformApiError, platformApi } from "@/lib/api/client";
 import type { MerchantSummary, ProductSummary } from "@/lib/types";
@@ -215,6 +218,14 @@ export function AdminOverview({ mode = "directory" }: AdminOverviewProps) {
       : matchingMerchants;
   const isDashboard = mode === "dashboard";
 
+  if (loading) {
+    return isDashboard ? (
+      <DashboardAdminSkeleton />
+    ) : (
+      <MerchantDirectorySkeleton />
+    );
+  }
+
   return (
     <div className="page-stack">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between animate-fade-in-up">
@@ -382,9 +393,7 @@ export function AdminOverview({ mode = "directory" }: AdminOverviewProps) {
         </Alert>
       ) : null}
 
-      {loading ? (
-        <ListSkeleton />
-      ) : displayedMerchants.length === 0 ? (
+      {displayedMerchants.length === 0 ? (
         <EmptyState
           icon={Users}
           title={

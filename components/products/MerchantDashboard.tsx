@@ -6,7 +6,7 @@ import { Boxes, Globe, Plus, Wallet } from "lucide-react";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import { DashboardMerchantSkeleton } from "@/components/ui/portalSkeletons";
 import { StatCard } from "@/components/ui/StatCard";
 
 import { MerchantActivity } from "./MerchantActivity";
@@ -43,7 +43,7 @@ export function MerchantDashboard({
   const firstName = userName.trim().split(/\s+/)[0] || "there";
 
   if (overview.loading) {
-    return <DetailSkeleton />;
+    return <DashboardMerchantSkeleton />;
   }
 
   if (overview.error) {
@@ -51,7 +51,11 @@ export function MerchantDashboard({
       <Alert tone="danger" title="Load failed">
         {overview.error}
         <div className="mt-3">
-          <Button variant="outline" size="sm" onClick={() => void overview.reload()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void overview.reload()}
+          >
             Retry
           </Button>
         </div>
@@ -59,9 +63,16 @@ export function MerchantDashboard({
     );
   }
 
-  const totalSpend = overview.sites.reduce((sum, entry) => sum + entry.monthlySpend, 0);
-  const spendCurrency = overview.sites.find((entry) => entry.monthlySpend > 0)?.currency ?? "USD";
-  const activeProducts = overview.sites.reduce((sum, entry) => sum + entry.activeProducts, 0);
+  const totalSpend = overview.sites.reduce(
+    (sum, entry) => sum + entry.monthlySpend,
+    0,
+  );
+  const spendCurrency =
+    overview.sites.find((entry) => entry.monthlySpend > 0)?.currency ?? "USD";
+  const activeProducts = overview.sites.reduce(
+    (sum, entry) => sum + entry.activeProducts,
+    0,
+  );
   const period = currentPeriod();
 
   return (
@@ -74,7 +85,9 @@ export function MerchantDashboard({
             </h1>
             <Badge tone="brand">{merchantName}</Badge>
           </div>
-          <p className="mt-1 text-[13px] text-ink-muted">Here is what is happening across your sites today.</p>
+          <p className="mt-1 text-[13px] text-ink-muted">
+            Here is what is happening across your sites today.
+          </p>
         </div>
         <Link href="/sites">
           <Button size="sm" variant="outline">
@@ -85,9 +98,25 @@ export function MerchantDashboard({
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatCard label="Monthly spend" value={formatCurrency(totalSpend, spendCurrency)} hint={`Estimated · ${period}`} icon={Wallet} accent />
-        <StatCard label="Sites" value={String(overview.sites.length)} hint="Deployments" icon={Globe} />
-        <StatCard label="Active products" value={String(activeProducts)} hint="Across all sites" icon={Boxes} />
+        <StatCard
+          label="Monthly spend"
+          value={formatCurrency(totalSpend, spendCurrency)}
+          hint={`Estimated / ${period}`}
+          icon={Wallet}
+          accent
+        />
+        <StatCard
+          label="Sites"
+          value={String(overview.sites.length)}
+          hint="Deployments"
+          icon={Globe}
+        />
+        <StatCard
+          label="Active products"
+          value={String(activeProducts)}
+          hint="Across all sites"
+          icon={Boxes}
+        />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">
@@ -108,8 +137,12 @@ export function MerchantDashboard({
 
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold tracking-tight text-ink">Your sites</h2>
-          <span className="text-[12.5px] text-ink-muted">{overview.sites.length} total</span>
+          <h2 className="text-[15px] font-semibold tracking-tight text-ink">
+            Your sites
+          </h2>
+          <span className="text-[12.5px] text-ink-muted">
+            {overview.sites.length} total
+          </span>
         </div>
         <SitesOverview sites={overview.sites} hrefBase="/sites" />
       </div>

@@ -7,6 +7,7 @@ import { ScrollText } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { MerchantActivitySkeleton } from "@/components/ui/portalSkeletons";
 import { platformApi } from "@/lib/api/client";
 import type { AuditLogSummary } from "@/lib/types";
 
@@ -22,6 +23,7 @@ export function MerchantActivity({
   const searchParams = useSearchParams();
   const [entries, setEntries] = useState<AuditLogSummary[]>([]);
   const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
   const page = Math.max(
     1,
     Number(searchParams.get("activityPage") ?? "1") || 1,
@@ -42,6 +44,7 @@ export function MerchantActivity({
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
     void platformApi
       .listAuditLogs(merchantId, page, pageSize)
       .then((response) => {
@@ -52,11 +55,20 @@ export function MerchantActivity({
       })
       .catch(() => {
         // Activity is best-effort; product actions surface their own toasts.
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
       });
     return () => {
       active = false;
     };
   }, [merchantId, page, refreshSignal]);
+
+  if (loading) {
+    return <MerchantActivitySkeleton />;
+  }
 
   return (
     <Card className="shadow-sm border-line bg-surface h-fit">

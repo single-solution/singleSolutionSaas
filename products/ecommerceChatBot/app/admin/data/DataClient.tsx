@@ -7,9 +7,9 @@ import { Database } from "lucide-react";
 import { adminApi } from "@/lib/admin/adminApiClient";
 import {
   Button,
+  DataTableSkeleton,
   EmptyState,
   FilterGroup,
-  ListSkeleton,
   NoSiteSelected,
   PageError,
   PageHeading,
@@ -53,6 +53,7 @@ export function DataClient() {
   }
 
   const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  const skeletonColumnCount = Math.max(columns.length, 5);
 
   return (
     <div className="admin-page-stack">
@@ -86,12 +87,11 @@ export function DataClient() {
           </thead>
           <tbody>
             {loading ? (
-              <TableEmptyRow colSpan={Math.max(1, columns.length)}>
-                <ListSkeleton rows={4} />
-              </TableEmptyRow>
+              <DataTableSkeleton columns={skeletonColumnCount} />
             ) : rows.length === 0 ? (
-              <TableEmptyRow colSpan={Math.max(1, columns.length)}>
+              <TableEmptyRow colSpan={Math.max(1, columns.length)} compact>
                 <EmptyState
+                  compact
                   icon={Database}
                   title="No records"
                   description="This resource has no stored rows for the selected site."

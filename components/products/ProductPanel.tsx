@@ -45,6 +45,7 @@ export interface ProductPanelProps {
   createdToken: ProductAccessTokenCreated | null;
   tokenName: string;
   tokenDomains: string;
+  showBack?: boolean;
   onBack: () => void;
   onPlanChange: (planCode: string) => void;
   onStatusToggle: () => void;
@@ -110,14 +111,16 @@ export function ProductPanel(props: ProductPanelProps) {
     <div className="animate-fade-in space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <button
-            type="button"
-            onClick={props.onBack}
-            className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            All products
-          </button>
+          {props.showBack !== false ? (
+            <button
+              type="button"
+              onClick={props.onBack}
+              className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              All products
+            </button>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-xl font-semibold tracking-tight text-ink">
               {product.displayName}
@@ -177,7 +180,7 @@ export function ProductPanel(props: ProductPanelProps) {
           value={
             product.priceMonthly !== null && product.currency
               ? formatCurrency(product.priceMonthly, product.currency)
-              : "—"
+              : "-"
           }
         />
         <MiniStat label="Active keys" value={String(activeTokens.length)} />
@@ -207,7 +210,7 @@ export function ProductPanel(props: ProductPanelProps) {
               <span className="text-sm font-medium text-ink">
                 {product.priceMonthly !== null && product.currency
                   ? `${formatCurrency(product.priceMonthly, product.currency)}/mo`
-                  : "—"}
+                  : "-"}
               </span>
             </div>
 
@@ -227,7 +230,7 @@ export function ProductPanel(props: ProductPanelProps) {
                     <option value="">Unassigned</option>
                     {product.availablePlans.map((plan) => (
                       <option key={plan.code} value={plan.code}>
-                        {plan.name} —{" "}
+                        {plan.name} -{" "}
                         {formatCurrency(plan.priceMonthly, plan.currency)}/mo
                       </option>
                     ))}
@@ -384,10 +387,10 @@ export function ProductPanel(props: ProductPanelProps) {
                 <div className="min-w-0">
                   <p className="truncate font-medium text-ink">{token.name}</p>
                   <p className="text-sm text-ink-muted">
-                    ····{token.tokenPrefix}
+                    ****{token.tokenPrefix}
                     {token.lastUsedAt
-                      ? ` · used ${new Date(token.lastUsedAt).toLocaleDateString()}`
-                      : " · never used"}
+                      ? ` / used ${new Date(token.lastUsedAt).toLocaleDateString()}`
+                      : " / never used"}
                   </p>
                   {token.allowedDomains.length > 0 ? (
                     <p className="mt-0.5 truncate text-xs text-ink-faint">
@@ -395,7 +398,7 @@ export function ProductPanel(props: ProductPanelProps) {
                     </p>
                   ) : (
                     <p className="mt-0.5 text-xs text-danger">
-                      No domains — widget blocked
+                      No domains - widget blocked
                     </p>
                   )}
                 </div>

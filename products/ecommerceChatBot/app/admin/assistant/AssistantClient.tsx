@@ -8,7 +8,7 @@ import {
   Button,
   Card,
   CardHeader,
-  DetailSkeleton,
+  AssistantFormSkeleton,
   Field,
   InlineNote,
   Input,
@@ -103,7 +103,7 @@ export function AssistantClient() {
     return <NoSiteSelected />;
   }
   if (loading) {
-    return <DetailSkeleton />;
+    return <AssistantFormSkeleton />;
   }
 
   return (

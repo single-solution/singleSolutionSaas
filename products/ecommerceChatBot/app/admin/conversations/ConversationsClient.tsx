@@ -10,10 +10,11 @@ import { cn } from "@/components/admin/cn";
 import {
   Button,
   Card,
+  ConversationListSkeleton,
+  ConversationThreadSkeleton,
   EmptyState,
   FilterGroup,
   Input,
-  ListSkeleton,
   NoSiteSelected,
   PageError,
   PageHeading,
@@ -154,15 +155,16 @@ export function ConversationsClient() {
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         <Card className="overflow-hidden p-0">
           {loading ? (
-            <div className="p-4">
-              <ListSkeleton rows={5} />
-            </div>
+            <ConversationListSkeleton />
           ) : list.length === 0 ? (
-            <EmptyState
-              icon={MessageSquare}
-              title="No conversations"
-              description="No conversations match the current filters."
-            />
+            <div className="p-4">
+              <EmptyState
+                compact
+                icon={MessageSquare}
+                title="No conversations"
+                description="No conversations match the current filters."
+              />
+            </div>
           ) : (
             <ul className="max-h-[70vh] divide-y divide-[var(--line)] overflow-y-auto">
               {list.map((conversation) => (
@@ -205,19 +207,22 @@ export function ConversationsClient() {
 
         <Card className="overflow-hidden p-0">
           {!thread ? (
-            <div className="p-6">
-              {threadLoading ? (
-                <ListSkeleton rows={3} />
-              ) : (
+            threadLoading ? (
+              <ConversationThreadSkeleton
+                messageCount={Math.min(3, Math.max(1, list.length))}
+              />
+            ) : (
+              <div className="p-4">
                 <EmptyState
+                  compact
                   icon={MessageSquare}
                   title="Select a conversation"
                   description="Choose a thread from the list to view messages and reply."
                 />
-              )}
-            </div>
+              </div>
+            )
           ) : (
-            <div className="flex h-[70vh] flex-col">
+            <div className="flex max-h-[70vh] flex-col">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] p-4">
                 <div>
                   <p className="text-sm font-semibold text-[var(--ink)]">
@@ -257,7 +262,7 @@ export function ConversationsClient() {
                 </div>
               </div>
 
-              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              <div className="space-y-3 overflow-y-auto p-4">
                 {thread.messages.map((message) => (
                   <div
                     key={message.id}

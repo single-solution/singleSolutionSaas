@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { Textarea } from "@/components/ui/Textarea";
+import { ProductConfigEditorSkeleton } from "@/components/ui/portalSkeletons";
 import { useToast } from "@/components/providers/ToastProvider";
 import { PlatformApiError, platformApi } from "@/lib/api/client";
 import type {
@@ -434,14 +435,7 @@ export function ProductConfigEditor({
     : "Managed from the portal. Inherited values come from the product default; override per site as needed.";
 
   if (loading) {
-    return (
-      <Card className="shadow-sm border-line bg-surface">
-        <CardHeader title={title} description={description} />
-        <p className="text-sm text-ink-muted" aria-live="polite">
-          Loading configuration...
-        </p>
-      </Card>
-    );
+    return <ProductConfigEditorSkeleton />;
   }
 
   if (error || !config) {

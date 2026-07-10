@@ -1,14 +1,25 @@
 import { cn } from "@/lib/cn";
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-md bg-line", className)} aria-hidden="true" />;
+  return (
+    <div
+      className={cn(
+        "animate-pulse rounded-md bg-line motion-reduce:animate-none",
+        className,
+      )}
+      aria-hidden="true"
+    />
+  );
 }
 
 export function ListSkeleton() {
   return (
     <div className="space-y-3" aria-hidden="true">
       {Array.from({ length: 4 }).map((_, index) => (
-        <div key={index} className="flex items-center justify-between rounded-lg border border-line px-4 py-3">
+        <div
+          key={index}
+          className="flex items-center justify-between rounded-lg border border-line px-4 py-3"
+        >
           <div className="space-y-2">
             <Skeleton className="h-4 w-40" />
             <Skeleton className="h-3 w-24" />

@@ -4,7 +4,7 @@
  * Embeddable live chat widget.
  *
  * Anonymous by design: each browser gets a persistent `visitorId` and exactly
- * ONE conversation, so there is no thread list — the widget opens straight into
+ * ONE conversation, so there is no thread list - the widget opens straight into
  * it. Polls the API on a focus/blur cadence and sends optimistically.
  */
 
@@ -25,6 +25,8 @@ import { classNames } from "./cn";
 import {
   ChatShell,
   ComposeConversation,
+  ChatWidgetBootstrapSkeleton,
+  ChatWidgetThreadSkeleton,
   StartingConversation,
   SupportHintFooter,
   ThreadConversation,
@@ -209,7 +211,7 @@ export function LiveChatWidget({
 
   async function handlePreviewSend() {
     setBootstrapError(
-      "Preview mode — this shows how the widget looks. Publish to go live.",
+      "Preview mode - this shows how the widget looks. Publish to go live.",
     );
   }
 
@@ -339,21 +341,19 @@ export function LiveChatWidget({
             title={title}
             subtitle={
               isReconnecting
-                ? "Reconnecting…"
+                ? "Reconnecting..."
                 : view === "thread" && activeThread?.assistantPaused
-                  ? "Team is reviewing — you can still message us"
+                  ? "Team is reviewing - you can still message us"
                   : view === "thread" && activeThread
                     ? statusLabel(activeThread.status)
                     : assistantEnabled
-                      ? "Support chat · replies in seconds"
+                      ? "Support chat - replies in seconds"
                       : "We typically reply within an hour"
             }
             onClose={() => setIsOpen(false)}
           >
             {!bootstrapLoaded ? (
-              <div className="flex flex-1 items-center justify-center text-[length:var(--chat-font-body)] text-[var(--color-ink-500)]">
-                Loading chat…
-              </div>
+              <ChatWidgetBootstrapSkeleton />
             ) : !enabled ? (
               <div className="flex flex-1 items-center justify-center px-6 text-center text-[length:var(--chat-font-body)] text-[var(--color-ink-500)]">
                 Chat is currently disabled.
@@ -376,7 +376,7 @@ export function LiveChatWidget({
                     welcomeMessage={welcomeMessage}
                   />
                 )}
-                {view === "thread" && activeThread && (
+                {view === "thread" && activeThread ? (
                   <ThreadConversation
                     thread={activeThread}
                     onSend={handleSend}
@@ -388,7 +388,10 @@ export function LiveChatWidget({
                     isLoadingOlder={isLoadingOlder}
                     onLoadOlder={loadOlderMessages}
                   />
-                )}
+                ) : null}
+                {view === "thread" && !activeThread ? (
+                  <ChatWidgetThreadSkeleton />
+                ) : null}
                 <SupportHintFooter
                   assistantEnabled={assistantEnabled}
                   assistantPaused={

@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { DataTable } from "@/components/ui/DataTable";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import { ProductDetailSkeleton } from "@/components/ui/portalSkeletons";
 import { Tabs } from "@/components/ui/Tabs";
 import { PlatformApiError, platformApi } from "@/lib/api/client";
 import type {
@@ -123,11 +123,7 @@ export default function ProductDetailPage() {
   }
 
   if (loading) {
-    return (
-      <div className="page-stack">
-        <DetailSkeleton />
-      </div>
-    );
+    return <ProductDetailSkeleton />;
   }
 
   if (error || !product) {

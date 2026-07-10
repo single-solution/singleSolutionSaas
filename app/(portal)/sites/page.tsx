@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Boxes, Globe, KeyRound, Search } from "lucide-react";
+import { Boxes, ChevronRight, Globe, KeyRound, Search } from "lucide-react";
 
 import { useAuth } from "@/components/AuthProvider";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -14,7 +14,10 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Input } from "@/components/ui/Input";
 import { ResourceCard } from "@/components/ui/ResourceCard";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import {
+  DETAIL_FIRST_MAX_COUNT,
+  SiteDirectorySkeleton,
+} from "@/components/ui/portalSkeletons";
 import { platformApi } from "@/lib/api/client";
 import type { SiteSummary } from "@/lib/types";
 
@@ -90,7 +93,7 @@ export default function SitesPage() {
   }, [load]);
 
   if (loading) {
-    return <DetailSkeleton />;
+    return <SiteDirectorySkeleton />;
   }
 
   if (error) {
@@ -159,73 +162,150 @@ export default function SitesPage() {
           description="Clear the search or change the status filter."
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {filteredSites.map((site) => (
-            <ResourceCard
-              key={site.id}
-              title={site.name}
-              subtitle={site.primaryDomain || "Domain not configured"}
-              href={`/sites/${site.id}`}
-              icon={Globe}
-              badge={
-                <Badge tone={site.primaryDomain ? "success" : "danger"}>
-                  {site.primaryDomain ? "Ready" : "Attention"}
-                </Badge>
-              }
-              footer={
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-ink-faint">
-                    {site.lastActivityAt
-                      ? `Active ${new Date(site.lastActivityAt).toLocaleDateString()}`
-                      : "No usage yet"}
-                  </span>
-                  <Link
-                    href={`/sites/${site.id}`}
-                    className="text-sm font-medium text-brand-700 hover:text-brand-800"
-                  >
-                    Manage
-                  </Link>
+        <div
+          className={
+            filteredSites.length <= DETAIL_FIRST_MAX_COUNT
+              ? "space-y-3"
+              : "grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+          }
+        >
+          {filteredSites.map((site) =>
+            filteredSites.length <= DETAIL_FIRST_MAX_COUNT ? (
+              <Link
+                key={site.id}
+                href={`/sites/${site.id}`}
+                className="group flex flex-col gap-4 rounded-xl border border-line bg-surface p-5 shadow-card transition-shadow hover:shadow-panel focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 lg:flex-row lg:items-center"
+              >
+                <div className="flex min-w-0 items-start justify-between gap-3 lg:w-72 lg:shrink-0">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                      <Globe className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="truncate font-semibold text-ink transition-colors group-hover:text-brand-700">
+                        {site.name}
+                      </h3>
+                      <p className="truncate text-sm text-ink-muted">
+                        {site.primaryDomain || "Domain not configured"}
+                      </p>
+                      {user?.isPlatformAdmin && site.merchantName ? (
+                        <p className="truncate text-[13px] text-ink-secondary">
+                          {site.merchantName}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <Badge tone={site.primaryDomain ? "success" : "danger"}>
+                    {site.primaryDomain ? "Ready" : "Attention"}
+                  </Badge>
                 </div>
-              }
-            >
-              {user?.isPlatformAdmin && site.merchantName ? (
-                <p className="mt-3 truncate text-sm text-ink-secondary">
-                  {site.merchantName}
-                </p>
-              ) : null}
 
-              <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line text-center">
-                <div className="bg-surface px-2 py-3">
-                  <Boxes
-                    className="mx-auto h-4 w-4 text-ink-faint"
+                <div className="grid flex-1 grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line text-center">
+                  <div className="bg-surface px-2 py-3">
+                    <Boxes
+                      className="mx-auto h-4 w-4 text-ink-faint"
+                      aria-hidden="true"
+                    />
+                    <p className="mt-1 font-semibold text-ink">
+                      {site.activeProducts ?? 0}
+                    </p>
+                    <p className="text-xs text-ink-faint">Products</p>
+                  </div>
+                  <div className="bg-surface px-2 py-3">
+                    <KeyRound
+                      className="mx-auto h-4 w-4 text-ink-faint"
+                      aria-hidden="true"
+                    />
+                    <p className="mt-1 font-semibold text-ink">
+                      {site.activeTokens ?? 0}
+                    </p>
+                    <p className="text-xs text-ink-faint">Keys</p>
+                  </div>
+                  <div className="bg-surface px-2 py-3">
+                    <p className="font-semibold text-ink">
+                      {site.monthlySpend && site.currency
+                        ? formatCurrency(site.monthlySpend, site.currency)
+                        : "-"}
+                    </p>
+                    <p className="mt-1 text-xs text-ink-faint">Monthly</p>
+                  </div>
+                </div>
+
+                <span className="inline-flex items-center gap-1 text-sm font-medium text-brand-700 lg:shrink-0">
+                  Manage
+                  <ChevronRight
+                    className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
                     aria-hidden="true"
                   />
-                  <p className="mt-1 font-semibold text-ink">
-                    {site.activeProducts ?? 0}
+                </span>
+              </Link>
+            ) : (
+              <ResourceCard
+                key={site.id}
+                title={site.name}
+                subtitle={site.primaryDomain || "Domain not configured"}
+                href={`/sites/${site.id}`}
+                icon={Globe}
+                badge={
+                  <Badge tone={site.primaryDomain ? "success" : "danger"}>
+                    {site.primaryDomain ? "Ready" : "Attention"}
+                  </Badge>
+                }
+                footer={
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-ink-muted">
+                      {(site.suspendedProducts ?? 0) > 0
+                        ? `${site.suspendedProducts} suspended`
+                        : "Subscriptions healthy"}
+                    </span>
+                    <Link
+                      href={`/sites/${site.id}`}
+                      className="text-sm font-medium text-brand-700 hover:text-brand-800"
+                    >
+                      Manage
+                    </Link>
+                  </div>
+                }
+              >
+                {user?.isPlatformAdmin && site.merchantName ? (
+                  <p className="mt-3 truncate text-sm text-ink-secondary">
+                    {site.merchantName}
                   </p>
-                  <p className="text-xs text-ink-faint">Products</p>
+                ) : null}
+
+                <div className="mt-4 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line text-center">
+                  <div className="bg-surface px-2 py-3">
+                    <Boxes
+                      className="mx-auto h-4 w-4 text-ink-faint"
+                      aria-hidden="true"
+                    />
+                    <p className="mt-1 font-semibold text-ink">
+                      {site.activeProducts ?? 0}
+                    </p>
+                    <p className="text-xs text-ink-faint">Products</p>
+                  </div>
+                  <div className="bg-surface px-2 py-3">
+                    <KeyRound
+                      className="mx-auto h-4 w-4 text-ink-faint"
+                      aria-hidden="true"
+                    />
+                    <p className="mt-1 font-semibold text-ink">
+                      {site.activeTokens ?? 0}
+                    </p>
+                    <p className="text-xs text-ink-faint">Keys</p>
+                  </div>
+                  <div className="bg-surface px-2 py-3">
+                    <p className="font-semibold text-ink">
+                      {site.monthlySpend && site.currency
+                        ? formatCurrency(site.monthlySpend, site.currency)
+                        : "-"}
+                    </p>
+                    <p className="mt-1 text-xs text-ink-faint">Monthly</p>
+                  </div>
                 </div>
-                <div className="bg-surface px-2 py-3">
-                  <KeyRound
-                    className="mx-auto h-4 w-4 text-ink-faint"
-                    aria-hidden="true"
-                  />
-                  <p className="mt-1 font-semibold text-ink">
-                    {site.activeTokens ?? 0}
-                  </p>
-                  <p className="text-xs text-ink-faint">Keys</p>
-                </div>
-                <div className="bg-surface px-2 py-3">
-                  <p className="font-semibold text-ink">
-                    {site.monthlySpend && site.currency
-                      ? formatCurrency(site.monthlySpend, site.currency)
-                      : "-"}
-                  </p>
-                  <p className="mt-1 text-xs text-ink-faint">Monthly</p>
-                </div>
-              </div>
-            </ResourceCard>
-          ))}
+              </ResourceCard>
+            ),
+          )}
         </div>
       )}
     </div>

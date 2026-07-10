@@ -7,14 +7,13 @@ import { Copy, PackagePlus } from "lucide-react";
 
 import { useAuth } from "@/components/AuthProvider";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { MerchantActivity } from "@/components/products/MerchantActivity";
 import { ProductsView } from "@/components/products/ProductsView";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import { SiteDetailSkeleton } from "@/components/ui/portalSkeletons";
 import { platformApi } from "@/lib/api/client";
 import type {
   MerchantSummary,
@@ -32,7 +31,6 @@ export default function SiteDetailPage() {
   const [merchant, setMerchant] = useState<MerchantSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [activitySignal, setActivitySignal] = useState(0);
   const [productViewKey, setProductViewKey] = useState(0);
   const [showAssignment, setShowAssignment] = useState(
     searchParams.get("assign") === "1",
@@ -115,7 +113,6 @@ export default function SiteDetailPage() {
         setShowAssignment(false);
       }
       setProductViewKey((current) => current + 1);
-      setActivitySignal((current) => current + 1);
     } catch {
       setAssignmentError(
         "Could not assign this product. Check the plan and try again.",
@@ -132,7 +129,7 @@ export default function SiteDetailPage() {
   }
 
   if (loading) {
-    return <DetailSkeleton />;
+    return <SiteDetailSkeleton />;
   }
 
   if (!site) {
@@ -296,15 +293,7 @@ export default function SiteDetailPage() {
         canManage={isPlatformAdmin}
         isPlatformAdmin={isPlatformAdmin}
         conversationsBase={`/sites/${siteId}/products`}
-        onChanged={() => setActivitySignal((current) => current + 1)}
       />
-
-      {merchant ? (
-        <MerchantActivity
-          merchantId={merchant.id}
-          refreshSignal={activitySignal}
-        />
-      ) : null}
     </div>
   );
 }

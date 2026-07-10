@@ -6,8 +6,8 @@ import { useSearchParams } from "next/navigation";
 import { adminApi, type OverviewData } from "@/lib/admin/adminApiClient";
 import {
   Card,
-  DetailSkeleton,
   NoSiteSelected,
+  OverviewSkeleton,
   PageError,
   PageHeading,
   StatCard,
@@ -51,13 +51,14 @@ export function OverviewClient() {
     return <NoSiteSelected />;
   }
   if (loading) {
-    return <DetailSkeleton />;
+    return <OverviewSkeleton />;
   }
   if (error || !data) {
     return <PageError message={error ?? "No data."} onRetry={load} />;
   }
 
   const maxVolume = Math.max(1, ...data.volume.map((point) => point.count));
+  const hasVolume = data.volume.some((point) => point.count > 0);
 
   return (
     <div className="admin-page-stack">
@@ -91,23 +92,29 @@ export function OverviewClient() {
             role="img"
             aria-label="Conversation volume chart"
           >
-            {data.volume.map((point) => (
-              <div
-                key={point.date}
-                className="flex flex-1 flex-col items-center gap-1"
-                title={`${point.date}: ${point.count}`}
-              >
+            {hasVolume ? (
+              data.volume.map((point) => (
                 <div
-                  className="w-full rounded-t bg-[var(--brand-800)]"
-                  style={{
-                    height: `${Math.max(2, (point.count / maxVolume) * 100)}%`,
-                  }}
-                />
-                <span className="text-[9px] text-[var(--ink-faint)]">
-                  {point.date.slice(5)}
-                </span>
-              </div>
-            ))}
+                  key={point.date}
+                  className="flex flex-1 flex-col items-center gap-1"
+                  title={`${point.date}: ${point.count}`}
+                >
+                  <div
+                    className="w-full rounded-t bg-[var(--brand-800)]"
+                    style={{
+                      height: `${Math.max(2, (point.count / maxVolume) * 100)}%`,
+                    }}
+                  />
+                  <span className="text-[9px] text-[var(--ink-faint)]">
+                    {point.date.slice(5)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="flex h-24 w-full items-center justify-center rounded-lg border border-dashed border-[var(--line)] bg-[var(--surface-subtle)] text-center text-[13px] text-[var(--ink-muted)]">
+                No conversations in this period.
+              </p>
+            )}
           </div>
         </Card>
         <Card>

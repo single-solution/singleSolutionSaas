@@ -1,14 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 import { AlertTriangle, MessageSquare, Send, X } from "lucide-react";
 
-import { classNames } from "./cn";
-import { ChatMessageBubble, ChatMessageDayDivider, ChatTypingIndicator, groupChatMessagesByDay } from "./chatMessageUi";
-import { CHAT_MESSAGE_BODY_MAX, type ChatMessage, type ChatThread } from "@/lib/chat/types";
+import { classNames, CHAT_SUPPORT_DISPLAY_NAME } from "./cn";
+import {
+  ChatMessageBubble,
+  ChatMessageDayDivider,
+  groupChatMessagesByDay,
+} from "./chatMessageUi";
+import {
+  CHAT_MESSAGE_BODY_MAX,
+  type ChatMessage,
+  type ChatThread,
+} from "@/lib/chat/types";
 import { scheduleStateUpdate } from "@/lib/chat/scheduleStateUpdate";
 
-const CHAT_COMPOSER_FORM_CLASS = "flex items-end gap-2 border-t border-[var(--color-ink-100)] bg-[var(--color-surface)] px-3 py-2.5";
+const CHAT_COMPOSER_FORM_CLASS =
+  "flex items-end gap-2 border-t border-[var(--color-ink-100)] bg-[var(--color-surface)] px-3 py-2.5";
 const CHAT_COMPOSER_TEXTAREA_CLASS =
   "box-border max-h-[120px] min-h-[40px] min-w-0 flex-1 resize-none rounded-[var(--radius-md)] bg-[var(--color-canvas-deep)] px-3 py-2 text-[length:var(--chat-font-body)] leading-normal text-[var(--color-ink-800)] placeholder:text-[var(--color-ink-400)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent-500)] disabled:opacity-60";
 const CHAT_COMPOSER_SEND_CLASS =
@@ -24,7 +40,13 @@ interface ChatComposerProps {
   placeholder: string;
 }
 
-function ChatComposer({ draft, onDraftChange, onSubmit, sending, placeholder }: ChatComposerProps) {
+function ChatComposer({
+  draft,
+  onDraftChange,
+  onSubmit,
+  sending,
+  placeholder,
+}: ChatComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useLayoutEffect(() => {
@@ -59,8 +81,17 @@ function ChatComposer({ draft, onDraftChange, onSubmit, sending, placeholder }: 
         disabled={sending}
         className={CHAT_COMPOSER_TEXTAREA_CLASS}
       />
-      <button type="submit" aria-label="Send message" disabled={sending || draft.trim().length === 0} className={CHAT_COMPOSER_SEND_CLASS}>
-        {sending ? <span className="block size-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" /> : <Send className="size-3.5" strokeWidth={2.2} />}
+      <button
+        type="submit"
+        aria-label="Send message"
+        disabled={sending || draft.trim().length === 0}
+        className={CHAT_COMPOSER_SEND_CLASS}
+      >
+        {sending ? (
+          <span className="block size-3.5 animate-spin rounded-full border-2 border-current border-r-transparent" />
+        ) : (
+          <Send className="size-3.5" strokeWidth={2.2} />
+        )}
       </button>
     </form>
   );
@@ -83,11 +114,73 @@ function estimateReadingDelayMs(customerBody: string): number {
   return Math.min(MAX_READING_MS, customerBody.length * READING_MS_PER_CHAR);
 }
 
+function ChatWidgetPulse({ className }: { className?: string }) {
+  return (
+    <div
+      className={classNames(
+        "animate-pulse rounded-[var(--radius-md)] bg-[var(--color-ink-200)] motion-reduce:animate-none",
+        className,
+      )}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function ChatWidgetBootstrapSkeleton() {
+  return (
+    <>
+      <div
+        className="flex-1 space-y-3 bg-[var(--color-canvas-deep)] px-3 py-3"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading chat"
+      >
+        <ChatWidgetPulse className="h-[4.5rem] w-[85%] rounded-[var(--radius-lg)]" />
+        <ChatWidgetPulse className="ml-auto h-10 w-[58%] rounded-[var(--radius-lg)]" />
+        <ChatWidgetPulse className="h-[3.25rem] w-[72%] rounded-[var(--radius-lg)]" />
+      </div>
+      <div className="border-t border-[var(--color-ink-100)] bg-[var(--color-surface)] px-3 py-2.5">
+        <ChatWidgetPulse className="h-10 w-full rounded-[var(--radius-md)]" />
+      </div>
+    </>
+  );
+}
+
+export function ChatWidgetThreadSkeleton() {
+  return (
+    <>
+      <div
+        className="flex-1 space-y-3 bg-[var(--color-canvas-deep)] px-3 py-3"
+        role="status"
+        aria-busy="true"
+        aria-label="Loading messages"
+      >
+        <ChatWidgetPulse className="h-12 w-[78%] rounded-[var(--radius-lg)]" />
+        <ChatWidgetPulse className="ml-auto h-10 w-[62%] rounded-[var(--radius-lg)]" />
+      </div>
+      <div className="border-t border-[var(--color-ink-100)] bg-[var(--color-surface)] px-3 py-2.5">
+        <ChatWidgetPulse className="h-10 w-full rounded-[var(--radius-md)]" />
+      </div>
+    </>
+  );
+}
+
+function ChatStatusLine({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      role="status"
+      className="text-[length:var(--chat-font-small)] text-[var(--color-ink-500)]"
+    >
+      {children}
+    </p>
+  );
+}
+
 export function StartingConversation({ message }: { message: ChatMessage }) {
   return (
     <div className="flex-1 space-y-3 overflow-y-auto bg-[var(--color-canvas-deep)] px-3 py-3">
       <ChatMessageBubble message={message} />
-      <ChatTypingIndicator label="Connecting you with someone..." />
+      <ChatStatusLine>Connecting you with someone...</ChatStatusLine>
     </div>
   );
 }
@@ -95,11 +188,11 @@ export function StartingConversation({ message }: { message: ChatMessage }) {
 export function statusLabel(status: ChatThread["status"]): string {
   switch (status) {
     case "open":
-      return "Open — we'll reply soon";
+      return "Open - we'll reply soon";
     case "awaiting-customer":
       return "Waiting on you";
     case "resolved":
-      return "Resolved · message us anytime to reopen";
+      return "Resolved - message us anytime to reopen";
   }
 }
 
@@ -110,7 +203,12 @@ interface ChatShellProps {
   children: React.ReactNode;
 }
 
-export function ChatShell({ title, subtitle, onClose, children }: ChatShellProps) {
+export function ChatShell({
+  title,
+  subtitle,
+  onClose,
+  children,
+}: ChatShellProps) {
   return (
     <div
       role="dialog"
@@ -122,8 +220,12 @@ export function ChatShell({ title, subtitle, onClose, children }: ChatShellProps
           <MessageSquare size={16} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[length:var(--chat-font-body)] font-semibold leading-tight">{title}</p>
-          <p className="truncate text-[length:var(--chat-font-small)] leading-tight text-[var(--color-ink-700)]">{subtitle}</p>
+          <p className="text-[length:var(--chat-font-body)] font-semibold leading-tight">
+            {title}
+          </p>
+          <p className="truncate text-[length:var(--chat-font-small)] leading-tight text-[var(--color-ink-700)]">
+            {subtitle}
+          </p>
         </div>
         {onClose && (
           <button
@@ -181,7 +283,9 @@ export function ThreadConversation({
   }, [initialDraft, onDraftConsumed]);
 
   const messagesRef = useRef(thread.messages);
-  const revealedIdsRef = useRef<Set<string>>(new Set(thread.messages.map((message) => message.id)));
+  const revealedIdsRef = useRef<Set<string>>(
+    new Set(thread.messages.map((message) => message.id)),
+  );
 
   useEffect(() => {
     messagesRef.current = thread.messages;
@@ -190,9 +294,13 @@ export function ThreadConversation({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readDelayRef = useRef(0);
   const [, bumpReveal] = useReducer((count: number) => count + 1, 0);
-  const [botActivity, setBotActivity] = useState<"reading" | "typing" | false>(false);
+  const [botActivity, setBotActivity] = useState<"reading" | "typing" | false>(
+    false,
+  );
 
-  const visibleMessages = thread.messages.filter((message) => revealedIdsRef.current.has(message.id));
+  const visibleMessages = thread.messages.filter((message) =>
+    revealedIdsRef.current.has(message.id),
+  );
   const lastVisibleId = visibleMessages[visibleMessages.length - 1]?.id;
   const firstVisibleId = visibleMessages[0]?.id;
 
@@ -203,7 +311,8 @@ export function ThreadConversation({
       setBotActivity(false);
       return;
     }
-    const nextBody = messagesRef.current.find((message) => message.id === nextId)?.body ?? "";
+    const nextBody =
+      messagesRef.current.find((message) => message.id === nextId)?.body ?? "";
     const startGap = readDelayRef.current;
     readDelayRef.current = 0;
 
@@ -227,19 +336,27 @@ export function ThreadConversation({
   }, []);
 
   useEffect(() => {
-    const newOnes = thread.messages.filter((message) => !revealedIdsRef.current.has(message.id) && !queueRef.current.includes(message.id));
+    const newOnes = thread.messages.filter(
+      (message) =>
+        !revealedIdsRef.current.has(message.id) &&
+        !queueRef.current.includes(message.id),
+    );
     if (newOnes.length === 0) return;
 
     let latestRevealedAt = 0;
     for (const message of messagesRef.current) {
       if (revealedIdsRef.current.has(message.id)) {
-        latestRevealedAt = Math.max(latestRevealedAt, new Date(message.createdAt).getTime());
+        latestRevealedAt = Math.max(
+          latestRevealedAt,
+          new Date(message.createdAt).getTime(),
+        );
       }
     }
 
     let revealedAny = false;
     for (const message of newOnes) {
-      const isHistorical = new Date(message.createdAt).getTime() < latestRevealedAt;
+      const isHistorical =
+        new Date(message.createdAt).getTime() < latestRevealedAt;
       if (message.author === "assistant" && !isHistorical) {
         queueRef.current.push(message.id);
       } else {
@@ -249,15 +366,20 @@ export function ThreadConversation({
     }
     if (revealedAny) bumpReveal();
     if (queueRef.current.length > 0 && !timerRef.current) {
-      const lastCustomer = [...messagesRef.current].reverse().find((message) => message.author === "customer");
+      const lastCustomer = [...messagesRef.current]
+        .reverse()
+        .find((message) => message.author === "customer");
       readDelayRef.current = estimateReadingDelayMs(lastCustomer?.body ?? "");
       pump();
     }
   }, [thread.messages, pump]);
 
-  useEffect(() => () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
 
   const stickToBottomRef = useRef(true);
   const olderAnchorRef = useRef<{ height: number; top: number } | null>(null);
@@ -265,8 +387,13 @@ export function ThreadConversation({
   function handleMessageListScroll() {
     const el = messageListRef.current;
     if (!el) return;
-    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    if (el.scrollTop < LOAD_OLDER_SCROLL_THRESHOLD_PX && hasMoreOlder && !isLoadingOlder) {
+    stickToBottomRef.current =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (
+      el.scrollTop < LOAD_OLDER_SCROLL_THRESHOLD_PX &&
+      hasMoreOlder &&
+      !isLoadingOlder
+    ) {
       olderAnchorRef.current = { height: el.scrollHeight, top: el.scrollTop };
       onLoadOlder();
     }
@@ -289,7 +416,9 @@ export function ThreadConversation({
   }, [firstVisibleId]);
 
   useEffect(() => {
-    revealedIdsRef.current = new Set(messagesRef.current.map((message) => message.id));
+    revealedIdsRef.current = new Set(
+      messagesRef.current.map((message) => message.id),
+    );
     queueRef.current = [];
     if (timerRef.current) {
       clearTimeout(timerRef.current);
@@ -324,15 +453,20 @@ export function ThreadConversation({
   return (
     <>
       {thread.assistantPaused ? <AssistantPausedNotice /> : null}
-      <div ref={messageListRef} onScroll={handleMessageListScroll} className="flex-1 space-y-3 overflow-y-auto bg-[var(--color-canvas-deep)] px-3 py-3">
-        {(hasMoreOlder || isLoadingOlder) && (
-          <div className="flex justify-center py-1">
-            <span
-              aria-label="Loading earlier messages"
-              className={classNames("block size-4 rounded-full border-2 border-[var(--color-ink-300)] border-r-transparent", isLoadingOlder ? "animate-spin" : "opacity-0")}
-            />
+      <div
+        ref={messageListRef}
+        onScroll={handleMessageListScroll}
+        className="flex-1 space-y-3 overflow-y-auto bg-[var(--color-canvas-deep)] px-3 py-3"
+      >
+        {isLoadingOlder ? (
+          <div
+            className="flex justify-center py-1"
+            role="status"
+            aria-label="Loading earlier messages"
+          >
+            <span className="block size-4 animate-spin rounded-full border-2 border-[var(--color-ink-300)] border-r-transparent motion-reduce:animate-none" />
           </div>
-        )}
+        ) : null}
         {groupedMessages.map((group) => (
           <div key={group.day} className="space-y-2">
             <ChatMessageDayDivider label={group.day} />
@@ -341,15 +475,31 @@ export function ThreadConversation({
             ))}
           </div>
         ))}
-        {assistantEnabled && !thread.assistantPaused && botActivity && <ChatTypingIndicator label={botActivity === "reading" ? "Just a moment..." : undefined} />}
+        {assistantEnabled && !thread.assistantPaused && botActivity ? (
+          <ChatStatusLine>
+            {botActivity === "reading"
+              ? "Just a moment..."
+              : `${CHAT_SUPPORT_DISPLAY_NAME} is replying...`}
+          </ChatStatusLine>
+        ) : null}
         {thread.messages.length === 0 && (
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-ink-100)] bg-[var(--color-surface)] px-4 py-3.5 text-[length:var(--chat-font-body)] leading-relaxed text-[var(--color-ink-600)] shadow-[var(--shadow-sm)]">
             {welcomeMessage}
           </div>
         )}
       </div>
-      {error && <div className="border-t border-[var(--color-danger-200)] bg-[var(--color-danger-50)] px-3 py-1.5 text-[length:var(--chat-font-small)] text-[var(--color-danger-700)]">{error}</div>}
-      <ChatComposer draft={draft} onDraftChange={setDraft} onSubmit={sendDraft} sending={sending} placeholder="Type a message" />
+      {error && (
+        <div className="border-t border-[var(--color-danger-200)] bg-[var(--color-danger-50)] px-3 py-1.5 text-[length:var(--chat-font-small)] text-[var(--color-danger-700)]">
+          {error}
+        </div>
+      )}
+      <ChatComposer
+        draft={draft}
+        onDraftChange={setDraft}
+        onSubmit={sendDraft}
+        sending={sending}
+        placeholder="Type a message"
+      />
     </>
   );
 }
@@ -361,7 +511,12 @@ interface ComposeConversationProps {
   welcomeMessage: string;
 }
 
-export function ComposeConversation({ draft, onDraftChange, onSend, welcomeMessage }: ComposeConversationProps) {
+export function ComposeConversation({
+  draft,
+  onDraftChange,
+  onSend,
+  welcomeMessage,
+}: ComposeConversationProps) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -388,8 +543,18 @@ export function ComposeConversation({ draft, onDraftChange, onSend, welcomeMessa
           {welcomeMessage}
         </div>
       </div>
-      {error ? <div className="border-t border-[var(--color-danger-200)] bg-[var(--color-danger-50)] px-3 py-1.5 text-[length:var(--chat-font-small)] text-[var(--color-danger-700)]">{error}</div> : null}
-      <ChatComposer draft={draft} onDraftChange={onDraftChange} onSubmit={sendDraft} sending={sending} placeholder="Type your first message" />
+      {error ? (
+        <div className="border-t border-[var(--color-danger-200)] bg-[var(--color-danger-50)] px-3 py-1.5 text-[length:var(--chat-font-small)] text-[var(--color-danger-700)]">
+          {error}
+        </div>
+      ) : null}
+      <ChatComposer
+        draft={draft}
+        onDraftChange={onDraftChange}
+        onSubmit={sendDraft}
+        sending={sending}
+        placeholder="Type your first message"
+      />
     </>
   );
 }
@@ -402,19 +567,28 @@ function AssistantPausedNotice() {
     >
       <AlertTriangle size={14} className="mt-0.5 shrink-0" aria-hidden />
       <span>
-        <strong className="font-semibold">Your chat needs personal attention.</strong> Automated help is paused for now — you can still send messages here and our team will follow up as soon as
-        we can.
+        <strong className="font-semibold">
+          Your chat needs personal attention.
+        </strong>{" "}
+        Automated help is paused for now - you can still send messages here and
+        our team will follow up as soon as we can.
       </span>
     </div>
   );
 }
 
-export function SupportHintFooter({ assistantEnabled, assistantPaused = false }: { assistantEnabled: boolean; assistantPaused?: boolean }) {
+export function SupportHintFooter({
+  assistantEnabled,
+  assistantPaused = false,
+}: {
+  assistantEnabled: boolean;
+  assistantPaused?: boolean;
+}) {
   return (
     <p className="mx-auto border-t border-[var(--color-ink-100)] bg-[var(--color-canvas-deep)] px-4 py-2.5 text-center text-[length:var(--chat-font-small)] leading-relaxed text-[var(--color-ink-600)]">
       <span className="mx-auto block max-w-prose">
         {assistantPaused
-          ? "Leave your message below — a teammate will read this chat and reply here."
+          ? "Leave your message below - a teammate will read this chat and reply here."
           : assistantEnabled
             ? 'Need to speak with our team? Type "speak to someone" and we will join this chat.'
             : "A teammate will reply here as soon as possible."}

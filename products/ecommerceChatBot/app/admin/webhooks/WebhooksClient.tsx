@@ -15,11 +15,11 @@ import {
   Card,
   EmptyState,
   InlineNote,
-  ListSkeleton,
   NoSiteSelected,
   PageError,
   PageHeading,
   TableEmptyRow,
+  WebhookTableSkeleton,
 } from "@/components/admin/ui";
 
 export function WebhooksClient() {
@@ -125,12 +125,11 @@ export function WebhooksClient() {
           </thead>
           <tbody>
             {loading ? (
-              <TableEmptyRow colSpan={5}>
-                <ListSkeleton rows={3} />
-              </TableEmptyRow>
+              <WebhookTableSkeleton />
             ) : deliveries.length === 0 ? (
-              <TableEmptyRow colSpan={5}>
+              <TableEmptyRow colSpan={5} compact>
                 <EmptyState
+                  compact
                   icon={Plug}
                   title="No deliveries yet"
                   description="Webhook events will appear here after the first notification."

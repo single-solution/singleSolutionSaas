@@ -22,7 +22,7 @@ import { Card } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import { MerchantDetailSkeleton } from "@/components/ui/portalSkeletons";
 import { Tabs } from "@/components/ui/Tabs";
 import { PlatformApiError, platformApi } from "@/lib/api/client";
 import type { MerchantSummary } from "@/lib/types";
@@ -95,7 +95,7 @@ export default function AdminMerchantDetailPage() {
   }
 
   if (loading) {
-    return <DetailSkeleton />;
+    return <MerchantDetailSkeleton />;
   }
 
   if (notFound || !merchant) {

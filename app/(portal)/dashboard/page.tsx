@@ -3,13 +3,13 @@
 import { useAuth } from "@/components/AuthProvider";
 import { AdminOverview } from "@/components/dashboard/AdminOverview";
 import { MerchantHome } from "@/components/dashboard/MerchantHome";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import { DashboardMerchantSkeleton } from "@/components/ui/portalSkeletons";
 
 export default function DashboardPage() {
   const { user } = useAuth();
 
   if (!user) {
-    return <DetailSkeleton />;
+    return <DashboardMerchantSkeleton />;
   }
 
   return user.isPlatformAdmin ? (

@@ -9,7 +9,7 @@ import { MerchantDashboard } from "@/components/products/MerchantDashboard";
 import { Alert } from "@/components/ui/Alert";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import { DashboardMerchantSkeleton } from "@/components/ui/portalSkeletons";
 import { platformApi } from "@/lib/api/client";
 import type { MerchantSummary } from "@/lib/types";
 
@@ -37,7 +37,7 @@ export function MerchantHome() {
   }, []);
 
   if (loading) {
-    return <DetailSkeleton />;
+    return <DashboardMerchantSkeleton />;
   }
 
   if (error) {
@@ -56,7 +56,10 @@ export function MerchantHome() {
   if (!merchant) {
     return (
       <div className="page-stack">
-        <PageHeader title="Your workspace" description="Sites, products, usage, and keys." />
+        <PageHeader
+          title="Your workspace"
+          description="Sites, products, usage, and keys."
+        />
         <EmptyState
           icon={Building2}
           title="No workspace assigned"
@@ -66,5 +69,11 @@ export function MerchantHome() {
     );
   }
 
-  return <MerchantDashboard merchantId={merchant.id} merchantName={merchant.name} userName={user?.name ?? ""} />;
+  return (
+    <MerchantDashboard
+      merchantId={merchant.id}
+      merchantName={merchant.name}
+      userName={user?.name ?? ""}
+    />
+  );
 }
