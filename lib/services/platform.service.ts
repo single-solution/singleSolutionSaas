@@ -1,4 +1,4 @@
-import { AuditLog, Merchant, MerchantMembership, Site, Types, User } from "@/lib/db";
+import { AuditLog, Merchant, MerchantMembership, Product, Site, Subscription, Types, User } from "@/lib/db";
 import type {
   AuditLogSummary,
   InvitationInfo,
@@ -172,26 +172,78 @@ export async function listMerchantsForUser(userId: string): Promise<MerchantSumm
 export async function listAllMerchants(): Promise<MerchantSummary[]> {
   const merchants = await Merchant.find().sort({ createdAt: -1 }).lean();
   const merchantIds = merchants.map((merchant) => merchant._id);
+
   const ownerMemberships = await MerchantMembership.find({ merchantId: { $in: merchantIds }, role: "owner" }).lean();
   const ownerUsers = await User.find({ _id: { $in: ownerMemberships.map((membership) => membership.userId) } })
-    .select("_id status")
+    .select("_id status email")
     .lean();
-  const statusByUserId = new Map(ownerUsers.map((user) => [user._id.toString(), user.status]));
-  const pendingByMerchantId = new Map(
-    ownerMemberships.map((membership) => [
-      membership.merchantId.toString(),
-      statusByUserId.get(membership.userId.toString()) === "invited",
+  const ownerByUserId = new Map(ownerUsers.map((user) => [user._id.toString(), user]));
+  const ownerByMerchantId = new Map(
+    ownerMemberships.map((membership) => [membership.merchantId.toString(), ownerByUserId.get(membership.userId.toString())]),
+  );
+
+  // Sites per merchant, plus a site -> merchant lookup for subscription rollups.
+  const sites = await Site.find({ merchantId: { $in: merchantIds } }).select("_id merchantId").lean();
+  const merchantBySiteId = new Map(sites.map((site) => [site._id.toString(), site.merchantId.toString()]));
+  const siteCountByMerchant = new Map<string, number>();
+  for (const site of sites) {
+    const key = site.merchantId.toString();
+    siteCountByMerchant.set(key, (siteCountByMerchant.get(key) ?? 0) + 1);
+  }
+
+  // Active priced subscriptions -> product/plan counts and monthly spend per merchant.
+  const subscriptions = await Subscription.find({
+    siteId: { $in: sites.map((site) => site._id) },
+    status: "active",
+    planCode: { $ne: null },
+  })
+    .select("siteId productSlug planCode")
+    .lean();
+  const products = await Product.find({ slug: { $in: subscriptions.map((subscription) => subscription.productSlug) } })
+    .select("slug plans")
+    .lean();
+  const planPriceBySlug = new Map(
+    products.map((product) => [
+      product.slug,
+      new Map(product.plans.map((plan) => [plan.code, { price: plan.priceMonthly, currency: plan.currency }])),
     ]),
   );
 
-  return merchants.map((merchant) => ({
-    id: merchant._id.toString(),
-    name: merchant.name,
-    slug: merchant.slug,
-    role: "owner",
-    createdAt: toIso(merchant.createdAt),
-    pendingInvite: pendingByMerchantId.get(merchant._id.toString()) ?? false,
-  }));
+  const productCountByMerchant = new Map<string, number>();
+  const spendByMerchant = new Map<string, number>();
+  const currencyByMerchant = new Map<string, string>();
+  for (const subscription of subscriptions) {
+    const merchantId = merchantBySiteId.get(subscription.siteId.toString());
+    if (!merchantId) {
+      continue;
+    }
+    productCountByMerchant.set(merchantId, (productCountByMerchant.get(merchantId) ?? 0) + 1);
+    const plan = subscription.planCode ? planPriceBySlug.get(subscription.productSlug)?.get(subscription.planCode) : undefined;
+    if (plan) {
+      spendByMerchant.set(merchantId, (spendByMerchant.get(merchantId) ?? 0) + plan.price);
+      if (!currencyByMerchant.has(merchantId)) {
+        currencyByMerchant.set(merchantId, plan.currency);
+      }
+    }
+  }
+
+  return merchants.map((merchant) => {
+    const key = merchant._id.toString();
+    const owner = ownerByMerchantId.get(key);
+    return {
+      id: key,
+      name: merchant.name,
+      slug: merchant.slug,
+      role: "owner",
+      createdAt: toIso(merchant.createdAt),
+      pendingInvite: owner?.status === "invited",
+      ownerEmail: owner?.email,
+      siteCount: siteCountByMerchant.get(key) ?? 0,
+      productCount: productCountByMerchant.get(key) ?? 0,
+      monthlySpend: spendByMerchant.get(key) ?? 0,
+      currency: currencyByMerchant.get(key) ?? null,
+    };
+  });
 }
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60_000;

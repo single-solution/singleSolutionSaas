@@ -2,14 +2,15 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { Boxes, CalendarDays, ChevronRight, Copy, Send, UserPlus, Users, Zap } from "lucide-react";
+import { Boxes, CalendarDays, ChevronRight, Copy, Globe, Mail, Send, UserPlus, Users, Zap } from "lucide-react";
 
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/providers/ToastProvider";
+import { formatCurrency } from "@/components/products/currency";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Drawer } from "@/components/ui/Drawer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -158,60 +159,60 @@ export function AdminOverview() {
         <StatCard label="New this month" value={String(newThisMonth)} hint={monthPrefix} icon={CalendarDays} />
       </div>
 
-      {showOnboard ? (
-        <Card className="shadow-sm border-line bg-surface">
-          <CardHeader title="Onboard a merchant" description="Creates the merchant, a default site, and emails an invite." />
-          {formError ? (
-            <Alert tone="danger" title="Could not create" className="mb-4">
-              {formError}
-            </Alert>
-          ) : null}
-          <form className="grid gap-3.5 sm:grid-cols-3" onSubmit={handleCreate} noValidate>
-            <Field label="Merchant name" htmlFor="merchant-name" required>
-              <Input
-                id="merchant-name"
-                value={merchantName}
-                onChange={(event) => setMerchantName(event.target.value)}
-                placeholder="Acme Store"
-              />
-            </Field>
-            <Field label="Owner name" htmlFor="owner-name" required>
-              <Input id="owner-name" value={ownerName} onChange={(event) => setOwnerName(event.target.value)} placeholder="Jane Doe" />
-            </Field>
-            <Field label="Owner email" htmlFor="owner-email" required>
-              <Input
-                id="owner-email"
-                type="email"
-                value={ownerEmail}
-                autoComplete="off"
-                onChange={(event) => setOwnerEmail(event.target.value)}
-                placeholder="jane@acme.com"
-              />
-            </Field>
-            <div className="sm:col-span-3">
-              <Button type="submit" loading={creating}>
-                <Send className="h-4 w-4" aria-hidden="true" />
-                Send invite
+      <Drawer
+        open={showOnboard}
+        title="Onboard a merchant"
+        description="Creates the merchant, a default site, and emails an invite."
+        onClose={() => setShowOnboard(false)}
+      >
+        {formError ? (
+          <Alert tone="danger" title="Could not create" className="mb-4">
+            {formError}
+          </Alert>
+        ) : null}
+        <form className="grid gap-4" onSubmit={handleCreate} noValidate>
+          <Field label="Merchant name" htmlFor="merchant-name" required>
+            <Input
+              id="merchant-name"
+              value={merchantName}
+              onChange={(event) => setMerchantName(event.target.value)}
+              placeholder="Acme Store"
+            />
+          </Field>
+          <Field label="Owner name" htmlFor="owner-name" required>
+            <Input id="owner-name" value={ownerName} onChange={(event) => setOwnerName(event.target.value)} placeholder="Jane Doe" />
+          </Field>
+          <Field label="Owner email" htmlFor="owner-email" required>
+            <Input
+              id="owner-email"
+              type="email"
+              value={ownerEmail}
+              autoComplete="off"
+              onChange={(event) => setOwnerEmail(event.target.value)}
+              placeholder="jane@acme.com"
+            />
+          </Field>
+          <Button type="submit" loading={creating}>
+            <Send className="h-4 w-4" aria-hidden="true" />
+            Send invite
+          </Button>
+        </form>
+
+        {inviteLink ? (
+          <Alert tone="success" title="Invite link ready" className="mt-4">
+            <p className="mb-2">One-time link, valid 7 days. The merchant sets their own password.</p>
+            <code className="block break-all rounded-md border border-line bg-surface-subtle px-3 py-2 text-xs text-ink">
+              {inviteLink}
+            </code>
+            <div className="mt-3">
+              <Button variant="outline" size="sm" onClick={() => void copyToClipboard(inviteLink)}>
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                Copy link
               </Button>
             </div>
-          </form>
-
-          {inviteLink ? (
-            <Alert tone="success" title="Invite link ready" className="mt-4">
-              <p className="mb-2">One-time link, valid 7 days. The merchant sets their own password.</p>
-              <code className="block break-all rounded-md border border-line bg-surface-subtle px-3 py-2 text-xs text-ink">
-                {inviteLink}
-              </code>
-              <div className="mt-3">
-                <Button variant="outline" size="sm" onClick={() => void copyToClipboard(inviteLink)}>
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                  Copy link
-                </Button>
-              </div>
-            </Alert>
-          ) : null}
-        </Card>
-      ) : null}
+          </Alert>
+        ) : null}
+      </Drawer>
 
       {error ? (
         <Alert tone="danger" title="Load failed">
@@ -246,12 +247,43 @@ export function AdminOverview() {
                     <p className="truncate text-[13px] text-ink-muted">{merchant.slug}</p>
                   </div>
                 </Link>
-                {merchant.pendingInvite ? <Badge tone="brand">Pending</Badge> : null}
+                <Badge tone={merchant.pendingInvite ? "brand" : "success"}>{merchant.pendingInvite ? "Pending" : "Active"}</Badge>
               </div>
 
-              <p className="mt-4 text-[13px] text-ink-muted">Created {merchant.createdAt.slice(0, 10)}</p>
+              {merchant.ownerEmail ? (
+                <p className="mt-3 flex items-center gap-1.5 truncate text-[13px] text-ink-secondary">
+                  <Mail className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden="true" />
+                  <span className="truncate">{merchant.ownerEmail}</span>
+                </p>
+              ) : null}
+
+              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-4 text-center">
+                <div>
+                  <p className="flex items-center justify-center gap-1 text-sm font-semibold text-ink">
+                    <Globe className="h-3.5 w-3.5 text-ink-faint" aria-hidden="true" />
+                    {merchant.siteCount ?? 0}
+                  </p>
+                  <p className="mt-0.5 text-[11px] uppercase tracking-wide text-ink-faint">Sites</p>
+                </div>
+                <div>
+                  <p className="flex items-center justify-center gap-1 text-sm font-semibold text-ink">
+                    <Boxes className="h-3.5 w-3.5 text-ink-faint" aria-hidden="true" />
+                    {merchant.productCount ?? 0}
+                  </p>
+                  <p className="mt-0.5 text-[11px] uppercase tracking-wide text-ink-faint">Products</p>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-ink">
+                    {merchant.monthlySpend && merchant.currency
+                      ? formatCurrency(merchant.monthlySpend, merchant.currency)
+                      : "-"}
+                  </p>
+                  <p className="mt-0.5 text-[11px] uppercase tracking-wide text-ink-faint">/mo</p>
+                </div>
+              </div>
 
               <div className="mt-4 flex items-center gap-2 border-t border-line pt-4">
+                <span className="text-[12px] text-ink-faint">Created {merchant.createdAt.slice(0, 10)}</span>
                 {merchant.pendingInvite ? (
                   <Button
                     variant="outline"
@@ -260,7 +292,7 @@ export function AdminOverview() {
                     onClick={() => void handleResendInvite(merchant)}
                   >
                     <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                    Resend invite
+                    Resend
                   </Button>
                 ) : null}
                 <Link

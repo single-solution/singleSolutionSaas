@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Boxes, Layers, Pencil, Plus, PowerOff, Settings, Zap } from "lucide-react";
+import { Boxes, Layers, Pencil, Plug, Plus, PowerOff, Settings, ShieldCheck, Zap } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ProductForm, type ProductFormValues } from "@/components/products/ProductForm";
@@ -11,7 +11,7 @@ import { useToast } from "@/components/providers/ToastProvider";
 import { Alert } from "@/components/ui/Alert";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Card, CardHeader } from "@/components/ui/Card";
+import { Drawer } from "@/components/ui/Drawer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ListSkeleton } from "@/components/ui/Skeleton";
 import { StatCard } from "@/components/ui/StatCard";
@@ -138,16 +138,24 @@ export default function AdminProductsPage() {
         <StatCard label="Plans" value={String(totalPlans)} hint="Across all products" icon={Layers} />
       </div>
 
-      {showCreate ? (
-        <Card className="shadow-sm border-line bg-surface">
-          <CardHeader title="Register product" description="Just a name to start. Add plans and scopes as needed." />
-          <ProductForm key={createFormKey} mode="create" submitting={submitting} submitLabel="Register product" onSubmit={handleRegister} />
-        </Card>
-      ) : null}
+      <Drawer
+        open={showCreate}
+        title="Register product"
+        description="Just a name to start. Add plans and scopes as needed."
+        width="xl"
+        onClose={() => setShowCreate(false)}
+      >
+        <ProductForm key={createFormKey} mode="create" submitting={submitting} submitLabel="Register product" onSubmit={handleRegister} />
+      </Drawer>
 
-      {editingProduct ? (
-        <Card className="shadow-sm border-line bg-surface">
-          <CardHeader title={`Edit ${editingProduct.name}`} description="Update plans, scopes, and connection details." />
+      <Drawer
+        open={Boolean(editingProduct)}
+        title={editingProduct ? `Edit ${editingProduct.name}` : "Edit product"}
+        description="Update plans, scopes, and connection details."
+        width="xl"
+        onClose={() => setEditingSlug(null)}
+      >
+        {editingProduct ? (
           <ProductForm
             mode="edit"
             initial={editingProduct}
@@ -156,8 +164,8 @@ export default function AdminProductsPage() {
             onSubmit={(values) => handleUpdate(editingProduct.slug, values)}
             onCancel={() => setEditingSlug(null)}
           />
-        </Card>
-      ) : null}
+        ) : null}
+      </Drawer>
 
       {error ? (
         <Alert tone="danger" title="Load failed">
@@ -203,7 +211,24 @@ export default function AdminProductsPage() {
                 {product.description || "No description."}
               </p>
 
-              <div className="mt-4 flex items-center gap-2 border-t border-line pt-4">
+              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-4 text-[12.5px] text-ink-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-ink-faint" aria-hidden="true" />
+                  {product.availableScopes.length} scope{product.availableScopes.length === 1 ? "" : "s"}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Plug className="h-3.5 w-3.5 text-ink-faint" aria-hidden="true" />
+                  {product.baseUrl ? (() => {
+                    try {
+                      return new URL(product.baseUrl).host;
+                    } catch {
+                      return "Connected";
+                    }
+                  })() : "No base URL"}
+                </span>
+              </div>
+
+              <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
                 <Button type="button" variant="ghost" size="sm" onClick={() => router.push(`/products/${product.slug}`)}>
                   <Settings className="h-4 w-4" aria-hidden="true" />
                   Manage

@@ -25,6 +25,16 @@ export interface MerchantSummary {
   createdAt: string;
   /** Owner still has an unaccepted invitation (admin list only). */
   pendingInvite?: boolean;
+  /** Admin list only: owner account email. */
+  ownerEmail?: string;
+  /** Admin list only: number of sites owned by the merchant. */
+  siteCount?: number;
+  /** Admin list only: number of active product subscriptions across sites. */
+  productCount?: number;
+  /** Admin list only: total monthly recurring spend across active subscriptions. */
+  monthlySpend?: number;
+  /** Admin list only: currency for monthlySpend (from the priced plans). */
+  currency?: string | null;
 }
 
 export interface SiteSummary {
