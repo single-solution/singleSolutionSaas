@@ -1,6 +1,6 @@
 /** POST /api/admin/webhooks/test - send a test delivery to the site's webhook. */
 
-import { requireAdminApi } from "@/lib/admin/guard";
+import { requireAdminApi, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
 import { sendTestWebhook } from "@/lib/admin/webhooks";
 
@@ -24,8 +24,12 @@ export async function POST(request: Request) {
   if (!siteId) {
     return badRequest("siteId is required.");
   }
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
 
-  const result = await sendTestWebhook(siteId);
+  const result = await sendTestWebhook(dataDbName, siteId);
   if (!result.configured) {
     return badRequest("No webhook URL configured for this site.");
   }

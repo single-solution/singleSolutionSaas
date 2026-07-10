@@ -6,8 +6,7 @@
  * widget's focus/blur cadence.
  */
 
-import { connectDb } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
 import { resolveChatCaller } from "@/lib/api/productAuth";
 import { preflight, withCors } from "@/lib/api/cors";
 import { ok } from "@/lib/api/responses";
@@ -30,7 +29,7 @@ export async function GET(request: Request) {
       return ok({ enabled: false, threads: [], settings });
     }
 
-    await connectDb();
+    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
     const doc = await Conversation.findOne({
       siteId: caller.entitlement.siteId,
       visitorId: caller.visitorId,

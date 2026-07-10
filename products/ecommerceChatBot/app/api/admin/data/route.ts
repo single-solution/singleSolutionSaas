@@ -4,10 +4,10 @@
  * Read-only raw data browser for the admin dashboard.
  */
 
-import { requireAdminApi, requireSiteId } from "@/lib/admin/guard";
+import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
-import { connectDb } from "@/lib/db/connection";
-import { Conversation, type ConversationAttributes } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
+import { type ConversationAttributes } from "@/lib/db/models/Conversation";
 import type { ConversationLean } from "@/lib/chat/serializer";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,11 @@ export async function GET(request: Request) {
   const resource = resourceParam as Resource;
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
 
-  await connectDb();
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
+  const { Conversation } = await getTenantModels(dataDbName);
 
   if (resource === "visitors") {
     const rows = await Conversation.aggregate<{ _id: string; conversations: number; lastActivity: Date }>([

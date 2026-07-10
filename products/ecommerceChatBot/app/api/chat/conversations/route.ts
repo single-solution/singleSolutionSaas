@@ -5,8 +5,7 @@
  * first message required — anonymous by design.
  */
 
-import { connectDb } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
 import { resolveChatCaller } from "@/lib/api/productAuth";
 import { preflight, withCors } from "@/lib/api/cors";
 import { checkRateLimit, getClientIp } from "@/lib/api/rateLimit";
@@ -50,7 +49,7 @@ export async function POST(request: Request) {
       return badRequest("Chat is currently disabled.");
     }
 
-    await connectDb();
+    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
     try {
       const existing = await Conversation.findOne({
         siteId: caller.entitlement.siteId,
@@ -81,7 +80,7 @@ export async function POST(request: Request) {
       if (!lean) {
         return serverError("Conversation vanished after creation.");
       }
-      void dispatchWebhook(caller.entitlement.siteId, "conversation.created", {
+      void dispatchWebhook(caller.entitlement.dataDbName, caller.entitlement.siteId, "conversation.created", {
         conversationId: doc._id.toString(),
         visitorId: caller.visitorId,
       });

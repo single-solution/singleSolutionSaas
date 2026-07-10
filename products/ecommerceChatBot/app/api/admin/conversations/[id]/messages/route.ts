@@ -1,8 +1,8 @@
 /** POST /api/admin/conversations/[id]/messages - admin agent reply. */
 
-import { connectDb, Types } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
-import { requireAdminApi } from "@/lib/admin/guard";
+import { Types } from "@/lib/db/connection";
+import { getTenantModels } from "@/lib/db/tenant";
+import { requireAdminApi, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, created, notFound, serverError } from "@/lib/api/responses";
 import { toThreadLatestPage, type ConversationLean } from "@/lib/chat/serializer";
 import { statusPatchAfterMessage } from "@/lib/chat/status";
@@ -45,8 +45,12 @@ export async function POST(request: Request, { params }: RouteContext) {
   if (!Types.ObjectId.isValid(id)) {
     return notFound("Conversation not found.");
   }
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
 
-  await connectDb();
+  const { Conversation } = await getTenantModels(dataDbName);
   const conversation = await Conversation.findOne({ _id: new Types.ObjectId(id), siteId }).lean<ConversationLean>();
   if (!conversation) {
     return notFound("Conversation not found.");

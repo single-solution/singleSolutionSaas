@@ -1,5 +1,5 @@
-import { connectDb } from "@/lib/db/connection";
-import { SiteSettings, type SiteSettingsAttributes } from "@/lib/db/models/SiteSettings";
+import { getTenantModels } from "@/lib/db/tenant";
+import { type SiteSettingsAttributes } from "@/lib/db/models/SiteSettings";
 
 export type SiteSettingsValues = Omit<SiteSettingsAttributes, "siteId">;
 
@@ -14,8 +14,8 @@ const EMPTY: SiteSettingsValues = {
 };
 
 /** Load a site's advanced settings, falling back to empty defaults. */
-export async function getSiteSettings(siteId: string): Promise<SiteSettingsValues> {
-  await connectDb();
+export async function getSiteSettings(dataDbName: string, siteId: string): Promise<SiteSettingsValues> {
+  const { SiteSettings } = await getTenantModels(dataDbName);
   const doc = await SiteSettings.findOne({ siteId }).lean<SiteSettingsAttributes>();
   if (!doc) {
     return { ...EMPTY };
@@ -43,8 +43,12 @@ function cleanString(value: unknown, max: number): string {
 }
 
 /** Persist a site's advanced settings. Secrets are only replaced when provided. */
-export async function saveSiteSettings(siteId: string, input: Partial<SiteSettingsValues>): Promise<SiteSettingsValues> {
-  await connectDb();
+export async function saveSiteSettings(
+  dataDbName: string,
+  siteId: string,
+  input: Partial<SiteSettingsValues>,
+): Promise<SiteSettingsValues> {
+  const { SiteSettings } = await getTenantModels(dataDbName);
   const update: Record<string, unknown> = {
     autoReplyRules: cleanList(input.autoReplyRules),
     cannedReplies: cleanList(input.cannedReplies),
@@ -59,7 +63,7 @@ export async function saveSiteSettings(siteId: string, input: Partial<SiteSettin
     update.webhookSecret = secret;
   }
   await SiteSettings.findOneAndUpdate({ siteId }, { $set: update }, { upsert: true, new: true, setDefaultsOnInsert: true });
-  return getSiteSettings(siteId);
+  return getSiteSettings(dataDbName, siteId);
 }
 
 /**

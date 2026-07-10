@@ -1,9 +1,9 @@
 /** GET /api/admin/conversations?siteId=&status=&search=&page= - moderation list. */
 
-import { requireAdminApi, requireSiteId } from "@/lib/admin/guard";
+import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
-import { connectDb } from "@/lib/db/connection";
-import { Conversation, CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
+import { CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
 import { summariseThread, type ConversationLean } from "@/lib/chat/serializer";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,11 @@ export async function GET(request: Request) {
   const search = url.searchParams.get("search")?.trim() ?? "";
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
 
-  await connectDb();
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
+  const { Conversation } = await getTenantModels(dataDbName);
   const filter: Record<string, unknown> = { siteId, ...(status ? { status } : {}) };
   if (search) {
     const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

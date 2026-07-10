@@ -55,7 +55,7 @@ export function PortalShell({
         Skip to main content
       </a>
 
-      <div className="mx-auto flex w-full min-h-0 max-w-[1440px] flex-1 flex-col gap-3 sm:gap-4">
+      <div className="mx-auto flex w-full min-h-0 max-w-[1720px] flex-1 flex-col gap-3 sm:gap-4">
         <header className="z-30 flex h-14 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3 shadow-sm sm:gap-4 sm:px-4">
           <Link href="/" className="flex shrink-0 items-center gap-2.5">
             <div className="glass-shine flex h-7 w-7 items-center justify-center rounded-lg bg-ink text-white shadow-sm">
@@ -107,8 +107,8 @@ export function PortalShell({
           {sidebar ? (
             <aside className="hidden w-52 shrink-0 overflow-y-auto border-r border-line p-3 md:block">{sidebar}</aside>
           ) : null}
-          <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-            <div className="mx-auto w-full max-w-[1100px] animate-fade-in-up">{children}</div>
+          <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6">
+            <div className="w-full animate-fade-in-up">{children}</div>
           </div>
         </main>
       </div>

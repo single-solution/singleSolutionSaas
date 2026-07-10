@@ -4,8 +4,8 @@
  * Marks unread agent/assistant messages as read by the visitor.
  */
 
-import { connectDb, Types } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
+import { Types } from "@/lib/db/connection";
+import { getTenantModels } from "@/lib/db/tenant";
 import { resolveChatCaller } from "@/lib/api/productAuth";
 import { preflight, withCors } from "@/lib/api/cors";
 import { noContent, notFound } from "@/lib/api/responses";
@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       return notFound("Conversation not found.");
     }
 
-    await connectDb();
+    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
     const conversation = await Conversation.findOne({
       _id: new Types.ObjectId(id),
       siteId: caller.entitlement.siteId,

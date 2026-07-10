@@ -1,4 +1,4 @@
-import mongoose, { Schema, type Model } from "mongoose";
+import { Schema } from "mongoose";
 
 /**
  * Advanced, product-owned automation for a site. Basic settings (enabled,
@@ -17,7 +17,7 @@ export interface SiteSettingsAttributes {
   webhookSecret: string;
 }
 
-const siteSettingsSchema = new Schema<SiteSettingsAttributes>(
+export const siteSettingsSchema = new Schema<SiteSettingsAttributes>(
   {
     siteId: { type: String, required: true, unique: true, index: true },
     autoReplyRules: { type: [String], default: [] },
@@ -30,7 +30,3 @@ const siteSettingsSchema = new Schema<SiteSettingsAttributes>(
   },
   { timestamps: true },
 );
-
-export const SiteSettings: Model<SiteSettingsAttributes> =
-  (mongoose.models.SiteSettings as Model<SiteSettingsAttributes>) ??
-  mongoose.model<SiteSettingsAttributes>("SiteSettings", siteSettingsSchema);

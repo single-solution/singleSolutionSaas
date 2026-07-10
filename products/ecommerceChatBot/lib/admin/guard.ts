@@ -1,4 +1,5 @@
 import { unauthorized } from "@/lib/api/responses";
+import { resolveSiteDataDb } from "@/lib/platform/client";
 import { readAdminSessionFromRequest, type AdminIdentity } from "./session";
 
 /** Guard an admin API route. Returns the identity or a 401 Response. */
@@ -14,4 +15,12 @@ export function requireAdminApi(request: Request): AdminIdentity | Response {
 export function requireSiteId(request: Request): string | null {
   const siteId = new URL(request.url).searchParams.get("siteId")?.trim();
   return siteId && siteId.length > 0 ? siteId : null;
+}
+
+/**
+ * Resolve the tenant data database for an admin request's site. The dashboard
+ * only ever carries a `siteId`; the platform maps it to the tenant DB.
+ */
+export function resolveAdminDataDb(identity: AdminIdentity, siteId: string): Promise<string | null> {
+  return resolveSiteDataDb(identity.productSlug, siteId);
 }

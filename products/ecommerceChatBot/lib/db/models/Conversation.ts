@@ -1,4 +1,4 @@
-import mongoose, { Schema, type Model } from "mongoose";
+import mongoose, { Schema } from "mongoose";
 
 /**
  * A visitor <-> merchant chat conversation. This product runs as one shared
@@ -60,7 +60,7 @@ const messageSchema = new Schema<ConversationMessageAttributes>(
   { _id: true },
 );
 
-const conversationSchema = new Schema<ConversationAttributes>(
+export const conversationSchema = new Schema<ConversationAttributes>(
   {
     siteId: { type: String, required: true, index: true },
     productSlug: { type: String, required: true, trim: true },
@@ -84,6 +84,3 @@ const conversationSchema = new Schema<ConversationAttributes>(
 conversationSchema.index({ siteId: 1, visitorId: 1 }, { unique: true });
 // Agent inbox: filter by site + status, newest activity first.
 conversationSchema.index({ siteId: 1, status: 1, lastMessageAt: -1 });
-
-export const Conversation: Model<ConversationAttributes> =
-  (mongoose.models.Conversation as Model<ConversationAttributes>) ?? mongoose.model<ConversationAttributes>("Conversation", conversationSchema);

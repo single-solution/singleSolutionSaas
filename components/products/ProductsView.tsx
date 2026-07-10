@@ -90,10 +90,13 @@ export function ProductsView({
           products={products.products}
           usageBySlug={products.usageBySlug}
           tokensBySlug={products.tokensBySlug}
+          isPlatformAdmin={isPlatformAdmin}
+          togglingSlug={products.savingPlanSlug}
           onSelect={(productSlug) => {
             setSelectedSlug(productSlug);
             products.setCreatedToken(null);
           }}
+          onToggleStatus={(product) => void products.toggleStatus(product)}
         />
       )}
 

@@ -4,8 +4,8 @@
  * Platform-only: full conversation for the agent inbox; marks it team-read.
  */
 
-import { connectDb, Types } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
+import { Types } from "@/lib/db/connection";
+import { getTenantModels } from "@/lib/db/tenant";
 import { requireInternalAuth } from "@/lib/api/internalAuth";
 import { badRequest, notFound, ok } from "@/lib/api/responses";
 import { toThread, type ConversationLean } from "@/lib/chat/serializer";
@@ -20,16 +20,21 @@ export async function GET(request: Request, { params }: RouteContext) {
   const unauthorizedResponse = requireInternalAuth(request);
   if (unauthorizedResponse) return unauthorizedResponse;
 
-  const siteId = new URL(request.url).searchParams.get("siteId")?.trim();
+  const url = new URL(request.url);
+  const siteId = url.searchParams.get("siteId")?.trim();
   if (!siteId) {
     return badRequest("siteId is required.");
+  }
+  const dataDbName = url.searchParams.get("dataDbName")?.trim();
+  if (!dataDbName) {
+    return badRequest("dataDbName is required.");
   }
   const { id } = await params;
   if (!Types.ObjectId.isValid(id)) {
     return notFound("Conversation not found.");
   }
 
-  await connectDb();
+  const { Conversation } = await getTenantModels(dataDbName);
   const conversation = await Conversation.findOne({ _id: new Types.ObjectId(id), siteId }).lean<ConversationLean>();
   if (!conversation) {
     return notFound("Conversation not found.");

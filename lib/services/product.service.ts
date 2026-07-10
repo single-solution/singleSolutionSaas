@@ -18,6 +18,7 @@ import {
   resolvePublishedConfig,
 } from "@/lib/services/productConfig.service";
 import { generateProductToken, hashApiKey } from "@/lib/crypto";
+import { ensureSubscriptionDataDb } from "@/lib/services/tenantDb";
 import { type RequestActor, writeAuditLog } from "@/lib/services/platform.service";
 import {
   fetchProductConversation,
@@ -402,11 +403,22 @@ export async function setSiteProductPlan(
     update.status = input.status;
   }
 
-  await Subscription.findOneAndUpdate(
+  const subscription = await Subscription.findOneAndUpdate(
     { siteId: new Types.ObjectId(siteId), productSlug: product.slug },
     { $set: update },
     { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
+  ).lean();
+
+  // Provision the tenant's dedicated product data database on first assignment.
+  if (subscription && !subscription.dataDbName) {
+    await ensureSubscriptionDataDb({
+      _id: subscription._id,
+      merchantId: subscription.merchantId,
+      siteId: subscription.siteId,
+      productSlug: subscription.productSlug,
+      dataDbName: subscription.dataDbName,
+    });
+  }
 
   await writeAuditLog({
     merchantId: site.merchantId.toString(),
@@ -610,6 +622,15 @@ export async function verifyProductToken(plaintextToken: string) {
     return null;
   }
 
+  // Resolve (backfilling for legacy subscriptions) the tenant's data database.
+  const dataDbName = await ensureSubscriptionDataDb({
+    _id: subscription._id,
+    merchantId: subscription.merchantId,
+    siteId: subscription.siteId,
+    productSlug: subscription.productSlug,
+    dataDbName: subscription.dataDbName,
+  });
+
   const entitlement = resolveEntitlement(product.plans.map(mapPlan), subscription);
   const period = currentPeriod();
   const metrics = await usageMetrics(token.siteId.toString(), token.productSlug, entitlement.quotas, period);
@@ -634,6 +655,7 @@ export async function verifyProductToken(plaintextToken: string) {
     usage: metrics,
     withinQuota: metrics.every((metric) => metric.withinQuota),
     config,
+    dataDbName,
   };
 }
 
@@ -706,18 +728,43 @@ async function resolveProductBaseUrl(productSlug: string): Promise<string> {
   return product.baseUrl;
 }
 
+async function resolveProductBridge(siteId: string, productSlug: string): Promise<{ baseUrl: string; dataDbName: string }> {
+  const slug = productSlug.toLowerCase();
+  const [product, subscription] = await Promise.all([
+    Product.findOne({ slug }).lean(),
+    Subscription.findOne({ siteId: new Types.ObjectId(siteId), productSlug: slug }).lean(),
+  ]);
+  if (!product) {
+    throw new ProductBridgeError("Product not found.", 404);
+  }
+  if (!product.baseUrl) {
+    throw new ProductBridgeError("This product has no base URL configured, so conversations can't be loaded.", 409);
+  }
+  if (!subscription) {
+    throw new ProductBridgeError("This site is not subscribed to the product.", 409);
+  }
+  const dataDbName = await ensureSubscriptionDataDb({
+    _id: subscription._id,
+    merchantId: subscription.merchantId,
+    siteId: subscription.siteId,
+    productSlug: subscription.productSlug,
+    dataDbName: subscription.dataDbName,
+  });
+  return { baseUrl: product.baseUrl, dataDbName };
+}
+
 export async function listSiteProductConversations(
   siteId: string,
   productSlug: string,
   query: { status?: string; page: number; pageSize: number },
 ) {
-  const baseUrl = await resolveProductBaseUrl(productSlug);
-  return fetchProductConversations(baseUrl, siteId, query);
+  const { baseUrl, dataDbName } = await resolveProductBridge(siteId, productSlug);
+  return fetchProductConversations(baseUrl, siteId, dataDbName, query);
 }
 
 export async function getSiteProductConversation(siteId: string, productSlug: string, conversationId: string) {
-  const baseUrl = await resolveProductBaseUrl(productSlug);
-  return fetchProductConversation(baseUrl, siteId, conversationId);
+  const { baseUrl, dataDbName } = await resolveProductBridge(siteId, productSlug);
+  return fetchProductConversation(baseUrl, siteId, dataDbName, conversationId);
 }
 
 export async function replyToSiteProductConversation(
@@ -727,8 +774,8 @@ export async function replyToSiteProductConversation(
   body: string,
   agentName: string,
 ) {
-  const baseUrl = await resolveProductBaseUrl(productSlug);
-  return postProductConversationReply(baseUrl, siteId, conversationId, body, agentName);
+  const { baseUrl, dataDbName } = await resolveProductBridge(siteId, productSlug);
+  return postProductConversationReply(baseUrl, siteId, dataDbName, conversationId, body, agentName);
 }
 
 export async function buildProductPreview(

@@ -1,9 +1,9 @@
 /** GET /api/admin/overview?siteId=... - conversation analytics for a site. */
 
-import { requireAdminApi, requireSiteId } from "@/lib/admin/guard";
+import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
-import { connectDb } from "@/lib/db/connection";
-import { Conversation, type ConversationAttributes } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
+import { type ConversationAttributes } from "@/lib/db/models/Conversation";
 import type { ConversationLean } from "@/lib/chat/serializer";
 
 export const dynamic = "force-dynamic";
@@ -17,8 +17,12 @@ export async function GET(request: Request) {
   if (!siteId) {
     return badRequest("siteId is required.");
   }
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
+  const { Conversation } = await getTenantModels(dataDbName);
 
-  await connectDb();
   const since = new Date();
   since.setUTCDate(since.getUTCDate() - (VOLUME_DAYS - 1));
   since.setUTCHours(0, 0, 0, 0);

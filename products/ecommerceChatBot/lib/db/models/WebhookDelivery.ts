@@ -1,4 +1,4 @@
-import mongoose, { Schema, type Model } from "mongoose";
+import { Schema } from "mongoose";
 
 /**
  * Log of a single outbound webhook attempt, for the admin dashboard's webhook
@@ -22,7 +22,7 @@ export interface WebhookDeliveryAttributes {
   durationMs: number;
 }
 
-const webhookDeliverySchema = new Schema<WebhookDeliveryAttributes>(
+export const webhookDeliverySchema = new Schema<WebhookDeliveryAttributes>(
   {
     siteId: { type: String, required: true, index: true },
     event: { type: String, enum: WEBHOOK_EVENTS, required: true },
@@ -38,7 +38,3 @@ const webhookDeliverySchema = new Schema<WebhookDeliveryAttributes>(
 );
 
 webhookDeliverySchema.index({ siteId: 1, createdAt: -1 });
-
-export const WebhookDelivery: Model<WebhookDeliveryAttributes> =
-  (mongoose.models.WebhookDelivery as Model<WebhookDeliveryAttributes>) ??
-  mongoose.model<WebhookDeliveryAttributes>("WebhookDelivery", webhookDeliverySchema);

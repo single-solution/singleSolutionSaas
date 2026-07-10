@@ -21,6 +21,10 @@ const subscriptionSchema = new Schema(
     status: { type: String, enum: ["active", "suspended"], required: true, default: "active" },
     scopeOverrides: { type: [String], default: null },
     quotaOverrides: { type: [quotaOverrideSchema], default: null },
+    // Dedicated per-tenant product data database name (merchant + site + product),
+    // on the shared cluster. Provisioned when the subscription is created. The
+    // running product resolves its data store from this value.
+    dataDbName: { type: String, trim: true, default: null },
   },
   { timestamps: true },
 );

@@ -3,9 +3,10 @@
  * PATCH /api/admin/conversations/[id]         - status change + assistant mute.
  */
 
-import { connectDb, Types } from "@/lib/db/connection";
-import { Conversation, CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
-import { requireAdminApi, requireSiteId } from "@/lib/admin/guard";
+import { Types } from "@/lib/db/connection";
+import { getTenantModels } from "@/lib/db/tenant";
+import { CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
+import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, notFound, ok, serverError } from "@/lib/api/responses";
 import { toThreadLatestPage, type ConversationLean } from "@/lib/chat/serializer";
 
@@ -26,8 +27,12 @@ export async function GET(request: Request, { params }: RouteContext) {
   if (!Types.ObjectId.isValid(id)) {
     return notFound("Conversation not found.");
   }
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
 
-  await connectDb();
+  const { Conversation } = await getTenantModels(dataDbName);
   const conversation = await Conversation.findOne({ _id: new Types.ObjectId(id), siteId }).lean<ConversationLean>();
   if (!conversation) {
     return notFound("Conversation not found.");
@@ -59,6 +64,10 @@ export async function PATCH(request: Request, { params }: RouteContext) {
   if (!Types.ObjectId.isValid(id)) {
     return notFound("Conversation not found.");
   }
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
 
   const set: Record<string, unknown> = {};
   const unset: Record<string, unknown> = {};
@@ -82,7 +91,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     return badRequest("Nothing to update.");
   }
 
-  await connectDb();
+  const { Conversation } = await getTenantModels(dataDbName);
   try {
     const updated = await Conversation.findOneAndUpdate(
       { _id: new Types.ObjectId(id), siteId },

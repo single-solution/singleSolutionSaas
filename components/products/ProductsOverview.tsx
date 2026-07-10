@@ -3,6 +3,7 @@
 import { Boxes, ChevronRight, KeyRound, ShieldCheck } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import type { ProductAccessTokenSummary, ProductUsageSummary, SubscriptionSummary } from "@/lib/types";
@@ -51,12 +52,18 @@ export function ProductsOverview({
   products,
   usageBySlug,
   tokensBySlug,
+  isPlatformAdmin,
+  togglingSlug,
   onSelect,
+  onToggleStatus,
 }: {
   products: SubscriptionSummary[];
   usageBySlug: Record<string, ProductUsageSummary>;
   tokensBySlug: Record<string, ProductAccessTokenSummary[]>;
+  isPlatformAdmin: boolean;
+  togglingSlug: string | null;
   onSelect: (productSlug: string) => void;
+  onToggleStatus: (product: SubscriptionSummary) => void;
 }) {
   if (products.length === 0) {
     return (
@@ -72,43 +79,48 @@ export function ProductsOverview({
   }
 
   return (
-    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
       {products.map((product, index) => {
         const usage = usageBySlug[product.productSlug];
         const activeTokens = (tokensBySlug[product.productSlug] ?? []).filter((token) => !token.revokedAt).length;
+        const canToggle = isPlatformAdmin && Boolean(product.planCode);
 
         return (
-          <button
+          <div
             key={product.productSlug}
-            type="button"
-            onClick={() => onSelect(product.productSlug)}
             style={{ animationDelay: `${index * 0.04}s` }}
-            className="group flex animate-fade-in-up flex-col rounded-xl border border-line bg-surface p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+            className="flex animate-fade-in-up flex-col rounded-xl border border-line bg-surface p-5 shadow-sm transition-all hover:border-brand-300 hover:shadow-md"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
-                  <Boxes className="h-5 w-5" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <h3 className="truncate font-semibold tracking-tight text-ink transition-colors group-hover:text-brand-700">
-                    {product.displayName}
-                  </h3>
-                  <p className="truncate text-[13px] text-ink-muted">{product.planName ?? "Unassigned plan"}</p>
+            <button
+              type="button"
+              onClick={() => onSelect(product.productSlug)}
+              className="group flex flex-col text-left focus:outline-none"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                    <Boxes className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold tracking-tight text-ink transition-colors group-hover:text-brand-700">
+                      {product.displayName}
+                    </h3>
+                    <p className="truncate text-[13px] text-ink-muted">{product.planName ?? "Unassigned plan"}</p>
+                  </div>
                 </div>
+                <StatusBadge product={product} />
               </div>
-              <StatusBadge product={product} />
-            </div>
 
-            <p className="mt-4 line-clamp-2 min-h-[2.5rem] text-[13px] leading-5 text-ink-secondary">
-              {product.description || product.productSlug}
-            </p>
+              <p className="mt-4 line-clamp-2 min-h-[2.5rem] text-[13px] leading-5 text-ink-secondary">
+                {product.description || product.productSlug}
+              </p>
 
-            <div className="mt-4 border-t border-line pt-4">
-              <UsagePreview usage={usage} />
-            </div>
+              <div className="mt-4 w-full border-t border-line pt-4">
+                <UsagePreview usage={usage} />
+              </div>
+            </button>
 
-            <div className="mt-4 flex items-center justify-between">
+            <div className="mt-4 flex items-center justify-between gap-2">
               <span className="inline-flex items-center gap-3 text-[13px] text-ink-muted">
                 <span className="inline-flex items-center gap-1.5">
                   <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
@@ -117,18 +129,33 @@ export function ProductsOverview({
                 {product.scopes.length > 0 ? (
                   <span className="inline-flex items-center gap-1.5">
                     <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                    {product.scopes.length} {product.scopes.length === 1 ? "scope" : "scopes"}
+                    {product.scopes.length}
                   </span>
                 ) : null}
-              </span>
-              <span className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-700">
                 {product.priceMonthly !== null && product.currency ? (
-                  <span className="text-ink">{formatCurrency(product.priceMonthly, product.currency)}/mo</span>
+                  <span className="font-medium text-ink">{formatCurrency(product.priceMonthly, product.currency)}/mo</span>
                 ) : null}
-                <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
               </span>
+
+              <div className="flex shrink-0 items-center gap-2">
+                {canToggle ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    loading={togglingSlug === product.productSlug}
+                    onClick={() => onToggleStatus(product)}
+                  >
+                    {product.status === "active" ? "Suspend" : "Resume"}
+                  </Button>
+                ) : null}
+                <Button type="button" variant="ghost" size="sm" onClick={() => onSelect(product.productSlug)}>
+                  Manage
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
             </div>
-          </button>
+          </div>
         );
       })}
     </div>

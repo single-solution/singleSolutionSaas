@@ -6,8 +6,9 @@
  * automated reply.
  */
 
-import { connectDb, Types } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
+import { Types } from "@/lib/db/connection";
+import { getTenantModels } from "@/lib/db/tenant";
+import { mirrorUsage } from "@/lib/db/usageMirror";
 import { resolveChatCaller } from "@/lib/api/productAuth";
 import { preflight, withCors } from "@/lib/api/cors";
 import { checkRateLimit, getClientIp } from "@/lib/api/rateLimit";
@@ -101,7 +102,7 @@ export async function POST(request: Request, { params }: RouteContext) {
       return badRequest("Message too long.");
     }
 
-    await connectDb();
+    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
     const conversation = await Conversation.findOne({
       _id: new Types.ObjectId(id),
       siteId: caller.entitlement.siteId,
@@ -136,7 +137,14 @@ export async function POST(request: Request, { params }: RouteContext) {
       );
 
       void reportProductUsage(caller.token, USAGE_METRIC, 1);
-      void dispatchWebhook(caller.entitlement.siteId, "message.created", {
+      void mirrorUsage(
+        caller.entitlement.dataDbName,
+        caller.entitlement.siteId,
+        caller.entitlement.productSlug,
+        USAGE_METRIC,
+        1,
+      );
+      void dispatchWebhook(caller.entitlement.dataDbName, caller.entitlement.siteId, "message.created", {
         conversationId: conversation._id.toString(),
         author: "customer",
         preview: body.slice(0, 280),
@@ -149,7 +157,7 @@ export async function POST(request: Request, { params }: RouteContext) {
         return serverError("Conversation vanished while posting.");
       }
 
-      await maybeReplyWithAssistant(refreshed, caller.entitlement.config);
+      await maybeReplyWithAssistant(caller.entitlement.dataDbName, refreshed, caller.entitlement.config);
 
       const withAssistant =
         (await Conversation.findById(

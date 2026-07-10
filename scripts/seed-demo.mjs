@@ -31,17 +31,49 @@ const platformDbName = process.env.MONGODB_PLATFORM_DB?.trim() || "platform";
 const productBaseUrl = (process.env.DEMO_PRODUCT_BASE_URL?.trim() || "https://single-solution-saas-ecommerce-chat.vercel.app").replace(/\/$/, "");
 const productHost = new URL(productBaseUrl).hostname.toLowerCase();
 const ownerPassword = process.env.DEMO_MERCHANT_PASSWORD?.trim() || "Passw0rd!demo";
+const adminEmail = process.env.DEMO_ADMIN_EMAIL?.trim() || "admin@example.com";
+const adminPassword = process.env.DEMO_ADMIN_PASSWORD?.trim() || "Passw0rd!admin";
 
 const PRODUCT_SLUG = "ecommerce-chatbot";
-const OWNER_EMAIL = "owner@northwind.test";
+const OWNER_EMAIL = process.env.DEMO_MERCHANT_EMAIL?.trim() || "owner@northwind.test";
 const MERCHANT_SLUG = "northwind-outfitters";
 const SITE_SLUG = "storefront";
 const PLAN_CODE = "pro";
 const SCOPES = ["chat:read", "chat:write"];
 const ALLOWED_DOMAINS = [productHost, "localhost"];
 
+const LEGACY_PRODUCT_DB = process.env.LEGACY_PRODUCT_DB?.trim() || "ecommerce-chatbot";
+
 function hashApiKey(plaintext) {
   return createHash("sha256").update(plaintext).digest("hex");
+}
+
+// Mirror of lib/services/tenantDb.ts buildTenantDbName - keep in sync.
+function sanitizeSegment(value, maxLength) {
+  const cleaned = String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned.slice(0, maxLength) || "x";
+}
+
+function buildTenantDbName(merchantSlug, siteSlug, productSlug, subscriptionId) {
+  const suffix = String(subscriptionId).replace(/[^a-z0-9]/gi, "").slice(-8).toLowerCase() || "0";
+  return `t-${sanitizeSegment(merchantSlug, 8)}-${sanitizeSegment(siteSlug, 6)}-${sanitizeSegment(productSlug, 8)}-${suffix}`.slice(0, 38);
+}
+
+/** Copy a site's product data from the legacy shared DB into its tenant DB. */
+async function migrateLegacyData(legacyDb, tenantDb, siteId) {
+  const collections = ["conversations", "sitesettings", "webhookdeliveries", "usages"];
+  let moved = 0;
+  for (const name of collections) {
+    const docs = await legacyDb.collection(name).find({ siteId }).toArray();
+    for (const doc of docs) {
+      await tenantDb.collection(name).updateOne({ _id: doc._id }, { $setOnInsert: doc }, { upsert: true });
+      moved += 1;
+    }
+    if (docs.length > 0) {
+      await legacyDb.collection(name).deleteMany({ siteId });
+    }
+  }
+  return moved;
 }
 
 function generateProductToken() {
@@ -136,6 +168,18 @@ async function run() {
     { upsert: true },
   );
 
+  // 2a. Platform admin (bootstrap only runs on an empty DB, which the seed is
+  // not, so ensure one explicitly). Idempotent: refreshes password every run.
+  const adminPasswordHash = await bcrypt.hash(adminPassword, 12);
+  await db.collection("users").updateOne(
+    { email: adminEmail },
+    {
+      $set: { name: "Platform Admin", passwordHash: adminPasswordHash, status: "active", isPlatformAdmin: true, updatedAt: now },
+      $setOnInsert: { email: adminEmail, sessionVersion: 0, inviteTokenHash: null, inviteTokenExpiresAt: null, createdAt: now },
+    },
+    { upsert: true },
+  );
+
   // 2. Owner user (active, signable). Reset password + activation every run.
   const passwordHash = await bcrypt.hash(ownerPassword, 12);
   await db.collection("users").updateOne(
@@ -177,6 +221,30 @@ async function run() {
     { upsert: true },
   );
 
+  // 5b. Provision the tenant's dedicated product data database (merchant + site +
+  // product), record its name on the subscription, and migrate any data that was
+  // written to the legacy shared product DB before per-tenant isolation.
+  const subscription = await db
+    .collection("subscriptions")
+    .findOne({ siteId, productSlug: PRODUCT_SLUG }, { projection: { _id: 1 } });
+  const dataDbName = buildTenantDbName(MERCHANT_SLUG, SITE_SLUG, PRODUCT_SLUG, subscription._id.toString());
+  const tenantDb = mongoose.connection.useDb(dataDbName, { useCache: true });
+  await tenantDb.collection("tenantMeta").updateOne(
+    { key: "tenant" },
+    {
+      $set: { merchantId: merchantId.toString(), siteId: siteId.toString(), productSlug: PRODUCT_SLUG, updatedAt: now },
+      $setOnInsert: { provisionedAt: now },
+    },
+    { upsert: true },
+  );
+  await db.collection("subscriptions").updateOne({ _id: subscription._id }, { $set: { dataDbName } });
+
+  let migrated = 0;
+  if (LEGACY_PRODUCT_DB && LEGACY_PRODUCT_DB !== dataDbName) {
+    const legacyDb = mongoose.connection.useDb(LEGACY_PRODUCT_DB, { useCache: true });
+    migrated = await migrateLegacyData(legacyDb, tenantDb, siteId.toString());
+  }
+
   // 6. Fresh product access token (rotate: the plaintext is only shown once).
   await db.collection("productaccesstokens").deleteMany({ siteId, productSlug: PRODUCT_SLUG });
   const { plaintextToken, tokenHash, tokenPrefix } = generateProductToken();
@@ -198,11 +266,15 @@ async function run() {
 
   const line = "=".repeat(64);
   console.log(`\n${line}\nDEMO SEED COMPLETE\n${line}`);
+  console.log(`\nPlatform admin login (platform portal):`);
+  console.log(`  email:    ${adminEmail}`);
+  console.log(`  password: ${adminPassword}`);
   console.log(`\nMerchant login (platform portal):`);
   console.log(`  email:    ${OWNER_EMAIL}`);
   console.log(`  password: ${ownerPassword}`);
   console.log(`\nProduct:      ${PRODUCT_SLUG} (Pro plan, active subscription)`);
   console.log(`Merchant:     Northwind Outfitters  |  Site: Northwind Storefront`);
+  console.log(`Tenant data DB: ${dataDbName}${migrated > 0 ? `  (migrated ${migrated} docs from ${LEGACY_PRODUCT_DB})` : ""}`);
   console.log(`\nProduct access token (copy now, shown once):`);
   console.log(`  ${plaintextToken}`);
   console.log(`\nAllowed domains: ${ALLOWED_DOMAINS.join(", ")}`);

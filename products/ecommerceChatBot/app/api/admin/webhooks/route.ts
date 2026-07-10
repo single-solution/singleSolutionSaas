@@ -1,9 +1,8 @@
 /** GET /api/admin/webhooks?siteId= - recent webhook delivery logs. */
 
-import { requireAdminApi, requireSiteId } from "@/lib/admin/guard";
+import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
-import { connectDb } from "@/lib/db/connection";
-import { WebhookDelivery } from "@/lib/db/models/WebhookDelivery";
+import { getTenantModels } from "@/lib/db/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +15,12 @@ export async function GET(request: Request) {
   if (!siteId) {
     return badRequest("siteId is required.");
   }
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
 
-  await connectDb();
+  const { WebhookDelivery } = await getTenantModels(dataDbName);
   const docs = await WebhookDelivery.find({ siteId }).sort({ createdAt: -1 }).limit(LIMIT).lean();
   const deliveries = docs.map((doc) => {
     const withTimestamps = doc as typeof doc & { createdAt?: Date };

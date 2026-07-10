@@ -6,11 +6,9 @@
  * messages read on a full open.
  */
 
-import { connectDb, Types } from "@/lib/db/connection";
-import {
-  Conversation,
-  type ConversationMessageAttributes,
-} from "@/lib/db/models/Conversation";
+import { Types } from "@/lib/db/connection";
+import { type ConversationMessageAttributes } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
 import { resolveChatCaller } from "@/lib/api/productAuth";
 import { preflight, withCors } from "@/lib/api/cors";
 import { notFound, notModified, ok } from "@/lib/api/responses";
@@ -46,7 +44,7 @@ export async function GET(request: Request, { params }: RouteContext) {
       return notFound("Conversation not found.");
     }
 
-    await connectDb();
+    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
     const conversation = await Conversation.findOne({
       _id: new Types.ObjectId(id),
       siteId: caller.entitlement.siteId,

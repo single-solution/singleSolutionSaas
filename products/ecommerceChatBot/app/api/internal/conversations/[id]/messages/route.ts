@@ -6,8 +6,8 @@
  * the unread counter it polls.
  */
 
-import { connectDb, Types } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
+import { Types } from "@/lib/db/connection";
+import { getTenantModels } from "@/lib/db/tenant";
 import { requireInternalAuth } from "@/lib/api/internalAuth";
 import { badRequest, created, notFound, serverError } from "@/lib/api/responses";
 import { toThreadLatestPage, type ConversationLean } from "@/lib/chat/serializer";
@@ -22,6 +22,7 @@ interface RouteContext {
 
 interface PostBody {
   siteId?: unknown;
+  dataDbName?: unknown;
   body?: unknown;
   agentName?: unknown;
 }
@@ -38,10 +39,14 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const siteId = typeof parsed.siteId === "string" ? parsed.siteId.trim() : "";
+  const dataDbName = typeof parsed.dataDbName === "string" ? parsed.dataDbName.trim() : "";
   const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
   const agentName = typeof parsed.agentName === "string" && parsed.agentName.trim() ? parsed.agentName.trim().slice(0, 160) : "Agent";
   if (!siteId) {
     return badRequest("siteId is required.");
+  }
+  if (!dataDbName) {
+    return badRequest("dataDbName is required.");
   }
   if (!body) {
     return badRequest("Message cannot be empty.");
@@ -55,7 +60,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     return notFound("Conversation not found.");
   }
 
-  await connectDb();
+  const { Conversation } = await getTenantModels(dataDbName);
   const conversation = await Conversation.findOne({ _id: new Types.ObjectId(id), siteId }).lean<ConversationLean>();
   if (!conversation) {
     return notFound("Conversation not found.");

@@ -21,6 +21,8 @@ export interface ProductEntitlement {
   withinQuota: boolean;
   /** Published, portal-managed configuration for this site + product. */
   config: Record<string, unknown>;
+  /** This tenant's dedicated product data database (merchant + site + product). */
+  dataDbName: string;
 }
 
 interface CacheEntry {
@@ -95,6 +97,8 @@ export interface ProductSiteRef {
   siteId: string;
   name: string;
   merchantName: string;
+  /** The site's dedicated product data database for this product. */
+  dataDbName: string;
 }
 
 /** List sites subscribed to a product, for the admin dashboard site switcher. */
@@ -114,6 +118,27 @@ export async function fetchProductSites(productSlug: string): Promise<ProductSit
   } catch {
     return [];
   }
+}
+
+const siteDbCache = new Map<string, { dataDbName: string; expiresAt: number }>();
+const SITE_DB_CACHE_TTL_MS = 60_000;
+
+/**
+ * Resolve a site's tenant data database from the platform (cached). Used by the
+ * in-product admin dashboard, whose requests carry only a `siteId`.
+ */
+export async function resolveSiteDataDb(productSlug: string, siteId: string): Promise<string | null> {
+  const key = `${productSlug}:${siteId}`;
+  const now = Date.now();
+  const cached = siteDbCache.get(key);
+  if (cached && cached.expiresAt > now) {
+    return cached.dataDbName || null;
+  }
+  const sites = await fetchProductSites(productSlug);
+  for (const site of sites) {
+    siteDbCache.set(`${productSlug}:${site.siteId}`, { dataDbName: site.dataDbName, expiresAt: now + SITE_DB_CACHE_TTL_MS });
+  }
+  return siteDbCache.get(key)?.dataDbName || null;
 }
 
 /** Report metered usage to the platform. Fire-and-forget; failures are swallowed. */

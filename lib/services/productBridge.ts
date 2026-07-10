@@ -49,30 +49,37 @@ async function callProduct<T>(baseUrl: string, path: string, init: RequestInit):
 export function fetchProductConversations(
   baseUrl: string,
   siteId: string,
+  dataDbName: string,
   query: { status?: string; page: number; pageSize: number },
 ): Promise<{ conversations: ProductConversationSummary[]; total: number; page: number; pageSize: number }> {
-  const params = new URLSearchParams({ siteId, page: String(query.page), pageSize: String(query.pageSize) });
+  const params = new URLSearchParams({ siteId, dataDbName, page: String(query.page), pageSize: String(query.pageSize) });
   if (query.status) {
     params.set("status", query.status);
   }
   return callProduct(baseUrl, `/api/internal/conversations?${params.toString()}`, { method: "GET" });
 }
 
-export function fetchProductConversation(baseUrl: string, siteId: string, conversationId: string): Promise<ProductConversation> {
-  const params = new URLSearchParams({ siteId });
+export function fetchProductConversation(
+  baseUrl: string,
+  siteId: string,
+  dataDbName: string,
+  conversationId: string,
+): Promise<ProductConversation> {
+  const params = new URLSearchParams({ siteId, dataDbName });
   return callProduct(baseUrl, `/api/internal/conversations/${encodeURIComponent(conversationId)}?${params.toString()}`, { method: "GET" });
 }
 
 export function postProductConversationReply(
   baseUrl: string,
   siteId: string,
+  dataDbName: string,
   conversationId: string,
   body: string,
   agentName: string,
 ): Promise<ProductConversation> {
   return callProduct(baseUrl, `/api/internal/conversations/${encodeURIComponent(conversationId)}/messages`, {
     method: "POST",
-    body: JSON.stringify({ siteId, body, agentName }),
+    body: JSON.stringify({ siteId, dataDbName, body, agentName }),
   });
 }
 

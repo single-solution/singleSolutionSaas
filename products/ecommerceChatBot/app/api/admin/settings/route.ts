@@ -3,7 +3,7 @@
  * PUT /api/admin/settings          - save them.
  */
 
-import { requireAdminApi, requireSiteId } from "@/lib/admin/guard";
+import { requireAdminApi, requireSiteId, resolveAdminDataDb } from "@/lib/admin/guard";
 import { badRequest, ok } from "@/lib/api/responses";
 import { getSiteSettings, saveSiteSettings, type SiteSettingsValues } from "@/lib/admin/siteSettings";
 
@@ -22,7 +22,11 @@ export async function GET(request: Request) {
   if (!siteId) {
     return badRequest("siteId is required.");
   }
-  const settings = await getSiteSettings(siteId);
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
+  const settings = await getSiteSettings(dataDbName, siteId);
   return ok({ settings: present(settings) });
 }
 
@@ -44,6 +48,10 @@ export async function PUT(request: Request) {
   if (!siteId) {
     return badRequest("siteId is required.");
   }
-  const settings = await saveSiteSettings(siteId, parsed);
+  const dataDbName = await resolveAdminDataDb(identity, siteId);
+  if (!dataDbName) {
+    return badRequest("Unknown site.");
+  }
+  const settings = await saveSiteSettings(dataDbName, siteId, parsed);
   return ok({ settings: present(settings) });
 }

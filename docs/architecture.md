@@ -70,7 +70,7 @@ There is no organization concept. A **merchant** is a tenant; it owns **sites**;
 | `MerchantMembership` | Links a user to a merchant with a role (`owner`/`admin`/`member`) |
 | `Site` | Deployment under a merchant: name + `primaryDomain`; slug unique per merchant |
 | `Product` | Catalog: slug, status, `baseUrl`, `availableScopes`, embedded `plans[]` |
-| `Subscription` | Per (merchant + product + site): `planCode`, `status`, optional scope/quota overrides |
+| `Subscription` | Per (merchant + product + site): `planCode`, `status`, optional scope/quota overrides, and `dataDbName` (the tenant's dedicated product data database) |
 | `ProductAccessToken` | Hashed token per (site + product) with frozen scopes and domain allowlist; shown once |
 | `ProductUsage` | Monthly aggregate per (site + product + metric) |
 | `SubscriptionConfig` | Per (site + product) `draft`/`published` override values + `lockedFields`; unique on `siteId+productSlug` |
@@ -79,7 +79,16 @@ There is no organization concept. A **merchant** is a tenant; it owns **sites**;
 
 `Product` also carries a `configSchema` (sections of typed fields the portal renders generically) and `testActions` (dry-run harness actions), both synced from the product via `GET /api/internal/config-schema`.
 
-Product-side (isolated `ecommerceChatBot` database) additionally has `SiteSettings` (per-site advanced automation + webhook config) and `WebhookDelivery` (outbound delivery log), both owned by the product's admin dashboard.
+### Per-tenant product databases
+
+A product has two kinds of database:
+
+- **Permanent (shared) DB** - the platform control plane (`single-solution-saas`) and the product's own base connection. Holds the registry, admin config, and the authoritative billing usage counters.
+- **Tenant data DB** - one **dedicated database per subscription** (merchant + site + product), on the same cluster, named dynamically (e.g. `t-northwin-storef-ecommerc-<id>`, capped at 38 bytes for Atlas). It is provisioned when the admin assigns the product to a site, its name is stored on the `Subscription` (`dataDbName`), and it is the only place a tenant's runtime data lives - so tenants are physically isolated, not just filtered by `siteId`.
+
+The product resolves its tenant DB at request time from the name the platform delivers: in the token-verification response for widget traffic, and passed explicitly on internal (agent inbox) and admin-dashboard calls. All product models bind to that tenant connection (`lib/db/tenant.ts`).
+
+Inside each **tenant data DB** the product owns: `Conversation` (chat threads + messages), `SiteSettings` (per-site advanced automation + webhook config), `WebhookDelivery` (outbound delivery log), and `Usage` (a local mirror of the metered counter; the platform's `ProductUsage` stays authoritative for billing).
 
 ## Multi-tenancy
 
@@ -175,7 +184,7 @@ The chatbot widget is embedded in merchant sites, so its product token (`pk_live
 | CORS | Widget endpoints reflect the caller origin for cross-origin embeds; the domain allowlist (not CORS) is the security boundary. |
 | Per-IP rate limit | All widget requests capped per IP; conversation creation and message sending have tighter per-IP caps on top of the per-visitor cap (a self-asserted `visitorId` cannot be rotated to bypass them). |
 | Quota | Server-enforced plan quota blocks messages once exhausted, capping the merchant's cost from a leaked token. |
-| Tenant isolation | Every read/write is scoped by `siteId` + `visitorId`; no cross-visitor or cross-tenant access. |
+| Tenant isolation | Each subscription's runtime data lives in its own database (`Subscription.dataDbName`); within it, reads/writes are scoped by `siteId` + `visitorId`. No cross-visitor or cross-tenant access. |
 | Internal secret | `INTERNAL_API_SECRET` compared in constant time on both platform and product internal endpoints. |
 
 ## Migration

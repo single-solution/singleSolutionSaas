@@ -4,8 +4,8 @@
  * Platform-only: lists a site's conversations for the agent inbox.
  */
 
-import { connectDb } from "@/lib/db/connection";
-import { Conversation, CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
+import { CONVERSATION_STATUSES, type ConversationStatus } from "@/lib/db/models/Conversation";
 import { requireInternalAuth } from "@/lib/api/internalAuth";
 import { badRequest, ok } from "@/lib/api/responses";
 import { summariseThread, type ConversationLean } from "@/lib/chat/serializer";
@@ -24,13 +24,17 @@ export async function GET(request: Request) {
   if (!siteId) {
     return badRequest("siteId is required.");
   }
+  const dataDbName = url.searchParams.get("dataDbName")?.trim();
+  if (!dataDbName) {
+    return badRequest("dataDbName is required.");
+  }
 
   const statusParam = url.searchParams.get("status");
   const status = statusParam && CONVERSATION_STATUSES.includes(statusParam as ConversationStatus) ? (statusParam as ConversationStatus) : null;
   const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
   const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(url.searchParams.get("pageSize")) || DEFAULT_PAGE_SIZE));
 
-  await connectDb();
+  const { Conversation } = await getTenantModels(dataDbName);
   const filter = { siteId, ...(status ? { status } : {}) };
   const [docs, total] = await Promise.all([
     Conversation.find(filter)

@@ -8,8 +8,7 @@
  * changing the API or widget.
  */
 
-import { connectDb } from "@/lib/db/connection";
-import { Conversation } from "@/lib/db/models/Conversation";
+import { getTenantModels } from "@/lib/db/tenant";
 import { getSiteSettings, mergeAssistantConfig } from "@/lib/admin/siteSettings";
 import { getChatSettings } from "./settings";
 import { statusPatchAfterMessage } from "./status";
@@ -119,6 +118,7 @@ export function generateAssistantReplies(
  * the assistant is disabled or already paused (a human has taken over).
  */
 export async function maybeReplyWithAssistant(
+  dataDbName: string,
   conversation: ConversationLean,
   config?: Record<string, unknown>,
 ): Promise<void> {
@@ -132,14 +132,14 @@ export async function maybeReplyWithAssistant(
   }
 
   // Portal config is the base; advanced per-site automation overrides it.
-  const siteSettings = await getSiteSettings(conversation.siteId);
+  const siteSettings = await getSiteSettings(dataDbName, conversation.siteId);
   const effectiveConfig = mergeAssistantConfig(config, siteSettings);
   const { replies, escalate } = generateAssistantReplies(lastCustomer.body, effectiveConfig);
   if (replies.length === 0) {
     return;
   }
 
-  await connectDb();
+  const { Conversation } = await getTenantModels(dataDbName);
   const now = new Date();
   const messages = replies.map((body, index) => ({
     author: "assistant" as const,

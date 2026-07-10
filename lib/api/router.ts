@@ -648,9 +648,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
 
     if (method === "POST") {
-      const roleCheck = await requireMerchantRole(auth, params.data.merchantId, ["owner", "admin"]);
-      if (roleCheck instanceof Response) {
-        return roleCheck;
+      // Site creation is platform-admin only: admins provision a merchant's sites.
+      if (!auth.actor.isPlatformAdmin) {
+        return jsonForbidden();
       }
       const body = await parseJsonBody<unknown>(request);
       if (body instanceof Response) {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
-import { Boxes, CalendarDays, ChevronRight, Copy, Send, Users, Zap } from "lucide-react";
+import { Boxes, CalendarDays, ChevronRight, Copy, Send, UserPlus, Users, Zap } from "lucide-react";
 
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "@/components/providers/ToastProvider";
@@ -44,6 +44,7 @@ export function AdminOverview() {
   const [formError, setFormError] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [showOnboard, setShowOnboard] = useState(false);
 
   async function load() {
     setError(null);
@@ -137,11 +138,17 @@ export function AdminOverview() {
 
   return (
     <div className="page-stack">
-      <div className="animate-fade-in-up">
-        <h1 className="text-xl font-semibold tracking-tight text-ink">
-          {greeting()}, {firstName}
-        </h1>
-        <p className="mt-1 text-[13px] text-ink-muted">Platform overview across every merchant and product.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between animate-fade-in-up">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-ink">
+            {greeting()}, {firstName}
+          </h1>
+          <p className="mt-1 text-[13px] text-ink-muted">Platform overview across every merchant and product.</p>
+        </div>
+        <Button onClick={() => setShowOnboard((current) => !current)}>
+          <UserPlus className="h-4 w-4" aria-hidden="true" />
+          {showOnboard ? "Close" : "Onboard merchant"}
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -151,91 +158,15 @@ export function AdminOverview() {
         <StatCard label="New this month" value={String(newThisMonth)} hint={monthPrefix} icon={CalendarDays} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <Card className="shadow-sm border-line bg-surface lg:col-span-2">
-          <CardHeader title="Merchants" description={`${merchants.length} total`} />
-          {error ? (
-            <Alert tone="danger" title="Load failed">
-              {error}
-              <div className="mt-3">
-                <Button variant="outline" size="sm" onClick={() => void load()}>
-                  Retry
-                </Button>
-              </div>
-            </Alert>
-          ) : null}
-          {loading ? (
-            <ListSkeleton />
-          ) : merchants.length === 0 ? (
-            <EmptyState
-              icon={Users}
-              title="No merchants yet"
-              description="Onboard your first merchant with the form on the right."
-            />
-          ) : (
-            <div className="overflow-hidden rounded-lg border border-line">
-              <table className="w-full text-left">
-                <thead className="bg-surface-subtle">
-                  <tr className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">
-                    <th className="px-3 py-2">Merchant</th>
-                    <th className="hidden px-3 py-2 sm:table-cell">Slug</th>
-                    <th className="px-3 py-2">Created</th>
-                    <th className="px-3 py-2" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {merchants.map((merchant) => (
-                    <tr key={merchant.id} className="group transition-colors hover:bg-surface-subtle">
-                      <td className="px-3 py-2.5">
-                        <Link href={`/merchants/${merchant.id}`} className="flex items-center gap-2.5">
-                          <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-subtle text-ink-secondary ring-1 ring-line">
-                            <Users className="h-3.5 w-3.5" aria-hidden="true" />
-                          </span>
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span className="truncate text-[13px] font-medium text-ink group-hover:text-brand-700">{merchant.name}</span>
-                            {merchant.pendingInvite ? <Badge tone="brand">Pending</Badge> : null}
-                          </span>
-                        </Link>
-                      </td>
-                      <td className="hidden px-3 py-2.5 text-[12.5px] text-ink-muted sm:table-cell">{merchant.slug}</td>
-                      <td className="px-3 py-2.5 text-[12.5px] text-ink-muted">{merchant.createdAt.slice(0, 10)}</td>
-                      <td className="px-3 py-2.5 text-right">
-                        {merchant.pendingInvite ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            loading={resendingId === merchant.id}
-                            onClick={() => void handleResendInvite(merchant)}
-                          >
-                            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                            Invite
-                          </Button>
-                        ) : (
-                          <Link
-                            href={`/merchants/${merchant.id}`}
-                            className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand-700 opacity-0 transition-opacity group-hover:opacity-100"
-                          >
-                            Open
-                            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
-        <Card className="shadow-sm border-line bg-surface h-fit">
+      {showOnboard ? (
+        <Card className="shadow-sm border-line bg-surface">
           <CardHeader title="Onboard a merchant" description="Creates the merchant, a default site, and emails an invite." />
           {formError ? (
             <Alert tone="danger" title="Could not create" className="mb-4">
               {formError}
             </Alert>
           ) : null}
-          <form className="grid gap-3.5" onSubmit={handleCreate} noValidate>
+          <form className="grid gap-3.5 sm:grid-cols-3" onSubmit={handleCreate} noValidate>
             <Field label="Merchant name" htmlFor="merchant-name" required>
               <Input
                 id="merchant-name"
@@ -257,10 +188,12 @@ export function AdminOverview() {
                 placeholder="jane@acme.com"
               />
             </Field>
-            <Button type="submit" loading={creating}>
-              <Send className="h-4 w-4" aria-hidden="true" />
-              Send invite
-            </Button>
+            <div className="sm:col-span-3">
+              <Button type="submit" loading={creating}>
+                <Send className="h-4 w-4" aria-hidden="true" />
+                Send invite
+              </Button>
+            </div>
           </form>
 
           {inviteLink ? (
@@ -278,7 +211,70 @@ export function AdminOverview() {
             </Alert>
           ) : null}
         </Card>
-      </div>
+      ) : null}
+
+      {error ? (
+        <Alert tone="danger" title="Load failed">
+          {error}
+          <div className="mt-3">
+            <Button variant="outline" size="sm" onClick={() => void load()}>
+              Retry
+            </Button>
+          </div>
+        </Alert>
+      ) : null}
+
+      {loading ? (
+        <ListSkeleton />
+      ) : merchants.length === 0 ? (
+        <EmptyState icon={Users} title="No merchants yet" description="Onboard your first merchant to get started." />
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {merchants.map((merchant, index) => (
+            <div
+              key={merchant.id}
+              style={{ animationDelay: `${index * 0.04}s` }}
+              className="flex animate-fade-in-up flex-col rounded-xl border border-line bg-surface p-5 shadow-sm transition-all hover:border-brand-300 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <Link href={`/merchants/${merchant.id}`} className="group flex min-w-0 items-center gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700">
+                    <Users className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="truncate font-semibold tracking-tight text-ink group-hover:text-brand-700">{merchant.name}</h3>
+                    <p className="truncate text-[13px] text-ink-muted">{merchant.slug}</p>
+                  </div>
+                </Link>
+                {merchant.pendingInvite ? <Badge tone="brand">Pending</Badge> : null}
+              </div>
+
+              <p className="mt-4 text-[13px] text-ink-muted">Created {merchant.createdAt.slice(0, 10)}</p>
+
+              <div className="mt-4 flex items-center gap-2 border-t border-line pt-4">
+                {merchant.pendingInvite ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    loading={resendingId === merchant.id}
+                    onClick={() => void handleResendInvite(merchant)}
+                  >
+                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    Resend invite
+                  </Button>
+                ) : null}
+                <Link
+                  href={`/merchants/${merchant.id}`}
+                  className="ml-auto inline-flex items-center gap-1 text-[13px] font-medium text-brand-700 hover:text-brand-800"
+                >
+                  Manage
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

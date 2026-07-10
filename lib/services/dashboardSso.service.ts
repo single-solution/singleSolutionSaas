@@ -3,6 +3,7 @@ import { SignJWT } from "jose";
 import { isValidObjectId, Merchant, Product, Site, Subscription, Types, User } from "@/lib/db";
 import { loadEnvironment } from "@/lib/env";
 import { type RequestActor, writeAuditLog } from "@/lib/services/platform.service";
+import { ensureSubscriptionDataDb } from "@/lib/services/tenantDb";
 
 /** Short-lived so a leaked deep-link cannot be replayed. */
 const DASHBOARD_SSO_TTL_SECONDS = 120;
@@ -74,6 +75,8 @@ export interface ProductSiteRef {
   siteId: string;
   name: string;
   merchantName: string;
+  /** The site's dedicated product data database for this product. */
+  dataDbName: string;
 }
 
 /** Sites subscribed to a product, for the in-product dashboard site switcher. */
@@ -87,9 +90,23 @@ export async function listProductSitesForSwitcher(productSlug: string): Promise<
   }).lean();
   const merchantById = new Map(merchants.map((merchant) => [merchant._id.toString(), merchant]));
 
+  // Resolve (backfilling legacy rows) each subscription's tenant data database.
+  const dataDbBySite = new Map<string, string>();
+  for (const subscription of subscriptions) {
+    const dataDbName = await ensureSubscriptionDataDb({
+      _id: subscription._id,
+      merchantId: subscription.merchantId,
+      siteId: subscription.siteId,
+      productSlug: subscription.productSlug,
+      dataDbName: subscription.dataDbName,
+    });
+    dataDbBySite.set(subscription.siteId.toString(), dataDbName);
+  }
+
   return sites.map((site) => ({
     siteId: site._id.toString(),
     name: site.name,
     merchantName: merchantById.get(site.merchantId.toString())?.name ?? "Unknown",
+    dataDbName: dataDbBySite.get(site._id.toString()) ?? "",
   }));
 }
