@@ -1,16 +1,9 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useAuth } from "@/components/AuthProvider";
-import { AdminOverview } from "@/components/dashboard/AdminOverview";
-import { MerchantHome } from "@/components/dashboard/MerchantHome";
-import { DetailSkeleton } from "@/components/ui/Skeleton";
+import { getServerSession } from "@/lib/auth/serverSession";
 
-export default function DashboardPage() {
-  const { user } = useAuth();
+export default async function PortalIndexPage() {
+  const session = await getServerSession();
 
-  if (!user) {
-    return <DetailSkeleton />;
-  }
-
-  return user.isPlatformAdmin ? <AdminOverview /> : <MerchantHome />;
+  redirect(session ? "/dashboard" : "/login");
 }

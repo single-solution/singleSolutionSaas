@@ -8,11 +8,28 @@
  * it. Polls the API on a focus/blur cadence and sends optimistically.
  */
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import { MessageSquare, X } from "lucide-react";
 
+import {
+  issueFromChatError,
+  describeDemoWidgetIssue,
+} from "@/lib/demo/chatErrors";
 import { classNames } from "./cn";
-import { ChatShell, ComposeConversation, StartingConversation, SupportHintFooter, ThreadConversation, statusLabel } from "./liveChatWidgetViews";
+import {
+  ChatShell,
+  ComposeConversation,
+  StartingConversation,
+  SupportHintFooter,
+  ThreadConversation,
+  statusLabel,
+} from "./liveChatWidgetViews";
 import { initChatSession } from "@/lib/chat/session";
 import { createChatTransport } from "@/lib/chat/chatTransport";
 import { mergeChatMessagesById } from "@/lib/chat/messagePagination";
@@ -54,12 +71,15 @@ export function LiveChatWidget({
   const [isOpen, setIsOpen] = useState(isPreview);
   const [bootstrapLoaded, setBootstrapLoaded] = useState(isPreview);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
-  const [settings, setSettings] = useState<ChatSettings | null>(previewSettings ?? null);
+  const [settings, setSettings] = useState<ChatSettings | null>(
+    previewSettings ?? null,
+  );
   const [enabled, setEnabled] = useState(true);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [activeThread, setActiveThread] = useState<ChatThread | null>(null);
   const [view, setView] = useState<WidgetView>("compose");
-  const [pendingFirstMessage, setPendingFirstMessage] = useState<ChatMessage | null>(null);
+  const [pendingFirstMessage, setPendingFirstMessage] =
+    useState<ChatMessage | null>(null);
   const [composerDraft, setComposerDraft] = useState("");
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -78,7 +98,10 @@ export function LiveChatWidget({
   // frame so a closed widget doesn't cover (and block clicks on) the host page.
   useEffect(() => {
     if (typeof window === "undefined" || window.parent === window) return;
-    window.parent.postMessage({ source: "ecommerce-chatbot", type: "resize", open: isOpen }, "*");
+    window.parent.postMessage(
+      { source: "ecommerce-chatbot", type: "resize", open: isOpen },
+      "*",
+    );
   }, [isOpen]);
 
   useEffect(() => {
@@ -94,7 +117,8 @@ export function LiveChatWidget({
       setBootstrapError(null);
       return data;
     } catch (error) {
-      setBootstrapError(error instanceof Error ? error.message : "Unable to load chat.");
+      const issue = issueFromChatError(error);
+      setBootstrapError(describeDemoWidgetIssue(issue).detail);
       return null;
     }
   }, []);
@@ -153,7 +177,8 @@ export function LiveChatWidget({
         }
         const fresh = await pollChatThread(threadId, since, `"${since}"`);
         if (!fresh) return;
-        pollCursorRef.current = newestServerCreatedAt(fresh.messages) ?? pollCursorRef.current;
+        pollCursorRef.current =
+          newestServerCreatedAt(fresh.messages) ?? pollCursorRef.current;
         transport.touch();
         setActiveThread((prev) => {
           if (!prev) return fresh;
@@ -183,7 +208,9 @@ export function LiveChatWidget({
   }, [settings, isOpen]);
 
   async function handlePreviewSend() {
-    setBootstrapError("Preview mode — this shows how the widget looks. Publish to go live.");
+    setBootstrapError(
+      "Preview mode — this shows how the widget looks. Publish to go live.",
+    );
   }
 
   async function handleComposeSend(body: string) {
@@ -195,12 +222,18 @@ export function LiveChatWidget({
       const fresh = await sendChatMessage(thread.id, body);
       pollCursorRef.current = newestServerCreatedAt(fresh.messages);
       setActiveThreadId(fresh.id);
-      setActiveThread({ ...fresh, messages: fresh.messages.filter((message) => message.author === "customer") });
+      setActiveThread({
+        ...fresh,
+        messages: fresh.messages.filter(
+          (message) => message.author === "customer",
+        ),
+      });
       setView("thread");
       setPendingFirstMessage(null);
       requestAnimationFrame(() => setActiveThread(fresh));
     } catch (error) {
-      setBootstrapError(error instanceof Error ? error.message : "Could not start chat.");
+      const issue = issueFromChatError(error);
+      setBootstrapError(describeDemoWidgetIssue(issue).detail);
       setPendingFirstMessage(null);
       setView("compose");
       throw error;
@@ -209,7 +242,10 @@ export function LiveChatWidget({
 
   async function handleSend(body: string) {
     if (!activeThread) return;
-    const optimistic = makeOptimisticMessage({ body, authorName: activeThread.customerName });
+    const optimistic = makeOptimisticMessage({
+      body,
+      authorName: activeThread.customerName,
+    });
     setActiveThread({
       ...activeThread,
       messages: [...activeThread.messages, optimistic],
@@ -219,10 +255,13 @@ export function LiveChatWidget({
     });
     try {
       const fresh = await sendChatMessage(activeThread.id, body);
-      pollCursorRef.current = newestServerCreatedAt(fresh.messages) ?? pollCursorRef.current;
+      pollCursorRef.current =
+        newestServerCreatedAt(fresh.messages) ?? pollCursorRef.current;
       setActiveThread((prev) => {
         const base = prev ?? fresh;
-        const withoutOptimistic = base.messages.filter((message) => message.id !== optimistic.id);
+        const withoutOptimistic = base.messages.filter(
+          (message) => message.id !== optimistic.id,
+        );
         return {
           ...fresh,
           messages: mergeChatMessagesById(withoutOptimistic, fresh.messages),
@@ -230,9 +269,19 @@ export function LiveChatWidget({
         };
       });
     } catch (error) {
-      setActiveThread((prev) => (prev ? { ...prev, messages: prev.messages.filter((message) => message.id !== optimistic.id) } : prev));
-      if (error instanceof ChatRequestError && error.code === "quota_exceeded") {
-        setBootstrapError(error.message);
+      setActiveThread((prev) =>
+        prev
+          ? {
+              ...prev,
+              messages: prev.messages.filter(
+                (message) => message.id !== optimistic.id,
+              ),
+            }
+          : prev,
+      );
+      if (error instanceof ChatRequestError) {
+        const issue = issueFromChatError(error);
+        setBootstrapError(describeDemoWidgetIssue(issue).detail);
       }
       throw error;
     }
@@ -271,13 +320,18 @@ export function LiveChatWidget({
   }
 
   const assistantEnabled = settings?.assistantEnabled ?? false;
-  const welcomeMessage = settings?.welcomeMessage ?? "Hi! How can we help you today?";
+  const welcomeMessage =
+    settings?.welcomeMessage ?? "Hi! How can we help you today?";
   const title = settings?.assistantName ?? "Chat Support";
 
   return (
     <div
       className="ecommerce-chatbot-widget fixed bottom-4 right-4 z-[2147483000] flex flex-col items-end gap-3"
-      style={settings?.themeColor ? ({ "--color-accent-500": settings.themeColor } as CSSProperties) : undefined}
+      style={
+        settings?.themeColor
+          ? ({ "--color-accent-500": settings.themeColor } as CSSProperties)
+          : undefined
+      }
     >
       {isOpen ? (
         <div className="h-[520px] w-[370px] max-w-[calc(100vw-2rem)]">
@@ -297,9 +351,13 @@ export function LiveChatWidget({
             onClose={() => setIsOpen(false)}
           >
             {!bootstrapLoaded ? (
-              <div className="flex flex-1 items-center justify-center text-[length:var(--chat-font-body)] text-[var(--color-ink-500)]">Loading chat…</div>
+              <div className="flex flex-1 items-center justify-center text-[length:var(--chat-font-body)] text-[var(--color-ink-500)]">
+                Loading chat…
+              </div>
             ) : !enabled ? (
-              <div className="flex flex-1 items-center justify-center px-6 text-center text-[length:var(--chat-font-body)] text-[var(--color-ink-500)]">Chat is currently disabled.</div>
+              <div className="flex flex-1 items-center justify-center px-6 text-center text-[length:var(--chat-font-body)] text-[var(--color-ink-500)]">
+                Chat is currently disabled.
+              </div>
             ) : (
               <>
                 {bootstrapError && (
@@ -307,8 +365,17 @@ export function LiveChatWidget({
                     {bootstrapError}
                   </div>
                 )}
-                {view === "starting" && pendingFirstMessage && <StartingConversation message={pendingFirstMessage} />}
-                {view === "compose" && <ComposeConversation draft={composerDraft} onDraftChange={setComposerDraft} onSend={isPreview ? handlePreviewSend : handleComposeSend} welcomeMessage={welcomeMessage} />}
+                {view === "starting" && pendingFirstMessage && (
+                  <StartingConversation message={pendingFirstMessage} />
+                )}
+                {view === "compose" && (
+                  <ComposeConversation
+                    draft={composerDraft}
+                    onDraftChange={setComposerDraft}
+                    onSend={isPreview ? handlePreviewSend : handleComposeSend}
+                    welcomeMessage={welcomeMessage}
+                  />
+                )}
                 {view === "thread" && activeThread && (
                   <ThreadConversation
                     thread={activeThread}
@@ -322,7 +389,13 @@ export function LiveChatWidget({
                     onLoadOlder={loadOlderMessages}
                   />
                 )}
-                <SupportHintFooter assistantEnabled={assistantEnabled} assistantPaused={view === "thread" && (activeThread?.assistantPaused ?? false)} />
+                <SupportHintFooter
+                  assistantEnabled={assistantEnabled}
+                  assistantPaused={
+                    view === "thread" &&
+                    (activeThread?.assistantPaused ?? false)
+                  }
+                />
               </>
             )}
           </ChatShell>

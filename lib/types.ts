@@ -39,11 +39,18 @@ export interface MerchantSummary {
 
 export interface SiteSummary {
   id: SiteId;
-  merchantId: MerchantId;
   name: string;
   slug: string;
   primaryDomain: string;
+  merchantId: MerchantId;
   createdAt: string;
+  merchantName?: string;
+  activeProducts?: number;
+  suspendedProducts?: number;
+  activeTokens?: number;
+  monthlySpend?: number;
+  currency?: string | null;
+  lastActivityAt?: string | null;
 }
 
 export interface ProductPlanQuota {
@@ -72,7 +79,8 @@ export type ProductConfigFieldType =
   | "secret"
   | "list";
 
-export type ProductConfigSectionKind = "settings" | "connection" | "integration";
+export type ProductConfigSectionKind =
+  "settings" | "connection" | "integration";
 
 export interface ProductConfigFieldOption {
   value: string;
@@ -119,6 +127,9 @@ export interface ProductSummary {
   configSchema: ProductConfigSection[];
   testActions: ProductTestAction[];
   createdAt: string;
+  subscriberCount?: number;
+  activeSubscriberCount?: number;
+  suspendedSubscriberCount?: number;
 }
 
 /** Result of pinging a running product at its Base URL and syncing its schema. */
@@ -239,7 +250,8 @@ export interface ProductUsageSummary {
   currency: string;
 }
 
-export type ProductConversationStatus = "open" | "awaiting-customer" | "resolved";
+export type ProductConversationStatus =
+  "open" | "awaiting-customer" | "resolved";
 export type ProductConversationAuthor = "customer" | "agent" | "assistant";
 
 export interface ProductConversationSummary {

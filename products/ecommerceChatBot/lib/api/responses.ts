@@ -15,15 +15,27 @@ export function notModified(etag: string): Response {
 }
 
 export function badRequest(message: string, code?: string): Response {
-  return Response.json({ error: message, ...(code ? { code } : {}) }, { status: 400 });
+  return Response.json(
+    { error: message, ...(code ? { code } : {}) },
+    { status: 400 },
+  );
 }
 
-export function unauthorized(message = "Unauthorized"): Response {
-  return Response.json({ error: message }, { status: 401 });
+export function unauthorized(
+  message = "Unauthorized",
+  code?: string,
+): Response {
+  return Response.json(
+    { error: message, ...(code ? { code } : {}) },
+    { status: 401 },
+  );
 }
 
 export function forbidden(message: string, code?: string): Response {
-  return Response.json({ error: message, ...(code ? { code } : {}) }, { status: 403 });
+  return Response.json(
+    { error: message, ...(code ? { code } : {}) },
+    { status: 403 },
+  );
 }
 
 export function notFound(message = "Not found"): Response {
@@ -31,11 +43,20 @@ export function notFound(message = "Not found"): Response {
 }
 
 export function paymentRequired(message: string, code?: string): Response {
-  return Response.json({ error: message, ...(code ? { code } : {}) }, { status: 402 });
+  return Response.json(
+    { error: message, ...(code ? { code } : {}) },
+    { status: 402 },
+  );
 }
 
-export function tooManyRequests(retryAfterSeconds: number, message = "Too many requests. Please slow down."): Response {
-  return Response.json({ error: message }, { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } });
+export function tooManyRequests(
+  retryAfterSeconds: number,
+  message = "Too many requests. Please slow down.",
+): Response {
+  return Response.json(
+    { error: message },
+    { status: 429, headers: { "Retry-After": String(retryAfterSeconds) } },
+  );
 }
 
 export function serverError(message = "Something went wrong"): Response {

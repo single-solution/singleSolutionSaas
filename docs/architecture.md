@@ -17,21 +17,25 @@ Single deployable: **Next.js App Router** portal for Single Solution operations.
 
 ## Stack
 
-| Layer | Choice |
-|-------|--------|
-| Framework | Next.js 15 (App Router) |
-| UI | React 19, client components for dashboards |
-| API | Next.js Route Handlers (`app/api/[...path]`) |
-| Database | MongoDB Atlas via Mongoose |
-| Auth | Email/password, JWT in httpOnly cookie |
+| Layer     | Choice                                       |
+| --------- | -------------------------------------------- |
+| Framework | Next.js 15 (App Router)                      |
+| UI        | React 19, client components for dashboards   |
+| API       | Next.js Route Handlers (`app/api/[...path]`) |
+| Database  | MongoDB Atlas via Mongoose                   |
+| Auth      | Email/password, JWT in httpOnly cookie       |
 
 ## Folder layout
 
 ```
 app/
-  login/              Shared sign-in
-  admin/              Platform admin (merchants, products)
-  merchant/           Merchant dashboard + sites
+  login/              Shared sign-in + public demo entry
+  (portal)/
+    dashboard/        Role-aware operational overview
+    merchants/        Admin merchant directory and details
+    sites/            Shared, scope-filtered site directory and details
+    products/         Admin product catalog and details
+    settings/         Shared account settings
   api/[...path]/      REST API (auth, merchants, sites, products, audit)
 components/           Shared client components (AuthProvider, products/*)
 lib/
@@ -58,24 +62,26 @@ flowchart LR
 
 - **Platform admin**: `User.isPlatformAdmin === true`
 - **Merchant**: user with `MerchantMembership`
-- Same `/login` page; after sign-in everyone lands on the unified role-aware dashboard (`/`), which renders admin or merchant content based on role
+- Same `/login` page; `/` redirects signed-in users to `/dashboard`, which renders admin or merchant content based on role
+- Merchants and sites use shared canonical routes. Authorization is encoded in API query scope rather than duplicated admin/merchant route trees.
+- Only platform admins mutate merchants, sites, catalog products, plans, subscriptions, tokens, and configuration. Merchants see their scoped sites, existing key metadata, usage, billing, and allowed conversations.
 
 ## Data model
 
 There is no organization concept. A **merchant** is a tenant; it owns **sites**; each (merchant + product + site) is a **subscription** with its own plan, tokens, usage, and billing.
 
-| Collection | Purpose |
-|-----------|---------|
-| `Merchant` | Tenant: globally unique slug |
-| `MerchantMembership` | Links a user to a merchant with a role (`owner`/`admin`/`member`) |
-| `Site` | Deployment under a merchant: name + `primaryDomain`; slug unique per merchant |
-| `Product` | Catalog: slug, status, `baseUrl`, `availableScopes`, embedded `plans[]` |
-| `Subscription` | Per (merchant + product + site): `planCode`, `status`, optional scope/quota overrides, and `dataDbName` (the tenant's dedicated product data database) |
-| `ProductAccessToken` | Hashed token per (site + product) with frozen scopes and domain allowlist; shown once |
-| `ProductUsage` | Monthly aggregate per (site + product + metric) |
-| `SubscriptionConfig` | Per (site + product) `draft`/`published` override values + `lockedFields`; unique on `siteId+productSlug` |
-| `ProductDefaultConfig` | Per product `draft`/`published` default values + `lockedFields` (enforced across sites); unique on `productSlug` |
-| `AuditLog` | Merchant-scoped actions |
+| Collection             | Purpose                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Merchant`             | Tenant: globally unique slug                                                                                                                           |
+| `MerchantMembership`   | Links a user to a merchant with a role (`owner`/`admin`/`member`)                                                                                      |
+| `Site`                 | Deployment under a merchant: name + `primaryDomain`; slug unique per merchant                                                                          |
+| `Product`              | Catalog: slug, status, `baseUrl`, `availableScopes`, embedded `plans[]`                                                                                |
+| `Subscription`         | Per (merchant + product + site): `planCode`, `status`, optional scope/quota overrides, and `dataDbName` (the tenant's dedicated product data database) |
+| `ProductAccessToken`   | Hashed token per (site + product) with frozen scopes and domain allowlist; shown once                                                                  |
+| `ProductUsage`         | Monthly aggregate per (site + product + metric)                                                                                                        |
+| `SubscriptionConfig`   | Per (site + product) `draft`/`published` override values + `lockedFields`; unique on `siteId+productSlug`                                              |
+| `ProductDefaultConfig` | Per product `draft`/`published` default values + `lockedFields` (enforced across sites); unique on `productSlug`                                       |
+| `AuditLog`             | Merchant-scoped actions                                                                                                                                |
 
 `Product` also carries a `configSchema` (sections of typed fields the portal renders generically) and `testActions` (dry-run harness actions), both synced from the product via `GET /api/internal/config-schema`.
 
@@ -92,11 +98,11 @@ Inside each **tenant data DB** the product owns: `Conversation` (chat threads + 
 
 ## Multi-tenancy
 
-| Scope | Key |
-|-------|-----|
-| Merchant | `merchantId` |
-| Site | `siteId` (belongs to one merchant) |
-| Subscription / token / usage | `siteId` + `productSlug` |
+| Scope                        | Key                                |
+| ---------------------------- | ---------------------------------- |
+| Merchant                     | `merchantId`                       |
+| Site                         | `siteId` (belongs to one merchant) |
+| Subscription / token / usage | `siteId` + `productSlug`           |
 
 Platform admins bypass merchant membership checks for support operations.
 
@@ -107,8 +113,8 @@ Products are isolated apps (separate repo, separate database). The portal is the
 **Product access tokens** (per site+product; entitlement + runtime credential):
 
 1. Platform admin registers the product with plans, scopes, and quotas at `/products` (persisted in the `Product` collection).
-2. A plan is assigned to a product on a site (by admin or by the merchant self-serve) creating a `Subscription`.
-3. Merchant issues a product access token for that site+product; scopes are frozen from the plan.
+2. A platform admin assigns a plan to a product on a site, creating a `Subscription` and provisioning its tenant database.
+3. The platform admin issues a domain-bound product access token for that site+product; scopes are frozen from the plan. Merchants can view existing key metadata but cannot issue or revoke keys.
 4. Product app calls `POST /api/internal/product-tokens/verifications` (Bearer `INTERNAL_API_SECRET`) to resolve merchant, site, plan, scopes, quotas, current usage, and `withinQuota`.
 5. Product app reports usage via `POST /api/internal/product-usage`, incrementing the current-month `ProductUsage` aggregate.
 
@@ -161,6 +167,23 @@ No public sign-up. `POST /api/admin/merchants` (platform admin only) creates an 
 
 Invite tokens are SHA-256 hashed at rest with a 7-day expiry. `GET /api/auth/invitations/{token}` (public, rate-limited) resolves the invitee for display; `POST /api/auth/invitations/acceptance` (public, rate-limited) sets the chosen password, flips `status` to `active`, bumps `sessionVersion`, clears the token, and issues the session cookie. Invited users are rejected by `authenticateUser` until acceptance. The merchant slug is auto-generated from the name and de-duplicated server-side (numeric suffix on clash); site slugs are auto-generated per merchant; owner email is unique (409 on clash).
 
+## Portal UI system
+
+- The portal uses a floating, wide top-navigation shell with no permanent sidebar. Admin navigation exposes Dashboard, Merchants, Sites, and Products as equal entries; merchant navigation exposes Dashboard and Sites.
+- Search/filter/view/tab/pagination state uses URL query parameters. `Cmd/Ctrl+K` opens global navigation search by merchant, owner email, site/domain, or product.
+- Shared primitives under `components/ui` provide semantic controls, modal focus trapping/restoration, keyboard tabs, dropdown menus, resource cards, data tables, progress semantics, and loading/error/empty page states.
+- Quick edits and guided workflows use center modals. Destructive lifecycle changes explain runtime and token consequences before confirmation.
+- The standalone chatbot admin applies the same light-indigo semantic language, accessible controls, reduced-motion handling, responsive states, and page-state patterns while retaining product-specific navigation.
+
+## Public demo sandbox
+
+The chatbot exposes `/public-demo` for a dedicated restricted demo subscription. `scripts/seed-demo.mjs` issues the publishable demo token with a product-host/localhost domain allowlist and marks its token metadata as the demo credential. The chatbot server receives that token through `PUBLIC_DEMO_PRODUCT_TOKEN`; the platform login reaches it through `ECOMMERCE_CHATBOT_PUBLIC_URL`.
+
+- Public demo requests use stricter rate limits and cannot enter internal or product-admin APIs.
+- The page falls back to a non-interactive sample when no demo token is configured.
+- `/demo?token=...` remains the explicit token-testing route for operators; `/public-demo` never accepts privileged platform credentials.
+- Guest demo and admin tenant preview are labeled separately: guest sandbox uses the restricted tenant, while **Test site** mints a short-lived preview for the selected real subscription.
+
 ## Widget embedding
 
 ```mermaid
@@ -178,14 +201,14 @@ flowchart LR
 
 The chatbot widget is embedded in merchant sites, so its product token (`pk_live_...`) is a **publishable key** visible in page source. Defense in depth on the product's widget endpoints:
 
-| Control | Mechanism |
-|---------|-----------|
-| Domain binding | Each token has an allowlist; requests are checked by `Origin` (fallback `Referer`) host. No domains configured = blocked (secure by default); supports `*.example.com`. |
-| CORS | Widget endpoints reflect the caller origin for cross-origin embeds; the domain allowlist (not CORS) is the security boundary. |
+| Control           | Mechanism                                                                                                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain binding    | Each token has an allowlist; requests are checked by `Origin` (fallback `Referer`) host. No domains configured = blocked (secure by default); supports `*.example.com`.                             |
+| CORS              | Widget endpoints reflect the caller origin for cross-origin embeds; the domain allowlist (not CORS) is the security boundary.                                                                       |
 | Per-IP rate limit | All widget requests capped per IP; conversation creation and message sending have tighter per-IP caps on top of the per-visitor cap (a self-asserted `visitorId` cannot be rotated to bypass them). |
-| Quota | Server-enforced plan quota blocks messages once exhausted, capping the merchant's cost from a leaked token. |
-| Tenant isolation | Each subscription's runtime data lives in its own database (`Subscription.dataDbName`); within it, reads/writes are scoped by `siteId` + `visitorId`. No cross-visitor or cross-tenant access. |
-| Internal secret | `INTERNAL_API_SECRET` compared in constant time on both platform and product internal endpoints. |
+| Quota             | Server-enforced plan quota blocks messages once exhausted, capping the merchant's cost from a leaked token.                                                                                         |
+| Tenant isolation  | Each subscription's runtime data lives in its own database (`Subscription.dataDbName`); within it, reads/writes are scoped by `siteId` + `visitorId`. No cross-visitor or cross-tenant access.      |
+| Internal secret   | `INTERNAL_API_SECRET` compared in constant time on both platform and product internal endpoints.                                                                                                    |
 
 ## Migration
 

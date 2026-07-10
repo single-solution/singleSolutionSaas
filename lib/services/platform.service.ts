@@ -1,4 +1,15 @@
-import { AuditLog, Merchant, MerchantMembership, Product, Site, Subscription, Types, User } from "@/lib/db";
+import {
+  AuditLog,
+  Merchant,
+  MerchantMembership,
+  Product,
+  ProductAccessToken,
+  ProductUsage,
+  Site,
+  Subscription,
+  Types,
+  User,
+} from "@/lib/db";
 import type {
   AuditLogSummary,
   InvitationInfo,
@@ -26,7 +37,12 @@ function toIso(value: Date): string {
   return value.toISOString();
 }
 
-function mapUser(user: { _id: { toString(): string }; email: string; name: string; isPlatformAdmin: boolean }): UserSummary {
+function mapUser(user: {
+  _id: { toString(): string };
+  email: string;
+  name: string;
+  isPlatformAdmin: boolean;
+}): UserSummary {
   return {
     id: user._id.toString(),
     email: user.email,
@@ -53,7 +69,10 @@ function mapSite(site: {
   };
 }
 
-export async function bootstrapPlatformAdmin(email: string, password: string): Promise<void> {
+export async function bootstrapPlatformAdmin(
+  email: string,
+  password: string,
+): Promise<void> {
   const existing = await User.countDocuments();
   if (existing > 0) {
     return;
@@ -73,7 +92,10 @@ export async function invalidateUserSessions(userId: string): Promise<void> {
   await User.findByIdAndUpdate(userId, { $inc: { sessionVersion: 1 } });
 }
 
-export async function authenticateUser(email: string, password: string): Promise<UserSummary | null> {
+export async function authenticateUser(
+  email: string,
+  password: string,
+): Promise<UserSummary | null> {
   const user = await User.findOne({ email: email.toLowerCase() });
   if (!user) {
     return null;
@@ -104,7 +126,10 @@ export async function updateUserProfile(
   if (input.email) {
     const email = input.email.toLowerCase();
     if (email !== user.email) {
-      const taken = await User.findOne({ email, _id: { $ne: user._id } }).lean();
+      const taken = await User.findOne({
+        email,
+        _id: { $ne: user._id },
+      }).lean();
       if (taken) {
         throw new Error("EMAIL_TAKEN");
       }
@@ -135,7 +160,10 @@ export async function changeUserPassword(
   return mapUser(user);
 }
 
-export async function getMembershipRole(merchantId: string, userId: string): Promise<MerchantMemberRole | null> {
+export async function getMembershipRole(
+  merchantId: string,
+  userId: string,
+): Promise<MerchantMemberRole | null> {
   const membership = await MerchantMembership.findOne({
     merchantId: new Types.ObjectId(merchantId),
     userId: new Types.ObjectId(userId),
@@ -143,14 +171,20 @@ export async function getMembershipRole(merchantId: string, userId: string): Pro
   return membership?.role ?? null;
 }
 
-export async function listMerchantsForUser(userId: string): Promise<MerchantSummary[]> {
-  const memberships = await MerchantMembership.find({ userId: new Types.ObjectId(userId) })
+export async function listMerchantsForUser(
+  userId: string,
+): Promise<MerchantSummary[]> {
+  const memberships = await MerchantMembership.find({
+    userId: new Types.ObjectId(userId),
+  })
     .sort({ createdAt: -1 })
     .lean();
 
   const merchantIds = memberships.map((membership) => membership.merchantId);
   const merchants = await Merchant.find({ _id: { $in: merchantIds } }).lean();
-  const merchantById = new Map(merchants.map((merchant) => [merchant._id.toString(), merchant]));
+  const merchantById = new Map(
+    merchants.map((merchant) => [merchant._id.toString(), merchant]),
+  );
 
   return memberships
     .map((membership) => {
@@ -173,18 +207,32 @@ export async function listAllMerchants(): Promise<MerchantSummary[]> {
   const merchants = await Merchant.find().sort({ createdAt: -1 }).lean();
   const merchantIds = merchants.map((merchant) => merchant._id);
 
-  const ownerMemberships = await MerchantMembership.find({ merchantId: { $in: merchantIds }, role: "owner" }).lean();
-  const ownerUsers = await User.find({ _id: { $in: ownerMemberships.map((membership) => membership.userId) } })
+  const ownerMemberships = await MerchantMembership.find({
+    merchantId: { $in: merchantIds },
+    role: "owner",
+  }).lean();
+  const ownerUsers = await User.find({
+    _id: { $in: ownerMemberships.map((membership) => membership.userId) },
+  })
     .select("_id status email")
     .lean();
-  const ownerByUserId = new Map(ownerUsers.map((user) => [user._id.toString(), user]));
+  const ownerByUserId = new Map(
+    ownerUsers.map((user) => [user._id.toString(), user]),
+  );
   const ownerByMerchantId = new Map(
-    ownerMemberships.map((membership) => [membership.merchantId.toString(), ownerByUserId.get(membership.userId.toString())]),
+    ownerMemberships.map((membership) => [
+      membership.merchantId.toString(),
+      ownerByUserId.get(membership.userId.toString()),
+    ]),
   );
 
   // Sites per merchant, plus a site -> merchant lookup for subscription rollups.
-  const sites = await Site.find({ merchantId: { $in: merchantIds } }).select("_id merchantId").lean();
-  const merchantBySiteId = new Map(sites.map((site) => [site._id.toString(), site.merchantId.toString()]));
+  const sites = await Site.find({ merchantId: { $in: merchantIds } })
+    .select("_id merchantId")
+    .lean();
+  const merchantBySiteId = new Map(
+    sites.map((site) => [site._id.toString(), site.merchantId.toString()]),
+  );
   const siteCountByMerchant = new Map<string, number>();
   for (const site of sites) {
     const key = site.merchantId.toString();
@@ -199,13 +247,22 @@ export async function listAllMerchants(): Promise<MerchantSummary[]> {
   })
     .select("siteId productSlug planCode")
     .lean();
-  const products = await Product.find({ slug: { $in: subscriptions.map((subscription) => subscription.productSlug) } })
+  const products = await Product.find({
+    slug: {
+      $in: subscriptions.map((subscription) => subscription.productSlug),
+    },
+  })
     .select("slug plans")
     .lean();
   const planPriceBySlug = new Map(
     products.map((product) => [
       product.slug,
-      new Map(product.plans.map((plan) => [plan.code, { price: plan.priceMonthly, currency: plan.currency }])),
+      new Map(
+        product.plans.map((plan) => [
+          plan.code,
+          { price: plan.priceMonthly, currency: plan.currency },
+        ]),
+      ),
     ]),
   );
 
@@ -217,10 +274,20 @@ export async function listAllMerchants(): Promise<MerchantSummary[]> {
     if (!merchantId) {
       continue;
     }
-    productCountByMerchant.set(merchantId, (productCountByMerchant.get(merchantId) ?? 0) + 1);
-    const plan = subscription.planCode ? planPriceBySlug.get(subscription.productSlug)?.get(subscription.planCode) : undefined;
+    productCountByMerchant.set(
+      merchantId,
+      (productCountByMerchant.get(merchantId) ?? 0) + 1,
+    );
+    const plan = subscription.planCode
+      ? planPriceBySlug
+          .get(subscription.productSlug)
+          ?.get(subscription.planCode)
+      : undefined;
     if (plan) {
-      spendByMerchant.set(merchantId, (spendByMerchant.get(merchantId) ?? 0) + plan.price);
+      spendByMerchant.set(
+        merchantId,
+        (spendByMerchant.get(merchantId) ?? 0) + plan.price,
+      );
       if (!currencyByMerchant.has(merchantId)) {
         currencyByMerchant.set(merchantId, plan.currency);
       }
@@ -279,7 +346,8 @@ async function deliverInvite(input: {
 async function generateUniqueMerchantSlug(name: string): Promise<string> {
   const base = slugify(name) || "merchant";
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`.slice(0, 80);
+    const candidate =
+      attempt === 0 ? base : `${base}-${attempt + 1}`.slice(0, 80);
     const taken = await Merchant.exists({ slug: candidate });
     if (!taken) {
       return candidate;
@@ -288,10 +356,14 @@ async function generateUniqueMerchantSlug(name: string): Promise<string> {
   return `${base}-${randomBytes(4).toString("hex")}`.slice(0, 80);
 }
 
-async function generateUniqueSiteSlug(merchantId: Types.ObjectId, name: string): Promise<string> {
+async function generateUniqueSiteSlug(
+  merchantId: Types.ObjectId,
+  name: string,
+): Promise<string> {
   const base = slugify(name) || "site";
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`.slice(0, 80);
+    const candidate =
+      attempt === 0 ? base : `${base}-${attempt + 1}`.slice(0, 80);
     const taken = await Site.exists({ merchantId, slug: candidate });
     if (!taken) {
       return candidate;
@@ -313,7 +385,9 @@ async function reclaimOrphanedOwner(email: string): Promise<"CONFLICT" | "OK"> {
   if (existing.status !== "invited") {
     return "CONFLICT";
   }
-  const memberships = await MerchantMembership.find({ userId: existing._id }).lean();
+  const memberships = await MerchantMembership.find({
+    userId: existing._id,
+  }).lean();
   for (const membership of memberships) {
     const merchant = await Merchant.findById(membership.merchantId).lean();
     if (merchant) {
@@ -328,7 +402,12 @@ async function reclaimOrphanedOwner(email: string): Promise<"CONFLICT" | "OK"> {
 export async function createMerchant(
   actor: RequestActor,
   input: { merchantName: string; ownerName: string; ownerEmail: string },
-): Promise<{ merchant: MerchantSummary; owner: UserSummary; inviteToken: string; emailSent: boolean }> {
+): Promise<{
+  merchant: MerchantSummary;
+  owner: UserSummary;
+  inviteToken: string;
+  emailSent: boolean;
+}> {
   const email = input.ownerEmail.toLowerCase();
   if ((await reclaimOrphanedOwner(email)) === "CONFLICT") {
     throw new Error("EMAIL_TAKEN");
@@ -350,14 +429,24 @@ export async function createMerchant(
     });
     created.userId = user._id as unknown as Types.ObjectId;
 
-    const merchant = await Merchant.create({ name: input.merchantName, slug: merchantSlug });
+    const merchant = await Merchant.create({
+      name: input.merchantName,
+      slug: merchantSlug,
+    });
     created.merchantId = merchant._id as unknown as Types.ObjectId;
 
-    await MerchantMembership.create({ merchantId: merchant._id, userId: user._id, role: "owner" });
+    await MerchantMembership.create({
+      merchantId: merchant._id,
+      userId: user._id,
+      role: "owner",
+    });
     await Site.create({
       merchantId: merchant._id,
       name: "Default site",
-      slug: await generateUniqueSiteSlug(merchant._id as unknown as Types.ObjectId, "Default site"),
+      slug: await generateUniqueSiteSlug(
+        merchant._id as unknown as Types.ObjectId,
+        "Default site",
+      ),
       primaryDomain: "",
     });
 
@@ -374,7 +463,12 @@ export async function createMerchant(
       action: "merchant.invited",
       resourceType: "merchant",
       resourceId: merchant._id.toString(),
-      metadata: { name: merchant.name, slug: merchant.slug, ownerEmail: email, emailSent },
+      metadata: {
+        name: merchant.name,
+        slug: merchant.slug,
+        ownerEmail: email,
+        emailSent,
+      },
     });
 
     return {
@@ -406,7 +500,11 @@ export async function createMerchant(
 export async function resendMerchantInvitation(
   actor: RequestActor,
   merchantId: string,
-): Promise<{ inviteToken: string; emailSent: boolean; ownerEmail: string } | "NOT_FOUND" | "ALREADY_ACTIVE"> {
+): Promise<
+  | { inviteToken: string; emailSent: boolean; ownerEmail: string }
+  | "NOT_FOUND"
+  | "ALREADY_ACTIVE"
+> {
   const merchant = await Merchant.findById(merchantId).lean();
   if (!merchant) {
     return "NOT_FOUND";
@@ -450,13 +548,26 @@ export async function resendMerchantInvitation(
   return { inviteToken: token, emailSent, ownerEmail: owner.email };
 }
 
-export async function getInvitation(token: string): Promise<InvitationInfo | null> {
-  const user = await User.findOne({ inviteTokenHash: hashApiKey(token), status: "invited" }).lean();
-  if (!user || !user.inviteTokenExpiresAt || user.inviteTokenExpiresAt.getTime() < Date.now()) {
+export async function getInvitation(
+  token: string,
+): Promise<InvitationInfo | null> {
+  const user = await User.findOne({
+    inviteTokenHash: hashApiKey(token),
+    status: "invited",
+  }).lean();
+  if (
+    !user ||
+    !user.inviteTokenExpiresAt ||
+    user.inviteTokenExpiresAt.getTime() < Date.now()
+  ) {
     return null;
   }
-  const membership = await MerchantMembership.findOne({ userId: user._id }).lean();
-  const merchant = membership ? await Merchant.findById(membership.merchantId).lean() : null;
+  const membership = await MerchantMembership.findOne({
+    userId: user._id,
+  }).lean();
+  const merchant = membership
+    ? await Merchant.findById(membership.merchantId).lean()
+    : null;
   return {
     email: user.email,
     name: user.name,
@@ -464,9 +575,19 @@ export async function getInvitation(token: string): Promise<InvitationInfo | nul
   };
 }
 
-export async function acceptInvitation(token: string, password: string): Promise<UserSummary | null> {
-  const user = await User.findOne({ inviteTokenHash: hashApiKey(token), status: "invited" });
-  if (!user || !user.inviteTokenExpiresAt || user.inviteTokenExpiresAt.getTime() < Date.now()) {
+export async function acceptInvitation(
+  token: string,
+  password: string,
+): Promise<UserSummary | null> {
+  const user = await User.findOne({
+    inviteTokenHash: hashApiKey(token),
+    status: "invited",
+  });
+  if (
+    !user ||
+    !user.inviteTokenExpiresAt ||
+    user.inviteTokenExpiresAt.getTime() < Date.now()
+  ) {
     return null;
   }
   user.passwordHash = await hashPassword(password);
@@ -478,7 +599,9 @@ export async function acceptInvitation(token: string, password: string): Promise
   return mapUser(user);
 }
 
-export async function getMerchantById(merchantId: string): Promise<MerchantSummary | null> {
+export async function getMerchantById(
+  merchantId: string,
+): Promise<MerchantSummary | null> {
   const merchant = await Merchant.findById(merchantId).lean();
   if (!merchant) {
     return null;
@@ -497,7 +620,11 @@ export async function updateMerchant(
   merchantId: string,
   input: { name?: string },
 ): Promise<MerchantSummary | null> {
-  const merchant = await Merchant.findByIdAndUpdate(merchantId, { name: input.name }, { new: true }).lean();
+  const merchant = await Merchant.findByIdAndUpdate(
+    merchantId,
+    { name: input.name },
+    { new: true },
+  ).lean();
   if (!merchant) {
     return null;
   }
@@ -520,9 +647,14 @@ export async function updateMerchant(
   };
 }
 
+/** Lists one merchant's sites with batched product, token, spend, and activity summaries. */
 export async function listSites(merchantId: string): Promise<SiteSummary[]> {
-  const sites = await Site.find({ merchantId: new Types.ObjectId(merchantId) }).sort({ createdAt: -1 }).lean();
-  return sites.map(mapSite);
+  return listSiteSummaries({ merchantId: new Types.ObjectId(merchantId) });
+}
+
+/** Lists every site for platform-wide administration. */
+export async function listAllSites(): Promise<SiteSummary[]> {
+  return listSiteSummaries({});
 }
 
 export async function createSite(
@@ -535,7 +667,7 @@ export async function createSite(
     merchantId: merchantObjectId,
     name: input.name,
     slug: await generateUniqueSiteSlug(merchantObjectId, input.name),
-    primaryDomain: (input.primaryDomain ?? "").trim().toLowerCase(),
+    primaryDomain: normalizeDomain(input.primaryDomain ?? ""),
   });
 
   await writeAuditLog({
@@ -544,7 +676,11 @@ export async function createSite(
     action: "site.created",
     resourceType: "site",
     resourceId: site._id.toString(),
-    metadata: { name: site.name, slug: site.slug, primaryDomain: site.primaryDomain },
+    metadata: {
+      name: site.name,
+      slug: site.slug,
+      primaryDomain: site.primaryDomain,
+    },
   });
 
   return mapSite(site);
@@ -565,9 +701,11 @@ export async function updateSite(
     update.name = input.name;
   }
   if (input.primaryDomain !== undefined) {
-    update.primaryDomain = input.primaryDomain.trim().toLowerCase();
+    update.primaryDomain = normalizeDomain(input.primaryDomain);
   }
-  const site = await Site.findByIdAndUpdate(siteId, update, { new: true }).lean();
+  const site = await Site.findByIdAndUpdate(siteId, update, {
+    new: true,
+  }).lean();
   if (!site) {
     return null;
   }
@@ -589,11 +727,20 @@ export async function listAuditLogs(
   page: number,
   pageSize: number,
 ): Promise<PaginatedResponse<AuditLogSummary>> {
-  const { offset, limit, page: safePage, pageSize: safePageSize } = getPagination(page, pageSize);
+  const {
+    offset,
+    limit,
+    page: safePage,
+    pageSize: safePageSize,
+  } = getPagination(page, pageSize);
   const filter = { merchantId: new Types.ObjectId(merchantId) };
 
   const [rows, total] = await Promise.all([
-    AuditLog.find(filter).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
+    AuditLog.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(offset)
+      .limit(limit)
+      .lean(),
     AuditLog.countDocuments(filter),
   ]);
 
@@ -623,11 +770,151 @@ export async function writeAuditLog(input: {
   metadata?: Record<string, unknown>;
 }): Promise<void> {
   await AuditLog.create({
-    merchantId: input.merchantId ? new Types.ObjectId(input.merchantId) : undefined,
-    actorUserId: input.actorUserId ? new Types.ObjectId(input.actorUserId) : undefined,
+    merchantId: input.merchantId
+      ? new Types.ObjectId(input.merchantId)
+      : undefined,
+    actorUserId: input.actorUserId
+      ? new Types.ObjectId(input.actorUserId)
+      : undefined,
     action: input.action,
     resourceType: input.resourceType,
     resourceId: input.resourceId,
     metadata: input.metadata,
   });
+}
+
+async function listSiteSummaries(filter: {
+  merchantId?: Types.ObjectId;
+}): Promise<SiteSummary[]> {
+  const sites = await Site.find(filter).sort({ createdAt: -1 }).lean();
+  if (sites.length === 0) {
+    return [];
+  }
+
+  const siteIds = sites.map((site) => site._id);
+  const merchantIds = [
+    ...new Set(sites.map((site) => site.merchantId.toString())),
+  ].map((merchantId) => new Types.ObjectId(merchantId));
+  const [merchants, subscriptions, tokens, usage] = await Promise.all([
+    Merchant.find({ _id: { $in: merchantIds } })
+      .select("_id name")
+      .lean(),
+    Subscription.find({ siteId: { $in: siteIds }, planCode: { $ne: null } })
+      .select("siteId productSlug planCode status")
+      .lean(),
+    ProductAccessToken.find({ siteId: { $in: siteIds }, revokedAt: null })
+      .select("siteId")
+      .lean(),
+    ProductUsage.find({ siteId: { $in: siteIds } })
+      .select("siteId lastEventAt")
+      .sort({ lastEventAt: -1 })
+      .lean(),
+  ]);
+
+  const products = await Product.find({
+    slug: {
+      $in: subscriptions.map((subscription) => subscription.productSlug),
+    },
+  })
+    .select("slug plans")
+    .lean();
+  const merchantNameById = new Map(
+    merchants.map((merchant) => [merchant._id.toString(), merchant.name]),
+  );
+  const pricesByProduct = new Map(
+    products.map((product) => [
+      product.slug,
+      new Map(
+        product.plans.map((plan) => [
+          plan.code,
+          { price: plan.priceMonthly, currency: plan.currency },
+        ]),
+      ),
+    ]),
+  );
+  const rollupBySiteId = new Map<
+    string,
+    {
+      activeProducts: number;
+      suspendedProducts: number;
+      activeTokens: number;
+      monthlySpend: number;
+      currency: string | null;
+      lastActivityAt: Date | null;
+    }
+  >();
+
+  for (const site of sites) {
+    rollupBySiteId.set(site._id.toString(), {
+      activeProducts: 0,
+      suspendedProducts: 0,
+      activeTokens: 0,
+      monthlySpend: 0,
+      currency: null,
+      lastActivityAt: null,
+    });
+  }
+  for (const subscription of subscriptions) {
+    const rollup = rollupBySiteId.get(subscription.siteId.toString());
+    if (!rollup) {
+      continue;
+    }
+    if (subscription.status === "active") {
+      rollup.activeProducts += 1;
+      const plan = subscription.planCode
+        ? pricesByProduct
+            .get(subscription.productSlug)
+            ?.get(subscription.planCode)
+        : undefined;
+      if (plan) {
+        rollup.monthlySpend += plan.price;
+        rollup.currency ??= plan.currency;
+      }
+    } else {
+      rollup.suspendedProducts += 1;
+    }
+  }
+  for (const token of tokens) {
+    const rollup = rollupBySiteId.get(token.siteId.toString());
+    if (rollup) {
+      rollup.activeTokens += 1;
+    }
+  }
+  for (const usageEntry of usage) {
+    const rollup = rollupBySiteId.get(usageEntry.siteId.toString());
+    if (rollup && usageEntry.lastEventAt && !rollup.lastActivityAt) {
+      rollup.lastActivityAt = usageEntry.lastEventAt;
+    }
+  }
+
+  return sites.map((site) => {
+    const summary = mapSite(site);
+    const rollup = rollupBySiteId.get(site._id.toString());
+    return {
+      ...summary,
+      merchantName: merchantNameById.get(site.merchantId.toString()),
+      activeProducts: rollup?.activeProducts ?? 0,
+      suspendedProducts: rollup?.suspendedProducts ?? 0,
+      activeTokens: rollup?.activeTokens ?? 0,
+      monthlySpend: rollup?.monthlySpend ?? 0,
+      currency: rollup?.currency ?? null,
+      lastActivityAt: rollup?.lastActivityAt
+        ? toIso(rollup.lastActivityAt)
+        : null,
+    };
+  });
+}
+
+function normalizeDomain(value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+  try {
+    return new URL(
+      normalized.includes("://") ? normalized : `https://${normalized}`,
+    ).hostname;
+  } catch {
+    return normalized.replace(/^https?:\/\//, "").split("/")[0];
+  }
 }

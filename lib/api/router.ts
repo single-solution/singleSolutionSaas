@@ -5,7 +5,10 @@ import {
   setSessionCookie,
   type RequestAuth,
 } from "@/lib/api/auth";
-import { assertMutationHeaders, isValidInternalAuthorization } from "@/lib/api/guards";
+import {
+  assertMutationHeaders,
+  isValidInternalAuthorization,
+} from "@/lib/api/guards";
 import { checkRateLimit, getClientIp } from "@/lib/api/rateLimit";
 import {
   jsonCreated,
@@ -52,6 +55,7 @@ import {
   getMerchantById,
   getSiteById,
   listAllMerchants,
+  listAllSites,
   listAuditLogs,
   listMerchantsForUser,
   listSites,
@@ -102,7 +106,10 @@ import {
 
 const MUTATION_METHODS = new Set(["POST", "PATCH", "DELETE"]);
 
-function applyBrowserMutationGuards(request: Request, path: string): Response | null {
+function applyBrowserMutationGuards(
+  request: Request,
+  path: string,
+): Response | null {
   if (!MUTATION_METHODS.has(request.method)) {
     return null;
   }
@@ -112,7 +119,10 @@ function applyBrowserMutationGuards(request: Request, path: string): Response | 
   return assertMutationHeaders(request);
 }
 
-function applyAuthenticatedRateLimit(request: Request, actorUserId?: string): Response | null {
+function applyAuthenticatedRateLimit(
+  request: Request,
+  actorUserId?: string,
+): Response | null {
   const ip = getClientIp(request);
   const key = actorUserId ? `api:user:${actorUserId}` : `api:ip:${ip}`;
   const result = checkRateLimit(key, 300, 60_000);
@@ -151,7 +161,10 @@ async function resolveSite(
   return { site };
 }
 
-export async function handleApiRequest(request: Request, pathSegments: string[]): Promise<Response> {
+export async function handleApiRequest(
+  request: Request,
+  pathSegments: string[],
+): Promise<Response> {
   await ensurePlatformReady();
 
   const method = request.method;
@@ -164,7 +177,10 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
   }
 
   if (method === "GET" && path === "health") {
-    return jsonOk({ status: "ok" }, 200, { cache: "public", varyCookie: false });
+    return jsonOk({ status: "ok" }, 200, {
+      cache: "public",
+      varyCookie: false,
+    });
   }
 
   if (method === "POST" && path === "auth/sessions") {
@@ -183,12 +199,19 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       return jsonUnauthorized();
     }
 
-    const emailLimit = checkRateLimit(`login:email:${parsed.data.email.toLowerCase()}`, 10, 15 * 60_000);
+    const emailLimit = checkRateLimit(
+      `login:email:${parsed.data.email.toLowerCase()}`,
+      10,
+      15 * 60_000,
+    );
     if (!emailLimit.allowed) {
       return jsonTooManyRequests(emailLimit.retryAfterSeconds ?? 60);
     }
 
-    const user = await authenticateUser(parsed.data.email, parsed.data.password);
+    const user = await authenticateUser(
+      parsed.data.email,
+      parsed.data.password,
+    );
     if (!user) {
       return jsonUnauthorized();
     }
@@ -196,7 +219,12 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     return jsonOk({ user });
   }
 
-  if (method === "GET" && pathSegments[0] === "auth" && pathSegments[1] === "invitations" && pathSegments.length === 3) {
+  if (
+    method === "GET" &&
+    pathSegments[0] === "auth" &&
+    pathSegments[1] === "invitations" &&
+    pathSegments.length === 3
+  ) {
     const ip = getClientIp(request);
     const limit = checkRateLimit(`invite-lookup:ip:${ip}`, 30, 15 * 60_000);
     if (!limit.allowed) {
@@ -223,7 +251,10 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
     }
-    const user = await acceptInvitation(parsed.data.token, parsed.data.password);
+    const user = await acceptInvitation(
+      parsed.data.token,
+      parsed.data.password,
+    );
     if (!user) {
       return jsonError("This invitation is invalid or has expired.", 400);
     }
@@ -283,7 +314,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const limit = checkRateLimit(`password-change:${auth.actor.userId}`, 5, 15 * 60_000);
+    const limit = checkRateLimit(
+      `password-change:${auth.actor.userId}`,
+      5,
+      15 * 60_000,
+    );
     if (!limit.allowed) {
       return jsonTooManyRequests(limit.retryAfterSeconds ?? 60);
     }
@@ -295,7 +330,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
     }
-    const result = await changeUserPassword(auth.actor.userId, parsed.data.currentPassword, parsed.data.newPassword);
+    const result = await changeUserPassword(
+      auth.actor.userId,
+      parsed.data.currentPassword,
+      parsed.data.newPassword,
+    );
     if (result === "INVALID") {
       return jsonError("Current password is incorrect.", 400);
     }
@@ -308,7 +347,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const items = (await listProducts()).filter((product) => product.status === "active");
+    const items = (await listProducts()).filter(
+      (product) => product.status === "active",
+    );
     return jsonOk({ items });
   }
 
@@ -344,7 +385,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
 
   const adminProductMatch = path.match(/^admin\/products\/([^/]+)$/);
   if (adminProductMatch && (method === "GET" || method === "PATCH")) {
-    const params = productSlugParamSchema.safeParse({ productSlug: adminProductMatch[1] });
+    const params = productSlugParamSchema.safeParse({
+      productSlug: adminProductMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid product slug", 400);
     }
@@ -372,16 +415,24 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (!parsed.success) {
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
     }
-    const product = await updateProduct(auth.actor, params.data.productSlug, parsed.data);
+    const product = await updateProduct(
+      auth.actor,
+      params.data.productSlug,
+      parsed.data,
+    );
     if (!product) {
       return jsonError("Not found", 404);
     }
     return jsonOk({ product });
   }
 
-  const adminProductSubscribersMatch = path.match(/^admin\/products\/([^/]+)\/subscribers$/);
+  const adminProductSubscribersMatch = path.match(
+    /^admin\/products\/([^/]+)\/subscribers$/,
+  );
   if (adminProductSubscribersMatch && method === "GET") {
-    const params = productSlugParamSchema.safeParse({ productSlug: adminProductSubscribersMatch[1] });
+    const params = productSlugParamSchema.safeParse({
+      productSlug: adminProductSubscribersMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid product slug", 400);
     }
@@ -399,9 +450,13 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     return jsonOk({ items });
   }
 
-  const adminProductConnectionMatch = path.match(/^admin\/products\/([^/]+)\/connection-test$/);
+  const adminProductConnectionMatch = path.match(
+    /^admin\/products\/([^/]+)\/connection-test$/,
+  );
   if (adminProductConnectionMatch && method === "POST") {
-    const params = productSlugParamSchema.safeParse({ productSlug: adminProductConnectionMatch[1] });
+    const params = productSlugParamSchema.safeParse({
+      productSlug: adminProductConnectionMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid product slug", 400);
     }
@@ -412,16 +467,23 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (!auth.actor.isPlatformAdmin) {
       return jsonForbidden();
     }
-    const status = await testProductConnection(auth.actor, params.data.productSlug);
+    const status = await testProductConnection(
+      auth.actor,
+      params.data.productSlug,
+    );
     if (status === null) {
       return jsonError("Not found", 404);
     }
     return jsonOk({ status });
   }
 
-  const adminProductConfigMatch = path.match(/^admin\/products\/([^/]+)\/config$/);
+  const adminProductConfigMatch = path.match(
+    /^admin\/products\/([^/]+)\/config$/,
+  );
   if (adminProductConfigMatch && (method === "GET" || method === "PATCH")) {
-    const params = productSlugParamSchema.safeParse({ productSlug: adminProductConfigMatch[1] });
+    const params = productSlugParamSchema.safeParse({
+      productSlug: adminProductConfigMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid product slug", 400);
     }
@@ -454,7 +516,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
     }
     try {
-      const config = await saveProductDefaultsDraft(auth.actor, params.data.productSlug, parsed.data);
+      const config = await saveProductDefaultsDraft(
+        auth.actor,
+        params.data.productSlug,
+        parsed.data,
+      );
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
@@ -464,9 +530,13 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const adminDashboardSessionMatch = path.match(/^admin\/products\/([^/]+)\/dashboard-session$/);
+  const adminDashboardSessionMatch = path.match(
+    /^admin\/products\/([^/]+)\/dashboard-session$/,
+  );
   if (adminDashboardSessionMatch && method === "POST") {
-    const params = productSlugParamSchema.safeParse({ productSlug: adminDashboardSessionMatch[1] });
+    const params = productSlugParamSchema.safeParse({
+      productSlug: adminDashboardSessionMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid product slug", 400);
     }
@@ -481,9 +551,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (body instanceof Response) {
       return body;
     }
-    const siteId = typeof body.siteId === "string" && body.siteId.length > 0 ? body.siteId : undefined;
+    const siteId =
+      typeof body.siteId === "string" && body.siteId.length > 0
+        ? body.siteId
+        : undefined;
     try {
-      const session = await mintDashboardSession(auth.actor, params.data.productSlug, siteId);
+      const session = await mintDashboardSession(
+        auth.actor,
+        params.data.productSlug,
+        siteId,
+      );
       return jsonOk(session);
     } catch (error) {
       if (error instanceof DashboardSsoError) {
@@ -493,9 +570,13 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const adminProductConfigPublishMatch = path.match(/^admin\/products\/([^/]+)\/config\/publish$/);
+  const adminProductConfigPublishMatch = path.match(
+    /^admin\/products\/([^/]+)\/config\/publish$/,
+  );
   if (adminProductConfigPublishMatch && method === "POST") {
-    const params = productSlugParamSchema.safeParse({ productSlug: adminProductConfigPublishMatch[1] });
+    const params = productSlugParamSchema.safeParse({
+      productSlug: adminProductConfigPublishMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid product slug", 400);
     }
@@ -507,7 +588,10 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       return jsonForbidden();
     }
     try {
-      const config = await publishProductDefaults(auth.actor, params.data.productSlug);
+      const config = await publishProductDefaults(
+        auth.actor,
+        params.data.productSlug,
+      );
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
@@ -551,9 +635,25 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const resendInviteMatch = path.match(/^admin\/merchants\/([^/]+)\/invitation$/);
+  if (path === "admin/sites" && method === "GET") {
+    const auth = await requireAuthenticated(request);
+    if (auth instanceof Response) {
+      return auth;
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const items = await listAllSites();
+    return jsonOk({ items });
+  }
+
+  const resendInviteMatch = path.match(
+    /^admin\/merchants\/([^/]+)\/invitation$/,
+  );
   if (resendInviteMatch && method === "POST") {
-    const params = merchantIdParamSchema.safeParse({ merchantId: resendInviteMatch[1] });
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: resendInviteMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid merchant id", 400);
     }
@@ -564,12 +664,18 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (!auth.actor.isPlatformAdmin) {
       return jsonForbidden();
     }
-    const result = await resendMerchantInvitation(auth.actor, params.data.merchantId);
+    const result = await resendMerchantInvitation(
+      auth.actor,
+      params.data.merchantId,
+    );
     if (result === "NOT_FOUND") {
       return jsonError("Not found", 404);
     }
     if (result === "ALREADY_ACTIVE") {
-      return jsonError("This merchant has already accepted their invitation", 409);
+      return jsonError(
+        "This merchant has already accepted their invitation",
+        409,
+      );
     }
     return jsonOk(result);
   }
@@ -585,7 +691,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
 
   const merchantMatch = path.match(/^merchants\/([^/]+)$/);
   if (merchantMatch) {
-    const params = merchantIdParamSchema.safeParse({ merchantId: merchantMatch[1] });
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: merchantMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid merchant id", 400);
     }
@@ -595,7 +703,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
 
     if (method === "GET") {
-      const roleCheck = await requireMerchantRole(auth, params.data.merchantId, ["owner", "admin", "member"]);
+      const roleCheck = await requireMerchantRole(
+        auth,
+        params.data.merchantId,
+        ["owner", "admin", "member"],
+      );
       if (roleCheck instanceof Response) {
         return roleCheck;
       }
@@ -603,13 +715,17 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       if (!merchant) {
         return jsonError("Not found", 404);
       }
-      return jsonOk({ merchant: { ...merchant, role: roleCheck.merchantRole ?? merchant.role } });
+      return jsonOk({
+        merchant: {
+          ...merchant,
+          role: roleCheck.merchantRole ?? merchant.role,
+        },
+      });
     }
 
     if (method === "PATCH") {
-      const roleCheck = await requireMerchantRole(auth, params.data.merchantId, ["owner", "admin"]);
-      if (roleCheck instanceof Response) {
-        return roleCheck;
+      if (!auth.actor.isPlatformAdmin) {
+        return jsonForbidden();
       }
       const body = await parseJsonBody<unknown>(request);
       if (body instanceof Response) {
@@ -617,9 +733,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       }
       const parsed = updateMerchantBodySchema.safeParse(body);
       if (!parsed.success) {
-        return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+        return jsonError(
+          parsed.error.issues[0]?.message ?? "Invalid body",
+          400,
+        );
       }
-      const merchant = await updateMerchant(auth.actor, params.data.merchantId, parsed.data);
+      const merchant = await updateMerchant(
+        auth.actor,
+        params.data.merchantId,
+        parsed.data,
+      );
       if (!merchant) {
         return jsonError("Not found", 404);
       }
@@ -629,7 +752,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
 
   const merchantSitesMatch = path.match(/^merchants\/([^/]+)\/sites$/);
   if (merchantSitesMatch) {
-    const params = merchantIdParamSchema.safeParse({ merchantId: merchantSitesMatch[1] });
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: merchantSitesMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid merchant id", 400);
     }
@@ -639,7 +764,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
 
     if (method === "GET") {
-      const roleCheck = await requireMerchantRole(auth, params.data.merchantId, ["owner", "admin", "member"]);
+      const roleCheck = await requireMerchantRole(
+        auth,
+        params.data.merchantId,
+        ["owner", "admin", "member"],
+      );
       if (roleCheck instanceof Response) {
         return roleCheck;
       }
@@ -658,16 +787,25 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       }
       const parsed = createSiteBodySchema.safeParse(body);
       if (!parsed.success) {
-        return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+        return jsonError(
+          parsed.error.issues[0]?.message ?? "Invalid body",
+          400,
+        );
       }
-      const site = await createSite(auth.actor, params.data.merchantId, parsed.data);
+      const site = await createSite(
+        auth.actor,
+        params.data.merchantId,
+        parsed.data,
+      );
       return jsonCreated({ site });
     }
   }
 
   const merchantAuditMatch = path.match(/^merchants\/([^/]+)\/audit-logs$/);
   if (merchantAuditMatch && method === "GET") {
-    const params = merchantIdParamSchema.safeParse({ merchantId: merchantAuditMatch[1] });
+    const params = merchantIdParamSchema.safeParse({
+      merchantId: merchantAuditMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid merchant id", 400);
     }
@@ -675,7 +813,10 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const roleCheck = await requireMerchantRole(auth, params.data.merchantId, ["owner", "admin"]);
+    const roleCheck = await requireMerchantRole(auth, params.data.merchantId, [
+      "owner",
+      "admin",
+    ]);
     if (roleCheck instanceof Response) {
       return roleCheck;
     }
@@ -686,7 +827,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (!query.success) {
       return jsonError("Invalid pagination", 400);
     }
-    const result = await listAuditLogs(params.data.merchantId, query.data.page, query.data.pageSize);
+    const result = await listAuditLogs(
+      params.data.merchantId,
+      query.data.page,
+      query.data.pageSize,
+    );
     return jsonOk(result);
   }
 
@@ -702,7 +847,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
 
     if (method === "GET") {
-      const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin", "member"]);
+      const resolved = await resolveSite(auth, params.data.siteId, [
+        "owner",
+        "admin",
+        "member",
+      ]);
       if (resolved instanceof Response) {
         return resolved;
       }
@@ -710,7 +859,14 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
 
     if (method === "PATCH") {
-      const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+      if (!auth.actor.isPlatformAdmin) {
+        return jsonForbidden();
+      }
+      const resolved = await resolveSite(auth, params.data.siteId, [
+        "owner",
+        "admin",
+        "member",
+      ]);
       if (resolved instanceof Response) {
         return resolved;
       }
@@ -720,9 +876,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       }
       const parsed = updateSiteBodySchema.safeParse(body);
       if (!parsed.success) {
-        return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
+        return jsonError(
+          parsed.error.issues[0]?.message ?? "Invalid body",
+          400,
+        );
       }
-      const updated = await updateSite(auth.actor, params.data.siteId, parsed.data);
+      const updated = await updateSite(
+        auth.actor,
+        params.data.siteId,
+        parsed.data,
+      );
       if (!updated) {
         return jsonError("Not found", 404);
       }
@@ -732,7 +895,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
 
   const siteProductsMatch = path.match(/^sites\/([^/]+)\/products$/);
   if (siteProductsMatch && method === "GET") {
-    const params = siteIdParamSchema.safeParse({ siteId: siteProductsMatch[1] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: siteProductsMatch[1],
+    });
     if (!params.success) {
       return jsonError("Invalid site id", 400);
     }
@@ -740,7 +905,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin", "member"]);
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
@@ -748,10 +917,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     return jsonOk({ items });
   }
 
-  const productTokenMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/tokens$/);
+  const productTokenMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/tokens$/,
+  );
   if (productTokenMatch && (method === "GET" || method === "POST")) {
-    const params = siteIdParamSchema.safeParse({ siteId: productTokenMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: productTokenMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: productTokenMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: productTokenMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -759,14 +934,24 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
 
     if (method === "GET") {
-      const items = await listProductTokens(params.data.siteId, slugParams.data.productSlug);
+      const items = await listProductTokens(
+        params.data.siteId,
+        slugParams.data.productSlug,
+      );
       return jsonOk({ items });
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
     }
 
     const body = await parseJsonBody<unknown>(request);
@@ -795,11 +980,19 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const revokeProductTokenMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/tokens\/([^/]+)$/);
+  const revokeProductTokenMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/tokens\/([^/]+)$/,
+  );
   if (revokeProductTokenMatch && method === "DELETE") {
-    const params = siteIdParamSchema.safeParse({ siteId: revokeProductTokenMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: revokeProductTokenMatch[2] });
-    const tokenParams = idParamSchema.safeParse({ id: revokeProductTokenMatch[3] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: revokeProductTokenMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: revokeProductTokenMatch[2],
+    });
+    const tokenParams = idParamSchema.safeParse({
+      id: revokeProductTokenMatch[3],
+    });
     if (!params.success || !slugParams.success || !tokenParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -807,7 +1000,14 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
@@ -823,10 +1023,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     return jsonOk({ success: true });
   }
 
-  const productUsageMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/usage$/);
+  const productUsageMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/usage$/,
+  );
   if (productUsageMatch && method === "GET") {
-    const params = siteIdParamSchema.safeParse({ siteId: productUsageMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: productUsageMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: productUsageMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: productUsageMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -834,21 +1040,34 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin", "member"]);
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
-    const usage = await getProductUsage(params.data.siteId, slugParams.data.productSlug);
+    const usage = await getProductUsage(
+      params.data.siteId,
+      slugParams.data.productSlug,
+    );
     if (!usage) {
       return jsonError("Not found", 404);
     }
     return jsonOk({ usage });
   }
 
-  const productConfigMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/config$/);
+  const productConfigMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/config$/,
+  );
   if (productConfigMatch && (method === "GET" || method === "PATCH")) {
-    const params = siteIdParamSchema.safeParse({ siteId: productConfigMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: productConfigMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: productConfigMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: productConfigMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -856,14 +1075,21 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
 
     if (method === "GET") {
       try {
-        const config = await getProductConfig(params.data.siteId, slugParams.data.productSlug);
+        const config = await getProductConfig(
+          params.data.siteId,
+          slugParams.data.productSlug,
+        );
         return jsonOk({ config });
       } catch (error) {
         if (error instanceof ProductConfigError) {
@@ -871,6 +1097,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
         }
         return jsonError("Could not load configuration", 500);
       }
+    }
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
     }
 
     const body = await parseJsonBody<unknown>(request);
@@ -882,7 +1111,12 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
     }
     try {
-      const config = await saveProductConfigDraft(auth.actor, params.data.siteId, slugParams.data.productSlug, parsed.data);
+      const config = await saveProductConfigDraft(
+        auth.actor,
+        params.data.siteId,
+        slugParams.data.productSlug,
+        parsed.data,
+      );
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
@@ -892,10 +1126,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const publishConfigMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/config\/publish$/);
+  const publishConfigMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/config\/publish$/,
+  );
   if (publishConfigMatch && method === "POST") {
-    const params = siteIdParamSchema.safeParse({ siteId: publishConfigMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: publishConfigMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: publishConfigMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: publishConfigMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -903,12 +1143,23 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
     try {
-      const config = await publishProductConfig(auth.actor, params.data.siteId, slugParams.data.productSlug);
+      const config = await publishProductConfig(
+        auth.actor,
+        params.data.siteId,
+        slugParams.data.productSlug,
+      );
       return jsonOk({ config });
     } catch (error) {
       if (error instanceof ProductConfigError) {
@@ -918,10 +1169,14 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const previewMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/preview$/);
+  const previewMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/preview$/,
+  );
   if (previewMatch && method === "POST") {
     const params = siteIdParamSchema.safeParse({ siteId: previewMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: previewMatch[2] });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: previewMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -929,7 +1184,14 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
@@ -950,7 +1212,9 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
   const testMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/test$/);
   if (testMatch && method === "POST") {
     const params = siteIdParamSchema.safeParse({ siteId: testMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: testMatch[2] });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: testMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -958,7 +1222,14 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
@@ -986,10 +1257,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const conversationReplyMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/conversations\/([^/]+)\/messages$/);
+  const conversationReplyMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/conversations\/([^/]+)\/messages$/,
+  );
   if (conversationReplyMatch && method === "POST") {
-    const params = siteIdParamSchema.safeParse({ siteId: conversationReplyMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: conversationReplyMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: conversationReplyMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: conversationReplyMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -997,7 +1274,10 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin", "member"]);
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
@@ -1026,10 +1306,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const conversationDetailMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/conversations\/([^/]+)$/);
+  const conversationDetailMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/conversations\/([^/]+)$/,
+  );
   if (conversationDetailMatch && method === "GET") {
-    const params = siteIdParamSchema.safeParse({ siteId: conversationDetailMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: conversationDetailMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: conversationDetailMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: conversationDetailMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -1037,12 +1323,20 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin", "member"]);
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
     try {
-      const conversation = await getSiteProductConversation(params.data.siteId, slugParams.data.productSlug, conversationDetailMatch[3]);
+      const conversation = await getSiteProductConversation(
+        params.data.siteId,
+        slugParams.data.productSlug,
+        conversationDetailMatch[3],
+      );
       return jsonOk({ conversation });
     } catch (error) {
       if (error instanceof ProductBridgeError) {
@@ -1052,10 +1346,16 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
   }
 
-  const conversationsMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)\/conversations$/);
+  const conversationsMatch = path.match(
+    /^sites\/([^/]+)\/products\/([^/]+)\/conversations$/,
+  );
   if (conversationsMatch && method === "GET") {
-    const params = siteIdParamSchema.safeParse({ siteId: conversationsMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: conversationsMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: conversationsMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: conversationsMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -1063,7 +1363,11 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin", "member"]);
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
@@ -1076,11 +1380,15 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     }
     const status = url.searchParams.get("status") ?? undefined;
     try {
-      const result = await listSiteProductConversations(params.data.siteId, slugParams.data.productSlug, {
-        status,
-        page: pagination.data.page,
-        pageSize: pagination.data.pageSize,
-      });
+      const result = await listSiteProductConversations(
+        params.data.siteId,
+        slugParams.data.productSlug,
+        {
+          status,
+          page: pagination.data.page,
+          pageSize: pagination.data.pageSize,
+        },
+      );
       return jsonOk(result);
     } catch (error) {
       if (error instanceof ProductBridgeError) {
@@ -1092,8 +1400,12 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
 
   const subscriptionMatch = path.match(/^sites\/([^/]+)\/products\/([^/]+)$/);
   if (subscriptionMatch && method === "PATCH") {
-    const params = siteIdParamSchema.safeParse({ siteId: subscriptionMatch[1] });
-    const slugParams = productSlugParamSchema.safeParse({ productSlug: subscriptionMatch[2] });
+    const params = siteIdParamSchema.safeParse({
+      siteId: subscriptionMatch[1],
+    });
+    const slugParams = productSlugParamSchema.safeParse({
+      productSlug: subscriptionMatch[2],
+    });
     if (!params.success || !slugParams.success) {
       return jsonError("Invalid id", 400);
     }
@@ -1101,7 +1413,14 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
     if (auth instanceof Response) {
       return auth;
     }
-    const resolved = await resolveSite(auth, params.data.siteId, ["owner", "admin"]);
+    if (!auth.actor.isPlatformAdmin) {
+      return jsonForbidden();
+    }
+    const resolved = await resolveSite(auth, params.data.siteId, [
+      "owner",
+      "admin",
+      "member",
+    ]);
     if (resolved instanceof Response) {
       return resolved;
     }
@@ -1114,7 +1433,12 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
       return jsonError(parsed.error.issues[0]?.message ?? "Invalid body", 400);
     }
     try {
-      const product = await setSiteProductPlan(auth.actor, params.data.siteId, slugParams.data.productSlug, parsed.data);
+      const product = await setSiteProductPlan(
+        auth.actor,
+        params.data.siteId,
+        slugParams.data.productSlug,
+        parsed.data,
+      );
       if (!product) {
         return jsonError("Unknown product", 404);
       }
@@ -1131,12 +1455,21 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
   if (method === "POST" && path === "internal/product-tokens/verifications") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(`internal:product-verify:ip:${ip}`, 120, 60_000);
+    const ipLimit = checkRateLimit(
+      `internal:product-verify:ip:${ip}`,
+      120,
+      60_000,
+    );
     if (!ipLimit.allowed) {
       return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
     }
     const authorization = request.headers.get("authorization");
-    if (!isValidInternalAuthorization(authorization, environment.INTERNAL_API_SECRET)) {
+    if (
+      !isValidInternalAuthorization(
+        authorization,
+        environment.INTERNAL_API_SECRET,
+      )
+    ) {
       return jsonUnauthorized();
     }
     const body = await parseJsonBody<unknown>(request);
@@ -1157,26 +1490,43 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
   if (method === "POST" && path === "internal/product-config") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(`internal:product-config:ip:${ip}`, 120, 60_000);
+    const ipLimit = checkRateLimit(
+      `internal:product-config:ip:${ip}`,
+      120,
+      60_000,
+    );
     if (!ipLimit.allowed) {
       return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
     }
     const authorization = request.headers.get("authorization");
-    if (!isValidInternalAuthorization(authorization, environment.INTERNAL_API_SECRET)) {
+    if (
+      !isValidInternalAuthorization(
+        authorization,
+        environment.INTERNAL_API_SECRET,
+      )
+    ) {
       return jsonUnauthorized();
     }
     const body = await parseJsonBody<{ previewToken?: unknown }>(request);
     if (body instanceof Response) {
       return body;
     }
-    const previewToken = typeof body.previewToken === "string" ? body.previewToken : "";
+    const previewToken =
+      typeof body.previewToken === "string" ? body.previewToken : "";
     const claims = await verifyPreviewToken(previewToken);
     if (!claims) {
       return jsonUnauthorized();
     }
     try {
-      const config = await resolveDraftConfig(claims.siteId, claims.productSlug);
-      return jsonOk({ siteId: claims.siteId, productSlug: claims.productSlug, config });
+      const config = await resolveDraftConfig(
+        claims.siteId,
+        claims.productSlug,
+      );
+      return jsonOk({
+        siteId: claims.siteId,
+        productSlug: claims.productSlug,
+        config,
+      });
     } catch (error) {
       if (error instanceof ProductConfigError) {
         return jsonError(error.message, error.status);
@@ -1188,12 +1538,21 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
   if (method === "GET" && path === "internal/product-sites") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(`internal:product-sites:ip:${ip}`, 120, 60_000);
+    const ipLimit = checkRateLimit(
+      `internal:product-sites:ip:${ip}`,
+      120,
+      60_000,
+    );
     if (!ipLimit.allowed) {
       return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
     }
     const authorization = request.headers.get("authorization");
-    if (!isValidInternalAuthorization(authorization, environment.INTERNAL_API_SECRET)) {
+    if (
+      !isValidInternalAuthorization(
+        authorization,
+        environment.INTERNAL_API_SECRET,
+      )
+    ) {
       return jsonUnauthorized();
     }
     const slug = new URL(request.url).searchParams.get("slug");
@@ -1207,12 +1566,21 @@ export async function handleApiRequest(request: Request, pathSegments: string[])
   if (method === "POST" && path === "internal/product-usage") {
     const environment = loadEnvironment();
     const ip = getClientIp(request);
-    const ipLimit = checkRateLimit(`internal:product-usage:ip:${ip}`, 600, 60_000);
+    const ipLimit = checkRateLimit(
+      `internal:product-usage:ip:${ip}`,
+      600,
+      60_000,
+    );
     if (!ipLimit.allowed) {
       return jsonTooManyRequests(ipLimit.retryAfterSeconds ?? 60);
     }
     const authorization = request.headers.get("authorization");
-    if (!isValidInternalAuthorization(authorization, environment.INTERNAL_API_SECRET)) {
+    if (
+      !isValidInternalAuthorization(
+        authorization,
+        environment.INTERNAL_API_SECRET,
+      )
+    ) {
       return jsonUnauthorized();
     }
     const body = await parseJsonBody<unknown>(request);

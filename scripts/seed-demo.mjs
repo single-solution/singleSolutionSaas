@@ -28,21 +28,31 @@ if (!uri) {
 }
 
 const platformDbName = process.env.MONGODB_PLATFORM_DB?.trim() || "platform";
-const productBaseUrl = (process.env.DEMO_PRODUCT_BASE_URL?.trim() || "https://single-solution-saas-ecommerce-chat.vercel.app").replace(/\/$/, "");
+const productBaseUrl = (
+  process.env.DEMO_PRODUCT_BASE_URL?.trim() ||
+  "https://single-solution-saas-ecommerce-chat.vercel.app"
+).replace(/\/$/, "");
 const productHost = new URL(productBaseUrl).hostname.toLowerCase();
-const ownerPassword = process.env.DEMO_MERCHANT_PASSWORD?.trim() || "Passw0rd!demo";
+const ownerPassword =
+  process.env.DEMO_MERCHANT_PASSWORD?.trim() || "Passw0rd!demo";
 const adminEmail = process.env.DEMO_ADMIN_EMAIL?.trim() || "admin@example.com";
-const adminPassword = process.env.DEMO_ADMIN_PASSWORD?.trim() || "Passw0rd!admin";
+const adminPassword =
+  process.env.DEMO_ADMIN_PASSWORD?.trim() || "Passw0rd!admin";
 
 const PRODUCT_SLUG = "ecommerce-chatbot";
-const OWNER_EMAIL = process.env.DEMO_MERCHANT_EMAIL?.trim() || "owner@northwind.test";
+const OWNER_EMAIL =
+  process.env.DEMO_MERCHANT_EMAIL?.trim() || "owner@northwind.test";
 const MERCHANT_SLUG = "northwind-outfitters";
 const SITE_SLUG = "storefront";
 const PLAN_CODE = "pro";
+const PUBLIC_DEMO_MERCHANT_SLUG = "public-demo";
+const PUBLIC_DEMO_SITE_SLUG = "sandbox";
+const PUBLIC_DEMO_PLAN_CODE = "starter";
 const SCOPES = ["chat:read", "chat:write"];
 const ALLOWED_DOMAINS = [productHost, "localhost"];
 
-const LEGACY_PRODUCT_DB = process.env.LEGACY_PRODUCT_DB?.trim() || "ecommerce-chatbot";
+const LEGACY_PRODUCT_DB =
+  process.env.LEGACY_PRODUCT_DB?.trim() || "ecommerce-chatbot";
 
 function hashApiKey(plaintext) {
   return createHash("sha256").update(plaintext).digest("hex");
@@ -50,23 +60,45 @@ function hashApiKey(plaintext) {
 
 // Mirror of lib/services/tenantDb.ts buildTenantDbName - keep in sync.
 function sanitizeSegment(value, maxLength) {
-  const cleaned = String(value).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const cleaned = String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return cleaned.slice(0, maxLength) || "x";
 }
 
-function buildTenantDbName(merchantSlug, siteSlug, productSlug, subscriptionId) {
-  const suffix = String(subscriptionId).replace(/[^a-z0-9]/gi, "").slice(-8).toLowerCase() || "0";
-  return `t-${sanitizeSegment(merchantSlug, 8)}-${sanitizeSegment(siteSlug, 6)}-${sanitizeSegment(productSlug, 8)}-${suffix}`.slice(0, 38);
+function buildTenantDbName(
+  merchantSlug,
+  siteSlug,
+  productSlug,
+  subscriptionId,
+) {
+  const suffix =
+    String(subscriptionId)
+      .replace(/[^a-z0-9]/gi, "")
+      .slice(-8)
+      .toLowerCase() || "0";
+  return `t-${sanitizeSegment(merchantSlug, 8)}-${sanitizeSegment(siteSlug, 6)}-${sanitizeSegment(productSlug, 8)}-${suffix}`.slice(
+    0,
+    38,
+  );
 }
 
 /** Copy a site's product data from the legacy shared DB into its tenant DB. */
 async function migrateLegacyData(legacyDb, tenantDb, siteId) {
-  const collections = ["conversations", "sitesettings", "webhookdeliveries", "usages"];
+  const collections = [
+    "conversations",
+    "sitesettings",
+    "webhookdeliveries",
+    "usages",
+  ];
   let moved = 0;
   for (const name of collections) {
     const docs = await legacyDb.collection(name).find({ siteId }).toArray();
     for (const doc of docs) {
-      await tenantDb.collection(name).updateOne({ _id: doc._id }, { $setOnInsert: doc }, { upsert: true });
+      await tenantDb
+        .collection(name)
+        .updateOne({ _id: doc._id }, { $setOnInsert: doc }, { upsert: true });
       moved += 1;
     }
     if (docs.length > 0) {
@@ -78,7 +110,11 @@ async function migrateLegacyData(legacyDb, tenantDb, siteId) {
 
 function generateProductToken() {
   const plaintextToken = `pk_live_${randomBytes(24).toString("base64url")}`;
-  return { plaintextToken, tokenHash: hashApiKey(plaintextToken), tokenPrefix: plaintextToken.slice(-4) };
+  return {
+    plaintextToken,
+    tokenHash: hashApiKey(plaintextToken),
+    tokenPrefix: plaintextToken.slice(-4),
+  };
 }
 
 const configSchema = [
@@ -88,17 +124,44 @@ const configSchema = [
     description: "Core behavior and appearance of the chat widget.",
     kind: "settings",
     fields: [
-      { key: "enabled", label: "Chat enabled", type: "boolean", default: true, help: "Turn the widget on or off.", lockable: true },
-      { key: "assistantEnabled", label: "Automated assistant", type: "boolean", default: true, help: "Auto-reply to customers before a human joins.", lockable: true },
-      { key: "assistantName", label: "Assistant name", type: "string", default: "Northwind Support", help: "Shown as the sender name and widget title." },
+      {
+        key: "enabled",
+        label: "Chat enabled",
+        type: "boolean",
+        default: true,
+        help: "Turn the widget on or off.",
+        lockable: true,
+      },
+      {
+        key: "assistantEnabled",
+        label: "Automated assistant",
+        type: "boolean",
+        default: true,
+        help: "Auto-reply to customers before a human joins.",
+        lockable: true,
+      },
+      {
+        key: "assistantName",
+        label: "Assistant name",
+        type: "string",
+        default: "Northwind Support",
+        help: "Shown as the sender name and widget title.",
+      },
       {
         key: "welcomeMessage",
         label: "Welcome message",
         type: "text",
-        default: "Hi! Welcome to Northwind Outfitters. Ask about products, orders, or shipping.",
+        default:
+          "Hi! Welcome to Northwind Outfitters. Ask about products, orders, or shipping.",
         help: "First message shown when the widget opens.",
       },
-      { key: "themeColor", label: "Accent color", type: "color", default: "#2563eb", help: "Primary color of the launcher button." },
+      {
+        key: "themeColor",
+        label: "Accent color",
+        type: "color",
+        default: "#2563eb",
+        help: "Primary color of the launcher button.",
+      },
     ],
   },
 ];
@@ -107,7 +170,8 @@ const testActions = [
   {
     key: "assistant-reply",
     label: "Assistant reply",
-    description: "Preview the automated reply for a sample customer message using the draft config.",
+    description:
+      "Preview the automated reply for a sample customer message using the draft config.",
     inputLabel: "Customer message",
     inputPlaceholder: "e.g. Do you offer refunds?",
   },
@@ -154,7 +218,8 @@ async function run() {
     {
       $set: {
         name: "Ecommerce Chatbot",
-        description: "Embeddable live chat widget with an automated assistant and human handoff.",
+        description:
+          "Embeddable live chat widget with an automated assistant and human handoff.",
         baseUrl: productBaseUrl,
         status: "active",
         availableScopes: SCOPES,
@@ -174,8 +239,20 @@ async function run() {
   await db.collection("users").updateOne(
     { email: adminEmail },
     {
-      $set: { name: "Platform Admin", passwordHash: adminPasswordHash, status: "active", isPlatformAdmin: true, updatedAt: now },
-      $setOnInsert: { email: adminEmail, sessionVersion: 0, inviteTokenHash: null, inviteTokenExpiresAt: null, createdAt: now },
+      $set: {
+        name: "Platform Admin",
+        passwordHash: adminPasswordHash,
+        status: "active",
+        isPlatformAdmin: true,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        email: adminEmail,
+        sessionVersion: 0,
+        inviteTokenHash: null,
+        inviteTokenExpiresAt: null,
+        createdAt: now,
+      },
     },
     { upsert: true },
   );
@@ -185,12 +262,28 @@ async function run() {
   await db.collection("users").updateOne(
     { email: OWNER_EMAIL },
     {
-      $set: { name: "Nadia Owner", passwordHash, status: "active", isPlatformAdmin: false, updatedAt: now },
-      $setOnInsert: { email: OWNER_EMAIL, sessionVersion: 0, inviteTokenHash: null, inviteTokenExpiresAt: null, createdAt: now },
+      $set: {
+        name: "Nadia Owner",
+        passwordHash,
+        status: "active",
+        isPlatformAdmin: false,
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        email: OWNER_EMAIL,
+        sessionVersion: 0,
+        inviteTokenHash: null,
+        inviteTokenExpiresAt: null,
+        createdAt: now,
+      },
     },
     { upsert: true },
   );
-  const userId = (await db.collection("users").findOne({ email: OWNER_EMAIL }, { projection: { _id: 1 } }))._id;
+  const userId = (
+    await db
+      .collection("users")
+      .findOne({ email: OWNER_EMAIL }, { projection: { _id: 1 } })
+  )._id;
 
   // 3. Merchant + owner membership.
   const merchantId = await upsertReturningId(
@@ -200,7 +293,10 @@ async function run() {
   );
   await db.collection("merchantmemberships").updateOne(
     { merchantId, userId },
-    { $set: { role: "owner", updatedAt: now }, $setOnInsert: { merchantId, userId, createdAt: now } },
+    {
+      $set: { role: "owner", updatedAt: now },
+      $setOnInsert: { merchantId, userId, createdAt: now },
+    },
     { upsert: true },
   );
 
@@ -208,15 +304,31 @@ async function run() {
   const siteId = await upsertReturningId(
     db.collection("sites"),
     { merchantId, slug: SITE_SLUG },
-    { merchantId, name: "Northwind Storefront", slug: SITE_SLUG, primaryDomain: productHost },
+    {
+      merchantId,
+      name: "Northwind Storefront",
+      slug: SITE_SLUG,
+      primaryDomain: productHost,
+    },
   );
 
   // 5. Paid, active subscription on the Pro plan.
   await db.collection("subscriptions").updateOne(
     { siteId, productSlug: PRODUCT_SLUG },
     {
-      $set: { merchantId, planCode: PLAN_CODE, status: "active", updatedAt: now },
-      $setOnInsert: { siteId, productSlug: PRODUCT_SLUG, scopeOverrides: null, quotaOverrides: null, createdAt: now },
+      $set: {
+        merchantId,
+        planCode: PLAN_CODE,
+        status: "active",
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        siteId,
+        productSlug: PRODUCT_SLUG,
+        scopeOverrides: null,
+        quotaOverrides: null,
+        createdAt: now,
+      },
     },
     { upsert: true },
   );
@@ -227,34 +339,144 @@ async function run() {
   const subscription = await db
     .collection("subscriptions")
     .findOne({ siteId, productSlug: PRODUCT_SLUG }, { projection: { _id: 1 } });
-  const dataDbName = buildTenantDbName(MERCHANT_SLUG, SITE_SLUG, PRODUCT_SLUG, subscription._id.toString());
+  const dataDbName = buildTenantDbName(
+    MERCHANT_SLUG,
+    SITE_SLUG,
+    PRODUCT_SLUG,
+    subscription._id.toString(),
+  );
   const tenantDb = mongoose.connection.useDb(dataDbName, { useCache: true });
   await tenantDb.collection("tenantMeta").updateOne(
     { key: "tenant" },
     {
-      $set: { merchantId: merchantId.toString(), siteId: siteId.toString(), productSlug: PRODUCT_SLUG, updatedAt: now },
+      $set: {
+        merchantId: merchantId.toString(),
+        siteId: siteId.toString(),
+        productSlug: PRODUCT_SLUG,
+        updatedAt: now,
+      },
       $setOnInsert: { provisionedAt: now },
     },
     { upsert: true },
   );
-  await db.collection("subscriptions").updateOne({ _id: subscription._id }, { $set: { dataDbName } });
+  await db
+    .collection("subscriptions")
+    .updateOne({ _id: subscription._id }, { $set: { dataDbName } });
 
   let migrated = 0;
   if (LEGACY_PRODUCT_DB && LEGACY_PRODUCT_DB !== dataDbName) {
-    const legacyDb = mongoose.connection.useDb(LEGACY_PRODUCT_DB, { useCache: true });
+    const legacyDb = mongoose.connection.useDb(LEGACY_PRODUCT_DB, {
+      useCache: true,
+    });
     migrated = await migrateLegacyData(legacyDb, tenantDb, siteId.toString());
   }
 
   // 6. Fresh product access token (rotate: the plaintext is only shown once).
-  await db.collection("productaccesstokens").deleteMany({ siteId, productSlug: PRODUCT_SLUG });
+  await db
+    .collection("productaccesstokens")
+    .deleteMany({ siteId, productSlug: PRODUCT_SLUG });
   const { plaintextToken, tokenHash, tokenPrefix } = generateProductToken();
   await db.collection("productaccesstokens").insertOne({
     merchantId,
     siteId,
     productSlug: PRODUCT_SLUG,
-    name: "Storefront widget",
+    name: "Production test",
     tokenPrefix,
     tokenHash,
+    scopes: SCOPES,
+    allowedDomains: ALLOWED_DOMAINS,
+    revokedAt: null,
+    expiresAt: null,
+    createdAt: now,
+  });
+
+  // 7. Dedicated restricted public sandbox (no user membership or portal login).
+  const publicDemoMerchantId = await upsertReturningId(
+    db.collection("merchants"),
+    { slug: PUBLIC_DEMO_MERCHANT_SLUG },
+    { name: "Public Demo Sandbox", slug: PUBLIC_DEMO_MERCHANT_SLUG },
+  );
+  const publicDemoSiteId = await upsertReturningId(
+    db.collection("sites"),
+    { merchantId: publicDemoMerchantId, slug: PUBLIC_DEMO_SITE_SLUG },
+    {
+      merchantId: publicDemoMerchantId,
+      name: "Public Chatbot Sandbox",
+      slug: PUBLIC_DEMO_SITE_SLUG,
+      primaryDomain: productHost,
+    },
+  );
+  await db.collection("subscriptions").updateOne(
+    { siteId: publicDemoSiteId, productSlug: PRODUCT_SLUG },
+    {
+      $set: {
+        merchantId: publicDemoMerchantId,
+        planCode: PUBLIC_DEMO_PLAN_CODE,
+        status: "active",
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        siteId: publicDemoSiteId,
+        productSlug: PRODUCT_SLUG,
+        scopeOverrides: null,
+        quotaOverrides: null,
+        createdAt: now,
+      },
+    },
+    { upsert: true },
+  );
+  const publicDemoSubscription = await db
+    .collection("subscriptions")
+    .findOne(
+      { siteId: publicDemoSiteId, productSlug: PRODUCT_SLUG },
+      { projection: { _id: 1 } },
+    );
+  const publicDemoDbName = buildTenantDbName(
+    PUBLIC_DEMO_MERCHANT_SLUG,
+    PUBLIC_DEMO_SITE_SLUG,
+    PRODUCT_SLUG,
+    publicDemoSubscription._id.toString(),
+  );
+  const publicDemoDb = mongoose.connection.useDb(publicDemoDbName, {
+    useCache: true,
+  });
+  await Promise.all(
+    ["conversations", "sitesettings", "webhookdeliveries", "usages"].map(
+      (collectionName) =>
+        publicDemoDb.collection(collectionName).deleteMany({}),
+    ),
+  );
+  await publicDemoDb.collection("tenantMeta").updateOne(
+    { key: "tenant" },
+    {
+      $set: {
+        merchantId: publicDemoMerchantId.toString(),
+        siteId: publicDemoSiteId.toString(),
+        productSlug: PRODUCT_SLUG,
+        isPublicDemo: true,
+        updatedAt: now,
+      },
+      $setOnInsert: { provisionedAt: now },
+    },
+    { upsert: true },
+  );
+  await db
+    .collection("subscriptions")
+    .updateOne(
+      { _id: publicDemoSubscription._id },
+      { $set: { dataDbName: publicDemoDbName } },
+    );
+  await db
+    .collection("productaccesstokens")
+    .deleteMany({ siteId: publicDemoSiteId, productSlug: PRODUCT_SLUG });
+  const publicDemoToken = generateProductToken();
+  await db.collection("productaccesstokens").insertOne({
+    merchantId: publicDemoMerchantId,
+    siteId: publicDemoSiteId,
+    productSlug: PRODUCT_SLUG,
+    name: "Restricted public sandbox",
+    tokenPrefix: publicDemoToken.tokenPrefix,
+    tokenHash: publicDemoToken.tokenHash,
     scopes: SCOPES,
     allowedDomains: ALLOWED_DOMAINS,
     revokedAt: null,
@@ -272,13 +494,24 @@ async function run() {
   console.log(`\nMerchant login (platform portal):`);
   console.log(`  email:    ${OWNER_EMAIL}`);
   console.log(`  password: ${ownerPassword}`);
-  console.log(`\nProduct:      ${PRODUCT_SLUG} (Pro plan, active subscription)`);
-  console.log(`Merchant:     Northwind Outfitters  |  Site: Northwind Storefront`);
-  console.log(`Tenant data DB: ${dataDbName}${migrated > 0 ? `  (migrated ${migrated} docs from ${LEGACY_PRODUCT_DB})` : ""}`);
+  console.log(
+    `\nProduct:      ${PRODUCT_SLUG} (Pro plan, active subscription)`,
+  );
+  console.log(
+    `Merchant:     Northwind Outfitters  |  Site: Northwind Storefront`,
+  );
+  console.log(
+    `Tenant data DB: ${dataDbName}${migrated > 0 ? `  (migrated ${migrated} docs from ${LEGACY_PRODUCT_DB})` : ""}`,
+  );
   console.log(`\nProduct access token (copy now, shown once):`);
   console.log(`  ${plaintextToken}`);
+  console.log(`\nSet on the chatbot product host:`);
+  console.log(`  PUBLIC_DEMO_PRODUCT_TOKEN=${publicDemoToken.plaintextToken}`);
+  console.log(`\nPublic demo tenant DB: ${publicDemoDbName}`);
   console.log(`\nAllowed domains: ${ALLOWED_DOMAINS.join(", ")}`);
-  console.log(`\nOpen the live test storefront:`);
+  console.log(`\nOpen the guest public demo:`);
+  console.log(`  ${productBaseUrl}/public-demo`);
+  console.log(`\nOpen a manual token demo:`);
   console.log(`  ${productBaseUrl}/demo?token=${plaintextToken}`);
   console.log(`\n${line}\n`);
 }

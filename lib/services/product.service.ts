@@ -1,4 +1,12 @@
-import { Merchant, Product, ProductAccessToken, ProductUsage, Site, Subscription, Types } from "@/lib/db";
+import {
+  Merchant,
+  Product,
+  ProductAccessToken,
+  ProductUsage,
+  Site,
+  Subscription,
+  Types,
+} from "@/lib/db";
 import type {
   ProductAccessTokenCreated,
   ProductAccessTokenSummary,
@@ -19,7 +27,10 @@ import {
 } from "@/lib/services/productConfig.service";
 import { generateProductToken, hashApiKey } from "@/lib/crypto";
 import { ensureSubscriptionDataDb } from "@/lib/services/tenantDb";
-import { type RequestActor, writeAuditLog } from "@/lib/services/platform.service";
+import {
+  type RequestActor,
+  writeAuditLog,
+} from "@/lib/services/platform.service";
 import {
   fetchProductConversation,
   fetchProductConversations,
@@ -75,7 +86,9 @@ function mapConfigSchema(sections: unknown): ProductConfigSection[] {
   }
   return sections.map((section) => {
     const raw = section as Record<string, unknown>;
-    const fields = Array.isArray(raw.fields) ? (raw.fields as Record<string, unknown>[]) : [];
+    const fields = Array.isArray(raw.fields)
+      ? (raw.fields as Record<string, unknown>[])
+      : [];
     return {
       key: String(raw.key ?? ""),
       title: String(raw.title ?? ""),
@@ -84,7 +97,9 @@ function mapConfigSchema(sections: unknown): ProductConfigSection[] {
       fields: fields.map((field) => ({
         key: String(field.key ?? ""),
         label: String(field.label ?? ""),
-        type: (field.type as ProductConfigSection["fields"][number]["type"]) ?? "string",
+        type:
+          (field.type as ProductConfigSection["fields"][number]["type"]) ??
+          "string",
         default: field.default ?? null,
         help: String(field.help ?? ""),
         options: Array.isArray(field.options)
@@ -118,18 +133,21 @@ function mapTestActions(actions: unknown): ProductTestAction[] {
   });
 }
 
-function mapProduct(product: {
-  slug: string;
-  name: string;
-  description?: string | null;
-  baseUrl?: string | null;
-  status: "active" | "inactive";
-  availableScopes: string[];
-  plans: Parameters<typeof mapPlan>[0][];
-  configSchema?: unknown;
-  testActions?: unknown;
-  createdAt: Date;
-}): ProductSummary {
+function mapProduct(
+  product: {
+    slug: string;
+    name: string;
+    description?: string | null;
+    baseUrl?: string | null;
+    status: "active" | "inactive";
+    availableScopes: string[];
+    plans: Parameters<typeof mapPlan>[0][];
+    configSchema?: unknown;
+    testActions?: unknown;
+    createdAt: Date;
+  },
+  counts?: { active: number; suspended: number },
+): ProductSummary {
   return {
     slug: product.slug,
     name: product.name,
@@ -141,6 +159,13 @@ function mapProduct(product: {
     configSchema: mapConfigSchema(product.configSchema),
     testActions: mapTestActions(product.testActions),
     createdAt: toIso(product.createdAt),
+    ...(counts
+      ? {
+          subscriberCount: counts.active + counts.suspended,
+          activeSubscriberCount: counts.active,
+          suspendedSubscriberCount: counts.suspended,
+        }
+      : {}),
   };
 }
 
@@ -155,16 +180,33 @@ interface Entitlement {
 
 function resolveEntitlement(
   plans: ProductPlan[],
-  subscription: { planCode?: string | null; scopeOverrides?: string[] | null; quotaOverrides?: { metric: string; limit: number }[] | null } | null,
+  subscription: {
+    planCode?: string | null;
+    scopeOverrides?: string[] | null;
+    quotaOverrides?: { metric: string; limit: number }[] | null;
+  } | null,
 ): Entitlement {
   if (!subscription || !subscription.planCode) {
-    return { planCode: null, planName: null, priceMonthly: null, currency: null, scopes: [], quotas: [] };
+    return {
+      planCode: null,
+      planName: null,
+      priceMonthly: null,
+      currency: null,
+      scopes: [],
+      quotas: [],
+    };
   }
 
-  const plan = plans.find((candidate) => candidate.code === subscription.planCode) ?? null;
+  const plan =
+    plans.find((candidate) => candidate.code === subscription.planCode) ?? null;
   const scopes = subscription.scopeOverrides ?? plan?.scopes ?? [];
 
-  const overrideByMetric = new Map((subscription.quotaOverrides ?? []).map((quota) => [quota.metric, quota.limit]));
+  const overrideByMetric = new Map(
+    (subscription.quotaOverrides ?? []).map((quota) => [
+      quota.metric,
+      quota.limit,
+    ]),
+  );
   const quotas: ProductPlanQuota[] = (plan?.quotas ?? []).map((quota) => ({
     metric: quota.metric,
     limit: overrideByMetric.get(quota.metric) ?? quota.limit,
@@ -182,8 +224,39 @@ function resolveEntitlement(
 }
 
 export async function listProducts(): Promise<ProductSummary[]> {
-  const products = await Product.find().sort({ createdAt: -1 }).lean();
-  return products.map(mapProduct);
+  const [products, subscriptionCounts] = await Promise.all([
+    Product.find().sort({ createdAt: -1 }).lean(),
+    Subscription.aggregate<{
+      _id: { productSlug: string; status: "active" | "suspended" };
+      count: number;
+    }>([
+      { $match: { planCode: { $ne: null } } },
+      {
+        $group: {
+          _id: { productSlug: "$productSlug", status: "$status" },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+  const countsByProduct = new Map<
+    string,
+    { active: number; suspended: number }
+  >();
+  for (const entry of subscriptionCounts) {
+    const counts = countsByProduct.get(entry._id.productSlug) ?? {
+      active: 0,
+      suspended: 0,
+    };
+    counts[entry._id.status] = entry.count;
+    countsByProduct.set(entry._id.productSlug, counts);
+  }
+  return products.map((product) =>
+    mapProduct(
+      product,
+      countsByProduct.get(product.slug) ?? { active: 0, suspended: 0 },
+    ),
+  );
 }
 
 export async function getProduct(slug: string): Promise<ProductSummary | null> {
@@ -200,14 +273,24 @@ function countFields(sections: ProductConfigSection[]): number {
  * schema + test actions into the catalog. This is how the portal "connects" to a
  * running product deployment.
  */
-export async function testProductConnection(actor: RequestActor, slug: string): Promise<ProductConnectionStatus | null> {
+export async function testProductConnection(
+  actor: RequestActor,
+  slug: string,
+): Promise<ProductConnectionStatus | null> {
   const product = await Product.findOne({ slug: slug.toLowerCase() });
   if (!product) {
     return null;
   }
   const baseUrl = (product.baseUrl ?? "").trim();
   if (!baseUrl) {
-    return { reachable: false, latencyMs: null, error: "No Base URL set for this product.", fieldCount: 0, actionCount: 0, baseUrl: "" };
+    return {
+      reachable: false,
+      latencyMs: null,
+      error: "No Base URL set for this product.",
+      fieldCount: 0,
+      actionCount: 0,
+      baseUrl: "",
+    };
   }
 
   const startedAt = Date.now();
@@ -226,13 +309,27 @@ export async function testProductConnection(actor: RequestActor, slug: string): 
       action: "product.connection_synced",
       resourceType: "product",
       resourceId: product._id.toString(),
-      metadata: { slug: product.slug, fields: countFields(configSchema), actions: testActions.length },
+      metadata: {
+        slug: product.slug,
+        fields: countFields(configSchema),
+        actions: testActions.length,
+      },
     });
 
-    return { reachable: true, latencyMs, error: null, fieldCount: countFields(configSchema), actionCount: testActions.length, baseUrl };
+    return {
+      reachable: true,
+      latencyMs,
+      error: null,
+      fieldCount: countFields(configSchema),
+      actionCount: testActions.length,
+      baseUrl,
+    };
   } catch (error) {
     const latencyMs = Date.now() - startedAt;
-    const message = error instanceof ProductBridgeError ? error.message : "Product service is unreachable.";
+    const message =
+      error instanceof ProductBridgeError
+        ? error.message
+        : "Product service is unreachable.";
     return {
       reachable: false,
       latencyMs,
@@ -245,18 +342,30 @@ export async function testProductConnection(actor: RequestActor, slug: string): 
 }
 
 /** Every site/merchant currently subscribed to this product, with plan + status. */
-export async function listProductSubscribers(slug: string): Promise<ProductSubscriber[] | null> {
+export async function listProductSubscribers(
+  slug: string,
+): Promise<ProductSubscriber[] | null> {
   const product = await Product.findOne({ slug: slug.toLowerCase() }).lean();
   if (!product) {
     return null;
   }
-  const subscriptions = await Subscription.find({ productSlug: product.slug }).lean();
-  const sites = await Site.find({ _id: { $in: subscriptions.map((subscription) => subscription.siteId) } }).lean();
+  const subscriptions = await Subscription.find({
+    productSlug: product.slug,
+  }).lean();
+  const sites = await Site.find({
+    _id: { $in: subscriptions.map((subscription) => subscription.siteId) },
+  }).lean();
   const siteById = new Map(sites.map((site) => [site._id.toString(), site]));
   const merchants = await Merchant.find({
-    _id: { $in: [...new Set(sites.map((site) => site.merchantId.toString()))].map((id) => new Types.ObjectId(id)) },
+    _id: {
+      $in: [...new Set(sites.map((site) => site.merchantId.toString()))].map(
+        (id) => new Types.ObjectId(id),
+      ),
+    },
   }).lean();
-  const merchantById = new Map(merchants.map((merchant) => [merchant._id.toString(), merchant]));
+  const merchantById = new Map(
+    merchants.map((merchant) => [merchant._id.toString(), merchant]),
+  );
 
   return subscriptions
     .map((subscription) => {
@@ -265,7 +374,10 @@ export async function listProductSubscribers(slug: string): Promise<ProductSubsc
         return null;
       }
       const merchant = merchantById.get(site.merchantId.toString());
-      const plan = product.plans.find((candidate) => candidate.code === subscription.planCode) ?? null;
+      const plan =
+        product.plans.find(
+          (candidate) => candidate.code === subscription.planCode,
+        ) ?? null;
       return {
         siteId: site._id.toString(),
         siteName: site.name,
@@ -331,7 +443,11 @@ export async function updateProduct(
     testActions?: ProductTestAction[];
   },
 ): Promise<ProductSummary | null> {
-  const product = await Product.findOneAndUpdate({ slug: slug.toLowerCase() }, input, { new: true }).lean();
+  const product = await Product.findOneAndUpdate(
+    { slug: slug.toLowerCase() },
+    input,
+    { new: true },
+  ).lean();
   if (!product) {
     return null;
   }
@@ -348,13 +464,20 @@ export async function updateProduct(
   return mapProduct(product);
 }
 
-export async function listSiteProducts(siteId: string): Promise<SubscriptionSummary[]> {
+export async function listSiteProducts(
+  siteId: string,
+): Promise<SubscriptionSummary[]> {
   const [products, subscriptions] = await Promise.all([
     Product.find({ status: "active" }).sort({ name: 1 }).lean(),
     Subscription.find({ siteId: new Types.ObjectId(siteId) }).lean(),
   ]);
 
-  const subscriptionBySlug = new Map(subscriptions.map((subscription) => [subscription.productSlug, subscription]));
+  const subscriptionBySlug = new Map(
+    subscriptions.map((subscription) => [
+      subscription.productSlug,
+      subscription,
+    ]),
+  );
 
   return products.map((product) => {
     const subscription = subscriptionBySlug.get(product.slug) ?? null;
@@ -385,13 +508,19 @@ export async function setSiteProductPlan(
 ): Promise<SubscriptionSummary | null> {
   const [site, product] = await Promise.all([
     Site.findById(siteId).lean(),
-    Product.findOne({ slug: productSlug.toLowerCase(), status: "active" }).lean(),
+    Product.findOne({
+      slug: productSlug.toLowerCase(),
+      status: "active",
+    }).lean(),
   ]);
   if (!site || !product) {
     return null;
   }
 
-  if (input.planCode && !product.plans.some((plan) => plan.code === input.planCode)) {
+  if (
+    input.planCode &&
+    !product.plans.some((plan) => plan.code === input.planCode)
+  ) {
     throw new Error("PLAN_NOT_FOUND");
   }
 
@@ -430,7 +559,9 @@ export async function setSiteProductPlan(
   });
 
   const summaries = await listSiteProducts(siteId);
-  return summaries.find((summary) => summary.productSlug === product.slug) ?? null;
+  return (
+    summaries.find((summary) => summary.productSlug === product.slug) ?? null
+  );
 }
 
 function mapToken(token: {
@@ -463,7 +594,10 @@ function mapToken(token: {
   };
 }
 
-export async function listProductTokens(siteId: string, productSlug: string): Promise<ProductAccessTokenSummary[]> {
+export async function listProductTokens(
+  siteId: string,
+  productSlug: string,
+): Promise<ProductAccessTokenSummary[]> {
   const tokens = await ProductAccessToken.find({
     siteId: new Types.ObjectId(siteId),
     productSlug: productSlug.toLowerCase(),
@@ -482,19 +616,38 @@ export async function createProductToken(
 ): Promise<ProductAccessTokenCreated> {
   const [site, product, subscription] = await Promise.all([
     Site.findById(siteId).lean(),
-    Product.findOne({ slug: productSlug.toLowerCase(), status: "active" }).lean(),
-    Subscription.findOne({ siteId: new Types.ObjectId(siteId), productSlug: productSlug.toLowerCase() }).lean(),
+    Product.findOne({
+      slug: productSlug.toLowerCase(),
+      status: "active",
+    }).lean(),
+    Subscription.findOne({
+      siteId: new Types.ObjectId(siteId),
+      productSlug: productSlug.toLowerCase(),
+    }).lean(),
   ]);
 
   if (!site || !product) {
     throw new Error("PRODUCT_NOT_FOUND");
   }
-  if (!subscription || !subscription.planCode || subscription.status !== "active") {
+  if (
+    !subscription ||
+    !subscription.planCode ||
+    subscription.status !== "active"
+  ) {
     throw new Error("PRODUCT_NOT_GRANTED");
   }
 
-  const entitlement = resolveEntitlement(product.plans.map(mapPlan), subscription);
-  const domains = normalizeDomains(allowedDomains.length > 0 ? allowedDomains : site.primaryDomain ? [site.primaryDomain] : []);
+  const entitlement = resolveEntitlement(
+    product.plans.map(mapPlan),
+    subscription,
+  );
+  const domains = normalizeDomains(
+    allowedDomains.length > 0
+      ? allowedDomains
+      : site.primaryDomain
+        ? [site.primaryDomain]
+        : [],
+  );
   const generated = generateProductToken();
   const token = await ProductAccessToken.create({
     merchantId: site.merchantId,
@@ -513,7 +666,12 @@ export async function createProductToken(
     action: "product_token.created",
     resourceType: "product_token",
     resourceId: token._id.toString(),
-    metadata: { siteId, productSlug: product.slug, name, allowedDomains: domains.length },
+    metadata: {
+      siteId,
+      productSlug: product.slug,
+      name,
+      allowedDomains: domains.length,
+    },
   });
 
   return { ...mapToken(token), plaintextToken: generated.plaintextToken };
@@ -565,9 +723,13 @@ async function usageMetrics(
   }).lean();
   const usedByMetric = new Map(rows.map((row) => [row.metric, row.quantity]));
 
-  const metricNames = new Set<string>([...quotas.map((quota) => quota.metric), ...usedByMetric.keys()]);
+  const metricNames = new Set<string>([
+    ...quotas.map((quota) => quota.metric),
+    ...usedByMetric.keys(),
+  ]);
   return [...metricNames].map((metric) => {
-    const quota = quotas.find((candidate) => candidate.metric === metric) ?? null;
+    const quota =
+      quotas.find((candidate) => candidate.metric === metric) ?? null;
     const used = usedByMetric.get(metric) ?? 0;
     return {
       metric,
@@ -579,18 +741,32 @@ async function usageMetrics(
   });
 }
 
-export async function getProductUsage(siteId: string, productSlug: string): Promise<ProductUsageSummary | null> {
+export async function getProductUsage(
+  siteId: string,
+  productSlug: string,
+): Promise<ProductUsageSummary | null> {
   const [product, subscription] = await Promise.all([
     Product.findOne({ slug: productSlug.toLowerCase() }).lean(),
-    Subscription.findOne({ siteId: new Types.ObjectId(siteId), productSlug: productSlug.toLowerCase() }).lean(),
+    Subscription.findOne({
+      siteId: new Types.ObjectId(siteId),
+      productSlug: productSlug.toLowerCase(),
+    }).lean(),
   ]);
   if (!product) {
     return null;
   }
 
-  const entitlement = resolveEntitlement(product.plans.map(mapPlan), subscription);
+  const entitlement = resolveEntitlement(
+    product.plans.map(mapPlan),
+    subscription,
+  );
   const period = currentPeriod();
-  const metrics = await usageMetrics(siteId, product.slug, entitlement.quotas, period);
+  const metrics = await usageMetrics(
+    siteId,
+    product.slug,
+    entitlement.quotas,
+    period,
+  );
 
   return {
     productSlug: product.slug,
@@ -603,7 +779,10 @@ export async function getProductUsage(siteId: string, productSlug: string): Prom
 
 export async function verifyProductToken(plaintextToken: string) {
   const tokenHash = hashApiKey(plaintextToken);
-  const token = await ProductAccessToken.findOne({ tokenHash, revokedAt: null }).lean();
+  const token = await ProductAccessToken.findOne({
+    tokenHash,
+    revokedAt: null,
+  }).lean();
   if (!token) {
     return null;
   }
@@ -613,12 +792,22 @@ export async function verifyProductToken(plaintextToken: string) {
 
   const [product, subscription, site, merchant] = await Promise.all([
     Product.findOne({ slug: token.productSlug, status: "active" }).lean(),
-    Subscription.findOne({ siteId: token.siteId, productSlug: token.productSlug }).lean(),
+    Subscription.findOne({
+      siteId: token.siteId,
+      productSlug: token.productSlug,
+    }).lean(),
     Site.findById(token.siteId).lean(),
     Merchant.findById(token.merchantId).lean(),
   ]);
 
-  if (!product || !site || !merchant || !subscription || subscription.status !== "active" || !subscription.planCode) {
+  if (
+    !product ||
+    !site ||
+    !merchant ||
+    !subscription ||
+    subscription.status !== "active" ||
+    !subscription.planCode
+  ) {
     return null;
   }
 
@@ -631,16 +820,27 @@ export async function verifyProductToken(plaintextToken: string) {
     dataDbName: subscription.dataDbName,
   });
 
-  const entitlement = resolveEntitlement(product.plans.map(mapPlan), subscription);
+  const entitlement = resolveEntitlement(
+    product.plans.map(mapPlan),
+    subscription,
+  );
   const period = currentPeriod();
-  const metrics = await usageMetrics(token.siteId.toString(), token.productSlug, entitlement.quotas, period);
+  const metrics = await usageMetrics(
+    token.siteId.toString(),
+    token.productSlug,
+    entitlement.quotas,
+    period,
+  );
   const config = await resolvePublishedConfig(
     mapConfigSchema(product.configSchema),
     token.siteId.toString(),
     token.productSlug,
   );
 
-  await ProductAccessToken.updateOne({ _id: token._id }, { lastUsedAt: new Date() });
+  await ProductAccessToken.updateOne(
+    { _id: token._id },
+    { lastUsedAt: new Date() },
+  );
 
   return {
     merchantId: token.merchantId.toString(),
@@ -665,7 +865,12 @@ export async function recordProductUsage(input: {
   productSlug?: string;
   metric: string;
   quantity: number;
-}): Promise<{ metric: string; used: number; limit: number | null; withinQuota: boolean } | null> {
+}): Promise<{
+  metric: string;
+  used: number;
+  limit: number | null;
+  withinQuota: boolean;
+} | null> {
   let siteId = input.siteId;
   let productSlug = input.productSlug;
   let merchantId: string | undefined;
@@ -689,7 +894,10 @@ export async function recordProductUsage(input: {
 
   const [product, subscription] = await Promise.all([
     Product.findOne({ slug: productSlug.toLowerCase() }).lean(),
-    Subscription.findOne({ siteId: new Types.ObjectId(siteId), productSlug: productSlug.toLowerCase() }).lean(),
+    Subscription.findOne({
+      siteId: new Types.ObjectId(siteId),
+      productSlug: productSlug.toLowerCase(),
+    }).lean(),
   ]);
   if (!product || !subscription || subscription.status !== "active") {
     return null;
@@ -698,16 +906,29 @@ export async function recordProductUsage(input: {
 
   const period = currentPeriod();
   const usage = await ProductUsage.findOneAndUpdate(
-    { siteId: new Types.ObjectId(siteId), productSlug: product.slug, metric: input.metric, period },
+    {
+      siteId: new Types.ObjectId(siteId),
+      productSlug: product.slug,
+      metric: input.metric,
+      period,
+    },
     {
       $inc: { quantity: input.quantity },
-      $set: { lastEventAt: new Date(), merchantId: new Types.ObjectId(merchantId) },
+      $set: {
+        lastEventAt: new Date(),
+        merchantId: new Types.ObjectId(merchantId),
+      },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true },
   ).lean();
 
-  const entitlement = resolveEntitlement(product.plans.map(mapPlan), subscription);
-  const quota = entitlement.quotas.find((candidate) => candidate.metric === input.metric) ?? null;
+  const entitlement = resolveEntitlement(
+    product.plans.map(mapPlan),
+    subscription,
+  );
+  const quota =
+    entitlement.quotas.find((candidate) => candidate.metric === input.metric) ??
+    null;
 
   return {
     metric: input.metric,
@@ -718,30 +939,47 @@ export async function recordProductUsage(input: {
 }
 
 async function resolveProductBaseUrl(productSlug: string): Promise<string> {
-  const product = await Product.findOne({ slug: productSlug.toLowerCase() }).lean();
+  const product = await Product.findOne({
+    slug: productSlug.toLowerCase(),
+  }).lean();
   if (!product) {
     throw new ProductBridgeError("Product not found.", 404);
   }
   if (!product.baseUrl) {
-    throw new ProductBridgeError("This product has no base URL configured, so conversations can't be loaded.", 409);
+    throw new ProductBridgeError(
+      "This product has no base URL configured, so conversations can't be loaded.",
+      409,
+    );
   }
   return product.baseUrl;
 }
 
-async function resolveProductBridge(siteId: string, productSlug: string): Promise<{ baseUrl: string; dataDbName: string }> {
+async function resolveProductBridge(
+  siteId: string,
+  productSlug: string,
+): Promise<{ baseUrl: string; dataDbName: string }> {
   const slug = productSlug.toLowerCase();
   const [product, subscription] = await Promise.all([
     Product.findOne({ slug }).lean(),
-    Subscription.findOne({ siteId: new Types.ObjectId(siteId), productSlug: slug }).lean(),
+    Subscription.findOne({
+      siteId: new Types.ObjectId(siteId),
+      productSlug: slug,
+    }).lean(),
   ]);
   if (!product) {
     throw new ProductBridgeError("Product not found.", 404);
   }
   if (!product.baseUrl) {
-    throw new ProductBridgeError("This product has no base URL configured, so conversations can't be loaded.", 409);
+    throw new ProductBridgeError(
+      "This product has no base URL configured, so conversations can't be loaded.",
+      409,
+    );
   }
   if (!subscription) {
-    throw new ProductBridgeError("This site is not subscribed to the product.", 409);
+    throw new ProductBridgeError(
+      "This site is not subscribed to the product.",
+      409,
+    );
   }
   const dataDbName = await ensureSubscriptionDataDb({
     _id: subscription._id,
@@ -758,12 +996,22 @@ export async function listSiteProductConversations(
   productSlug: string,
   query: { status?: string; page: number; pageSize: number },
 ) {
-  const { baseUrl, dataDbName } = await resolveProductBridge(siteId, productSlug);
+  const { baseUrl, dataDbName } = await resolveProductBridge(
+    siteId,
+    productSlug,
+  );
   return fetchProductConversations(baseUrl, siteId, dataDbName, query);
 }
 
-export async function getSiteProductConversation(siteId: string, productSlug: string, conversationId: string) {
-  const { baseUrl, dataDbName } = await resolveProductBridge(siteId, productSlug);
+export async function getSiteProductConversation(
+  siteId: string,
+  productSlug: string,
+  conversationId: string,
+) {
+  const { baseUrl, dataDbName } = await resolveProductBridge(
+    siteId,
+    productSlug,
+  );
   return fetchProductConversation(baseUrl, siteId, dataDbName, conversationId);
 }
 
@@ -774,8 +1022,18 @@ export async function replyToSiteProductConversation(
   body: string,
   agentName: string,
 ) {
-  const { baseUrl, dataDbName } = await resolveProductBridge(siteId, productSlug);
-  return postProductConversationReply(baseUrl, siteId, dataDbName, conversationId, body, agentName);
+  const { baseUrl, dataDbName } = await resolveProductBridge(
+    siteId,
+    productSlug,
+  );
+  return postProductConversationReply(
+    baseUrl,
+    siteId,
+    dataDbName,
+    conversationId,
+    body,
+    agentName,
+  );
 }
 
 export async function buildProductPreview(
@@ -788,7 +1046,12 @@ export async function buildProductPreview(
   return { embedUrl, expiresInSeconds: PREVIEW_TOKEN_TTL_SECONDS };
 }
 
-export async function runSiteProductTest(siteId: string, productSlug: string, action: string, input: string) {
+export async function runSiteProductTest(
+  siteId: string,
+  productSlug: string,
+  action: string,
+  input: string,
+) {
   const baseUrl = await resolveProductBaseUrl(productSlug);
   const config = await resolveDraftConfig(siteId, productSlug);
   const response = await postProductTest(baseUrl, { action, input, config });

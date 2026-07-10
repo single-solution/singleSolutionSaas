@@ -20,6 +20,7 @@ import {
   serverError,
   tooManyRequests,
 } from "@/lib/api/responses";
+import { demoMessageRateLimitMax, isPublicDemoToken } from "@/lib/demo/safety";
 import { maybeReplyWithAssistant } from "@/lib/chat/assistant";
 import { dispatchWebhook } from "@/lib/admin/webhooks";
 import { reportProductUsage } from "@/lib/platform/client";
@@ -35,6 +36,8 @@ export const dynamic = "force-dynamic";
 const USAGE_METRIC = "messages";
 const MAX_PER_MINUTE = 30;
 const IP_MAX_PER_MINUTE = 60;
+const DEMO_MAX_PER_MINUTE = demoMessageRateLimitMax();
+const DEMO_IP_MAX_PER_MINUTE = 30;
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -53,9 +56,10 @@ export async function POST(request: Request, { params }: RouteContext) {
     const caller = await resolveChatCaller(request);
     if (caller instanceof Response) return caller;
 
+    const isDemo = isPublicDemoToken(caller.token);
     const ipLimit = checkRateLimit(
       `chat-message:ip:${getClientIp(request)}`,
-      IP_MAX_PER_MINUTE,
+      isDemo ? DEMO_IP_MAX_PER_MINUTE : IP_MAX_PER_MINUTE,
       60_000,
     );
     if (!ipLimit.allowed) {
@@ -66,7 +70,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
     const limit = checkRateLimit(
       `chat-message:${caller.entitlement.siteId}:${caller.visitorId}`,
-      MAX_PER_MINUTE,
+      isDemo ? DEMO_MAX_PER_MINUTE : MAX_PER_MINUTE,
       60_000,
     );
     if (!limit.allowed) {
@@ -102,7 +106,9 @@ export async function POST(request: Request, { params }: RouteContext) {
       return badRequest("Message too long.");
     }
 
-    const { Conversation } = await getTenantModels(caller.entitlement.dataDbName);
+    const { Conversation } = await getTenantModels(
+      caller.entitlement.dataDbName,
+    );
     const conversation = await Conversation.findOne({
       _id: new Types.ObjectId(id),
       siteId: caller.entitlement.siteId,
@@ -144,11 +150,16 @@ export async function POST(request: Request, { params }: RouteContext) {
         USAGE_METRIC,
         1,
       );
-      void dispatchWebhook(caller.entitlement.dataDbName, caller.entitlement.siteId, "message.created", {
-        conversationId: conversation._id.toString(),
-        author: "customer",
-        preview: body.slice(0, 280),
-      });
+      void dispatchWebhook(
+        caller.entitlement.dataDbName,
+        caller.entitlement.siteId,
+        "message.created",
+        {
+          conversationId: conversation._id.toString(),
+          author: "customer",
+          preview: body.slice(0, 280),
+        },
+      );
 
       const refreshed = await Conversation.findById(
         conversation._id,
@@ -157,7 +168,11 @@ export async function POST(request: Request, { params }: RouteContext) {
         return serverError("Conversation vanished while posting.");
       }
 
-      await maybeReplyWithAssistant(caller.entitlement.dataDbName, refreshed, caller.entitlement.config);
+      await maybeReplyWithAssistant(
+        caller.entitlement.dataDbName,
+        refreshed,
+        caller.entitlement.config,
+      );
 
       const withAssistant =
         (await Conversation.findById(

@@ -5,7 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "migrate:merchants": "node --env-file=.env scripts/migrate-to-merchants-sites.mjs",
     "seed:chatbot-config": "node --env-file=.env scripts/seed-chatbot-config-schema.mjs"
@@ -27,11 +27,14 @@
     "zod": "^3.25.67"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.5",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.15.32",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^15.5.20",
     "typescript": "^5.8.3"
   },
   "engines": {

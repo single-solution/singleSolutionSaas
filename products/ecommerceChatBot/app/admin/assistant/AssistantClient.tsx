@@ -1,10 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { adminApi, type AdminSettings } from "@/lib/admin/adminApiClient";
-import { NoSiteSelected, PageError, PageHeading } from "@/components/admin/ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  DetailSkeleton,
+  Field,
+  InlineNote,
+  Input,
+  NoSiteSelected,
+  PageError,
+  PageHeading,
+  Textarea,
+} from "@/components/admin/ui";
 
 function toLines(value: string[]): string {
   return value.join("\n");
@@ -43,29 +55,23 @@ export function AssistantClient() {
     setWebhookSecret("");
   }
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!siteId) {
       setLoading(false);
       return;
     }
-    let active = true;
     setLoading(true);
     setError(null);
     adminApi
       .getSettings(siteId)
-      .then((result) => {
-        if (active) hydrate(result.settings);
-      })
-      .catch(() => {
-        if (active) setError("Could not load settings.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
+      .then((result) => hydrate(result.settings))
+      .catch(() => setError("Could not load settings."))
+      .finally(() => setLoading(false));
   }, [siteId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function handleSave() {
     if (!siteId) return;
@@ -80,7 +86,9 @@ export function AssistantClient() {
         handoffMessage,
         fallbackMessage,
         webhookUrl,
-        ...(webhookSecret.trim() ? { webhookSecret: webhookSecret.trim() } : {}),
+        ...(webhookSecret.trim()
+          ? { webhookSecret: webhookSecret.trim() }
+          : {}),
       });
       hydrate(result.settings);
       setSaved(true);
@@ -95,84 +103,127 @@ export function AssistantClient() {
     return <NoSiteSelected />;
   }
   if (loading) {
-    return <p className="text-sm text-slate-500">Loading settings...</p>;
+    return <DetailSkeleton />;
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <PageHeading title="Assistant tuning" subtitle="Advanced automation for this site. Overrides the portal defaults." />
-      {error ? <PageError message={error} /> : null}
-      {saved ? <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">Saved.</p> : null}
+    <div className="admin-page-stack max-w-3xl">
+      <PageHeading
+        title="Assistant tuning"
+        subtitle="Advanced automation for this site. Overrides the portal defaults."
+      />
+      {error ? <PageError message={error} onRetry={load} /> : null}
+      {saved ? <InlineNote tone="success">Settings saved.</InlineNote> : null}
 
-      <FieldBlock label="Auto-reply rules" hint="One per line as pattern::reply (pattern is a case-insensitive regex).">
-        <textarea
+      <Field
+        label="Auto-reply rules"
+        htmlFor="auto-reply-rules"
+        hint="One per line as pattern::reply (pattern is a case-insensitive regex)."
+      >
+        <Textarea
+          id="auto-reply-rules"
           value={autoReplyRules}
           onChange={(event) => setAutoReplyRules(event.target.value)}
           rows={5}
-          className="admin-textarea"
           placeholder="refund|return::We offer a 30-day return policy."
         />
-      </FieldBlock>
+      </Field>
 
-      <FieldBlock label="Canned replies" hint="Quick reply snippets, one per line (used by agents).">
-        <textarea value={cannedReplies} onChange={(event) => setCannedReplies(event.target.value)} rows={4} className="admin-textarea" />
-      </FieldBlock>
+      <Field
+        label="Canned replies"
+        htmlFor="canned-replies"
+        hint="Quick reply snippets, one per line (used by agents)."
+      >
+        <Textarea
+          id="canned-replies"
+          value={cannedReplies}
+          onChange={(event) => setCannedReplies(event.target.value)}
+          rows={4}
+        />
+      </Field>
 
-      <FieldBlock label="Escalation keywords" hint="One per line. Any match forces a human handoff.">
-        <textarea value={escalationKeywords} onChange={(event) => setEscalationKeywords(event.target.value)} rows={3} className="admin-textarea" />
-      </FieldBlock>
+      <Field
+        label="Escalation keywords"
+        htmlFor="escalation-keywords"
+        hint="One per line. Any match forces a human handoff."
+      >
+        <Textarea
+          id="escalation-keywords"
+          value={escalationKeywords}
+          onChange={(event) => setEscalationKeywords(event.target.value)}
+          rows={3}
+        />
+      </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <FieldBlock label="Handoff message" hint="Sent when a customer asks for a human.">
-          <textarea value={handoffMessage} onChange={(event) => setHandoffMessage(event.target.value)} rows={3} className="admin-textarea" />
-        </FieldBlock>
-        <FieldBlock label="Fallback message" hint="Sent when no rule matches.">
-          <textarea value={fallbackMessage} onChange={(event) => setFallbackMessage(event.target.value)} rows={3} className="admin-textarea" />
-        </FieldBlock>
+        <Field
+          label="Handoff message"
+          htmlFor="handoff-message"
+          hint="Sent when a customer asks for a human."
+        >
+          <Textarea
+            id="handoff-message"
+            value={handoffMessage}
+            onChange={(event) => setHandoffMessage(event.target.value)}
+            rows={3}
+          />
+        </Field>
+        <Field
+          label="Fallback message"
+          htmlFor="fallback-message"
+          hint="Sent when no rule matches."
+        >
+          <Textarea
+            id="fallback-message"
+            value={fallbackMessage}
+            onChange={(event) => setFallbackMessage(event.target.value)}
+            rows={3}
+          />
+        </Field>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <h3 className="text-sm font-semibold text-slate-800">Webhook</h3>
-        <p className="mt-1 text-xs text-slate-500">Notified on new conversations and customer messages. Signed with the secret.</p>
-        <div className="mt-3 space-y-3">
-          <FieldBlock label="Webhook URL">
-            <input
+      <Card>
+        <CardHeader
+          title="Webhook"
+          description="Notified on new conversations and customer messages. Signed with the secret."
+        />
+        <div className="space-y-3">
+          <Field label="Webhook URL" htmlFor="webhook-url">
+            <Input
+              id="webhook-url"
               value={webhookUrl}
               onChange={(event) => setWebhookUrl(event.target.value)}
               placeholder="https://example.com/hooks/chatbot"
-              className="admin-input"
             />
-          </FieldBlock>
-          <FieldBlock label="Webhook secret" hint={settings?.webhookSecretSet ? "A secret is set. Leave blank to keep it." : "Optional signing secret."}>
-            <input
+          </Field>
+          <Field
+            label="Webhook secret"
+            htmlFor="webhook-secret"
+            hint={
+              settings?.webhookSecretSet
+                ? "A secret is set. Leave blank to keep it."
+                : "Optional signing secret."
+            }
+            optional={!settings?.webhookSecretSet}
+          >
+            <Input
+              id="webhook-secret"
               type="password"
               value={webhookSecret}
               onChange={(event) => setWebhookSecret(event.target.value)}
-              placeholder={settings?.webhookSecretSet ? "set - leave blank to keep" : "Not set"}
-              className="admin-input"
+              placeholder={
+                settings?.webhookSecretSet
+                  ? "set - leave blank to keep"
+                  : "Not set"
+              }
             />
-          </FieldBlock>
+          </Field>
         </div>
-      </div>
+      </Card>
 
-      <button
-        type="button"
-        onClick={() => void handleSave()}
-        disabled={saving}
-        className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
-      >
+      <Button type="button" onClick={() => void handleSave()} loading={saving}>
         {saving ? "Saving..." : "Save settings"}
-      </button>
-    </div>
-  );
-}
-
-function FieldBlock({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-slate-700">{label}</label>
-      {hint ? <p className="mb-1.5 text-xs text-slate-400">{hint}</p> : <div className="mb-1.5" />}
-      {children}
+      </Button>
     </div>
   );
 }

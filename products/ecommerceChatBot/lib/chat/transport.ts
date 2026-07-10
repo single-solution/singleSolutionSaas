@@ -32,6 +32,18 @@ async function jsonOrThrow(res: Response): Promise<unknown> {
     } catch {
       // ignore
     }
+    if (!code && res.status === 429) {
+      code = "rate_limited";
+    }
+    if (!code && res.status === 401) {
+      code = "demo_expired";
+    }
+    if (!code && res.status === 403) {
+      code = "origin_not_allowed";
+    }
+    if (!code && res.status >= 500) {
+      code = "unavailable";
+    }
     throw new ChatRequestError(message, code);
   }
   return res.json();
@@ -42,22 +54,41 @@ function headers(extra?: Record<string, string>): Record<string, string> {
 }
 
 export async function fetchChatBootstrap(): Promise<ChatBootstrap> {
-  const res = await fetch("/api/chat", { method: "GET", cache: "no-store", headers: headers() });
+  const res = await fetch("/api/chat", {
+    method: "GET",
+    cache: "no-store",
+    headers: headers(),
+  });
   return (await jsonOrThrow(res)) as ChatBootstrap;
 }
 
 export async function fetchChatThread(id: string): Promise<ChatThread> {
-  const res = await fetch(`/api/chat/${encodeURIComponent(id)}`, { method: "GET", cache: "no-store", headers: headers() });
+  const res = await fetch(`/api/chat/${encodeURIComponent(id)}`, {
+    method: "GET",
+    cache: "no-store",
+    headers: headers(),
+  });
   return (await jsonOrThrow(res)) as ChatThread;
 }
 
-export async function fetchOlderChatMessages(id: string, beforeId: string): Promise<ChatThread> {
+export async function fetchOlderChatMessages(
+  id: string,
+  beforeId: string,
+): Promise<ChatThread> {
   const params = new URLSearchParams({ before: beforeId });
-  const res = await fetch(`/api/chat/${encodeURIComponent(id)}?${params}`, { method: "GET", cache: "no-store", headers: headers() });
+  const res = await fetch(`/api/chat/${encodeURIComponent(id)}?${params}`, {
+    method: "GET",
+    cache: "no-store",
+    headers: headers(),
+  });
   return (await jsonOrThrow(res)) as ChatThread;
 }
 
-export async function pollChatThread(id: string, since: string, etag?: string): Promise<ChatThread | null> {
+export async function pollChatThread(
+  id: string,
+  since: string,
+  etag?: string,
+): Promise<ChatThread | null> {
   const params = new URLSearchParams({ since });
   const res = await fetch(`/api/chat/${encodeURIComponent(id)}?${params}`, {
     method: "GET",
@@ -69,7 +100,10 @@ export async function pollChatThread(id: string, since: string, etag?: string): 
 }
 
 export async function markChatThreadRead(threadId: string): Promise<void> {
-  const res = await fetch(`/api/chat/${encodeURIComponent(threadId)}/read-receipts`, { method: "POST", headers: headers() });
+  const res = await fetch(
+    `/api/chat/${encodeURIComponent(threadId)}/read-receipts`,
+    { method: "POST", headers: headers() },
+  );
   if (res.status === 204 || res.status === 304) return;
   if (!res.ok) {
     await jsonOrThrow(res);
@@ -77,20 +111,33 @@ export async function markChatThreadRead(threadId: string): Promise<void> {
 }
 
 export async function startChatThread(): Promise<ChatThread> {
-  const res = await fetch("/api/chat/conversations", { method: "POST", headers: headers({ "Content-Type": "application/json" }), body: "{}" });
-  return (await jsonOrThrow(res)) as ChatThread;
-}
-
-export async function sendChatMessage(threadId: string, body: string): Promise<ChatThread> {
-  const res = await fetch(`/api/chat/${encodeURIComponent(threadId)}/messages`, {
+  const res = await fetch("/api/chat/conversations", {
     method: "POST",
     headers: headers({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ body }),
+    body: "{}",
   });
   return (await jsonOrThrow(res)) as ChatThread;
 }
 
-export function makeOptimisticMessage(args: { body: string; authorName?: string }): ChatMessage {
+export async function sendChatMessage(
+  threadId: string,
+  body: string,
+): Promise<ChatThread> {
+  const res = await fetch(
+    `/api/chat/${encodeURIComponent(threadId)}/messages`,
+    {
+      method: "POST",
+      headers: headers({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ body }),
+    },
+  );
+  return (await jsonOrThrow(res)) as ChatThread;
+}
+
+export function makeOptimisticMessage(args: {
+  body: string;
+  authorName?: string;
+}): ChatMessage {
   return {
     id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     author: "customer",

@@ -1,13 +1,20 @@
 import { cookies } from "next/headers";
 
-import { jsonForbidden, jsonUnauthorized } from "@/lib/api/responses";
+import { jsonForbidden } from "@/lib/api/responses";
 import { SESSION_COOKIE_NAME } from "@/lib/constants";
 import { ensurePlatformReady } from "@/lib/db/ready";
 import { User } from "@/lib/db";
 import { loadEnvironment } from "@/lib/env";
-import { createSessionToken, SESSION_COOKIE_OPTIONS, verifySessionToken } from "@/lib/session";
+import {
+  createSessionToken,
+  SESSION_COOKIE_OPTIONS,
+  verifySessionToken,
+} from "@/lib/session";
 import type { MerchantMemberRole, UserSummary } from "@/lib/types";
-import { getMembershipRole, type RequestActor } from "@/lib/services/platform.service";
+import {
+  getMembershipRole,
+  type RequestActor,
+} from "@/lib/services/platform.service";
 import { isProduction } from "@/lib/utils";
 
 export interface RequestAuth {
@@ -59,7 +66,10 @@ export async function getRequestAuth(): Promise<RequestAuth | null> {
   }
 
   return {
-    actor: { userId: user._id.toString(), isPlatformAdmin: user.isPlatformAdmin },
+    actor: {
+      userId: user._id.toString(),
+      isPlatformAdmin: user.isPlatformAdmin,
+    },
     user: mapUser(user),
   };
 }

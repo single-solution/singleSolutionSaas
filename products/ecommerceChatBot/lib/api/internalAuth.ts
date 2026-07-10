@@ -7,6 +7,7 @@
 import { timingSafeEqual } from "node:crypto";
 
 import { loadEnvironment } from "@/lib/env";
+import { isPublicDemoToken, demoForbiddenMessage } from "@/lib/demo/safety";
 import { unauthorized } from "./responses";
 
 function secretMatches(header: string | null, secret: string): boolean {
@@ -22,6 +23,11 @@ function secretMatches(header: string | null, secret: string): boolean {
 }
 
 export function requireInternalAuth(request: Request): Response | null {
+  const demoToken = request.headers.get("x-product-token")?.trim();
+  if (demoToken && isPublicDemoToken(demoToken)) {
+    return unauthorized(demoForbiddenMessage(), "demo_forbidden");
+  }
+
   const { internalApiSecret } = loadEnvironment();
   if (!secretMatches(request.headers.get("authorization"), internalApiSecret)) {
     return unauthorized();

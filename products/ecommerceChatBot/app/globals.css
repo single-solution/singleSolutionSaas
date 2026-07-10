@@ -2,12 +2,131 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer components {
-  .admin-input {
-    @apply h-10 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-800 focus:border-slate-500 focus:outline-none;
+@layer base {
+  .admin-app {
+    --brand-50: #eef2ff;
+    --brand-100: #e0e7ff;
+    --brand-600: #4f46e5;
+    --brand-700: #4338ca;
+    --brand-800: #3730a3;
+    --brand-900: #312e81;
+    --surface: #ffffff;
+    --surface-muted: #f8fafc;
+    --surface-subtle: #f1f5f9;
+    --ink: #0f172a;
+    --ink-secondary: #334155;
+    --ink-muted: #64748b;
+    --ink-faint: #94a3b8;
+    --line: #e2e8f0;
+    --line-strong: #cbd5e1;
+    --success: #047857;
+    --success-soft: #f0fdf4;
+    --success-border: #bbf7d0;
+    --danger: #b91c1c;
+    --danger-soft: #fef2f2;
+    --danger-border: #fecaca;
+    --warning: #b45309;
+    --warning-soft: #fffbeb;
+    --warning-border: #fde68a;
+    --accent: #4338ca;
+    --accent-soft: #eef2ff;
+    --accent-border: #c7d2fe;
+    --shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+    --shadow-panel: 0 1px 3px 0 rgb(15 23 42 / 0.06);
+    --shadow-focus: 0 0 0 3px rgb(71 85 105 / 0.2);
+
+    @apply min-h-screen bg-[var(--surface-muted)] font-sans text-[13px] leading-normal text-[var(--ink)] antialiased;
   }
+
+  .admin-app :focus-visible {
+    @apply outline-none ring-2 ring-[var(--brand-600)] ring-offset-2 ring-offset-[var(--surface-muted)];
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-app *,
+    .admin-app *::before,
+    .admin-app *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .admin-page-stack {
+    @apply flex flex-col gap-5;
+  }
+
+  .admin-no-scrollbar {
+    scrollbar-width: none;
+  }
+  .admin-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-glass-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .admin-glass-shine::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .admin-input {
+    @apply h-10 w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors placeholder:text-[var(--ink-faint)] hover:border-[var(--line-strong)] focus-visible:border-[var(--brand-600)] focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-not-allowed disabled:bg-[var(--surface-subtle)] disabled:text-[var(--ink-faint)];
+  }
+
   .admin-textarea {
-    @apply w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:border-slate-500 focus:outline-none;
+    @apply w-full rounded-md border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[13px] text-[var(--ink)] shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-colors placeholder:text-[var(--ink-faint)] hover:border-[var(--line-strong)] focus-visible:border-[var(--brand-600)] focus-visible:shadow-[var(--shadow-focus)] disabled:cursor-not-allowed disabled:bg-[var(--surface-subtle)] disabled:text-[var(--ink-faint)];
+  }
+
+  .admin-table {
+    @apply w-full text-left text-[13px];
+  }
+
+  .admin-table thead {
+    @apply bg-[var(--surface-subtle)] text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-faint)];
+  }
+
+  .admin-table th {
+    @apply px-4 py-2;
+  }
+
+  .admin-table tbody {
+    @apply divide-y divide-[var(--line)];
+  }
+
+  .admin-table td {
+    @apply px-4 py-2.5 text-[var(--ink-secondary)];
+  }
+
+  @keyframes admin-fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .admin-animate-fade-in-up {
+    animation: admin-fade-in-up 0.4s ease-out forwards;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-animate-fade-in-up {
+      animation: none;
+    }
   }
 }
 
@@ -17,7 +136,12 @@
  * can override any token by redeclaring the CSS variable on that selector.
  */
 .ecommerce-chatbot-widget {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
 
   --color-surface: #ffffff;
   --color-canvas-deep: #f8fafc;
@@ -79,5 +203,11 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ecommerce-chatbot-widget .chat-msg-in {
+    animation: none;
   }
 }

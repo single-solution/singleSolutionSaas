@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { PlatformApiError, platformApi } from "@/lib/api/client";
 import type { UserSummary } from "@/lib/types";
@@ -23,7 +30,7 @@ export function AuthProvider({
   initialUser: UserSummary | null;
 }) {
   const [user, setUser] = useState<UserSummary | null>(initialUser);
-  const [loading, setLoading] = useState(false);
+  const loading = false;
 
   async function refresh() {
     try {

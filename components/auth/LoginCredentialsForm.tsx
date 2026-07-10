@@ -13,7 +13,7 @@ import { useFormState } from "@/lib/forms/useFormState";
 import { validateEmail, validatePassword } from "@/lib/forms/validation";
 import { PlatformApiError } from "@/lib/api/client";
 
-export function LoginCredentialsForm() {
+export function LoginCredentialsForm({ demoUrl }: { demoUrl?: string | null }) {
   const router = useRouter();
   const { login } = useAuth();
   const toast = useToast();
@@ -31,7 +31,10 @@ export function LoginCredentialsForm() {
       errors.email = emailError;
     }
     if (passwordError) {
-      errors.password = passwordError === "Enter your password." ? passwordError : "Invalid email or password.";
+      errors.password =
+        passwordError === "Enter your password."
+          ? passwordError
+          : "Invalid email or password.";
     }
     return errors;
   }
@@ -52,8 +55,14 @@ export function LoginCredentialsForm() {
       router.replace("/");
       router.refresh();
     } catch (caughtError) {
-      if (caughtError instanceof PlatformApiError && caughtError.status === 429) {
-        setErrors({ password: "Too many sign-in attempts. Wait a few minutes and try again." });
+      if (
+        caughtError instanceof PlatformApiError &&
+        caughtError.status === 429
+      ) {
+        setErrors({
+          password:
+            "Too many sign-in attempts. Wait a few minutes and try again.",
+        });
         return;
       }
       setErrors({ password: "Invalid email or password." });
@@ -64,14 +73,24 @@ export function LoginCredentialsForm() {
 
   return (
     <section className="flex min-h-[60vh] items-center bg-surface px-6 py-10 sm:px-10 md:min-h-screen md:px-16">
-      <div className="w-full max-w-sm animate-fade-in-up" style={{ animationDelay: "0.1s" }}>
+      <div
+        className="w-full max-w-sm animate-fade-in-up"
+        style={{ animationDelay: "0.1s" }}
+      >
         <div className="mb-8">
           <h2 className="text-xl font-semibold text-ink">Sign in</h2>
-          <p className="mt-1 text-sm text-ink-muted">Use the account your administrator created for you.</p>
+          <p className="mt-1 text-sm text-ink-muted">
+            Use the account your administrator created for you.
+          </p>
         </div>
 
         <form className="space-y-5" onSubmit={handleSubmit} noValidate>
-          <Field label="Email" htmlFor="email" required error={submitted ? fieldErrors.email : undefined}>
+          <Field
+            label="Email"
+            htmlFor="email"
+            required
+            error={submitted ? fieldErrors.email : undefined}
+          >
             <Input
               name="email"
               type="email"
@@ -88,7 +107,12 @@ export function LoginCredentialsForm() {
             />
           </Field>
 
-          <Field label="Password" htmlFor="password" required error={submitted ? fieldErrors.password : undefined}>
+          <Field
+            label="Password"
+            htmlFor="password"
+            required
+            error={submitted ? fieldErrors.password : undefined}
+          >
             <PasswordInput
               name="password"
               autoComplete="current-password"
@@ -98,17 +122,37 @@ export function LoginCredentialsForm() {
                 setPassword(nextPassword);
                 if (submitted && fieldErrors.password) {
                   syncFieldOnChange("password", nextPassword, (value) =>
-                    validatePassword(value) ? "Invalid email or password." : undefined,
+                    validatePassword(value)
+                      ? "Invalid email or password."
+                      : undefined,
                   );
                 }
               }}
             />
           </Field>
 
-          <Button type="submit" className="w-full" size="lg" loading={submitting}>
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            loading={submitting}
+          >
             Sign in
           </Button>
         </form>
+
+        {demoUrl ? (
+          <p className="mt-6 text-center text-sm text-ink-muted">
+            Just exploring?{" "}
+            <a
+              href={demoUrl}
+              className="font-semibold text-brand-700 underline-offset-2 hover:underline"
+            >
+              Try live demo
+            </a>{" "}
+            without signing in.
+          </p>
+        ) : null}
       </div>
     </section>
   );

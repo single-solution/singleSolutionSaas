@@ -8,13 +8,18 @@
  * return it.
  */
 
-import { verifyProductToken, type ProductEntitlement } from "@/lib/platform/client";
+import {
+  verifyProductToken,
+  type ProductEntitlement,
+} from "@/lib/platform/client";
+import { demoIpRateLimitMax, isPublicDemoToken } from "@/lib/demo/safety";
 import { forbidden, tooManyRequests, unauthorized } from "./responses";
 import { checkRateLimit, getClientIp } from "./rateLimit";
 import { isHostAllowed, resolveRequestHost } from "./origin";
 
 const VISITOR_ID_MAX = 64;
 const IP_MAX_PER_MINUTE = 120;
+const DEMO_IP_MAX_PER_MINUTE = demoIpRateLimitMax();
 
 export interface ChatCaller {
   token: string;
@@ -30,13 +35,27 @@ function readVisitorId(request: Request): string | null {
   return raw;
 }
 
-export async function resolveChatCaller(request: Request): Promise<ChatCaller | Response> {
-  const ipLimit = checkRateLimit(`chat:ip:${getClientIp(request)}`, IP_MAX_PER_MINUTE, 60_000);
+export async function resolveChatCaller(
+  request: Request,
+): Promise<ChatCaller | Response> {
+  const tokenHeader = request.headers.get("x-product-token")?.trim();
+  const ipLimitMax =
+    tokenHeader && isPublicDemoToken(tokenHeader)
+      ? DEMO_IP_MAX_PER_MINUTE
+      : IP_MAX_PER_MINUTE;
+  const ipLimit = checkRateLimit(
+    `chat:ip:${getClientIp(request)}`,
+    ipLimitMax,
+    60_000,
+  );
   if (!ipLimit.allowed) {
-    return tooManyRequests(ipLimit.retryAfterSeconds);
+    return tooManyRequests(
+      ipLimit.retryAfterSeconds,
+      "Demo rate limit reached. Please wait and try again.",
+    );
   }
 
-  const token = request.headers.get("x-product-token")?.trim();
+  const token = tokenHeader;
   if (!token) {
     return unauthorized("Missing product token.");
   }
@@ -46,7 +65,7 @@ export async function resolveChatCaller(request: Request): Promise<ChatCaller | 
   }
   const entitlement = await verifyProductToken(token);
   if (!entitlement) {
-    return unauthorized("Invalid or inactive product token.");
+    return unauthorized("Invalid or inactive product token.", "demo_expired");
   }
 
   // Requests from the product's own pages (the hosted /embed iframe and demo)
@@ -56,7 +75,10 @@ export async function resolveChatCaller(request: Request): Promise<ChatCaller | 
   const selfHost = new URL(request.url).hostname.toLowerCase();
   const isSameOrigin = host === selfHost;
   if (!isSameOrigin && !isHostAllowed(host, entitlement.allowedDomains)) {
-    return forbidden("This domain is not allowed to use this chat.", "origin_not_allowed");
+    return forbidden(
+      "This domain is not allowed to use this chat.",
+      "origin_not_allowed",
+    );
   }
 
   return { token, visitorId, entitlement };
