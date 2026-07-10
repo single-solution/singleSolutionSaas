@@ -71,6 +71,15 @@ const config: Config = {
       maxWidth: {
         prose: "65ch",
       },
+      zIndex: {
+        dropdown: "20",
+        sticky: "30",
+        overlay: "40",
+        modal: "50",
+        popover: "60",
+        toast: "70",
+        tooltip: "80",
+      },
       keyframes: {
         "fade-in-up": {
           "0%": { opacity: "0", transform: "translateY(10px)" },

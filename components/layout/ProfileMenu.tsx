@@ -82,7 +82,7 @@ export function ProfileMenu({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-2 w-60 origin-top-right animate-fade-in rounded-xl border border-line bg-surface p-1.5 shadow-panel"
+          className="absolute right-0 z-dropdown mt-2 w-60 origin-top-right animate-fade-in motion-reduce:animate-none rounded-xl border border-line bg-surface p-1.5 shadow-panel"
         >
           <div className="border-b border-line px-3 py-2.5">
             <p className="truncate text-[13px] font-medium text-ink">{user.name}</p>

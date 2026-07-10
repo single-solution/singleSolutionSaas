@@ -56,7 +56,7 @@ export function PortalShell({
       </a>
 
       <div className="mx-auto flex w-full min-h-0 max-w-[1720px] flex-1 flex-col gap-3 sm:gap-4">
-        <header className="z-30 flex h-14 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3 shadow-sm sm:gap-4 sm:px-4">
+        <header className="z-sticky flex h-14 shrink-0 items-center gap-2 rounded-xl border border-line bg-surface px-3 shadow-sm sm:gap-4 sm:px-4">
           <Link href="/" className="flex shrink-0 items-center gap-2.5">
             <div className="glass-shine flex h-7 w-7 items-center justify-center rounded-lg bg-ink text-white shadow-sm">
               <Building2 className="h-3.5 w-3.5" aria-hidden="true" />
