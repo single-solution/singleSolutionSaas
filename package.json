@@ -1,48 +1,28 @@
 {
-  "name": "single-solution-portal",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint . --max-warnings=0",
-    "typecheck": "tsc --noEmit",
-    "migrate:merchants": "node --env-file=.env scripts/migrate-to-merchants-sites.mjs",
-    "migrate:config-secrets": "node --env-file=.env scripts/migrate-config-secrets.mjs",
-    "migrate:conversation-messages": "node --env-file=.env scripts/migrate-conversation-messages.mjs",
-    "reconcile:subscriptions": "node --env-file=.env scripts/reconcile-subscriptions.mjs",
-    "seed:chatbot-config": "node --env-file=.env scripts/seed-chatbot-config-schema.mjs",
-    "validate:openapi": "npx --yes @redocly/cli@1 lint contracts/openapi.yaml"
-  },
-  "dependencies": {
-    "@upstash/redis": "^1.38.0",
-    "autoprefixer": "^10.5.2",
-    "bcryptjs": "^3.0.2",
-    "clsx": "^2.1.1",
-    "jose": "^6.0.11",
-    "lucide-react": "^1.23.0",
-    "mongoose": "^8.16.1",
-    "next": "^15.3.4",
-    "nodemailer": "^9.0.3",
-    "postcss": "^8.5.16",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "tailwind-merge": "^3.6.0",
-    "tailwindcss": "^3.4.19",
-    "zod": "^3.25.67"
-  },
-  "devDependencies": {
-    "@eslint/eslintrc": "^3.3.5",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/node": "^22.15.32",
-    "@types/nodemailer": "^8.0.1",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "^15.5.20",
-    "typescript": "^5.8.3"
-  },
-  "engines": {
-    "node": ">=20"
-  }
+	"name": "single-solution-saas",
+	"private": true,
+	"scripts": {
+		"dev": "pnpm --parallel -r dev",
+		"build": "pnpm -r build",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"fix": "eslint . --fix && prettier --write .",
+		"check": "pnpm lint && pnpm format:check && pnpm test && pnpm -r build"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@tailwindcss/vite": "^4.3.3",
+		"eslint": "^9.39.5",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-react": "^7.37.5",
+		"eslint-plugin-react-hooks": "^4.6.2",
+		"globals": "^17.11.0",
+		"prettier": "^3.0.3",
+		"tailwindcss": "^4.3.3",
+		"vitest": "^2.1.9"
+	}
 }

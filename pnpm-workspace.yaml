@@ -1,0 +1,6 @@
+packages:
+   - 'portal'
+   - 'apps/*'
+allowBuilds:
+   esbuild: true
+   msgpackr-extract: true
