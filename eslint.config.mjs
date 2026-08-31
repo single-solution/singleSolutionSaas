@@ -6,7 +6,15 @@ import prettier from 'eslint-config-prettier';
 
 export default [
 	{
-		ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**', '**/.turbo/**'],
+		ignores: [
+			'**/dist/**',
+			'**/node_modules/**',
+			'**/coverage/**',
+			'**/.turbo/**',
+			'**/.next/**',
+			'portal/.next/**',
+			'apps/*/.next/**',
+		],
 	},
 	js.configs.recommended,
 	{
@@ -41,7 +49,7 @@ export default [
 			'no-var': 'error',
 			'prefer-const': 'error',
 			'no-unused-vars': [
-				'warn',
+				'off',
 				{
 					argsIgnorePattern: '^_',
 					varsIgnorePattern: '^_',

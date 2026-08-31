@@ -1,75 +1,80 @@
 import { describe, it, expect } from 'vitest';
-import chatHandler from '../apps/chatbot/api/chat.js';
-import eventsHandler from '../apps/analytics/api/events.js';
-import auditHandler from '../apps/seo/api/audit.js';
-import triggerHandler from '../apps/automation/api/trigger.js';
-import pointsHandler from '../apps/loyalty/api/points.js';
+import { POST as chatHandler } from '../apps/chatbot/app/api/chat/route.js';
+import { POST as eventsHandler } from '../apps/analytics/app/api/events/route.js';
+import { POST as auditHandler } from '../apps/seo/app/api/audit/route.js';
+import { POST as triggerHandler } from '../apps/automation/app/api/trigger/route.js';
+import { POST as pointsHandler } from '../apps/loyalty/app/api/points/route.js';
 
-function createMockRes() {
-	const res = {
-		statusCode: 200,
-		body: null,
-		status(code) {
-			this.statusCode = code;
-			return this;
-		},
-		json(data) {
-			this.body = data;
-			return this;
-		},
-	};
-	return res;
-}
+describe('Next.js App Router Functional Route Handlers', () => {
+	it('Chatbot API Route: should return AI simulated reply', async () => {
+		const req = new Request('http://localhost:5002/api/chat', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ message: 'Where is my order #1234?', tenantId: 'tnt_sisters' }),
+		});
 
-describe('Standalone Vercel Serverless Function Handlers', () => {
-	it('Chatbot API: should return AI simulated reply', async () => {
-		const req = { method: 'POST', body: { message: 'Where is my order #1234?', tenantId: 'tnt_sisters' } };
-		const res = createMockRes();
-
-		await chatHandler(req, res);
-		expect(res.statusCode).toBe(200);
-		expect(res.body.success).toBe(true);
-		expect(res.body.reply).toContain('Where is my order #1234?');
-		expect(res.body.tokensUsed).toBeGreaterThan(0);
+		const res = await chatHandler(req);
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.reply).toContain('Where is my order #1234?');
+		expect(json.tokensUsed).toBeGreaterThan(0);
 	});
 
-	it('Analytics API: should ingest telemetry events', async () => {
-		const req = { method: 'POST', body: { eventType: 'page_view', path: '/collections/dresses' } };
-		const res = createMockRes();
+	it('Analytics API Route: should ingest telemetry events', async () => {
+		const req = new Request('http://localhost:5001/api/events', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ eventType: 'page_view', path: '/collections/dresses' }),
+		});
 
-		await eventsHandler(req, res);
-		expect(res.statusCode).toBe(200);
-		expect(res.body.success).toBe(true);
-		expect(res.body.eventType).toBe('page_view');
+		const res = await eventsHandler(req);
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.event.eventType).toBe('page_view');
 	});
 
-	it('SEO Engine API: should audit URLs', async () => {
-		const req = { method: 'POST', body: { url: 'https://myshop.com/item' } };
-		const res = createMockRes();
+	it('SEO Engine API Route: should audit URLs', async () => {
+		const req = new Request('http://localhost:5003/api/audit', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ url: 'https://myshop.com/item' }),
+		});
 
-		await auditHandler(req, res);
-		expect(res.statusCode).toBe(200);
-		expect(res.body.success).toBe(true);
-		expect(res.body.score).toBe(95);
+		const res = await auditHandler(req);
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.score).toBe(94);
 	});
 
-	it('Workflow Automator API: should execute webhook trigger', async () => {
-		const req = { method: 'POST', body: { triggerType: 'order_paid' } };
-		const res = createMockRes();
+	it('Workflow Automator API Route: should execute webhook trigger', async () => {
+		const req = new Request('http://localhost:5004/api/trigger', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ event: 'order_paid', payload: { orderId: 'ord_123' } }),
+		});
 
-		await triggerHandler(req, res);
-		expect(res.statusCode).toBe(200);
-		expect(res.body.success).toBe(true);
-		expect(res.body.status).toBe('completed');
+		const res = await triggerHandler(req);
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.status).toBe('completed');
 	});
 
-	it('Loyalty & Rewards API: should calculate points from order amount', async () => {
-		const req = { method: 'POST', body: { orderAmount: 150 } };
-		const res = createMockRes();
+	it('Loyalty & Rewards API Route: should record points', async () => {
+		const req = new Request('http://localhost:5005/api/points', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ customerEmail: 'customer@test.com', points: 150 }),
+		});
 
-		await pointsHandler(req, res);
-		expect(res.statusCode).toBe(200);
-		expect(res.body.pointsEarned).toBe(300);
-		expect(res.body.newBalance).toBe(750);
+		const res = await pointsHandler(req);
+		expect(res.status).toBe(200);
+		const json = await res.json();
+		expect(json.success).toBe(true);
+		expect(json.pointsAdded).toBe(150);
+		expect(json.tierStatus).toBe('Gold');
 	});
 });

@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAppSecurity } from '@saas/ui/auth/AppAuthGuard';
 import { aggregateAnalyticsFromEvents, EMPTY_ANALYTICS_STATE } from '../data/analyticsStore';
 
 const StorefrontContext = createContext(null);
+const API_BASE = '/api';
 
 export function useStorefront() {
 	return useContext(StorefrontContext);
@@ -12,24 +13,22 @@ export function StorefrontProvider({ children }) {
 	const { session } = useAppSecurity() || {};
 	const isAdmin = session?.role === 'admin';
 
-	// Load list of merchant stores ONLY from real registered portal tenants
+	// Load list of merchant stores from SSO session or portal
 	const [stores, setStores] = useState(() => {
 		try {
-			// 1. If merchant session is logged in, use solely the merchant's real account
-			if (session && session.role === 'merchant') {
+			if (session && session.role === 'merchant' && session.tenantId) {
 				return [
 					{
 						id: session.tenantId,
-						name: session.tenantName,
-						domain: session.domain || 'unassigned-domain.com',
+						name: session.tenantName || 'Merchant Storefront',
+						domain: session.domain || 'yourstore.com',
 						apiKey: session.apiKey || `pk_live_${session.tenantId}`,
 						subscriptions: session.enabledFeatures || ['*'],
 					},
 				];
 			}
 
-			// 2. If admin, read registered merchants from portal storage
-			const savedTenants = localStorage.getItem('saas_tenants');
+			const savedTenants = typeof window !== 'undefined' ? localStorage.getItem('saas_tenants') : null;
 			if (savedTenants) {
 				const tenants = JSON.parse(savedTenants);
 				if (Array.isArray(tenants) && tenants.length > 0) {
@@ -42,8 +41,6 @@ export function StorefrontProvider({ children }) {
 					}));
 				}
 			}
-
-			// 3. Clean empty state: NO fake fallback merchants
 			return [];
 		} catch {
 			return [];
@@ -51,10 +48,44 @@ export function StorefrontProvider({ children }) {
 	});
 
 	const [selectedStoreId, setSelectedStoreId] = useState(() => {
-		return stores[0]?.id || '';
+		return session?.tenantId || stores[0]?.id || '';
 	});
 
-	// Keep selectedStoreId in sync when stores change
+	useEffect(() => {
+		if (session && session.role === 'merchant' && session.tenantId) {
+			const merchantStore = {
+				id: session.tenantId,
+				name: session.tenantName || 'Merchant Storefront',
+				domain: session.domain || 'yourstore.com',
+				apiKey: session.apiKey || `pk_live_${session.tenantId}`,
+				subscriptions: session.enabledFeatures || ['*'],
+			};
+			setStores([merchantStore]);
+			setSelectedStoreId(session.tenantId);
+		} else if (isAdmin) {
+			// Fetch all tenants for admin context switching
+			const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || 'http://localhost:3000';
+			fetch(`${portalUrl}/api/tenants`)
+				.then(res => res.json())
+				.then(data => {
+					if (Array.isArray(data) && data.length > 0) {
+						const adminStores = data.map(t => ({
+							id: t.id,
+							name: t.name,
+							domain: t.domain,
+							apiKey: t.apiKey || `pk_live_${t.id}`,
+							subscriptions: (t.subscriptions && t.subscriptions.analytics) || ['*'],
+						}));
+						setStores(adminStores);
+						if (!selectedStoreId || !adminStores.find(s => s.id === selectedStoreId)) {
+							setSelectedStoreId(adminStores[0].id);
+						}
+					}
+				})
+				.catch(err => console.warn('Failed to fetch tenants for admin:', err));
+		}
+	}, [session, isAdmin, selectedStoreId]);
+
 	useEffect(() => {
 		if (stores.length > 0 && !stores.some((s) => s.id === selectedStoreId)) {
 			setSelectedStoreId(stores[0].id);
@@ -70,9 +101,30 @@ export function StorefrontProvider({ children }) {
 	const [ga4Config, setGa4Config] = useState({ measurementId: '', apiSecret: '', isEnabled: false });
 	const [webhookConfig, setWebhookConfig] = useState({ endpointUrl: '', signingSecret: '', isEnabled: false });
 	const [storeEvents, setStoreEvents] = useState([]);
+	const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
-	// Re-load per-store settings when activeStore changes
-	useEffect(() => {
+	// Feature Licensing State per Store
+	const [featuresCatalog, setFeaturesCatalog] = useState([]);
+	const [enabledFeatures, setEnabledFeatures] = useState(() => {
+		if (session?.enabledFeatures && !session.enabledFeatures.includes('*')) {
+			return session.enabledFeatures;
+		}
+		return [
+			'core_traffic',
+			'funnel_dropoff',
+			'speed_insights',
+			'search_analytics',
+			'meta_capi',
+			'ga4_sync',
+			'custom_webhooks',
+			'product_merch',
+			'broken_links',
+		];
+	});
+	const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
+
+	// Fetch store features, events & integrations from standalone analytics backend
+	const refreshStoreData = useCallback(async () => {
 		if (!activeStore) {
 			setMetaCapiConfig({ pixelId: '', accessToken: '', testEventCode: '', isEnabled: false });
 			setGa4Config({ measurementId: '', apiSecret: '', isEnabled: false });
@@ -81,57 +133,115 @@ export function StorefrontProvider({ children }) {
 			return;
 		}
 
+		setIsLoadingEvents(true);
 		try {
-			const savedMeta = localStorage.getItem(`saas_meta_capi_${activeStore.id}`);
-			setMetaCapiConfig(
-				savedMeta ? JSON.parse(savedMeta) : { pixelId: '', accessToken: '', testEventCode: '', isEnabled: false },
-			);
+			// Fetch features
+			const resFeat = await fetch(`${API_BASE}/features?siteId=${encodeURIComponent(activeStore.id)}`);
+			if (resFeat.ok) {
+				const featData = await resFeat.json();
+				if (featData.features) setFeaturesCatalog(featData.features);
+				if (Array.isArray(featData.enabledFeatures)) {
+					setEnabledFeatures(featData.enabledFeatures);
+					setTotalMonthlyCost(featData.totalMonthlyCost || 0);
+				}
+			}
 
-			const savedGa4 = localStorage.getItem(`saas_ga4_${activeStore.id}`);
-			setGa4Config(savedGa4 ? JSON.parse(savedGa4) : { measurementId: '', apiSecret: '', isEnabled: false });
+			// Fetch events
+			const resEvents = await fetch(`${API_BASE}/events?siteId=${encodeURIComponent(activeStore.id)}`);
+			if (resEvents.ok) {
+				const events = await resEvents.json();
+				if (Array.isArray(events)) {
+					setStoreEvents(events);
+				}
+			}
 
-			const savedWh = localStorage.getItem(`saas_webhook_${activeStore.id}`);
-			setWebhookConfig(
-				savedWh
-					? JSON.parse(savedWh)
-					: { endpointUrl: '', signingSecret: `whsec_${activeStore.id.slice(-6)}`, isEnabled: false },
-			);
+			// Fetch integrations
+			const resInteg = await fetch(`${API_BASE}/integrations?siteId=${encodeURIComponent(activeStore.id)}`);
+			if (resInteg.ok) {
+				const integ = await resInteg.json();
+				if (integ.metaCapi) setMetaCapiConfig(integ.metaCapi);
+				if (integ.ga4) setGa4Config(integ.ga4);
+				if (integ.webhooks) setWebhookConfig(integ.webhooks);
+			}
+		} catch (err) {
+			console.warn('Analytics data load note:', err.message);
+		} finally {
+			setIsLoadingEvents(false);
+		}
+	}, [activeStore]);
 
-			const savedEvents = localStorage.getItem(`saas_events_${activeStore.id}`);
-			setStoreEvents(savedEvents ? JSON.parse(savedEvents) : []);
-		} catch {}
-	}, [activeStore?.id]);
+	useEffect(() => {
+		refreshStoreData();
+	}, [refreshStoreData]);
 
-	const saveMetaCapi = (newConfig) => {
+	const toggleFeature = async (featureId, action) => {
+		if (!activeStore) return;
+
+		// Optimistic update
+		setEnabledFeatures((prev) => {
+			if (action === 'enable') return prev.includes(featureId) ? prev : [...prev, featureId];
+			if (action === 'disable') return prev.filter((f) => f !== featureId);
+			return prev.includes(featureId) ? prev.filter((f) => f !== featureId) : [...prev, featureId];
+		});
+
+		try {
+			const res = await fetch(`${API_BASE}/features`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ siteId: activeStore.id, featureId, action }),
+			});
+			if (res.ok) {
+				const data = await res.json();
+				if (Array.isArray(data.enabledFeatures)) {
+					setEnabledFeatures(data.enabledFeatures);
+					setTotalMonthlyCost(data.totalMonthlyCost || 0);
+				}
+			}
+		} catch (err) {
+			console.error('Feature toggle error:', err);
+		}
+	};
+
+	const saveMetaCapi = async (newConfig) => {
 		if (!activeStore) return;
 		setMetaCapiConfig(newConfig);
 		try {
-			localStorage.setItem(`saas_meta_capi_${activeStore.id}`, JSON.stringify(newConfig));
+			await fetch(`${API_BASE}/integrations`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ siteId: activeStore.id, metaCapi: newConfig, ga4: ga4Config, webhooks: webhookConfig }),
+			});
 		} catch {}
 	};
 
-	const saveGa4 = (newConfig) => {
+	const saveGa4 = async (newConfig) => {
 		if (!activeStore) return;
 		setGa4Config(newConfig);
 		try {
-			localStorage.setItem(`saas_ga4_${activeStore.id}`, JSON.stringify(newConfig));
+			await fetch(`${API_BASE}/integrations`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ siteId: activeStore.id, metaCapi: metaCapiConfig, ga4: newConfig, webhooks: webhookConfig }),
+			});
 		} catch {}
 	};
 
-	const saveWebhook = (newConfig) => {
+	const saveWebhook = async (newConfig) => {
 		if (!activeStore) return;
 		setWebhookConfig(newConfig);
 		try {
-			localStorage.setItem(`saas_webhook_${activeStore.id}`, JSON.stringify(newConfig));
+			await fetch(`${API_BASE}/integrations`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ siteId: activeStore.id, metaCapi: metaCapiConfig, ga4: ga4Config, webhooks: newConfig }),
+			});
 		} catch {}
 	};
 
-	const recordStoreEvent = (eventData) => {
+	const recordStoreEvent = async (eventData) => {
 		if (!activeStore) return null;
-		const newEvent = {
-			id: `ev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-			timestamp: 'Just now',
-			storeId: activeStore.id,
+		const payload = {
+			siteId: activeStore.id,
 			eventType: eventData.eventType || 'page_view',
 			eventName: eventData.eventName,
 			path: eventData.path || '/',
@@ -150,31 +260,41 @@ export function StorefrontProvider({ children }) {
 			eventData: eventData.eventData,
 		};
 
-		const updated = [newEvent, ...storeEvents.slice(0, 99)];
+		const tempEvent = {
+			id: `ev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+			timestamp: new Date().toISOString(),
+			...payload,
+		};
+
+		const updated = [tempEvent, ...storeEvents.slice(0, 99)];
 		setStoreEvents(updated);
+
 		try {
-			localStorage.setItem(`saas_events_${activeStore.id}`, JSON.stringify(updated));
+			await fetch(`${API_BASE}/events`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
 		} catch {}
-		return newEvent;
+
+		return tempEvent;
 	};
 
-	const resetStoreEvents = () => {
+	const resetStoreEvents = async () => {
 		if (!activeStore) return;
 		setStoreEvents([]);
 		try {
-			localStorage.removeItem(`saas_events_${activeStore.id}`);
+			await fetch(`${API_BASE}/events?siteId=${encodeURIComponent(activeStore.id)}`, { method: 'DELETE' });
 		} catch {}
 	};
 
-	// Aggregated metrics for current active store
 	const analyticsData = storeEvents.length > 0 ? aggregateAnalyticsFromEvents(storeEvents) : EMPTY_ANALYTICS_STATE;
 
-	// Check if active feature is enabled for this store
 	const hasStoreFeature = (featureId) => {
 		if (!activeStore) return false;
 		if (isAdmin) return true;
-		if (activeStore.subscriptions?.includes('*')) return true;
-		return Boolean(activeStore.subscriptions?.includes(featureId));
+		if (enabledFeatures.includes('*')) return true;
+		return Boolean(enabledFeatures.includes(featureId));
 	};
 
 	return (
@@ -187,6 +307,11 @@ export function StorefrontProvider({ children }) {
 				setSelectedStoreId,
 				analyticsData,
 				storeEvents,
+				isLoadingEvents,
+				featuresCatalog,
+				enabledFeatures,
+				totalMonthlyCost,
+				toggleFeature,
 				recordStoreEvent,
 				resetStoreEvents,
 				hasStoreFeature,

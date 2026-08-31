@@ -1,5 +1,8 @@
+'use client';
+
 import React from 'react';
-import { NavLink, Link } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { IconZap } from '../icons/IconZap';
 import { IconArrowRight } from '../icons/IconArrowRight';
 
@@ -11,6 +14,8 @@ export function Sidebar({
 	navSections = [],
 	footerLink = { to: 'http://localhost:3000', label: 'Master Portal' },
 }) {
+	const pathname = usePathname() || '/';
+
 	const sections =
 		navSections.length > 0
 			? navSections
@@ -50,21 +55,21 @@ export function Sidebar({
 							)}
 							{sec.items?.map((item, ii) => {
 								const target = item.to || item.href || item.path || '/';
+								const isActive =
+									target === '/' ? pathname === '/' : pathname === target || pathname.startsWith(target + '/');
+
 								return (
-									<NavLink
+									<Link
 										key={target || ii}
-										to={target}
-										end={target === '/' || target === '/merchant'}
-										className={({ isActive }) =>
-											`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 ${
-												isActive
-													? 'bg-indigo-50 text-indigo-700 font-semibold shadow-2xs'
-													: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
-											}`
-										}>
+										href={target}
+										className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-150 ${
+											isActive
+												? 'bg-indigo-50 text-indigo-700 font-semibold shadow-2xs'
+												: 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/80'
+										}`}>
 										{renderIcon(item.icon)}
 										<span>{item.label || item.name}</span>
-									</NavLink>
+									</Link>
 								);
 							})}
 						</div>
@@ -84,7 +89,7 @@ export function Sidebar({
 						</a>
 					) : (
 						<Link
-							to={footerLink.to}
+							href={footerLink.to}
 							className="flex items-center justify-between text-xs font-semibold text-slate-800 hover:text-indigo-600 transition-colors">
 							<span>{footerLink.label}</span>
 							<IconArrowRight size={13} />

@@ -1,8 +1,13 @@
 node_modules
+**/node_modules
 dist
+**/dist
 .turbo
+**/.turbo
 .next
+**/.next
 coverage
+**/coverage
 pnpm-lock.yaml
 .env
 .env.*

@@ -1,21 +1,19 @@
 {
-	"name": "@saas/chatbot",
+	"name": "chatbot-app",
 	"private": true,
-	"version": "0.0.0",
-	"type": "module",
+	"version": "1.0.0",
 	"scripts": {
-		"dev": "vite",
-		"build": "vite build",
-		"preview": "vite preview"
+		"dev": "next dev -p 5002",
+		"build": "next build",
+		"start": "next start -p 5002"
 	},
 	"dependencies": {
-		"lucide-react": "^0.344.0",
-		"react": "^18.2.0",
-		"react-dom": "^18.2.0",
-		"react-router-dom": "^6.22.3"
-	},
-	"devDependencies": {
-		"@vitejs/plugin-react": "^4.2.1",
-		"vite": "^5.1.4"
+		"@saas/ui": "workspace:*",
+		"dotenv": "^16.4.5",
+		"lucide-react": "^0.436.0",
+		"mongodb": "^6.9.0",
+		"next": "14.2.25",
+		"react": "^18.3.1",
+		"react-dom": "^18.3.1"
 	}
 }

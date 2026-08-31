@@ -1,22 +1,19 @@
 {
-	"name": "automation",
+	"name": "automation-app",
 	"private": true,
-	"version": "0.0.0",
-	"type": "module",
+	"version": "1.0.0",
 	"scripts": {
-		"dev": "vite",
-		"build": "vite build",
-		"lint": "eslint .",
-		"preview": "vite preview"
+		"dev": "next dev -p 5004",
+		"build": "next build",
+		"start": "next start -p 5004"
 	},
 	"dependencies": {
+		"@saas/ui": "workspace:*",
+		"dotenv": "^16.4.5",
+		"lucide-react": "^0.436.0",
+		"mongodb": "^6.9.0",
+		"next": "14.2.25",
 		"react": "^18.3.1",
-		"react-dom": "^18.3.1",
-		"react-router-dom": "^6.23.1",
-		"lucide-react": "^0.378.0"
-	},
-	"devDependencies": {
-		"@vitejs/plugin-react": "^4.2.1",
-		"vite": "^5.2.0"
+		"react-dom": "^18.3.1"
 	}
 }

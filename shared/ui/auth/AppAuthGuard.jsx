@@ -1,3 +1,5 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { verifySSOToken } from './ssoHandshake';
 
@@ -86,7 +88,21 @@ export function FeatureLockScreen({
 	creditCost = 30,
 	desc = 'This feature is currently disabled for your merchant account.',
 	portalUrl = 'http://localhost:3000/merchant/licenses',
+	onActivate,
 }) {
+	const [isActivating, setIsActivating] = useState(false);
+
+	const handleActivate = async () => {
+		if (onActivate) {
+			setIsActivating(true);
+			try {
+				await onActivate();
+			} finally {
+				setIsActivating(false);
+			}
+		}
+	};
+
 	return (
 		<div className="p-8 rounded-3xl bg-white border border-slate-200 shadow-xs max-w-lg mx-auto text-center space-y-5 my-8">
 			<div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-2xs">
@@ -101,90 +117,130 @@ export function FeatureLockScreen({
 			</div>
 			<div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-xs flex justify-between items-center text-left">
 				<div>
-					<div className="font-semibold text-slate-900">Feature Activation Cost</div>
-					<div className="text-[11px] text-slate-500">Deducted from store wallet monthly</div>
+					<div className="font-semibold text-slate-900">Pay-Per-Hour Rate (AWS Model)</div>
+					<div className="text-[11px] text-slate-500">Metered per hour active · Cancel anytime</div>
 				</div>
-				<span className="font-bold text-sm text-indigo-600">${creditCost} credits / mo</span>
+				<div className="text-right">
+					<span className="font-bold text-sm text-indigo-600">${(Number(creditCost) / 720).toFixed(4)}/hr</span>
+					<span className="text-[10px] text-slate-400 block font-mono">~${creditCost}/mo full float</span>
+				</div>
 			</div>
-			<a
-				href={portalUrl}
-				target="_blank"
-				rel="noopener noreferrer"
-				className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all duration-150 shadow-xs hover:shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98">
-				<span>Enable in Merchant Hub</span>
-				<ExternalLinkIcon size={13} />
-			</a>
+			<div className="space-y-2">
+				{onActivate && (
+					<button
+						type="button"
+						onClick={handleActivate}
+						disabled={isActivating}
+						className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs transition-all shadow-xs hover:shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50">
+						<span>{isActivating ? 'Activating Module...' : `Activate ($${(Number(creditCost) / 720).toFixed(4)}/hr)`}</span>
+					</button>
+				)}
+				<a
+					href={portalUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="w-full py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer">
+					<span>Manage in Master Portal</span>
+					<ExternalLinkIcon size={13} />
+				</a>
+			</div>
 		</div>
 	);
 }
 
-export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl = 'http://localhost:3000', children }) {
+export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: propPortalUrl, children }) {
 	const sessionKey = `saas_app_session_${productId || 'default'}`;
+	const [mounted, setMounted] = useState(false);
 
-	const [session, setSession] = useState(() => {
+	const [dynamicPortalUrl, setDynamicPortalUrl] = useState(() => {
+		if (typeof window !== 'undefined') {
+			try {
+				const params = new URLSearchParams(window.location.search);
+				const fromUrl = params.get('portal_url');
+				if (fromUrl) return fromUrl;
+				if (document.referrer) return new URL(document.referrer).origin;
+			} catch {}
+		}
+		return propPortalUrl || (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PORTAL_URL) || '#';
+	});
+
+	const [session, setSession] = useState(null);
+	const [error, setError] = useState('');
+
+	useEffect(() => {
+		setMounted(true);
 		try {
 			// 1. Check direct sessionStorage
 			const saved = sessionStorage.getItem(sessionKey);
-			if (saved) return JSON.parse(saved);
+			if (saved) {
+				const parsed = JSON.parse(saved);
+				if (parsed.portalUrl) setDynamicPortalUrl(parsed.portalUrl);
+				setSession(parsed);
+				return;
+			}
 
 			// 2. Auto-detect shared portal login session
 			const currentPortalUser = localStorage.getItem('saas_current_user');
 			if (currentPortalUser) {
 				const user = JSON.parse(currentPortalUser);
-				// Determine merchant active features for this product
 				let enabledFeatures = ['*'];
 				if (user.role === 'merchant' && user.subscriptions && user.subscriptions[productId]) {
 					enabledFeatures = user.subscriptions[productId];
 				}
 
-				return {
+				setSession({
 					tenantId: user.id || 'usr_authed',
 					tenantName: user.name || user.orgName || 'Authenticated User',
 					domain: user.domain || 'platform.local',
 					role: user.role || 'merchant',
 					productId,
+					portalUrl: dynamicPortalUrl,
 					plan: user.plan || 'pro',
 					creditsBalance: user.creditsBalance || 0,
 					enabledFeatures,
 					apiKey: user.apiKey || '',
 					authenticatedAt: Date.now(),
-				};
+				});
+				return;
 			}
 
 			// 3. Auto-detect root SuperAdmin setup
 			const adminUser = localStorage.getItem('saas_admin_user');
 			if (adminUser) {
 				const admin = JSON.parse(adminUser);
-				return {
+				setSession({
 					tenantId: admin.id || 'adm_root',
 					tenantName: admin.name || 'SuperAdmin Master',
 					domain: 'admin.platform.local',
 					role: 'admin',
 					productId,
+					portalUrl: dynamicPortalUrl,
 					plan: 'enterprise',
 					creditsBalance: 999999,
 					enabledFeatures: ['*'],
 					apiKey: '',
 					authenticatedAt: Date.now(),
-				};
+				});
 			}
-
-			return null;
-		} catch {
-			return null;
-		}
-	});
-
-	const [error, setError] = useState('');
+		} catch {}
+	}, [sessionKey, productId, dynamicPortalUrl]);
 
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
 		const ssoToken = params.get('sso_token');
+		const incomingPortalUrl = params.get('portal_url');
+
+		if (incomingPortalUrl) {
+			setDynamicPortalUrl(incomingPortalUrl);
+		}
 
 		if (ssoToken) {
 			const verification = verifySSOToken(ssoToken, { expectedProductId: productId });
 			if (verification.valid) {
 				const verifiedSession = verification.session;
+				if (verifiedSession.portalUrl) {
+					setDynamicPortalUrl(verifiedSession.portalUrl);
+				}
 				setSession(verifiedSession);
 				try {
 					sessionStorage.setItem(sessionKey, JSON.stringify(verifiedSession));
@@ -192,6 +248,7 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl = 'ht
 
 				const cleanUrl = new URL(window.location.href);
 				cleanUrl.searchParams.delete('sso_token');
+				cleanUrl.searchParams.delete('portal_url');
 				cleanUrl.searchParams.delete('tenant_id');
 				cleanUrl.searchParams.delete('product_id');
 				window.history.replaceState({}, document.title, cleanUrl.toString());
@@ -213,6 +270,10 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl = 'ht
 		return Boolean(session.enabledFeatures?.includes(featureId));
 	};
 
+	if (!mounted) {
+		return <div className="min-h-screen bg-slate-50" />;
+	}
+
 	if (session) {
 		return (
 			<AppSecurityContext.Provider
@@ -221,6 +282,7 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl = 'ht
 					logoutApp: handleLogoutApp,
 					appName,
 					productId,
+					portalUrl: session.portalUrl || dynamicPortalUrl,
 					hasFeature,
 					enabledFeatures: session.enabledFeatures || [],
 				}}>
@@ -252,12 +314,19 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl = 'ht
 				)}
 
 				<div className="space-y-3 pt-2">
-					<a
-						href={portalUrl}
-						className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs transition-all duration-150 shadow-xs hover:shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98">
-						<span>Sign In via Master Portal</span>
-						<ExternalLinkIcon size={14} />
-					</a>
+					{dynamicPortalUrl && dynamicPortalUrl !== '#' ? (
+						<a
+							href={dynamicPortalUrl}
+							className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs transition-all duration-150 shadow-xs hover:shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98">
+							<span>Sign In via Master Portal</span>
+							<ExternalLinkIcon size={14} />
+						</a>
+					) : (
+						<div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+							Portal URL not specified. Pass <code>?portal_url=https://your-portal-domain</code> or set{' '}
+							<code>NEXT_PUBLIC_PORTAL_URL</code> in environment variables.
+						</div>
+					)}
 				</div>
 
 				<div className="pt-2 text-[11px] text-slate-400 flex items-center justify-center gap-1">

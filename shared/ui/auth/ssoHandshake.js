@@ -5,7 +5,9 @@
  */
 
 // Platform Master Secret Key
-export const PLATFORM_MASTER_SECRET = 'saas_cluster_master_key_sig_v3_singlesolution';
+export const PLATFORM_MASTER_SECRET =
+	(typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_SSO_SECRET || process.env?.SSO_SECRET)) ||
+	'saas_cluster_master_key_sig_v3_singlesolution';
 
 // Replay attack prevention cache
 const CONSUMED_NONCES = new Set();
@@ -41,11 +43,16 @@ export function computeHMAC(message, secret = PLATFORM_MASTER_SECRET) {
 
 /**
  * Creates a signed SSO launch token for any user (Admin or Merchant) and product,
- * including active merchant-specific enabled features.
+ * including active merchant-specific enabled features and dynamic portal origin.
  */
-export function createSSOToken(tenantOrUser, product, customSecret) {
-	const secret = customSecret || tenantOrUser?.secretKey || PLATFORM_MASTER_SECRET;
+export function createSSOToken(tenantOrUser, product, customSecret, customPortalUrl) {
+	const secret = customSecret || product?.secretKey || tenantOrUser?.secretKey || PLATFORM_MASTER_SECRET;
 	const productId = product?.id || 'general';
+	const portalUrl =
+		customPortalUrl ||
+		(typeof window !== 'undefined' ? window.location.origin : '') ||
+		(typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PORTAL_URL) ||
+		'';
 
 	// Determine active features for this specific merchant and product
 	let enabledFeatures = ['*']; // SuperAdmin has all features by default
@@ -64,6 +71,7 @@ export function createSSOToken(tenantOrUser, product, customSecret) {
 		domain: tenantOrUser?.domain || 'platform.local',
 		role: tenantOrUser?.role || (tenantOrUser?.email?.includes('admin') ? 'admin' : 'merchant'),
 		productId,
+		portalUrl,
 		plan: tenantOrUser?.plan || 'enterprise',
 		creditsBalance: tenantOrUser?.creditsBalance || 0,
 		enabledFeatures,
@@ -143,6 +151,7 @@ export function verifySSOToken(token, options = {}) {
 				domain: payload.domain,
 				role: payload.role,
 				productId: payload.productId,
+				portalUrl: payload.portalUrl || '',
 				plan: payload.plan,
 				creditsBalance: payload.creditsBalance || 0,
 				enabledFeatures: Array.isArray(payload.enabledFeatures) ? payload.enabledFeatures : ['*'],
@@ -158,7 +167,7 @@ export function verifySSOToken(token, options = {}) {
 /**
  * Builds the secure SSO launch URL for any app running on any URL/port.
  */
-export function getAppLaunchUrl(baseUrl, tenantOrUser, product) {
+export function getAppLaunchUrl(baseUrl, tenantOrUser, product, customSecret) {
 	if (!baseUrl) return '#';
 
 	let user = tenantOrUser;
@@ -169,9 +178,18 @@ export function getAppLaunchUrl(baseUrl, tenantOrUser, product) {
 		} catch {}
 	}
 
-	const token = createSSOToken(user || { id: 'usr_portal', name: 'Platform User' }, product, PLATFORM_MASTER_SECRET);
-	const urlObj = new URL(baseUrl.startsWith('http') ? baseUrl : `http://${baseUrl}`);
+	const portalOrigin =
+		(typeof window !== 'undefined' ? window.location.origin : '') ||
+		(typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PORTAL_URL) ||
+		'';
+	const secret = customSecret || product?.secretKey || PLATFORM_MASTER_SECRET;
+	const token = createSSOToken(user || { id: 'usr_portal', name: 'Platform User' }, product, secret, portalOrigin);
+
+	const urlObj = new URL(baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`);
 	urlObj.searchParams.set('sso_token', token);
+	if (portalOrigin) {
+		urlObj.searchParams.set('portal_url', portalOrigin);
+	}
 	urlObj.searchParams.set('tenant_id', user?.id || 'tnt_portal');
 	urlObj.searchParams.set('product_id', product?.id || '');
 
