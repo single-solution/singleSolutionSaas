@@ -75,7 +75,7 @@ export default function Dashboard() {
 	const domain = activeStore.domain;
 	const hasEvents = analyticsData.totalPageViews > 0;
 	const analyticsUrl =
-		process.env.NEXT_PUBLIC_ANALYTICS_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
+		process.env.ANALYTICS_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
 
 	const embedScriptCode = `<!-- SingleSolution Analytics Pro Telemetry -->
 <script

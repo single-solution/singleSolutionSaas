@@ -6,7 +6,7 @@
 
 // Platform Master Secret Key
 export const PLATFORM_MASTER_SECRET =
-	(typeof process !== 'undefined' && (process.env?.NEXT_PUBLIC_SSO_SECRET || process.env?.SSO_SECRET)) ||
+	(typeof process !== 'undefined' && (process.env?.SSO_SECRET || process.env?.SSO_SECRET)) ||
 	'saas_cluster_master_key_sig_v3_singlesolution';
 
 // Replay attack prevention cache
@@ -51,7 +51,7 @@ export function createSSOToken(tenantOrUser, product, customSecret, customPortal
 	const portalUrl =
 		customPortalUrl ||
 		(typeof window !== 'undefined' ? window.location.origin : '') ||
-		(typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PORTAL_URL) ||
+		(typeof process !== 'undefined' && process.env?.PORTAL_URL) ||
 		'';
 
 	// Determine active features for this specific merchant and product
@@ -180,7 +180,7 @@ export function getAppLaunchUrl(baseUrl, tenantOrUser, product, customSecret) {
 
 	const portalOrigin =
 		(typeof window !== 'undefined' ? window.location.origin : '') ||
-		(typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PORTAL_URL) ||
+		(typeof process !== 'undefined' && process.env?.PORTAL_URL) ||
 		'';
 	const secret = customSecret || product?.secretKey || PLATFORM_MASTER_SECRET;
 	const token = createSSOToken(user || { id: 'usr_portal', name: 'Platform User' }, product, secret, portalOrigin);

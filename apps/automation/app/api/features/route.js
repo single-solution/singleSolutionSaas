@@ -37,7 +37,7 @@ export const DEFAULT_FEATURES = [
 async function getLiveFeatures(db) {
 	let portalFeatures = DEFAULT_FEATURES;
 	try {
-		const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || 'http://localhost:3000';
+		const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
 		// Use dynamic fetch to avoid stale cache on pricing
 		const res = await fetch(`${portalUrl}/api/apps`, { cache: 'no-store' });
 		if (res.ok) {

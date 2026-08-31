@@ -63,7 +63,7 @@ export function AppProvider({ children }) {
 			setSelectedStoreId(session.tenantId);
 		} else if (isAdmin) {
 			// Fetch all tenants for admin context switching
-			const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL || 'http://localhost:3000';
+			const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
 			fetch(`${portalUrl}/api/tenants`)
 				.then(res => res.json())
 				.then(data => {

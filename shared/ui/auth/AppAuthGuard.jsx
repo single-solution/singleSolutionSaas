@@ -161,7 +161,7 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 				if (document.referrer) return new URL(document.referrer).origin;
 			} catch {}
 		}
-		return propPortalUrl || (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PORTAL_URL) || '#';
+		return propPortalUrl || (typeof process !== 'undefined' && process.env?.PORTAL_URL) || '#';
 	});
 
 	const [session, setSession] = useState(null);
@@ -324,7 +324,7 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 					) : (
 						<div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
 							Portal URL not specified. Pass <code>?portal_url=https://your-portal-domain</code> or set{' '}
-							<code>NEXT_PUBLIC_PORTAL_URL</code> in environment variables.
+							<code>PORTAL_URL</code> in environment variables.
 						</div>
 					)}
 				</div>
