@@ -62,7 +62,7 @@ export async function POST(req) {
 			);
 		}
 
-		return NextResponse.json({ success: true, message: 'Cryptographic handshake accepted.' }, { headers: CORS_HEADERS });
+		return NextResponse.json({ success: true, message: 'Cryptographic handshake accepted.', session }, { headers: CORS_HEADERS });
 	} catch (err) {
 		return NextResponse.json({ error: 'Internal handshake error' }, { status: 500, headers: CORS_HEADERS });
 	}

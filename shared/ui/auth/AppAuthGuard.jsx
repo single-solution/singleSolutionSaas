@@ -235,26 +235,39 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 		}
 
 		if (ssoToken) {
-			const verification = verifySSOToken(ssoToken, { expectedProductId: productId });
-			if (verification.valid) {
-				const verifiedSession = verification.session;
-				if (verifiedSession.portalUrl) {
-					setDynamicPortalUrl(verifiedSession.portalUrl);
-				}
-				setSession(verifiedSession);
-				try {
-					sessionStorage.setItem(sessionKey, JSON.stringify(verifiedSession));
-				} catch {}
+			setSession(null); // Clear optimistic session
+			fetch('/api/auth/handshake', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ token: ssoToken, expectedProductId: productId }),
+			})
+				.then((res) => res.json())
+				.then((data) => {
+					if (data.success && data.session) {
+						const verifiedSession = data.session;
+						if (verifiedSession.portalUrl) {
+							setDynamicPortalUrl(verifiedSession.portalUrl);
+						}
+						setSession(verifiedSession);
+						try {
+							sessionStorage.setItem(sessionKey, JSON.stringify(verifiedSession));
+						} catch {}
 
-				const cleanUrl = new URL(window.location.href);
-				cleanUrl.searchParams.delete('sso_token');
-				cleanUrl.searchParams.delete('portal_url');
-				cleanUrl.searchParams.delete('tenant_id');
-				cleanUrl.searchParams.delete('product_id');
-				window.history.replaceState({}, document.title, cleanUrl.toString());
-			} else {
-				setError(verification.error || 'Invalid SSO Token');
-			}
+						const cleanUrl = new URL(window.location.href);
+						cleanUrl.searchParams.delete('sso_token');
+						cleanUrl.searchParams.delete('portal_url');
+						cleanUrl.searchParams.delete('tenant_id');
+						cleanUrl.searchParams.delete('product_id');
+						window.history.replaceState({}, '', cleanUrl);
+					} else {
+						setSession(null);
+						setError(data.error || 'Cryptographic signature mismatch: Untrusted or forged SSO token rejected.');
+					}
+				})
+				.catch((err) => {
+					setSession(null);
+					setError('Failed to verify token with server.');
+				});
 		}
 	}, [sessionKey, productId]);
 
