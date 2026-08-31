@@ -38,9 +38,7 @@ export default function AppRegistryTable() {
 	const [isProbing, setIsProbing] = useState(false);
 
 	// New App Form State
-	const [newName, setNewName] = useState('');
-	const [newUrl, setNewUrl] = useState('');
-	const [newCategory, setNewCategory] = useState('Utility');
+	const [newSecretKey, setNewSecretKey] = useState('');
 	const [newDesc, setNewDesc] = useState('');
 	const [newVersion, setNewVersion] = useState('v1.0.0');
 
@@ -63,12 +61,12 @@ export default function AppRegistryTable() {
 		await registerProduct({
 			name: newName,
 			url: newUrl,
-			category: newCategory,
+			secretKey: newSecretKey,
 			desc: newDesc,
-			version: newVersion,
 		});
 		setNewName('');
 		setNewUrl('');
+		setNewSecretKey('');
 		setNewDesc('');
 		setIsRegisterOpen(false);
 	};
@@ -144,9 +142,7 @@ export default function AppRegistryTable() {
 										<div>
 											<div className="flex items-center gap-1.5">
 												<h3 className="font-bold text-sm text-slate-900">{product.name}</h3>
-												<span className="text-[10px] text-slate-400 font-mono">{product.version || 'v1.0'}</span>
 											</div>
-											<div className="text-[10px] text-indigo-600 font-medium">{product.category}</div>
 										</div>
 									</div>
 
@@ -338,6 +334,18 @@ export default function AppRegistryTable() {
 							</div>
 
 							<div>
+								<label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">SSO Secret Key</label>
+								<input
+									type="text"
+									required
+									placeholder="Shared secret for SSO handshakes"
+									value={editingProduct.secretKey || ''}
+									onChange={(e) => setEditingProduct({ ...editingProduct, secretKey: e.target.value })}
+									className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono text-[11px] outline-none focus:border-indigo-500"
+								/>
+							</div>
+
+							<div>
 								<label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Description</label>
 								<textarea
 									rows={2}
@@ -404,18 +412,15 @@ export default function AppRegistryTable() {
 							</div>
 
 							<div>
-								<label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Category</label>
-								<select
-									value={newCategory}
-									onChange={(e) => setNewCategory(e.target.value)}
-									className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 outline-none focus:border-indigo-500">
-									<option value="Marketing & Conversion">Marketing & Conversion</option>
-									<option value="Search & Growth">Search & Growth</option>
-									<option value="Retention & CRM">Retention & CRM</option>
-									<option value="Customer Experience">Customer Experience</option>
-									<option value="DevOps & Workflows">DevOps & Workflows</option>
-									<option value="Utility">Utility</option>
-								</select>
+								<label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">SSO Secret Key</label>
+								<input
+									type="text"
+									required
+									placeholder="Shared secret for SSO handshakes"
+									value={newSecretKey}
+									onChange={(e) => setNewSecretKey(e.target.value)}
+									className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono text-[11px] outline-none focus:border-indigo-500"
+								/>
 							</div>
 
 							<div>

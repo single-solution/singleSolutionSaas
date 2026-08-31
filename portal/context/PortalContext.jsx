@@ -469,13 +469,9 @@ export function PortalProvider({ children }) {
 			id: slug,
 			originalId: productData.id,
 			name: productData.name.trim(),
-			category: productData.category || 'Utilities',
-			color: productData.color || 'indigo',
-			icon: productData.icon || 'Zap',
 			url: productData.url.trim(),
 			secretKey: productData.secretKey || `sec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
 			status: 'operational',
-			version: productData.version || 'v1.0.0',
 			desc: productData.desc?.trim() || 'Custom registered SaaS micro-application.',
 			features: productData.features || defaultFeatures,
 		};

@@ -18,7 +18,7 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
 		(p) =>
 			p.name.toLowerCase().includes(cleanQuery) ||
 			p.id.toLowerCase().includes(cleanQuery) ||
-			p.category.toLowerCase().includes(cleanQuery),
+			p.desc?.toLowerCase().includes(cleanQuery),
 	);
 
 	const matchedTenants =
@@ -84,7 +84,7 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
 													{app.name}
 												</div>
 												<div className="text-[11px] text-slate-400">
-													{app.category} · {app.url}
+													{app.url}
 												</div>
 											</div>
 										</div>

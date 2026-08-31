@@ -139,9 +139,9 @@ export default function LicenseManager() {
 								</div>
 								<div className="flex items-center gap-2">
 									<span className="text-xs font-bold text-indigo-600">${appTotal}/mo</span>
-									<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-100 px-2 py-0.5 rounded-md">
-										{prod.category}
-									</span>
+										<span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+											v1.0
+										</span>
 								</div>
 							</div>
 

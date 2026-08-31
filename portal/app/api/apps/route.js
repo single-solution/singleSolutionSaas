@@ -11,7 +11,6 @@ export const DEFAULT_APPS = [
 	{
 		id: 'analytics',
 		name: 'Analytics Suite',
-		category: 'Marketing & Conversion',
 		status: 'operational',
 		url: 'http://localhost:5001',
 		icon: 'BarChart3',
@@ -78,7 +77,6 @@ export const DEFAULT_APPS = [
 	{
 		id: 'seo',
 		name: 'SEO & Schema Hub',
-		category: 'Search & Growth',
 		status: 'operational',
 		url: 'http://localhost:5002',
 		icon: 'Search',
@@ -109,7 +107,6 @@ export const DEFAULT_APPS = [
 	{
 		id: 'loyalty',
 		name: 'Loyalty & VIP Rewards',
-		category: 'Retention & CRM',
 		status: 'operational',
 		url: 'http://localhost:5003',
 		icon: 'Gift',
@@ -135,7 +132,6 @@ export const DEFAULT_APPS = [
 	{
 		id: 'chatbot',
 		name: 'AI Support Assistant',
-		category: 'Customer Experience',
 		status: 'operational',
 		url: 'http://localhost:5004',
 		icon: 'Bot',
@@ -161,7 +157,6 @@ export const DEFAULT_APPS = [
 	{
 		id: 'automation',
 		name: 'Automation & Webhooks',
-		category: 'DevOps & Workflows',
 		status: 'operational',
 		url: 'http://localhost:5005',
 		icon: 'Zap',
@@ -216,7 +211,7 @@ export async function GET() {
 export async function POST(req) {
 	try {
 		const body = await req.json().catch(() => ({}));
-		const { id, originalId, name, category, status, url, secretKey, features, defaultPrice, icon, color, description, desc, version } =
+		const { id, originalId, name, status, url, secretKey, features, defaultPrice, description, desc } =
 			body;
 
 		if (!id || !name || !url) {
@@ -226,15 +221,11 @@ export async function POST(req) {
 		const appRecord = {
 			id: id.trim().toLowerCase(),
 			name: name.trim(),
-			category: category || 'Utility',
 			status: status || 'operational',
 			url: url.trim(),
-			version: version || 'v1.0.0',
 			secretKey: secretKey?.trim() || `sec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
 			features: Array.isArray(features) ? features : [],
 			defaultPrice: Number(defaultPrice) || 0,
-			icon: icon || 'Zap',
-			color: color || 'indigo',
 			desc: desc || description || '',
 			description: description || desc || '',
 			updatedAt: new Date().toISOString(),

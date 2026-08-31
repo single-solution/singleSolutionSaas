@@ -585,9 +585,6 @@ export default function TenantsManager() {
 													<div className="flex items-center justify-between">
 														<div className="flex items-center gap-2">
 															<span className="font-bold text-xs text-slate-900">{prod.name}</span>
-															<span className="text-[10px] text-slate-400 uppercase font-bold">
-																({prod.category})
-															</span>
 														</div>
 														<div className="text-xs font-bold text-indigo-600">${prodCost} credits/mo</div>
 													</div>
