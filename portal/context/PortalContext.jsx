@@ -283,30 +283,45 @@ export function PortalProvider({ children }) {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
-			if (res.ok) {
-				const created = await res.json();
-				setTenants((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
-				setSelectedTenantId(created.id);
-				logAction(`Created merchant account: ${created.name}`, created.id, 'success');
-				showToast(`Created merchant "${created.name}".`);
-				return created;
+			if (!res.ok) {
+				const errorData = await res.json();
+				throw new Error(errorData.error || 'Failed to create merchant');
 			}
-		} catch {
-			setTenants((prev) => [payload, ...prev]);
+			const created = await res.json();
+			setTenants((prev) => [created, ...prev.filter((t) => t.id !== created.id)]);
+			setSelectedTenantId(created.id);
+			logAction(`Created merchant account: ${created.name}`, created.id, 'success');
+			showToast(`Created merchant "${created.name}".`);
+			return created;
+		} catch (err) {
+			showToast(err.message || 'Failed to create merchant', 'danger');
+			return null;
 		}
-		return payload;
 	};
 
 	const updateTenant = async (tenantId, updates) => {
-		setTenants((prev) => prev.map((t) => (t.id === tenantId ? { ...t, ...updates } : t)));
 		try {
-			await fetch(`/api/tenants/${tenantId}`, {
+			const res = await fetch(`/api/tenants/${tenantId}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(updates),
 			});
-		} catch {}
-		showToast('Merchant updated successfully.');
+			if (!res.ok) {
+				const errorData = await res.json();
+				throw new Error(errorData.error || 'Failed to update merchant');
+			}
+			const data = await res.json();
+			// Update the tenant ID if it changed
+			const newTenantId = data.id || tenantId;
+			setTenants((prev) => prev.map((t) => (t.id === tenantId ? { ...t, ...updates, id: newTenantId } : t)));
+			if (selectedTenantId === tenantId && newTenantId !== tenantId) {
+				setSelectedTenantId(newTenantId);
+			}
+			showToast('Merchant updated successfully.');
+		} catch (err) {
+			showToast(err.message || 'Failed to update merchant', 'danger');
+			throw err;
+		}
 	};
 
 	// Multi-Website Operations
@@ -443,7 +458,7 @@ export function PortalProvider({ children }) {
 	};
 
 	const registerProduct = async (productData) => {
-		const slug = productData.id || productData.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+		const slug = productData.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
 		const defaultFeatures = [
 			{ id: 'core', name: 'Core Engine', creditCost: Number(productData.price) || 50, desc: 'Base functionality' },
 			{ id: 'analytics', name: 'Analytics & Telemetry', creditCost: 25, desc: 'Live event tracking' },
@@ -452,6 +467,7 @@ export function PortalProvider({ children }) {
 
 		const newProduct = {
 			id: slug,
+			originalId: productData.id,
 			name: productData.name.trim(),
 			category: productData.category || 'Utilities',
 			color: productData.color || 'indigo',
@@ -465,16 +481,25 @@ export function PortalProvider({ children }) {
 		};
 
 		try {
-			await fetch('/api/apps', {
+			const res = await fetch('/api/apps', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(newProduct),
 			});
-		} catch {}
+			if (!res.ok) {
+				const errorData = await res.json();
+				throw new Error(errorData.error || 'Failed to register app');
+			}
+		} catch (err) {
+			showToast(err.message || 'Failed to register app', 'danger');
+			return null;
+		}
 
 		setProducts((prev) => {
-			const filtered = prev.filter((p) => p.id !== newProduct.id);
-			return [...filtered, newProduct];
+			const filtered = prev.filter((p) => p.id !== (productData.id || newProduct.id));
+			const cleanProduct = { ...newProduct };
+			delete cleanProduct.originalId;
+			return [...filtered, cleanProduct];
 		});
 
 		logAction(`Registered SaaS micro-app: ${newProduct.name}`, newProduct.url, 'success');

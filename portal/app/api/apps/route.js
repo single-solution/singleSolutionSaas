@@ -216,11 +216,11 @@ export async function GET() {
 export async function POST(req) {
 	try {
 		const body = await req.json().catch(() => ({}));
-		const { id, name, category, status, url, secretKey, features, defaultPrice, icon, color, description, desc, version } =
+		const { id, originalId, name, category, status, url, secretKey, features, defaultPrice, icon, color, description, desc, version } =
 			body;
 
 		if (!id || !name || !url) {
-			return NextResponse.json({ error: 'App ID, Name, and URL are required' }, { status: 400, headers: CORS_HEADERS });
+			return NextResponse.json({ error: 'App Name and URL are required' }, { status: 400, headers: CORS_HEADERS });
 		}
 
 		const appRecord = {
@@ -242,14 +242,23 @@ export async function POST(req) {
 
 		const db = await connectPortalDb();
 		if (db) {
-			await db.collection('apps').updateOne({ id: appRecord.id }, { $set: appRecord }, { upsert: true });
+			const existing = await db.collection('apps').findOne({ id: appRecord.id });
+			if (existing && existing.id !== originalId) {
+				return NextResponse.json({ error: 'An app with this name/identifier already exists' }, { status: 400, headers: CORS_HEADERS });
+			}
+
+			if (originalId) {
+				await db.collection('apps').updateOne({ id: originalId }, { $set: appRecord });
+			} else {
+				await db.collection('apps').updateOne({ id: appRecord.id }, { $set: appRecord }, { upsert: true });
+			}
 
 			await db.collection('audit_logs').insertOne({
 				id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
 				action: `Saved micro-app configuration: ${appRecord.name}`,
 				actor: 'SuperAdmin',
 				level: 'info',
-				details: { appId: appRecord.id, url: appRecord.url },
+				details: { appId: appRecord.id, url: appRecord.url, originalId },
 				timestamp: new Date().toISOString(),
 			});
 		}

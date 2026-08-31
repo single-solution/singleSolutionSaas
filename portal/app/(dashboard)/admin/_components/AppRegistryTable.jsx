@@ -39,7 +39,6 @@ export default function AppRegistryTable() {
 
 	// New App Form State
 	const [newName, setNewName] = useState('');
-	const [newId, setNewId] = useState('');
 	const [newUrl, setNewUrl] = useState('');
 	const [newCategory, setNewCategory] = useState('Utility');
 	const [newDesc, setNewDesc] = useState('');
@@ -62,7 +61,6 @@ export default function AppRegistryTable() {
 	const handleCreateProduct = async (e) => {
 		e.preventDefault();
 		await registerProduct({
-			id: newId,
 			name: newName,
 			url: newUrl,
 			category: newCategory,
@@ -70,7 +68,6 @@ export default function AppRegistryTable() {
 			version: newVersion,
 		});
 		setNewName('');
-		setNewId('');
 		setNewUrl('');
 		setNewDesc('');
 		setIsRegisterOpen(false);
@@ -382,18 +379,6 @@ export default function AppRegistryTable() {
 						</div>
 
 						<form onSubmit={handleCreateProduct} className="space-y-4 text-xs">
-							<div>
-								<label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">App Identifier (Slug)</label>
-								<input
-									type="text"
-									required
-									placeholder="e.g. inventory"
-									value={newId}
-									onChange={(e) => setNewId(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-									className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono text-[11px] outline-none focus:border-indigo-500"
-								/>
-							</div>
-
 							<div>
 								<label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">App Title</label>
 								<input

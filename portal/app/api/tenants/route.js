@@ -78,13 +78,18 @@ export async function POST(request) {
 		const slug = name
 			.toLowerCase()
 			.replace(/[^a-z0-9]/g, '_')
-			.substring(0, 15);
+			.substring(0, 20);
+		
+		const tenantId = `tnt_${slug}`;
 
-		// Check if domain or email already exists
+		// Check if domain, email, or id already exists
 		const existing = await db.collection('tenants').findOne({
-			$or: [{ domain: cleanDomain }, { email: email?.trim().toLowerCase() }],
+			$or: [{ domain: cleanDomain }, { email: email?.trim().toLowerCase() }, { id: tenantId }],
 		});
 		if (existing) {
+			if (existing.id === tenantId) {
+				return NextResponse.json({ error: 'A merchant store with this name already exists' }, { status: 409, headers: CORS_HEADERS });
+			}
 			return NextResponse.json(
 				{ error: 'A merchant store with this domain or email already exists' },
 				{ status: 409, headers: CORS_HEADERS },
@@ -93,8 +98,6 @@ export async function POST(request) {
 
 		const generatedSecret = secretKey?.trim() || `sk_live_${slug}_${Math.random().toString(36).substring(2, 10)}`;
 		const tenantPassword = password ? hashPassword(password) : hashPassword(generatedSecret);
-
-		const tenantId = body.id || `tnt_${slug}_${Date.now().toString().slice(-4)}`;
 
 		const defaultWebsites =
 			Array.isArray(websites) && websites.length > 0

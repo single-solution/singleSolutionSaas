@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const SESSION_SECRET = process.env.PORTAL_SESSION_SECRET || 'singlesolution_master_session_secret_v3_99418';
+const SESSION_SECRET = process.env.PORTAL_SESSION_SECRET || '79467d966bdfb41e6cc7d5fd585fd2b765149fe7804d3039a3efb089cdc982fb';
 const COOKIE_NAME = 'portal_session';
 
 async function verifyEdgeSession(token) {

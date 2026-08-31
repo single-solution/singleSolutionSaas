@@ -43,6 +43,23 @@ export async function PATCH(request, { params }) {
 		delete cleanUpdates._id;
 		delete cleanUpdates.id;
 
+		let newTenantId = null;
+		if (cleanUpdates.name) {
+			const slug = cleanUpdates.name
+				.toLowerCase()
+				.replace(/[^a-z0-9]/g, '_')
+				.substring(0, 20);
+			newTenantId = `tnt_${slug}`;
+			
+			if (newTenantId !== id) {
+				const existing = await db.collection('tenants').findOne({ id: newTenantId });
+				if (existing) {
+					return NextResponse.json({ error: 'A merchant store with this name already exists' }, { status: 409, headers: CORS_HEADERS });
+				}
+				cleanUpdates.id = newTenantId;
+			}
+		}
+
 		// If a new password was supplied, hash it
 		if (cleanUpdates.password) {
 			cleanUpdates.password = hashPassword(cleanUpdates.password);
@@ -50,24 +67,26 @@ export async function PATCH(request, { params }) {
 
 		await db.collection('tenants').updateOne({ id }, { $set: cleanUpdates });
 
+		const finalTenantId = newTenantId && newTenantId !== id ? newTenantId : id;
+
 		const actionDescription =
 			updates.apiKey || updates.secretKey
-				? `Rotated credentials for tenant: ${id}`
+				? `Rotated credentials for tenant: ${finalTenantId}`
 				: updates.status
-					? `Changed status of ${id} to ${updates.status}`
-					: `Updated store profile for tenant: ${id}`;
+					? `Changed status of ${finalTenantId} to ${updates.status}`
+					: `Updated store profile for tenant: ${finalTenantId}`;
 
 		await db.collection('audit_logs').insertOne({
 			id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
 			action: actionDescription,
 			actor: updates.updatedBy || 'SuperAdmin',
 			level: 'info',
-			details: { tenantId: id, fields: Object.keys(cleanUpdates) },
+			details: { tenantId: finalTenantId, fields: Object.keys(cleanUpdates) },
 			timestamp: new Date().toISOString(),
 		});
 
 		delete cleanUpdates.password;
-		return NextResponse.json({ success: true, id, updates: cleanUpdates }, { headers: CORS_HEADERS });
+		return NextResponse.json({ success: true, id: finalTenantId, updates: cleanUpdates }, { headers: CORS_HEADERS });
 	} catch (err) {
 		return NextResponse.json({ error: err.message }, { status: 500, headers: CORS_HEADERS });
 	}
