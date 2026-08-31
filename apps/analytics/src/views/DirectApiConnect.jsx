@@ -59,8 +59,7 @@ export default function DirectApiConnect() {
 	const siteId = activeStore.id;
 	const apiKey = activeStore.apiKey;
 	const domain = activeStore.domain;
-	const analyticsUrl =
-		process.env.ANALYTICS_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001');
+	const analyticsUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001';
 
 	const handleCopy = (text, key) => {
 		navigator.clipboard.writeText(text);

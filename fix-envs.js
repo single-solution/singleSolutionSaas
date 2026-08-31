@@ -8,7 +8,6 @@ function replaceInFile(filePath) {
 	// Replace NEXT_PUBLIC_ in env variables
 	content = content.replace(/SSO_SECRET/g, 'SSO_SECRET');
 	content = content.replace(/PORTAL_URL/g, 'PORTAL_URL');
-	content = content.replace(/ANALYTICS_URL/g, 'ANALYTICS_URL');
 
 	if (content !== original) {
 		fs.writeFileSync(filePath, content, 'utf8');
