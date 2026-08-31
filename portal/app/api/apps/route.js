@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectPortalDb } from '../../../lib/db.js';
+import { createSSOToken } from '../../../../shared/ui/auth/ssoHandshake.js';
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -236,6 +237,47 @@ export async function POST(req) {
 			if (existing && existing.id !== originalId) {
 				return NextResponse.json(
 					{ error: 'An app with this name/identifier already exists' },
+					{ status: 400, headers: CORS_HEADERS },
+				);
+			}
+
+			// Pre-registration Handshake
+			try {
+				const portalUrl =
+					(typeof process !== 'undefined' && process.env?.PORTAL_URL) ||
+					(typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+
+				const handshakeToken = createSSOToken(
+					{ id: 'usr_portal_admin', name: 'SuperAdmin Verification', role: 'admin' },
+					{ id: appRecord.id, secretKey: appRecord.secretKey },
+					appRecord.secretKey,
+					portalUrl,
+				);
+
+				const handshakeRes = await fetch(`${appRecord.url}/api/auth/handshake`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ token: handshakeToken, expectedProductId: appRecord.id }),
+				});
+
+				if (!handshakeRes.ok) {
+					const errText = await handshakeRes.text();
+					let errMsg = 'Handshake failed';
+					try {
+						const errData = JSON.parse(errText);
+						errMsg = errData.error || errMsg;
+					} catch (e) {}
+
+					return NextResponse.json(
+						{
+							error: `Connection handshake failed: ${errMsg}. Please ensure the Secret Key matches the app's configuration.`,
+						},
+						{ status: 400, headers: CORS_HEADERS },
+					);
+				}
+			} catch (err) {
+				return NextResponse.json(
+					{ error: `Could not reach the app URL (${appRecord.url}). Please ensure it is online and the URL is correct.` },
 					{ status: 400, headers: CORS_HEADERS },
 				);
 			}

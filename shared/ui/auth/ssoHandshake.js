@@ -5,9 +5,7 @@
  */
 
 // Platform Master Secret Key
-export const PLATFORM_MASTER_SECRET =
-	(typeof process !== 'undefined' && (process.env?.SSO_SECRET || process.env?.SSO_SECRET)) ||
-	'saas_cluster_master_key_sig_v3_singlesolution';
+export const PLATFORM_MASTER_SECRET = (typeof process !== 'undefined' && process.env?.SSO_SECRET) || '';
 
 // Replay attack prevention cache
 const CONSUMED_NONCES = new Set();
