@@ -9,29 +9,29 @@ const CORS_HEADERS = {
 
 export const DEFAULT_FEATURES = [
 	{
-		"id": "schema",
-		"name": "Product Schema Ingestion",
-		"creditCost": 30,
-		"desc": "Automatic Rich Snippets and Breadcrumb markup",
-		"icon": "Search",
-		"category": "Growth"
+		id: 'schema',
+		name: 'Product Schema Ingestion',
+		creditCost: 30,
+		desc: 'Automatic Rich Snippets and Breadcrumb markup',
+		icon: 'Search',
+		category: 'Growth',
 	},
 	{
-		"id": "keywords",
-		"name": "Keyword Tracker Radar",
-		"creditCost": 45,
-		"desc": "Daily organic ranking telemetry for store catalogs",
-		"icon": "TrendingUp",
-		"category": "Growth"
+		id: 'keywords',
+		name: 'Keyword Tracker Radar',
+		creditCost: 45,
+		desc: 'Daily organic ranking telemetry for store catalogs',
+		icon: 'TrendingUp',
+		category: 'Growth',
 	},
 	{
-		"id": "audits",
-		"name": "Technical Lighthouse Probes",
-		"creditCost": 25,
-		"desc": "Automated Core Web Vitals performance scanning",
-		"icon": "Activity",
-		"category": "Technical"
-	}
+		id: 'audits',
+		name: 'Technical Lighthouse Probes',
+		creditCost: 25,
+		desc: 'Automated Core Web Vitals performance scanning',
+		icon: 'Activity',
+		category: 'Technical',
+	},
 ];
 
 async function getLiveFeatures(db) {
@@ -63,8 +63,8 @@ async function getLiveFeatures(db) {
 		try {
 			const overrides = await db.collection('app_pricing_overrides').find({}).toArray();
 			if (overrides && overrides.length > 0) {
-				portalFeatures = portalFeatures.map(f => {
-					const override = overrides.find(o => o.featureId === f.id);
+				portalFeatures = portalFeatures.map((f) => {
+					const override = overrides.find((o) => o.featureId === f.id);
 					return override ? { ...f, ...override } : f;
 				});
 			}
@@ -193,11 +193,7 @@ export async function PATCH(request) {
 		if (newDesc !== undefined) updates.desc = newDesc;
 		updates.updatedAt = new Date().toISOString();
 
-		await db.collection('app_pricing_overrides').updateOne(
-			{ featureId },
-			{ $set: updates },
-			{ upsert: true }
-		);
+		await db.collection('app_pricing_overrides').updateOne({ featureId }, { $set: updates }, { upsert: true });
 
 		return NextResponse.json({ success: true }, { headers: CORS_HEADERS });
 	} catch (err) {

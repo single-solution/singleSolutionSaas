@@ -83,9 +83,7 @@ export default function GlobalSearchModal({ isOpen, onClose }) {
 												<div className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
 													{app.name}
 												</div>
-												<div className="text-[11px] text-slate-400">
-													{app.url}
-												</div>
+												<div className="text-[11px] text-slate-400">{app.url}</div>
 											</div>
 										</div>
 										<span className="text-[11px] font-semibold text-slate-400 group-hover:text-indigo-600 flex items-center gap-1">

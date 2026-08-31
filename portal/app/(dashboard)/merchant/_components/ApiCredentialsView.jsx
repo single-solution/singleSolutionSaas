@@ -3,12 +3,14 @@
 import React, { useState } from 'react';
 import { usePortal } from '../../../../context/PortalContext';
 import { Copy, Check, Eye, EyeOff, RefreshCw, Send, Terminal } from 'lucide-react';
+import ConfirmModal from '../../../../components/ConfirmModal';
 
 export default function ApiCredentialsView() {
 	const { activeTenant, rotateTenantKeys, showToast } = usePortal();
 	const [showSecret, setShowSecret] = useState(false);
 	const [copiedKey, setCopiedKey] = useState(false);
 	const [copiedSecret, setCopiedSecret] = useState(false);
+	const [confirmRotate, setConfirmRotate] = useState(false);
 	const [webhookUrl, setWebhookUrl] = useState(activeTenant?.domain ? `https://${activeTenant.domain}/api/webhooks` : '');
 	const [testPayloadStatus, setTestPayloadStatus] = useState(null);
 
@@ -90,11 +92,7 @@ export default function ApiCredentialsView() {
 						</label>
 						<button
 							type="button"
-							onClick={() => {
-								if (confirm('Rotate Secret Key? Your server-side webhook verifications will need the new key.')) {
-									if (activeTenant) rotateTenantKeys(activeTenant.id);
-								}
-							}}
+							onClick={() => setConfirmRotate(true)}
 							className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer">
 							<RefreshCw size={11} />
 							<span>Rotate Key</span>
@@ -164,6 +162,19 @@ export default function ApiCredentialsView() {
 					)}
 				</div>
 			</div>
+
+			<ConfirmModal
+				isOpen={confirmRotate}
+				onClose={() => setConfirmRotate(false)}
+				onConfirm={() => {
+					if (activeTenant) rotateTenantKeys(activeTenant.id);
+					setConfirmRotate(false);
+				}}
+				title="Rotate Secret Key"
+				message="Are you sure you want to rotate your HMAC Secret Key? Your server-side webhook verifications will need the new key to function properly."
+				confirmText="Rotate Key"
+				confirmStyle="warning"
+			/>
 		</div>
 	);
 }

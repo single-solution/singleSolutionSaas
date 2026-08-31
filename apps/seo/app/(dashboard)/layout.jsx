@@ -8,7 +8,8 @@ import { Building2, Coins, LogOut, Search, Globe, CheckCircle2, FileText, Settin
 
 export default function SeoDashboardLayout({ children }) {
 	const { session, logoutApp } = useAppSecurity() || {};
-	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } = useAppContext() || {};
+	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
+		useAppContext() || {};
 
 	const navigation = [
 		{
@@ -18,7 +19,7 @@ export default function SeoDashboardLayout({ children }) {
 				{ name: 'Audit Reports', href: '/results', icon: CheckCircle2 },
 				{ name: 'URL Index', href: '/pages', icon: Globe },
 				{ name: 'XML Sitemap', href: '/sitemap', icon: FileText },
-				
+
 				{ name: 'Settings', href: '/settings', icon: Settings },
 			],
 		},

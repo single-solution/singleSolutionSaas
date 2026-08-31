@@ -6,38 +6,124 @@ const apps = ['chatbot', 'loyalty', 'seo', 'automation'];
 // We can extract DEFAULT_APPS manually since we know them
 const defaultApps = {
 	seo: [
-		{ id: 'schema', name: 'Product Schema Ingestion', creditCost: 30, desc: 'Automatic Rich Snippets and Breadcrumb markup', icon: 'Search', category: 'Growth' },
-		{ id: 'keywords', name: 'Keyword Tracker Radar', creditCost: 45, desc: 'Daily organic ranking telemetry for store catalogs', icon: 'TrendingUp', category: 'Growth' },
-		{ id: 'audits', name: 'Technical Lighthouse Probes', creditCost: 25, desc: 'Automated Core Web Vitals performance scanning', icon: 'Activity', category: 'Technical' }
+		{
+			id: 'schema',
+			name: 'Product Schema Ingestion',
+			creditCost: 30,
+			desc: 'Automatic Rich Snippets and Breadcrumb markup',
+			icon: 'Search',
+			category: 'Growth',
+		},
+		{
+			id: 'keywords',
+			name: 'Keyword Tracker Radar',
+			creditCost: 45,
+			desc: 'Daily organic ranking telemetry for store catalogs',
+			icon: 'TrendingUp',
+			category: 'Growth',
+		},
+		{
+			id: 'audits',
+			name: 'Technical Lighthouse Probes',
+			creditCost: 25,
+			desc: 'Automated Core Web Vitals performance scanning',
+			icon: 'Activity',
+			category: 'Technical',
+		},
 	],
 	loyalty: [
-		{ id: 'points', name: 'Points & Tier Engine', creditCost: 40, desc: 'Earn points per purchase with tiered discount ladders', icon: 'Gift', category: 'Retention' },
-		{ id: 'referrals', name: 'Referral Link Tracking', creditCost: 35, desc: 'Viral friend-referral voucher distribution', icon: 'Share2', category: 'Growth' },
-		{ id: 'vip', name: 'Exclusive Member Perks', creditCost: 30, desc: 'Early access and private sale badges for VIP shoppers', icon: 'Crown', category: 'Retention' }
+		{
+			id: 'points',
+			name: 'Points & Tier Engine',
+			creditCost: 40,
+			desc: 'Earn points per purchase with tiered discount ladders',
+			icon: 'Gift',
+			category: 'Retention',
+		},
+		{
+			id: 'referrals',
+			name: 'Referral Link Tracking',
+			creditCost: 35,
+			desc: 'Viral friend-referral voucher distribution',
+			icon: 'Share2',
+			category: 'Growth',
+		},
+		{
+			id: 'vip',
+			name: 'Exclusive Member Perks',
+			creditCost: 30,
+			desc: 'Early access and private sale badges for VIP shoppers',
+			icon: 'Crown',
+			category: 'Retention',
+		},
 	],
 	chatbot: [
-		{ id: 'conversations', name: 'AI Order Lookup & FAQ', creditCost: 60, desc: 'Automated natural language customer resolution', icon: 'Bot', category: 'CX' },
-		{ id: 'handoff', name: 'Human Live Agent Handoff', creditCost: 40, desc: 'Seamless escalation to store support operators', icon: 'UserCircle', category: 'CX' },
-		{ id: 'widget', name: 'Floating Storefront Widget', creditCost: 20, desc: 'Customizable branded chat widget snippet', icon: 'MessageSquare', category: 'CX' }
+		{
+			id: 'conversations',
+			name: 'AI Order Lookup & FAQ',
+			creditCost: 60,
+			desc: 'Automated natural language customer resolution',
+			icon: 'Bot',
+			category: 'CX',
+		},
+		{
+			id: 'handoff',
+			name: 'Human Live Agent Handoff',
+			creditCost: 40,
+			desc: 'Seamless escalation to store support operators',
+			icon: 'UserCircle',
+			category: 'CX',
+		},
+		{
+			id: 'widget',
+			name: 'Floating Storefront Widget',
+			creditCost: 20,
+			desc: 'Customizable branded chat widget snippet',
+			icon: 'MessageSquare',
+			category: 'CX',
+		},
 	],
 	automation: [
-		{ id: 'triggers', name: 'Real-Time Event Triggers', creditCost: 45, desc: 'Custom trigger rules on order creation and inventory low', icon: 'Zap', category: 'DevOps' },
-		{ id: 'notifications', name: 'SMS & WhatsApp Gateway', creditCost: 50, desc: 'Direct transactional dispatch via third-party providers', icon: 'MessageCircle', category: 'Comms' },
-		{ id: 'webhooks_out', name: 'Custom Outbound Webhooks', creditCost: 25, desc: 'Signed payload dispatch with retry queues', icon: 'Webhook', category: 'DevOps' }
-	]
+		{
+			id: 'triggers',
+			name: 'Real-Time Event Triggers',
+			creditCost: 45,
+			desc: 'Custom trigger rules on order creation and inventory low',
+			icon: 'Zap',
+			category: 'DevOps',
+		},
+		{
+			id: 'notifications',
+			name: 'SMS & WhatsApp Gateway',
+			creditCost: 50,
+			desc: 'Direct transactional dispatch via third-party providers',
+			icon: 'MessageCircle',
+			category: 'Comms',
+		},
+		{
+			id: 'webhooks_out',
+			name: 'Custom Outbound Webhooks',
+			creditCost: 25,
+			desc: 'Signed payload dispatch with retry queues',
+			icon: 'Webhook',
+			category: 'DevOps',
+		},
+	],
 };
 
 const analyticsRouteTemplate = fs.readFileSync('apps/analytics/app/api/features/route.js', 'utf8');
 const analyticsContextTemplate = fs.readFileSync('apps/analytics/src/context/StorefrontContext.jsx', 'utf8');
 const analyticsFeatureManagerTemplate = fs.readFileSync('apps/analytics/src/views/FeatureManager.jsx', 'utf8');
 
-apps.forEach(app => {
+apps.forEach((app) => {
 	console.log(`Processing app: ${app}`);
-	
+
 	// 1. Create API Route
 	const apiDir = `apps/${app}/app/api/features`;
 	fs.mkdirSync(apiDir, { recursive: true });
-	let routeContent = analyticsRouteTemplate.replace(/connectAnalyticsDb/g, 'connectPortalDb').replace(/'analytics'/g, `'${app}'`);
+	let routeContent = analyticsRouteTemplate
+		.replace(/connectAnalyticsDb/g, 'connectPortalDb')
+		.replace(/'analytics'/g, `'${app}'`);
 	// Replace DEFAULT_FEATURES
 	const regex = /export const DEFAULT_FEATURES = \[[\s\S]*?\];/;
 	const replacement = `export const DEFAULT_FEATURES = ${JSON.stringify(defaultApps[app], null, '\t')};`;
@@ -58,14 +144,14 @@ apps.forEach(app => {
 		.replace(/useStorefront/g, 'useAppContext')
 		.replace(/StorefrontProvider/g, 'AppProvider');
 	// Replace default enabled features with the app's features
-	const defaultFeaturesList = defaultApps[app].map(f => `'${f.id}'`).join(', ');
+	const defaultFeaturesList = defaultApps[app].map((f) => `'${f.id}'`).join(', ');
 	contextContent = contextContent.replace(/\[\s*'core_traffic'[\s\S]*?'broken_links',\s*\]/, `[${defaultFeaturesList}]`);
 	fs.writeFileSync(`${contextDir}/AppContext.jsx`, contextContent);
 
 	// 3. Create FeatureManager
 	const viewsDir = `apps/${app}/src/views`;
 	fs.mkdirSync(viewsDir, { recursive: true });
-	let fmContent = analyticsFeatureManagerTemplate
+	const fmContent = analyticsFeatureManagerTemplate
 		.replace(/StorefrontContext/g, 'AppContext')
 		.replace(/useStorefront/g, 'useAppContext')
 		.replace(/\.\.\/\.\.\/\.\.\/\.\.\/shared/g, '../../../../shared');
@@ -75,12 +161,12 @@ apps.forEach(app => {
 	const layoutPath = `apps/${app}/app/(dashboard)/layout.jsx`;
 	if (fs.existsSync(layoutPath)) {
 		let layoutContent = fs.readFileSync(layoutPath, 'utf8');
-		
+
 		// Add AppContext import
 		if (!layoutContent.includes('AppContext')) {
 			layoutContent = layoutContent.replace(
 				/import { useAppSecurity } from '@saas\/ui\/auth\/AppAuthGuard';/,
-				`import { useAppSecurity } from '@saas/ui/auth/AppAuthGuard';\nimport { useAppContext } from '../../src/context/AppContext';\nimport { Building2, Coins, LogOut } from 'lucide-react';`
+				`import { useAppSecurity } from '@saas/ui/auth/AppAuthGuard';\nimport { useAppContext } from '../../src/context/AppContext';\nimport { Building2, Coins, LogOut } from 'lucide-react';`,
 			);
 		}
 
@@ -88,7 +174,7 @@ apps.forEach(app => {
 		if (!layoutContent.includes('const { isAdmin, stores')) {
 			layoutContent = layoutContent.replace(
 				/const { session, logoutApp } = useAppSecurity\(\) \|\| \{\};/,
-				`const { session, logoutApp } = useAppSecurity() || {};\n\tconst { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } = useAppContext() || {};`
+				`const { session, logoutApp } = useAppSecurity() || {};\n\tconst { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } = useAppContext() || {};`,
 			);
 		}
 
@@ -138,7 +224,7 @@ apps.forEach(app => {
 					</button>
 				</div>
 			}`;
-		
+
 		layoutContent = layoutContent.replace(/headerRight=\{[\s\S]*?\}>/, `${headerRightTemplate}>`);
 		fs.writeFileSync(layoutPath, layoutContent);
 	}

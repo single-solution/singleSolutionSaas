@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePortal } from '../../../../context/PortalContext';
+import ConfirmModal from '../../../../components/ConfirmModal';
 import {
 	Plus,
 	Sliders,
@@ -58,6 +59,11 @@ export default function TenantsManager() {
 	// Add Website Form State
 	const [newSiteName, setNewSiteName] = useState('');
 	const [newSiteDomain, setNewSiteDomain] = useState('');
+
+	// Confirmation Modals State
+	const [confirmRotateTenant, setConfirmRotateTenant] = useState(null);
+	const [confirmDeleteTenant, setConfirmDeleteTenant] = useState(null);
+	const [confirmDeleteWebsite, setConfirmDeleteWebsite] = useState(null);
 
 	// Edit Form Extra State
 	const [editPassword, setEditPassword] = useState('');
@@ -316,15 +322,7 @@ export default function TenantsManager() {
 												</button>
 												<button
 													type="button"
-													onClick={() => {
-														if (
-															confirm(
-																`Rotate API & Secret credentials for ${t.name}? Current keys will be invalidated.`,
-															)
-														) {
-															rotateTenantKeys(t.id);
-														}
-													}}
+													onClick={() => setConfirmRotateTenant(t)}
 													className="p-1.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
 													title="Rotate Secret & API Keys">
 													<RefreshCw size={14} />
@@ -340,10 +338,7 @@ export default function TenantsManager() {
 												)}
 												<button
 													type="button"
-													onClick={() => {
-														if (confirm(`Delete merchant ${t.name}? This action is irreversible.`))
-															deleteTenant(t.id);
-													}}
+													onClick={() => setConfirmDeleteTenant(t)}
 													className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
 													title="Delete Merchant">
 													<Trash2 size={14} />
@@ -416,11 +411,7 @@ export default function TenantsManager() {
 											{(websiteModalTenant.websites || []).length > 1 && (
 												<button
 													type="button"
-													onClick={() => {
-														if (confirm(`Remove website ${site.domain}?`)) {
-															deleteMerchantWebsite(websiteModalTenant.id, site.id);
-														}
-													}}
+													onClick={() => setConfirmDeleteWebsite({ tenantId: websiteModalTenant.id, site })}
 													className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg cursor-pointer transition-colors">
 													<Trash2 size={13} />
 												</button>
@@ -911,6 +902,35 @@ export default function TenantsManager() {
 					</div>
 				</div>
 			)}
+			{/* Confirmation Modals */}
+			<ConfirmModal
+				isOpen={!!confirmRotateTenant}
+				onClose={() => setConfirmRotateTenant(null)}
+				onConfirm={() => rotateTenantKeys(confirmRotateTenant.id)}
+				title="Rotate API Credentials"
+				message={`Are you sure you want to rotate API & Secret credentials for ${confirmRotateTenant?.name}? Current keys will be instantly invalidated and they will need to update their `
+					.env` files.`}
+				confirmText="Rotate Keys"
+				confirmStyle="warning"
+			/>
+			<ConfirmModal
+				isOpen={!!confirmDeleteTenant}
+				onClose={() => setConfirmDeleteTenant(null)}
+				onConfirm={() => deleteTenant(confirmDeleteTenant.id)}
+				title="Delete Merchant"
+				message={`Are you sure you want to permanently delete merchant ${confirmDeleteTenant?.name}? This action is irreversible and will delete all their attached websites and app licenses.`}
+				confirmText="Yes, delete merchant"
+				confirmStyle="danger"
+			/>
+			<ConfirmModal
+				isOpen={!!confirmDeleteWebsite}
+				onClose={() => setConfirmDeleteWebsite(null)}
+				onConfirm={() => deleteMerchantWebsite(confirmDeleteWebsite.tenantId, confirmDeleteWebsite.site.id)}
+				title="Remove Attached Website"
+				message={`Are you sure you want to remove the website ${confirmDeleteWebsite?.site?.domain}? This will cancel all its active app subscriptions.`}
+				confirmText="Remove Website"
+				confirmStyle="danger"
+			/>
 		</div>
 	);
 }

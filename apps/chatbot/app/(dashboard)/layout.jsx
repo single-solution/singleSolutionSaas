@@ -8,7 +8,8 @@ import { Building2, Coins, LogOut, MessageSquare, Bot, BarChart3, Settings, Spar
 
 export default function ChatbotDashboardLayout({ children }) {
 	const { session, logoutApp } = useAppSecurity() || {};
-	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } = useAppContext() || {};
+	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
+		useAppContext() || {};
 
 	const navigation = [
 		{
@@ -17,7 +18,7 @@ export default function ChatbotDashboardLayout({ children }) {
 				{ name: 'Live Inbox', href: '/', icon: MessageSquare },
 				{ name: 'Bot Knowledge', href: '/config', icon: Bot },
 				{ name: 'Analytics', href: '/analytics', icon: BarChart3 },
-				
+
 				{ name: 'Settings', href: '/settings', icon: Settings },
 			],
 		},

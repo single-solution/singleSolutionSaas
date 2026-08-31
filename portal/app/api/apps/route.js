@@ -211,8 +211,7 @@ export async function GET() {
 export async function POST(req) {
 	try {
 		const body = await req.json().catch(() => ({}));
-		const { id, originalId, name, status, url, secretKey, features, defaultPrice, description, desc } =
-			body;
+		const { id, originalId, name, status, url, secretKey, features, defaultPrice, description, desc } = body;
 
 		if (!id || !name || !url) {
 			return NextResponse.json({ error: 'App Name and URL are required' }, { status: 400, headers: CORS_HEADERS });
@@ -235,7 +234,10 @@ export async function POST(req) {
 		if (db) {
 			const existing = await db.collection('apps').findOne({ id: appRecord.id });
 			if (existing && existing.id !== originalId) {
-				return NextResponse.json({ error: 'An app with this name/identifier already exists' }, { status: 400, headers: CORS_HEADERS });
+				return NextResponse.json(
+					{ error: 'An app with this name/identifier already exists' },
+					{ status: 400, headers: CORS_HEADERS },
+				);
 			}
 
 			if (originalId) {

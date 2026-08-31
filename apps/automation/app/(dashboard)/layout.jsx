@@ -8,7 +8,8 @@ import { Building2, Coins, LogOut, Zap, GitBranch, LayoutTemplate, PlayCircle, S
 
 export default function AutomationDashboardLayout({ children }) {
 	const { session, logoutApp } = useAppSecurity() || {};
-	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } = useAppContext() || {};
+	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
+		useAppContext() || {};
 
 	const navigation = [
 		{
@@ -18,7 +19,7 @@ export default function AutomationDashboardLayout({ children }) {
 				{ name: 'Flow Builder', href: '/builder', icon: GitBranch },
 				{ name: 'Templates', href: '/templates', icon: LayoutTemplate },
 				{ name: 'Execution Logs', href: '/executions', icon: PlayCircle },
-				
+
 				{ name: 'Settings', href: '/settings', icon: Settings },
 			],
 		},

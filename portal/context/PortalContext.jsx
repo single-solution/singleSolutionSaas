@@ -458,7 +458,10 @@ export function PortalProvider({ children }) {
 	};
 
 	const registerProduct = async (productData) => {
-		const slug = productData.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+		const slug = productData.name
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, '_');
 		const defaultFeatures = [
 			{ id: 'core', name: 'Core Engine', creditCost: Number(productData.price) || 50, desc: 'Base functionality' },
 			{ id: 'analytics', name: 'Analytics & Telemetry', creditCost: 25, desc: 'Live event tracking' },

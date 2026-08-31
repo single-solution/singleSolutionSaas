@@ -211,18 +211,12 @@ describe('Portal Control Plane, Feature Governance & Credit System', () => {
 
 		// Store with partial features: core_traffic (30) + funnel_dropoff (35) + meta_capi (30)
 		const activeFeatures = ['core_traffic', 'funnel_dropoff', 'meta_capi'];
-		const activeCost = DEFAULT_FEATURES.filter((f) => activeFeatures.includes(f.id)).reduce(
-			(sum, f) => sum + f.creditCost,
-			0,
-		);
+		const activeCost = DEFAULT_FEATURES.filter((f) => activeFeatures.includes(f.id)).reduce((sum, f) => sum + f.creditCost, 0);
 		expect(activeCost).toBe(95);
 
 		// Merchant adds custom_webhooks (+25)
 		activeFeatures.push('custom_webhooks');
-		const updatedCost = DEFAULT_FEATURES.filter((f) => activeFeatures.includes(f.id)).reduce(
-			(sum, f) => sum + f.creditCost,
-			0,
-		);
+		const updatedCost = DEFAULT_FEATURES.filter((f) => activeFeatures.includes(f.id)).reduce((sum, f) => sum + f.creditCost, 0);
 		expect(updatedCost).toBe(120);
 	});
 

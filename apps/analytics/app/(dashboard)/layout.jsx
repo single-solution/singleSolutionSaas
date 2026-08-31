@@ -105,7 +105,7 @@ export default function DashboardLayout({ children }) {
 			items: [
 				{ name: 'Module Manager', href: '/modules', icon: Layers, badge: `${enabledFeatures.length} Active` },
 				{ name: 'Direct API & SDK', href: '/connect', icon: Code },
-				
+
 				{ name: 'Settings', href: '/settings', icon: Settings },
 			],
 		},

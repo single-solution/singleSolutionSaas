@@ -31,10 +31,11 @@ export async function POST(request) {
 		const transactions = [];
 
 		for (const tenant of tenants) {
-			const websites = Array.isArray(tenant.websites) && tenant.websites.length > 0
-				? tenant.websites
-				: [{ subscriptions: tenant.subscriptions || {} }];
-			
+			const websites =
+				Array.isArray(tenant.websites) && tenant.websites.length > 0
+					? tenant.websites
+					: [{ subscriptions: tenant.subscriptions || {} }];
+
 			let monthlyCost = 0;
 
 			for (const site of websites) {
@@ -54,22 +55,22 @@ export async function POST(request) {
 			if (monthlyCost > 0) {
 				// Calculate AWS-style hourly rate (720 hours per month)
 				const hourlyCost = Math.round((monthlyCost / 720) * 10000) / 10000;
-				
+
 				const currentBalance = Number(tenant.creditsBalance) || 0;
 				const newBalance = Math.round((currentBalance - hourlyCost) * 10000) / 10000;
-				
+
 				// Suspend if out of credits
 				const newStatus = newBalance < 0 ? 'suspended' : tenant.status;
 
 				await db.collection('tenants').updateOne(
 					{ _id: tenant._id },
-					{ 
-						$set: { 
+					{
+						$set: {
 							creditsBalance: newBalance,
 							status: newStatus,
-							updatedAt: new Date().toISOString()
-						} 
-					}
+							updatedAt: new Date().toISOString(),
+						},
+					},
 				);
 
 				transactions.push({
@@ -91,7 +92,7 @@ export async function POST(request) {
 		// Insert transactions in bulk
 		if (transactions.length > 0) {
 			await db.collection('credit_transactions').insertMany(transactions);
-			
+
 			await db.collection('audit_logs').insertOne({
 				id: `log_cron_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
 				action: `Ran hourly billing engine. Processed ${tenantsProcessed} stores.`,
@@ -103,12 +104,12 @@ export async function POST(request) {
 		}
 
 		return NextResponse.json(
-			{ 
+			{
 				message: 'Hourly deduction simulated successfully',
 				tenantsProcessed,
-				totalDeducted 
+				totalDeducted,
 			},
-			{ status: 200, headers: CORS_HEADERS }
+			{ status: 200, headers: CORS_HEADERS },
 		);
 	} catch (err) {
 		console.error('Cron Deduct Error:', err);

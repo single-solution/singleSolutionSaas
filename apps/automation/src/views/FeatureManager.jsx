@@ -39,9 +39,10 @@ const ICON_MAP = {
 };
 
 export default function FeatureManager() {
-	const { activeStore, enabledFeatures, featuresCatalog, totalMonthlyCost, toggleFeature, isAdmin, refreshStoreData } = useAppContext();
+	const { activeStore, enabledFeatures, featuresCatalog, totalMonthlyCost, toggleFeature, isAdmin, refreshStoreData } =
+		useAppContext();
 	const [filterCategory, setFilterCategory] = useState('all');
-	
+
 	const [editingFeature, setEditingFeature] = useState(null);
 	const [newCreditCost, setNewCreditCost] = useState('');
 	const [isSavingPricing, setIsSavingPricing] = useState(false);
@@ -83,8 +84,8 @@ export default function FeatureManager() {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					featureId: editingFeature.id,
-					newCreditCost: Number(newCreditCost)
-				})
+					newCreditCost: Number(newCreditCost),
+				}),
 			});
 			if (res.ok) {
 				setEditingFeature(null);
@@ -257,7 +258,9 @@ export default function FeatureManager() {
 					<div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl animate-in zoom-in-95 fade-in duration-200">
 						<h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center justify-between">
 							<span>Admin Override Pricing</span>
-							<button onClick={() => setEditingFeature(null)} className="text-slate-400 hover:text-slate-700">✕</button>
+							<button onClick={() => setEditingFeature(null)} className="text-slate-400 hover:text-slate-700">
+								✕
+							</button>
 						</h3>
 						<form onSubmit={handleSavePricing} className="space-y-4">
 							<div className="space-y-1">
@@ -275,7 +278,11 @@ export default function FeatureManager() {
 									className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 outline-none focus:border-indigo-500 font-mono text-sm"
 								/>
 								<div className="text-[10px] text-slate-500 pt-1">
-									This sets the new base rate which is automatically converted to the <strong className="text-indigo-600">{newCreditCost ? formatHourlyRate(newCreditCost) : '$0.0000/hr'}</strong> hourly rate.
+									This sets the new base rate which is automatically converted to the{' '}
+									<strong className="text-indigo-600">
+										{newCreditCost ? formatHourlyRate(newCreditCost) : '$0.0000/hr'}
+									</strong>{' '}
+									hourly rate.
 								</div>
 							</div>
 							<div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">

@@ -50,11 +50,14 @@ export async function PATCH(request, { params }) {
 				.replace(/[^a-z0-9]/g, '_')
 				.substring(0, 20);
 			newTenantId = `tnt_${slug}`;
-			
+
 			if (newTenantId !== id) {
 				const existing = await db.collection('tenants').findOne({ id: newTenantId });
 				if (existing) {
-					return NextResponse.json({ error: 'A merchant store with this name already exists' }, { status: 409, headers: CORS_HEADERS });
+					return NextResponse.json(
+						{ error: 'A merchant store with this name already exists' },
+						{ status: 409, headers: CORS_HEADERS },
+					);
 				}
 				cleanUpdates.id = newTenantId;
 			}

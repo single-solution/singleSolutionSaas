@@ -66,10 +66,10 @@ export function StorefrontProvider({ children }) {
 			// Fetch all tenants for admin context switching
 			const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
 			fetch(`${portalUrl}/api/tenants`)
-				.then(res => res.json())
-				.then(data => {
+				.then((res) => res.json())
+				.then((data) => {
 					if (Array.isArray(data) && data.length > 0) {
-						const adminStores = data.map(t => ({
+						const adminStores = data.map((t) => ({
 							id: t.id,
 							name: t.name,
 							domain: t.domain,
@@ -77,12 +77,12 @@ export function StorefrontProvider({ children }) {
 							subscriptions: (t.subscriptions && t.subscriptions.analytics) || ['*'],
 						}));
 						setStores(adminStores);
-						if (!selectedStoreId || !adminStores.find(s => s.id === selectedStoreId)) {
+						if (!selectedStoreId || !adminStores.find((s) => s.id === selectedStoreId)) {
 							setSelectedStoreId(adminStores[0].id);
 						}
 					}
 				})
-				.catch(err => console.warn('Failed to fetch tenants for admin:', err));
+				.catch((err) => console.warn('Failed to fetch tenants for admin:', err));
 		}
 	}, [session, isAdmin, selectedStoreId]);
 

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePortal } from '../../../../context/PortalContext';
+import ConfirmModal from '../../../../components/ConfirmModal';
 import {
 	Plus,
 	Globe,
@@ -37,13 +38,16 @@ export default function AppRegistryTable() {
 	const [healthMap, setHealthMap] = useState({});
 	const [isProbing, setIsProbing] = useState(false);
 
-	// New App Form State
+	const [newName, setNewName] = useState('');
+	const [newUrl, setNewUrl] = useState('');
 	const [newSecretKey, setNewSecretKey] = useState('');
 	const [newDesc, setNewDesc] = useState('');
-	const [newVersion, setNewVersion] = useState('v1.0.0');
 
 	// Pricing Edit State
 	const [editPrices, setEditPrices] = useState({});
+
+	// Confirm Deletion State
+	const [deleteConfirmProduct, setDeleteConfirmProduct] = useState(null);
 
 	const handleProbeAll = async () => {
 		setIsProbing(true);
@@ -209,12 +213,10 @@ export default function AppRegistryTable() {
 									</button>
 									<button
 										type="button"
-										onClick={() => {
-											if (confirm(`Remove ${product.name} from the cluster registry?`)) deleteProduct(product.id);
-										}}
+										onClick={() => setDeleteConfirmProduct(product)}
 										className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
 										title="Delete Micro-App">
-										<Trash2 size={14} />
+										<Trash2 size={16} />
 									</button>
 								</div>
 
@@ -451,6 +453,16 @@ export default function AppRegistryTable() {
 					</div>
 				</div>
 			)}
+			{/* Delete Confirmation Modal */}
+			<ConfirmModal
+				isOpen={!!deleteConfirmProduct}
+				onClose={() => setDeleteConfirmProduct(null)}
+				onConfirm={() => deleteProduct(deleteConfirmProduct.id)}
+				title="Delete Micro-App"
+				message={`Are you sure you want to completely remove ${deleteConfirmProduct?.name} from the cluster registry? This will instantly disable it for all merchants.`}
+				confirmText="Yes, delete it"
+				confirmStyle="danger"
+			/>
 		</div>
 	);
 }

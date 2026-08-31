@@ -79,7 +79,7 @@ export async function POST(request) {
 			.toLowerCase()
 			.replace(/[^a-z0-9]/g, '_')
 			.substring(0, 20);
-		
+
 		const tenantId = `tnt_${slug}`;
 
 		// Check if domain, email, or id already exists
@@ -88,7 +88,10 @@ export async function POST(request) {
 		});
 		if (existing) {
 			if (existing.id === tenantId) {
-				return NextResponse.json({ error: 'A merchant store with this name already exists' }, { status: 409, headers: CORS_HEADERS });
+				return NextResponse.json(
+					{ error: 'A merchant store with this name already exists' },
+					{ status: 409, headers: CORS_HEADERS },
+				);
 			}
 			return NextResponse.json(
 				{ error: 'A merchant store with this domain or email already exists' },

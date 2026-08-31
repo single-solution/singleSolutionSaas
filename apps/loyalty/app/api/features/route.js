@@ -9,29 +9,29 @@ const CORS_HEADERS = {
 
 export const DEFAULT_FEATURES = [
 	{
-		"id": "points",
-		"name": "Points & Tier Engine",
-		"creditCost": 40,
-		"desc": "Earn points per purchase with tiered discount ladders",
-		"icon": "Gift",
-		"category": "Retention"
+		id: 'points',
+		name: 'Points & Tier Engine',
+		creditCost: 40,
+		desc: 'Earn points per purchase with tiered discount ladders',
+		icon: 'Gift',
+		category: 'Retention',
 	},
 	{
-		"id": "referrals",
-		"name": "Referral Link Tracking",
-		"creditCost": 35,
-		"desc": "Viral friend-referral voucher distribution",
-		"icon": "Share2",
-		"category": "Growth"
+		id: 'referrals',
+		name: 'Referral Link Tracking',
+		creditCost: 35,
+		desc: 'Viral friend-referral voucher distribution',
+		icon: 'Share2',
+		category: 'Growth',
 	},
 	{
-		"id": "vip",
-		"name": "Exclusive Member Perks",
-		"creditCost": 30,
-		"desc": "Early access and private sale badges for VIP shoppers",
-		"icon": "Crown",
-		"category": "Retention"
-	}
+		id: 'vip',
+		name: 'Exclusive Member Perks',
+		creditCost: 30,
+		desc: 'Early access and private sale badges for VIP shoppers',
+		icon: 'Crown',
+		category: 'Retention',
+	},
 ];
 
 async function getLiveFeatures(db) {
@@ -63,8 +63,8 @@ async function getLiveFeatures(db) {
 		try {
 			const overrides = await db.collection('app_pricing_overrides').find({}).toArray();
 			if (overrides && overrides.length > 0) {
-				portalFeatures = portalFeatures.map(f => {
-					const override = overrides.find(o => o.featureId === f.id);
+				portalFeatures = portalFeatures.map((f) => {
+					const override = overrides.find((o) => o.featureId === f.id);
 					return override ? { ...f, ...override } : f;
 				});
 			}
@@ -193,11 +193,7 @@ export async function PATCH(request) {
 		if (newDesc !== undefined) updates.desc = newDesc;
 		updates.updatedAt = new Date().toISOString();
 
-		await db.collection('app_pricing_overrides').updateOne(
-			{ featureId },
-			{ $set: updates },
-			{ upsert: true }
-		);
+		await db.collection('app_pricing_overrides').updateOne({ featureId }, { $set: updates }, { upsert: true });
 
 		return NextResponse.json({ success: true }, { headers: CORS_HEADERS });
 	} catch (err) {

@@ -8,7 +8,8 @@ import { Building2, Coins, LogOut, Award, Users, Crown, Gift, Settings, Sparkles
 
 export default function LoyaltyDashboardLayout({ children }) {
 	const { session, logoutApp } = useAppSecurity() || {};
-	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } = useAppContext() || {};
+	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
+		useAppContext() || {};
 
 	const navigation = [
 		{
@@ -18,7 +19,7 @@ export default function LoyaltyDashboardLayout({ children }) {
 				{ name: 'VIP Members', href: '/members', icon: Users },
 				{ name: 'Tier Rules', href: '/tiers', icon: Crown },
 				{ name: 'Rewards Catalog', href: '/rewards', icon: Gift },
-				
+
 				{ name: 'Settings', href: '/settings', icon: Settings },
 			],
 		},

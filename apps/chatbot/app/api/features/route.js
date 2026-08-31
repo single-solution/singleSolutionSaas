@@ -9,29 +9,29 @@ const CORS_HEADERS = {
 
 export const DEFAULT_FEATURES = [
 	{
-		"id": "conversations",
-		"name": "AI Order Lookup & FAQ",
-		"creditCost": 60,
-		"desc": "Automated natural language customer resolution",
-		"icon": "Bot",
-		"category": "CX"
+		id: 'conversations',
+		name: 'AI Order Lookup & FAQ',
+		creditCost: 60,
+		desc: 'Automated natural language customer resolution',
+		icon: 'Bot',
+		category: 'CX',
 	},
 	{
-		"id": "handoff",
-		"name": "Human Live Agent Handoff",
-		"creditCost": 40,
-		"desc": "Seamless escalation to store support operators",
-		"icon": "UserCircle",
-		"category": "CX"
+		id: 'handoff',
+		name: 'Human Live Agent Handoff',
+		creditCost: 40,
+		desc: 'Seamless escalation to store support operators',
+		icon: 'UserCircle',
+		category: 'CX',
 	},
 	{
-		"id": "widget",
-		"name": "Floating Storefront Widget",
-		"creditCost": 20,
-		"desc": "Customizable branded chat widget snippet",
-		"icon": "MessageSquare",
-		"category": "CX"
-	}
+		id: 'widget',
+		name: 'Floating Storefront Widget',
+		creditCost: 20,
+		desc: 'Customizable branded chat widget snippet',
+		icon: 'MessageSquare',
+		category: 'CX',
+	},
 ];
 
 async function getLiveFeatures(db) {
@@ -63,8 +63,8 @@ async function getLiveFeatures(db) {
 		try {
 			const overrides = await db.collection('app_pricing_overrides').find({}).toArray();
 			if (overrides && overrides.length > 0) {
-				portalFeatures = portalFeatures.map(f => {
-					const override = overrides.find(o => o.featureId === f.id);
+				portalFeatures = portalFeatures.map((f) => {
+					const override = overrides.find((o) => o.featureId === f.id);
 					return override ? { ...f, ...override } : f;
 				});
 			}
@@ -193,11 +193,7 @@ export async function PATCH(request) {
 		if (newDesc !== undefined) updates.desc = newDesc;
 		updates.updatedAt = new Date().toISOString();
 
-		await db.collection('app_pricing_overrides').updateOne(
-			{ featureId },
-			{ $set: updates },
-			{ upsert: true }
-		);
+		await db.collection('app_pricing_overrides').updateOne({ featureId }, { $set: updates }, { upsert: true });
 
 		return NextResponse.json({ success: true }, { headers: CORS_HEADERS });
 	} catch (err) {
