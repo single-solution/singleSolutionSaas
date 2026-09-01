@@ -36,7 +36,7 @@ export function AppProvider({ children }) {
 						name: t.name,
 						domain: t.domain,
 						apiKey: t.apiKey || `pk_live_${t.id}`,
-						subscriptions: (t.subscriptions && t.subscriptions.analytics) || ['*'],
+						subscriptions: (t.subscriptions && t.subscriptions.loyalty) || ['*'],
 					}));
 				}
 			}
@@ -63,7 +63,11 @@ export function AppProvider({ children }) {
 			setSelectedStoreId(session.tenantId);
 		} else if (isAdmin) {
 			// Fetch all tenants for admin context switching
-			const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
+			const portalUrl =
+				(typeof window !== 'undefined' && window.__PORTAL_URL__) ||
+				session?.portalUrl ||
+				process.env.PORTAL_URL ||
+				'http://localhost:3000';
 			fetch(`${portalUrl}/api/tenants`)
 				.then((res) => res.json())
 				.then((data) => {
@@ -73,7 +77,7 @@ export function AppProvider({ children }) {
 							name: t.name,
 							domain: t.domain,
 							apiKey: t.apiKey || `pk_live_${t.id}`,
-							subscriptions: (t.subscriptions && t.subscriptions.analytics) || ['*'],
+							subscriptions: (t.subscriptions && t.subscriptions.loyalty) || ['*'],
 						}));
 						setStores(adminStores);
 						if (!selectedStoreId || !adminStores.find((s) => s.id === selectedStoreId)) {

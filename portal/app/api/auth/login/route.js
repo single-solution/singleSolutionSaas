@@ -98,8 +98,10 @@ export async function POST(req) {
 				email: tenant.email || tenant.contactEmail || cleanEmail,
 				domain: tenant.domain,
 				role: 'merchant',
+				status: tenant.status || 'active',
 				creditsBalance: tenant.creditsBalance || 0,
 				subscriptions: tenant.subscriptions || {},
+				websites: Array.isArray(tenant.websites) ? tenant.websites : [],
 				apiKey: tenant.apiKey || '',
 			};
 

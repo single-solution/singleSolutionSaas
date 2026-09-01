@@ -313,4 +313,55 @@ describe('Portal Control Plane, Feature Governance & Credit System', () => {
 		const shortTestCost = calculateUsageCost(funnelMonthly, 3); // 3 * 0.0486 = $0.15
 		expect(shortTestCost).toBe(0.15);
 	});
+
+	it('safely handles tenant creation with optional/missing email without query collision', () => {
+		const existingTenants = [{ id: 'tnt_store_1', name: 'Store One', domain: 'storeone.com', email: '' }];
+
+		const checkCollision = (newTenant) => {
+			const cleanDomain = newTenant.domain.trim().toLowerCase();
+			const orConditions = [{ domain: cleanDomain }, { id: `tnt_${newTenant.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}` }];
+			if (newTenant.email && typeof newTenant.email === 'string' && newTenant.email.trim()) {
+				orConditions.push({ email: newTenant.email.trim().toLowerCase() });
+			}
+			return existingTenants.some((t) =>
+				orConditions.some(
+					(cond) =>
+						(cond.domain && t.domain === cond.domain) ||
+						(cond.id && t.id === cond.id) ||
+						(cond.email && t.email && t.email === cond.email),
+				),
+			);
+		};
+
+		// Distinct store without email should NOT collide with existing store without email
+		const newStoreNoEmail = { name: 'Store Two', domain: 'storetwo.com' };
+		expect(checkCollision(newStoreNoEmail)).toBe(false);
+
+		// Store with colliding domain SHOULD collide
+		const collidingStore = { name: 'Store Three', domain: 'storeone.com' };
+		expect(checkCollision(collidingStore)).toBe(true);
+	});
+
+	it('correctly aggregates multi-website subscriptions into top-level merchant subscriptions', () => {
+		const websites = [
+			{ id: 'site_1', subscriptions: { analytics: ['core_traffic', 'funnel_dropoff'], chatbot: ['ai_kb'] } },
+			{ id: 'site_2', subscriptions: { analytics: ['speed_insights'], loyalty: ['points_engine'] } },
+		];
+
+		const aggregated = {};
+		websites.forEach((site) => {
+			Object.entries(site.subscriptions || {}).forEach(([pId, fIds]) => {
+				if (!aggregated[pId]) aggregated[pId] = [];
+				if (Array.isArray(fIds)) {
+					fIds.forEach((f) => {
+						if (!aggregated[pId].includes(f)) aggregated[pId].push(f);
+					});
+				}
+			});
+		});
+
+		expect(aggregated.analytics).toEqual(['core_traffic', 'funnel_dropoff', 'speed_insights']);
+		expect(aggregated.chatbot).toEqual(['ai_kb']);
+		expect(aggregated.loyalty).toEqual(['points_engine']);
+	});
 });

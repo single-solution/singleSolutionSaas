@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useAppSecurity } from '@saas/ui/auth/AppAuthGuard';
 import {
 	Activity,
 	TrendingUp,
@@ -39,6 +40,11 @@ const ICON_MAP = {
 };
 
 export default function FeatureManager() {
+	const { session, portalUrl } = useAppSecurity() || {};
+	const effectivePortal = portalUrl || session?.portalUrl || '';
+	const billingLink = effectivePortal
+		? `${effectivePortal}/${session?.role === 'merchant' ? 'merchant/billing' : 'admin/billing'}`
+		: '#';
 	const { activeStore, enabledFeatures, featuresCatalog, totalMonthlyCost, toggleFeature, isAdmin, refreshStoreData } =
 		useAppContext();
 	const [filterCategory, setFilterCategory] = useState('all');
@@ -164,7 +170,7 @@ export default function FeatureManager() {
 				</div>
 
 				<a
-					href="http://localhost:3000/admin/billing"
+					href={billingLink}
 					className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-800">
 					<span>Manage Wallet Top-Ups in Portal</span>
 					<ExternalLink size={13} />

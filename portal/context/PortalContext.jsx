@@ -111,8 +111,8 @@ export function PortalProvider({ children }) {
 					const dataTenants = await resTenants.json();
 					if (Array.isArray(dataTenants)) {
 						setTenants(dataTenants);
-						if (dataTenants.length > 0 && !selectedTenantId) {
-							setSelectedTenantId(dataTenants[0].id);
+						if (dataTenants.length > 0) {
+							setSelectedTenantId((prev) => prev || dataTenants[0].id);
 						}
 					}
 				}
@@ -143,7 +143,7 @@ export function PortalProvider({ children }) {
 		}
 
 		syncWithServer();
-	}, [selectedTenantId]);
+	}, []);
 
 	const activeTenant = tenants.find((t) => t.id === selectedTenantId) || tenants[0] || null;
 	const isAuthenticated = Boolean(currentUser);
@@ -388,7 +388,21 @@ export function PortalProvider({ children }) {
 			return site;
 		});
 
-		await updateTenant(tenantId, { websites: updatedWebsites });
+		const aggregatedSubscriptions = {};
+		updatedWebsites.forEach((site) => {
+			Object.entries(site.subscriptions || {}).forEach(([pId, fIds]) => {
+				if (!aggregatedSubscriptions[pId]) aggregatedSubscriptions[pId] = [];
+				if (Array.isArray(fIds)) {
+					fIds.forEach((f) => {
+						if (!aggregatedSubscriptions[pId].includes(f)) {
+							aggregatedSubscriptions[pId].push(f);
+						}
+					});
+				}
+			});
+		});
+
+		await updateTenant(tenantId, { websites: updatedWebsites, subscriptions: aggregatedSubscriptions });
 		showToast(`Updated feature licensing.`);
 	};
 
@@ -434,7 +448,17 @@ export function PortalProvider({ children }) {
 		const nextFeatures = hasFeature ? currentFeatures.filter((f) => f !== featureId) : [...currentFeatures, featureId];
 
 		subs[productId] = nextFeatures;
-		await updateTenant(tenantId, { subscriptions: subs });
+
+		const updatedWebsites = Array.isArray(target.websites)
+			? target.websites.map((w, idx) =>
+					idx === 0 ? { ...w, subscriptions: { ...(w.subscriptions || {}), [productId]: nextFeatures } } : w,
+				)
+			: [];
+
+		await updateTenant(tenantId, {
+			subscriptions: subs,
+			...(updatedWebsites.length > 0 ? { websites: updatedWebsites } : {}),
+		});
 		showToast(`${hasFeature ? 'Disabled' : 'Enabled'} feature.`);
 	};
 

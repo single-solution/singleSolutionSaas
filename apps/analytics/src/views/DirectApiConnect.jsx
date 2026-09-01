@@ -20,7 +20,7 @@ import { Badge } from '@saas/ui/badges/Badge';
 import { useStorefront } from '../context/StorefrontContext';
 
 export default function DirectApiConnect() {
-	const { activeStore, stores } = useStorefront();
+	const { portalUrl, activeStore, stores } = useStorefront();
 	const [activeTab, setActiveTab] = useState('ingest_api');
 	const [copiedKey, setCopiedKey] = useState(null);
 
@@ -44,7 +44,7 @@ export default function DirectApiConnect() {
 						</div>
 						<div className="pt-2">
 							<a
-								href="http://localhost:3000/admin/tenants"
+								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
 								<span>Go to Master Portal</span>
 								<ExternalLink size={13} />

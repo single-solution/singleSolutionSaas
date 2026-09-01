@@ -164,66 +164,62 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 		return propPortalUrl || (typeof process !== 'undefined' && process.env?.PORTAL_URL) || '#';
 	});
 
-	const [session, setSession] = useState(null);
+	const [session, setSession] = useState(() => {
+		if (typeof window !== 'undefined') {
+			try {
+				const saved = sessionStorage.getItem(sessionKey);
+				if (saved) return JSON.parse(saved);
+
+				const currentPortalUser = localStorage.getItem('saas_current_user');
+				if (currentPortalUser) {
+					const user = JSON.parse(currentPortalUser);
+					let enabledFeatures = ['*'];
+					if (user.role === 'merchant' && user.subscriptions && user.subscriptions[productId]) {
+						enabledFeatures = user.subscriptions[productId];
+					}
+					return {
+						tenantId: user.id || 'usr_authed',
+						tenantName: user.name || user.orgName || 'Authenticated User',
+						domain: user.domain || 'platform.local',
+						role: user.role || 'merchant',
+						productId,
+						portalUrl: propPortalUrl || '#',
+						plan: user.plan || 'pro',
+						creditsBalance: user.creditsBalance || 0,
+						enabledFeatures,
+						apiKey: user.apiKey || '',
+						authenticatedAt: Date.now(),
+					};
+				}
+
+				const adminUser = localStorage.getItem('saas_admin_user');
+				if (adminUser) {
+					const admin = JSON.parse(adminUser);
+					return {
+						tenantId: admin.id || 'adm_root',
+						tenantName: admin.name || 'SuperAdmin Master',
+						domain: 'admin.platform.local',
+						role: 'admin',
+						productId,
+						portalUrl: propPortalUrl || '#',
+						plan: 'enterprise',
+						creditsBalance: 999999,
+						enabledFeatures: ['*'],
+						apiKey: '',
+						authenticatedAt: Date.now(),
+					};
+				}
+			} catch {}
+		}
+		return null;
+	});
+
 	const [error, setError] = useState('');
+	const [isValidating, setIsValidating] = useState(false);
 
 	useEffect(() => {
 		setMounted(true);
-		try {
-			// 1. Check direct sessionStorage
-			const saved = sessionStorage.getItem(sessionKey);
-			if (saved) {
-				const parsed = JSON.parse(saved);
-				if (parsed.portalUrl) setDynamicPortalUrl(parsed.portalUrl);
-				setSession(parsed);
-				return;
-			}
-
-			// 2. Auto-detect shared portal login session
-			const currentPortalUser = localStorage.getItem('saas_current_user');
-			if (currentPortalUser) {
-				const user = JSON.parse(currentPortalUser);
-				let enabledFeatures = ['*'];
-				if (user.role === 'merchant' && user.subscriptions && user.subscriptions[productId]) {
-					enabledFeatures = user.subscriptions[productId];
-				}
-
-				setSession({
-					tenantId: user.id || 'usr_authed',
-					tenantName: user.name || user.orgName || 'Authenticated User',
-					domain: user.domain || 'platform.local',
-					role: user.role || 'merchant',
-					productId,
-					portalUrl: dynamicPortalUrl,
-					plan: user.plan || 'pro',
-					creditsBalance: user.creditsBalance || 0,
-					enabledFeatures,
-					apiKey: user.apiKey || '',
-					authenticatedAt: Date.now(),
-				});
-				return;
-			}
-
-			// 3. Auto-detect root SuperAdmin setup
-			const adminUser = localStorage.getItem('saas_admin_user');
-			if (adminUser) {
-				const admin = JSON.parse(adminUser);
-				setSession({
-					tenantId: admin.id || 'adm_root',
-					tenantName: admin.name || 'SuperAdmin Master',
-					domain: 'admin.platform.local',
-					role: 'admin',
-					productId,
-					portalUrl: dynamicPortalUrl,
-					plan: 'enterprise',
-					creditsBalance: 999999,
-					enabledFeatures: ['*'],
-					apiKey: '',
-					authenticatedAt: Date.now(),
-				});
-			}
-		} catch {}
-	}, [sessionKey, productId, dynamicPortalUrl]);
+	}, []);
 
 	useEffect(() => {
 		const params = new URLSearchParams(window.location.search);
@@ -235,7 +231,10 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 		}
 
 		if (ssoToken) {
-			setSession(null); // Clear optimistic session
+			setSession(null);
+			setError('');
+			setIsValidating(true);
+
 			fetch('/api/auth/handshake', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -266,7 +265,10 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 				})
 				.catch((err) => {
 					setSession(null);
-					setError('Failed to verify token with server.');
+					setError(`Failed to verify SSO handshake with server: ${err.message}`);
+				})
+				.finally(() => {
+					setIsValidating(false);
 				});
 		}
 	}, [sessionKey, productId]);
@@ -283,7 +285,26 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 		return Boolean(session.enabledFeatures?.includes(featureId));
 	};
 
-	if (!mounted) {
+	if (isValidating) {
+		return (
+			<div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 antialiased font-sans text-slate-900">
+				<div className="w-full max-w-sm p-8 rounded-3xl bg-white border border-slate-200 shadow-xl space-y-4 text-center">
+					<div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto animate-pulse">
+						<LockIcon size={24} />
+					</div>
+					<div className="space-y-1.5">
+						<h2 className="text-base font-bold text-slate-900">Authenticating SSO Session</h2>
+						<p className="text-xs text-slate-500">Verifying cryptographic handshake with Portal...</p>
+					</div>
+					<div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+						<div className="bg-indigo-600 h-1.5 rounded-full animate-[progress_1s_ease-in-out_infinite] w-2/3 mx-auto" />
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	if (!mounted && !session) {
 		return <div className="min-h-screen bg-slate-50" />;
 	}
 

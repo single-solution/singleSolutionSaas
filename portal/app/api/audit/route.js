@@ -25,7 +25,10 @@ export async function GET(request) {
 
 		const query = {};
 		if (level && level !== 'all') query.level = level;
-		if (actor) query.actor = { $regex: actor, $options: 'i' };
+		if (actor) {
+			const safeActor = String(actor).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+			query.actor = { $regex: safeActor, $options: 'i' };
+		}
 
 		const logs = await db.collection('audit_logs').find(query).sort({ timestamp: -1 }).limit(limit).toArray();
 

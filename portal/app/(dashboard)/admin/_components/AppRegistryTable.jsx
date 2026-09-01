@@ -62,24 +62,28 @@ export default function AppRegistryTable() {
 
 	const handleCreateProduct = async (e) => {
 		e.preventDefault();
-		await registerProduct({
+		const result = await registerProduct({
 			name: newName,
 			url: newUrl,
 			secretKey: newSecretKey,
 			desc: newDesc,
 		});
-		setNewName('');
-		setNewUrl('');
-		setNewSecretKey('');
-		setNewDesc('');
-		setIsRegisterOpen(false);
+		if (result) {
+			setNewName('');
+			setNewUrl('');
+			setNewSecretKey('');
+			setNewDesc('');
+			setIsRegisterOpen(false);
+		}
 	};
 
 	const handleSaveEditProduct = async (e) => {
 		e.preventDefault();
 		if (!editingProduct) return;
-		await registerProduct(editingProduct);
-		setEditingProduct(null);
+		const result = await registerProduct(editingProduct);
+		if (result) {
+			setEditingProduct(null);
+		}
 	};
 
 	const handleOpenPricingModal = (product) => {

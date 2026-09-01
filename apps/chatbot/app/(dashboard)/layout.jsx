@@ -7,7 +7,7 @@ import { useAppContext } from '../../src/context/AppContext';
 import { Building2, Coins, LogOut, MessageSquare, Bot, BarChart3, Settings, Sparkles } from 'lucide-react';
 
 export default function ChatbotDashboardLayout({ children }) {
-	const { session, logoutApp } = useAppSecurity() || {};
+	const { session, logoutApp, portalUrl } = useAppSecurity() || {};
 	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
 		useAppContext() || {};
 
@@ -26,6 +26,7 @@ export default function ChatbotDashboardLayout({ children }) {
 
 	return (
 		<AppLayout
+			footerLink={{ to: portalUrl || session?.portalUrl || '#', label: 'Master Portal' }}
 			appName="AI Support Chatbot"
 			appSubtitle={session?.tenantName || 'Workspace'}
 			navigation={navigation}

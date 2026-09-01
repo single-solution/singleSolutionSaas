@@ -7,7 +7,7 @@ import { useAppContext } from '../../src/context/AppContext';
 import { Building2, Coins, LogOut, Award, Users, Crown, Gift, Settings, Sparkles } from 'lucide-react';
 
 export default function LoyaltyDashboardLayout({ children }) {
-	const { session, logoutApp } = useAppSecurity() || {};
+	const { session, logoutApp, portalUrl } = useAppSecurity() || {};
 	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
 		useAppContext() || {};
 
@@ -27,6 +27,7 @@ export default function LoyaltyDashboardLayout({ children }) {
 
 	return (
 		<AppLayout
+			footerLink={{ to: portalUrl || session?.portalUrl || '#', label: 'Master Portal' }}
 			appName="Loyalty & Rewards Program"
 			appSubtitle={session?.tenantName || 'Workspace'}
 			navigation={navigation}

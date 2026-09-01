@@ -83,8 +83,12 @@ export async function POST(request) {
 		const tenantId = `tnt_${slug}`;
 
 		// Check if domain, email, or id already exists
+		const orConditions = [{ domain: cleanDomain }, { id: tenantId }];
+		if (email && typeof email === 'string' && email.trim()) {
+			orConditions.push({ email: email.trim().toLowerCase() });
+		}
 		const existing = await db.collection('tenants').findOne({
-			$or: [{ domain: cleanDomain }, { email: email?.trim().toLowerCase() }, { id: tenantId }],
+			$or: orConditions,
 		});
 		if (existing) {
 			if (existing.id === tenantId) {

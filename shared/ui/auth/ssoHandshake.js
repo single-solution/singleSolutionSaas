@@ -7,8 +7,8 @@
 // Platform Master Secret Key
 export const PLATFORM_MASTER_SECRET = (typeof process !== 'undefined' && process.env?.SSO_SECRET) || '';
 
-// Replay attack prevention cache
-const CONSUMED_NONCES = new Set();
+// Replay attack prevention cache with TTL cleanup (15 minutes)
+const CONSUMED_NONCES = new Map();
 
 /**
  * Robust SHA-256-like HMAC generator for synchronous browser/node environments.
@@ -19,7 +19,7 @@ export function computeHMAC(message, secret = PLATFORM_MASTER_SECRET) {
 	let h2 = 0x3c6ef372;
 	let h3 = 0xa54ff53a;
 
-	const keyString = String(secret || PLATFORM_MASTER_SECRET);
+	const keyString = String(secret || PLATFORM_MASTER_SECRET || '').trim();
 	const fullInput = `${keyString}###${message}###${keyString}`;
 
 	for (let i = 0; i < fullInput.length; i++) {
@@ -119,23 +119,32 @@ export function verifySSOToken(token, options = {}) {
 			};
 		}
 
-		// 3. Expiry validation (Strict 10-minute launch window)
+		// 3. Expiry validation (Strict 10-minute launch window with 60s skew tolerance)
 		const now = Date.now();
 		const maxAgeMs = 10 * 60 * 1000;
 		if (now - payload.issuedAt > maxAgeMs) {
 			return { valid: false, error: 'SSO launch token has expired. Please launch again from the Portal.' };
 		}
+		if (payload.issuedAt - now > 60 * 1000) {
+			return { valid: false, error: 'Token timestamp is in the future. Check system clock.' };
+		}
 
-		// 4. Anti-Replay Nonce Check
+		// 4. Anti-Replay Nonce Check (with TTL cleanup)
+		for (const [nonceKey, expiry] of CONSUMED_NONCES.entries()) {
+			if (now > expiry) {
+				CONSUMED_NONCES.delete(nonceKey);
+			}
+		}
 		if (CONSUMED_NONCES.has(payload.nonce)) {
 			return { valid: false, error: 'Token replay detected: this launch token has already been consumed.' };
 		}
-		CONSUMED_NONCES.add(payload.nonce);
+		CONSUMED_NONCES.set(payload.nonce, now + maxAgeMs);
 
 		// 5. Cryptographic Signature Verification
-		const validSecret = expectedSecret || PLATFORM_MASTER_SECRET;
+		const validSecret = String(expectedSecret || PLATFORM_MASTER_SECRET || '').trim();
+		const masterSecret = String(PLATFORM_MASTER_SECRET || '').trim();
 		const expectedSig = computeHMAC(payloadString, validSecret);
-		const masterSig = computeHMAC(payloadString, PLATFORM_MASTER_SECRET);
+		const masterSig = computeHMAC(payloadString, masterSecret);
 
 		if (signature !== expectedSig && signature !== masterSig) {
 			return { valid: false, error: 'Cryptographic signature mismatch: Untrusted or forged SSO token rejected.' };
@@ -167,6 +176,11 @@ export function verifySSOToken(token, options = {}) {
  */
 export function getAppLaunchUrl(baseUrl, tenantOrUser, product, customSecret) {
 	if (!baseUrl) return '#';
+	let cleanBaseUrl = String(baseUrl).trim().replace(/\/+$/, '');
+	if (!cleanBaseUrl) return '#';
+	if (!/^https?:\/\//i.test(cleanBaseUrl)) {
+		cleanBaseUrl = `https://${cleanBaseUrl}`;
+	}
 
 	let user = tenantOrUser;
 	if (!user && typeof window !== 'undefined') {
@@ -183,7 +197,7 @@ export function getAppLaunchUrl(baseUrl, tenantOrUser, product, customSecret) {
 	const secret = customSecret || product?.secretKey || PLATFORM_MASTER_SECRET;
 	const token = createSSOToken(user || { id: 'usr_portal', name: 'Platform User' }, product, secret, portalOrigin);
 
-	const urlObj = new URL(baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`);
+	const urlObj = new URL(cleanBaseUrl);
 	urlObj.searchParams.set('sso_token', token);
 	if (portalOrigin) {
 		urlObj.searchParams.set('portal_url', portalOrigin);

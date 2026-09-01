@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
-	const { session, logoutApp } = useAppSecurity() || {};
+	const { session, logoutApp, portalUrl } = useAppSecurity() || {};
 	const {
 		isAdmin,
 		stores,
@@ -113,6 +113,7 @@ export default function DashboardLayout({ children }) {
 
 	return (
 		<AppLayout
+			footerLink={{ to: portalUrl || session?.portalUrl || '#', label: 'Master Portal' }}
 			appName="Analytics Pro"
 			appSubtitle={activeStore?.name || (isAdmin ? 'Admin Console' : 'Storefront')}
 			navigation={navigation}

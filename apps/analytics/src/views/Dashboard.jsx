@@ -32,7 +32,7 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function Dashboard() {
-	const { activeStore, stores, analyticsData, storeEvents, recordStoreEvent } = useStorefront();
+	const { portalUrl, activeStore, stores, analyticsData, storeEvents, recordStoreEvent } = useStorefront();
 	const [period, setPeriod] = useState('7d');
 	const [selectedSession, setSelectedSession] = useState(null);
 	const [copied, setCopied] = useState(false);
@@ -59,7 +59,7 @@ export default function Dashboard() {
 						</div>
 						<div className="pt-2">
 							<a
-								href="http://localhost:3000/admin/tenants"
+								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
 								<span>Register Merchant in Master Portal</span>
 								<ExternalLink size={13} />

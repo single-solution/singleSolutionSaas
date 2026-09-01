@@ -9,7 +9,8 @@ export async function GET(request) {
   var siteId = (script && (script.getAttribute('data-site-id') || script.getAttribute('data-site'))) || '${querySiteId}';
   if (!siteId) return;
 
-  var endpoint = (script && script.src ? script.src.split('/telemetry')[0] : '') + '/api/events';
+  var serverOrigin = '${new URL(request.url).origin}';
+  var endpoint = (script && script.src && script.src.indexOf('http') === 0 ? script.src.split('/telemetry')[0] : serverOrigin) + '/api/events';
   var sessionId = sessionStorage.getItem('__ss_sess') || ('sess_' + Math.random().toString(36).substring(2, 10));
   sessionStorage.setItem('__ss_sess', sessionId);
 

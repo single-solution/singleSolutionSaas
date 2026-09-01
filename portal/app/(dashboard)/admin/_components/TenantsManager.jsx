@@ -74,7 +74,7 @@ export default function TenantsManager() {
 
 	const handleCreateTenant = async (e) => {
 		e.preventDefault();
-		await addTenant({
+		const result = await addTenant({
 			name: newName,
 			domain: newDomain,
 			email: newEmail,
@@ -83,12 +83,14 @@ export default function TenantsManager() {
 			secretKey: newSecret || undefined,
 			initialCredits: Number(initialCredits),
 		});
-		setNewName('');
-		setNewDomain('');
-		setNewEmail('');
-		setNewPassword('');
-		setNewSecret('');
-		setIsCreateOpen(false);
+		if (result) {
+			setNewName('');
+			setNewDomain('');
+			setNewEmail('');
+			setNewPassword('');
+			setNewSecret('');
+			setIsCreateOpen(false);
+		}
 	};
 
 	const handleUpdateTenant = async (e) => {

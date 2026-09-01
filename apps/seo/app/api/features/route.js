@@ -37,9 +37,16 @@ export const DEFAULT_FEATURES = [
 async function getLiveFeatures(db) {
 	let portalFeatures = DEFAULT_FEATURES;
 	try {
-		const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
-		// Use dynamic fetch to avoid stale cache on pricing
-		const res = await fetch(`${portalUrl}/api/apps`, { cache: 'no-store' });
+		let portalUrl = process.env.PORTAL_URL;
+		if (!portalUrl && db) {
+			try {
+				const conn = await db.collection('portal_connections').findOne({}, { sort: { lastHandshake: -1 } });
+				if (conn && conn.portalUrl) portalUrl = conn.portalUrl;
+			} catch {}
+		}
+		if (!portalUrl) portalUrl = 'http://localhost:3000';
+		// Use dynamic fetch to avoid stale cache on pricing with 2.5s timeout
+		const res = await fetch(`${portalUrl}/api/apps`, { cache: 'no-store', signal: AbortSignal.timeout(2500) });
 		if (res.ok) {
 			const apps = await res.json();
 			const analyticsApp = apps.find((a) => a.id === 'seo');

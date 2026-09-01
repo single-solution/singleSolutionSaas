@@ -17,7 +17,15 @@ export async function POST(request) {
 			return NextResponse.json({ error: 'URL required' }, { status: 400, headers: CORS_HEADERS });
 		}
 
-		const cleanUrl = url.startsWith('http') ? url : `http://${url}`;
+		let cleanUrl = String(url || '')
+			.trim()
+			.replace(/\/+$/, '');
+		if (!cleanUrl) {
+			return NextResponse.json({ error: 'URL required' }, { status: 400, headers: CORS_HEADERS });
+		}
+		if (!/^https?:\/\//i.test(cleanUrl)) {
+			cleanUrl = `https://${cleanUrl}`;
+		}
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), 2500);
 

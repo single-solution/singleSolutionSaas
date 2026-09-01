@@ -89,9 +89,19 @@ export async function POST(request) {
 			}
 		}
 
-		// Insert transactions in bulk
+		// Insert transactions into primary ledger
 		if (transactions.length > 0) {
-			await db.collection('credit_transactions').insertMany(transactions);
+			const EMPTY_LEDGER = { id: 'primary_ledger', depositRequests: [], creditTransactions: [], bankConfig: {} };
+			const ledger = (await db.collection('billing_ledger').findOne({ id: 'primary_ledger' })) || EMPTY_LEDGER;
+			const updatedTxs = [...transactions, ...(ledger.creditTransactions || [])].slice(0, 500);
+
+			await db
+				.collection('billing_ledger')
+				.updateOne(
+					{ id: 'primary_ledger' },
+					{ $set: { creditTransactions: updatedTxs, updatedAt: new Date().toISOString() } },
+					{ upsert: true },
+				);
 
 			await db.collection('audit_logs').insertOne({
 				id: `log_cron_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,

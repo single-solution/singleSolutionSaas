@@ -7,7 +7,7 @@ import { useAppContext } from '../../src/context/AppContext';
 import { Building2, Coins, LogOut, Search, Globe, CheckCircle2, FileText, Settings, Sparkles } from 'lucide-react';
 
 export default function SeoDashboardLayout({ children }) {
-	const { session, logoutApp } = useAppSecurity() || {};
+	const { session, logoutApp, portalUrl } = useAppSecurity() || {};
 	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
 		useAppContext() || {};
 
@@ -27,6 +27,7 @@ export default function SeoDashboardLayout({ children }) {
 
 	return (
 		<AppLayout
+			footerLink={{ to: portalUrl || session?.portalUrl || '#', label: 'Master Portal' }}
 			appName="Autonomous SEO Engine"
 			appSubtitle={session?.tenantName || 'Workspace'}
 			navigation={navigation}

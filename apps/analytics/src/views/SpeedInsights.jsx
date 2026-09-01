@@ -9,7 +9,7 @@ import { useStorefront } from '../context/StorefrontContext';
 import { FeatureLockScreen } from '@saas/ui/auth/AppAuthGuard';
 
 export default function SpeedInsights() {
-	const { activeStore, stores, analyticsData, hasStoreFeature, storeEvents, toggleFeature } = useStorefront();
+	const { portalUrl, activeStore, stores, analyticsData, hasStoreFeature, storeEvents, toggleFeature } = useStorefront();
 	const [selectedMetric, setSelectedMetric] = useState(null);
 
 	if (!activeStore || stores.length === 0) {
@@ -32,7 +32,7 @@ export default function SpeedInsights() {
 						</div>
 						<div className="pt-2">
 							<a
-								href="http://localhost:3000/admin/tenants"
+								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
 								<span>Go to Master Portal</span>
 								<ExternalLink size={13} />

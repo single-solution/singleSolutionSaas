@@ -64,7 +64,11 @@ export function StorefrontProvider({ children }) {
 			setSelectedStoreId(session.tenantId);
 		} else if (isAdmin) {
 			// Fetch all tenants for admin context switching
-			const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
+			const portalUrl =
+				(typeof window !== 'undefined' && window.__PORTAL_URL__) ||
+				session?.portalUrl ||
+				process.env.PORTAL_URL ||
+				'http://localhost:3000';
 			fetch(`${portalUrl}/api/tenants`)
 				.then((res) => res.json())
 				.then((data) => {
@@ -319,7 +323,8 @@ export function StorefrontProvider({ children }) {
 				saveMetaCapi,
 				ga4Config,
 				saveGa4,
-				webhookConfig,
+				session,
+				portalUrl: (typeof window !== 'undefined' && window.__PORTAL_URL__) || session?.portalUrl || '',
 				saveWebhook,
 			}}>
 			{children}

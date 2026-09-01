@@ -214,15 +214,18 @@ export async function POST(req) {
 		const body = await req.json().catch(() => ({}));
 		const { id, originalId, name, status, url, secretKey, features, defaultPrice, description, desc } = body;
 
-		if (!id || !name || !url) {
-			return NextResponse.json({ error: 'App Name and URL are required' }, { status: 400, headers: CORS_HEADERS });
+		let normalizedUrl = String(url || '')
+			.trim()
+			.replace(/\/+$/, '');
+		if (!/^https?:\/\//i.test(normalizedUrl)) {
+			normalizedUrl = `https://${normalizedUrl}`;
 		}
 
 		const appRecord = {
 			id: id.trim().toLowerCase(),
 			name: name.trim(),
 			status: status || 'operational',
-			url: url.trim(),
+			url: normalizedUrl,
 			secretKey: secretKey?.trim() || `sec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
 			features: Array.isArray(features) ? features : [],
 			defaultPrice: Number(defaultPrice) || 0,

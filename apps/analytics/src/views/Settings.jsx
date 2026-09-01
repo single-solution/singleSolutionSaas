@@ -7,14 +7,14 @@ import { Input, Label } from '@saas/ui/inputs/TextInput';
 import { useStorefront } from '../context/StorefrontContext';
 
 export default function SettingsPage() {
-	const { activeStore, stores, resetStoreEvents } = useStorefront();
+	const { portalUrl, activeStore, stores, resetStoreEvents } = useStorefront();
 	const [saved, setSaved] = useState(false);
 	const [form, setForm] = useState({
 		siteId: activeStore?.id || '',
 		domain: activeStore?.domain || '',
 		ignoredIps: '192.168.1.1, 10.0.0.1',
 		samplingRate: '100',
-		edgeEndpoint: 'http://localhost:5001/api/telemetry/event',
+		edgeEndpoint: typeof window !== 'undefined' ? `${window.location.origin}/api/events` : '/api/events',
 	});
 
 	if (!activeStore || stores.length === 0) {
@@ -37,7 +37,7 @@ export default function SettingsPage() {
 						</div>
 						<div className="pt-2">
 							<a
-								href="http://localhost:3000/admin/tenants"
+								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
 								<span>Go to Master Portal</span>
 								<ExternalLink size={13} />
