@@ -22,19 +22,10 @@ import {
 } from 'lucide-react';
 
 export default function AppRegistryTable() {
-	const {
-		products = [],
-		registerProduct,
-		deleteProduct,
-		checkAppHealth,
-		launchMicroApp,
-		activeTenant,
-		updateFeaturePrice,
-	} = usePortal();
+	const { products = [], registerProduct, deleteProduct, checkAppHealth, launchMicroApp, activeTenant } = usePortal();
 
 	const [isRegisterOpen, setIsRegisterOpen] = useState(false);
 	const [editingProduct, setEditingProduct] = useState(null);
-	const [pricingModalProduct, setPricingModalProduct] = useState(null);
 	const [healthMap, setHealthMap] = useState({});
 	const [isProbing, setIsProbing] = useState(false);
 
@@ -42,9 +33,6 @@ export default function AppRegistryTable() {
 	const [newUrl, setNewUrl] = useState('');
 	const [newSecretKey, setNewSecretKey] = useState('');
 	const [newDesc, setNewDesc] = useState('');
-
-	// Pricing Edit State
-	const [editPrices, setEditPrices] = useState({});
 
 	// Confirm Deletion State
 	const [deleteConfirmProduct, setDeleteConfirmProduct] = useState(null);
@@ -86,21 +74,6 @@ export default function AppRegistryTable() {
 		}
 	};
 
-	const handleOpenPricingModal = (product) => {
-		setPricingModalProduct(product);
-		const initialPrices = {};
-		(product.features || []).forEach((f) => {
-			initialPrices[f.id] = f.creditCost;
-		});
-		setEditPrices(initialPrices);
-	};
-
-	const handleSaveFeaturePrice = async (featureId) => {
-		if (!pricingModalProduct) return;
-		const newPrice = editPrices[featureId];
-		await updateFeaturePrice(pricingModalProduct.id, featureId, newPrice);
-	};
-
 	return (
 		<div className="space-y-6">
 			{/* Top Actions */}
@@ -108,7 +81,7 @@ export default function AppRegistryTable() {
 				<div>
 					<h1 className="text-xl font-bold text-slate-900 tracking-tight">Micro-App Ecosystem Registry</h1>
 					<p className="text-xs text-slate-500">
-						Deploy micro-frontends, manage HMAC cryptographic secrets, and configure feature-tier pricing
+						Deploy micro-frontends, manage HMAC cryptographic secrets, and monitor ecosystem health
 					</p>
 				</div>
 				<div className="flex items-center gap-2.5">
@@ -202,14 +175,6 @@ export default function AppRegistryTable() {
 								<div className="flex items-center gap-1">
 									<button
 										type="button"
-										onClick={() => handleOpenPricingModal(product)}
-										className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
-										title="Manage Feature Pricing">
-										<Coins size={13} className="text-amber-600" />
-										<span>Pricing</span>
-									</button>
-									<button
-										type="button"
 										onClick={() => setEditingProduct(product)}
 										className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
 										title="Edit App Configuration">
@@ -236,74 +201,6 @@ export default function AppRegistryTable() {
 					);
 				})}
 			</div>
-
-			{/* Feature Pricing Modal */}
-			{pricingModalProduct && (
-				<div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-					<div className="w-full max-w-xl bg-white rounded-2xl border border-slate-200 shadow-2xl p-6 space-y-5 max-h-[85vh] overflow-y-auto">
-						<div className="flex items-center justify-between pb-3 border-b border-slate-100">
-							<div className="flex items-center gap-2">
-								<Coins size={18} className="text-amber-500" />
-								<h3 className="text-sm font-bold text-slate-900">Feature Credit Pricing · {pricingModalProduct.name}</h3>
-							</div>
-							<button onClick={() => setPricingModalProduct(null)} className="text-slate-400 hover:text-slate-700">
-								✕
-							</button>
-						</div>
-
-						<p className="text-xs text-slate-500 leading-relaxed">
-							SuperAdmins can customize the monthly credit cost ($/mo) for each capability. Prices auto-calculate across
-							all attached merchant websites.
-						</p>
-
-						<div className="space-y-3">
-							{(pricingModalProduct.features || []).map((feat) => {
-								return (
-									<div
-										key={feat.id}
-										className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-										<div className="space-y-0.5">
-											<div className="font-bold text-slate-900">{feat.name}</div>
-											<div className="text-[11px] text-slate-500">{feat.desc || 'No description'}</div>
-											<div className="text-[10px] text-slate-400 font-mono">ID: {feat.id}</div>
-										</div>
-
-										<div className="flex items-center gap-2 shrink-0">
-											<div className="relative flex items-center">
-												<span className="absolute left-2.5 text-slate-400 font-bold">$</span>
-												<input
-													type="number"
-													min="0"
-													value={editPrices[feat.id] !== undefined ? editPrices[feat.id] : feat.creditCost}
-													onChange={(e) => setEditPrices({ ...editPrices, [feat.id]: Number(e.target.value) })}
-													className="w-24 pl-6 pr-2 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-900 font-bold text-xs outline-none focus:border-indigo-500"
-												/>
-											</div>
-											<span className="text-[11px] text-slate-500 font-medium">/mo</span>
-
-											<button
-												type="button"
-												onClick={() => handleSaveFeaturePrice(feat.id)}
-												className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors cursor-pointer shadow-xs">
-												Save
-											</button>
-										</div>
-									</div>
-								);
-							})}
-						</div>
-
-						<div className="flex justify-end pt-3 border-t border-slate-100">
-							<button
-								type="button"
-								onClick={() => setPricingModalProduct(null)}
-								className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs">
-								Close
-							</button>
-						</div>
-					</div>
-				</div>
-			)}
 
 			{/* Edit App Modal */}
 			{editingProduct && (

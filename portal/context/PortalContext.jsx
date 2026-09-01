@@ -462,35 +462,11 @@ export function PortalProvider({ children }) {
 		showToast(`${hasFeature ? 'Disabled' : 'Enabled'} feature.`);
 	};
 
-	const updateFeaturePrice = async (appId, featureId, newCreditCost, newName, newDesc) => {
-		try {
-			const res = await fetch('/api/apps', {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ appId, featureId, newCreditCost: Number(newCreditCost), newName, newDesc }),
-			});
-
-			if (res.ok) {
-				const data = await res.json();
-				setProducts((prev) => prev.map((app) => (app.id === appId ? { ...app, features: data.features } : app)));
-				logAction(`SuperAdmin updated feature price: ${appId} -> ${featureId} to $${newCreditCost}/mo`, 'SuperAdmin', 'info');
-				showToast(`Feature price updated to $${newCreditCost} credits/mo.`);
-			}
-		} catch (err) {
-			showToast(err.message || 'Failed to update feature pricing', 'danger');
-		}
-	};
-
 	const registerProduct = async (productData) => {
 		const slug = productData.name
 			.trim()
 			.toLowerCase()
 			.replace(/[^a-z0-9]/g, '_');
-		const defaultFeatures = [
-			{ id: 'core', name: 'Core Engine', creditCost: Number(productData.price) || 50, desc: 'Base functionality' },
-			{ id: 'analytics', name: 'Analytics & Telemetry', creditCost: 25, desc: 'Live event tracking' },
-			{ id: 'webhooks', name: 'Webhook Triggers', creditCost: 20, desc: 'Automated event hooks' },
-		];
 
 		const newProduct = {
 			id: slug,
@@ -500,9 +476,10 @@ export function PortalProvider({ children }) {
 			secretKey: productData.secretKey || `sec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
 			status: 'operational',
 			desc: productData.desc?.trim() || 'Custom registered SaaS micro-application.',
-			features: productData.features || defaultFeatures,
+			features: productData.features || [],
 		};
 
+		let savedProduct = newProduct;
 		try {
 			const res = await fetch('/api/apps', {
 				method: 'POST',
@@ -513,21 +490,25 @@ export function PortalProvider({ children }) {
 				const errorData = await res.json();
 				throw new Error(errorData.error || 'Failed to register app');
 			}
+			const data = await res.json();
+			if (data && data.id) {
+				savedProduct = data;
+			}
 		} catch (err) {
 			showToast(err.message || 'Failed to register app', 'danger');
 			return null;
 		}
 
 		setProducts((prev) => {
-			const filtered = prev.filter((p) => p.id !== (productData.id || newProduct.id));
-			const cleanProduct = { ...newProduct };
+			const filtered = prev.filter((p) => p.id !== (productData.id || savedProduct.id));
+			const cleanProduct = { ...savedProduct };
 			delete cleanProduct.originalId;
 			return [...filtered, cleanProduct];
 		});
 
-		logAction(`Registered SaaS micro-app: ${newProduct.name}`, newProduct.url, 'success');
-		showToast(`Registered app "${newProduct.name}".`);
-		return newProduct;
+		logAction(`Registered SaaS micro-app: ${savedProduct.name}`, savedProduct.url, 'success');
+		showToast(`Registered app "${savedProduct.name}".`);
+		return savedProduct;
 	};
 
 	const deleteProduct = async (productId) => {
@@ -750,7 +731,6 @@ export function PortalProvider({ children }) {
 				addMerchantWebsite,
 				deleteMerchantWebsite,
 				toggleWebsiteFeature,
-				updateFeaturePrice,
 				registerProduct,
 				deleteProduct,
 				requestBankDeposit,

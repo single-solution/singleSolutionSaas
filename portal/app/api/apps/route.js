@@ -212,7 +212,7 @@ export async function GET() {
 export async function POST(req) {
 	try {
 		const body = await req.json().catch(() => ({}));
-		const { id, originalId, name, status, url, secretKey, features, defaultPrice, description, desc } = body;
+		const { id, originalId, name, status, url, secretKey, features, description, desc } = body;
 
 		let normalizedUrl = String(url || '')
 			.trim()
@@ -221,14 +221,30 @@ export async function POST(req) {
 			normalizedUrl = `https://${normalizedUrl}`;
 		}
 
+		// Auto-import features directly from micro-app if available
+		let appFeatures = Array.isArray(features) && features.length > 0 ? features : [];
+		try {
+			const featRes = await fetch(`${normalizedUrl}/api/features`, {
+				cache: 'no-store',
+				signal: AbortSignal.timeout(2500),
+			});
+			if (featRes.ok) {
+				const featData = await featRes.json();
+				if (Array.isArray(featData.features) && featData.features.length > 0) {
+					appFeatures = featData.features;
+				} else if (Array.isArray(featData) && featData.length > 0) {
+					appFeatures = featData;
+				}
+			}
+		} catch {}
+
 		const appRecord = {
 			id: id.trim().toLowerCase(),
 			name: name.trim(),
 			status: status || 'operational',
 			url: normalizedUrl,
 			secretKey: secretKey?.trim() || `sec_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-			features: Array.isArray(features) ? features : [],
-			defaultPrice: Number(defaultPrice) || 0,
+			features: appFeatures,
 			desc: desc || description || '',
 			description: description || desc || '',
 			updatedAt: new Date().toISOString(),
@@ -302,59 +318,6 @@ export async function POST(req) {
 		}
 
 		return NextResponse.json(appRecord, { headers: CORS_HEADERS });
-	} catch (err) {
-		return NextResponse.json({ error: err.message }, { status: 500, headers: CORS_HEADERS });
-	}
-}
-
-export async function PATCH(req) {
-	try {
-		const body = await req.json().catch(() => ({}));
-		const { appId, featureId, newCreditCost, newName, newDesc } = body;
-
-		if (!appId || !featureId || newCreditCost === undefined) {
-			return NextResponse.json(
-				{ error: 'appId, featureId, and newCreditCost are required' },
-				{ status: 400, headers: CORS_HEADERS },
-			);
-		}
-
-		const db = await connectPortalDb();
-		if (!db) {
-			return NextResponse.json({ error: 'Database offline' }, { status: 503, headers: CORS_HEADERS });
-		}
-
-		const app = await db.collection('apps').findOne({ id: appId });
-		if (!app) {
-			return NextResponse.json({ error: `App ${appId} not found` }, { status: 404, headers: CORS_HEADERS });
-		}
-
-		const updatedFeatures = (app.features || []).map((f) => {
-			if (f.id === featureId) {
-				return {
-					...f,
-					creditCost: Number(newCreditCost),
-					name: newName || f.name,
-					desc: newDesc || f.desc,
-				};
-			}
-			return f;
-		});
-
-		await db
-			.collection('apps')
-			.updateOne({ id: appId }, { $set: { features: updatedFeatures, updatedAt: new Date().toISOString() } });
-
-		await db.collection('audit_logs').insertOne({
-			id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-			action: `Updated feature pricing: ${app.name} -> ${featureId} to $${newCreditCost}/mo`,
-			actor: 'SuperAdmin',
-			level: 'info',
-			details: { appId, featureId, newCreditCost },
-			timestamp: new Date().toISOString(),
-		});
-
-		return NextResponse.json({ success: true, appId, features: updatedFeatures }, { headers: CORS_HEADERS });
 	} catch (err) {
 		return NextResponse.json({ error: err.message }, { status: 500, headers: CORS_HEADERS });
 	}
