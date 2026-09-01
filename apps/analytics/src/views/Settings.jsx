@@ -7,7 +7,7 @@ import { Input, Label } from '@saas/ui/inputs/TextInput';
 import { useStorefront } from '../context/StorefrontContext';
 
 export default function SettingsPage() {
-	const { portalUrl, activeStore, stores, resetStoreEvents } = useStorefront();
+	const { portalUrl, session, activeStore, stores, resetStoreEvents } = useStorefront();
 	const [saved, setSaved] = useState(false);
 	const [form, setForm] = useState({
 		siteId: activeStore?.id || '',
@@ -17,12 +17,14 @@ export default function SettingsPage() {
 		edgeEndpoint: typeof window !== 'undefined' ? `${window.location.origin}/api/events` : '/api/events',
 	});
 
+	const portalLink = portalUrl ? `${portalUrl}/${session?.role === 'merchant' ? 'merchant/home' : 'admin/tenants'}` : '#';
+
 	if (!activeStore || stores.length === 0) {
 		return (
-			<div className="space-y-6 antialiased text-slate-900 max-w-2xl">
+			<div className="space-y-6 antialiased text-slate-900 max-w-4xl">
 				<PageHeader
-					title="Telemetry Configuration & Collector Settings"
-					subtitle="Manage site credentials, edge collector endpoints, and data rules"
+					title="Analytics Pro Configuration"
+					subtitle="Manage telemetry credentials, domain mappings, and data retention"
 				/>
 				<Card>
 					<div className="py-16 px-4 text-center space-y-4 max-w-md mx-auto">
@@ -30,14 +32,14 @@ export default function SettingsPage() {
 							<Building2 size={28} />
 						</div>
 						<div className="space-y-1.5">
-							<h3 className="font-extrabold text-base text-slate-900">No Merchant Account Available</h3>
+							<h3 className="font-extrabold text-base text-slate-900">No Merchant Storefront Available</h3>
 							<p className="text-xs text-slate-500 leading-relaxed">
-								Register a merchant store in the Master Portal to configure edge collector and IP exclusion rules.
+								Register a merchant store in the Master Portal to manage analytics settings.
 							</p>
 						</div>
 						<div className="pt-2">
 							<a
-								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
+								href={portalLink}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
 								<span>Go to Master Portal</span>
 								<ExternalLink size={13} />

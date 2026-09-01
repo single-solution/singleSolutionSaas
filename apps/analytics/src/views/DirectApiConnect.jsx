@@ -20,13 +20,15 @@ import { Badge } from '@saas/ui/badges/Badge';
 import { useStorefront } from '../context/StorefrontContext';
 
 export default function DirectApiConnect() {
-	const { portalUrl, activeStore, stores } = useStorefront();
+	const { portalUrl, session, activeStore, stores } = useStorefront();
 	const [activeTab, setActiveTab] = useState('ingest_api');
 	const [copiedKey, setCopiedKey] = useState(null);
 
+	const portalLink = portalUrl ? `${portalUrl}/${session?.role === 'merchant' ? 'merchant/home' : 'admin/tenants'}` : '#';
+
 	if (!activeStore || stores.length === 0) {
 		return (
-			<div className="space-y-6 antialiased text-slate-900">
+			<div className="space-y-6 antialiased text-slate-900 max-w-4xl">
 				<PageHeader
 					title="Direct API & Headless Integration Hub"
 					subtitle="REST endpoints, Ingestion pipelines, and Query APIs for custom client designs"
@@ -44,7 +46,7 @@ export default function DirectApiConnect() {
 						</div>
 						<div className="pt-2">
 							<a
-								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
+								href={portalLink}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
 								<span>Go to Master Portal</span>
 								<ExternalLink size={13} />
@@ -59,7 +61,7 @@ export default function DirectApiConnect() {
 	const siteId = activeStore.id;
 	const apiKey = activeStore.apiKey;
 	const domain = activeStore.domain;
-	const analyticsUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001';
+	const analyticsUrl = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || '';
 
 	const handleCopy = (text, key) => {
 		navigator.clipboard.writeText(text);

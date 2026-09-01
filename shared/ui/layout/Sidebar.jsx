@@ -12,7 +12,7 @@ export function Sidebar({
 	icon = <IconZap size={18} />,
 	navigation = [],
 	navSections = [],
-	footerLink = { to: 'http://localhost:3000', label: 'Master Portal' },
+	footerLink = null,
 }) {
 	const pathname = usePathname() || '/';
 

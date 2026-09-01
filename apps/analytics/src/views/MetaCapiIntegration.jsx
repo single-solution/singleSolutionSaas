@@ -9,7 +9,8 @@ import { useStorefront } from '../context/StorefrontContext';
 import { FeatureLockScreen } from '@saas/ui/auth/AppAuthGuard';
 
 export default function MetaCapiIntegration() {
-	const { portalUrl, activeStore, stores, hasStoreFeature, metaCapiConfig, saveMetaCapi, toggleFeature } = useStorefront();
+	const { portalUrl, session, activeStore, stores, hasStoreFeature, metaCapiConfig, saveMetaCapi, toggleFeature } =
+		useStorefront();
 	const [form, setForm] = useState({
 		pixelId: metaCapiConfig?.pixelId || '',
 		accessToken: metaCapiConfig?.accessToken || '',
@@ -24,12 +25,14 @@ export default function MetaCapiIntegration() {
 	const [testResult, setTestResult] = useState(null);
 	const [isSending, setIsSending] = useState(false);
 
+	const portalLink = portalUrl ? `${portalUrl}/${session?.role === 'merchant' ? 'merchant/home' : 'admin/tenants'}` : '#';
+
 	if (!activeStore || stores.length === 0) {
 		return (
 			<div className="space-y-6 antialiased text-slate-900 max-w-4xl">
 				<PageHeader
-					title="Meta Pixel & Facebook Conversions API (CAPI)"
-					subtitle="Server-to-server conversion tracking and event deduplication"
+					title="Meta Conversions API (CAPI) & Pixel Setup"
+					subtitle="Direct server-to-server tracking for Facebook & Instagram Ads with test event validation"
 				/>
 				<Card>
 					<div className="py-16 px-4 text-center space-y-4 max-w-md mx-auto">
@@ -45,7 +48,7 @@ export default function MetaCapiIntegration() {
 						</div>
 						<div className="pt-2">
 							<a
-								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
+								href={portalLink}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
 								<span>Go to Master Portal</span>
 								<ExternalLink size={13} />

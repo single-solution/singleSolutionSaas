@@ -87,9 +87,11 @@ export function FeatureLockScreen({
 	featureName = 'Advanced Module',
 	creditCost = 30,
 	desc = 'This feature is currently disabled for your merchant account.',
-	portalUrl = 'http://localhost:3000/merchant/licenses',
+	portalUrl = '',
 	onActivate,
 }) {
+	const security = useAppSecurity();
+	const effectivePortalUrl = portalUrl || (security?.portalUrl ? `${security.portalUrl}/merchant/licenses` : '');
 	const [isActivating, setIsActivating] = useState(false);
 
 	const handleActivate = async () => {
@@ -135,14 +137,16 @@ export function FeatureLockScreen({
 						<span>{isActivating ? 'Activating Module...' : `Activate ($${(Number(creditCost) / 720).toFixed(4)}/hr)`}</span>
 					</button>
 				)}
-				<a
-					href={portalUrl}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="w-full py-2 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer">
-					<span>Manage in Master Portal</span>
-					<ExternalLinkIcon size={13} />
-				</a>
+				{effectivePortalUrl ? (
+					<div className="flex items-center justify-center gap-3 pt-2">
+						<a
+							href={effectivePortalUrl}
+							className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all">
+							<span>Configure Licensing</span>
+							<ExternalLinkIcon size={12} />
+						</a>
+					</div>
+				) : null}
 			</div>
 		</div>
 	);

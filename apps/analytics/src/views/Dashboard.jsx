@@ -32,12 +32,14 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function Dashboard() {
-	const { portalUrl, activeStore, stores, analyticsData, storeEvents, recordStoreEvent } = useStorefront();
+	const { portalUrl, session, activeStore, stores, analyticsData, storeEvents, recordStoreEvent } = useStorefront();
 	const [period, setPeriod] = useState('7d');
 	const [selectedSession, setSelectedSession] = useState(null);
 	const [copied, setCopied] = useState(false);
 
 	// Case 1: No merchants registered anywhere
+	const portalLink = portalUrl ? `${portalUrl}/${session?.role === 'merchant' ? 'merchant/home' : 'admin/tenants'}` : '#';
+
 	if (!activeStore || stores.length === 0) {
 		return (
 			<div className="space-y-6 antialiased text-slate-900">
@@ -59,9 +61,9 @@ export default function Dashboard() {
 						</div>
 						<div className="pt-2">
 							<a
-								href={portalUrl ? `${portalUrl}/admin/tenants` : '#'}
+								href={portalLink}
 								className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-all shadow-xs">
-								<span>Register Merchant in Master Portal</span>
+								<span>Go to Master Portal</span>
 								<ExternalLink size={13} />
 							</a>
 						</div>
@@ -74,7 +76,7 @@ export default function Dashboard() {
 	const siteId = activeStore.id;
 	const domain = activeStore.domain;
 	const hasEvents = analyticsData.totalPageViews > 0;
-	const analyticsUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5001';
+	const analyticsUrl = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || '';
 
 	const embedScriptCode = `<!-- SingleSolution Analytics Pro Telemetry -->
 <script

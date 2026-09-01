@@ -66,26 +66,29 @@ export function AppProvider({ children }) {
 			const portalUrl =
 				(typeof window !== 'undefined' && window.__PORTAL_URL__) ||
 				session?.portalUrl ||
+				process.env.NEXT_PUBLIC_PORTAL_URL ||
 				process.env.PORTAL_URL ||
-				'http://localhost:3000';
-			fetch(`${portalUrl}/api/tenants`)
-				.then((res) => res.json())
-				.then((data) => {
-					if (Array.isArray(data) && data.length > 0) {
-						const adminStores = data.map((t) => ({
-							id: t.id,
-							name: t.name,
-							domain: t.domain,
-							apiKey: t.apiKey || `pk_live_${t.id}`,
-							subscriptions: (t.subscriptions && t.subscriptions.seo) || ['*'],
-						}));
-						setStores(adminStores);
-						if (!selectedStoreId || !adminStores.find((s) => s.id === selectedStoreId)) {
-							setSelectedStoreId(adminStores[0].id);
+				'';
+			if (portalUrl) {
+				fetch(`${portalUrl}/api/tenants`)
+					.then((res) => res.json())
+					.then((data) => {
+						if (Array.isArray(data) && data.length > 0) {
+							const adminStores = data.map((t) => ({
+								id: t.id,
+								name: t.name,
+								domain: t.domain,
+								apiKey: t.apiKey || `pk_live_${t.id}`,
+								subscriptions: (t.subscriptions && t.subscriptions.seo) || ['*'],
+							}));
+							setStores(adminStores);
+							if (!selectedStoreId || !adminStores.find((s) => s.id === selectedStoreId)) {
+								setSelectedStoreId(adminStores[0].id);
+							}
 						}
-					}
-				})
-				.catch((err) => console.warn('Failed to fetch tenants for admin:', err));
+					})
+					.catch(() => {});
+			}
 		}
 	}, [session, isAdmin, selectedStoreId]);
 

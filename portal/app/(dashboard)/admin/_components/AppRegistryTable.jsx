@@ -150,24 +150,12 @@ export default function AppRegistryTable() {
 								<div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs flex items-center justify-between">
 									<div>
 										<span className="font-bold text-slate-900">{product.features?.length || 0} Features</span>
-										<span className="text-[10px] text-slate-400 block">Catalog Capabilities</span>
+										<span className="text-[10px] text-slate-400 block">Imported from Micro-App</span>
 									</div>
 									<div className="text-right">
 										<span className="font-extrabold text-indigo-600">${totalAppFloat} credits</span>
 										<span className="text-[10px] text-slate-400 block">Full suite / mo</span>
 									</div>
-								</div>
-
-								<div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-mono text-slate-400">
-									<span>Endpoint:</span>
-									<a
-										href={product.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										className="text-indigo-600 hover:underline flex items-center gap-1 font-semibold">
-										<span>{product.url}</span>
-										<ExternalLink size={10} />
-									</a>
 								</div>
 							</div>
 
@@ -307,7 +295,7 @@ export default function AppRegistryTable() {
 								<input
 									type="text"
 									required
-									placeholder="http://localhost:5006"
+									placeholder="https://app.yourdomain.com or https://app.vercel.app"
 									value={newUrl}
 									onChange={(e) => setNewUrl(e.target.value)}
 									className="w-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono text-[11px] outline-none focus:border-indigo-500"

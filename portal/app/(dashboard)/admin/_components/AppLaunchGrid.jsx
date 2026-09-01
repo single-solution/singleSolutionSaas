@@ -42,12 +42,6 @@ export default function AppLaunchGrid() {
 										{product.desc || product.description}
 									</p>
 								</div>
-
-								<div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-									<span>
-										URL: <strong className="text-slate-700 font-mono text-[10px]">{product.url}</strong>
-									</span>
-								</div>
 							</div>
 
 							<button

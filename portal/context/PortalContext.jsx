@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getAppLaunchUrl } from '../../shared/ui/auth/ssoHandshake.js';
+import { getAppLaunchUrl } from '@saas/ui/auth/ssoHandshake';
 
 const PortalContext = createContext(null);
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifySSOToken } from '../../../../../../shared/ui/auth/ssoHandshake';
+import { verifySSOToken } from '@saas/ui/auth/ssoHandshake';
 import { connectLoyaltyDb } from '../../../../lib/db';
 
 const CORS_HEADERS = {

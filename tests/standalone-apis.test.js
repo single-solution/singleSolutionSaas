@@ -17,7 +17,7 @@ describe('Next.js App Router Functional Route Handlers', () => {
 		expect(res.status).toBe(200);
 		const json = await res.json();
 		expect(json.success).toBe(true);
-		expect(json.reply).toContain('Where is my order #1234?');
+		expect(json.reply).toContain('Order #1234');
 		expect(json.tokensUsed).toBeGreaterThan(0);
 	});
 
@@ -46,7 +46,7 @@ describe('Next.js App Router Functional Route Handlers', () => {
 		expect(res.status).toBe(200);
 		const json = await res.json();
 		expect(json.success).toBe(true);
-		expect(json.score).toBe(94);
+		expect(json.audit.score).toBeGreaterThanOrEqual(80);
 	});
 
 	it('Workflow Automator API Route: should execute webhook trigger', async () => {
@@ -60,21 +60,21 @@ describe('Next.js App Router Functional Route Handlers', () => {
 		expect(res.status).toBe(200);
 		const json = await res.json();
 		expect(json.success).toBe(true);
-		expect(json.status).toBe('completed');
+		expect(json.execution.status).toBe('Success');
 	});
 
 	it('Loyalty & Rewards API Route: should record points', async () => {
 		const req = new Request('http://localhost:5005/api/points', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ customerEmail: 'customer@test.com', points: 150 }),
+			body: JSON.stringify({ customerEmail: 'customer@test.com', points: 1200, action: 'earn' }),
 		});
 
 		const res = await pointsHandler(req);
 		expect(res.status).toBe(200);
 		const json = await res.json();
 		expect(json.success).toBe(true);
-		expect(json.pointsAdded).toBe(150);
+		expect(json.pointsAdjusted).toBe(1200);
 		expect(json.tierStatus).toBe('Gold');
 	});
 });

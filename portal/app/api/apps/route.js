@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { connectPortalDb } from '../../../lib/db.js';
-import { createSSOToken } from '../../../../shared/ui/auth/ssoHandshake.js';
+import { createSSOToken } from '@saas/ui/auth/ssoHandshake';
 
 const CORS_HEADERS = {
 	'Access-Control-Allow-Origin': '*',
@@ -262,9 +262,9 @@ export async function POST(req) {
 
 			// Pre-registration Handshake
 			try {
-				const portalUrl =
-					(typeof process !== 'undefined' && process.env?.PORTAL_URL) ||
-					(typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
+				const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+				const proto = req.headers.get('x-forwarded-proto') || 'https';
+				const portalUrl = process.env.PORTAL_URL || (host ? `${proto}://${host}` : 'https://portal.singlesolutionsaas.com');
 
 				const handshakeToken = createSSOToken(
 					{ id: 'usr_portal_admin', name: 'SuperAdmin Verification', role: 'admin' },

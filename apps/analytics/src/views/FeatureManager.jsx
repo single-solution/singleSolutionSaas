@@ -25,7 +25,7 @@ import { PageHeader } from '@saas/ui/layout/PageHeader';
 import { Card } from '@saas/ui/cards/Card';
 import { Badge } from '@saas/ui/badges/Badge';
 import { useStorefront } from '../context/StorefrontContext';
-import { formatHourlyRate, formatMonthlyEquivalent, getHourlyRate } from '../../../../shared/ui/billing/hourlyBilling';
+import { formatHourlyRate, formatMonthlyEquivalent, getHourlyRate } from '@saas/ui/billing/hourlyBilling';
 
 const ICON_MAP = {
 	Activity,

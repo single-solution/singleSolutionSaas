@@ -1,46 +1,98 @@
-import React, { useState } from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Send, User, Bot } from 'lucide-react';
+import { Send, User, Bot, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { PageHeader } from '@saas/ui/layout/PageHeader';
 import { Card } from '@saas/ui/cards/Card';
 import { Badge } from '@saas/ui/badges/Badge';
 import { Button } from '@saas/ui/buttons/Button';
+import { useAppContext } from '../context/AppContext';
 
 export default function ConversationDetail() {
-	const { id } = useParams();
-	const [reply, setReply] = useState('');
+	const params = useParams();
+	const convoId = params?.id || 'conv_live_891';
+	const { activeStore } = useAppContext() || {};
 
-	const messages = [
+	const [convo, setConvo] = useState(null);
+	const [messages, setMessages] = useState([
 		{
-			sender: 'user',
-			text: 'Hi, I placed an order #CT-9912 yesterday. Can you tell me when it will arrive?',
-			time: '10:42 AM',
+			sender: 'customer',
+			text: 'Hi! I placed an order #9421 yesterday. When will it arrive?',
+			timestamp: new Date(Date.now() - 10 * 60000).toISOString(),
 		},
 		{
 			sender: 'bot',
-			text: 'Hello! Let me check that for you right away. Order #CT-9912 is currently packed and scheduled for courier pickup today at 4:00 PM. Estimated delivery is tomorrow afternoon.',
-			time: '10:42 AM',
+			text: 'Order #9421 has been packed and scheduled for courier dispatch today. Estimated delivery is tomorrow by 5:00 PM.',
+			timestamp: new Date(Date.now() - 9 * 60000).toISOString(),
 		},
-		{ sender: 'user', text: 'Great, thanks! Can I still change the delivery phone number?', time: '10:44 AM' },
-		{
-			sender: 'bot',
-			text: 'Yes! Please reply with the new phone number and I will update your shipping manifest immediately.',
-			time: '10:44 AM',
-		},
-	];
+	]);
+	const [reply, setReply] = useState('');
+	const [status, setStatus] = useState('Active');
+
+	useEffect(() => {
+		fetch(`/api/chat?conversationId=${convoId}`)
+			.then((res) => res.json())
+			.then((data) => {
+				if (data?.conversation) {
+					setConvo(data.conversation);
+					if (Array.isArray(data.conversation.messages) && data.conversation.messages.length > 0) {
+						setMessages(data.conversation.messages);
+					}
+					if (data.conversation.status) {
+						setStatus(data.conversation.status);
+					}
+				}
+			})
+			.catch(() => {});
+	}, [convoId]);
+
+	const handleSendReply = (e) => {
+		e.preventDefault();
+		if (!reply.trim()) return;
+
+		const newMsg = {
+			sender: 'agent',
+			text: reply.trim(),
+			timestamp: new Date().toISOString(),
+		};
+
+		setMessages((prev) => [...prev, newMsg]);
+		setReply('');
+
+		// Post to backend
+		fetch('/api/chat', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				conversationId: convoId,
+				tenantId: activeStore?.id || 'default',
+				message: `[Human Staff Response]: ${newMsg.text}`,
+				customerName: convo?.customerName || 'Customer',
+			}),
+		}).catch(() => {});
+	};
 
 	return (
-		<div className="space-y-6 max-w-4xl">
+		<div className="space-y-6 max-w-4xl pb-12">
 			<PageHeader
-				title={`Conversation ${id || '#cv_101'}`}
-				subtitle="Customer Support Session • Sisters Boutique Storefront"
+				title={`Conversation #${convoId.substring(0, 12)}`}
+				subtitle={`Live Support Session • ${convo?.customerName || 'Ayesha Tariq'}`}
 				actions={
 					<div className="flex items-center gap-2">
-						<Badge type="active">AI Handled</Badge>
-						<Link href="/">
+						<Badge type={status === 'Resolved' ? 'active' : status === 'Escalated' ? 'danger' : 'info'}>{status}</Badge>
+						<button
+							type="button"
+							onClick={() => setStatus(status === 'Resolved' ? 'Active' : 'Resolved')}
+							className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition-all">
+							<CheckCircle size={13} className="text-emerald-600" />
+							<span>{status === 'Resolved' ? 'Reopen Chat' : 'Mark Resolved'}</span>
+						</button>
+						<Link href="/conversations">
 							<Button variant="secondary" size="sm">
-								Back to Inbox
+								<ArrowLeft size={13} />
+								<span>Inbox</span>
 							</Button>
 						</Link>
 					</div>
@@ -48,24 +100,34 @@ export default function ConversationDetail() {
 			/>
 
 			<Card>
-				<div className="space-y-4 mb-6">
+				<div className="space-y-4 mb-6 min-h-[300px] max-h-[500px] overflow-y-auto p-2">
 					{messages.map((m, i) => (
-						<div key={i} className={`flex gap-3 ${m.sender === 'user' ? 'justify-start' : 'justify-end'}`}>
-							{m.sender === 'user' && (
-								<div className="w-8 h-8 rounded-full bg-zinc-200 text-zinc-700 flex items-center justify-center text-xs font-bold shrink-0">
+						<div key={i} className={`flex gap-3 ${m.sender === 'customer' ? 'justify-start' : 'justify-end'}`}>
+							{m.sender === 'customer' && (
+								<div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold shrink-0">
 									<User size={14} />
 								</div>
 							)}
 							<div
-								className={`p-4 rounded-2xl max-w-md text-xs leading-relaxed ${m.sender === 'user' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-950 text-white shadow-xs'}`}>
+								className={`p-3.5 rounded-2xl max-w-md text-xs leading-relaxed ${
+									m.sender === 'customer'
+										? 'bg-slate-100 text-slate-900 border border-slate-200'
+										: m.sender === 'agent'
+											? 'bg-indigo-600 text-white shadow-xs'
+											: 'bg-slate-900 text-white shadow-xs'
+								}`}>
+								<div className="text-[10px] font-bold opacity-75 mb-0.5">
+									{m.sender === 'customer' ? 'Customer' : m.sender === 'agent' ? 'Staff Agent' : 'AI Bot'}
+								</div>
 								<p>{m.text}</p>
-								<span
-									className={`block text-[10px] mt-1 ${m.sender === 'user' ? 'text-zinc-400' : 'text-zinc-400 text-right'}`}>
-									{m.time}
+								<span className="block text-[10px] mt-1 opacity-70 text-right">
+									{m.timestamp
+										? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+										: '10:42 AM'}
 								</span>
 							</div>
-							{m.sender === 'bot' && (
-								<div className="w-8 h-8 rounded-full bg-zinc-950 text-white flex items-center justify-center text-xs font-bold shrink-0">
+							{m.sender !== 'customer' && (
+								<div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs font-bold shrink-0">
 									<Bot size={14} />
 								</div>
 							)}
@@ -73,19 +135,19 @@ export default function ConversationDetail() {
 					))}
 				</div>
 
-				<div className="pt-4 border-t border-zinc-100 flex gap-2">
+				<form onSubmit={handleSendReply} className="pt-4 border-t border-slate-100 flex gap-2">
 					<input
 						type="text"
-						placeholder="Type a human agent takeover reply..."
+						placeholder="Type a human takeover response to send to the customer..."
 						value={reply}
 						onChange={(e) => setReply(e.target.value)}
-						className="flex-1 px-4 py-2 text-xs rounded-xl bg-zinc-50 border border-zinc-200 focus:outline-none focus:border-zinc-900"
+						className="flex-1 px-4 py-2.5 text-xs rounded-xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-indigo-600"
 					/>
-					<Button size="md">
+					<Button size="md" type="submit">
 						<Send size={13} />
-						<span>Send</span>
+						<span>Send Message</span>
 					</Button>
-				</div>
+				</form>
 			</Card>
 		</div>
 	);
