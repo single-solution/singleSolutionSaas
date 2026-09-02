@@ -197,7 +197,7 @@ export function StorefrontProvider({ children }) {
 		if (session?.enabledFeatures && !session.enabledFeatures.includes('*')) {
 			return session.enabledFeatures;
 		}
-		return ['realtime', 'meta_capi', 'ga4'];
+		return ['core_traffic', 'funnel_dropoff', 'speed_insights', 'meta_capi', 'ga4_sync', 'custom_webhooks', 'search_analytics'];
 	});
 	const [totalMonthlyCost, setTotalMonthlyCost] = useState(0);
 
@@ -219,6 +219,16 @@ export function StorefrontProvider({ children }) {
 			if (resEvents.ok) {
 				const events = await resEvents.json();
 				if (Array.isArray(events)) setStoreEvents(events);
+			}
+
+			const resInteg = await fetch(
+				`${API_BASE}/integrations?siteId=${encodeURIComponent(activeWebsite?.id || activeStore.id)}`,
+			);
+			if (resInteg.ok) {
+				const integ = await resInteg.json();
+				if (integ.metaCapi) setMetaCapiConfig(integ.metaCapi);
+				if (integ.ga4) setGa4Config(integ.ga4);
+				if (integ.webhooks) setWebhookConfig(integ.webhooks);
 			}
 		} catch (err) {
 			console.warn('Analytics data load note:', err.message);
@@ -255,17 +265,116 @@ export function StorefrontProvider({ children }) {
 		} catch {}
 	};
 
-	const rawAnalytics = storeEvents.length > 0 ? aggregateAnalyticsFromEvents(storeEvents) : EMPTY_ANALYTICS_STATE;
-	const analytics = {
-		...rawAnalytics,
-		overview: {
-			totalVisitors: rawAnalytics.overview.totalVisitors || 8420,
-			pageViews: rawAnalytics.overview.pageViews || 24800,
-			avgSessionDuration: rawAnalytics.overview.avgSessionDuration || '3m 14s',
-			bounceRate: rawAnalytics.overview.bounceRate || '34.2%',
-			activeNow: rawAnalytics.overview.activeNow || 42,
-		},
+	const saveMetaCapi = async (newConfig) => {
+		if (!activeStore) return;
+		setMetaCapiConfig(newConfig);
+		try {
+			await fetch(`${API_BASE}/integrations`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					siteId: activeWebsite?.id || activeStore.id,
+					metaCapi: newConfig,
+					ga4: ga4Config,
+					webhooks: webhookConfig,
+				}),
+			});
+		} catch {}
 	};
+
+	const saveGa4 = async (newConfig) => {
+		if (!activeStore) return;
+		setGa4Config(newConfig);
+		try {
+			await fetch(`${API_BASE}/integrations`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					siteId: activeWebsite?.id || activeStore.id,
+					metaCapi: metaCapiConfig,
+					ga4: newConfig,
+					webhooks: webhookConfig,
+				}),
+			});
+		} catch {}
+	};
+
+	const saveWebhook = async (newConfig) => {
+		if (!activeStore) return;
+		setWebhookConfig(newConfig);
+		try {
+			await fetch(`${API_BASE}/integrations`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					siteId: activeWebsite?.id || activeStore.id,
+					metaCapi: metaCapiConfig,
+					ga4: ga4Config,
+					webhooks: newConfig,
+				}),
+			});
+		} catch {}
+	};
+
+	const recordStoreEvent = async (eventData) => {
+		if (!activeStore) return null;
+		const payload = {
+			siteId: activeWebsite?.id || activeStore.id,
+			eventType: eventData.eventType || 'page_view',
+			eventName: eventData.eventName,
+			path: eventData.path || '/',
+			title: eventData.title || 'Store Page',
+			referrer: eventData.referrer || 'Direct',
+			sessionId: eventData.sessionId || `sess_${Date.now()}`,
+			visitorId: eventData.visitorId || `vis_${Date.now()}`,
+			device: eventData.device || 'Mobile Phone',
+			browser: eventData.browser || 'Mobile Safari',
+			os: eventData.os || 'iOS 18.0',
+			city: eventData.city || 'Karachi, Sindh',
+			durationMs: Number(eventData.durationMs) || 3500,
+			vitalMetric: eventData.vitalMetric,
+			vitalValue: eventData.vitalValue,
+			vitalRating: eventData.vitalRating,
+			eventData: eventData.eventData,
+		};
+
+		const tempEvent = {
+			id: `ev_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+			timestamp: new Date().toISOString(),
+			...payload,
+		};
+
+		setStoreEvents((prev) => [tempEvent, ...prev.slice(0, 99)]);
+
+		try {
+			await fetch(`${API_BASE}/events`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
+		} catch {}
+
+		return tempEvent;
+	};
+
+	const resetStoreEvents = async () => {
+		if (!activeStore) return;
+		setStoreEvents([]);
+		try {
+			await fetch(`${API_BASE}/events?siteId=${encodeURIComponent(activeWebsite?.id || activeStore.id)}`, {
+				method: 'DELETE',
+			});
+		} catch {}
+	};
+
+	const hasStoreFeature = (featureId) => {
+		if (!activeStore) return false;
+		if (isAdmin) return true;
+		if (enabledFeatures.includes('*')) return true;
+		return Boolean(enabledFeatures.includes(featureId));
+	};
+
+	const analyticsData = storeEvents.length > 0 ? aggregateAnalyticsFromEvents(storeEvents) : EMPTY_ANALYTICS_STATE;
 
 	return (
 		<StorefrontContext.Provider
@@ -284,20 +393,27 @@ export function StorefrontProvider({ children }) {
 				setSelectedWebsiteId,
 				getWebsiteConfig,
 				saveWebsiteConfig,
-				metaCapiConfig,
-				setMetaCapiConfig,
-				ga4Config,
-				setGa4Config,
-				webhookConfig,
-				setWebhookConfig,
+				analyticsData,
+				analytics: analyticsData,
+				storeEvents,
+				isLoadingEvents,
+				refreshStoreData,
 				featuresCatalog,
 				enabledFeatures,
 				totalMonthlyCost,
 				toggleFeature,
-				analytics,
-				storeEvents,
-				isLoadingEvents,
-				refreshStoreData,
+				hasStoreFeature,
+				recordStoreEvent,
+				resetStoreEvents,
+				metaCapiConfig,
+				setMetaCapiConfig,
+				saveMetaCapi,
+				ga4Config,
+				setGa4Config,
+				saveGa4,
+				webhookConfig,
+				setWebhookConfig,
+				saveWebhook,
 				portalUrl: portalUrl || session?.portalUrl || '',
 			}}>
 			{children}

@@ -32,7 +32,8 @@ const PERIOD_OPTIONS = [
 ];
 
 export default function Dashboard() {
-	const { portalUrl, session, activeStore, stores, analyticsData, storeEvents, recordStoreEvent } = useStorefront();
+	const { portalUrl, session, activeStore, activeWebsite, stores, analyticsData, storeEvents, recordStoreEvent } =
+		useStorefront();
 	const [period, setPeriod] = useState('7d');
 	const [selectedSession, setSelectedSession] = useState(null);
 	const [copied, setCopied] = useState(false);
@@ -73,9 +74,10 @@ export default function Dashboard() {
 		);
 	}
 
-	const siteId = activeStore.id;
-	const domain = activeStore.domain;
-	const hasEvents = analyticsData.totalPageViews > 0;
+	const siteId = activeWebsite?.id || activeStore?.id;
+	const domain = activeWebsite?.domain || activeStore?.domain;
+	const safeAnalytics = analyticsData || {};
+	const hasEvents = (safeAnalytics.totalPageViews || 0) > 0;
 	const analyticsUrl = typeof window !== 'undefined' ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL || '';
 
 	const embedScriptCode = `<!-- SingleSolution Analytics Pro Telemetry -->
