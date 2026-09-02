@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, CheckCircle2, Copy, Check, MessageSquare, Bot, Sparkles, Plus, Trash2, Globe } from 'lucide-react';
 import { PageHeader } from '@saas/ui/layout/PageHeader';
 import { Card } from '@saas/ui/cards/Card';
@@ -17,40 +17,54 @@ const COLOR_PRESETS = [
 	{ name: 'Midnight Slate', hex: '#0F172A' },
 ];
 
+const DEFAULT_CONFIG = {
+	botName: 'Emma AI Support',
+	greeting: 'Hi there! 👋 How can I help you with your order, returns, or product recommendations today?',
+	primaryColor: '#4F46E5',
+	position: 'right',
+	faqs: [
+		{
+			question: 'What is your return policy?',
+			answer: 'We offer a 30-day full refund policy on unworn items with original tags intact.',
+		},
+		{
+			question: 'How fast is standard shipping?',
+			answer: 'Standard shipping arrives in 2-4 business days across Pakistan. Free on orders above Rs. 3,000.',
+		},
+		{
+			question: 'Do you offer cash on delivery?',
+			answer: 'Yes, Cash on Delivery (COD) is available nationwide for all orders.',
+		},
+	],
+};
+
 export default function BotConfig() {
-	const { activeStore } = useAppContext() || {};
+	const { activeStore, activeWebsite, getWebsiteConfig, saveWebsiteConfig } = useAppContext() || {};
 	const [saved, setSaved] = useState(false);
 	const [copied, setCopied] = useState(false);
 
-	const [config, setConfig] = useState({
-		botName: 'Emma AI Support',
-		greeting: 'Hi there! 👋 How can I help you with your order, returns, or product recommendations today?',
-		primaryColor: '#4F46E5',
-		position: 'right',
-		faqs: [
-			{
-				question: 'What is your return policy?',
-				answer: 'We offer a 30-day full refund policy on unworn items with original tags intact.',
-			},
-			{
-				question: 'How fast is standard shipping?',
-				answer: 'Standard shipping arrives in 2-4 business days across Pakistan. Free on orders above Rs. 3,000.',
-			},
-			{
-				question: 'Do you offer cash on delivery?',
-				answer: 'Yes, Cash on Delivery (COD) is available nationwide for all orders.',
-			},
-		],
-	});
+	const [config, setConfig] = useState(DEFAULT_CONFIG);
+
+	// Load isolated website config when activeWebsite changes
+	useEffect(() => {
+		if (getWebsiteConfig) {
+			const loaded = getWebsiteConfig('bot_config', {
+				...DEFAULT_CONFIG,
+				botName: activeWebsite?.name ? `${activeWebsite.name} AI Assistant` : 'Storefront AI Assistant',
+			});
+			setConfig(loaded);
+			setPreviewMessages([{ sender: 'bot', text: loaded.greeting || DEFAULT_CONFIG.greeting }]);
+		}
+	}, [activeWebsite, getWebsiteConfig]);
 
 	const [newFaqQ, setNewFaqQ] = useState('');
 	const [newFaqA, setNewFaqA] = useState('');
 	const [previewInput, setPreviewInput] = useState('');
 	const [previewMessages, setPreviewMessages] = useState([{ sender: 'bot', text: config.greeting }]);
 
-	const siteId = activeStore?.id || 'tnt_merchant_demo';
+	const siteId = activeWebsite?.id || activeStore?.id || 'tnt_merchant_demo';
 	const widgetOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://chatbot.singlesolutionsaas.com';
-	const embedSnippet = `<!-- SingleSolution AI Live Chat Widget -->
+	const embedSnippet = `<!-- SingleSolution AI Live Chat Widget for ${activeWebsite?.name || 'Storefront'} -->
 <script
   defer
   src="${widgetOrigin}/widget.js"
@@ -63,6 +77,14 @@ export default function BotConfig() {
 		navigator.clipboard.writeText(embedSnippet);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2500);
+	};
+
+	const handleSave = () => {
+		if (saveWebsiteConfig) {
+			saveWebsiteConfig('bot_config', config);
+		}
+		setSaved(true);
+		setTimeout(() => setSaved(false), 3000);
 	};
 
 	const handleAddFaq = () => {
@@ -82,76 +104,76 @@ export default function BotConfig() {
 		}));
 	};
 
-	const handleSendPreview = (e) => {
+	const handleSendMessage = (e) => {
 		e.preventDefault();
 		if (!previewInput.trim()) return;
-		const userText = previewInput.trim();
-		setPreviewMessages((prev) => [...prev, { sender: 'customer', text: userText }]);
+
+		const userMsg = previewInput.trim();
+		setPreviewMessages((prev) => [...prev, { sender: 'user', text: userMsg }]);
 		setPreviewInput('');
 
-		// Check local FAQs or standard intelligence
-		const lower = userText.toLowerCase();
-		const matchedFaq = config.faqs.find(
-			(f) => lower.includes(f.question.toLowerCase()) || lower.includes('shipping') || lower.includes('return'),
-		);
-
+		// Simulate AI bot intelligence
 		setTimeout(() => {
+			const lower = userMsg.toLowerCase();
+			let botReply = `Thanks for asking! I'm ${config.botName}, and I can help look up your orders or assist with product sizing.`;
+
+			const matchedFaq = config.faqs.find((f) => lower.includes(f.question.toLowerCase().slice(0, 15)));
 			if (matchedFaq) {
-				setPreviewMessages((prev) => [...prev, { sender: 'bot', text: matchedFaq.answer }]);
-			} else if (lower.includes('order') || lower.includes('track')) {
-				setPreviewMessages((prev) => [
-					...prev,
-					{ sender: 'bot', text: 'Order #8942 has been shipped via Express Courier and will arrive tomorrow!' },
-				]);
-			} else {
-				setPreviewMessages((prev) => [
-					...prev,
-					{ sender: 'bot', text: 'Thanks for reaching out! A live customer support specialist has also been notified.' },
-				]);
+				botReply = matchedFaq.answer;
+			} else if (lower.includes('order') || lower.includes('#') || lower.includes('track')) {
+				botReply = 'Please provide your Order ID (e.g. #9482) and I will look up real-time courier tracking immediately!';
+			} else if (lower.includes('human') || lower.includes('agent') || lower.includes('help')) {
+				botReply = 'Connecting you with a human support specialist... Please hold for 30 seconds.';
 			}
+
+			setPreviewMessages((prev) => [...prev, { sender: 'bot', text: botReply }]);
 		}, 600);
 	};
 
 	return (
 		<div className="space-y-6 max-w-6xl pb-12">
 			<PageHeader
-				title="Chatbot Studio & Embed Configurator"
-				subtitle="Customize bot branding, automated FAQ answers, and generate 1-click storefront embed code"
+				title="Chatbot Studio & Embed Generator"
+				subtitle={`Configure AI assistant knowledge, branding, and copy 1-line script for ${activeWebsite?.name || 'your store'}`}
 			/>
 
 			{saved && (
 				<div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-fade-in">
 					<CheckCircle2 size={16} />
-					<span className="font-semibold">Widget configuration successfully saved to live production edge!</span>
+					<span className="font-semibold">
+						Bot settings saved for website: <strong>{activeWebsite?.name}</strong> ({activeWebsite?.domain})
+					</span>
 				</div>
 			)}
 
-			<div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-				{/* Left Column: Config Controls */}
-				<div className="lg:col-span-7 space-y-6">
-					<Card title="Embed & Install Script">
-						<div className="space-y-3">
-							<p className="text-xs text-slate-500">
-								Paste this 1-line script tag into your storefront template (
-								<code className="font-mono text-indigo-600 font-bold">&lt;head&gt;</code> or Shopify theme) to activate
-								the floating widget.
-							</p>
-							<div className="relative">
-								<pre className="p-3.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] overflow-x-auto leading-relaxed border border-slate-800">
-									{embedSnippet}
-								</pre>
-								<button
-									type="button"
-									onClick={handleCopy}
-									className="absolute top-2.5 right-2.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all">
-									{copied ? <Check size={13} /> : <Copy size={13} />}
-									<span>{copied ? 'Copied Tag' : 'Copy Code'}</span>
-								</button>
-							</div>
-						</div>
-					</Card>
+			{/* 1-Click Embed Snippet */}
+			<Card title={`Storefront Script Tag (${activeWebsite?.name || 'Active Website'})`}>
+				<div className="space-y-3">
+					<p className="text-xs text-slate-500">
+						Paste this 1-line script tag into your storefront{' '}
+						<code className="font-mono text-indigo-600 font-bold">&lt;head&gt;</code> to activate the AI Chatbot on{' '}
+						<strong>{activeWebsite?.domain || 'your domain'}</strong>.
+					</p>
+					<div className="relative">
+						<pre className="p-3.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] overflow-x-auto leading-relaxed border border-slate-800">
+							{embedSnippet}
+						</pre>
+						<button
+							type="button"
+							onClick={handleCopy}
+							className="absolute top-2.5 right-2.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all">
+							{copied ? <Check size={13} /> : <Copy size={13} />}
+							<span>{copied ? 'Copied Snippet' : 'Copy Script Tag'}</span>
+						</button>
+					</div>
+				</div>
+			</Card>
 
-					<Card title="Bot Personality & Branding">
+			{/* Main Studio Grid */}
+			<div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+				{/* Left Column: Form Controls */}
+				<div className="lg:col-span-7 space-y-6">
+					<Card title="Bot Identity & Appearance">
 						<div className="space-y-4">
 							<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 								<div>
@@ -159,7 +181,7 @@ export default function BotConfig() {
 									<Input
 										value={config.botName}
 										onChange={(e) => setConfig({ ...config, botName: e.target.value })}
-										placeholder="e.g. Zara Support"
+										placeholder="e.g. Emma AI Support"
 									/>
 								</div>
 								<div>
@@ -190,7 +212,7 @@ export default function BotConfig() {
 							</div>
 
 							<div>
-								<Label>Primary Brand Color</Label>
+								<Label>Theme Color</Label>
 								<div className="flex flex-wrap items-center gap-2 pt-1">
 									{COLOR_PRESETS.map((p) => (
 										<button
@@ -212,7 +234,7 @@ export default function BotConfig() {
 										value={config.primaryColor}
 										onChange={(e) => setConfig({ ...config, primaryColor: e.target.value })}
 										className="w-8 h-8 rounded-full border-0 p-0 cursor-pointer"
-										title="Custom Hex"
+										title="Custom Color"
 									/>
 								</div>
 							</div>
@@ -223,137 +245,133 @@ export default function BotConfig() {
 									rows={3}
 									value={config.greeting}
 									onChange={(e) => setConfig({ ...config, greeting: e.target.value })}
-									className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-indigo-600"
+									className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-800 outline-none focus:border-indigo-600 transition-all leading-relaxed"
 								/>
 							</div>
 						</div>
 					</Card>
 
-					<Card title="Knowledge Base & Automated FAQs">
+					<Card title="Store Knowledge Base & FAQs">
 						<div className="space-y-4">
-							<p className="text-xs text-slate-500">
-								Train the AI bot to instantly answer specific questions about store policies, shipping, and product lines.
-							</p>
-
-							<div className="space-y-2.5">
+							<div className="space-y-3">
 								{config.faqs.map((faq, idx) => (
-									<div key={idx} className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1 relative group">
-										<div className="flex items-center justify-between">
-											<span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-												<Sparkles size={12} className="text-indigo-600" />
-												{faq.question}
-											</span>
+									<div
+										key={idx}
+										className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1 relative group">
+										<div className="flex items-center justify-between font-bold text-slate-800">
+											<span>Q: {faq.question}</span>
 											<button
 												type="button"
 												onClick={() => handleDeleteFaq(idx)}
-												className="text-slate-400 hover:text-rose-600 opacity-0 group-hover:opacity-100 transition-opacity">
+												className="text-slate-400 hover:text-rose-600 transition-colors">
 												<Trash2 size={13} />
 											</button>
 										</div>
-										<p className="text-[11px] text-slate-600">{faq.answer}</p>
+										<p className="text-slate-600 text-[11px] leading-relaxed">A: {faq.answer}</p>
 									</div>
 								))}
 							</div>
 
-							<div className="pt-2 border-t border-slate-100 space-y-3">
-								<h4 className="text-[11px] font-bold uppercase text-slate-500">Add New FAQ Trigger</h4>
+							<div className="p-3.5 rounded-xl border border-dashed border-slate-300 bg-slate-50/50 space-y-2.5">
+								<span className="font-bold text-xs text-slate-800">Add New FAQ Question</span>
 								<Input
-									placeholder="Customer Question (e.g. Do you ship internationally?)"
+									placeholder="Customer Question (e.g. How do I exchange sizes?)"
 									value={newFaqQ}
 									onChange={(e) => setNewFaqQ(e.target.value)}
 								/>
 								<textarea
 									rows={2}
-									placeholder="Automated Bot Answer..."
+									placeholder="Bot Answer (e.g. You can exchange sizes within 7 days by contacting us.)"
 									value={newFaqA}
 									onChange={(e) => setNewFaqA(e.target.value)}
-									className="w-full px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-900 focus:outline-none focus:border-indigo-600"
+									className="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 outline-none focus:border-indigo-600"
 								/>
 								<button
 									type="button"
 									onClick={handleAddFaq}
-									className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center gap-1.5 transition-all">
+									className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 transition-all">
 									<Plus size={13} />
-									<span>Add FAQ Rule</span>
+									<span>Add FAQ</span>
 								</button>
-							</div>
-
-							<div className="pt-4 flex justify-end">
-								<Button
-									onClick={() => {
-										setSaved(true);
-										setTimeout(() => setSaved(false), 3000);
-									}}>
-									<Save size={13} />
-									<span>Save All Settings</span>
-								</Button>
 							</div>
 						</div>
 					</Card>
+
+					<div className="flex justify-end">
+						<Button onClick={handleSave}>
+							<Save size={14} />
+							<span>Save Settings for {activeWebsite?.name || 'Website'}</span>
+						</Button>
+					</div>
 				</div>
 
-				{/* Right Column: Live Interactive Widget Preview */}
-				<div className="lg:col-span-5 sticky top-6">
-					<Card title="Live Interactive Simulator">
-						<div className="space-y-3">
-							<p className="text-[11px] text-slate-500">
-								Test your changes in real-time. This is exactly how the widget behaves on customer storefronts.
-							</p>
+				{/* Right Column: Live Interactive Phone Simulator */}
+				<div className="lg:col-span-5 space-y-4">
+					<div className="flex items-center justify-between">
+						<span className="font-bold text-xs text-slate-700 flex items-center gap-1.5">
+							<Sparkles size={14} className="text-indigo-600" />
+							Interactive Live Simulator
+						</span>
+						<span className="text-[10px] font-mono text-slate-400">{activeWebsite?.domain || 'Storefront Preview'}</span>
+					</div>
 
-							<div className="rounded-2xl border border-slate-200 overflow-hidden shadow-lg bg-white flex flex-col h-[480px]">
-								{/* Mock Chat Header */}
-								<div
-									className="p-3.5 text-white flex items-center justify-between"
-									style={{ backgroundColor: config.primaryColor }}>
-									<div className="flex items-center gap-2.5">
-										<div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs">
-											<Bot size={16} />
-										</div>
-										<div>
-											<div className="text-xs font-bold leading-tight">{config.botName}</div>
-											<div className="text-[10px] opacity-85 flex items-center gap-1">
-												<span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-												Online
-											</div>
+					{/* Phone Frame */}
+					<div className="w-full max-w-sm mx-auto rounded-[32px] border-4 border-slate-800 bg-slate-900 p-2 shadow-2xl">
+						<div className="rounded-[24px] bg-slate-50 overflow-hidden flex flex-col h-[520px] relative">
+							{/* Widget Header */}
+							<div
+								className="p-4 text-white flex items-center justify-between shadow-xs"
+								style={{ backgroundColor: config.primaryColor }}>
+								<div className="flex items-center gap-2.5">
+									<div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs">
+										<Bot size={16} />
+									</div>
+									<div>
+										<div className="font-extrabold text-xs leading-none">{config.botName}</div>
+										<div className="text-[10px] opacity-85 flex items-center gap-1 mt-0.5">
+											<span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+											<span>Online • Instant Reply</span>
 										</div>
 									</div>
 								</div>
-
-								{/* Message History */}
-								<div className="flex-1 p-3.5 overflow-y-auto space-y-2.5 bg-slate-50 text-xs">
-									{previewMessages.map((m, idx) => (
-										<div
-											key={idx}
-											className={`max-w-[85%] p-2.5 rounded-xl ${
-												m.sender === 'customer'
-													? 'ml-auto text-white'
-													: 'mr-auto bg-white text-slate-800 border border-slate-200 shadow-2xs'
-											}`}
-											style={m.sender === 'customer' ? { backgroundColor: config.primaryColor } : {}}>
-											{m.text}
-										</div>
-									))}
-								</div>
-
-								{/* Input Field */}
-								<form onSubmit={handleSendPreview} className="p-2.5 border-t border-slate-200 bg-white flex gap-2">
-									<input
-										type="text"
-										value={previewInput}
-										onChange={(e) => setPreviewInput(e.target.value)}
-										placeholder="Ask a question..."
-										className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 text-xs outline-none focus:border-indigo-600"
-									/>
-									<button
-										type="submit"
-										className="px-3 py-1.5 rounded-lg text-white font-bold text-xs"
-										style={{ backgroundColor: config.primaryColor }}>
-										Send
-									</button>
-								</form>
 							</div>
+
+							{/* Chat Messages */}
+							<div className="flex-1 p-3 overflow-y-auto space-y-2.5 text-xs">
+								{previewMessages.map((msg, idx) => (
+									<div
+										key={idx}
+										className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+										<div
+											className={`max-w-[80%] p-2.5 rounded-2xl ${
+												msg.sender === 'user'
+													? 'bg-indigo-600 text-white rounded-br-xs'
+													: 'bg-white border border-slate-200/80 text-slate-800 rounded-bl-xs shadow-2xs'
+											}`}>
+											<p className="text-[11px] leading-relaxed">{msg.text}</p>
+										</div>
+									</div>
+								))}
+							</div>
+
+							{/* Input Bar */}
+							<form onSubmit={handleSendMessage} className="p-2 bg-white border-t border-slate-200 flex gap-1.5">
+								<input
+									type="text"
+									placeholder="Ask a question..."
+									value={previewInput}
+									onChange={(e) => setPreviewInput(e.target.value)}
+									className="flex-1 px-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-800 outline-none focus:bg-slate-50"
+								/>
+								<button
+									type="submit"
+									className="px-3 py-1.5 rounded-xl text-white font-bold text-xs"
+									style={{ backgroundColor: config.primaryColor }}>
+									Send
+								</button>
+							</form>
 						</div>
-					</Card>
+					</div>
 				</div>
 			</div>
 		</div>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save, CheckCircle2, Copy, Check, Sparkles, Gift, Award, Users } from 'lucide-react';
 import { PageHeader } from '@saas/ui/layout/PageHeader';
 import { Card } from '@saas/ui/cards/Card';
@@ -17,24 +17,37 @@ const COLOR_PRESETS = [
 	{ name: 'Midnight Slate', hex: '#0F172A' },
 ];
 
+const DEFAULT_LOYALTY_CONFIG = {
+	programName: 'VIP Club Rewards',
+	primaryColor: '#D97706',
+	position: 'left',
+	pointsPerDollar: '5',
+	welcomeBonus: '100',
+	referralBonus: '150',
+	minRedeemPoints: '100',
+};
+
 export default function Settings() {
-	const { activeStore } = useAppContext() || {};
+	const { activeStore, activeWebsite, getWebsiteConfig, saveWebsiteConfig } = useAppContext() || {};
 	const [saved, setSaved] = useState(false);
 	const [copied, setCopied] = useState(false);
 
-	const [config, setConfig] = useState({
-		programName: 'VIP Club Rewards',
-		primaryColor: '#D97706',
-		position: 'left',
-		pointsPerDollar: '5',
-		welcomeBonus: '100',
-		referralBonus: '150',
-		minRedeemPoints: '100',
-	});
+	const [config, setConfig] = useState(DEFAULT_LOYALTY_CONFIG);
 
-	const siteId = activeStore?.id || 'tnt_merchant_demo';
+	// Load website-specific loyalty rules
+	useEffect(() => {
+		if (getWebsiteConfig) {
+			const loaded = getWebsiteConfig('loyalty_config', {
+				...DEFAULT_LOYALTY_CONFIG,
+				programName: activeWebsite?.name ? `${activeWebsite.name} VIP Rewards` : 'VIP Club Rewards',
+			});
+			setConfig(loaded);
+		}
+	}, [activeWebsite, getWebsiteConfig]);
+
+	const siteId = activeWebsite?.id || activeStore?.id || 'tnt_merchant_demo';
 	const rewardsOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://loyalty.singlesolutionsaas.com';
-	const embedSnippet = `<!-- SingleSolution Loyalty Rewards Launcher -->
+	const embedSnippet = `<!-- SingleSolution Loyalty Rewards Launcher for ${activeWebsite?.name || 'Storefront'} -->
 <script
   defer
   src="${rewardsOrigin}/rewards.js"
@@ -49,26 +62,36 @@ export default function Settings() {
 		setTimeout(() => setCopied(false), 2500);
 	};
 
+	const handleSave = () => {
+		if (saveWebsiteConfig) {
+			saveWebsiteConfig('loyalty_config', config);
+		}
+		setSaved(true);
+		setTimeout(() => setSaved(false), 3000);
+	};
+
 	return (
 		<div className="space-y-6 max-w-4xl pb-12">
 			<PageHeader
 				title="Loyalty Hub & Embed Configurator"
-				subtitle="Configure customer points economy, VIP rewards launcher, and copy 1-line storefront embed snippet"
+				subtitle={`Configure customer points economy and VIP rewards launcher for ${activeWebsite?.name || 'Active Website'}`}
 			/>
 
 			{saved && (
 				<div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-fade-in">
 					<CheckCircle2 size={16} />
-					<span className="font-semibold">Loyalty program rules & embed widget settings saved successfully!</span>
+					<span className="font-semibold">
+						Loyalty rules saved for website: <strong>{activeWebsite?.name}</strong> ({activeWebsite?.domain})
+					</span>
 				</div>
 			)}
 
-			<Card title="Embed & Install Script">
+			<Card title={`Embed & Install Script (${activeWebsite?.name || 'Active Storefront'})`}>
 				<div className="space-y-3">
 					<p className="text-xs text-slate-500">
 						Paste this script tag into your storefront template (
-						<code className="font-mono text-indigo-600 font-bold">&lt;head&gt;</code> or Shopify theme) to display the
-						floating Rewards bubble on your store.
+						<code className="font-mono text-indigo-600 font-bold">&lt;head&gt;</code> or theme) to display the floating
+						Rewards bubble on <strong>{activeWebsite?.domain}</strong>.
 					</p>
 					<div className="relative">
 						<pre className="p-3.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[11px] overflow-x-auto leading-relaxed border border-slate-800">
@@ -189,13 +212,9 @@ export default function Settings() {
 					</div>
 
 					<div className="pt-4 flex justify-end">
-						<Button
-							onClick={() => {
-								setSaved(true);
-								setTimeout(() => setSaved(false), 3000);
-							}}>
+						<Button onClick={handleSave}>
 							<Save size={13} />
-							<span>Save Loyalty Rules</span>
+							<span>Save Loyalty Rules for {activeWebsite?.name || 'Website'}</span>
 						</Button>
 					</div>
 				</div>

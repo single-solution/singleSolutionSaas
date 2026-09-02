@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { AppLayout } from '@saas/ui/layout/AppLayout';
+import { StoreWebsiteSelector } from '@saas/ui/layout/StoreWebsiteSelector';
 import { useAppSecurity } from '@saas/ui/auth/AppAuthGuard';
 import { useStorefront } from '../../src/context/StorefrontContext';
 import {
@@ -10,7 +11,6 @@ import {
 	Settings,
 	Filter,
 	Activity,
-	Sparkles,
 	Globe,
 	LogOut,
 	Gauge,
@@ -18,7 +18,6 @@ import {
 	Share2,
 	Radio,
 	Code,
-	Building2,
 	Layers,
 	Coins,
 } from 'lucide-react';
@@ -27,14 +26,21 @@ export default function DashboardLayout({ children }) {
 	const { session, logoutApp, portalUrl } = useAppSecurity() || {};
 	const {
 		isAdmin,
+		isMerchant,
+		isStandalone,
 		stores,
 		activeStore,
 		selectedStoreId,
 		setSelectedStoreId,
-		hasStoreFeature,
+		websites,
+		activeWebsite,
+		selectedWebsiteId,
+		setSelectedWebsiteId,
 		totalMonthlyCost,
 		enabledFeatures,
 	} = useStorefront();
+
+	const hasStoreFeature = (f) => enabledFeatures.includes(f) || enabledFeatures.includes('*');
 
 	const navigation = [
 		{
@@ -105,7 +111,6 @@ export default function DashboardLayout({ children }) {
 			items: [
 				{ name: 'Module Manager', href: '/modules', icon: Layers, badge: `${enabledFeatures.length} Active` },
 				{ name: 'Direct API & SDK', href: '/connect', icon: Code },
-
 				{ name: 'Settings', href: '/settings', icon: Settings },
 			],
 		},
@@ -115,42 +120,35 @@ export default function DashboardLayout({ children }) {
 		<AppLayout
 			footerLink={{ to: portalUrl || session?.portalUrl || '#', label: 'Master Portal' }}
 			appName="Analytics Pro"
-			appSubtitle={activeStore?.name || (isAdmin ? 'Admin Console' : 'Storefront')}
+			appSubtitle={activeWebsite?.name || session?.tenantName || 'Workspace'}
 			navigation={navigation}
+			headerLeft={
+				<StoreWebsiteSelector
+					merchants={stores}
+					selectedMerchantId={selectedStoreId}
+					onSelectMerchant={setSelectedStoreId}
+					websites={websites}
+					selectedWebsiteId={selectedWebsiteId}
+					onSelectWebsite={setSelectedWebsiteId}
+					isAdmin={isAdmin}
+					isMerchant={isMerchant}
+					isStandalone={isStandalone}
+					merchantName={activeStore?.name}
+					portalUrl={portalUrl}
+				/>
+			}
 			headerRight={
 				<div className="flex items-center gap-3">
-					{isAdmin && (
-						<div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs">
-							<Building2 size={13} className="text-indigo-600" />
-							<span className="text-slate-500 font-bold hidden sm:inline">Store:</span>
-							{stores.length > 0 ? (
-								<select
-									value={selectedStoreId}
-									onChange={(e) => setSelectedStoreId(e.target.value)}
-									className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer">
-									{stores.map((s) => (
-										<option key={s.id} value={s.id}>
-											{s.name} ({s.domain})
-										</option>
-									))}
-								</select>
-							) : (
-								<span className="font-semibold text-slate-400">No Stores Registered</span>
-							)}
-						</div>
-					)}
-
-					{/* Monthly Credit Cost Pill */}
 					<div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
 						<Coins size={13} className="text-amber-600" />
-						<span>${totalMonthlyCost}</span>
+						<span>${totalMonthlyCost || 0}</span>
 						<span className="text-[10px] text-amber-600 font-normal">/mo</span>
 					</div>
 
 					<div className="text-xs text-right hidden sm:block">
 						<div className="font-bold text-slate-900">{activeStore?.name || session?.tenantName || 'SuperAdmin'}</div>
 						<div className="text-[10px] text-slate-500 font-mono">
-							{activeStore?.domain || session?.domain || 'Platform Root'}
+							{activeWebsite?.domain || activeStore?.domain || 'Platform Root'}
 						</div>
 					</div>
 

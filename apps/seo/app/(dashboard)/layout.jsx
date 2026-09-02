@@ -2,14 +2,27 @@
 
 import React from 'react';
 import { AppLayout } from '@saas/ui/layout/AppLayout';
+import { StoreWebsiteSelector } from '@saas/ui/layout/StoreWebsiteSelector';
 import { useAppSecurity } from '@saas/ui/auth/AppAuthGuard';
 import { useAppContext } from '../../src/context/AppContext';
-import { Building2, Coins, LogOut, Search, Globe, CheckCircle2, FileText, Settings, Sparkles } from 'lucide-react';
+import { Coins, LogOut, Search, Globe, CheckCircle2, FileText, Settings } from 'lucide-react';
 
 export default function SeoDashboardLayout({ children }) {
 	const { session, logoutApp, portalUrl } = useAppSecurity() || {};
-	const { isAdmin, stores, activeStore, selectedStoreId, setSelectedStoreId, totalMonthlyCost, enabledFeatures } =
-		useAppContext() || {};
+	const {
+		isAdmin,
+		isMerchant,
+		isStandalone,
+		stores,
+		activeStore,
+		selectedStoreId,
+		setSelectedStoreId,
+		websites,
+		activeWebsite,
+		selectedWebsiteId,
+		setSelectedWebsiteId,
+		totalMonthlyCost,
+	} = useAppContext() || {};
 
 	const navigation = [
 		{
@@ -19,7 +32,6 @@ export default function SeoDashboardLayout({ children }) {
 				{ name: 'Audit Reports', href: '/results', icon: CheckCircle2 },
 				{ name: 'URL Index', href: '/pages', icon: Globe },
 				{ name: 'XML Sitemap', href: '/sitemap', icon: FileText },
-
 				{ name: 'Settings', href: '/settings', icon: Settings },
 			],
 		},
@@ -29,31 +41,25 @@ export default function SeoDashboardLayout({ children }) {
 		<AppLayout
 			footerLink={{ to: portalUrl || session?.portalUrl || '#', label: 'Master Portal' }}
 			appName="Autonomous SEO Engine"
-			appSubtitle={session?.tenantName || 'Workspace'}
+			appSubtitle={activeWebsite?.name || session?.tenantName || 'Workspace'}
 			navigation={navigation}
+			headerLeft={
+				<StoreWebsiteSelector
+					merchants={stores}
+					selectedMerchantId={selectedStoreId}
+					onSelectMerchant={setSelectedStoreId}
+					websites={websites}
+					selectedWebsiteId={selectedWebsiteId}
+					onSelectWebsite={setSelectedWebsiteId}
+					isAdmin={isAdmin}
+					isMerchant={isMerchant}
+					isStandalone={isStandalone}
+					merchantName={activeStore?.name}
+					portalUrl={portalUrl}
+				/>
+			}
 			headerRight={
 				<div className="flex items-center gap-3">
-					{isAdmin && stores && (
-						<div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs">
-							<Building2 size={13} className="text-indigo-600" />
-							<span className="text-slate-500 font-bold hidden sm:inline">Store:</span>
-							{stores.length > 0 ? (
-								<select
-									value={selectedStoreId}
-									onChange={(e) => setSelectedStoreId(e.target.value)}
-									className="bg-transparent font-bold text-slate-900 focus:outline-none cursor-pointer">
-									{stores.map((s) => (
-										<option key={s.id} value={s.id}>
-											{s.name} ({s.domain})
-										</option>
-									))}
-								</select>
-							) : (
-								<span className="font-semibold text-slate-400">No Stores Registered</span>
-							)}
-						</div>
-					)}
-
 					<div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
 						<Coins size={13} className="text-amber-600" />
 						<span>${totalMonthlyCost || 0}</span>
@@ -63,7 +69,7 @@ export default function SeoDashboardLayout({ children }) {
 					<div className="text-xs text-right hidden sm:block">
 						<div className="font-bold text-slate-900">{activeStore?.name || session?.tenantName || 'SuperAdmin'}</div>
 						<div className="text-[10px] text-slate-500 font-mono">
-							{activeStore?.domain || session?.domain || 'Platform Root'}
+							{activeWebsite?.domain || activeStore?.domain || 'Platform Root'}
 						</div>
 					</div>
 
