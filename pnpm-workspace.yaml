@@ -1,7 +1,6 @@
 packages:
-   - 'portal'
-   - 'apps/*'
-   - 'shared/ui'
+  - 'packages/*'
+  - 'platform'
+  - 'products/*'
 allowBuilds:
-   esbuild: true
-   msgpackr-extract: true
+  esbuild: true

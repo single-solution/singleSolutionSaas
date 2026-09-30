@@ -1,0 +1,11 @@
+{
+	"name": "@ss/protocol",
+	"version": "0.1.0",
+	"description": "App Protocol primitives: Ed25519 keys/JWKS, launch tokens, client assertions, website keys, signed entitlement documents, registration handshake, event signatures, replay protection.",
+	"type": "module",
+	"license": "UNLICENSED",
+	"private": true,
+	"exports": { ".": "./src/index.js" },
+	"files": ["src"],
+	"dependencies": {"jose": "^6.1.0"}
+}
