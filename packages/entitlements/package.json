@@ -5,7 +5,14 @@
 	"type": "module",
 	"license": "UNLICENSED",
 	"private": true,
-	"exports": { ".": "./src/index.js" },
-	"files": ["src"],
-	"dependencies": {"@ss/rules": "workspace:*"}
+	"exports": {
+		".": "./src/index.js"
+	},
+	"files": [
+		"src"
+	],
+	"dependencies": {
+		"@ss/rules": "workspace:*",
+		"@ss/contracts": "workspace:*"
+	}
 }

@@ -1,6 +1,6 @@
 packages:
-  - 'packages/*'
-  - 'platform'
-  - 'products/*'
+   - 'packages/*'
+   - 'platform'
+   - 'products/*'
 allowBuilds:
-  esbuild: true
+   esbuild: true

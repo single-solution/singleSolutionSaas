@@ -5,7 +5,11 @@
 	"type": "module",
 	"license": "UNLICENSED",
 	"private": true,
-	"exports": { ".": "./src/index.js" },
-	"files": ["src"],
+	"exports": {
+		".": "./src/index.js"
+	},
+	"files": [
+		"src"
+	],
 	"dependencies": {}
 }

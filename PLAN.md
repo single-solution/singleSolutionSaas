@@ -1,13 +1,13 @@
 # Single Solution — Platform Plan (single source of truth)
 
-| | |
-|---|---|
-| **Status** | Direction approved · pre-implementation · greenfield (existing `singleSolutionSaas` code retired; UI look and ideas carry over) |
-| **Date** | 2026-10-01 · Owner: Bilal (single-solution) |
-| **Deliverables** | **A. Control plane** (Portal) · **B. Delivery plane** (Loader, Edge Injection, hosted pages, preview) · **C. Products** (independent) · **D. Contracts & kit** |
-| **Hosting** | Vercel Pro + MongoDB Atlas, one project/database per deployable; no vendor-specific code |
-| **Language** | JavaScript (ESM), functional, JSDoc-typed, `tsc --checkJs --strict` in CI |
-| **This file** | The only planning document. Sections 1–16 + Appendices A–C = platform plan · **Part D** = product specifications (every element and what can be modified) · **Part E** = the Product Standard every product must follow |
+|                  |                                                                                                                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Status**       | Direction approved · pre-implementation · greenfield (existing `singleSolutionSaas` code retired; UI look and ideas carry over)                                                                                         |
+| **Date**         | 2026-10-01 · Owner: Bilal (single-solution)                                                                                                                                                                             |
+| **Deliverables** | **A. Control plane** (Portal) · **B. Delivery plane** (Loader, Edge Injection, hosted pages, preview) · **C. Products** (independent) · **D. Contracts & kit**                                                          |
+| **Hosting**      | Vercel Pro + MongoDB Atlas, one project/database per deployable; no vendor-specific code                                                                                                                                |
+| **Language**     | JavaScript (ESM), functional, JSDoc-typed, `tsc --checkJs --strict` in CI                                                                                                                                               |
+| **This file**    | The only planning document. Sections 1–16 + Appendices A–C = platform plan · **Part D** = product specifications (every element and what can be modified) · **Part E** = the Product Standard every product must follow |
 
 ---
 
@@ -17,16 +17,16 @@
 
 The previous plans described a marketplace of apps behind a billing portal. That is table stakes. The product wins on eight things competitors don't do together:
 
-| # | Differentiator | What it means |
-|---|---|---|
-| 1 | **One Loader per website** | A single tiny `<script>` (or nothing at all, see #2). The platform **compiles a per-website bundle** of exactly the enabled elements + their signed config and serves it from the edge. One request, cached globally, no per-product scripts, no config round-trips. |
-| 2 | **Edge Injection (zero-code integration)** | Point the domain through the platform edge (optional). Elements, SEO fixes, structured data, redirects, hosted pages and widgets are injected into the site's HTML at the edge. Works for sites the merchant cannot modify or whose developer is gone. |
-| 3 | **"Try it on your site" preview** | Before subscribing, the merchant sees *their own live site* rendered through the preview proxy with the element injected. Demo on a sample store is the fallback, not the pitch. |
-| 4 | **Website Graph** | One per-website data model (customers, items, orders, events, files) owned by the merchant. Products read/write the same graph through scoped contracts, so loyalty, chat, reviews and analytics agree on who the customer is and what happened — without integrating with each other. Bring-your-own identity: the site's existing login federates in. |
-| 5 | **Elements, not apps** | The unit merchants see, switch, configure and pay for is the element (a gallery, a coupon engine, an AI reply, a sitemap). Products are just how elements are built and shipped. Two product kinds: **service products** (own backend) and **element packs** (pure front-end, no server — served by the Loader). |
-| 6 | **Performance and design as constraints** | Every element declares a weight budget and uses the website's design tokens. The platform refuses combinations that break the site's budget and shows Core Web Vitals impact before enabling. Elements look native, not bolted on. |
-| 7 | **AI operator in the console** | "Give 2 % points on completed orders, expire after 12 months, message customers in their language." The assistant edits configuration through the same schemas, explains the effect on cost, audits SEO, drafts campaigns — with a diff and an undo, never silently. |
-| 8 | **Transparent, safe money, sovereign data** | Live meter (credits/hour now, projected month), budgets and caps per website, hourly idempotent settlement, statements that reconcile to the credit. **All client data lives in the client's own database and storage; all providers run on the client's own keys** (§1a). |
+| #   | Differentiator                              | What it means                                                                                                                                                                                                                                                                                                                                           |
+| --- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **One Loader per website**                  | A single tiny `<script>` (or nothing at all, see #2). The platform **compiles a per-website bundle** of exactly the enabled elements + their signed config and serves it from the edge. One request, cached globally, no per-product scripts, no config round-trips.                                                                                    |
+| 2   | **Edge Injection (zero-code integration)**  | Point the domain through the platform edge (optional). Elements, SEO fixes, structured data, redirects, hosted pages and widgets are injected into the site's HTML at the edge. Works for sites the merchant cannot modify or whose developer is gone.                                                                                                  |
+| 3   | **"Try it on your site" preview**           | Before subscribing, the merchant sees _their own live site_ rendered through the preview proxy with the element injected. Demo on a sample store is the fallback, not the pitch.                                                                                                                                                                        |
+| 4   | **Website Graph**                           | One per-website data model (customers, items, orders, events, files) owned by the merchant. Products read/write the same graph through scoped contracts, so loyalty, chat, reviews and analytics agree on who the customer is and what happened — without integrating with each other. Bring-your-own identity: the site's existing login federates in. |
+| 5   | **Elements, not apps**                      | The unit merchants see, switch, configure and pay for is the element (a gallery, a coupon engine, an AI reply, a sitemap). Products are just how elements are built and shipped. Two product kinds: **service products** (own backend) and **element packs** (pure front-end, no server — served by the Loader).                                        |
+| 6   | **Performance and design as constraints**   | Every element declares a weight budget and uses the website's design tokens. The platform refuses combinations that break the site's budget and shows Core Web Vitals impact before enabling. Elements look native, not bolted on.                                                                                                                      |
+| 7   | **AI operator in the console**              | "Give 2 % points on completed orders, expire after 12 months, message customers in their language." The assistant edits configuration through the same schemas, explains the effect on cost, audits SEO, drafts campaigns — with a diff and an undo, never silently.                                                                                    |
+| 8   | **Transparent, safe money, sovereign data** | Live meter (credits/hour now, projected month), budgets and caps per website, hourly idempotent settlement, statements that reconcile to the credit. **All client data lives in the client's own database and storage; all providers run on the client's own keys** (§1a).                                                                              |
 
 Everything below exists to make those eight true while staying **fast, secure, reliable, standalone and consumable**.
 
@@ -34,23 +34,23 @@ Everything below exists to make those eight true while staying **fast, secure, r
 
 We do **not** provide storage, hosting, databases, AI, messaging or payment capacity to clients. We provide the software (products, elements, methods) and the control plane. Every client resource is the client's own, connected with the client's own credentials:
 
-| Resource | Who provides | How it's connected |
-|---|---|---|
-| Website hosting | client | untouched; we integrate via Loader script, Edge Injection (their DNS) or API |
-| **Database for all product and data-plane data** (Graph, events, product records) | client (their own MongoDB/Atlas) | connection string per merchant (or per website) registered in the Portal; products open connections to *that* database; all documents still carry `websiteId` |
-| Object storage (files, media) | client (their S3/R2/GCS bucket) | credentials registered; products sign uploads directly to it |
-| AI providers | client's own API keys | AI connector uses the client's key; we meter our usage units, they pay the provider |
-| Messaging providers (WhatsApp/SMS/email) | client's own accounts | connector with their credentials |
-| Payment gateways | client's own merchant accounts | gateway adapters with their keys |
-| Analytics/tag accounts | client's own | ids/keys in config |
+| Resource                                                                          | Who provides                     | How it's connected                                                                                                                                            |
+| --------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Website hosting                                                                   | client                           | untouched; we integrate via Loader script, Edge Injection (their DNS) or API                                                                                  |
+| **Database for all product and data-plane data** (Graph, events, product records) | client (their own MongoDB/Atlas) | connection string per merchant (or per website) registered in the Portal; products open connections to _that_ database; all documents still carry `websiteId` |
+| Object storage (files, media)                                                     | client (their S3/R2/GCS bucket)  | credentials registered; products sign uploads directly to it                                                                                                  |
+| AI providers                                                                      | client's own API keys            | AI connector uses the client's key; we meter our usage units, they pay the provider                                                                           |
+| Messaging providers (WhatsApp/SMS/email)                                          | client's own accounts            | connector with their credentials                                                                                                                              |
+| Payment gateways                                                                  | client's own merchant accounts   | gateway adapters with their keys                                                                                                                              |
+| Analytics/tag accounts                                                            | client's own                     | ids/keys in config                                                                                                                                            |
 
 Consequences (binding):
 
-- **Two data domains.** *Control plane* data (accounts, websites, subscriptions, entitlements, credits, ledger, audit, keys, delivery metadata) lives in our database. *Data plane* content (Graph, events payloads, product data, files, messages, AI logs) lives **only** in the client's resources. If a client leaves, their data is already theirs; we hold nothing but control-plane records.
+- **Two data domains.** _Control plane_ data (accounts, websites, subscriptions, entitlements, credits, ledger, audit, keys, delivery metadata) lives in our database. _Data plane_ content (Graph, events payloads, product data, files, messages, AI logs) lives **only** in the client's resources. If a client leaves, their data is already theirs; we hold nothing but control-plane records.
 - **Shared services become connectors.** Messaging, AI, Storage and Payments are adapter layers that execute with the client's credentials; metering counts our method usage for credits, never resells capacity.
 - **Credentials custody.** Client credentials are stored envelope-encrypted per merchant in the Secrets module, used only at runtime by products the client enabled, never shown back, rotatable, and revocable in one click (which immediately stops every product for that resource). Customer-managed keys are a later option.
 - **Onboarding gate.** A product that stores data cannot be enabled for a website until the merchant's database connection passes the **connection check** (reachability, least-privilege role, index creation rights, size/plan sanity). Same for storage/provider connectors the product requires. The Portal shows exactly what is missing.
-- **Per-client schema management.** Products own their collections *inside the client's database* under a product prefix, with `schemaVersion` on every document and lazy, idempotent migrations on connect; the app-kit provides connection caching per merchant with pool limits suited to serverless.
+- **Per-client schema management.** Products own their collections _inside the client's database_ under a product prefix, with `schemaVersion` on every document and lazy, idempotent migrations on connect; the app-kit provides connection caching per merchant with pool limits suited to serverless.
 - **Element packs** with state (e.g. wishlist) store through the Graph API, which writes to the client's database.
 - **Isolation stays.** Even inside a client's own database, every query carries `websiteId`; a merchant with several websites may use one database with website-scoped collections or one database per website.
 
@@ -87,23 +87,28 @@ ADRs (kept as a numbered list here; each becomes a section when implementation s
 ## 4. Delivery plane
 
 ### 4.1 Loader (compiled per website)
+
 - On any change (element enabled, config saved, product version accepted) the compiler produces a **website bundle**: element code from element packs + service-product client stubs + signed config document → immutable versioned artefact on the CDN (`/w/<websiteId>/<version>/loader.js`), with an alias `/w/<websiteId>/loader.js` that flips atomically.
 - Budget check at compile time (§6.3). Only enabled elements are included; nothing loads for disabled ones.
 - Runtime: one script, `defer`, < 15 KB core; elements lazy-mount by page conditions declared in config (path, selector, event); consent-aware; CSP-friendly (nonce or hash published per version).
 - Rollback = flip alias to previous version. Preview = alias per environment (`test`).
 
 ### 4.2 Edge Injection (optional, zero-code)
+
 - Merchant points DNS at the platform edge (CNAME); the edge proxies to the origin and **rewrites HTML on the fly**: injects the Loader, SEO metadata and structured data, canonical/redirect rules, hosted pages under merchant paths (`/policies/*`, `/sitemap.xml`, `/checkout`), cache headers. TLS issued automatically.
 - Guardrails: per-rule enable/disable, dry-run diff view, bypass header for the site developer, instant off switch, origin health checks, no caching of authenticated pages by default.
 - Implemented as edge functions with rules compiled from configuration; portable to Cloudflare Workers/Vercel Edge/Deno.
 
 ### 4.3 Hosted pages
+
 Products may publish server-rendered pages (checkout, account, policies, PDP) that appear under the merchant's domain via Edge Injection, or under `pages.<platform>/<domain>/…` with a `<link rel=canonical>` when injection is off.
 
 ### 4.4 Preview proxy
+
 Renders the merchant's public page through a sandboxed proxy with the candidate bundle injected, watermarked, non-indexable, never cached, rate-limited, only for domains the merchant has added. Used by the catalog ("Try on your site"), the config editor (live preview) and the AI operator (before/after).
 
 ### 4.5 Performance
+
 CDN caching with immutable versions, Brotli, edge compute for injection, per-website bundles ≤ declared budget, RUM (Core Web Vitals) collected by the Loader and shown per element.
 
 ---
@@ -111,15 +116,19 @@ CDN caching with immutable versions, Brotli, edge compute for injection, per-web
 ## 5. Data plane: Website Graph, Event Hub, identity federation
 
 ### 5.1 Website Graph
+
 Per website, merchant-owned, schema-versioned entities: **Customer** (identities: email/phone/external id; consent; attributes; tags), **Item** (id, type, attributes, variants, media refs, price), **Order/Transaction** (lines, amounts, status), **Session/Visit**, **File**, **Event** (timeline). Products declare **scopes** (`graph.customer.read`, `graph.order.write`, …) in their manifest; merchants approve scopes on subscribe; every access is audited. The graph is populated by events, by product writes, and by imports/connectors (CSV, storefront platforms later).
 
 ### 5.2 Event Hub
+
 Standard events v1 (`customer.*`, `page.viewed`, `item.viewed`, `cart.updated`, `order.*`, `inventory.changed`, `price.changed`, `file.uploaded`, `custom.*`) plus product events. Immutable, deduplicated by `(websiteId, idempotencyKey)`, fanned out to subscribed products with signed, retried deliveries, DLQ, replay and per-website delivery logs. Schemas in `@ss/contracts` (`type@v`).
 
 ### 5.3 Bring-your-own identity
+
 A website can register its own issuer (JWKS URL or shared secret). Tokens from the site's login are accepted by the Loader and products as the end-customer identity (mapped into the Graph). Our Signups product is optional, not required.
 
 ### 5.4 Files & consent
+
 Files are graph nodes backed by Storage; consent categories are graph attributes evaluated by the Loader before any element loads a tag or collects data.
 
 ---
@@ -127,20 +136,24 @@ Files are graph nodes backed by Storage; consent categories are graph attributes
 ## 6. Runtime plane: products and elements
 
 ### 6.1 Two product kinds
-| Kind | Has | Deployed as | Examples |
-|---|---|---|---|
-| **Service product** | backend, own DB, dashboard, REST, jobs, hosted pages | own repo → own Vercel project + Atlas DB | Chatbot, Checkout, Order Manager, SEO Suite |
-| **Element pack** | front-end elements only, config schemas, no server | published static bundle, served by the Loader; state lives in the Graph via SDK | PDP blocks, Storefront blocks, Notice bar, Wishlist UI |
+
+| Kind                | Has                                                  | Deployed as                                                                     | Examples                                               |
+| ------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Service product** | backend, own DB, dashboard, REST, jobs, hosted pages | own repo → own Vercel project + Atlas DB                                        | Chatbot, Checkout, Order Manager, SEO Suite            |
+| **Element pack**    | front-end elements only, config schemas, no server   | published static bundle, served by the Loader; state lives in the Graph via SDK | PDP blocks, Storefront blocks, Notice bar, Wishlist UI |
 
 Both are independent, both are registered, reviewed and priced the same way. A service product may also ship an element pack for its UI.
 
 ### 6.2 Elements
+
 Switchable, individually priced (per hour and/or per use), field-level configurable (typed features: flag/quota/limit/rate/config with JSON Schema), optional dependencies within the product, declared surfaces (Loader element, REST, hosted page, dashboard screen, console extension), declared weight budget and Graph scopes.
 
 ### 6.3 Certification pipeline (automated + review)
+
 Contract tests · isolation tests · performance budget (JS weight, no layout shift, lazy mount) · accessibility checks · security scan (deps, secrets, CSP compliance) · sandbox demo present · admin-launch support · graceful degradation test (Portal offline). Levels: **Listed** (passes automation) → **Certified** (manual review) → **Featured**.
 
 ### 6.4 Independence rules
+
 No product imports another; no product reads another's database; cooperation only via the Graph and Event Hub; every product must run with the Portal unreachable (cached entitlements).
 
 ---
@@ -217,30 +230,30 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 
 ## 14. Roadmap
 
-| Milestone | Scope | Exit |
-|---|---|---|
-| **M0 Specs** (1 wk) | ADRs 001–010, protocol, entitlement/element model, Graph & event schemas, manifest schema, data model, OpenAPI skeleton, threat model, delivery-plane design, hosting topology | sign-off |
-| **M1 Contracts, kit, emulator** (2 wks) | `@ss/contracts`, `@ss/app-kit`, `@ss/web`, CLI with Portal emulator, product + element-pack templates | template products pass contract tests locally |
-| **M2 Control plane** (5 wks) | Identity, Catalog/Lifecycle, Commerce, Configuration, Observability, Admin + Merchant consoles, isolation suite, CI, Docker | security/isolation green; OpenAPI published |
-| **M3 Delivery + data planes** (4 wks) | Loader compiler + CDN, preview proxy ("try on your site"), Website Graph v1, Event Hub v1, identity federation, Notifications; Loyalty reference product + one element pack | first merchant live via Loader in < 10 min |
-| **M4 Launch set** (4 wks) | In priority order: **Chatbot, Coupons, Loyalty, Signups & Identity, Deals, Reviews, Alerts** (+ Consent & Tags pack, Notice/Storefront basics pack). Chosen for merchant value, small data footprint, and independence from a store backend | listed & certified |
-| **M5 Edge Injection + commerce products** (6 wks) | Edge injection with guardrails, hosted pages; Catalog, Configurator, Grades, PDP pack, Storefront pack, Checkout, Order Manager, After-sales, Search | zero-code site live; sample store on products only |
-| **M6 Intelligence + visibility** (4 wks) | AI Gateway, console operator, SEO Suite, Analytics, Consent, Content, Files, Automation, Reports, Ops Monitor | operator applies audited diffs |
-| **M7 Partners, developers, marketplace** (3 wks) | Partner & Developer consoles, certification UI, marketplace, docs site, WordPress plugin, deposit-request flow | third-party product certified end-to-end |
-| **M8 Scale** | sovereign mode (BYO DB), white-label, gateways, revenue share, locales, status page, load tests | — |
+| Milestone                                         | Scope                                                                                                                                                                                                                                       | Exit                                               |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **M0 Specs** (1 wk)                               | ADRs 001–010, protocol, entitlement/element model, Graph & event schemas, manifest schema, data model, OpenAPI skeleton, threat model, delivery-plane design, hosting topology                                                              | sign-off                                           |
+| **M1 Contracts, kit, emulator** (2 wks)           | `@ss/contracts`, `@ss/app-kit`, `@ss/web`, CLI with Portal emulator, product + element-pack templates                                                                                                                                       | template products pass contract tests locally      |
+| **M2 Control plane** (5 wks)                      | Identity, Catalog/Lifecycle, Commerce, Configuration, Observability, Admin + Merchant consoles, isolation suite, CI, Docker                                                                                                                 | security/isolation green; OpenAPI published        |
+| **M3 Delivery + data planes** (4 wks)             | Loader compiler + CDN, preview proxy ("try on your site"), Website Graph v1, Event Hub v1, identity federation, Notifications; Loyalty reference product + one element pack                                                                 | first merchant live via Loader in < 10 min         |
+| **M4 Launch set** (4 wks)                         | In priority order: **Chatbot, Coupons, Loyalty, Signups & Identity, Deals, Reviews, Alerts** (+ Consent & Tags pack, Notice/Storefront basics pack). Chosen for merchant value, small data footprint, and independence from a store backend | listed & certified                                 |
+| **M5 Edge Injection + commerce products** (6 wks) | Edge injection with guardrails, hosted pages; Catalog, Configurator, Grades, PDP pack, Storefront pack, Checkout, Order Manager, After-sales, Search                                                                                        | zero-code site live; sample store on products only |
+| **M6 Intelligence + visibility** (4 wks)          | AI Gateway, console operator, SEO Suite, Analytics, Consent, Content, Files, Automation, Reports, Ops Monitor                                                                                                                               | operator applies audited diffs                     |
+| **M7 Partners, developers, marketplace** (3 wks)  | Partner & Developer consoles, certification UI, marketplace, docs site, WordPress plugin, deposit-request flow                                                                                                                              | third-party product certified end-to-end           |
+| **M8 Scale**                                      | sovereign mode (BYO DB), white-label, gateways, revenue share, locales, status page, load tests                                                                                                                                             | —                                                  |
 
 ---
 
 ## 15. Risks
 
-| Risk | Mitigation |
-|---|---|
+| Risk                          | Mitigation                                                                                                              |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Edge injection breaking sites | opt-in, dry-run diffs, per-rule switches, bypass header, auto-disable on origin errors, never cache authenticated pages |
-| Loader weight creep | hard budgets per element and per website; compile-time refusal; RUM feedback |
-| Contract churn | semver, N-1 compatibility, contract tests in every product CI |
-| Settlement errors | pure core, property tests, reconciliation, merchant-visible statements |
-| Scope | elements ship incrementally; each product defines a launch element set |
-| Third-party quality | certification pipeline, scopes, revocation, health SLOs |
+| Loader weight creep           | hard budgets per element and per website; compile-time refusal; RUM feedback                                            |
+| Contract churn                | semver, N-1 compatibility, contract tests in every product CI                                                           |
+| Settlement errors             | pure core, property tests, reconciliation, merchant-visible statements                                                  |
+| Scope                         | elements ship incrementally; each product defines a launch element set                                                  |
+| Third-party quality           | certification pipeline, scopes, revocation, health SLOs                                                                 |
 
 ---
 
@@ -256,260 +269,287 @@ Greenfield · **clients bring their own database, storage, AI/messaging/payment 
 
 > Full product depth is in Part D. This appendix is the pricing summary only.
 
-Kinds: products marked *pack* are element packs (no backend); others are service products. PDP, Storefront Blocks, Wishlist UI, Consent banner and Content pages ship as packs; Chatbot, Checkout, Order Manager, SEO Suite, Files, Messaging, Auth, Loyalty, Reviews, Alerts, Catalog, Configurator, Grades, Search, Analytics, Automation, Reports, Ops are service products (several also ship a pack for their UI).
+Kinds: products marked _pack_ are element packs (no backend); others are service products. PDP, Storefront Blocks, Wishlist UI, Consent banner and Content pages ship as packs; Chatbot, Checkout, Order Manager, SEO Suite, Files, Messaging, Auth, Loyalty, Reviews, Alerts, Catalog, Configurator, Grades, Search, Analytics, Automation, Reports, Ops are service products (several also ship a pack for their UI).
 
 Columns: **Element** · what it is · **configurable** (every field is editable per website; only highlights listed) · **pricing** (H = hourly add-on, M = metered, 0 = free element).
 
 ### Category: Commerce
 
 #### A.1 Catalog & PIM (`catalog`) — headless item data for any store
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `items` | items with media, description, status | fields, custom fields, statuses, scheduled publish | H + L items |
-| `variants` | variant matrix per item | uniqueness rules, option pools, price/qty per variant, private cost | H |
-| `attributes` | attribute definitions & options | types, options, filter visibility, card position, per-collection scope | H |
-| `collections` | categories/collections tree | depth, marketing copy, visibility cascade | H |
-| `brands` | brand registry | scoping per collection, logos | 0 |
-| `media` | images/videos per item via Files | count limits, ladder, alt templates | 0 (uses Files) |
-| `import_export` | CSV templates, dry-run bulk updates | columns, validation, conflict policy | H |
-| `feeds` | shopping/marketing feeds | field mapping, condition mapping, tokened URLs | H |
-| `api` | REST read/write | scopes, rate (R) | M requests |
-Events: `item.*`, `inventory.changed`, `price.changed`.
+
+| Element                                                 | What                                  | Configurable                                                           | Pricing        |
+| ------------------------------------------------------- | ------------------------------------- | ---------------------------------------------------------------------- | -------------- |
+| `items`                                                 | items with media, description, status | fields, custom fields, statuses, scheduled publish                     | H + L items    |
+| `variants`                                              | variant matrix per item               | uniqueness rules, option pools, price/qty per variant, private cost    | H              |
+| `attributes`                                            | attribute definitions & options       | types, options, filter visibility, card position, per-collection scope | H              |
+| `collections`                                           | categories/collections tree           | depth, marketing copy, visibility cascade                              | H              |
+| `brands`                                                | brand registry                        | scoping per collection, logos                                          | 0              |
+| `media`                                                 | images/videos per item via Files      | count limits, ladder, alt templates                                    | 0 (uses Files) |
+| `import_export`                                         | CSV templates, dry-run bulk updates   | columns, validation, conflict policy                                   | H              |
+| `feeds`                                                 | shopping/marketing feeds              | field mapping, condition mapping, tokened URLs                         | H              |
+| `api`                                                   | REST read/write                       | scopes, rate (R)                                                       | M requests     |
+| Events: `item.*`, `inventory.changed`, `price.changed`. |
 
 #### A.2 Configurator Builder (`configurator`) — option/variant configurator for anything configurable
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `schema` | option groups, dependencies, exclusions | groups, order, required, defaults | H |
-| `resolver` | picks a valid combination from partial input | closest-match strategy, fallbacks, in-stock preference | H |
-| `price_deltas` | price per option/combination | delta rules, rounding | H |
-| `url_sync` | selection ↔ URL params | param names, canonical rules | 0 |
-| `widget` | embeddable selector UI | layout (pills/dropdowns/swatches), copy, theme | H |
-| `api` | evaluate/resolve endpoint | rate (R) | M evaluations |
+
+| Element        | What                                         | Configurable                                           | Pricing       |
+| -------------- | -------------------------------------------- | ------------------------------------------------------ | ------------- |
+| `schema`       | option groups, dependencies, exclusions      | groups, order, required, defaults                      | H             |
+| `resolver`     | picks a valid combination from partial input | closest-match strategy, fallbacks, in-stock preference | H             |
+| `price_deltas` | price per option/combination                 | delta rules, rounding                                  | H             |
+| `url_sync`     | selection ↔ URL params                       | param names, canonical rules                           | 0             |
+| `widget`       | embeddable selector UI                       | layout (pills/dropdowns/swatches), copy, theme         | H             |
+| `api`          | evaluate/resolve endpoint                    | rate (R)                                               | M evaluations |
 
 #### A.3 Grade & Condition System (`grades`) — condition tiers for used/refurbished or any quality tiers
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `tiers` | tiers with badge, colour, notes | count (L), labels, colours, order | H |
-| `showcase` | tier explainer block with video/images | media, copy per tier | H |
-| `filters` | tier filter on listings | visibility rules | 0 |
-| `warranty` | warranty text/days per tier | days, text templates | 0 |
-| `mapping` | tier → external condition (feeds, structured data) | mapping table | 0 |
-| `inspection` | inspection checklist/report per unit | checklist items, required photos | H |
+
+| Element      | What                                               | Configurable                      | Pricing |
+| ------------ | -------------------------------------------------- | --------------------------------- | ------- |
+| `tiers`      | tiers with badge, colour, notes                    | count (L), labels, colours, order | H       |
+| `showcase`   | tier explainer block with video/images             | media, copy per tier              | H       |
+| `filters`    | tier filter on listings                            | visibility rules                  | 0       |
+| `warranty`   | warranty text/days per tier                        | days, text templates              | 0       |
+| `mapping`    | tier → external condition (feeds, structured data) | mapping table                     | 0       |
+| `inspection` | inspection checklist/report per unit               | checklist items, required photos  | H       |
 
 #### A.4 Product Detail Page (`pdp`) — composable detail page or embeddable blocks
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `gallery` | responsive gallery, zoom, video | thumbnails, lazy strategy, priority image | H |
-| `price_block` | price, savings, availability | formats, availability copy | 0 |
-| `configurator_embed` | uses Configurator product if subscribed | — | 0 |
-| `deal_pill` | active deal hint from Deal System | placement, copy | 0 |
-| `grade_showcase` | uses Grade System | placement | 0 |
-| `related` | related items rail | strategy (same collection/brand/attrs), count | H |
-| `faq` | per-item FAQ | source (manual/AI), count | H |
-| `structured_data` | Product/Offer JSON-LD | field mapping, condition mapping | 0 |
-| `sticky_buy_bar` | mobile CTA bar | show rules | H |
-| `share` | share buttons | channels | 0 |
-| `reviews_block` | uses Reviews product | placement | 0 |
-| `alerts_block` | uses Alerts product | placement | 0 |
-| `hosted_page` | Portal-rendered page on a subpath | route pattern, metadata | H + M renders |
+
+| Element              | What                                    | Configurable                                  | Pricing       |
+| -------------------- | --------------------------------------- | --------------------------------------------- | ------------- |
+| `gallery`            | responsive gallery, zoom, video         | thumbnails, lazy strategy, priority image     | H             |
+| `price_block`        | price, savings, availability            | formats, availability copy                    | 0             |
+| `configurator_embed` | uses Configurator product if subscribed | —                                             | 0             |
+| `deal_pill`          | active deal hint from Deal System       | placement, copy                               | 0             |
+| `grade_showcase`     | uses Grade System                       | placement                                     | 0             |
+| `related`            | related items rail                      | strategy (same collection/brand/attrs), count | H             |
+| `faq`                | per-item FAQ                            | source (manual/AI), count                     | H             |
+| `structured_data`    | Product/Offer JSON-LD                   | field mapping, condition mapping              | 0             |
+| `sticky_buy_bar`     | mobile CTA bar                          | show rules                                    | H             |
+| `share`              | share buttons                           | channels                                      | 0             |
+| `reviews_block`      | uses Reviews product                    | placement                                     | 0             |
+| `alerts_block`       | uses Alerts product                     | placement                                     | 0             |
+| `hosted_page`        | Portal-rendered page on a subpath       | route pattern, metadata                       | H + M renders |
 
 #### A.5 Storefront Blocks (`storefront`) — listing and layout blocks for any site
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `grid` | item grid with infinite scroll / pagination | page size, sort options, crawlable pagination | H |
-| `cards` | item cards with rotating attribute chips | fields shown, chip cycling, badges | H |
-| `filters` | facets/filters with URL sync | facet list, layout (sidebar/sheet), counts | H |
-| `search_overlay` | uses Site Search | placement | 0 |
-| `hero` | hero with media (image/video policies) | media rules incl. data-saver, headline, CTA | H |
-| `trending_band` | trending/featured items strip | source, count | H |
-| `category_cards` / `brand_cards` | navigation cards | layout | 0 |
-| `deals_page` | page listing deals | layout | 0 (uses Deals) |
-| `notice_bar` | dismissible announcement bar | text, schedule, dismiss memory | 0 |
-| `mobile_tab_bar` | bottom navigation | tabs, icons | 0 |
-| `contact_footer` | hours, contacts, socials, policies links | fields | 0 |
-| `theme` | tokens, fonts, motion | all | 0 |
+
+| Element                          | What                                        | Configurable                                  | Pricing        |
+| -------------------------------- | ------------------------------------------- | --------------------------------------------- | -------------- |
+| `grid`                           | item grid with infinite scroll / pagination | page size, sort options, crawlable pagination | H              |
+| `cards`                          | item cards with rotating attribute chips    | fields shown, chip cycling, badges            | H              |
+| `filters`                        | facets/filters with URL sync                | facet list, layout (sidebar/sheet), counts    | H              |
+| `search_overlay`                 | uses Site Search                            | placement                                     | 0              |
+| `hero`                           | hero with media (image/video policies)      | media rules incl. data-saver, headline, CTA   | H              |
+| `trending_band`                  | trending/featured items strip               | source, count                                 | H              |
+| `category_cards` / `brand_cards` | navigation cards                            | layout                                        | 0              |
+| `deals_page`                     | page listing deals                          | layout                                        | 0 (uses Deals) |
+| `notice_bar`                     | dismissible announcement bar                | text, schedule, dismiss memory                | 0              |
+| `mobile_tab_bar`                 | bottom navigation                           | tabs, icons                                   | 0              |
+| `contact_footer`                 | hours, contacts, socials, policies links    | fields                                        | 0              |
+| `theme`                          | tokens, fonts, motion                       | all                                           | 0              |
 
 #### A.6 Cart & Checkout System (`checkout`)
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `cart` | cart with reconciliation & guest merge | max qty/lines, stale handling | H |
-| `checkout_form` | address/contact/delivery/payment steps | field schema, required fields, labels, autocomplete | H |
-| `payment_manual` | bank transfer (proof upload) / cash on delivery (surcharge, caps, confirmation step) / pickup | all rules | H |
-| `payment_gateway` | gateway adapters (later) | provider | H + M |
-| `offer_apply` | applies Coupon/Deal products | — | 0 |
-| `loyalty_redeem` | applies Loyalty product | — | 0 |
-| `place_order` | atomic placement (idempotent) | reservation policy, expiry hours | H + M orders |
-| `success_page` | confirmation with next steps | steps by method, SLA text | 0 |
-| `policies_notice` | links to Content policies | which | 0 |
-| `signin_gate` | uses Signups product for identity | when required | 0 |
+
+| Element           | What                                                                                          | Configurable                                        | Pricing      |
+| ----------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------------ |
+| `cart`            | cart with reconciliation & guest merge                                                        | max qty/lines, stale handling                       | H            |
+| `checkout_form`   | address/contact/delivery/payment steps                                                        | field schema, required fields, labels, autocomplete | H            |
+| `payment_manual`  | bank transfer (proof upload) / cash on delivery (surcharge, caps, confirmation step) / pickup | all rules                                           | H            |
+| `payment_gateway` | gateway adapters (later)                                                                      | provider                                            | H + M        |
+| `offer_apply`     | applies Coupon/Deal products                                                                  | —                                                   | 0            |
+| `loyalty_redeem`  | applies Loyalty product                                                                       | —                                                   | 0            |
+| `place_order`     | atomic placement (idempotent)                                                                 | reservation policy, expiry hours                    | H + M orders |
+| `success_page`    | confirmation with next steps                                                                  | steps by method, SLA text                           | 0            |
+| `policies_notice` | links to Content policies                                                                     | which                                               | 0            |
+| `signin_gate`     | uses Signups product for identity                                                             | when required                                       | 0            |
 
 #### A.7 Coupon System (`coupons`)
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `codes` | single/multi-use codes, bulk generation | pattern, count (L), expiry | H |
-| `rules` | who/what/when conditions | segments, items, totals, first-order, schedules | H |
-| `actions` | percent/fixed/free-shipping/BXGY | bounds | 0 |
-| `limits` | per-customer/global usage | counts, windows | 0 |
-| `redeem_api` | validate/redeem endpoint | rate (R) | M redemptions |
-| `reports` | usage & impact | — | 0 |
+
+| Element      | What                                    | Configurable                                    | Pricing       |
+| ------------ | --------------------------------------- | ----------------------------------------------- | ------------- |
+| `codes`      | single/multi-use codes, bulk generation | pattern, count (L), expiry                      | H             |
+| `rules`      | who/what/when conditions                | segments, items, totals, first-order, schedules | H             |
+| `actions`    | percent/fixed/free-shipping/BXGY        | bounds                                          | 0             |
+| `limits`     | per-customer/global usage               | counts, windows                                 | 0             |
+| `redeem_api` | validate/redeem endpoint                | rate (R)                                        | M redemptions |
+| `reports`    | usage & impact                          | —                                               | 0             |
 
 #### A.8 Deal System (`deals`) — automatic offers (no code)
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `item_deals` | automatic item/collection deals | conditions, actions, schedules (weekday/time, overnight) | H |
-| `cart_deals` | checkout-wide deals (totals, payment method) | conditions, actions | H |
-| `stacking` | policy engine | single vs stackable classes, loyalty interaction | 0 |
-| `price_locks` | honour shown price for N minutes | N, stale behaviour | H |
-| `badges` | badges/pills/countdowns | copy, placement | 0 |
-| `quote_api` | evaluate cart/item | rate (R) | M quotes |
+
+| Element       | What                                         | Configurable                                             | Pricing  |
+| ------------- | -------------------------------------------- | -------------------------------------------------------- | -------- |
+| `item_deals`  | automatic item/collection deals              | conditions, actions, schedules (weekday/time, overnight) | H        |
+| `cart_deals`  | checkout-wide deals (totals, payment method) | conditions, actions                                      | H        |
+| `stacking`    | policy engine                                | single vs stackable classes, loyalty interaction         | 0        |
+| `price_locks` | honour shown price for N minutes             | N, stale behaviour                                       | H        |
+| `badges`      | badges/pills/countdowns                      | copy, placement                                          | 0        |
+| `quote_api`   | evaluate cart/item                           | rate (R)                                                 | M quotes |
 
 #### A.9 Ecommerce Helper — Order Manager (`orders`) — back-office for orders from any checkout (ours or theirs)
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `lifecycle` | statuses & transitions with side effects | matrix, customer-cancellable, auto-expiry | H |
-| `fulfilment` | courier list, tracking links, dispatch video | carriers, URL templates | H |
-| `serials` | per-unit serial capture with validation | patterns (e.g. Luhn ids), required-before-dispatch | H |
-| `invoices` | customer & internal invoices/receipts | templates, branding, snapshots | H + M renders |
-| `print` | packing slips, pick lists | templates | H |
-| `bulk` | bulk status, CSV import/export | limits | H |
-| `risk` | open-order caps, blocklist, RTO flags, COD confirmation | thresholds | H |
-| `customer_updates` | status messages via Messaging | templates per status | 0 (M via Messaging) |
-| `ledger` | payments & refunds records | methods, partial refunds | H |
-| `inbound_api` | receive orders from any external checkout | schema mapping | M orders |
+
+| Element            | What                                                    | Configurable                                       | Pricing             |
+| ------------------ | ------------------------------------------------------- | -------------------------------------------------- | ------------------- |
+| `lifecycle`        | statuses & transitions with side effects                | matrix, customer-cancellable, auto-expiry          | H                   |
+| `fulfilment`       | courier list, tracking links, dispatch video            | carriers, URL templates                            | H                   |
+| `serials`          | per-unit serial capture with validation                 | patterns (e.g. Luhn ids), required-before-dispatch | H                   |
+| `invoices`         | customer & internal invoices/receipts                   | templates, branding, snapshots                     | H + M renders       |
+| `print`            | packing slips, pick lists                               | templates                                          | H                   |
+| `bulk`             | bulk status, CSV import/export                          | limits                                             | H                   |
+| `risk`             | open-order caps, blocklist, RTO flags, COD confirmation | thresholds                                         | H                   |
+| `customer_updates` | status messages via Messaging                           | templates per status                               | 0 (M via Messaging) |
+| `ledger`           | payments & refunds records                              | methods, partial refunds                           | H                   |
+| `inbound_api`      | receive orders from any external checkout               | schema mapping                                     | M orders            |
 
 #### A.10 After-sales (`aftersales`)
+
 `claims` (return/warranty/exchange with windows, evidence, photos), `queue` (statuses, notes), `refunds` (via ledger), `restock`, `serial_registry` (lookup), `messages`. H per element; M photos.
 
 #### A.11 Site Search (`search`)
+
 `index` (documents Q), `sources`, `ranking` (fields/boosts/synonyms), `suggestions` (popular/recent), `overlay` widget, `analytics` (zero-result). H + M queries.
 
 ### Category: Engagement & Identity
 
 #### A.12 Chatbot (`chat`)
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `widget` | website chat launcher & window | placement, theme, triggers, languages | H |
-| `ai_replies` | LLM replies via AI Gateway | provider/model, persona, topics, tool rounds | H + M tokens |
-| `knowledge` | docs/URLs/FAQ sources | sources (L), refresh | H |
-| `tools` | built-in + merchant webhooks tools | tool list, schemas | H |
-| `inbox` | human agents, assignment, SLAs, notes | agents (L), hours, canned replies | H |
-| `handoff` | WhatsApp/SMS/email handoff | channel, template, triggers | 0 |
-| `attachments` | uploads in chat | size/types | 0 (Files) |
-| `lead_capture` | collect contact when offline | fields | H |
-| `moderation` | PII/leak filters | rules | 0 |
-| `realtime` | polling/push tuning | intervals | 0 |
-Events: `chat.*`; consumes `page.viewed`, `customer.*`, `order.*` for lookups.
+
+| Element                                                                        | What                                  | Configurable                                 | Pricing      |
+| ------------------------------------------------------------------------------ | ------------------------------------- | -------------------------------------------- | ------------ |
+| `widget`                                                                       | website chat launcher & window        | placement, theme, triggers, languages        | H            |
+| `ai_replies`                                                                   | LLM replies via AI Gateway            | provider/model, persona, topics, tool rounds | H + M tokens |
+| `knowledge`                                                                    | docs/URLs/FAQ sources                 | sources (L), refresh                         | H            |
+| `tools`                                                                        | built-in + merchant webhooks tools    | tool list, schemas                           | H            |
+| `inbox`                                                                        | human agents, assignment, SLAs, notes | agents (L), hours, canned replies            | H            |
+| `handoff`                                                                      | WhatsApp/SMS/email handoff            | channel, template, triggers                  | 0            |
+| `attachments`                                                                  | uploads in chat                       | size/types                                   | 0 (Files)    |
+| `lead_capture`                                                                 | collect contact when offline          | fields                                       | H            |
+| `moderation`                                                                   | PII/leak filters                      | rules                                        | 0            |
+| `realtime`                                                                     | polling/push tuning                   | intervals                                    | 0            |
+| Events: `chat.*`; consumes `page.viewed`, `customer.*`, `order.*` for lookups. |
 
 #### A.13 Signups & Passwordless Auth (`auth`)
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `otp` | phone/email OTP | length, expiry, cooldowns, limits (R/Q), providers | H + M sends |
-| `magic_link` | email link sign-in | expiry | H |
-| `sessions` | JWT sessions verified offline by the site | lifetime, refresh, revoke-all | H |
-| `profile` | profile & addresses storage | field schema | H |
-| `account_pages` | hosted/embeddable account UI | blocks | H |
-| `widget` | sign-in UI | copy, theme, autofill | 0 |
-| `fallback` | "continue via chat/WhatsApp" when sending fails | template | 0 |
-Events: `customer.created`, `customer.signed_in`.
+
+| Element                                           | What                                            | Configurable                                       | Pricing     |
+| ------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------- | ----------- |
+| `otp`                                             | phone/email OTP                                 | length, expiry, cooldowns, limits (R/Q), providers | H + M sends |
+| `magic_link`                                      | email link sign-in                              | expiry                                             | H           |
+| `sessions`                                        | JWT sessions verified offline by the site       | lifetime, refresh, revoke-all                      | H           |
+| `profile`                                         | profile & addresses storage                     | field schema                                       | H           |
+| `account_pages`                                   | hosted/embeddable account UI                    | blocks                                             | H           |
+| `widget`                                          | sign-in UI                                      | copy, theme, autofill                              | 0           |
+| `fallback`                                        | "continue via chat/WhatsApp" when sending fails | template                                           | 0           |
+| Events: `customer.created`, `customer.signed_in`. |
 
 #### A.14 Loyalty & Rewards (`loyalty`)
+
 `earn_rules` (any event → points), `redeem`, `tiers`, `expiry`, `referrals`, `adjustments`, `widgets`, `messages`, `reversal` — H per element; L members; M messages via Messaging.
 
 #### A.15 Reviews & Ratings (`reviews`)
+
 `collection` (verified-only rules, request timing), `moderation`, `photos`, `display` widgets, `structured_data`, `incentives` — H per element; Q reviews; M photos.
 
 #### A.16 Alerts & Waitlists (`alerts`)
+
 `types` (stock/price/availability/custom), `capture` widget, `dispatch` (channels, caps, quiet hours), `triggers` — H; Q subscriptions; M sends.
 
 #### A.17 Wishlist (`wishlist`)
+
 `lists`, `guest_merge`, `share`, `price_drop_hook`, `widgets` — H; L items.
 
 #### A.18 Messaging & Campaigns (`messaging`)
+
 `templates` (per event/channel/language), `transactional` (send API), `outbox` (retries, DLQ), `campaigns` (segments, schedule, throttle, opt-out), `providers` (platform or own), `staff_alerts`, `quiet_hours` — H per element; M messages per channel.
 
 ### Category: Visibility & Marketing
 
 #### A.19 SEO Suite (`seo`)
-| Element | What | Configurable | Pricing |
-|---|---|---|---|
-| `health` | 30+ checks with guided fixes | checks, thresholds, schedule | H |
-| `metadata` | title/description/canonical/robots rules by page type | templates, rules | H |
-| `structured_data` | Organization/LocalBusiness/WebSite/Breadcrumb/Product/FAQ/Article | per page-type mapping | H |
-| `sitemaps` | index + chunked sitemaps with images | exclusions, lastmod source | H |
-| `feeds` | shopping feeds | mapping | H |
-| `indexnow` | change submissions | key | 0 |
-| `redirects` | slug history, host/case normalisation, manager UI | rules | H |
-| `intent_pages` | attribute/collection landing pages | thresholds, templates | H |
-| `ai_copy` | AI descriptions/meta/FAQ with review | tone, languages, batch size | H + M tokens |
-| `og_images` | generated share images | templates | M renders |
-| `llms_txt` | AI-search files | fields | 0 |
-| `verification` | search engine verification tokens | tokens | 0 |
-| `crawl` | site crawler for audits | pages (Q), depth | M pages |
+
+| Element           | What                                                              | Configurable                 | Pricing      |
+| ----------------- | ----------------------------------------------------------------- | ---------------------------- | ------------ |
+| `health`          | 30+ checks with guided fixes                                      | checks, thresholds, schedule | H            |
+| `metadata`        | title/description/canonical/robots rules by page type             | templates, rules             | H            |
+| `structured_data` | Organization/LocalBusiness/WebSite/Breadcrumb/Product/FAQ/Article | per page-type mapping        | H            |
+| `sitemaps`        | index + chunked sitemaps with images                              | exclusions, lastmod source   | H            |
+| `feeds`           | shopping feeds                                                    | mapping                      | H            |
+| `indexnow`        | change submissions                                                | key                          | 0            |
+| `redirects`       | slug history, host/case normalisation, manager UI                 | rules                        | H            |
+| `intent_pages`    | attribute/collection landing pages                                | thresholds, templates        | H            |
+| `ai_copy`         | AI descriptions/meta/FAQ with review                              | tone, languages, batch size  | H + M tokens |
+| `og_images`       | generated share images                                            | templates                    | M renders    |
+| `llms_txt`        | AI-search files                                                   | fields                       | 0            |
+| `verification`    | search engine verification tokens                                 | tokens                       | 0            |
+| `crawl`           | site crawler for audits                                           | pages (Q), depth             | M pages      |
 
 #### A.20 Analytics & Insights (`analytics`)
+
 `snippet` (page views, vitals, sampling), `server_events` (API), `funnels` (steps by event), `kpis`, `segments`, `rollups` (retention), `alerts` (anomalies), `exports` — H per element; M events.
 
 #### A.21 Consent & Tags (`consent`)
+
 `banner`, `consent_mode`, `tag_loader` (GTM/GA/Meta/TikTok/custom by category), `conversion_events` (standard events → payloads), `records` — H; Q records.
 
 #### A.22 Content & Policies (`content`)
+
 `documents` (policies, terms, FAQs) with tokens, `glossary`, `announcements`, `hosted_pages` (with metadata/JSON-LD), `versions`, `languages` — H; L documents; M renders.
 
 ### Category: Operations & Infrastructure
 
 #### A.23 Files, Media & Drive (`files`)
+
 `uploads` (presigned, policies), `images` (variant ladders, placeholders, CDN), `video` (optimiser presets), `drive` (folders, share links, versions, trash), `providers` (platform or own bucket) — H; Q storage/bandwidth; M transformations.
 
 #### A.24 Automation & Scheduler (`automation`)
+
 `rules` (event → conditions → actions), `schedules` (cron), `actions` (message, points, tag, webhook, task), `digests`, `retries` — H; Q runs.
 
 #### A.25 Reports & Exports (`reports`)
+
 `sales_reports` (by dimension), `inventory_reports` (sell-through, stock age), `service_reports` (return rate, SLA), `funnels`, `scheduled_reports`, `exports` — H; R exports.
 
 #### A.26 Ops Monitor (`ops`)
+
 `health_endpoints`, `error_reporting`, `uptime_checks`, `daily_digest`, `audit_viewer` — H; 0 for basics.
 
 #### A.27 Team & Access (provided by the Portal to every product, not sold)
+
 RBAC, 2FA, invites, website-scoped roles, audit log, activity feed.
 
 ### Sample bundles (Portal-defined)
+
 `Commerce Suite`, `Growth Suite`, `Visibility Suite`, `Builder Suite` — discounts are ledger adjustments; products stay independent.
 
 ---
 
-
 ## Appendix B — Source map (ibrahimMobiles module → product)
-| ibrahimMobiles module | Product |
-|---|---|
-| assistant chat, inquiries inbox, guest limits, handoff | Chatbot |
-| OTP issue/verify, sessions, profile/addresses, account pages | Signups & Passwordless Auth |
-| loyalty ledger, earn/reverse on transitions, expiry, history | Loyalty |
-| offer evaluator/matching/schedule, cart locks | Coupon System (codes) + Deal System (automatic) |
-| reviews, moderation, rating rollups | Reviews |
-| stock/price alerts | Alerts & Waitlists |
-| wishlist | Wishlist |
-| customer templates, outbox, staff alerts, SMTP | Messaging & Campaigns |
-| categories/attributes/brands/products/variants, CSV, price rollups | Catalog & PIM |
-| PDP variant selector, attribute pools, closest match, URL sync | Configurator Builder |
-| grades, badges, showcase, warranty per grade, condition mapping | Grade & Condition System |
-| PDP gallery, related, FAQ, structured data, sticky bar | Product Detail Page |
-| cards, grid, filters, hero, trending, category/brand cards, notice bar, tab bar, footer | Storefront Blocks |
-| cart, checkout form, manual payments, placement transaction, success page | Cart & Checkout System |
-| lifecycle, couriers, serials, invoices, packing slips, bulk, risk caps, payments/refunds ledger | Order Manager |
-| returns/warranty claims | After-sales |
-| Atlas Search index, hints, overlay | Site Search |
-| metadata, structured data, sitemaps, feeds, IndexNow, redirects, intent pages, AI copy, OG images, llms.txt, SEO health, verification | SEO Suite |
-| telemetry, vitals, dashboards, rollups | Analytics |
-| consent banner, tag loading, conversion events | Consent & Tags |
-| policies, glossary, notices | Content & Policies |
-| presigned uploads, image variants, video optimiser, storage | Files, Media & Drive |
-| cron jobs, digests | Automation & Scheduler, Ops Monitor |
-| reports, exports | Reports & Exports |
-| RBAC, 2FA, audit, activity | Portal-provided Team & Access |
-ibrahimMobiles itself is not modified.
+
+| ibrahimMobiles module                                                                                                                 | Product                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| assistant chat, inquiries inbox, guest limits, handoff                                                                                | Chatbot                                         |
+| OTP issue/verify, sessions, profile/addresses, account pages                                                                          | Signups & Passwordless Auth                     |
+| loyalty ledger, earn/reverse on transitions, expiry, history                                                                          | Loyalty                                         |
+| offer evaluator/matching/schedule, cart locks                                                                                         | Coupon System (codes) + Deal System (automatic) |
+| reviews, moderation, rating rollups                                                                                                   | Reviews                                         |
+| stock/price alerts                                                                                                                    | Alerts & Waitlists                              |
+| wishlist                                                                                                                              | Wishlist                                        |
+| customer templates, outbox, staff alerts, SMTP                                                                                        | Messaging & Campaigns                           |
+| categories/attributes/brands/products/variants, CSV, price rollups                                                                    | Catalog & PIM                                   |
+| PDP variant selector, attribute pools, closest match, URL sync                                                                        | Configurator Builder                            |
+| grades, badges, showcase, warranty per grade, condition mapping                                                                       | Grade & Condition System                        |
+| PDP gallery, related, FAQ, structured data, sticky bar                                                                                | Product Detail Page                             |
+| cards, grid, filters, hero, trending, category/brand cards, notice bar, tab bar, footer                                               | Storefront Blocks                               |
+| cart, checkout form, manual payments, placement transaction, success page                                                             | Cart & Checkout System                          |
+| lifecycle, couriers, serials, invoices, packing slips, bulk, risk caps, payments/refunds ledger                                       | Order Manager                                   |
+| returns/warranty claims                                                                                                               | After-sales                                     |
+| Atlas Search index, hints, overlay                                                                                                    | Site Search                                     |
+| metadata, structured data, sitemaps, feeds, IndexNow, redirects, intent pages, AI copy, OG images, llms.txt, SEO health, verification | SEO Suite                                       |
+| telemetry, vitals, dashboards, rollups                                                                                                | Analytics                                       |
+| consent banner, tag loading, conversion events                                                                                        | Consent & Tags                                  |
+| policies, glossary, notices                                                                                                           | Content & Policies                              |
+| presigned uploads, image variants, video optimiser, storage                                                                           | Files, Media & Drive                            |
+| cron jobs, digests                                                                                                                    | Automation & Scheduler, Ops Monitor             |
+| reports, exports                                                                                                                      | Reports & Exports                               |
+| RBAC, 2FA, audit, activity                                                                                                            | Portal-provided Team & Access                   |
+| ibrahimMobiles itself is not modified.                                                                                                |
 
 ---
-
 
 ## Appendix C — Glossary
 
@@ -519,7 +559,7 @@ ibrahimMobiles itself is not modified.
 
 # PART D — PRODUCT SPECIFICATIONS
 
-(Appendix A of Part A is the price/element summary; this part is the depth.) The Portal stays simple: it only knows *elements, features, prices, schemas*. All richness below lives inside the products and is expressed through those four things.
+(Appendix A of Part A is the price/element summary; this part is the depth.) The Portal stays simple: it only knows _elements, features, prices, schemas_. All richness below lives inside the products and is expressed through those four things.
 
 ---
 
@@ -529,17 +569,17 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 ### 0. The flexibility model (every product supports all nine levels)
 
-| Level | Name | What a merchant (or staff, or the AI operator) can change | How it's declared by the product |
-|---|---|---|---|
-| L0 | **Switch** | Element on/off per website and environment; scheduled on/off; audience (all / segment / % rollout) | element `key`, `schedule`, `audience` |
-| L1 | **Configure** | Every setting is a typed feature (flag/quota/limit/rate/config) with defaults and plan-bounded ranges | JSON Schema per element |
-| L2 | **Appearance** | Website design tokens inherited automatically; per-element overrides; layout variants; density; scoped custom CSS; icon set | `theme` schema + `variants[]` |
-| L3 | **Copy & language** | Every user-facing string editable, per language, with placeholders; tone presets | `strings` catalog with `{{placeholders}}` |
-| L4 | **Rules & logic** | Conditions, segments, formulas and eligibility written in a safe expression language (`when`, `unless`, `score = …`), evaluated in the pure core; visual builder + code view | `rules` schema referencing the expression grammar |
-| L5 | **Data** | Custom fields on the product's entities and on Graph entities; custom events; tags; import/export | `customFields` allowed per entity |
-| L6 | **Extend** | Webhooks in/out, custom tools/actions pointing at merchant URLs, sandboxed JS hooks in the Loader (`before/after` element events), slots for merchant HTML | `hooks[]`, `slots[]`, `webhooks[]` |
-| L7 | **Placement** | Where and when elements render: path patterns, CSS selectors, page types, device, referrer, time, consent state, scroll/idle/exit triggers | `placement` schema (shared) |
-| L8 | **Governance** | Who may change what (website-scoped roles), locks by staff, approval workflow for sensitive changes (pricing rules, payment settings), versions + rollback, **experiments** (A/B variants of any element config with traffic split and success metric) | `governance` metadata, `experiments` |
+| Level | Name                | What a merchant (or staff, or the AI operator) can change                                                                                                                                                                                              | How it's declared by the product                  |
+| ----- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| L0    | **Switch**          | Element on/off per website and environment; scheduled on/off; audience (all / segment / % rollout)                                                                                                                                                     | element `key`, `schedule`, `audience`             |
+| L1    | **Configure**       | Every setting is a typed feature (flag/quota/limit/rate/config) with defaults and plan-bounded ranges                                                                                                                                                  | JSON Schema per element                           |
+| L2    | **Appearance**      | Website design tokens inherited automatically; per-element overrides; layout variants; density; scoped custom CSS; icon set                                                                                                                            | `theme` schema + `variants[]`                     |
+| L3    | **Copy & language** | Every user-facing string editable, per language, with placeholders; tone presets                                                                                                                                                                       | `strings` catalog with `{{placeholders}}`         |
+| L4    | **Rules & logic**   | Conditions, segments, formulas and eligibility written in a safe expression language (`when`, `unless`, `score = …`), evaluated in the pure core; visual builder + code view                                                                           | `rules` schema referencing the expression grammar |
+| L5    | **Data**            | Custom fields on the product's entities and on Graph entities; custom events; tags; import/export                                                                                                                                                      | `customFields` allowed per entity                 |
+| L6    | **Extend**          | Webhooks in/out, custom tools/actions pointing at merchant URLs, sandboxed JS hooks in the Loader (`before/after` element events), slots for merchant HTML                                                                                             | `hooks[]`, `slots[]`, `webhooks[]`                |
+| L7    | **Placement**       | Where and when elements render: path patterns, CSS selectors, page types, device, referrer, time, consent state, scroll/idle/exit triggers                                                                                                             | `placement` schema (shared)                       |
+| L8    | **Governance**      | Who may change what (website-scoped roles), locks by staff, approval workflow for sensitive changes (pricing rules, payment settings), versions + rollback, **experiments** (A/B variants of any element config with traffic split and success metric) | `governance` metadata, `experiments`              |
 
 **Expression language (shared, tiny, safe).** Boolean and arithmetic over event/entity fields, sets, dates, string ops, and a fixed function library (`inSegment()`, `daysSince()`, `total()`, `has()`, `matches()`), no side effects, time-boxed evaluation, versioned grammar. Used by rules everywhere so merchants learn it once.
 
@@ -553,25 +593,25 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 #### Elements and what can be modified
 
-| Element | Configurable (highlights, all L1–L8 apply) |
-|---|---|
-| `launcher` | position, offset, size, icon/avatar, label, pulse, mobile tab integration, hide rules (pages, devices), open triggers (delay, scroll %, exit intent, idle, selector click), unread badge |
-| `window` | layout (bubble / side panel / full-screen mobile), header (name, avatar, status text), theme overrides, sound, typing indicator, message grouping, attachments UI, emoji, quick replies, persistent history per identity |
-| `ai_replies` | provider/model (via AI Gateway), persona and tone presets, system instructions (editable), languages (auto-detect + allowed list), answer length, citation style, confidence threshold → handoff, forbidden topics, escalation phrases, max tool rounds, token budget per conversation and per month, cost cap alerts |
-| `knowledge` | sources: uploaded files, URLs (crawl depth, refresh), FAQ entries, Graph items (which fields), policies pages; per-source priority; freshness rules; "don't know" behaviour |
-| `flows` | **visual conversation builder**: nodes (message, question, buttons, form, condition, action, AI step, handoff, delay), variables, branching on rules (L4), entry triggers (page, keyword, event), exit actions |
-| `tools` | built-in (order status, item search, quote offer, book slot, track shipment) with field mapping; **custom tools**: name, description, input schema, merchant webhook URL, auth header, timeout, allowed for AI or flows |
-| `inbox` | agents (count), teams, assignment (round-robin / load / rules), working hours per team, SLA targets and breach alerts, statuses, tags, priorities, canned replies with variables, internal notes, snooze, merge, transfer |
-| `channels` | web widget, WhatsApp, Messenger, Instagram, email-to-inbox, SMS — each with its own hours, greeting, opt-in text (via Messaging Gateway) |
-| `handoff` | when (rule), to whom (team), message shown, offline fallback (lead form / WhatsApp link / email), queue position text |
-| `proactive` | targeted messages by rule (cart value, page, returning visitor), frequency caps, dismissal memory |
-| `lead_capture` | fields (schema), required, consent checkbox text, where to send (Graph customer, webhook, email) |
-| `forms_in_chat` | reusable forms (schema), validation, file uploads |
-| `product_cards` | show Graph items in chat (fields, image, CTA), add-to-cart action if Checkout present |
-| `csat` | rating scale, when asked, follow-up question, target |
-| `transcripts` | retention days, export, send transcript by email |
-| `moderation` | PII redaction in/out, leak filter, link allow-list, profanity policy |
-| `analytics` | topics clustering, resolution rate, handoff rate, CSAT, cost per conversation |
+| Element         | Configurable (highlights, all L1–L8 apply)                                                                                                                                                                                                                                                                            |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `launcher`      | position, offset, size, icon/avatar, label, pulse, mobile tab integration, hide rules (pages, devices), open triggers (delay, scroll %, exit intent, idle, selector click), unread badge                                                                                                                              |
+| `window`        | layout (bubble / side panel / full-screen mobile), header (name, avatar, status text), theme overrides, sound, typing indicator, message grouping, attachments UI, emoji, quick replies, persistent history per identity                                                                                              |
+| `ai_replies`    | provider/model (via AI Gateway), persona and tone presets, system instructions (editable), languages (auto-detect + allowed list), answer length, citation style, confidence threshold → handoff, forbidden topics, escalation phrases, max tool rounds, token budget per conversation and per month, cost cap alerts |
+| `knowledge`     | sources: uploaded files, URLs (crawl depth, refresh), FAQ entries, Graph items (which fields), policies pages; per-source priority; freshness rules; "don't know" behaviour                                                                                                                                           |
+| `flows`         | **visual conversation builder**: nodes (message, question, buttons, form, condition, action, AI step, handoff, delay), variables, branching on rules (L4), entry triggers (page, keyword, event), exit actions                                                                                                        |
+| `tools`         | built-in (order status, item search, quote offer, book slot, track shipment) with field mapping; **custom tools**: name, description, input schema, merchant webhook URL, auth header, timeout, allowed for AI or flows                                                                                               |
+| `inbox`         | agents (count), teams, assignment (round-robin / load / rules), working hours per team, SLA targets and breach alerts, statuses, tags, priorities, canned replies with variables, internal notes, snooze, merge, transfer                                                                                             |
+| `channels`      | web widget, WhatsApp, Messenger, Instagram, email-to-inbox, SMS — each with its own hours, greeting, opt-in text (via Messaging Gateway)                                                                                                                                                                              |
+| `handoff`       | when (rule), to whom (team), message shown, offline fallback (lead form / WhatsApp link / email), queue position text                                                                                                                                                                                                 |
+| `proactive`     | targeted messages by rule (cart value, page, returning visitor), frequency caps, dismissal memory                                                                                                                                                                                                                     |
+| `lead_capture`  | fields (schema), required, consent checkbox text, where to send (Graph customer, webhook, email)                                                                                                                                                                                                                      |
+| `forms_in_chat` | reusable forms (schema), validation, file uploads                                                                                                                                                                                                                                                                     |
+| `product_cards` | show Graph items in chat (fields, image, CTA), add-to-cart action if Checkout present                                                                                                                                                                                                                                 |
+| `csat`          | rating scale, when asked, follow-up question, target                                                                                                                                                                                                                                                                  |
+| `transcripts`   | retention days, export, send transcript by email                                                                                                                                                                                                                                                                      |
+| `moderation`    | PII redaction in/out, leak filter, link allow-list, profanity policy                                                                                                                                                                                                                                                  |
+| `analytics`     | topics clustering, resolution rate, handoff rate, CSAT, cost per conversation                                                                                                                                                                                                                                         |
 
 **Integration.** Widget via Loader; REST (`conversations`, `messages`, `bots`); events `chat.*`; Graph scopes `customer.read/write`, `item.read`, `order.read`. **Data.** Conversations, messages, flows, knowledge index, agents. **KPIs.** first-response time, resolution rate, deflection, CSAT, cost/conversation.
 
@@ -581,19 +621,19 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 **Purpose.** Passwordless sign-in and profiles for any site; or federate the site's own login.
 
-| Element | Configurable |
-|---|---|
-| `otp` | channels (email / SMS / WhatsApp), code length/alphabet, expiry, resend cooldown, max sends per identity/hour, attempts, per-IP limits, global cap, templates per channel/language, provider selection |
-| `magic_link` | expiry, single-use, redirect rules, template |
-| `social` | providers (Google, Apple, Facebook…) with merchant's own client ids, scopes, account linking rules |
-| `federation` | merchant issuer (JWKS/secret), claim mapping to Graph customer, session exchange |
-| `sessions` | lifetime, sliding renewal, device list, revoke-all, session version, cookie attributes |
-| `profile` | field schema (name, phone, email, addresses, custom fields), required fields, verification badges, avatar via Files |
-| `account_pages` | which pages (profile, addresses, orders, wishlist, points, data export, delete account), layout, hosted vs embedded |
-| `widget` | sign-in UI variants (modal / inline / page), steps, copy, autofill, remember device |
-| `risk` | new-device notice, unusual-location rule, bot protection hook, disposable-email block list |
-| `consent` | terms/privacy acceptance capture and versioning |
-| `data_rights` | self-service export/delete with cooling-off period |
+| Element         | Configurable                                                                                                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `otp`           | channels (email / SMS / WhatsApp), code length/alphabet, expiry, resend cooldown, max sends per identity/hour, attempts, per-IP limits, global cap, templates per channel/language, provider selection |
+| `magic_link`    | expiry, single-use, redirect rules, template                                                                                                                                                           |
+| `social`        | providers (Google, Apple, Facebook…) with merchant's own client ids, scopes, account linking rules                                                                                                     |
+| `federation`    | merchant issuer (JWKS/secret), claim mapping to Graph customer, session exchange                                                                                                                       |
+| `sessions`      | lifetime, sliding renewal, device list, revoke-all, session version, cookie attributes                                                                                                                 |
+| `profile`       | field schema (name, phone, email, addresses, custom fields), required fields, verification badges, avatar via Files                                                                                    |
+| `account_pages` | which pages (profile, addresses, orders, wishlist, points, data export, delete account), layout, hosted vs embedded                                                                                    |
+| `widget`        | sign-in UI variants (modal / inline / page), steps, copy, autofill, remember device                                                                                                                    |
+| `risk`          | new-device notice, unusual-location rule, bot protection hook, disposable-email block list                                                                                                             |
+| `consent`       | terms/privacy acceptance capture and versioning                                                                                                                                                        |
+| `data_rights`   | self-service export/delete with cooling-off period                                                                                                                                                     |
 
 **Integration.** SDK (`start`, `verify`, JWT verified offline), widget, REST, events `customer.created/signed_in/updated`.
 
@@ -601,33 +641,33 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 ### 3. Loyalty & Rewards (`loyalty`) — service product + pack
 
-| Element | Configurable |
-|---|---|
-| `earn_rules` | list of rules: trigger event (any Graph event incl. custom) → points formula (expression: fixed, % of amount, per unit, per visit), caps per rule/period, exclusions (items, categories, payment methods, coupons), delay until `order.completed`, multipliers by tier/segment/campaign |
-| `redeem` | conversion rate, min/max per transaction, allowed with coupons?, redeemable products/categories, expiry of redemption codes, partial redemption |
-| `tiers` | names, thresholds (points or spend), window, benefits (multipliers, perks flags, badges, free shipping via Checkout), downgrade rules, tier copy |
-| `expiry` | months, FIFO/LIFO, notice schedule, grace |
-| `referrals` | referrer/referee rewards, code format, landing page, fraud limits, attribution window |
-| `campaigns` | double-points windows, birthday, streaks, missions (do X get Y) |
-| `wallet` | balance, history, expiring soon, statements; widgets (badge, page block, checkout block) |
-| `adjustments` | manual credit/debit, reasons, approval threshold, bulk import |
-| `messages` | templates per event/channel/language |
-| `reversal` | cancel/return/refund behaviour, negative balances policy |
-| `gamification` | badges, progress bars, leaderboard (opt-in) |
+| Element        | Configurable                                                                                                                                                                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `earn_rules`   | list of rules: trigger event (any Graph event incl. custom) → points formula (expression: fixed, % of amount, per unit, per visit), caps per rule/period, exclusions (items, categories, payment methods, coupons), delay until `order.completed`, multipliers by tier/segment/campaign |
+| `redeem`       | conversion rate, min/max per transaction, allowed with coupons?, redeemable products/categories, expiry of redemption codes, partial redemption                                                                                                                                         |
+| `tiers`        | names, thresholds (points or spend), window, benefits (multipliers, perks flags, badges, free shipping via Checkout), downgrade rules, tier copy                                                                                                                                        |
+| `expiry`       | months, FIFO/LIFO, notice schedule, grace                                                                                                                                                                                                                                               |
+| `referrals`    | referrer/referee rewards, code format, landing page, fraud limits, attribution window                                                                                                                                                                                                   |
+| `campaigns`    | double-points windows, birthday, streaks, missions (do X get Y)                                                                                                                                                                                                                         |
+| `wallet`       | balance, history, expiring soon, statements; widgets (badge, page block, checkout block)                                                                                                                                                                                                |
+| `adjustments`  | manual credit/debit, reasons, approval threshold, bulk import                                                                                                                                                                                                                           |
+| `messages`     | templates per event/channel/language                                                                                                                                                                                                                                                    |
+| `reversal`     | cancel/return/refund behaviour, negative balances policy                                                                                                                                                                                                                                |
+| `gamification` | badges, progress bars, leaderboard (opt-in)                                                                                                                                                                                                                                             |
 
 ---
 
 ### 4. Coupons (`coupons`) — service product
 
-| Element | Configurable |
-|---|---|
-| `codes` | pattern/prefix, bulk generation (count, uniqueness), single vs multi-use, per-customer limits, global limits, validity window, auto-apply links (`?coupon=`) |
-| `eligibility` | rules (L4): customer segments, first order, min total, items/categories/brands/attributes, payment/delivery method, country/zone, device, referral source |
-| `actions` | percent (bounded), fixed, free shipping, BXGY, tiered by quantity/total, gift item |
-| `stacking` | with deals, with loyalty, with other coupons (classes) |
-| `distribution` | send via Messaging, embed in campaigns, QR generation, partner codes |
-| `abuse` | velocity limits, one per device, blocklists |
-| `reporting` | redemptions, revenue impact, top codes, exports |
+| Element        | Configurable                                                                                                                                                 |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `codes`        | pattern/prefix, bulk generation (count, uniqueness), single vs multi-use, per-customer limits, global limits, validity window, auto-apply links (`?coupon=`) |
+| `eligibility`  | rules (L4): customer segments, first order, min total, items/categories/brands/attributes, payment/delivery method, country/zone, device, referral source    |
+| `actions`      | percent (bounded), fixed, free shipping, BXGY, tiered by quantity/total, gift item                                                                           |
+| `stacking`     | with deals, with loyalty, with other coupons (classes)                                                                                                       |
+| `distribution` | send via Messaging, embed in campaigns, QR generation, partner codes                                                                                         |
+| `abuse`        | velocity limits, one per device, blocklists                                                                                                                  |
+| `reporting`    | redemptions, revenue impact, top codes, exports                                                                                                              |
 
 **Integration.** REST (`validate`, `redeem`, `release`), Checkout hook, events `coupon.redeemed`.
 
@@ -635,35 +675,35 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 ### 5. Deals & Promotions (`deals`) — service product + pack
 
-| Element | Configurable |
-|---|---|
-| `item_deals` | scope (items/collections/attributes), action, schedule (weekday/time windows incl. overnight, date ranges, timezone), priority, quantity limits, per-customer limits |
-| `cart_deals` | thresholds (total/qty), payment/delivery conditions, free shipping, tiered |
-| `flash_sales` | countdown, stock-limited, start/end, badge |
-| `bundles` | buy-together pricing, mix-and-match rules |
-| `stacking` | policy classes, best-offer selection strategy |
-| `price_locks` | honour displayed price for N minutes, stale behaviour |
-| `display` | badges, pills, strike-through formats, countdowns, deals page layout, sort |
-| `quote_api` | evaluate item/cart; rate limits |
-| `reporting` | uplift, margin impact (needs cost from Catalog) |
+| Element       | Configurable                                                                                                                                                         |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `item_deals`  | scope (items/collections/attributes), action, schedule (weekday/time windows incl. overnight, date ranges, timezone), priority, quantity limits, per-customer limits |
+| `cart_deals`  | thresholds (total/qty), payment/delivery conditions, free shipping, tiered                                                                                           |
+| `flash_sales` | countdown, stock-limited, start/end, badge                                                                                                                           |
+| `bundles`     | buy-together pricing, mix-and-match rules                                                                                                                            |
+| `stacking`    | policy classes, best-offer selection strategy                                                                                                                        |
+| `price_locks` | honour displayed price for N minutes, stale behaviour                                                                                                                |
+| `display`     | badges, pills, strike-through formats, countdowns, deals page layout, sort                                                                                           |
+| `quote_api`   | evaluate item/cart; rate limits                                                                                                                                      |
+| `reporting`   | uplift, margin impact (needs cost from Catalog)                                                                                                                      |
 
 ---
 
 ### 6. Catalog & Product Information (`catalog`) — service product
 
-| Element | Configurable |
-|---|---|
+| Element         | Configurable                                                                                                                                                                |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `entity_schema` | item types (e.g. device, garment, course), attribute definitions (type, options, units, validation, filterable, card position, required), custom fields, localisable fields |
-| `variants` | option dimensions, uniqueness, pools per item, per-variant price/qty/cost/SKU/barcode, status |
-| `collections` | tree depth, rules-based (smart) collections via expressions, manual ordering, marketing content, SEO fields |
-| `brands` | registry, scoping, logos |
-| `media` | per-item limits, ladder via Files, alt-text templates, video |
-| `inventory` | multi-location (optional), low-stock thresholds, backorder policy, restock dates |
-| `pricing` | price lists (by segment/currency), scheduled prices, cost (private), rounding |
-| `publishing` | statuses, schedule, visibility cascades, archive |
-| `import_export` | CSV mapping, dry-run diff, conflict policy, images by URL |
-| `connectors` | pull from external systems (later: Shopify/Woo), field mapping, sync cadence |
-| `api` | read/write scopes, rate limits |
+| `variants`      | option dimensions, uniqueness, pools per item, per-variant price/qty/cost/SKU/barcode, status                                                                               |
+| `collections`   | tree depth, rules-based (smart) collections via expressions, manual ordering, marketing content, SEO fields                                                                 |
+| `brands`        | registry, scoping, logos                                                                                                                                                    |
+| `media`         | per-item limits, ladder via Files, alt-text templates, video                                                                                                                |
+| `inventory`     | multi-location (optional), low-stock thresholds, backorder policy, restock dates                                                                                            |
+| `pricing`       | price lists (by segment/currency), scheduled prices, cost (private), rounding                                                                                               |
+| `publishing`    | statuses, schedule, visibility cascades, archive                                                                                                                            |
+| `import_export` | CSV mapping, dry-run diff, conflict policy, images by URL                                                                                                                   |
+| `connectors`    | pull from external systems (later: Shopify/Woo), field mapping, sync cadence                                                                                                |
+| `api`           | read/write scopes, rate limits                                                                                                                                              |
 
 ---
 
@@ -671,48 +711,48 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 **Purpose.** Let users configure any configurable thing (variants, options, add-ons, bundles) and always land on a valid, priced result.
 
-| Element | Configurable |
-|---|---|
-| `schema` | option groups (type: single/multi/range/text/file), order, required, defaults, dependencies and exclusions (rules), hidden options, option images/swatches |
-| `resolver` | closest-match strategy (in-stock first, price, popularity), partial selection behaviour, fallbacks, "notify me" hook to Alerts |
-| `pricing` | deltas per option/combination, formulas (L4), currency, quantity breaks |
-| `constraints` | stock-aware, compatibility matrices, min/max quantities |
-| `widget` | layout (pills, dropdowns, swatches, cards, steps/wizard), summary panel, sticky CTA, validation messages, URL sync param names |
-| `output` | resulting SKU/variant, quote object for Checkout, share link, PDF summary (optional) |
-| `analytics` | abandonment per step, popular combinations |
+| Element       | Configurable                                                                                                                                               |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema`      | option groups (type: single/multi/range/text/file), order, required, defaults, dependencies and exclusions (rules), hidden options, option images/swatches |
+| `resolver`    | closest-match strategy (in-stock first, price, popularity), partial selection behaviour, fallbacks, "notify me" hook to Alerts                             |
+| `pricing`     | deltas per option/combination, formulas (L4), currency, quantity breaks                                                                                    |
+| `constraints` | stock-aware, compatibility matrices, min/max quantities                                                                                                    |
+| `widget`      | layout (pills, dropdowns, swatches, cards, steps/wizard), summary panel, sticky CTA, validation messages, URL sync param names                             |
+| `output`      | resulting SKU/variant, quote object for Checkout, share link, PDF summary (optional)                                                                       |
+| `analytics`   | abandonment per step, popular combinations                                                                                                                 |
 
 ---
 
 ### 8. Grade & Condition System (`grades`) — service product + pack
 
-| Element | Configurable |
-|---|---|
-| `tiers` | names, order, badge style/colour, description, icon, applicability per item type |
-| `criteria` | inspection checklist per tier (items, pass/fail, photos required), scoring → tier suggestion |
-| `warranty` | days/text per tier, exclusions, printable terms |
-| `showcase` | explainer block (video/images/table compare) placement and copy |
-| `filters` | expose tiers as filters, default sort |
-| `mapping` | tier → external condition values (feeds, structured data, marketplaces) |
-| `unit_reports` | per-unit inspection report (via serials) visible to buyer |
+| Element        | Configurable                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------- |
+| `tiers`        | names, order, badge style/colour, description, icon, applicability per item type             |
+| `criteria`     | inspection checklist per tier (items, pass/fail, photos required), scoring → tier suggestion |
+| `warranty`     | days/text per tier, exclusions, printable terms                                              |
+| `showcase`     | explainer block (video/images/table compare) placement and copy                              |
+| `filters`      | expose tiers as filters, default sort                                                        |
+| `mapping`      | tier → external condition values (feeds, structured data, marketplaces)                      |
+| `unit_reports` | per-unit inspection report (via serials) visible to buyer                                    |
 
 ---
 
 ### 9. Product Detail Page (`pdp`) — element pack
 
-| Element | Configurable |
-|---|---|
-| `gallery` | layouts (carousel/grid/stacked), zoom, video, 360 (from Files), thumbnails, priority image, lazy strategy, aspect ratios |
-| `title_block` | fields order (brand, name, subtitle), badges (deal, grade, new), share |
-| `price_block` | formats, savings display, taxes text, per-variant update, financing text (copy only) |
-| `configurator_embed` | uses Configurator; placement |
-| `buy_box` | quantity limits, CTA copy, secondary CTA (WhatsApp/ask), stock messaging, delivery estimate text rules |
-| `sticky_bar` | mobile/desktop rules, contents |
-| `tabs_or_sections` | description, specs (attribute groups), warranty, shipping/returns (from Content), FAQ (manual/AI via SEO), reviews (Reviews product), Q&A |
-| `related` | strategy (collection/brand/attribute/manual/AI), count, layout |
-| `trust` | badges, policies links, contact strip |
-| `structured_data` | on/off, mapping |
-| `layouts` | desktop/mobile variants, slots for merchant HTML, section order via drag-and-drop |
-| `experiments` | variants of any section |
+| Element              | Configurable                                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `gallery`            | layouts (carousel/grid/stacked), zoom, video, 360 (from Files), thumbnails, priority image, lazy strategy, aspect ratios                  |
+| `title_block`        | fields order (brand, name, subtitle), badges (deal, grade, new), share                                                                    |
+| `price_block`        | formats, savings display, taxes text, per-variant update, financing text (copy only)                                                      |
+| `configurator_embed` | uses Configurator; placement                                                                                                              |
+| `buy_box`            | quantity limits, CTA copy, secondary CTA (WhatsApp/ask), stock messaging, delivery estimate text rules                                    |
+| `sticky_bar`         | mobile/desktop rules, contents                                                                                                            |
+| `tabs_or_sections`   | description, specs (attribute groups), warranty, shipping/returns (from Content), FAQ (manual/AI via SEO), reviews (Reviews product), Q&A |
+| `related`            | strategy (collection/brand/attribute/manual/AI), count, layout                                                                            |
+| `trust`              | badges, policies links, contact strip                                                                                                     |
+| `structured_data`    | on/off, mapping                                                                                                                           |
+| `layouts`            | desktop/mobile variants, slots for merchant HTML, section order via drag-and-drop                                                         |
+| `experiments`        | variants of any section                                                                                                                   |
 
 ---
 
@@ -724,122 +764,139 @@ Every element can be used as **drop-in UI** (our renderer, themed by the website
 
 ### 11. Cart & Checkout (`checkout`) — service product + pack
 
-| Element | Configurable |
-|---|---|
-| `cart` | drawer/page, max qty per line/lines, notes, gift options, save-for-later, reconciliation policy (price/stock changes), guest merge, abandoned-cart events |
-| `checkout_flow` | steps (single-page / multi-step), guest allowed?, identity via Auth or federation, express reorder |
-| `fields` | address schema (which fields, required, validation, autocomplete), contact fields, custom fields, per-country overrides (optional) |
-| `delivery` | methods (courier zones, pickup points, scheduled slots), rates (flat/tiered/free thresholds/by rule), ETA text |
-| `payments` | manual methods (bank transfer with proof upload & reference, cash on delivery with surcharge/caps/confirmation, pickup pay-later), gateway adapters (later) — each with instructions copy, availability rules, limits |
-| `pricing` | rounding, surcharges, taxes/VAT rules (later), currency |
-| `offers_hook` | apply Coupons/Deals/Loyalty (order of application, stacking policy from those products) |
-| `place_order` | idempotency, reservation policy, expiry hours, fraud/risk hooks, order numbering |
-| `success` | steps copy by method, SLA text, tracking links, share/receipt |
-| `policies` | consent checkboxes, links to Content documents |
-| `abandonment` | events for Automation/Messaging |
-| `hosted_vs_embedded` | hosted checkout page, embedded blocks, or headless API |
+| Element              | Configurable                                                                                                                                                                                                          |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cart`               | drawer/page, max qty per line/lines, notes, gift options, save-for-later, reconciliation policy (price/stock changes), guest merge, abandoned-cart events                                                             |
+| `checkout_flow`      | steps (single-page / multi-step), guest allowed?, identity via Auth or federation, express reorder                                                                                                                    |
+| `fields`             | address schema (which fields, required, validation, autocomplete), contact fields, custom fields, per-country overrides (optional)                                                                                    |
+| `delivery`           | methods (courier zones, pickup points, scheduled slots), rates (flat/tiered/free thresholds/by rule), ETA text                                                                                                        |
+| `payments`           | manual methods (bank transfer with proof upload & reference, cash on delivery with surcharge/caps/confirmation, pickup pay-later), gateway adapters (later) — each with instructions copy, availability rules, limits |
+| `pricing`            | rounding, surcharges, taxes/VAT rules (later), currency                                                                                                                                                               |
+| `offers_hook`        | apply Coupons/Deals/Loyalty (order of application, stacking policy from those products)                                                                                                                               |
+| `place_order`        | idempotency, reservation policy, expiry hours, fraud/risk hooks, order numbering                                                                                                                                      |
+| `success`            | steps copy by method, SLA text, tracking links, share/receipt                                                                                                                                                         |
+| `policies`           | consent checkboxes, links to Content documents                                                                                                                                                                        |
+| `abandonment`        | events for Automation/Messaging                                                                                                                                                                                       |
+| `hosted_vs_embedded` | hosted checkout page, embedded blocks, or headless API                                                                                                                                                                |
 
 ---
 
 ### 12. Order Manager — "Ecommerce Helper" (`orders`) — service product
 
-| Element | Configurable |
-|---|---|
-| `intake` | receive orders from our Checkout or any external system (API/CSV/webhook) with field mapping |
-| `lifecycle` | status set and names, transition matrix, who may transition, side effects (stock, points, messages), auto-expiry rules, customer-cancellable window |
-| `fulfilment` | carriers (name, tracking URL template, service levels), packing workflow, dispatch video, batch actions |
-| `serials` | capture per unit, validation patterns, required-before-dispatch rules, lookup |
-| `documents` | invoices/receipts/packing slips/pick lists — templates (branding, fields, legal text), numbering, PDF |
-| `payments_ledger` | record payments/refunds (methods, references, proofs), partial refunds, reconciliation views |
-| `risk` | open-order caps, blocklists, RTO counters and thresholds, manual review queue |
-| `customer_updates` | messages per status via Messaging; tracking page (hosted) |
-| `bulk` | bulk status changes with per-order validation; CSV export/import |
-| `views` | saved filters, columns, SLAs (e.g. confirm within 2 h), alerts |
-| `returns_hook` | hands off to After-sales |
+| Element            | Configurable                                                                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `intake`           | receive orders from our Checkout or any external system (API/CSV/webhook) with field mapping                                                        |
+| `lifecycle`        | status set and names, transition matrix, who may transition, side effects (stock, points, messages), auto-expiry rules, customer-cancellable window |
+| `fulfilment`       | carriers (name, tracking URL template, service levels), packing workflow, dispatch video, batch actions                                             |
+| `serials`          | capture per unit, validation patterns, required-before-dispatch rules, lookup                                                                       |
+| `documents`        | invoices/receipts/packing slips/pick lists — templates (branding, fields, legal text), numbering, PDF                                               |
+| `payments_ledger`  | record payments/refunds (methods, references, proofs), partial refunds, reconciliation views                                                        |
+| `risk`             | open-order caps, blocklists, RTO counters and thresholds, manual review queue                                                                       |
+| `customer_updates` | messages per status via Messaging; tracking page (hosted)                                                                                           |
+| `bulk`             | bulk status changes with per-order validation; CSV export/import                                                                                    |
+| `views`            | saved filters, columns, SLAs (e.g. confirm within 2 h), alerts                                                                                      |
+| `returns_hook`     | hands off to After-sales                                                                                                                            |
 
 ---
 
 ### 13. After-sales (`aftersales`) — service product + pack
+
 `claim_types` (return/warranty/exchange/repair: windows by rule, evidence, photos), `intake_form` (fields per type), `queue` (statuses/transitions/assignments/SLAs), `decisions` (approve/reject reasons, partial), `logistics` (return labels text, pickup), `resolution` (refund via ledger, replacement order, repair tracking), `restock` (per line), `serial_registry` (warranty lookup page), `messages`, `reporting` (return rate by reason/item).
 
 ---
 
 ### 14. Site Search (`search`) — service product + pack
+
 `index` (sources: catalog fields with weights, pages, files, custom docs), `ranking` (boosts, synonyms, typo tolerance, pinned results, rules by query), `suggestions` (popular, recent, categories), `overlay` (layout, hotkeys, mobile), `results_page` (filters, sort), `analytics` (queries, zero results, CTR), `api`.
 
 ---
 
 ### 15. Reviews & Ratings (`reviews`) — service product + pack
+
 `collection` (who, when, incentives), `request_flow` (timing, channel, reminders), `moderation` (auto rules, manual, replies), `content` (title/body limits, photos/videos, attributes ratings e.g. fit), `display` (widgets, sort, filters, summary, Q&A), `structured_data`, `import` (from other platforms), `analytics`.
 
 ---
 
 ### 16. Alerts & Waitlists (`alerts`) — service product + pack
+
 `types` (stock, price-drop threshold, availability/slots, custom), `capture` (identity fields, consent, rate limits), `dispatch` (channels, templates, caps, quiet hours, batching), `triggers` (events/API/CSV), `waitlist_priority` (FIFO / tier), `analytics`.
 
 ---
 
 ### 17. Wishlist (`wishlist`) — element pack + Graph storage
+
 `lists` (multiple lists, names), `items` limits, `guest_merge`, `share` (public link, privacy), `price_drop_hook`, `widgets` (heart button placement, page block), `analytics`.
 
 ---
 
 ### 18. Messaging & Campaigns (`messaging`) — service product
+
 `templates` (per event/channel/language, approval status for WhatsApp templates), `transactional` (send API, priorities), `providers` (platform or own credentials per channel), `outbox` (retries, DLQ, rate pacing), `campaigns` (audience via Graph segments/rules, schedule, throttle, A/B subject/body, links tracking), `preferences` (opt-in/out per channel, quiet hours), `inbound` (replies to Chat inbox), `analytics` (delivery, open/click where available).
 
 ---
 
 ### 19. SEO Suite (`seo`) — service product (+ edge rules)
+
 `health` (checks list, thresholds, schedule, guided fixes), `metadata` (templates by page type, rules, overrides per URL), `structured_data` (types per page type, mappings), `sitemaps` (types, chunking, images, exclusions), `feeds` (shopping feeds mapping), `redirects` (manager, slug history, host/case rules, import), `intent_pages` (templates, thresholds, generation), `ai_copy` (fields, tone, languages, batch, approval), `og_images` (templates), `llms_txt`, `verification`, `crawl` (audits), `edge_rules` (apply at the edge without site changes), `rank_tracking` (later), `reporting`.
 
 ---
 
 ### 20. Analytics & Insights (`analytics`) — service product + pack
+
 `collection` (page views, vitals, custom events, sampling), `funnels` (steps by event/rule), `kpis` (definitions via expressions), `segments`, `attribution` (source/medium rules), `dashboards` (widgets, sharing), `alerts` (anomalies), `retention`, `exports`, `privacy` (consent gating, IP policy).
 
 ---
 
 ### 21. Consent & Tags (`consent`) — element pack
+
 `banner` (layouts, texts per language, categories, granular toggles, re-consent policy), `consent_mode` (Google), `tag_loader` (tags by category, load order, custom scripts), `conversion_events` (event → tag payload mapping), `records` (log, export), `geo_rules` (optional).
 
 ---
 
 ### 22. Content & Policies (`content`) — service product + pack
+
 `documents` (types, editor with sanitizer policy, tokens from other products), `pages` (hosted pages with layouts/blocks), `glossary`, `announcements`, `faqs`, `versions`, `languages`, `seo_fields`.
 
 ---
 
 ### 23. Files, Media & Drive (`files`) — service product + pack
+
 `uploads` (types, sizes, folders, direct-to-storage), `images` (ladders, formats, quality, placeholders, focal points), `video` (presets, posters), `drive` (folders, sharing, versions, trash), `providers` (platform or own bucket), `cdn` (custom domain), `quotas`, `usage_reports`.
 
 ---
 
 ### 24. Automation (`automation`) — service product
+
 `rules` (trigger: any event/schedule/threshold → conditions (L4) → actions), `actions` (message, points, tag, segment add/remove, webhook, create task, pause offer, adjust stock, custom tool), `delays_and_waits`, `sequences` (multi-step journeys), `runs` (logs, retries), `templates` (library of common automations), `limits`.
 
 ---
 
 ### 25. Reports & Exports (`reports`) — service product
+
 `library` (sales, inventory, service, marketing reports), `builder` (dimensions/measures over Graph and product data), `schedules` (email/WhatsApp delivery), `exports` (CSV/JSON/API), `sharing`, `retention`.
 
 ---
 
 ### 26. Ops Monitor (`ops`) — service product
+
 `health` (endpoint checks for the site and products), `errors` (client/server error reporting), `uptime`, `digests` (daily/weekly), `alerts` (channels, thresholds), `audit_viewer`.
 
 ---
 
 ### 27. Team & Access — Portal-provided
+
 Roles, website scoping, invites, 2FA, audit, activity feed, approvals.
 
 ---
 
 ### 28. Out-of-the-box product ideas (backlog, same model)
+
 Booking & Appointments (slots, resources, deposits) · Forms & Surveys (builder, logic, submissions to Graph) · Pop-ups & Banners (targeting, experiments) · Referral & Affiliate (links, commissions) · Gift cards & Store credit · Subscriptions & Recurring orders · Multi-vendor marketplace tools (vendors, payouts) · Live shopping / video commerce · Product Q&A · Size/fit assistant · Image search · Price intelligence (competitor tracking) · Translations (site localisation) · Accessibility widget · Legal generator (policies from answers) · Digital downloads / licensing · Events & tickets · Donations · Feedback & NPS · Help center / knowledge base · Status page for merchants' own services.
 
 ---
 
 ### 29. How this stays simple for the Portal
+
 Every capability above is expressed to the Portal as: an element (switch + price), typed features (schemas), rules (shared expression grammar), placement (shared schema), strings (catalog), hooks/webhooks (declared), experiments (shared). The Portal renders forms from schemas and enforces precedence, locks, budgets and pricing. It never learns product-specific logic.
 
 ---
@@ -854,13 +911,14 @@ The standard is enforced, not suggested: the product template generates it, `@ss
 
 ### 1. Three consumption modes (every element, always)
 
-| Mode | Who builds the UI | What the product must provide | Typical user |
-|---|---|---|---|
-| **A. Drop-in** | We do (default renderer) | Element renders via the Loader with the website's design tokens, variants, slots and copy | Merchant with no developer |
-| **B. Headless UI** | The merchant's developer | The element's **headless core**: state, actions, events, validation, i18n strings — framework-agnostic, plus React/Vue/Svelte adapters; no DOM opinions | Developer wanting a fully custom look |
-| **C. API only** | Nobody on the front-end (or a mobile app) | The element's REST/SDK surface with identical semantics; server keys | Headless sites, mobile apps, back-office integrations |
+| Mode               | Who builds the UI                         | What the product must provide                                                                                                                           | Typical user                                          |
+| ------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **A. Drop-in**     | We do (default renderer)                  | Element renders via the Loader with the website's design tokens, variants, slots and copy                                                               | Merchant with no developer                            |
+| **B. Headless UI** | The merchant's developer                  | The element's **headless core**: state, actions, events, validation, i18n strings — framework-agnostic, plus React/Vue/Svelte adapters; no DOM opinions | Developer wanting a fully custom look                 |
+| **C. API only**    | Nobody on the front-end (or a mobile app) | The element's REST/SDK surface with identical semantics; server keys                                                                                    | Headless sites, mobile apps, back-office integrations |
 
 Rules:
+
 - The **same configuration, rules, entitlements, pricing and events** apply in all three modes. Turning an element off disables A, B and C together.
 - Mode A is implemented **on top of** Mode B, and Mode B **on top of** Mode C. A product may not add behaviour that only exists in the default renderer.
 - Every element declares which modes it supports; **C is mandatory** for any element with state, **B is mandatory** for any element with UI, **A is mandatory** for element packs.
@@ -972,22 +1030,22 @@ export const createApplyBox = ({ config, strings, client, identity, emit }) => (
 
 ### 5. API standard (Mode C)
 
-| Topic | Rule |
-|---|---|
-| Base | `https://<product>/v1/…` ; version in path; `Accept: application/json` |
-| Auth | `Authorization: Bearer <website key>` (`pk_` for browser-safe reads, `sk_` for server); `X-SS-Website` optional override never trusted over the key's binding; SSO sessions for dashboard routes; app-to-Portal via client-assertion |
-| Resources | plural nouns, kebab-case paths, `id` opaque strings, `websiteId` never in the path (derived from the key) |
-| Reads | `GET /v1/<resource>?cursor=&limit=&filter[field]=&sort=` ; cursor pagination; `fields=` sparse selection; `include=` for relations |
-| Writes | `POST` create, `PATCH` partial update (JSON Merge Patch), `DELETE` soft by default; **`Idempotency-Key` required** on POST that creates or moves state; replay returns the original result |
-| Errors | RFC 9457 problem details: `{ type, title, status, detail, instance, requestId, errors[] }`; stable machine `type` URIs per product |
-| Rate limits | `RateLimit-Limit/Remaining/Reset` headers; 429 with `Retry-After` |
-| Versioning | additive changes only within `/v1`; breaking → `/v2` with `Sunset` and `Deprecation` headers on the old one; N-1 supported for 12 months |
-| Webhooks out | signed (`SS-Signature`, `SS-Timestamp`, `kid`), retried with backoff, event envelope identical to the Event Hub |
-| Batch | `POST /v1/<resource>:batch` with per-item results |
-| Time & money | ISO-8601 UTC timestamps; money as integer minor units + currency code |
-| Custom fields | `custom: {}` object on entities that declare `customFields`, validated by merchant-defined schema |
-| Health | `GET /healthz` (no auth, cheap), `GET /readyz` (dependencies) |
-| Docs | OpenAPI 3.1 generated from code; examples for every operation; SDK generated from the spec |
+| Topic         | Rule                                                                                                                                                                                                                                 |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Base          | `https://<product>/v1/…` ; version in path; `Accept: application/json`                                                                                                                                                               |
+| Auth          | `Authorization: Bearer <website key>` (`pk_` for browser-safe reads, `sk_` for server); `X-SS-Website` optional override never trusted over the key's binding; SSO sessions for dashboard routes; app-to-Portal via client-assertion |
+| Resources     | plural nouns, kebab-case paths, `id` opaque strings, `websiteId` never in the path (derived from the key)                                                                                                                            |
+| Reads         | `GET /v1/<resource>?cursor=&limit=&filter[field]=&sort=` ; cursor pagination; `fields=` sparse selection; `include=` for relations                                                                                                   |
+| Writes        | `POST` create, `PATCH` partial update (JSON Merge Patch), `DELETE` soft by default; **`Idempotency-Key` required** on POST that creates or moves state; replay returns the original result                                           |
+| Errors        | RFC 9457 problem details: `{ type, title, status, detail, instance, requestId, errors[] }`; stable machine `type` URIs per product                                                                                                   |
+| Rate limits   | `RateLimit-Limit/Remaining/Reset` headers; 429 with `Retry-After`                                                                                                                                                                    |
+| Versioning    | additive changes only within `/v1`; breaking → `/v2` with `Sunset` and `Deprecation` headers on the old one; N-1 supported for 12 months                                                                                             |
+| Webhooks out  | signed (`SS-Signature`, `SS-Timestamp`, `kid`), retried with backoff, event envelope identical to the Event Hub                                                                                                                      |
+| Batch         | `POST /v1/<resource>:batch` with per-item results                                                                                                                                                                                    |
+| Time & money  | ISO-8601 UTC timestamps; money as integer minor units + currency code                                                                                                                                                                |
+| Custom fields | `custom: {}` object on entities that declare `customFields`, validated by merchant-defined schema                                                                                                                                    |
+| Health        | `GET /healthz` (no auth, cheap), `GET /readyz` (dependencies)                                                                                                                                                                        |
+| Docs          | OpenAPI 3.1 generated from code; examples for every operation; SDK generated from the spec                                                                                                                                           |
 
 Every product exposes the **same standard resources** in addition to its own: `GET /v1/entitlement` (what this website has enabled, from cache), `GET /v1/config` (effective config for the element(s) requested), `POST /v1/events` (element/domain events the site wants to push into this product), `GET /v1/strings?lang=`.
 
@@ -1068,3 +1126,65 @@ Semver for the product; manifest `version`; price-book `version` with `effective
 6. Events declared and emitted; consumers idempotent.
 7. Tests: unit, contract, isolation, renderer, e2e; certification green.
 8. Docs generated; changelog entry.
+
+---
+
+# PART F — IMPLEMENTATION DECISIONS (binding; supersedes earlier wording where they differ)
+
+Recorded as the core packages were built on branch `platform-v1`. Each package's `README.md` is the detailed normative reference; this part is the index of decisions.
+
+## F.1 Money and settlement (`@ss/entitlements`)
+
+- All prices and ledger amounts are **integer millicredits** (1 credit = 1000). Tiny per-unit prices are reduced fractions `{ millicredits, per }`. Every charge rounds down; metered charges are computed on cumulative period usage so hourly amounts sum exactly to the period total.
+- **Billing hour:** only complete UTC hours settle. A bucket with _any_ active instant is billed in full, priced at its first active instant (elements and price-book pin read there). Only fully paused/suspended/spend-capped hours are free. Settlement runs after the hour, so a balance can go negative by at most one hour; spend caps use the upcoming hour's cost to pause first.
+- **Two ledger entries per hour** when metered usage exists: `${subscriptionId}:${hourISO}` (base + elements) and `${subscriptionId}:${hourISO}:metered`. Zero-amount buckets are still emitted so reconciliation sees every hour.
+- Price-book pins apply from `max(pin.at, effectiveFrom)`; buckets without a price book are skipped as `unpriced` and alerted.
+
+## F.2 Entitlement resolution
+
+- **Lock authority** (not list order): website 1 < merchant 2 < product = plan 3 < platform policy 4 < admin 5. The highest-authority lock wins; lower-authority values are excluded and reported. Admin may exceed plan max. Absolute schema bounds bind everyone, admin included. Plan max applies to merchant, website and experiment values; platform policy is not plan-bounded.
+- **Plans** are `{ code, name?, description?, elements[], addons?[] }`: `elements` included and on by default, `addons` allowed and off by default, anything else unavailable (`not_in_plan`). Included elements' dependencies must be included; add-ons' dependencies must be in `elements ∪ addons`. No plan ⇒ every element available with product defaults.
+- **Per-plan defaults and maxima live only in feature schemas** (`x-plan`). Max semantics: number = value, array = item count, string = length, flag = boolean (`false` = cannot be enabled).
+- **Runtime order per element:** state (cancelled › suspended › paused › spend_cap) → `resource_missing` (element `requires` a connector not `connected`) → `rollout` → `dependency` (topological cascade; never auto-enables). A hard-stop quota blocks only that feature, not the element.
+- Rollouts here are subscription-level; visitor-level audience/placement belongs to the Loader.
+- **Document mapping:** the `@ss/contracts` entitlement document is canonical. `toDocument()` converts resolver output; the Portal assigns an integer `version` and bumps it when `contentHash()` changes; diagnostics stay in the resolver report; cancelled subscriptions get no document (revoked instead).
+- `@ss/entitlements` is Node-only (`node:crypto`); browsers receive signed documents, never run the resolver.
+
+## F.3 Contracts (`@ss/contracts`)
+
+- Schema `$id`s are URNs `urn:ss:contracts:v1:<name>` (no hosts). Objects are closed (`additionalProperties: false`); v1 changes are additive and validators ship before producers.
+- Money in events/graph: integer minor units; one `currency` per cart/order context, `{ amount, currency }` when standalone.
+- **Feature-schema subset:** object root, one `type` per node, no `$ref`/combinators; top-level features need `title` and `default`. Extension keywords: `x-kind` (flag|quota|limit|rate|config), `x-plan`, `x-lock`, `x-experiment` (element must allow experiments), `x-period` (required on quota: hour|day|week|month), `x-hardStop`, `x-unit` (snake_case), `x-per` (required on rate: second|minute|hour), `x-ui` (form hints only).
+- Manifest `features` are delivered **inline** to the Portal; `ss app validate` bundles any local refs.
+- **Mode rules:** pack ⇒ every element mode A; A ⇒ renderer + `budget.js > 0`; B ⇒ headless core; renderer ⇒ headless + A; UI (renderer/placement/budget) ⇒ B; stateful ⇒ C, satisfied by the element's or a dependency's `api.resources`.
+- **Element packs:** no `endpoints`, no admin launch, modes ⊆ {A, B}, no `api.resources`, scopes limited to `graph.*` and `events.publish:*`; stateful pack elements need a `graph.<entity>.write` scope. Packs are published as signed bundles, not via the registration handshake. **Service products** must declare `endpoints.base`, `register`, `events`.
+- **Event scopes are mandatory:** every consumed event is covered by an `events.subscribe:<glob>` scope; published events are in the product namespace (slug with `-` → `_`, e.g. `notice_bar.*`) or a standard event covered by `events.publish:<glob>`. Glob `*` spans dots; a pattern without `@` matches all versions.
+- Entitlement document time fields: `issuedAt`, `validFrom`, `validUntil` (ISO-8601 UTC); `resources[].ref` accepts opaque ids only (never connection strings); `dataScope.prefix` ends with `_`; feature keys are `<element>.<featurePath>`.
+- Domains: `normaliseDomain` lowercases, punycodes, strips scheme/path/port/trailing dot, rejects IPs (incl. odd forms), `localhost`, single labels and wildcards unless `allowLocal`; public-suffix rejection is an injected predicate.
+- Ids: `<prefix>_` + 128 random bits as 26 lowercase Crockford base32 chars.
+- Problems follow RFC 9457 with a configurable type base URI (`createProblemFactory({ baseUri })`) and 32 stable codes.
+
+## F.4 Rules language (`@ss/rules`, `rules@1`)
+
+- Hand-written Pratt parser, no `eval`, programs are plain JSON `{ v: 1, ast }`, re-validated whenever loaded from storage.
+- **No regular expressions:** `like`/`ilike` glob (`*`, `?`, `\`), patterns ≤ 256 chars, iterative matcher charged to the step budget. Library: `has, count, sum, min, max, avg, round, floor, ceil, abs, lower, upper, trim, startsWith, endsWith, like, ilike, daysSince, hoursSince, minutesSince, dateParts, between, inSegment, any, all, filter, map, coalesce, len, date, number, string`.
+- Durations are milliseconds; date literals without zone are UTC; no implicit type coercion; missing paths → null; null ordering comparisons → false; comparisons cannot chain; `it` reserved for predicates.
+- `between(time, 'HH:MM', 'HH:MM', tz)` is a `[start, end)` time-of-day window that wraps past midnight when start > end.
+- Products pass the website's timezone as `options.timeZone` (default UTC). **An evaluation error means "did not match."** Context data must be JSON + `Date` (convert DB ids to strings).
+- Default limits: length 4000, depth 64, nodes 2000, steps 10000, list 1000, string 10000 — each a distinct error code.
+
+## F.5 Protocol (`@ss/protocol`)
+
+- One JWS path: EdDSA only, `kid` required, a distinct `typ` per token type; `jwk/jku/x5u/x5c/crit/b64/zip` headers refused; token length capped; exact `aud`/`iss`.
+- **Key rotation:** JWKS entries may carry `nbf`/`exp`; unknown kids trigger at most one refetch per 30 s; last-known keys survive Portal outages up to `maxStaleMs` (24 h); revocation beats everything; duplicate kids are dropped. **Rotating the Portal key that signs website keys requires re-issuing all website keys.**
+- **Launch kinds:** admin must carry a scope (merchant or `all`); demo must not carry `merchantId`; partner needs `partnerId`; developer needs `developerId`; impersonate needs `act.sub ≠ sub`, `merchantId`, and `impExp ≤ 1 h`; only impersonate may carry `act`/`impExp`. Launch claims list `subscriptions`. TTL default 60 s, max 300 s.
+- **Website keys:** `pk_`/`sk_` are signed tokens verified offline plus server-side revocation by `keyId`; the prefix must agree with the signed kind and env (no relabelling). Revocation lists refresh ≤ 5 min. The Portal stores only HMAC-SHA-256(key, pepper) and compares in constant time.
+- **Origin check:** Origin is authoritative, Referer only when Origin is absent; https only (localhost only in test env); userinfo/whitespace/control chars/backslashes refused; exact host or `.domain` suffix when `allowSubdomains`.
+- **Events:** `SS-Signature: v1;kid=<kid>;sig=<b64url>` (up to 4 entries for dual-signing during rotation) over `ss-event.v1.${timestamp}.${sha256hex(body)}`; `SS-Key-Id` is only a hint; replay key `ts|sha256(body)` within tolerance (300 s).
+- **Registration:** the product stores only SHA-256 of the one-time token; the Portal JWKS is fetched only from the pinned origin (default `<pinned>/.well-known/jwks.json`; body URLs ignored); the Portal's signed request binds `sha256(token)`; wrong tokens rejected before any fetch; the token burns atomically before `onRegistered`, and a failure after burn requires a new token; every failure returns the same generic 401. **Proof-of-possession:** the product signs `{ manifestHash, jkt, nonce, portalUrl, iat }` with the key it registers (`typ ss-registration-response+jws`); the Portal verifies signature, thumbprint, nonce echo, URL, manifest hash and freshness (± 5 min).
+- **Replay/nonce stores in production** are one shared atomic TTL store (MongoDB unique `_id` + TTL index) in the control plane.
+
+## F.6 Repository and tooling
+
+- Monorepo `pnpm` workspace on branch `platform-v1`: `packages/*` (contracts, rules, entitlements, protocol, then app-kit, web SDK, cli, ui), `platform/` (Portal), `products/*` (reference products; each extractable to its own repo).
+- JavaScript ESM, functional (ESLint forbids classes and `console`), JSDoc types with `tsc --checkJs --strict --noUncheckedIndexedAccess`, Prettier, Vitest with ≥ 90 % line coverage per package, CI on every push.

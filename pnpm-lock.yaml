@@ -47,6 +47,9 @@ importers:
 
   packages/entitlements:
     dependencies:
+      '@ss/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@ss/rules':
         specifier: workspace:*
         version: link:../rules
