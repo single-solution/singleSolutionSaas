@@ -67,9 +67,13 @@ export default function SeoDashboardLayout({ children }) {
 					</div>
 
 					<div className="text-xs text-right hidden sm:block">
-						<div className="font-bold text-slate-900">{activeStore?.name || session?.tenantName || 'SuperAdmin'}</div>
+						<div className="font-bold text-slate-900">
+							{isAdmin
+								? session?.tenantName || 'SuperAdmin'
+								: activeStore?.name || session?.tenantName || 'Merchant Store'}
+						</div>
 						<div className="text-[10px] text-slate-500 font-mono">
-							{activeWebsite?.domain || activeStore?.domain || 'Platform Root'}
+							{isAdmin ? 'System Administrator' : activeWebsite?.domain || activeStore?.domain || 'Storefront'}
 						</div>
 					</div>
 

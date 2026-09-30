@@ -182,9 +182,9 @@ export function AppAuthGuard({ productId, appName = 'Micro-App', portalUrl: prop
 						enabledFeatures = user.subscriptions[productId];
 					}
 					return {
-						tenantId: user.id || 'usr_authed',
-						tenantName: user.name || user.orgName || 'Authenticated User',
-						domain: user.domain || 'platform.local',
+						tenantId: user.id || 'usr_merchant',
+						tenantName: user.name || user.orgName || 'Merchant Store',
+						domain: user.domain || 'yourstore.com',
 						role: user.role || 'merchant',
 						productId,
 						portalUrl: propPortalUrl || '#',

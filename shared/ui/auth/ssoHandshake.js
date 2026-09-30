@@ -194,8 +194,12 @@ export function getAppLaunchUrl(baseUrl, tenantOrUser, product, customSecret) {
 		(typeof window !== 'undefined' ? window.location.origin : '') ||
 		(typeof process !== 'undefined' && process.env?.PORTAL_URL) ||
 		'';
+	const defaultUser =
+		user?.role === 'admin'
+			? { id: 'adm_root', name: 'SuperAdmin', role: 'admin' }
+			: { id: 'tnt_merchant', name: 'Merchant Store', role: 'merchant' };
 	const secret = customSecret || product?.secretKey || PLATFORM_MASTER_SECRET;
-	const token = createSSOToken(user || { id: 'usr_portal', name: 'Platform User' }, product, secret, portalOrigin);
+	const token = createSSOToken(user || defaultUser, product, secret, portalOrigin);
 
 	const urlObj = new URL(cleanBaseUrl);
 	urlObj.searchParams.set('sso_token', token);
