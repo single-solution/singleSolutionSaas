@@ -99,6 +99,25 @@ export const identitySectionSchema = deepFreeze({
 	},
 });
 
+/** IANA time zone names (`Europe/Berlin`, `America/Argentina/Buenos_Aires`, `UTC`, `Etc/GMT+5`); the runtime check is `isTimeZone`. */
+export const TIME_ZONE_PATTERN = '^[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9][A-Za-z0-9_+-]*){0,2}$';
+
+/**
+ * Website settings the Portal copies into every document of the website (all optional; filled from the website's
+ * settings in the console): `timeZone` (IANA name), `language` (BCP-47 tag, the website's default language) and
+ * `currency` (ISO-4217, the store currency). Products use them as defaults (schedules, strings, money formatting)
+ * instead of asking the merchant again. Closed object.
+ */
+export const websiteSectionSchema = deepFreeze({
+	type: 'object',
+	additionalProperties: false,
+	properties: {
+		timeZone: { type: 'string', minLength: 1, maxLength: 64, pattern: TIME_ZONE_PATTERN, description: 'IANA time zone name.' },
+		language: ref('locale'),
+		currency: ref('currency'),
+	},
+});
+
 /** The entitlement document schema. */
 export const entitlementDocumentSchema = deepFreeze({
 	$schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -196,6 +215,7 @@ export const entitlementDocumentSchema = deepFreeze({
 			properties: { prefix: { type: 'string', minLength: 3, maxLength: 64, pattern: '^[a-z][a-z0-9_]*_$' } },
 		},
 		identity: identitySectionSchema,
+		website: websiteSectionSchema,
 		experiments: {
 			type: 'array',
 			maxItems: 200,

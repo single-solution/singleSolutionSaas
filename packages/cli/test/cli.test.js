@@ -189,6 +189,9 @@ describe('ss (main)', () => {
 			).toContain('"ai":"missing"');
 			expect((await ss(['dev', 'subscription', ...d])).code).toBe(2);
 			expect((await ss(['dev', 'resource', ...d])).code).toBe(2);
+			expect(JSON.parse((await ss(['dev', 'identity', ...d])).out)).toEqual({ requests: [], issuers: {} });
+			expect((await ss(['dev', 'identity', ...d, '--website', 'web_devwebsite01'])).code).toBe(2);
+			expect((await ss(['dev', 'identity', ...d, '--website', 'web_devwebsite01', '--decision', 'approve'])).code).toBe(1);
 			expect((await ss(['dev', 'settle', ...d, '--hours', '2'])).out).toContain('Total');
 			expect(JSON.parse((await ss(['dev', 'state', ...d])).out).apps).toHaveLength(1);
 			expect(devIo.out()).toContain('registered  live-notes');

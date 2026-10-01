@@ -1,6 +1,7 @@
 /**
  * S3-compatible storage adapter executing with the merchant's own credentials (their bucket, their keys). Objects are
  * namespaced `<descriptor.prefix><slug>/<websiteId>/<key>` so a product can only reach its own area of the bucket.
+ * Callers always pass and receive **relative** keys (`<key>`); `fullKey(key)` gives the absolute object key.
  * Signing is `@ss/net` SigV4; server-side calls go through the outbound `send` (`@ss/net` `safeFetch` under the
  * product's outbound policy), so a descriptor cannot point the product at an internal address.
  * @module
@@ -21,6 +22,9 @@ import { kitError } from '../util.js';
  * @property {boolean} [forcePathStyle] default true with a custom endpoint, false for AWS
  * @property {string} [prefix] merchant-chosen key prefix
  */
+
+/** A media type without parameters spanning lines (`type/subtype[; params]`). */
+const CONTENT_TYPE = /^[A-Za-z0-9!#$&^_.+-]{1,127}\/[A-Za-z0-9!#$&^_.+-]{1,127}(?:\s*;[\x20-\x7e]{0,256})?$/;
 
 /**
  * @param {unknown} key
@@ -75,11 +79,18 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		...(d.forcePathStyle === undefined ? {} : { forcePathStyle: d.forcePathStyle }),
 	};
 
-	/** @param {string} key */
-	const keyFor = (key) => `${base}${checkKey(key)}`;
-
-	/** @param {string} fullKey */
-	const urlFor = (fullKey) => objectUrl(store, fullKey);
+	/**
+	 * Absolute object key in the bucket of a relative key: `<prefix><slug>/<websiteId>/<key>`.
+	 * @param {string} key relative key
+	 * @returns {string}
+	 */
+	const fullKey = (key) => {
+		// an absolute key passed back would be prefixed twice: refuse it instead of writing elsewhere
+		if (checkKey(key).startsWith(base)) throw kitError('invalid_key', 'pass the relative object key, not the full key');
+		return `${base}${key}`;
+	};
+	/** @param {string} key relative key */
+	const urlFor = (key) => objectUrl(store, fullKey(key));
 
 	/**
 	 * Signed server-side request.
@@ -109,33 +120,49 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 		kind: 'storage',
 		provider: 's3',
 		bucket: d.bucket,
-		keyFor,
+		/** Absolute object key of a relative key (for public CDN links, logs, lifecycle rules). */
+		fullKey,
+		/** @deprecated use `fullKey` */
+		keyFor: fullKey,
 		/**
-		 * Presigned PUT for a direct browser upload.
-		 * @param {{ key: string, contentType?: string, expiresIn?: number }} input
+		 * Presigned PUT for a direct browser upload. `content-type` and `content-length` (when given) are signed headers:
+		 * the client must send exactly the returned `headers`, so the bucket refuses another type or size.
+		 * @param {{ key: string, contentType?: string, contentLength?: number, expiresIn?: number }} input `key` relative
+		 * @returns {{ method: 'PUT', url: string, headers: Record<string, string>, key: string, expiresAt: string }}
 		 */
-		presignPut: ({ key, contentType, expiresIn }) => {
-			const fullKey = keyFor(key);
+		presignPut: ({ key, contentType, contentLength, expiresIn }) => {
+			checkKey(key);
 			const seconds = ttl(expiresIn);
 			/** @type {Record<string, string>} */
-			const headers = contentType ? { 'content-type': contentType } : {};
+			const headers = {};
+			if (contentType !== undefined) {
+				if (typeof contentType !== 'string' || !CONTENT_TYPE.test(contentType))
+					throw kitError('invalid_argument', 'contentType must be a media type');
+				headers['content-type'] = contentType;
+			}
+			if (contentLength !== undefined) {
+				if (!Number.isSafeInteger(contentLength) || contentLength < 1)
+					throw kitError('invalid_argument', 'contentLength must be a positive integer');
+				headers['content-length'] = String(contentLength);
+			}
 			const url = presignV4({
 				method: 'PUT',
-				url: urlFor(fullKey),
+				url: urlFor(key),
 				...credentials,
 				region: d.region,
 				now: now(),
 				expiresIn: seconds,
 				headers,
 			});
-			return { method: 'PUT', url, headers, key: fullKey, expiresAt: new Date(now() + seconds * 1000).toISOString() };
+			return { method: 'PUT', url, headers, key, expiresAt: new Date(now() + seconds * 1000).toISOString() };
 		},
 		/**
 		 * Presigned GET.
-		 * @param {{ key: string, expiresIn?: number, downloadName?: string }} input
+		 * @param {{ key: string, expiresIn?: number, downloadName?: string }} input `key` relative
+		 * @returns {{ method: 'GET', url: string, key: string, expiresAt: string }}
 		 */
 		presignGet: ({ key, expiresIn, downloadName }) => {
-			const fullKey = keyFor(key);
+			checkKey(key);
 			const seconds = ttl(expiresIn);
 			/** @type {Record<string, string>} */
 			const query = downloadName
@@ -143,18 +170,21 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 				: {};
 			const url = presignV4({
 				method: 'GET',
-				url: urlFor(fullKey),
+				url: urlFor(key),
 				...credentials,
 				region: d.region,
 				now: now(),
 				expiresIn: seconds,
 				query,
 			});
-			return { method: 'GET', url, key: fullKey, expiresAt: new Date(now() + seconds * 1000).toISOString() };
+			return { method: 'GET', url, key, expiresAt: new Date(now() + seconds * 1000).toISOString() };
 		},
-		/** @param {{ key: string }} input */
+		/**
+		 * @param {{ key: string }} input `key` relative
+		 * @returns {Promise<{ exists: false } | { exists: true, size: number, contentType: string | undefined, etag: string | undefined }>}
+		 */
 		headObject: async ({ key }) => {
-			const response = await call('HEAD', urlFor(keyFor(key)));
+			const response = await call('HEAD', urlFor(key));
 			if (response.status === 404) return { exists: false };
 			if (response.status < 200 || response.status > 299)
 				throw kitError('upstream_error', `storage HEAD answered ${response.status}`, { status: response.status });
@@ -165,9 +195,12 @@ export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy
 				etag: response.headers.etag,
 			};
 		},
-		/** @param {{ key: string }} input */
+		/**
+		 * @param {{ key: string }} input `key` relative
+		 * @returns {Promise<{ deleted: true }>}
+		 */
 		deleteObject: async ({ key }) => {
-			const response = await call('DELETE', urlFor(keyFor(key)));
+			const response = await call('DELETE', urlFor(key));
 			if ((response.status < 200 || response.status > 299) && response.status !== 404) {
 				throw kitError('upstream_error', `storage DELETE answered ${response.status}`, { status: response.status });
 			}

@@ -9,11 +9,17 @@
  *   `documentFor`, checked with the Portal keys) × accepted manifests → `w/<websiteId>/<env>/<version>/loader.js` +
  *   `manifest.json`; the alias in `delivery_aliases` flips with a compare-and-set so an older compile never replaces
  *   a newer one. Budget overruns refuse the compile (`delivery_budget_exceeded`) and keep the current alias.
+ * - **UI bundles** (`submitUiBundle`, `uploadUiAsset`; F.16): a service product publishes the browser modules of its
+ *   mode-A elements itself — the same signed `ss-pack-bundle@1` descriptor as packs (verified by catalog with the
+ *   product's registered keys), then each asset (bytes = descriptor sha256 and size). Once every asset is stored the
+ *   bundle is `ready`, the newest ready bundle replaces the element stub, and every subscribed website recompiles.
  * - **Serve**: `/w/<websiteId>/loader.js` (alias, 60 s + stale-while-revalidate) and `/w/<websiteId>/<version>/…`
- *   (immutable), `/w/packs/<appId>/<version>/<path>` (pack modules, immutable).
+ *   (immutable), `/w/packs/<appId>/<version>/<path>` (pack modules) and `/w/ui/<appId>/<version>/<path>` (service UI
+ *   bundle modules), both immutable.
  * - **Preview**: a signed 10-minute session with a candidate element set; `/p/<token>/<path>` fetches the merchant's
  *   public page through `@ss/net` `safeFetch` (website origin only, GET, no cookies, HTML ≤ 2 MB), injects the
- *   candidate bundle and a ribbon, and returns it sandboxed — nothing fetched is ever stored.
+ *   candidate bundle and a ribbon, and returns it sandboxed — nothing fetched is ever stored. With `PREVIEW_ORIGIN`
+ *   previews are served only from that dedicated cookie-less origin (the merchant's own scripts may run there).
  * @module
  */
 import { createId, isId } from '@ss/contracts';
@@ -21,7 +27,7 @@ import { createOutboundPolicy, isNetError, safeFetch as netFetch } from '@ss/net
 import { canonicalJson, verifyEntitlementDocument } from '@ss/protocol';
 import { deriveSecret } from '../../infra/config.js';
 import { problem } from '../../infra/http.js';
-import { checkUpload, isAssetPath } from './core/assets.js';
+import { checkUpload, isAssetPath, sha256Hex } from './core/assets.js';
 import {
 	VERSION_PATTERN,
 	bundleData,
@@ -46,7 +52,7 @@ import {
 	verifyPreviewToken,
 } from './core/preview.js';
 import { RUNTIME_AUDIENCE, RUNTIME_CORE } from './runtime/generated.js';
-import { ALIASES, ARTEFACTS, ASSETS, PREVIEWS } from './schema.js';
+import { ALIASES, ARTEFACTS, ASSETS, PREVIEWS, UI_BUNDLES } from './schema.js';
 import { createAssetStorage, withImmutableCache } from './storage.js';
 import { gzipSync } from 'node:zlib';
 
@@ -69,6 +75,7 @@ import { gzipSync } from 'node:zlib';
  * @property {ReadonlyArray<string>} [allowHosts] development allowlist (default `ctx.config.outbound.allowHosts`;
  *   always empty in production)
  * @property {{ core: string, audience: string }} [runtime] browser runtime (default: `runtime/generated.js`)
+ * @property {string | null} [previewOrigin] dedicated preview origin (default `ctx.config.delivery.previewOrigin`)
  */
 
 export const COMPILE_JOB = 'delivery.compile';
@@ -138,12 +145,17 @@ export const createDeliveryService = (ctx, options = {}) => {
 	const portalUrl = ctx.config.portalUrl;
 	const portalOrigin = ctx.config.portalOrigin;
 	const eventsUrl = `${portalUrl}/v1/events`;
-	const assetBase = `${portalUrl}/w/packs/`;
+	// element modules: `packs/<appId>/<version>/<path>` and `ui/<appId>/<version>/<path>` below this base
+	const assetBase = `${portalUrl}/w/`;
+	const previewOrigin =
+		options.previewOrigin === undefined ? (ctx.config.delivery.previewOrigin ?? null) : options.previewOrigin;
+	const previewHost = previewOrigin ? new URL(previewOrigin).host : null;
 
 	const assets = ctx.collection(ASSETS);
 	const artefacts = ctx.collection(ARTEFACTS);
 	const aliases = ctx.collection(ALIASES);
 	const previews = ctx.collection(PREVIEWS);
+	const uiBundles = ctx.collection(UI_BUNDLES);
 	const identity = () => ctx.service('identity');
 	const catalog = () => ctx.service('catalog');
 	const commerce = () => ctx.service('commerce');
@@ -244,7 +256,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			sha256,
 			size: bytes.byteLength,
 			contentType: checked.contentType,
-			url: `${assetBase}${appId}/${n}/${path}`,
+			url: `${assetBase}packs/${appId}/${n}/${path}`,
 			changed: !existing,
 			missing: (detail.assets ?? [])
 				.map((/** @type {{ path: string }} */ a) => a.path)
@@ -253,7 +265,248 @@ export const createDeliveryService = (ctx, options = {}) => {
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
+	// service UI bundles (F.16)
+
+	/** @param {Record<string, any>} doc */
+	const uiBundleView = (doc, /** @type {string[]} */ missing = []) => ({
+		appId: doc.appId,
+		version: doc.version,
+		status: doc.status,
+		productVersion: doc.productVersion,
+		elements: (doc.elements ?? []).map((/** @type {Record<string, any>} */ e) => e.key),
+		assets: (doc.assets ?? []).length,
+		missing,
+		uploadPath: `/v1/product/ui-bundles/${doc.version}/assets/`,
+		createdAt: iso(doc.createdAt),
+		readyAt: iso(doc.readyAt),
+	});
+
+	/** @param {Record<string, any>} bundle */
+	const missingUiAssets = async (bundle) => {
+		/** @type {Array<Record<string, any>>} */
+		const stored = await assets.find({ appId: bundle.appId, version: bundle.version, bundle: 'ui' }).toArray();
+		const have = new Map(stored.map((a) => [String(a.path), String(a.sha256)]));
+		return (bundle.assets ?? [])
+			.filter((/** @type {{ path: string, sha256: string }} */ a) => have.get(a.path) !== a.sha256)
+			.map((/** @type {{ path: string }} */ a) => a.path);
+	};
+
+	/** Recompile every website subscribed to an app (best effort; each request coalesces per website). */
+	const recompileApp = async (/** @type {string} */ appId, /** @type {string} */ reason) => {
+		/** @type {string[]} */
+		let websiteIds = [];
+		try {
+			const listed = await commerce().websitesOfApp?.(appId);
+			websiteIds = Array.isArray(listed) ? listed : [];
+		} catch (error) {
+			ctx.logger.warn('websites of an app unavailable for recompiling', { appId, error });
+		}
+		for (const websiteId of websiteIds)
+			await requestCompile(websiteId, { reason }).catch((error) =>
+				ctx.logger.warn('recompile not requested', { appId, websiteId, error }),
+			);
+		return websiteIds.length;
+	};
+
+	/**
+	 * Mark a UI bundle ready when every declared asset is stored (idempotent), then recompile its websites.
+	 * @param {Record<string, any>} bundle
+	 * @param {Actor} actor
+	 */
+	const settleUiBundle = async (bundle, actor) => {
+		const missing = await missingUiAssets(bundle);
+		if (missing.length > 0 || bundle.status === 'ready') return { bundle, missing };
+		const readyAt = new Date(ctx.now());
+		const updated = await uiBundles.findOneAndUpdate(
+			{ _id: bundle._id, status: 'pending' },
+			{ $set: { status: 'ready', readyAt } },
+		);
+		if (!updated) return { bundle: (await uiBundles.findOne({ _id: bundle._id })) ?? bundle, missing };
+		await audit(
+			actor,
+			'delivery.ui_bundle_ready',
+			{ type: 'app', id: bundle.appId },
+			{ after: { version: bundle.version, elements: (bundle.elements ?? []).map((/** @type {any} */ e) => e.key) } },
+		);
+		await recompileApp(bundle.appId, 'ui_bundle.ready');
+		return { bundle: { ...bundle, status: 'ready', readyAt }, missing };
+	};
+
+	/**
+	 * `POST /v1/product/ui-bundles`: a service product submits a signed UI bundle descriptor (catalog verifies the
+	 * format, the module references and the signature with the product's registered keys). The same descriptor is
+	 * idempotent (same version); a new one gets the next version, `pending` until its assets are uploaded.
+	 * @param {{ appId: string, body: unknown, requestId?: string | null, ip?: string | null }} input
+	 */
+	const submitUiBundle = async ({ appId, body, requestId = null, ip = null }) => {
+		store();
+		const verified = await catalog().verifyUiBundle({ appId, body });
+		const descriptorHash = sha256Hex(Buffer.from(canonicalJson(verified.descriptor), 'utf8'));
+		const actor = /** @type {Actor} */ ({ type: 'product', id: appId });
+		let doc = await uiBundles.findOne({ appId, descriptorHash });
+		if (!doc) {
+			for (let attempt = 0; attempt < 5 && !doc; attempt += 1) {
+				const last = await uiBundles.find({ appId }).sort({ version: -1 }).limit(1).toArray();
+				const version = Number(last[0]?.version ?? 0) + 1;
+				const record = {
+					_id: `${appId}:${version}`,
+					appId,
+					version,
+					descriptorHash,
+					productVersion: String(/** @type {any} */ (verified.descriptor.manifest).product.version),
+					elements: verified.elements,
+					assets: verified.descriptor.assets.map((/** @type {{ path: string, sha256: string, size: number }} */ a) => ({
+						path: a.path,
+						sha256: a.sha256,
+						size: a.size,
+					})),
+					kid: verified.signature.kid,
+					status: 'pending',
+					readyAt: null,
+				};
+				try {
+					await uiBundles.insertOne(record);
+					doc = record;
+					await audit(
+						actor,
+						'delivery.ui_bundle_submitted',
+						{ type: 'app', id: appId },
+						{
+							after: {
+								version,
+								descriptorHash,
+								elements: verified.elements.map((/** @type {{ key: string }} */ e) => e.key),
+							},
+							requestId,
+							ip,
+						},
+					);
+				} catch (error) {
+					doc = await uiBundles.findOne({ appId, descriptorHash });
+					if (!doc && !(isObject(error) && error.code === 11000)) throw error;
+				}
+			}
+			if (!doc) fail('conflict', 'The UI bundle could not be stored concurrently; retry.');
+		}
+		const settled = await settleUiBundle(/** @type {Record<string, any>} */ (doc), actor);
+		return uiBundleView(settled.bundle, settled.missing);
+	};
+
+	/**
+	 * `PUT /v1/product/ui-bundles/:version/assets/<path>`: one asset of the product's own UI bundle.
+	 * @param {{ appId: string, version: string | number, path: string, bytes: Uint8Array, contentType: string | null,
+	 *   requestId?: string | null, ip?: string | null }} input
+	 */
+	const uploadUiAsset = async ({ appId, version, path, bytes, contentType, requestId = null, ip = null }) => {
+		const n = Number(version);
+		if (!Number.isSafeInteger(n) || n < 1) return fail('not_found', 'No such UI bundle version.');
+		if (!isAssetPath(path))
+			fail('validation_failed', 'The asset path is invalid.', {
+				errors: [{ path: '/path', message: 'must be a relative file path' }],
+			});
+		const bundle = (await uiBundles.findOne({ _id: `${appId}:${n}` })) ?? fail('not_found', 'No such UI bundle version.');
+		const declared = (bundle.assets ?? []).find((/** @type {{ path: string }} */ a) => a.path === path);
+		const checked = checkUpload({ path, bytes, contentType, declared });
+		if (checked.errors.length > 0) {
+			const first = /** @type {{ code: string }} */ (checked.errors[0]).code;
+			const code =
+				first === 'type_not_allowed' || first === 'content_type'
+					? 'unsupported_media_type'
+					: first === 'too_large'
+						? 'payload_too_large'
+						: 'delivery_asset_mismatch';
+			fail(code, 'The asset does not match the signed UI bundle descriptor.', { errors: checked.errors });
+		}
+		const sha256 = /** @type {{ sha256: string }} */ (declared).sha256;
+		const id = `ui:${appId}:${n}:${path}`;
+		const storageKey = `ui/${appId}/${n}/${path}`;
+		const actor = /** @type {Actor} */ ({ type: 'product', id: appId });
+		const existing = await assets.findOne({ _id: id });
+		if (!existing || existing.sha256 !== sha256) {
+			await store().put(storageKey, bytes, { contentType: checked.contentType, cacheControl: IMMUTABLE });
+			await assets.updateOne(
+				{ _id: id },
+				{
+					$set: {
+						appId,
+						version: n,
+						path,
+						bundle: 'ui',
+						sha256,
+						size: bytes.byteLength,
+						contentType: checked.contentType,
+						storageKey,
+					},
+					$setOnInsert: { uploadedBy: actor.id },
+				},
+				{ upsert: true },
+			);
+			await audit(
+				actor,
+				'delivery.ui_asset_uploaded',
+				{ type: 'app', id: appId },
+				{ after: { version: n, path, sha256, size: bytes.byteLength }, requestId, ip },
+			);
+		}
+		const settled = await settleUiBundle(bundle, actor);
+		return {
+			appId,
+			version: n,
+			path,
+			sha256,
+			size: bytes.byteLength,
+			contentType: checked.contentType,
+			url: `${assetBase}ui/${appId}/${n}/${path}`,
+			changed: !existing,
+			status: settled.bundle.status,
+			missing: settled.missing,
+		};
+	};
+
+	/**
+	 * The UI bundles of a product, newest first (`GET /v1/product/ui-bundles`).
+	 * @param {{ appId: string }} input
+	 */
+	const listUiBundles = async ({ appId }) => {
+		/** @type {Array<Record<string, any>>} */
+		const docs = await uiBundles.find({ appId }).sort({ version: -1 }).limit(HISTORY).toArray();
+		const items = [];
+		for (const doc of docs) items.push(uiBundleView(doc, doc.status === 'ready' ? [] : await missingUiAssets(doc)));
+		return { items };
+	};
+
+	// ------------------------------------------------------------------------------------------------------------
 	// compiler
+
+	/**
+	 * Load stored module assets (gzip sizes of the JS modules, parsed string catalogs) into a source's maps.
+	 * @param {{ appId: string, records: Array<Record<string, any>>, elements: ReadonlyArray<{ key: string, headless?: unknown,
+	 *   renderer?: unknown, strings?: unknown }>, stored: Map<string, { sha256: string, size: number }>,
+	 *   strings: Map<string, Record<string, unknown>>, gzipBytes: Map<string, number> }} input
+	 * @param {Warning[]} warnings
+	 */
+	const loadModules = async ({ appId, records, elements, stored, strings, gzipBytes }, warnings) => {
+		const byPath = new Map(records.map((r) => [String(r.path), r]));
+		for (const r of records) stored.set(String(r.path), { sha256: String(r.sha256), size: Number(r.size) });
+		for (const element of elements) {
+			for (const ref of [parseModuleRef(element.headless), parseModuleRef(element.renderer)]) {
+				const record = ref ? byPath.get(ref.path) : undefined;
+				if (!ref || !record || gzipBytes.has(ref.path)) continue;
+				const object = await store().get(String(record.storageKey));
+				if (object) gzipBytes.set(ref.path, gzipSync(object.body, { level: 9 }).byteLength);
+				else stored.delete(ref.path);
+			}
+			const record = typeof element.strings === 'string' ? byPath.get(element.strings) : undefined;
+			if (record && !strings.has(String(record.path))) {
+				const object = await store().get(String(record.storageKey));
+				try {
+					if (object) strings.set(String(record.path), JSON.parse(Buffer.from(object.body).toString('utf8')));
+				} catch {
+					warnings.push({ code: 'strings_invalid', appId, key: element.key, detail: `${record.path} is not JSON` });
+				}
+			}
+		}
+	};
 
 	/**
 	 * Inputs of one product for the compiler.
@@ -274,29 +527,24 @@ export const createDeliveryService = (ctx, options = {}) => {
 		const strings = new Map();
 		/** @type {Map<string, number>} */
 		const gzipBytes = new Map();
+		/** @type {import('./core/compile.js').UiBundle | null} */
+		let ui = null;
 		if (app.kind === 'pack') {
 			/** @type {Array<Record<string, any>>} */
-			const records = await assets.find({ appId, version: manifestVersion }).toArray();
-			const byPath = new Map(records.map((r) => [String(r.path), r]));
-			for (const r of records) stored.set(String(r.path), { sha256: String(r.sha256), size: Number(r.size) });
-			for (const element of manifest.elements) {
-				if (!element.modes.includes('A')) continue;
-				for (const ref of [parseModuleRef(element.headless), parseModuleRef(element.renderer)]) {
-					const record = ref ? byPath.get(ref.path) : undefined;
-					if (!ref || !record || gzipBytes.has(ref.path)) continue;
-					const object = await store().get(String(record.storageKey));
-					if (object) gzipBytes.set(ref.path, gzipSync(object.body, { level: 9 }).byteLength);
-					else stored.delete(ref.path);
-				}
-				const record = typeof element.strings === 'string' ? byPath.get(element.strings) : undefined;
-				if (record && !strings.has(String(record.path))) {
-					const object = await store().get(String(record.storageKey));
-					try {
-						if (object) strings.set(String(record.path), JSON.parse(Buffer.from(object.body).toString('utf8')));
-					} catch {
-						warnings.push({ code: 'strings_invalid', appId, key: element.key, detail: `${record.path} is not JSON` });
-					}
-				}
+			const records = await assets.find({ appId, version: manifestVersion, bundle: { $exists: false } }).toArray();
+			const elements = manifest.elements.filter((element) => element.modes.includes('A'));
+			await loadModules({ appId, records, elements, stored, strings, gzipBytes }, warnings);
+		} else {
+			// the newest ready UI bundle, restricted to the mode-A elements of the pinned manifest
+			const [bundle] = await uiBundles.find({ appId, status: 'ready' }).sort({ version: -1 }).limit(1).toArray();
+			if (bundle) {
+				const modeA = new Set(manifest.elements.filter((e) => e.modes.includes('A')).map((e) => e.key));
+				/** @type {Array<{ key: string, headless: string, renderer: string, strings?: string }>} */
+				const elements = (bundle.elements ?? []).filter((/** @type {{ key: string }} */ e) => modeA.has(e.key));
+				/** @type {Array<Record<string, any>>} */
+				const records = await assets.find({ appId, version: Number(bundle.version), bundle: 'ui' }).toArray();
+				await loadModules({ appId, records, elements, stored, strings, gzipBytes }, warnings);
+				ui = { version: Number(bundle.version), elements: new Map(elements.map((e) => [e.key, e])) };
 			}
 		}
 		return {
@@ -310,6 +558,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			assets: stored,
 			strings,
 			gzipBytes,
+			ui,
 		};
 	};
 
@@ -848,15 +1097,18 @@ export const createDeliveryService = (ctx, options = {}) => {
 	};
 
 	/**
-	 * `GET /w/packs/<appId>/<version>/<path>` — an uploaded, hash-verified pack asset.
-	 * @param {{ appId: string, version: string, path: string, ifNoneMatch?: string | null }} input
+	 * `GET /w/packs/<appId>/<version>/<path>` (pack asset) and `GET /w/ui/<appId>/<version>/<path>` (service UI-bundle
+	 * asset) — uploaded, hash-verified modules.
+	 * @param {{ appId: string, version: string, path: string, ifNoneMatch?: string | null, bundle?: 'pack' | 'ui' }} input
 	 * @returns {Promise<Response>}
 	 */
-	const serveAsset = async ({ appId, version, path, ifNoneMatch = null }) => {
+	const serveAsset = async ({ appId, version, path, ifNoneMatch = null, bundle = 'pack' }) => {
 		const n = Number(version);
 		if (!isId(appId, 'app') || !Number.isSafeInteger(n) || n < 1 || !isAssetPath(path))
 			return fail('not_found', 'No such asset.');
-		const record = (await assets.findOne({ _id: `${appId}:${n}:${path}` })) ?? fail('not_found', 'No such asset.');
+		const record =
+			(await assets.findOne({ _id: `${bundle === 'ui' ? 'ui:' : ''}${appId}:${n}:${path}` })) ??
+			fail('not_found', 'No such asset.');
 		const etag = `"${record.sha256}"`;
 		const headers = {
 			...servedHeaders(),
@@ -909,7 +1161,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 		const token = signPreviewToken(previewKey, { previewId, merchantId, websiteId, exp });
 		return {
 			previewId,
-			url: `${portalUrl}/p/${token}${candidates.path}`,
+			url: `${previewOrigin ?? portalUrl}/p/${token}${candidates.path}`,
 			expiresAt: new Date(exp).toISOString(),
 			version: built.version,
 			budget: built.manifest.budget,
@@ -929,11 +1181,14 @@ export const createDeliveryService = (ctx, options = {}) => {
 	};
 
 	/**
-	 * `GET /p/<token>/<path>`: the merchant's public page with the candidate bundle injected.
-	 * @param {{ token: string, path: string, search?: string }} input
+	 * `GET /p/<token>/<path>`: the merchant's public page with the candidate bundle injected. With a dedicated preview
+	 * origin, only requests to that host are served (the Portal host refuses previews).
+	 * @param {{ token: string, path: string, search?: string, host?: string | null }} input
 	 * @returns {Promise<Response>}
 	 */
-	const servePreview = async ({ token, path, search = '' }) => {
+	const servePreview = async ({ token, path, search = '', host = null }) => {
+		if (previewHost !== null && host !== previewHost)
+			return fail('delivery_preview_refused', `Previews are served from ${previewOrigin} only.`);
 		const claims = verifyPreviewToken(previewKey, token, ctx.now()) ?? fail('not_found', 'The preview has expired.');
 		const session = await previews.findOne({ _id: claims.previewId, websiteId: claims.websiteId });
 		if (!session || new Date(session.expireAt).getTime() <= ctx.now()) return fail('not_found', 'The preview has expired.');
@@ -973,6 +1228,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 				origin: String(session.origin),
 				portalOrigin,
 				connectOrigins: Array.isArray(session.connectOrigins) ? session.connectOrigins.map(String) : [],
+				dedicated: previewHost !== null,
 			}),
 		});
 	};
@@ -988,6 +1244,10 @@ export const createDeliveryService = (ctx, options = {}) => {
 		createPreview,
 		// developers / staff
 		uploadAsset,
+		// service products (F.16)
+		submitUiBundle,
+		uploadUiAsset,
+		listUiBundles,
 		// public serving
 		serveBundle,
 		serveAsset,

@@ -595,6 +595,43 @@ describe('entitlement documents', () => {
 		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: 4 });
 	});
 
+	it('carries the website settings section, hashes it, and reports resource needs (F.16)', async () => {
+		const clock = createClock(T0);
+		const h = await bootCommerce({ mongo, dbName: 'cm_website', clock });
+		await h.credit(M1, 100_000);
+		const { subscriptionId } = await h.service.subscribe({
+			websiteId: W1,
+			appId: APP,
+			planCode: 'starter',
+			actor: MERCHANT_ACTOR,
+		});
+		const plain = await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }));
+		expect(plain).not.toHaveProperty('website');
+		const before = plain.version;
+		const site = /** @type {any} */ (h.world.websites.get(W1));
+		h.world.websites.set(W1, { ...site, timeZone: 'Europe/Berlin', language: 'de-DE', currency: 'EUR' });
+		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: before + 1 });
+		const doc = await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }));
+		expect(doc.website).toEqual({ timeZone: 'Europe/Berlin', language: 'de-DE', currency: 'EUR' });
+		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: before + 1 }); // unchanged
+		h.world.websites.set(W1, { ...site, timeZone: 'Europe/Berlin', language: null, currency: null });
+		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: before + 2 });
+		expect((await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }))).website).toEqual({
+			timeZone: 'Europe/Berlin',
+		});
+
+		// starter: reports (database) and ai_copy (ai) are off → their kinds are needed only if enabled
+		const needs = await h.service.resourceNeeds(W1);
+		expect(needs.map((/** @type {any} */ n) => [n.kind, n.scope, n.neededNow, n.elements])).toEqual([
+			['ai', 'element', false, ['ai_copy']],
+			['database', 'element', false, ['reports']],
+		]);
+		await h.service.setElement({ subscriptionId, elementKey: 'reports', enabled: true, actor: MERCHANT_ACTOR });
+		const after = await h.service.resourceNeeds(W1);
+		expect(after.find((/** @type {any} */ n) => n.kind === 'database')).toMatchObject({ neededNow: true, appId: APP });
+		expect(await h.service.websitesOfApp(APP)).toEqual([W1]);
+	});
+
 	it('previews documents for configuration dry runs and invalidates every subscription of an app', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_preview', clock });

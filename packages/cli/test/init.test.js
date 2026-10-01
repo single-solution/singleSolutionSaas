@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { checkInitOptions, fill, initApp } from '../src/init.js';
+import { NOTES_SAMPLE_FILES, checkInitOptions, fill, initApp } from '../src/init.js';
 import { validateProject } from '../src/validate/index.js';
 import { exists } from '../src/fsutil.js';
 import { removeDir, tempDir } from './helpers/util.js';
@@ -81,6 +81,28 @@ describe('ss app init → validate (integration)', () => {
 		expect(stdout).toMatch(/fail 0/);
 	}, 30_000);
 
+	it('--minimal generates a service product without the notes sample that validates and passes its tests', async () => {
+		const dir = path.join(root, 'minimal');
+		const { files } = await initApp({ dir, kind: 'service', slug: 'bare-app', name: 'Bare App', minimal: true });
+		for (const file of NOTES_SAMPLE_FILES) expect(files).not.toContain(file.replace('{{namespace}}', 'bare_app'));
+		expect(files.filter((file) => /notes?[._]/.test(file))).toEqual([]);
+		for (const file of ['core/status.js', 'api/routes.js', 'adapters/privacy.js', 'tests/status.test.js', 'ui/README.md'])
+			expect(files).toContain(file);
+		const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8'));
+		expect(manifest.elements.map((/** @type {{ key: string }} */ element) => element.key)).toEqual(['status']);
+		expect(manifest.product).toMatchObject({ slug: 'bare-app', kind: 'service' });
+		const strings = JSON.parse(await readFile(path.join(dir, 'strings/en.json'), 'utf8'));
+		expect(Object.keys(strings).every((key) => key.startsWith('dashboard.'))).toBe(true);
+		const openapi = JSON.parse(await readFile(path.join(dir, 'openapi.json'), 'utf8'));
+		expect(Object.keys(openapi.paths)).toEqual(['/v1/status']);
+		for (const file of files) expect(await readFile(path.join(dir, file), 'utf8'), file).not.toMatch(/\{\{[A-Za-z]+\}\}/);
+
+		const report = await validateProject(dir);
+		expect(report.problems).toEqual([]);
+		const { stdout } = await run(process.execPath, ['--test', 'tests/status.test.js'], { cwd: dir });
+		expect(stdout).toMatch(/fail 0/);
+	}, 30_000);
+
 	it('generates an element pack that validates and whose own tests pass', async () => {
 		const dir = path.join(root, 'pack');
 		const { files } = await initApp({ dir, kind: 'pack', slug: 'sticky', name: 'Sticky Notes' });
@@ -113,5 +135,8 @@ describe('ss app init → validate (integration)', () => {
 		await expect(initApp({ dir: full, kind: 'pack', slug: 'full', name: 'Full' })).rejects.toMatchObject({ code: 'not_empty' });
 		expect(await exists(path.join(full, 'manifest.json'))).toBe(false);
 		expect(fill('{{slug}} {{unknown}}', { slug: 's' })).toBe('s {{unknown}}');
+		expect(checkInitOptions({ dir: 'x', kind: 'pack', slug: 'ok', name: 'Ok', minimal: true })).toEqual([
+			expect.stringMatching(/--minimal is for service products/),
+		]);
 	});
 });

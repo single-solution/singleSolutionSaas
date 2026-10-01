@@ -110,6 +110,39 @@ describe('createProduct', () => {
 		expect(await product.portal.consumeLaunch({ jti: 'j' })).toEqual({ consumed: true });
 	});
 
+	it('requests to become a website identity issuer: pending until the merchant approves, then active', async () => {
+		const { portal, product } = await setup();
+		const body = {
+			issuer: 'https://coupons.example.dev/i/web',
+			jwksUrl: 'https://coupons.example.dev/jwks.json',
+			audience: WEBSITE,
+			claimMap: { subject: 'sub', email: 'email' },
+		};
+		const input = { websiteId: WEBSITE, ...body };
+		const first = await product.portal.requestIdentityIssuer(input);
+		expect(first).toMatchObject({ status: 'pending', request: { websiteId: WEBSITE, issuer: input.issuer } });
+		expect(portal.calls.at(-1)).toEqual({
+			method: 'PUT',
+			path: `/v1/product/websites/${WEBSITE}/identity`,
+			appId: 'app_test',
+		});
+		expect(portal.identityRequests.get(WEBSITE)).toEqual({ status: 'pending', appId: 'app_test', input: body });
+		expect(portal.decideIdentityRequest(WEBSITE, 'approve')).toMatchObject({ status: 'approved' });
+		expect(portal.decideIdentityRequest(WEBSITE, 'approve')).toBeNull();
+		expect(await product.portal.requestIdentityIssuer(input)).toEqual({ status: 'active', issuer: body });
+		// undefined members are not sent; a refusal surfaces as portal_error 403
+		await product.portal.requestIdentityIssuer({ ...input, audience: undefined, issuer: 'https://other.example/' });
+		expect(portal.identityRequests.get(WEBSITE)?.input).not.toHaveProperty('audience');
+		portal.refuseIdentityRequests(WEBSITE);
+		await expect(product.portal.requestIdentityIssuer(input)).rejects.toMatchObject({
+			code: 'portal_error',
+			details: { status: 403, problem: 'forbidden' },
+		});
+		await expect(product.portal.requestIdentityIssuer({ ...input, websiteId: '' })).rejects.toMatchObject({
+			code: 'invalid_argument',
+		});
+	});
+
 	it('uses custom problem base URIs and codes', async () => {
 		const { product } = await setup({
 			overrides: {
@@ -169,6 +202,15 @@ describe('portal client', () => {
 		answers.push(() => new Response('{"kind":"ai","descriptor":{},"expiresAt":"x"}', { status: 200 }));
 		await expect(client.resolveResource({ websiteId: WEBSITE, kind: 'database' })).rejects.toMatchObject({
 			code: 'portal_error',
+		});
+		answers.push(() => new Response('{"status":"pending"}', { status: 202 }));
+		await expect(client.requestIdentityIssuer({ websiteId: WEBSITE, issuer: 'https://i.example/' })).rejects.toMatchObject({
+			code: 'portal_error',
+		});
+		answers.push(() => new Response('{"status":"active","issuer":{"issuer":"https://i.example/"}}', { status: 200 }));
+		expect(await client.requestIdentityIssuer({ websiteId: 'web/1', issuer: 'https://i.example/' })).toEqual({
+			status: 'active',
+			issuer: { issuer: 'https://i.example/' },
 		});
 		answers.push(() => new Response('{}', { status: 200 }));
 		expect(await client.usage([])).toEqual({ results: [] });

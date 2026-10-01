@@ -18,8 +18,10 @@ import {
 	MAX_EVENTS,
 	buildControlEvent,
 	checkBatch,
+	KEY_KIND_SUPPORTED,
 	checkProductEvent,
 	checkWebsiteEvent,
+	withoutProvenance,
 	consumersOf,
 	identify,
 	isDeliverableApp,
@@ -130,6 +132,14 @@ describe('ingest request parsing', () => {
 describe('website event checks', () => {
 	it('accepts valid events and refuses the rest', () => {
 		expect(checkWebsiteEvent(event(), KEY)).toMatchObject({ ok: true });
+		// F.16 provenance: the verified key kind is stamped; a producer-supplied value is stripped first
+		expect(KEY_KIND_SUPPORTED).toBe(true);
+		expect(/** @type {any} */ (checkWebsiteEvent(event(), KEY)).event.context).toEqual({ keyKind: 'pk' });
+		const forged = /** @type {any} */ (checkWebsiteEvent(event({ context: { keyKind: 'sk', source: 'server' } }), KEY));
+		expect(forged.event.context).toEqual({ keyKind: 'pk', source: 'server' });
+		expect(/** @type {any} */ (checkWebsiteEvent(event(), { ...KEY, kind: 'sk' })).event.context.keyKind).toBe('sk');
+		expect(withoutProvenance({ context: { keyKind: 'x', locale: 'en' } })).toEqual({ context: { locale: 'en' } });
+		expect(withoutProvenance('raw')).toBe('raw');
 		expect(checkWebsiteEvent(event({ data: {} }), KEY)).toMatchObject({ ok: false, reason: 'invalid_event' });
 		expect(checkWebsiteEvent(event({ type: 'unknown.thing@1' }), KEY)).toMatchObject({ ok: false, reason: 'invalid_event' });
 		expect(checkWebsiteEvent('nope', KEY)).toMatchObject({ ok: false, reason: 'invalid_event' });
@@ -175,6 +185,12 @@ describe('product event checks', () => {
 		expect(checkProductEvent(event({ type: 'other.thing@1', data: {} }), manifest)).toMatchObject({ reason: 'invalid_event' });
 		expect(checkProductEvent(event({ type: 'page.viewed@1' }), manifest)).toMatchObject({ reason: 'not_declared' });
 		expect(checkProductEvent(event({ type: 'order.placed@1', data: order }), manifest)).toMatchObject({ ok: true });
+		// product events carry no key kind; they are marked by source and product
+		expect(
+			/** @type {any} */ (
+				checkProductEvent(event({ type: 'order.placed@1', data: order, context: { keyKind: 'sk' } }), manifest)
+			).event.context,
+		).toEqual({ source: 'product', product: 'order-hub' });
 		expect(
 			checkProductEvent(
 				event({ type: 'cart.updated@1', data: { cartId: 'c', currency: 'USD', lines: [], subtotalAmount: 0 } }),

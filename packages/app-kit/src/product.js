@@ -4,7 +4,8 @@
  * audit, health and the request handler. Every side effect is injected (fetch, clock, randomness, logger, stores).
  * @module
  */
-import { createId, createProblemFactory, eventGlobMatches, eventNamespace, validateManifest } from '@ss/contracts';
+import { PROBLEM_CODES, createId, createProblemFactory, eventGlobMatches, eventNamespace, validateManifest } from '@ss/contracts';
+import { createOutboundPolicy, safeFetch } from '@ss/net';
 import {
 	DEFAULT_GRACE_MS,
 	canonicalUrl,
@@ -17,6 +18,7 @@ import {
 	verifyRequest,
 } from '@ss/protocol';
 import { createAudit } from './audit.js';
+import { createBackground } from './background.js';
 import { createConnectors } from './connectors/index.js';
 import { createData } from './data.js';
 import { createEntitlements } from './entitlements.js';
@@ -27,11 +29,14 @@ import { createRequestHandler } from './http/handler.js';
 import { createWebsiteKeys } from './keys.js';
 import { createLaunch } from './launch.js';
 import { noopLogger } from './logger.js';
+import { createOutbox } from './outbox.js';
 import { createPortalClient } from './portal-client.js';
 import { createPrivacy } from './privacy.js';
 import { createMemoryStores } from './stores/memory.js';
 import { createUsage } from './usage.js';
-import { defaultRandomBytes, isObject, kitError, parseDurationMs } from './util.js';
+import { createHmac } from 'node:crypto';
+import { createReplayBodies } from './http/replay.js';
+import { defaultRandomBytes, isObject, kitError, parseDurationMs, sha256Hex } from './util.js';
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 
@@ -71,11 +76,21 @@ const MANIFEST_RESIGN_MS = 3_600_000;
  * @property {Record<string, Record<string, import('./connectors/index.js').AdapterFactory>>} [connectors] provider adapters per kind
  * @property {import('@ss/net').OutboundPolicyOptions} [outbound] SSRF policy of connector calls and the merchant database (`@ss/net`); `allowHosts`
  *   is ignored when `nodeEnv === 'production'`
- * @property {import('./connectors/index.js').OutboundSend} [outboundSend] replaces `safeFetch` for connector calls (tests)
+ * @property {import('./connectors/index.js').OutboundSend} [outboundSend] replaces `safeFetch` for connector calls and
+ *   `product.outbound.fetch` (tests)
+ * @property {import('./connectors/smtp.js').CreateSmtpTransport} [createSmtpTransport] replaces nodemailer's transport of
+ *   the built-in `smtp` messaging adapter (tests)
  * @property {{ collections?: import('./privacy.js').PrivacyCollection[], export?: (input: any) => Promise<unknown>, anonymize?: (input: any) => Promise<unknown> }} [privacy]
  * @property {((entry: any) => Promise<unknown>) | null} [auditSink]
  * @property {{ entitlementTtlMs?: number, revocationSyncMs?: number }} [cache]
+ * @property {{ mode?: import('./background.js').BackgroundMode, intervalMs?: number, everyRequests?: number }} [background]
+ *   automatic flushing of the usage queue and the event outbox (default `auto`; `off` when `NODE_ENV=test`)
  */
+
+/** Problem codes the kit itself answers with (registered unless `@ss/contracts` already defines them). */
+const KIT_PROBLEM_CODES = Object.freeze({
+	idempotency_replay_no_body: Object.freeze({ status: 409, title: 'Idempotent replay body unavailable' }),
+});
 
 /**
  * @param {unknown} value
@@ -245,11 +260,26 @@ export const createProduct = (options) => {
 			return result.ok ? result.doc.subscriptionId : null;
 		},
 	});
-	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
+	const outbox = createOutbox({ store: stores.eventOutbox, portal, now, randomBytes, logger });
+	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
+	const background = createBackground({
+		tasks: [
+			{ name: 'usage', run: () => usage.flush() },
+			{ name: 'events', run: () => outbox.flush() },
+		],
+		mode: options.background?.mode ?? (nodeEnv === 'test' ? 'off' : 'auto'),
+		logger,
+		...(options.background?.intervalMs ? { intervalMs: options.background.intervalMs } : {}),
+		...(options.background?.everyRequests ? { everyRequests: options.background.everyRequests } : {}),
+	});
+	const production = nodeEnv === 'production';
 	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
 	if (production && allowHosts.length > 0) logger.warn('outbound.allowHosts is ignored in production');
 	const outbound = { ...outboundRest, allowHosts: production ? [] : allowHosts };
 	const data = createData({ portal, slug: manifest.product.slug, now, randomBytes, logger, outbound, ...(options.data ?? {}) });
+	const outboundPolicy = createOutboundPolicy(outbound);
+	/** @type {import('./connectors/index.js').OutboundSend} */
+	const outboundSend = options.outboundSend ?? ((url, init) => safeFetch(url, init, outboundPolicy));
 	const connectors = createConnectors({
 		portal,
 		slug: manifest.product.slug,
@@ -258,9 +288,15 @@ export const createProduct = (options) => {
 		adapters: options.connectors ?? {},
 		outbound,
 		...(options.outboundSend ? { send: options.outboundSend } : {}),
+		...(options.createSmtpTransport ? { createSmtpTransport: options.createSmtpTransport } : {}),
 	});
 	const audit = createAudit({ data, now, sink: options.auditSink ?? null });
 	const devProbes = options.devProbes === true && !production;
+	// HMAC key for idempotency records (key + request fingerprint): derived from the product signing key, so the
+	// control store never holds request content or brute-forceable plain hashes of it.
+	const hmacKey = createHmac('sha256', 'ss-app-kit.idempotency.v1').update(String(privateJwk.d)).digest();
+	const hmac = (/** @type {string} */ value) => createHmac('sha256', hmacKey).update(value).digest('hex');
+	const replayBodies = createReplayBodies({ data, now, logger });
 	const events = createEvents({ keyResolver, replay: stores.replay, now, logger, trackEffects: devProbes });
 	const health = createHealth({ product: manifest.product, portal, ping: stores.ping ?? null, now });
 	const privacy = createPrivacy({ data, now, ...(options.privacy ?? {}) });
@@ -385,9 +421,13 @@ export const createProduct = (options) => {
 	/**
 	 * Publish a product event: fills in the envelope (`id`, `occurredAt`, `env` from the website's entitlement,
 	 * `actor: { type: 'product', id: slug }`, `context: { source: 'product', product: slug }`), validates it, sends it.
-	 * @param {{ websiteId: string, type: string, data: Record<string, unknown>, idempotencyKey: string, env?: 'live' | 'test', occurredAt?: string, context?: Record<string, unknown> }} input
+	 * The envelope goes through the durable outbox: it is stored first (idempotent by event id), sent right away when
+	 * the Portal is reachable, and otherwise retried with backoff by `flush` / the background flusher (dead-lettered on
+	 * a Portal rejection). The event id is derived from `(websiteId, type, idempotencyKey)` unless `id` is given, so a
+	 * repeated publish of the same logical event is a no-op.
+	 * @param {{ websiteId: string, type: string, data: Record<string, unknown>, idempotencyKey: string, id?: string, env?: 'live' | 'test', occurredAt?: string, context?: Record<string, unknown> }} input
 	 */
-	const publishEvent = async ({ websiteId, type, data, idempotencyKey, env, occurredAt, context: extraContext }) => {
+	const publishEvent = async ({ websiteId, type, data, idempotencyKey, id, env, occurredAt, context: extraContext }) => {
 		if (
 			typeof type !== 'string' ||
 			!(type.startsWith(`${namespace}.`) || publishes.some((pattern) => eventGlobMatches(pattern, type)))
@@ -400,8 +440,11 @@ export const createProduct = (options) => {
 			if (!result.ok) throw kitError('invalid_event', 'the website has no entitlement, so its env is unknown');
 			resolvedEnv = result.doc.env;
 		}
+		if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0)
+			throw kitError('invalid_event', 'idempotencyKey is required');
+		const digest = Buffer.from(sha256Hex(`ss-event.v1\n${websiteId}\n${type}\n${idempotencyKey}`), 'hex');
 		const envelope = {
-			id: createId('evt', { randomBytes }),
+			id: id ?? createId('evt', { randomBytes: (length) => new Uint8Array(digest.subarray(0, length)) }),
 			type,
 			websiteId,
 			env: resolvedEnv,
@@ -418,13 +461,17 @@ export const createProduct = (options) => {
 				`event envelope is invalid: ${checked.errors.map((e) => `${e.path} ${e.message}`).join('; ')}`,
 			);
 		}
-		await portal.publishEvent(envelope);
+		const { status } = await outbox.publish(envelope);
+		if (status === 'queued') background.markDirty();
 		return envelope;
 	};
 
 	const problems = createProblemFactory({
 		baseUri: options.problemBaseUri ?? `${canonicalUrl(manifest.endpoints.base)}/problems/`,
-		...(options.problemCodes ? { codes: options.problemCodes } : {}),
+		codes: {
+			...Object.fromEntries(Object.entries(KIT_PROBLEM_CODES).filter(([code]) => !Object.hasOwn(PROBLEM_CODES, code))),
+			...(options.problemCodes ?? {}),
+		},
 	});
 
 	const context = Object.freeze({
@@ -443,6 +490,9 @@ export const createProduct = (options) => {
 		publicJwk,
 		appId: resolveAppId,
 		devProbes,
+		hmac,
+		replayBodies,
+		background,
 	});
 
 	/** @type {any} */
@@ -473,7 +523,30 @@ export const createProduct = (options) => {
 		entitlements,
 		/** Bring-your-own customer identity: `verify(request, { doc, body })`, `verifyToken(token, section)`. */
 		identity: createIdentity({ now }),
-		usage,
+		usage: Object.freeze({
+			...usage,
+			/** @type {typeof usage.record} */
+			record: async (input) => {
+				const result = await usage.record(input);
+				if (!result.duplicate) background.markDirty();
+				return result;
+			},
+		}),
+		/** Durable event outbox behind `portal.publishEvent`: `flush()` sends due events, `stats()` counts them. */
+		outbox: Object.freeze({ flush: outbox.flush, stats: outbox.stats }),
+		/**
+		 * SSRF-guarded outbound HTTP under the product's outbound policy (`@ss/net` `safeFetch`: public https only,
+		 * every DNS answer vetted at connect time, redirects only same-origin GET/HEAD, deadline, size cap). Resolves
+		 * `{ status, headers, body: Buffer, url }`; rejects with a typed `NetError`.
+		 */
+		outbound: Object.freeze({
+			/** @type {import('./connectors/index.js').OutboundSend} */
+			fetch: (url, init) => outboundSend(url, init),
+			policy: outboundPolicy,
+		}),
+		/** Flush the usage queue and the event outbox now (also run by the background flusher). */
+		flush: () => background.tick(),
+		background: Object.freeze({ mode: background.mode, start: background.start, stop: background.stop }),
 		portal: Object.freeze({ ...portal, publishEvent }),
 		data,
 		connectors,
@@ -482,17 +555,28 @@ export const createProduct = (options) => {
 		context,
 		/** @param {ReadonlyArray<import('./http/routes.js').RouteDefinition>} routes @param {Parameters<typeof createRequestHandler>[2]} [handlerOptions] */
 		handler: (routes, handlerOptions) => createRequestHandler(product, routes, handlerOptions),
-		/** Send a heartbeat `{ version, status, queues }`. */
+		/** Flush the queues, then send a heartbeat `{ version, status, queues }`. */
 		heartbeat: async () => {
-			const queues = await usage.stats().catch(() => null);
+			await background.tick();
+			const [queues, events] = await Promise.all([usage.stats().catch(() => null), outbox.stats().catch(() => null)]);
 			return portal.heartbeat({
 				version: manifest.product.version,
 				status: 'ok',
-				...(queues ? { queues: { usagePending: queues.pending, usageDead: queues.dead } } : {}),
+				...(queues || events
+					? {
+							queues: {
+								...(queues ? { usagePending: queues.pending, usageDead: queues.dead } : {}),
+								...(events ? { eventsPending: events.pending, eventsDead: events.dead } : {}),
+							},
+						}
+					: {}),
 			});
 		},
-		/** Close pooled client-database connections (graceful shutdown, tests). */
-		close: () => data.closeAll(),
+		/** Stop the background flusher and close pooled client-database connections (graceful shutdown, tests). */
+		close: () => {
+			background.stop();
+			return data.closeAll();
+		},
 	};
 	return Object.freeze(product);
 };

@@ -380,6 +380,13 @@ describe('descriptors (F.9 shapes)', () => {
 		expect(
 			descriptorOf('messaging', 'smtp', { host: 'h.example.com', secure: false, username: 'u', password: 'p' }).baseUrl,
 		).toBe('smtp://h.example.com:587');
+		// the TLS default follows the port: 465 implicit TLS, anything else STARTTLS
+		expect(descriptorOf('messaging', 'smtp', { host: 'h.example.com', port: 587, username: 'u', password: 'p' }).baseUrl).toBe(
+			'smtp://h.example.com:587',
+		);
+		expect(descriptorOf('messaging', 'smtp', { host: 'h.example.com', username: 'u', password: 'p' }).baseUrl).toBe(
+			'smtps://h.example.com:465',
+		);
 		expect(descriptorOf('payments', 'stripe', { secretKey: 's' })).toEqual({
 			provider: 'stripe',
 			credentials: { secretKey: 's' },
@@ -512,6 +519,19 @@ describe('resolve authorisation (pure)', () => {
 			ok: true,
 			subscriptionId: 'sub_3',
 		});
+		// F.16: with commerce's needs, an element-level kind resolves only while a requiring element is on
+		const needs = [
+			{ appId: 'app_a', kind: 'database', neededNow: true },
+			{ appId: 'app_a', kind: 'storage', neededNow: false },
+			{ appId: 'app_other', kind: 'storage', neededNow: true },
+		];
+		expect(decideResolve({ appId: 'app_a', websiteId: WEB, kind: 'storage', subscriptions: active, manifest, needs })).toEqual({
+			ok: false,
+			reason: 'element_off',
+		});
+		expect(
+			decideResolve({ appId: 'app_a', websiteId: WEB, kind: 'database', subscriptions: active, manifest, needs }),
+		).toMatchObject({ ok: true });
 		expect(
 			decideResolve({
 				appId: 'app_a',

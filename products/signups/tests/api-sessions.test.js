@@ -1,11 +1,12 @@
 /**
  * Sessions and the website's identity issuer: EdDSA access tokens verified offline exactly as other products do
  * (app-kit `verifyIdentityToken` with the JWKS this product publishes), refresh-token rotation with reuse detection,
- * device list, revoke one / all, signing-key rotation with pre-publication, discovery and the issuer report.
+ * device list, revoke one / all, signing-key rotation with pre-publication, discovery, the issuer report and the
+ * request to become the website's issuer (POST /v1/issuer:register, daily job, dashboard; the merchant approves).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyIdentityToken } from '@ss/app-kit';
-import { createHarness, WEBSITE } from './harness.js';
+import { CRON_SECRET, createHarness, WEBSITE } from './harness.js';
 
 const HOUR = 3_600_000;
 
@@ -48,6 +49,7 @@ describe('identity issuer', () => {
 				subject: signedIn.json.customer.id,
 				email: 'jwt@example.com',
 				issuer: `https://signups.example.com/i/${WEBSITE}`,
+				claims: expect.objectContaining({ sub: signedIn.json.customer.id, email: 'jwt@example.com' }),
 			},
 		});
 		// tokens of this website are not valid for another website's issuer
@@ -93,6 +95,110 @@ describe('identity issuer', () => {
 		// after the retention window the superseded key disappears and is pruned by the daily job
 		h.clock.advance(2 * HOUR);
 		expect((await sectionFor()).jwks.map((/** @type {any} */ k) => k.kid)).not.toContain(kid(before.json.tokens.accessToken));
+	});
+});
+
+describe('identity issuer request (the merchant approves in the Portal)', () => {
+	/** @type {Awaited<ReturnType<typeof createHarness>>} */
+	let r;
+	beforeAll(async () => {
+		r = await createHarness();
+	});
+	afterAll(async () => r?.close());
+	const job = () => r.call('GET', '/cron/maintenance', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
+	const ours = (/** @type {any} */ result) => result.json.results.find((/** @type {any} */ x) => x.websiteId === WEBSITE);
+	const portalPath = `/v1/product/websites/${WEBSITE}/identity`;
+
+	it('the daily job asks once, never fails on a Portal error, and retries the next day', async () => {
+		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toBeNull(); // the website is now known
+		r.portal.failNext(portalPath, 503);
+		const failed = await job();
+		expect(failed.status).toBe(200);
+		expect(ours(failed)).toMatchObject({ issuerRequested: 0 });
+		expect(r.portal.identityRequests.size).toBe(0);
+		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toBeNull();
+		const sent = await job();
+		expect(ours(sent)).toMatchObject({ issuerRequested: 1 });
+		expect(r.portal.identityRequests.get(WEBSITE)).toMatchObject({
+			status: 'pending',
+			input: {
+				issuer: `https://signups.example.com/i/${WEBSITE}`,
+				jwksUrl: `https://signups.example.com/.well-known/jwks/${WEBSITE}.json`,
+				audience: WEBSITE,
+				claimMap: { subject: 'sub', email: 'email', phone: 'phone_number' },
+			},
+		});
+		// already requested for this configuration: not asked again (a rejection is not repeated on its own)
+		const calls = r.portal.calls.filter((c) => c.path === portalPath).length;
+		expect(ours(await job())).toMatchObject({ issuerRequested: 0 });
+		expect(r.portal.calls.filter((c) => c.path === portalPath)).toHaveLength(calls);
+		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toEqual({
+			status: 'pending',
+			requestedAt: new Date(r.clock.now()).toISOString(),
+		});
+	});
+
+	it('POST /v1/issuer:register (sk only) answers 202 pending, then 200 active once the merchant approved', async () => {
+		expect((await r.call('POST', '/v1/issuer:register')).status).toBe(403);
+		const pending = await r.call('POST', '/v1/issuer:register', { key: r.sk });
+		expect(pending.status).toBe(202);
+		expect(pending.json).toMatchObject({
+			status: 'pending',
+			registered: false,
+			issuer: `https://signups.example.com/i/${WEBSITE}`,
+		});
+		expect(r.portal.decideIdentityRequest(WEBSITE, 'approve')).toMatchObject({ status: 'approved' });
+		const active = await r.call('POST', '/v1/issuer:register', { key: r.sk });
+		expect(active.status).toBe(200);
+		expect(active.json).toMatchObject({ status: 'active', registered: true });
+		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toMatchObject({ status: 'active' });
+		const audit = await r.collection('audit').find({ websiteId: WEBSITE, action: 'issuer.registration_requested' }).toArray();
+		expect(audit.map((entry) => entry.after?.status)).toEqual(['pending', 'pending', 'active']);
+	});
+
+	it('maps Portal refusals and outages to problems', async () => {
+		r.portal.failNext(portalPath, 429);
+		expect((await r.call('POST', '/v1/issuer:register', { key: r.sk })).json.type).toMatch(/rate_limited$/);
+		r.portal.failNext(portalPath, 500);
+		expect((await r.call('POST', '/v1/issuer:register', { key: r.sk })).status).toBe(502);
+		r.portal.setDown(true);
+		const down = await r.call('POST', '/v1/issuer:register', { key: r.sk });
+		r.portal.setDown(false);
+		expect(down.status).toBe(503);
+		r.portal.refuseIdentityRequests(WEBSITE);
+		const refused = await r.call('POST', '/v1/issuer:register', { key: r.sk });
+		expect(refused.status).toBe(403);
+		expect(refused.json.detail).toMatch(/identityIssuer/);
+	});
+
+	it('the dashboard sends the request for merchant launches, not for the demo', async () => {
+		/** @param {Awaited<ReturnType<typeof createHarness>>} harness @param {'merchant' | 'demo'} kind @param {Record<string, unknown>} scope */
+		const sessionOf = async (harness, kind, scope) => {
+			const { token } = await harness.portal.issueLaunch({
+				kind,
+				subject: 'usr_1',
+				user: { id: 'usr_1' },
+				scope,
+				subscriptions: [],
+			});
+			const sso = await harness.handle(new Request(`https://signups.example.com/sso?launch=${token}`));
+			return /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
+		};
+		/** @param {Awaited<ReturnType<typeof createHarness>>} harness @param {string | undefined} session */
+		const press = (harness, session) =>
+			harness.call('POST', '/v1/dashboard/issuer:register', { key: null, headers: { authorization: `Bearer ${session}` } });
+		const fresh = await createHarness(); // a website Signups has not asked for yet
+		try {
+			const session = await sessionOf(fresh, 'merchant', { merchantId: 'mer_0123456789abcdefghjkmnpq', websiteId: WEBSITE });
+			const sent = await press(fresh, session);
+			expect(sent.status, JSON.stringify(sent.json)).toBe(202);
+			expect(fresh.portal.identityRequests.get(WEBSITE)?.status).toBe('pending');
+			const audit = await fresh.collection('audit').findOne({ websiteId: WEBSITE, action: 'issuer.registration_requested' });
+			expect(audit?.actor).toEqual({ type: 'merchant', id: 'usr_1' });
+		} finally {
+			await fresh.close();
+		}
+		expect((await press(r, await sessionOf(r, 'demo', {}))).status).toBe(403);
 	});
 });
 

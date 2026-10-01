@@ -5,11 +5,12 @@
  *   bootstrap staff (password + TOTP) → register Signups AND Loyalty through the real catalog handshake → activate →
  *   merchant signs up → website → credits → subscribes to both → connects a database connector and a messaging
  *   connector (a fake HTTP gateway on loopback, dev allowlist; the connector check calls it) → a browser asks Signups
- *   for a code (pk_ key, website origin) → the gateway receives the code → verify → EdDSA access token → the merchant
- *   registers Signups as the website's identity issuer through the Portal API (Portal fetches the per-website JWKS from
- *   Signups) → the re-signed entitlement document reaches Loyalty → Loyalty accepts the Signups token as the customer
- *   (`GET /v1/wallet` with SS-Identity) → customer.created@1 from Signups is routed by the Event Hub to Loyalty →
- *   usage (otp_send) reported exactly once → hourly settlement charges the Signups subscription.
+ *   for a code (pk_ key, website origin) → the gateway receives the code → verify → EdDSA access token → Signups asks
+ *   the Portal to be the website's identity issuer (product route, pending) → the merchant approves it (the Portal
+ *   fetches the per-website JWKS from Signups) → the re-signed entitlement document reaches Loyalty → Loyalty accepts
+ *   the Signups token as the customer (`GET /v1/wallet` with SS-Identity) → customer.created@1 from Signups is routed
+ *   by the Event Hub to Loyalty → usage (otp_send) reported exactly once → hourly settlement charges the Signups
+ *   subscription.
  *
  * The Portal and the gateway are served over http on 127.0.0.1 (allowed outside production); the products over https
  * on localhost with a throw-away certificate trusted for this process only (`endpoints.base` must be https).
@@ -542,21 +543,36 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		expect(JSON.stringify(keys)).not.toMatch(/"d":/); // private keys are sealed
 	});
 
-	it('is refused by Loyalty until the merchant registers Signups as the website’s identity issuer in the Portal', async () => {
+	it('is refused by Loyalty until the merchant approves Signups’ request to be the website’s identity issuer', async () => {
 		const { browser, loyalty, signups, state, call, drain } = ctx;
 		const before = await browser(loyalty.url, 'GET', '/v1/wallet', { key: state.pk, identity: state.accessToken });
 		expect(before.status, JSON.stringify(before.json)).toBe(401);
-		// what Signups says to register (sk_ only)
-		const issuer = await fetch(`${signups.url}/v1/issuer`, { headers: { authorization: `Bearer ${state.sk}` } }).then((r) =>
-			r.json(),
-		);
+		const sk = { authorization: `Bearer ${state.sk}` };
+		// what Signups would register (sk_ only), and the merchant-side call it documents
+		const issuer = await fetch(`${signups.url}/v1/issuer`, { headers: sk }).then((r) => r.json());
 		expect(issuer).toMatchObject({
 			registered: false,
 			portal: { method: 'PUT', path: `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/identity` },
 		});
-		const registered = await call('PUT', issuer.portal.path, { cookie: state.merchant, body: issuer.portal.body });
-		expect(registered.status, JSON.stringify(registered.json)).toBe(200);
-		expect(registered.json.issuer).toMatchObject({ issuer: `${signups.url}/i/${state.websiteId}` });
+		// Signups asks the real Portal (product auth, capabilities.identityIssuer): pending until the merchant decides
+		const register = () =>
+			fetch(`${signups.url}/v1/issuer:register`, { method: 'POST', headers: { ...sk, 'idempotency-key': randomUUID() } }).then(
+				async (r) => ({ status: r.status, json: await r.json() }),
+			);
+		const requested = await register();
+		expect(requested.status, JSON.stringify(requested.json)).toBe(202);
+		expect(requested.json).toMatchObject({ status: 'pending', registered: false });
+		const shown = await call('GET', issuer.portal.path, { cookie: state.merchant });
+		expect(shown.json.request).toMatchObject({
+			status: 'pending',
+			issuer: `${signups.url}/i/${state.websiteId}`,
+			product: { slug: 'signups' },
+		});
+		const approved = await call('POST', `${issuer.portal.path}/request/approve`, { cookie: state.merchant, body: {} });
+		expect(approved.status, JSON.stringify(approved.json)).toBe(200);
+		expect(approved.json.issuer).toMatchObject({ issuer: `${signups.url}/i/${state.websiteId}` });
+		// asking again is safe: the Portal answers active
+		expect(await register()).toMatchObject({ status: 200, json: { status: 'active', registered: true } });
 		await drain(); // entitlement.changed@1 → both products refresh their signed documents
 		const accepted = await browser(loyalty.url, 'GET', '/v1/wallet', { key: state.pk, identity: state.accessToken });
 		expect(accepted.status, JSON.stringify(accepted.json)).toBe(200);

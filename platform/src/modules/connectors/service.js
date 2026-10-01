@@ -559,7 +559,17 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 			? await Promise.resolve(ctx.service('identity').getWebsite(websiteId)).catch(() => null)
 			: null;
 		if (!website || website.merchantId !== merchantId) throw problem('not_found', 'No such website.');
-		return { websiteId, resources: await statusOf(merchantId, websiteId) };
+		const commerce = ctx.moduleNames().includes('commerce') ? ctx.service('commerce') : null;
+		/** @type {unknown[] | null} */
+		let needs = null;
+		if (typeof commerce?.resourceNeeds === 'function')
+			needs = await Promise.resolve(commerce.resourceNeeds(websiteId)).catch(() => null);
+		return {
+			websiteId,
+			resources: await statusOf(merchantId, websiteId),
+			// F.16: per product and kind — `neededNow` (product-level, or a requiring element is on) vs needed if enabled
+			...(Array.isArray(needs) ? { needs } : {}),
+		};
 	};
 
 	/**
@@ -599,11 +609,15 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 		const website = await Promise.resolve(ctx.service('identity').getWebsite(w)).catch(() => null);
 		if (!website?.merchantId) throw await deny('unknown_website', null, forbidden);
 		const merchantId = String(website.merchantId);
-		const [subscriptions, manifest] = await Promise.all([
-			Promise.resolve(ctx.service('commerce').subscriptionsForWebsite(w)).catch(() => []),
+		const commerce = ctx.service('commerce');
+		const [subscriptions, manifest, needs] = await Promise.all([
+			Promise.resolve(commerce.subscriptionsForWebsite(w)).catch(() => []),
 			Promise.resolve(ctx.service('catalog').getManifest(appId)).catch(() => null),
+			typeof commerce.resourceNeeds === 'function'
+				? Promise.resolve(commerce.resourceNeeds(w)).catch(() => null)
+				: Promise.resolve(null),
 		]);
-		const decision = decideResolve({ appId, websiteId: w, kind: k, subscriptions, manifest });
+		const decision = decideResolve({ appId, websiteId: w, kind: k, subscriptions, manifest, needs });
 		if (!decision.ok) throw await deny(decision.reason, merchantId, forbidden);
 		const doc = await repo.assigned(merchantId, w, k);
 		if (!doc || doc.status === 'revoked' || !doc.sealed || !(doc.websiteIds ?? []).includes(w))

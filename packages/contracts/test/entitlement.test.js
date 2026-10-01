@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DOCUMENT_RULES, RUNTIME_STATES, checkEntitlementDocument, validateEntitlementDocument } from '../src/index.js';
+import {
+	DOCUMENT_RULES,
+	RUNTIME_STATES,
+	checkEntitlementDocument,
+	isLanguageTag,
+	validateEntitlementDocument,
+} from '../src/index.js';
 import { entitlement } from './fixtures.js';
 import { expectProblem, expectRule } from './helpers.js';
 
@@ -168,5 +174,39 @@ describe('entitlement document identity section (bring-your-own identity)', () =
 		const result = validateEntitlementDocument(withIdentity({ ...section, jwks: [ed, { ...ec, kid: 'site-1' }] }));
 		expect(result.ok).toBe(false);
 		expectRule(result.ok ? [] : result.problems, DOCUMENT_RULES.duplicateIdentityKey, '/identity/jwks/1/kid');
+	});
+});
+
+describe('entitlement document website section', () => {
+	/** @param {unknown} website */
+	const withWebsite = (website) => ({ ...entitlement(), website });
+
+	it.each([
+		['every field', { timeZone: 'America/Argentina/Buenos_Aires', language: 'pt-BR', currency: 'BRL' }],
+		['UTC only', { timeZone: 'UTC' }],
+		['an Etc offset zone', { timeZone: 'Etc/GMT+5' }],
+		['a script subtag', { language: 'zh-Hant-TW' }],
+		['nothing', {}],
+	])('accepts %s', (_name, website) => {
+		expect(validateEntitlementDocument(withWebsite(website)).ok).toBe(true);
+	});
+
+	/** @type {Array<[string, unknown, string, string]>} */
+	const invalid = [
+		['an offset time zone', { timeZone: '+01:00' }, '/website/timeZone', 'pattern'],
+		['an unknown time zone', { timeZone: 'Mars/Olympus_Mons' }, '/website/timeZone', DOCUMENT_RULES.timezone],
+		['a malformed language', { language: 'EN_us' }, '/website/language', 'pattern'],
+		['an invalid language tag', { language: 'de-1901-1901' }, '/website/language', DOCUMENT_RULES.languageTag],
+		['a lowercase currency', { currency: 'eur' }, '/website/currency', 'pattern'],
+		['an unknown member', { country: 'DE' }, '/website/country', 'additionalProperties'],
+	];
+	it.each(invalid)('rejects %s', (_name, website, path, keyword) => {
+		expectProblem(validateEntitlementDocument(withWebsite(website)), path, keyword);
+	});
+
+	it('isLanguageTag accepts BCP-47 tags only', () => {
+		expect(isLanguageTag('en')).toBe(true);
+		expect(isLanguageTag('de-CH-1901')).toBe(true);
+		expect(isLanguageTag('not a tag')).toBe(false);
 	});
 });

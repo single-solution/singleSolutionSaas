@@ -3,6 +3,11 @@
  * `templates/shared` (core, headless, ui, strings, schemas, unit tests) overlaid by `templates/<kind>`.
  * Files and paths may contain `{{slug}}`, `{{name}}`, `{{namespace}}` (slug with `-` → `_`) and `{{sdkVersion}}`.
  * `_gitignore` is written as `.gitignore`.
+ *
+ * `--minimal` (service products): the `notes` sample ({@link NOTES_SAMPLE_FILES}) is left out and
+ * `templates/minimal/service` is overlaid instead: one placeholder Mode C element `status` (`GET /v1/status`, marked
+ * `x-ss-certify`, no database, no events) because a product needs at least one element. The project still passes
+ * `ss app validate` and its own tests.
  * @module
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
@@ -18,12 +23,36 @@ export const TEMPLATES_DIR = fileURLToPath(new URL('../templates/', import.meta.
 export const INIT_KINDS = Object.freeze(/** @type {const} */ (['service', 'pack']));
 
 /**
+ * Template files (source paths, before placeholder substitution) that belong to the `notes` sample only; `--minimal`
+ * leaves them out. The manifest, openapi.json, strings, api/routes.js, adapters/privacy.js, docs and README are
+ * replaced by the minimal overlay instead.
+ */
+export const NOTES_SAMPLE_FILES = Object.freeze([
+	'core/notes.js',
+	'headless/notes.js',
+	'ui/notes.js',
+	'schemas/notes.features.json',
+	'tests/core.test.js',
+	'tests/headless.test.js',
+	'tests/ui.test.js',
+	'tests/helpers.js',
+	'api/notes.js',
+	'api/events.js',
+	'adapters/db.js',
+	'jobs/purge-deleted.js',
+	'schemas/events/{{namespace}}.note_created@1.json',
+	'tests/api.test.js',
+	'tests/memory-collection.js',
+]);
+
+/**
  * @typedef {object} InitOptions
  * @property {string} dir target directory (created; must be empty or absent)
  * @property {'service' | 'pack'} kind
  * @property {string} slug product slug (SSPS slug pattern)
  * @property {string} name display name (1–80 chars)
  * @property {string} [sdkVersion] version range for `@ss/*` dependencies (default `workspace:*`)
+ * @property {boolean} [minimal] service only: leave out the `notes` sample (one placeholder element instead)
  * @property {string} [templatesDir]
  */
 
@@ -43,7 +72,7 @@ export const fill = (text, values) =>
  * @param {Partial<InitOptions>} options
  * @returns {string[]}
  */
-export const checkInitOptions = ({ dir, kind, slug, name }) => {
+export const checkInitOptions = ({ dir, kind, slug, name, minimal }) => {
 	/** @type {string[]} */
 	const errors = [];
 	if (typeof dir !== 'string' || dir.length === 0) errors.push('a target directory is required');
@@ -52,6 +81,8 @@ export const checkInitOptions = ({ dir, kind, slug, name }) => {
 		errors.push('--slug must be 2–40 chars of lowercase letters/digits separated by - or _ (e.g. notes-pro)');
 	if (typeof name !== 'string' || name.trim().length === 0 || name.length > 80) errors.push('--name must be 1–80 characters');
 	else if (/[{}"\\<>\n\r`]/.test(name)) errors.push('--name must not contain { } " \\ < > ` or line breaks');
+	if (minimal === true && kind === 'pack')
+		errors.push('--minimal is for service products (a pack element is the sample: it needs a headless core and renderer)');
 	return errors;
 };
 
@@ -60,8 +91,16 @@ export const checkInitOptions = ({ dir, kind, slug, name }) => {
  * @param {InitOptions} options
  * @returns {Promise<{ dir: string, files: string[] }>} files written (relative)
  */
-export const initApp = async ({ dir, kind, slug, name, sdkVersion = 'workspace:*', templatesDir = TEMPLATES_DIR }) => {
-	const errors = checkInitOptions({ dir, kind, slug, name });
+export const initApp = async ({
+	dir,
+	kind,
+	slug,
+	name,
+	sdkVersion = 'workspace:*',
+	minimal = false,
+	templatesDir = TEMPLATES_DIR,
+}) => {
+	const errors = checkInitOptions({ dir, kind, slug, name, minimal });
 	if (errors.length > 0) throw Object.assign(new Error(errors.join('; ')), { code: 'invalid_options' });
 	const target = path.resolve(dir);
 	try {
@@ -73,9 +112,11 @@ export const initApp = async ({ dir, kind, slug, name, sdkVersion = 'workspace:*
 	const values = { slug, name: name.trim(), namespace: slug.replace(/-/g, '_'), sdkVersion };
 	/** @type {Map<string, string>} destination → source */
 	const plan = new Map();
-	for (const layer of ['shared', kind]) {
+	const skip = new Set(minimal ? NOTES_SAMPLE_FILES : []);
+	for (const layer of minimal ? ['shared', kind, `minimal/${kind}`] : ['shared', kind]) {
 		const root = path.join(templatesDir, layer);
 		for (const file of await walk(root, { ignore: new Set(['node_modules']) })) {
+			if (skip.has(file)) continue;
 			const destination = fill(file, values)
 				.split('/')
 				.map((part) => (part === '_gitignore' ? '.gitignore' : part))

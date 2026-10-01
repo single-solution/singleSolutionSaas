@@ -30,7 +30,9 @@ merchant's favour per period and unit).
 `normaliseProduct(input)` turns a contracts-validated SSPS v1 manifest into a `Product`:
 
 - **Elements** `{ key, name, dependsOn[], requires[], defaultEnabled, features[] }`. `requires` is the
-  manifest's `requires.resources` (resource kinds such as `database`, `ai`; a bare array is accepted).
+  element's `requires.resources` (resource kinds such as `database`, `ai`; a bare array is accepted) plus the
+  manifest's product-level `requires.resources`, which means **always required** (every element needs it).
+  The product-level kinds are also kept as `product.requires`.
   `defaultEnabled` is not an SSPS field and defaults to `false`. Dependencies must exist and be acyclic;
   `elementOrder` is a deterministic topological order.
 - **Features** are the top-level properties of the element's `features` JSON Schema, keyed
@@ -122,8 +124,10 @@ active). For each element that is **configured on**, in topological order, the f
 disables it:
 
 1. `state ≠ active` → reason = state;
-2. `resource_missing` — a required resource kind is not `'connected'` in `runtime.resources` (a
-   `{ kind: status }` map or the document's `[{ kind, status }]` list; listed in `missing`);
+2. `resource_missing` — a required resource kind (the element's own or a product-level, always-required
+   one) is not `'connected'` in `runtime.resources` (a `{ kind: status }` map or the document's
+   `[{ kind, status }]` list; listed in `missing`). A missing product-level kind therefore disables every
+   element; a missing element-level kind only the elements that require it;
 3. `rollout` — `runtime.rollouts[element] = { id, percent?, rule? }` excludes the subscription:
    `bucketOf([subscriptionId, element, id]) ≥ round(percent × 100)`, or `evaluateRule(rule, context)`
    does not return exactly `true` (missing evaluator or a throw fails closed). `context` =
@@ -166,7 +170,8 @@ experiment array order; keys are sorted. At most one experiment may run per elem
 The `@ss/contracts` entitlement document is canonical. `toDocument(resolved, meta)` maps the resolver
 output plus Portal metadata (`websiteId, merchantId, domain, allowSubdomains, env, version, issuedAt,
 validFrom, validUntil, resources, dataScope`, optional `subscriptionId`/`productSlug`/`planCode` which
-must match, optional `priceBookVersion` override) and returns `{ ok: true, document }` only if
+must match, optional `priceBookVersion` override, optional `identity` and `website` sections copied as given;
+an empty `website` is omitted) and returns `{ ok: true, document }` only if
 `validateEntitlementDocument` accepts it, else `{ ok: false, problems }`.
 
 - `version` is the Portal's integer, bumped when `contentHash` changes.

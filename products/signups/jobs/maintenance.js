@@ -1,9 +1,10 @@
 /**
  * Daily job (Vercel cron → `GET /cron/maintenance` with `Authorization: Bearer $CRON_SECRET`): for every website this
  * deployment serves, execute deletions whose cooling-off ended, rotate the issuer's signing key when it is due
- * (pre-published first) and prune superseded keys. Each website is independent: one failing website never stops the
- * others. The per-website work is the service's `maintain`, passed in by the composition root (serve.js,
- * app/_lib/product.js), so this layer depends on no handler code. Expired codes, links, counters and sessions are
+ * (pre-published first), prune superseded keys and — once per issuer configuration, while the Portal does not carry
+ * it — ask the Portal to make Signups the website's identity issuer (best effort; the merchant approves). Each website
+ * is independent: one failing website never stops the others. The per-website work is the service's `maintain`,
+ * passed in by the composition root (serve.js, app/_lib/product.js), so this layer depends on no handler code. Expired codes, links, counters and sessions are
  * removed by TTL indexes, not by this job.
  */
 import { timingSafeEqual } from 'node:crypto';

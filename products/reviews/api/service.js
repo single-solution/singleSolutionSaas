@@ -200,12 +200,20 @@ export const createReviewsService = ({
 		}
 		const id = idFor(site.websiteId, 'rph', key);
 		const existing = await site.repos.photos.get(id);
-		const slot = bucket.presignPut({ key: `photos/${id}`, contentType, expiresIn: config.upload_ttl_seconds });
+		// a retried request re-signs the slot it created first: same key, type and declared size
+		const declared = { contentType: existing?.contentType ?? contentType, size: existing?.size ?? size };
+		// `content-length` is a signed header: the bucket refuses a body of any other size than the declared one
+		const slot = bucket.presignPut({
+			key: `photos/${id}`,
+			contentType: declared.contentType,
+			contentLength: declared.size,
+			expiresIn: config.upload_ttl_seconds,
+		});
 		if (!existing)
 			await site.repos.photos.insert({
 				id,
-				key: `photos/${id}`,
-				objectKey: slot.key,
+				key: slot.key,
+				objectKey: bucket.fullKey(slot.key),
 				contentType,
 				size,
 				customerId,
@@ -226,7 +234,9 @@ export const createReviewsService = ({
 	};
 
 	/**
-	 * Check photos before they are attached: pending, owned by the submitter, uploaded, of an allowed type and size.
+	 * Check photos before they are attached: pending, owned by the submitter, uploaded, of an allowed type and exactly the
+	 * declared size. The presigned PUT already signs type and size; this HEAD check stays as defence in depth (some
+	 * S3-compatible stores do not enforce signed headers) and is needed anyway to know the upload happened.
 	 * @param {Site} site
 	 * @param {string[]} ids
 	 * @param {string | null} customerId
@@ -264,6 +274,7 @@ export const createReviewsService = ({
 			if (
 				!head.exists ||
 				!(Number(head.size) > 0 && Number(head.size) <= config.max_photo_bytes) ||
+				(typeof photo.size === 'number' && Number(head.size) !== photo.size) ||
 				!config.allowed_types.includes(type ?? '') ||
 				type !== photo.contentType
 			)

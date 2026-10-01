@@ -11,6 +11,8 @@ export const fakeCommerce = (options = {}) => {
 	const calls = [];
 	/** @type {string[]} websites whose documents were re-signed */
 	const invalidated = [];
+	/** @type {Array<{ appId: string, websiteId: string, status: string }>} subscriptions the identity module sees (F.16) */
+	const subscriptions = [];
 	const module = defineModule({
 		name: 'commerce',
 		service: () => ({
@@ -20,6 +22,8 @@ export const fakeCommerce = (options = {}) => {
 				if (options.fail) throw new Error('commerce is down');
 				return { invalidated: 1 };
 			},
+			/** @param {string} websiteId */
+			subscriptionsForWebsite: async (websiteId) => subscriptions.filter((s) => s.websiteId === websiteId),
 			/** @param {{ merchantId: string, status: string }} input */
 			onMerchantStatus: async (input) => {
 				calls.push(input);
@@ -27,7 +31,7 @@ export const fakeCommerce = (options = {}) => {
 			},
 		}),
 	});
-	return { module, calls, invalidated };
+	return { module, calls, invalidated, subscriptions };
 };
 
 /** @param {{ fail?: boolean }} [options] */
@@ -52,13 +56,21 @@ export const fakeCatalog = async (appId = 'app_test') => {
 	const { privateJwk, publicJwk } = await generateSigningKey({ kid: `${appId}-1` });
 	const resolver = createKeyResolver({ jwks: createJwks([publicJwk]) });
 	const signer = createSigner(privateJwk);
+	/** The app's manifest capabilities (F.16 `identityIssuer`), mutable by tests. */
+	const capabilities = /** @type {Record<string, unknown>} */ ({});
 	const module = defineModule({
 		name: 'catalog',
+		service: () => ({
+			getApp: async (/** @type {string} */ id) => ({ appId: id, slug: 'signups', kind: 'service', status: 'active' }),
+			getManifest: async () => ({ product: { slug: 'signups', name: 'Signups' }, capabilities: { ...capabilities } }),
+			activeProducts: async () => [{ appId, slug: 'signups', name: 'Signups', kind: 'service' }],
+		}),
 		ports: () => ({ appKeys: (/** @type {string} */ id) => (id === appId ? resolver : null) }),
 	});
 	return {
 		module,
 		appId,
+		capabilities,
 		/** @param {string} audience @param {() => number} now */
 		assertion: (audience, now) => signAssertion({ signer, appId, audience, now }),
 	};

@@ -220,6 +220,8 @@ export const presentIssuer = (doc) => ({
 	keys: (doc.keys ?? []).map((/** @type {IdentityJwk} */ key) => ({ kid: key.kid, kty: key.kty, alg: key.alg ?? null })),
 	keysFetchedAt: doc.keysFetchedAt instanceof Date ? doc.keysFetchedAt.toISOString() : null,
 	lastError: doc.lastError ?? null,
+	// set when a product's issuer request was approved (F.16): `{ appId, slug, name }`
+	managedBy: doc.managedBy ? { ...doc.managedBy } : null,
 	createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : null,
 	updatedAt: doc.updatedAt instanceof Date ? doc.updatedAt.toISOString() : null,
 });

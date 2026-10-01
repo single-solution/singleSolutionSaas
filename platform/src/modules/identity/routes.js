@@ -71,7 +71,7 @@ const ownMerchant = (c) => {
  * @returns {RouteDefinition[]}
  */
 export const identityRoutes = (ctx, service) => {
-	const { accounts, teams, websites, keys, issuers, admin, impersonation } = service;
+	const { accounts, teams, websites, keys, issuers, issuerRequests, admin, impersonation } = service;
 
 	/**
 	 * @param {RequestContext} c
@@ -509,6 +509,25 @@ export const identityRoutes = (ctx, service) => {
 			},
 		},
 		{
+			// website settings (F.16): merchants and staff (Admin Console) alike
+			method: 'PATCH',
+			path: '/v1/merchants/:merchantId/websites/:websiteId',
+			auth: ['merchant', 'staff'],
+			handler: async (c) => {
+				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				const settings = valid(inputs.websiteSettings(c.body));
+				return ok(
+					await websites.updateSettings({
+						merchantId,
+						websiteId: String(website._id),
+						settings,
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				);
+			},
+		},
+		{
 			method: 'DELETE',
 			path: '/v1/merchants/:merchantId/websites/:websiteId',
 			auth: ['merchant', 'staff'],
@@ -529,6 +548,16 @@ export const identityRoutes = (ctx, service) => {
 			},
 		},
 		{
+			// the scope vocabulary keys are checked against (F.16): platform scopes + per listed service product
+			method: 'GET',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/scopes',
+			auth: ['merchant', 'staff'],
+			handler: async (c) => {
+				await authorizedWebsite(c, 'keys.read');
+				return ok({ defaults: ['elements.read', 'events.write'], items: await keys.scopeCatalogue() });
+			},
+		},
+		{
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys',
 			auth: ['merchant', 'staff'],
@@ -541,7 +570,7 @@ export const identityRoutes = (ctx, service) => {
 						merchantId,
 						websiteId: String(website._id),
 						kind: body.kind,
-						scopes: body.scopes,
+						scopes: body.scopes ?? [],
 						...(body.expiresAt === undefined ? {} : { expiresAt: body.expiresAt }),
 						...(body.allowSubdomains === undefined ? {} : { allowSubdomains: body.allowSubdomains }),
 						actor: actorOf(c),
@@ -598,7 +627,57 @@ export const identityRoutes = (ctx, service) => {
 			auth: ['merchant', 'staff'],
 			handler: async (c) => {
 				const { merchantId, website } = await authorizedWebsite(c, 'websites.read');
-				return ok({ issuer: await issuers.getIssuer({ merchantId, websiteId: String(website._id) }) });
+				const websiteId = String(website._id);
+				return ok({
+					issuer: await issuers.getIssuer({ merchantId, websiteId }),
+					request: await issuerRequests.pending({ merchantId, websiteId }),
+				});
+			},
+		},
+		.../** @type {const} */ (['approve', 'reject']).map((decision) => ({
+			method: /** @type {const} */ ('POST'),
+			path: `/v1/merchants/:merchantId/websites/:websiteId/identity/request/${decision}`,
+			auth: /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'staff']),
+			idempotent: /** @type {const} */ ('optional'),
+			/** @param {RequestContext} c */
+			handler: async (c) => {
+				const body = valid(inputs.keyRevoke(c.body));
+				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				return ok(
+					await issuerRequests.decide({
+						merchantId,
+						websiteId: String(website._id),
+						decision,
+						reason: body.reason ?? null,
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				);
+			},
+		})),
+		{
+			// console notifications: pending product requests across the merchant's websites (F.16)
+			method: 'GET',
+			path: '/v1/merchants/:merchantId/notifications',
+			auth: ['merchant', 'staff'],
+			handler: async (c) => {
+				const merchantId = ownMerchant(c);
+				const visible = ctx.rbac.websitesVisible(actorOf(c), 'websites.read');
+				const all = await issuerRequests.pendingForMerchant({ merchantId });
+				const live = new Map((await websites.listWebsites(merchantId)).map((w) => [w.websiteId, w]));
+				const items = all
+					.filter((r) => {
+						const w = live.get(r.websiteId);
+						const id = w ? (w.env === 'live' ? w.websiteId : String(w.twinId)) : null;
+						return id !== null && (visible === 'all' || visible.includes(id));
+					})
+					.map((r) => ({
+						kind: 'identity_issuer_request',
+						websiteId: r.websiteId,
+						domain: live.get(r.websiteId)?.domain ?? null,
+						request: r,
+					}));
+				return ok({ items });
 			},
 		},
 		{
@@ -923,7 +1002,24 @@ export const identityRoutes = (ctx, service) => {
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Product API (F.9)
+		// Product API (F.9, F.16)
+		{
+			// a product asks to become the website's identity issuer: stored pending until the merchant approves
+			method: 'PUT',
+			path: '/v1/product/websites/:websiteId/identity',
+			auth: 'product',
+			rateLimit: { limit: 30, windowMs: 60 * 60_000 },
+			handler: async (c) => {
+				const input = valid(parseIssuer(c.body));
+				const result = await issuerRequests.request({
+					appId: /** @type {{ appId: string }} */ (c.app).appId,
+					websiteId: /** @type {string} */ (c.params.websiteId),
+					input,
+					meta: metaOf(c),
+				});
+				return ok(result, { status: result.status === 'pending' ? 202 : 200 });
+			},
+		},
 		{
 			method: 'GET',
 			path: '/v1/product/revocations',

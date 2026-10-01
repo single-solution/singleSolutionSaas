@@ -17,7 +17,13 @@
  * @property {string[]} [roles] launch-session roles allowed (default any)
  * @property {string} [element] element that must be enabled in the entitlement document
  * @property {boolean | 'optional'} [idempotent] POST: true = Idempotency-Key required (default), 'optional', false = ignored
- * @property {{ limit: number, windowMs?: number, windowSeconds?: number, key?: (ctx: any) => string }} [rateLimit] fixed window (`windowMs` or `windowSeconds`)
+ * @property {{ limit: number | ((ctx: any) => number | Promise<number>), windowMs?: number, windowSeconds?: number,
+ *   key?: (ctx: any) => string | Promise<string>, bucket?: string }} [rateLimit]
+ *   fixed window (`windowMs` or `windowSeconds`). `limit` may be a (sync or async) function of the request context,
+ *   evaluated after auth, the entitlement, the JSON body and the customer identity (e.g.
+ *   `(ctx) => feature(ctx.entitlement.doc, 'chat.messagesPerMinute')`), returning an integer ≥ 0 (0 refuses every
+ *   request) or `Infinity` (no limit). `key(ctx)` is the subject (default: website, session or client IP); `bucket`
+ *   shares one window between routes (default: the route id)
  * @property {boolean} [rawBody] do not parse JSON (handler reads `ctx.rawBody`)
  * @property {number} [maxBodyBytes]
  * @property {boolean} [entitlement] website auth: load the entitlement (default true)
@@ -57,12 +63,17 @@ export const defineRoute = (definition) => {
 	/** @type {RouteDefinition['rateLimit']} */
 	let rateLimit;
 	if (definition.rateLimit) {
-		const { limit, windowMs, windowSeconds, key } = definition.rateLimit;
+		const { limit, windowMs, windowSeconds, key, bucket } = definition.rateLimit;
 		const ms = windowMs ?? (Number.isInteger(windowSeconds) ? /** @type {number} */ (windowSeconds) * 1000 : undefined);
-		if (!Number.isInteger(limit) || limit < 1 || !Number.isInteger(ms) || /** @type {number} */ (ms) < 1) {
-			throw new TypeError(`rateLimit needs an integer limit and windowMs or windowSeconds (${method} ${path})`);
+		const limitOk = typeof limit === 'function' || (Number.isInteger(limit) && limit >= 1);
+		if (!limitOk || !Number.isInteger(ms) || /** @type {number} */ (ms) < 1) {
+			throw new TypeError(`rateLimit needs an integer (or function) limit and windowMs or windowSeconds (${method} ${path})`);
 		}
-		rateLimit = { limit, windowMs: /** @type {number} */ (ms), ...(key ? { key } : {}) };
+		if (key !== undefined && typeof key !== 'function')
+			throw new TypeError(`rateLimit.key must be a function (${method} ${path})`);
+		if (bucket !== undefined && (typeof bucket !== 'string' || !/^[\w.:-]{1,64}$/.test(bucket)))
+			throw new TypeError(`rateLimit.bucket must be 1..64 word characters (${method} ${path})`);
+		rateLimit = { limit, windowMs: /** @type {number} */ (ms), ...(key ? { key } : {}), ...(bucket ? { bucket } : {}) };
 	}
 	return Object.freeze({ ...definition, ...(rateLimit ? { rateLimit } : {}) });
 };

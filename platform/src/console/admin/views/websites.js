@@ -28,6 +28,7 @@ import { Link } from '../../link.js';
 import { adminFetch } from '../client.js';
 import { ID, adminApi, adminRoutes } from '../paths.js';
 import { ActionProblem, AdminProblem, IdChip, staffCan } from './common.js';
+import { WebsiteSettingsCard } from '../../views/websites.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -175,6 +176,16 @@ export function WebsitesView(props) {
 									},
 								]}
 							/>
+							{canWrite && w.status === 'active' ? (
+								<div className="mt-4">
+									<WebsiteSettingsCard merchantId={w.merchantId} website={w} fetcher={adminFetch} />
+								</div>
+							) : (
+								<p className="mt-3 text-xs text-muted">
+									Time zone {w.timeZone ?? 'UTC (default)'} · language {w.language ?? 'not set'} · currency{' '}
+									{w.currency ?? 'not set'}
+								</p>
+							)}
 						</Card>
 					);
 				})

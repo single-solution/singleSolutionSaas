@@ -15,8 +15,16 @@ let replSet = null;
 
 export const setup = async () => {
 	if (process.env.SS_TEST_MONGO_URI) return;
+	// the TTL monitor is off: it deletes documents by **wall-clock** time, while every test runs on an injected clock
+	// (`createClock`, starting at a fixed T0). Expiry stays deterministic because the code compares `expireAt` with the
+	// injected `now()`; with the monitor on, a short-lived token or session whose injected expiry lies in the real past
+	// vanished whenever a monitor pass (every 60 s) fell inside the test — the impersonation test failed under load.
 	replSet = await MongoMemoryReplSet.create({
-		replSet: { count: 1, storageEngine: 'wiredTiger', args: ['--setParameter', 'diagnosticDataCollectionEnabled=false'] },
+		replSet: {
+			count: 1,
+			storageEngine: 'wiredTiger',
+			args: ['--setParameter', 'diagnosticDataCollectionEnabled=false', '--setParameter', 'ttlMonitorEnabled=false'],
+		},
 	});
 	await replSet.waitUntilRunning();
 	const uri = replSet.getUri();

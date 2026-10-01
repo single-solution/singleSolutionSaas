@@ -7,3 +7,4 @@ export const POST = forward('POST');
 export const PUT = forward('PUT');
 export const PATCH = forward('PATCH');
 export const DELETE = forward('DELETE');
+export const OPTIONS = forward('OPTIONS');

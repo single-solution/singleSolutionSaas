@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { AUTHORITY, LAYERS, inRollout, pickEffective, resolveEntitlement, selectVariant } from '../src/resolve.js';
-import { HEALTHY, NOW, coupons, deepFreeze } from './fixtures.js';
+import { normaliseProduct } from '../src/catalog.js';
+import { HEALTHY, NOW, coupons, couponsInput, deepFreeze } from './fixtures.js';
 
 /** @typedef {import('../src/resolve.js').Layer} Layer */
 
@@ -358,6 +359,19 @@ describe('runtime state', () => {
 		expect(doc.elements.reports?.enabled).toBe(true);
 		const none = resolve({ runtime: {} });
 		expect(none.elements.reports).toMatchObject({ enabled: false, reason: 'resource_missing', missing: ['database'] });
+	});
+
+	it('treats product-level resources as always required: every element is disabled while one is missing', () => {
+		const product = normaliseProduct({ ...couponsInput(), requires: { resources: ['storage'] } });
+		expect(product.requires).toEqual(['storage']);
+		expect(product.elements.codes?.requires).toEqual(['storage']);
+		expect(product.elements.ai_copy?.requires).toEqual(['ai', 'storage']);
+		const missing = resolve({ product, runtime: { resources: HEALTHY } });
+		for (const key of ['codes', 'apply_box', 'reports', 'ai_copy'])
+			expect(missing.elements[key], key).toMatchObject({ enabled: false, reason: 'resource_missing' });
+		expect(missing.elements.ai_copy?.missing).toEqual(['storage']);
+		const connected = resolve({ product, runtime: { resources: { ...HEALTHY, storage: 'connected' } } });
+		expect(Object.values(connected.elements).every((element) => element.enabled)).toBe(true);
 	});
 
 	it('blocks hard-stop quotas when exhausted, not soft ones', () => {

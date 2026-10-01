@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { STANDARD_EVENT_DATA, createValidator, validateEvent } from '../src/index.js';
+import {
+	ACTOR_TYPES,
+	KEY_KINDS,
+	STANDARD_EVENT_DATA,
+	WEBSITE_KEY_ACTORS,
+	actorAllowedForKeyKind,
+	createValidator,
+	validateEvent,
+} from '../src/index.js';
 import { event, standardEventData } from './fixtures.js';
 import { expectProblem } from './helpers.js';
 
@@ -12,6 +20,99 @@ describe('event envelope', () => {
 
 	it.each(Object.entries(data))('accepts %s', (type, payload) => {
 		expect(validateEvent(event(type, payload))).toMatchObject({ ok: true });
+	});
+
+	it('accepts the richer optional fields of inventory.changed@1 and price.changed@1', () => {
+		const inventory = {
+			itemId: 'itm_1',
+			variantId: 'v1',
+			sku: 'LS-S',
+			locationId: 'loc_main',
+			quantity: 4,
+			previousQuantity: 0,
+			available: 3,
+			previousAvailable: 0,
+			reason: 'restock',
+		};
+		expect(validateEvent(event('inventory.changed@1', inventory)).ok).toBe(true);
+		const price = {
+			itemId: 'itm_1',
+			variantId: 'v1',
+			sku: 'LS-S',
+			priceListId: 'pl_retail',
+			price: { amount: 3900, currency: 'EUR' },
+			previousPrice: { amount: 4900, currency: 'EUR' },
+			compareAtPrice: { amount: 4900, currency: 'EUR' },
+			previousCompareAtPrice: { amount: 5900, currency: 'EUR' },
+			reason: 'sale',
+		};
+		expect(validateEvent(event('price.changed@1', price)).ok).toBe(true);
+		expectProblem(validateEvent(event('inventory.changed@1', { ...inventory, reason: 'Restock!' })), '/data/reason', 'pattern');
+	});
+
+	/** @type {Array<[string, string, Record<string, unknown>, string, string]>} */
+	const itemInvalid = [
+		[
+			'variants without currency',
+			'item.created@1',
+			{ itemId: 'i', title: 'T', variants: [{ variantId: 'v', price: 1 }] },
+			'/data',
+			'dependentRequired',
+		],
+		[
+			'a decimal price',
+			'item.created@1',
+			{ itemId: 'i', title: 'T', currency: 'EUR', variants: [{ variantId: 'v', price: 1.5 }] },
+			'/data/variants/0/price',
+			'type',
+		],
+		[
+			'a variant without price',
+			'item.updated@1',
+			{ itemId: 'i', currency: 'EUR', variants: [{ variantId: 'v' }] },
+			'/data/variants/0/price',
+			'required',
+		],
+		[
+			'a per-variant currency',
+			'item.updated@1',
+			{ itemId: 'i', currency: 'EUR', variants: [{ variantId: 'v', price: 1, currency: 'USD' }] },
+			'/data/variants/0/currency',
+			'additionalProperties',
+		],
+		['a missing title', 'item.created@1', { itemId: 'i' }, '/data/title', 'required'],
+		[
+			'a nested attribute object',
+			'item.created@1',
+			{ itemId: 'i', title: 'T', attributes: { a: { b: 1 } } },
+			'/data/attributes/a',
+			'anyOf',
+		],
+		['a full snapshot on delete', 'item.deleted@1', { itemId: 'i', title: 'T' }, '/data/title', 'additionalProperties'],
+	];
+	it.each(itemInvalid)('rejects item events with %s', (_name, type, payload, path, keyword) => {
+		expectProblem(validateEvent(event(type, payload)), path, keyword);
+	});
+
+	it('accepts context.keyKind pk|sk only (set by the Portal Event Hub)', () => {
+		for (const keyKind of KEY_KINDS) {
+			const e = event('order.completed@1', { orderId: 'o1' });
+			e.context.keyKind = keyKind;
+			expect(validateEvent(e).ok).toBe(true);
+		}
+		const bad = event('order.completed@1', { orderId: 'o1' });
+		bad.context.keyKind = 'rk';
+		expectProblem(validateEvent(bad), '/context/keyKind', 'enum');
+	});
+
+	it('actorAllowedForKeyKind: pk_ → customer/anonymous; sk_ → anyone but product/system', () => {
+		const allowed = (/** @type {unknown} */ kind) => ACTOR_TYPES.filter((actor) => actorAllowedForKeyKind(kind, actor));
+		expect(allowed('pk')).toEqual(['customer', 'anonymous']);
+		expect(allowed('sk')).toEqual(['customer', 'anonymous', 'staff', 'merchant']);
+		expect(allowed('rk')).toEqual([]);
+		expect(actorAllowedForKeyKind('sk', 'robot')).toBe(false);
+		expect(actorAllowedForKeyKind('pk', undefined)).toBe(false);
+		expect(WEBSITE_KEY_ACTORS.pk).toEqual(['customer', 'anonymous']);
 	});
 
 	it('accepts custom.* events with any object data and minimal envelopes', () => {

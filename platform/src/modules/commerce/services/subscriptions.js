@@ -13,7 +13,16 @@ import { ceilHour, currentPriceBook, floorHour, periodBounds, resolveEntitlement
 import { signEntitlementDocument } from '@ss/protocol';
 import { problem } from '../../../infra/http.js';
 import { dataScopePrefix, firstHourCharge, quotaFeatures } from '../core/catalog.js';
-import { documentHash, enabledElements, isFresh, nextVersion, quotaWatch, validityWindow } from '../core/documents.js';
+import {
+	documentHash,
+	enabledElements,
+	isFresh,
+	nextVersion,
+	quotaWatch,
+	resourceNeeds,
+	validityWindow,
+	websiteSection,
+} from '../core/documents.js';
 import { overlaySwitches, resolverState, sameElements, statusOf, withHold } from '../core/subscription.js';
 
 /** @typedef {import('../../../infra/modules.js').ModuleContext} ModuleContext */
@@ -128,7 +137,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	 * @param {Record<string, any> | null} [override]
 	 */
 	const resolve = async (sub, website, now, override = null) => {
-		const { product } = await deps.manifestOf(sub.appId, sub.manifestVersion);
+		const { product, manifest } = await deps.manifestOf(sub.appId, sub.manifestVersion);
 		const [config, resources, identity] = await Promise.all([
 			override ? Promise.resolve(splitLayers(override)) : deps.layersFor(sub),
 			deps.statusFor(sub.websiteId),
@@ -159,13 +168,16 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 						subscription: { ...input.subscription, status: 'active' },
 						runtime: { ...input.runtime, spendCap: false },
 					});
+		const site = websiteSection(website);
 		return {
 			resolved,
 			billing: enabledElements(billable),
 			product,
+			manifest,
 			resources,
 			identity,
-			contentHash: documentHash(resolved.contentHash, identity),
+			website: site,
+			contentHash: documentHash(resolved.contentHash, identity, site),
 		};
 	};
 
@@ -209,10 +221,10 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	 * @param {{ sub: Doc, website: Doc, resolved: ReturnType<typeof resolveEntitlement>, product: Product,
 	 *   resources: { kind: string, ref?: string, status: string }[], version: number,
 	 *   window: { issuedAt: string, validFrom: string, validUntil: string },
-	 *   identity?: import('@ss/contracts').IdentitySection | null }} input
+	 *   identity?: import('@ss/contracts').IdentitySection | null, site?: Record<string, string> | null }} input
 	 * @returns {Record<string, unknown>}
 	 */
-	const buildDocument = ({ sub, website, resolved, product, resources, version, window, identity = null }) => {
+	const buildDocument = ({ sub, website, resolved, product, resources, version, window, identity = null, site = null }) => {
 		const mapped = toDocument(resolved, {
 			websiteId: sub.websiteId,
 			merchantId: sub.merchantId,
@@ -226,6 +238,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 				.map((r) => ({ kind: r.kind, ref: /** @type {string} */ (r.ref), status: r.status })),
 			dataScope: { prefix: dataScopePrefix(product.slug) },
 			identity,
+			website: site,
 		});
 		if (!mapped.ok) {
 			ctx.logger.error('entitlement document invalid', { subscriptionId: sub._id, result: mapped });
@@ -246,7 +259,16 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		}
 		const website = await deps.getWebsite(sub.websiteId);
 		const now = ctx.now();
-		const { resolved, billing, product, resources, identity, contentHash } = await resolve(sub, website, now);
+		const {
+			resolved,
+			billing,
+			product,
+			manifest,
+			resources,
+			identity,
+			website: site,
+			contentHash,
+		} = await resolve(sub, website, now);
 		await recordTimeline(sub, billing, now);
 		for (let attempt = 0; attempt < 4; attempt += 1) {
 			const stored = await repo.documentOf(sub.merchantId, sub._id);
@@ -255,7 +277,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 				contentHash,
 			);
 			const window = validityWindow(now);
-			const document = buildDocument({ sub, website, resolved, product, resources, version, window, identity });
+			const document = buildDocument({ sub, website, resolved, product, resources, version, window, identity, site });
 			const jws = await signEntitlementDocument({ signer: ctx.keys.signer, payload: /** @type {any} */ (document) });
 			const written = await repo.writeDocument(sub.merchantId, sub._id, stored ? stored.version : null, {
 				version,
@@ -268,6 +290,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 				appId: sub.appId,
 				state: resolved.state,
 				quotas: quotaWatch(quotaFeatures(product), resolved),
+				needs: resourceNeeds(/** @type {any} */ (manifest), resolved.elements),
 			});
 			if (!written) continue;
 			if (bumped)
@@ -636,7 +659,14 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		if (sub.cancelledAt) throw problem('gone', 'The subscription is cancelled.');
 		const website = await deps.getWebsite(sub.websiteId);
 		const now = ctx.now();
-		const { resolved, product, resources, identity, contentHash } = await resolve(sub, website, now, layers ?? {});
+		const {
+			resolved,
+			product,
+			resources,
+			identity,
+			website: site,
+			contentHash,
+		} = await resolve(sub, website, now, layers ?? {});
 		const stored = await repo.documentOf(sub.merchantId, sub._id);
 		const { version } = nextVersion(stored ? { version: stored.version, contentHash: stored.contentHash } : null, contentHash);
 		return buildDocument({
@@ -648,7 +678,30 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 			version,
 			window: validityWindow(now),
 			identity,
+			site,
 		});
+	};
+
+	/**
+	 * Resource needs of the live subscriptions of a website (F.16): product-level kinds always, element-level kinds
+	 * `neededNow` only while a requiring element is on. Read from the last resolution (resolved now when missing).
+	 * @param {string} websiteId
+	 * @returns {Promise<Array<{ subscriptionId: string, appId: string, productSlug: string, kind: string,
+	 *   scope: 'product' | 'element', elements: string[], neededNow: boolean }>>}
+	 */
+	const resourceNeedsOf = async (websiteId) => {
+		const out = [];
+		for (const sub of await repo.subscriptionsForWebsite(websiteId)) {
+			if (!sub.live || sub.cancelledAt) continue;
+			let stored = await repo.documentOf(sub.merchantId, sub._id);
+			if (!Array.isArray(stored?.needs)) {
+				await refreshQuietly(sub);
+				stored = await repo.documentOf(sub.merchantId, sub._id);
+			}
+			for (const need of Array.isArray(stored?.needs) ? stored.needs : [])
+				out.push({ subscriptionId: sub._id, appId: sub.appId, productSlug: sub.productSlug, ...need });
+		}
+		return out;
 	};
 
 	/**
@@ -690,6 +743,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		cancel,
 		documentFor,
 		previewDocument,
+		resourceNeedsOf,
 		invalidate,
 		onMerchantStatus,
 		/** @param {string} subscriptionId @param {string | null} [merchantId] */

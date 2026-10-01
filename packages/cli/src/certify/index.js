@@ -156,6 +156,56 @@ export const formatReport = (report) => {
 	return `${lines.join('\n')}\n`;
 };
 
+/** OpenAPI operation keys of a path item. */
+const HTTP_METHODS = Object.freeze(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
+
+/**
+ * True when an OpenAPI path item, or one of its operations, sets `"x-ss-certify": true`.
+ * @param {unknown} item
+ * @returns {boolean}
+ */
+const marksCertify = (item) =>
+	isObject(item) &&
+	(item['x-ss-certify'] === true ||
+		HTTP_METHODS.some((method) => isObject(item[method]) && item[method]['x-ss-certify'] === true));
+
+/**
+ * @typedef {{ ok: true, element: import('@ss/contracts').ManifestElement | undefined, resource: string | undefined, source: 'x-ss-certify' | 'first' }
+ *   | { ok: false, problem: string }} CertificationTarget
+ */
+
+/**
+ * The resource the key, gating, idempotency, pagination, control-event and offline checks run against. A product
+ * chooses it by marking the collection path `/v1/<resource>` (the path item or one of its operations) with
+ * `"x-ss-certify": true` in `openapi.json`; the resource must be in the `api.resources` of a Mode C element (the
+ * first such element is the one switched off and on). Without a mark: the first resource of the first Mode C
+ * element with `api.resources`. Several marked paths, or a mark on anything else, is a configuration error.
+ * @param {import('@ss/contracts').Manifest} manifest
+ * @param {Record<string, unknown>} openapiPaths `paths` of openapi.json (`{}` when absent)
+ * @returns {CertificationTarget}
+ */
+export const certificationTarget = (manifest, openapiPaths) => {
+	const modeC = manifest.elements.filter((element) => element.modes.includes('C') && (element.api?.resources?.length ?? 0) > 0);
+	const marked = Object.entries(openapiPaths)
+		.filter(([, item]) => marksCertify(item))
+		.map(([pathname]) => pathname);
+	if (marked.length === 0) {
+		const element = modeC[0];
+		return { ok: true, element, resource: element?.api?.resources?.[0], source: 'first' };
+	}
+	if (marked.length > 1)
+		return { ok: false, problem: `x-ss-certify is set on ${marked.length} paths (${marked.join(', ')}); mark one` };
+	const pathname = /** @type {string} */ (marked[0]);
+	const name = /^\/v1\/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$/.exec(pathname)?.[1];
+	const element = name === undefined ? undefined : modeC.find((candidate) => candidate.api?.resources?.includes(name));
+	if (!element || name === undefined)
+		return {
+			ok: false,
+			problem: `${pathname} is marked x-ss-certify but is not /v1/<resource> of a Mode C element's api.resources`,
+		};
+	return { ok: true, element, resource: name, source: 'x-ss-certify' };
+};
+
 /**
  * @typedef {object} CertifyOptions
  * @property {string} dir project directory (manifest, openapi.json)
@@ -500,10 +550,6 @@ export const runCertification = async ({
 		});
 
 		// Website keys
-		const resourceElement = manifest.elements.find(
-			(element) => element.modes.includes('C') && (element.api?.resources?.length ?? 0) > 0,
-		);
-		const resource = resourceElement?.api?.resources?.[0];
 		/** Every Mode C resource, in manifest order. */
 		const resources = [
 			...new Set(
@@ -512,6 +558,20 @@ export const runCertification = async ({
 		];
 		const openapi = await readJson(path.join(dir, 'openapi.json'));
 		const openapiPaths = openapi.ok && isObject(openapi.value) ? /** @type {any} */ (openapi.value.paths ?? {}) : {};
+		const target = certificationTarget(manifest, openapiPaths);
+		const resourceElement = target.ok ? target.element : undefined;
+		const resource = target.ok ? target.resource : undefined;
+		if (!target.ok) {
+			await check('certify.target', 'the certification resource (x-ss-certify) is a Mode C resource', async () => {
+				expect(false, target.problem);
+			});
+		} else if (resource) {
+			await check('certify.target', 'certification resource', async () =>
+				target.source === 'x-ss-certify'
+					? `/v1/${resource} of ${target.element?.key} (x-ss-certify)`
+					: `/v1/${resource} of ${target.element?.key} (first Mode C resource)`,
+			);
+		}
 		/** Resources with a collection read: documented `GET /v1/<resource>` (all of them when openapi.json is missing). */
 		const readable = resources.filter((name) => !openapi.ok || Boolean(openapiPaths[`/v1/${name}`]?.get));
 		/** Resources whose `GET /v1/<resource>` declares `x-ss-key-kind: "sk"` in openapi.json (pk_ must be refused). */

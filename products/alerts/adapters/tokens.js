@@ -8,7 +8,6 @@
  * - **Link tokens** (unsubscribe, double opt-in confirm): `<purpose>1.<payload>.<hmac>` over
  *   `{ w: websiteId, s: subscriptionId, k: contactKey, e: expiry }`, bound to one website and one purpose, compared in
  *   constant time. They authorise exactly one thing (stop / confirm alerts of that contact) and expire.
- * - **Claims** of a customer token app-kit already verified (bring-your-own identity), for the waitlist tier claim.
  * @module
  */
 import { createHash, createHmac, hkdfSync, randomBytes as nodeRandomBytes, timingSafeEqual } from 'node:crypto';
@@ -65,23 +64,6 @@ export const tokenSecret = ({ secret, signingKey }) => {
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
 	if (!material || material.length === 0) throw new Error('ALERTS_TOKEN_SECRET (≥ 32 chars) or SS_APP_SIGNING_KEY is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-alerts', 'link-token/v1', 32));
-};
-
-/**
- * Decode the payload of a compact JWS / JWT (no verification — only for a token app-kit has just verified).
- * @param {string | null} token
- * @returns {Record<string, unknown> | null}
- */
-export const unverifiedClaims = (token) => {
-	if (typeof token !== 'string' || token.length > 16_384) return null;
-	const payload = token.split('.')[1];
-	if (!payload) return null;
-	try {
-		const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-		return typeof claims === 'object' && claims !== null && !Array.isArray(claims) ? claims : null;
-	} catch {
-		return null;
-	}
 };
 
 /**

@@ -132,3 +132,48 @@ export const checkBundleAssets = (manifest, assets) => {
 	});
 	return errors;
 };
+
+const ELEMENT_KEY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const MODULE_REF = /^((?!\/)(?!.*\.\.)[A-Za-z0-9_./-]+\.m?js)#([A-Za-z_$][A-Za-z0-9_$]*)$/;
+const UI_ELEMENT_FIELDS = Object.freeze(['key', 'headless', 'renderer', 'strings']);
+
+/**
+ * Check the manifest part of a service product's **UI bundle** descriptor (F.16): the same `ss-pack-bundle@1`
+ * descriptor as packs, but `manifest` is only `{ product: { slug, version }, elements: [{ key, headless, renderer,
+ * strings? }] }` — the browser modules of the product's mode-A elements. Everything else about the elements comes
+ * from the product's accepted manifest (the compiler only uses a UI bundle for elements that manifest enables).
+ * @param {unknown} manifest
+ * @param {string} slug the product's registered slug
+ * @returns {FieldError[]}
+ */
+export const checkUiManifest = (manifest, slug) => {
+	/** @type {FieldError[]} */
+	const errors = [];
+	const at = '/descriptor/manifest';
+	if (!isObject(manifest)) return [{ path: at, message: 'manifest must be an object' }];
+	const { product, elements, ...rest } = manifest;
+	for (const key of Object.keys(rest)) errors.push({ path: `${at}/${key}`, message: 'unknown property' });
+	if (!isObject(product) || product.slug !== slug)
+		errors.push({ path: `${at}/product/slug`, message: `must be the product's slug ${slug}` });
+	else if (typeof product.version !== 'string' || product.version.length === 0 || product.version.length > 64)
+		errors.push({ path: `${at}/product/version`, message: 'version must be a string' });
+	if (!Array.isArray(elements) || elements.length === 0 || elements.length > 200)
+		return [...errors, { path: `${at}/elements`, message: 'elements must list 1..200 elements' }];
+	const seen = new Set();
+	elements.forEach((element, i) => {
+		const p = `${at}/elements/${i}`;
+		if (!isObject(element)) return void errors.push({ path: p, message: 'element must be an object' });
+		for (const key of Object.keys(element))
+			if (!UI_ELEMENT_FIELDS.includes(key)) errors.push({ path: `${p}/${key}`, message: 'unknown property' });
+		if (typeof element.key !== 'string' || element.key.length > 40 || !ELEMENT_KEY.test(element.key))
+			errors.push({ path: `${p}/key`, message: 'key must be an element key' });
+		else if (seen.has(element.key)) errors.push({ path: `${p}/key`, message: `duplicate element ${element.key}` });
+		else seen.add(element.key);
+		for (const field of /** @type {const} */ (['headless', 'renderer']))
+			if (typeof element[field] !== 'string' || !MODULE_REF.test(element[field]))
+				errors.push({ path: `${p}/${field}`, message: `${field} must be a module reference file.js#export` });
+		if (element.strings !== undefined && (typeof element.strings !== 'string' || !element.strings.endsWith('.json')))
+			errors.push({ path: `${p}/strings`, message: 'strings must be the path of a JSON asset' });
+	});
+	return errors;
+};

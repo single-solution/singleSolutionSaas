@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as I from '../../../src/modules/identity/core/inputs.js';
 import { linkFor } from '../../../src/modules/identity/core/links.js';
+import { DEFAULT_SCOPES, checkScopes, scopeCatalogue } from '../../../src/modules/identity/core/scopes.js';
 import {
 	claimsMatch,
 	expirySeconds,
@@ -111,7 +112,7 @@ describe('inputs: fields', () => {
 	});
 	it('scopes, domains, timestamps, ints, enums', () => {
 		expect(I.scopes(['events.publish', 'config.*', 'events.subscribe:order.*@1']).ok).toBe(true);
-		expect(I.scopes([]).ok).toBe(false);
+		expect(I.scopes([]).ok).toBe(true); // empty = the default scopes (checked on issue)
 		expect(I.scopes(Array(33).fill('a')).ok).toBe(false);
 		expect(I.scopes(['Bad Scope']).ok).toBe(false);
 		expect(I.scopes(['a', 'a']).ok).toBe(false);
@@ -178,7 +179,7 @@ describe('inputs: objects', () => {
 			['memberUpdate', { roles: ['admin'] }],
 			['ownerTransfer', { userId: 'usr_0123456789', password: 'p' }],
 			['website', { domain: 'a.example' }],
-			['keyIssue', { kind: 'sk', scopes: ['a'], expiresAt: '2030-01-01T00:00:00Z', allowSubdomains: false }],
+			['keyIssue', { kind: 'sk', scopes: ['events.write'], expiresAt: '2030-01-01T00:00:00Z', allowSubdomains: false }],
 			['keyRotate', undefined],
 			['keyRevoke', undefined],
 			['reason', { reason: 'r' }],
@@ -263,7 +264,7 @@ describe('key rules', () => {
 		websiteId: WEB,
 		kind: /** @type {const} */ ('sk'),
 		env: /** @type {const} */ ('live'),
-		scopes: ['a'],
+		scopes: ['events.write'],
 		allowSubdomains: false,
 		kid: 'k',
 		hint: 'sk_live_…abcdef',
@@ -392,6 +393,53 @@ describe('presentation', () => {
 		expect(presentParty({ _id: 'prt_1', name: 'P', email: 'e', status: 'active' }, 'partnerId')).toMatchObject({
 			partnerId: 'prt_1',
 			grants: [],
+		});
+	});
+});
+
+describe('website settings and the key scope vocabulary (F.16)', () => {
+	it('validates time zones (Intl), BCP 47 languages and ISO 4217 currencies, canonicalised', () => {
+		expect(I.timeZone('Europe/Berlin')).toEqual({ ok: true, value: 'Europe/Berlin' });
+		expect(I.timeZone('UTC')).toMatchObject({ ok: true });
+		expect(I.timeZone('Mars/Olympus').ok).toBe(false);
+		expect(I.timeZone('+01:00').ok).toBe(false);
+		expect(I.language('en-us')).toEqual({ ok: true, value: 'en-US' });
+		expect(I.language('de-CH')).toMatchObject({ ok: true });
+		expect(I.language('not a tag').ok).toBe(false);
+		expect(I.language('x'.repeat(40)).ok).toBe(false);
+		expect(I.currency('eur')).toEqual({ ok: true, value: 'EUR' });
+		expect(I.currency('EURO').ok).toBe(false);
+		expect(I.currency('ZZZ').ok).toBe(false);
+		expect(I.inputs.websiteSettings({ timeZone: 'Europe/Paris', currency: null })).toEqual({
+			ok: true,
+			value: { timeZone: 'Europe/Paris', currency: null },
+		});
+		expect(I.inputs.websiteSettings({}).ok).toBe(false);
+		expect(I.inputs.websiteSettings({ locale: 'en' }).ok).toBe(false);
+	});
+
+	it('builds the scope catalogue from products and checks requested scopes', () => {
+		const catalogue = scopeCatalogue([
+			{ slug: 'reviews', name: 'Reviews' },
+			{ slug: 'events', name: 'Clash' },
+			{ slug: 'chatbot' },
+		]);
+		expect(catalogue.map((e) => e.scope)).toEqual([
+			'elements.read',
+			'events.write',
+			'chatbot.read',
+			'chatbot.write',
+			'reviews.read',
+			'reviews.write',
+		]);
+		expect(checkScopes([], catalogue)).toEqual({ ok: true, value: [...DEFAULT_SCOPES] });
+		expect(checkScopes(['reviews.write', 'events.*', 'chatbot.*'], catalogue)).toMatchObject({ ok: true });
+		expect(checkScopes(['reviews.delete', 'graph.*', 'elements.read'], catalogue)).toEqual({
+			ok: false,
+			errors: [
+				{ path: '/scopes/0', message: 'reviews.delete is not a website-key scope' },
+				{ path: '/scopes/1', message: 'graph.* is not a website-key scope' },
+			],
 		});
 	});
 });

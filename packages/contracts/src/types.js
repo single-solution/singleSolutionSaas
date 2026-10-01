@@ -113,7 +113,7 @@
  * @property {'1'} ssps
  * @property {{ slug: string, name: string, kind: 'service' | 'pack', version: string, category: string, description?: string }} product
  * @property {{ base: string, dashboard?: string, demo?: string, events?: string, register?: string }} [endpoints]
- * @property {{ adminLaunch?: boolean, sandbox?: boolean, localEnforcement?: string[], offlineGrace?: string }} [capabilities]
+ * @property {{ adminLaunch?: boolean, identityIssuer?: boolean, sandbox?: boolean, localEnforcement?: string[], offlineGrace?: string }} [capabilities]
  * @property {string[]} [scopes]
  * @property {{ resources?: ResourceKind[] }} [requires]
  * @property {{ consumes?: string[], publishes?: string[] }} [events]
@@ -150,7 +150,15 @@
  * @property {Array<{ kind: ResourceKind, ref: string, status: 'connected' | 'missing' | 'failing' | 'revoked' }>} resources
  * @property {{ prefix: string }} dataScope
  * @property {IdentitySection} [identity] the website's own customer identity issuer (bring-your-own identity)
+ * @property {WebsiteSection} [website] website defaults filled by the Portal (time zone, language, currency)
  * @property {Array<{ element: string, variant: string }>} experiments
+ */
+
+/**
+ * @typedef {object} WebsiteSection website settings copied into every document of the website (all optional)
+ * @property {string} [timeZone] IANA time zone name, e.g. `Europe/Berlin`
+ * @property {string} [language] BCP-47 language tag, e.g. `en` or `pt-BR`
+ * @property {string} [currency] ISO-4217 code, e.g. `EUR`
  */
 
 /**
@@ -185,7 +193,8 @@
  * @property {string} idempotencyKey
  * @property {{ type: string, id?: string }} actor
  * @property {Record<string, unknown>} data
- * @property {{ element?: string } & Record<string, unknown>} [context]
+ * @property {{ element?: string, keyKind?: 'pk' | 'sk' } & Record<string, unknown>} [context] `keyKind` is set by the
+ *   Portal Event Hub on delivery (the kind of website key the event was ingested with); producers never set it
  */
 
 /**

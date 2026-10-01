@@ -15,7 +15,7 @@ export default async function ConsoleLayout({ children }) {
 	}
 	const api = await consoleApi();
 	const [frame, impersonation] = await Promise.all([
-		session.merchantId ? loadFrame(api, session.merchantId) : { websites: [], meter: null },
+		session.merchantId ? loadFrame(api, session.merchantId) : { websites: [], meter: null, notifications: [] },
 		loadImpersonation(api),
 	]);
 	return (
@@ -24,6 +24,7 @@ export default async function ConsoleLayout({ children }) {
 			merchantId={session.merchantId}
 			websites={frame.websites}
 			meter={frame.meter}
+			notifications={frame.notifications}
 			impersonation={impersonation}>
 			{children}
 		</ConsoleShell>

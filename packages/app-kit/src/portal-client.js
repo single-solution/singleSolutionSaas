@@ -27,6 +27,25 @@ import { isObject, kitError } from './util.js';
  * @property {(event: Record<string, unknown>) => Promise<unknown>} publishEvent send one complete envelope (as a batch of one)
  * @property {(events: Record<string, unknown>[]) => Promise<unknown>} publishEvents send complete envelopes `{ events: [...] }`
  * @property {(input: { websiteId: string, kind: ResourceKind }) => Promise<ResolvedResource>} resolveResource
+ * @property {(input: IdentityIssuerRequest) => Promise<IdentityIssuerStatus>} requestIdentityIssuer ask to become the
+ *   website's identity issuer (`PUT /v1/product/websites/:websiteId/identity`): `pending` until the merchant approves,
+ *   `active` when the request equals the website's active issuer (safe to repeat)
+ */
+
+/**
+ * A request to become a website's identity issuer (bring-your-own identity). Give exactly one of `jwksUrl` and
+ * `publicJwks`; the product's manifest must declare `capabilities.identityIssuer: true` and the website must have an
+ * active subscription to the product.
+ * @typedef {object} IdentityIssuerRequest
+ * @property {string} websiteId
+ * @property {string} issuer the tokens' `iss`
+ * @property {string | null} [jwksUrl] where the Portal fetches the public keys (must yield a usable key now)
+ * @property {Record<string, unknown>[] | null} [publicJwks] inline public keys instead of a JWKS URL
+ * @property {string | null} [audience] the tokens' `aud`, when checked
+ * @property {{ subject?: string, email?: string, phone?: string }} [claimMap] claim names (default `{ subject: 'sub' }`)
+ */
+/**
+ * @typedef {{ status: 'pending', request: Record<string, any> } | { status: 'active', issuer: Record<string, any> }} IdentityIssuerStatus
  */
 
 /**
@@ -73,7 +92,7 @@ export const createPortalClient = ({
 	};
 
 	/**
-	 * @param {'GET' | 'POST'} method
+	 * @param {'GET' | 'POST' | 'PUT'} method
 	 * @param {string} path
 	 * @param {{ body?: unknown, signed?: boolean, headers?: Record<string, string> }} [options]
 	 * @returns {Promise<any>}
@@ -176,6 +195,18 @@ export const createPortalClient = ({
 				throw kitError('portal_error', 'resource descriptor is malformed');
 			}
 			return /** @type {ResolvedResource} */ (json);
+		},
+		requestIdentityIssuer: async ({ websiteId, ...input }) => {
+			if (typeof websiteId !== 'string' || websiteId.length === 0)
+				throw kitError('invalid_argument', 'requestIdentityIssuer needs a websiteId');
+			const body = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+			const json = expectObject(
+				await call('PUT', `/v1/product/websites/${encodeURIComponent(websiteId)}/identity`, { body }),
+				'identity issuer',
+			);
+			if (json.status === 'pending' && isObject(json.request)) return { status: 'pending', request: json.request };
+			if (json.status === 'active' && isObject(json.issuer)) return { status: 'active', issuer: json.issuer };
+			throw kitError('portal_error', 'identity issuer response is malformed');
 		},
 	});
 };

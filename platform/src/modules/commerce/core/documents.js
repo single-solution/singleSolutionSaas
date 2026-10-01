@@ -77,11 +77,57 @@ export const quotaWatch = (quotas, resolved) =>
 export const quotaCrossed = (watch, usedByKey) => watch.some((q) => !q.blocked && (usedByKey[q.key] ?? 0) >= q.limit);
 
 /**
- * Content hash of a document: the resolver's hash, extended with the website's identity section when there is one (a
- * changed issuer or rotated issuer key bumps the version; documents without identity keep the resolver's hash).
+ * Content hash of a document: the resolver's hash, extended with the website's identity section and its `website`
+ * settings section (F.16) when present (a changed issuer, rotated issuer key or changed website setting bumps the
+ * version; documents without either keep the resolver's hash, and identity-only documents keep their former hash).
  * @param {string} resolvedHash `resolveEntitlement(...).contentHash`
  * @param {unknown} identity the document's `identity` section, or null
+ * @param {Record<string, unknown> | null} [website] the document's `website` section, or null
  * @returns {string}
  */
-export const documentHash = (resolvedHash, identity) =>
-	identity ? sha256Hex(`${resolvedHash}\nidentity:${stableStringify(identity)}`) : resolvedHash;
+export const documentHash = (resolvedHash, identity, website = null) => {
+	if (!identity && !website) return resolvedHash;
+	const parts = [resolvedHash];
+	if (identity) parts.push(`identity:${stableStringify(identity)}`);
+	if (website) parts.push(`website:${stableStringify(website)}`);
+	return sha256Hex(parts.join('\n'));
+};
+
+/**
+ * The `website` section of a website's documents: its set settings only, or null when none is set.
+ * @param {{ timeZone?: string | null, language?: string | null, currency?: string | null } | null | undefined} website
+ * @returns {{ timeZone?: string, language?: string, currency?: string } | null}
+ */
+export const websiteSection = (website) => {
+	/** @type {{ timeZone?: string, language?: string, currency?: string }} */
+	const out = {};
+	if (typeof website?.timeZone === 'string') out.timeZone = website.timeZone;
+	if (typeof website?.language === 'string') out.language = website.language;
+	if (typeof website?.currency === 'string') out.currency = website.currency;
+	return Object.keys(out).length > 0 ? out : null;
+};
+
+/**
+ * Which resource kinds a subscription needs (F.16): product-level `requires.resources` always; an element's kinds
+ * only while that element is on (enabled, or configured on but blocked because a resource is missing).
+ * @param {{ requires?: { resources?: readonly string[] }, elements: ReadonlyArray<{ key: string, requires?: { resources?: readonly string[] } }> }} manifest
+ * @param {Record<string, { enabled: boolean, reason?: string | null }>} elements resolved element states
+ * @returns {Array<{ kind: string, scope: 'product' | 'element', elements: string[], neededNow: boolean }>}
+ */
+export const resourceNeeds = (manifest, elements) => {
+	/** @type {Map<string, { kind: string, scope: 'product' | 'element', elements: string[], neededNow: boolean }>} */
+	const out = new Map();
+	for (const kind of manifest.requires?.resources ?? [])
+		out.set(kind, { kind, scope: 'product', elements: [], neededNow: true });
+	for (const element of manifest.elements) {
+		const state = elements[element.key];
+		const on = state?.enabled === true || state?.reason === 'resource_missing';
+		for (const kind of element.requires?.resources ?? []) {
+			const entry = out.get(kind) ?? { kind, scope: /** @type {const} */ ('element'), elements: [], neededNow: false };
+			entry.elements.push(element.key);
+			if (on) entry.neededNow = true;
+			out.set(kind, entry);
+		}
+	}
+	return [...out.values()].sort((a, b) => (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0));
+};

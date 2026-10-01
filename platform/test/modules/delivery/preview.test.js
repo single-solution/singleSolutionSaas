@@ -163,6 +163,29 @@ describe('preview sessions', () => {
 		expect(doc.body.className).toBe('home');
 	});
 
+	it('a dedicated PREVIEW_ORIGIN serves previews (merchant scripts allowed, still sandboxed) and nothing else (F.16)', async () => {
+		const up = upstream();
+		const t = await boot({ env: { PREVIEW_ORIGIN: 'https://preview.example-previews.test' }, delivery: { fetch: up.fetch } });
+		const created = await t.request('POST', `${SITE}/preview`, {
+			cookie: await t.cookie(),
+			body: { path: '/', elements: [{ appId: PACK, key: 'bar' }] },
+		});
+		expect(created.json.url).toMatch(/^https:\/\/preview\.example-previews\.test\/p\//);
+		const path = new URL(created.json.url).pathname;
+		// the Portal host refuses previews once the dedicated origin is configured
+		problemOf(await t.request('GET', path), 422, 'delivery_preview_refused');
+		const page = await t.portal.handle(new Request(`https://preview.example-previews.test${path}`));
+		expect(page.status).toBe(200);
+		const csp = String(page.headers.get('content-security-policy'));
+		expect(csp).toMatch(/^sandbox allow-scripts allow-same-origin /);
+		expect(csp).toContain("script-src https: 'unsafe-inline'");
+		expect(csp).not.toContain('nonce-');
+		expect(await page.text()).toContain('__ssr.start(');
+		// the preview host serves nothing but /p/*
+		for (const other of ['/v1/system/info', `/w/${W1}/loader.js`, '/cron/drain'])
+			expect((await t.portal.handle(new Request(`https://preview.example-previews.test${other}`))).status).toBe(404);
+	});
+
 	it('refuses redirects off the website, private addresses, non-HTML and failures', async () => {
 		/** @type {(url: string) => any} */
 		let respond = () => ({});

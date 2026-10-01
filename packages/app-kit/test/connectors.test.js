@@ -82,7 +82,9 @@ describe('S3 storage adapter', () => {
 	it('scopes keys to <prefix><slug>/<websiteId>/ and presigns PUT/GET', () => {
 		const storage = createS3Storage({ descriptor, websiteId: WEBSITE, slug: 'coupon-box', send: noSend, now: () => AWS_NOW });
 		const put = storage.presignPut({ key: 'img/a b.png', contentType: 'image/png', expiresIn: 120 });
-		expect(put.key).toBe(`site/coupon-box/${WEBSITE}/img/a b.png`);
+		expect(put.key).toBe('img/a b.png');
+		expect(storage.fullKey(put.key)).toBe(`site/coupon-box/${WEBSITE}/img/a b.png`);
+		expect(storage.keyFor('img/a b.png')).toBe(storage.fullKey('img/a b.png'));
 		expect(
 			put.url.startsWith(`https://merchant-bucket.s3.eu-central-1.amazonaws.com/site/coupon-box/${WEBSITE}/img/a%20b.png?`),
 		).toBe(true);
@@ -90,11 +92,42 @@ describe('S3 storage adapter', () => {
 		expect(put.headers).toEqual({ 'content-type': 'image/png' });
 		expect(put.expiresAt).toBe('2013-05-24T00:02:00.000Z');
 		const get = storage.presignGet({ key: 'img/a.png', downloadName: 'a"b.png' });
+		expect(get.key).toBe('img/a.png');
+		expect(new URL(get.url).pathname).toBe(`/site/coupon-box/${WEBSITE}/img/a.png`);
 		expect(new URL(get.url).searchParams.get('response-content-disposition')).toBe('attachment; filename="a_b.png"');
 		for (const key of ['', '/abs', 'a/../b', 'a//b', './a', 'a\\b', 'a\u0000b', 'x'.repeat(901)]) {
-			expect(() => storage.keyFor(key)).toThrow();
+			expect(() => storage.fullKey(key)).toThrow();
 		}
+		// an absolute key handed back is refused rather than prefixed twice
+		expect(() => storage.presignGet({ key: storage.fullKey('img/a.png') })).toThrow(/relative object key/);
 		expect(() => storage.presignGet({ key: 'a', expiresIn: 10 ** 7 })).toThrow();
+	});
+
+	it('signs content-length (and content-type) into presigned PUTs', () => {
+		const storage = createS3Storage({ descriptor, websiteId: WEBSITE, slug: 'reviews', send: noSend, now: () => AWS_NOW });
+		const put = storage.presignPut({ key: 'photos/p1', contentType: 'image/jpeg', contentLength: 48_211 });
+		expect(put).toMatchObject({
+			method: 'PUT',
+			key: 'photos/p1',
+			headers: { 'content-type': 'image/jpeg', 'content-length': '48211' },
+		});
+		const url = new URL(put.url);
+		expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
+		expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
+		// the signature binds the size: another length signs differently
+		const other = storage.presignPut({ key: 'photos/p1', contentType: 'image/jpeg', contentLength: 48_212 });
+		expect(new URL(other.url).searchParams.get('X-Amz-Signature')).not.toBe(url.searchParams.get('X-Amz-Signature'));
+		const sizeOnly = storage.presignPut({ key: 'photos/p2', contentLength: 1 });
+		expect(sizeOnly.headers).toEqual({ 'content-length': '1' });
+		expect(new URL(sizeOnly.url).searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;host');
+		for (const contentLength of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '10']) {
+			expect(() => storage.presignPut({ key: 'k', contentLength: /** @type {any} */ (contentLength) })).toThrow(
+				/contentLength/,
+			);
+		}
+		for (const contentType of ['', 'image', 'text/plain\r\nx-evil: 1', 42]) {
+			expect(() => storage.presignPut({ key: 'k', contentType: /** @type {any} */ (contentType) })).toThrow(/contentType/);
+		}
 	});
 
 	it('supports custom endpoints (path and virtual-hosted style)', () => {

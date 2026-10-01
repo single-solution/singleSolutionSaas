@@ -62,7 +62,7 @@ import { SCHEMAS } from './settings.js';
  */
 /**
  * @typedef {{ ok: true, status: number, value: any }
- *   | { ok: false, code: string, detail?: string, retryAfter?: number, errors?: Array<{ path: string, code: string, message: string }> }} Outcome
+ *   | { ok: false, code: string, detail?: string, retryAfter?: number, extensions?: Record<string, unknown>, errors?: Array<{ path: string, code: string, message: string }> }} Outcome
  */
 
 /** How long cached secrets and keys are reused before the database is read again. */
@@ -78,7 +78,7 @@ const RETAIN_MS = SCHEMAS.sessions.properties.access_ttl_minutes.maximum * MINUT
 const ok = (status, value) => ({ ok: true, status, value });
 /**
  * @param {string} code
- * @param {{ detail?: string, retryAfter?: number, errors?: Array<{ path: string, code: string, message: string }> }} [extra]
+ * @param {{ detail?: string, retryAfter?: number, extensions?: Record<string, unknown>, errors?: Array<{ path: string, code: string, message: string }> }} [extra]
  * @returns {Outcome}
  */
 const fail = (code, extra = {}) => ({ ok: false, code, ...extra });
@@ -90,10 +90,13 @@ const fail = (code, extra = {}) => ({ ok: false, code, ...extra });
  *   publish: (event: { websiteId: string, type: string, data: Record<string, unknown>, idempotencyKey: string }) => Promise<unknown>,
  *   recordUsage: (usage: { websiteId: string, unit: string, quantity: number, idempotencyKey: string }) => Promise<unknown>,
  *   audit: (entry: Record<string, unknown>) => Promise<unknown>,
+ *   requestIssuer?: (input: { websiteId: string, issuer: string, jwksUrl: string, audience: string,
+ *     claimMap: Record<string, string> }) => Promise<{ status: 'pending' | 'active' }>,
  *   log?: { warn?: (message: string, fields?: Record<string, unknown>) => void, error?: (message: string, fields?: Record<string, unknown>) => void },
- * }} deps
+ * }} deps `requestIssuer` is app-kit `product.portal.requestIdentityIssuer` (ask the Portal to make Signups the
+ *   website's identity issuer; the merchant approves)
  */
-export const createSignupsService = ({ app, messenger, publish, recordUsage, audit, log }) => {
+export const createSignupsService = ({ app, messenger, publish, recordUsage, audit, requestIssuer, log }) => {
 	const { now, sealer } = app;
 	const iso = (/** @type {number} */ ms = now()) => new Date(ms).toISOString();
 	/** @type {Map<string, { pepper: Buffer, at: number }>} */
@@ -490,11 +493,14 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		if (!challenge || challenge.kind !== 'otp') return fail('code_invalid');
 		if (challenge.consumedAt) return fail(challenge.consumedReason === 'exhausted' ? 'attempts_exhausted' : 'code_invalid');
 		if (challenge.expiresAt.getTime() <= now()) return fail('code_expired');
-		const remaining = (/** @type {number} */ attempts) => ({
-			errors: [
-				{ path: '/code', code: 'attempts_remaining', message: String(attemptsRemaining(attempts, challenge.maxAttempts)) },
-			],
-		});
+		const remaining = (/** @type {number} */ attempts) => {
+			const left = attemptsRemaining(attempts, challenge.maxAttempts);
+			return {
+				// RFC 9457 extension member; `errors[0]` keeps the v1 shape for existing clients
+				extensions: { attemptsRemaining: left },
+				errors: [{ path: '/code', code: 'attempts_remaining', message: String(left) }],
+			};
+		};
 		const code = normaliseCode(body.code, { length: challenge.codeLength, alphabet: challenge.codeAlphabet });
 		if (!code) return fail('code_invalid', remaining(challenge.attempts));
 		const reserved = await site.repos.challenges.reserveAttempt(challengeId, new Date(now()));
@@ -1415,6 +1421,30 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 	};
 
 	/**
+	 * What to register as the website's identity issuer (the body of the Portal's identity PUTs).
+	 * @param {Site} site
+	 */
+	const registration = (site) => ({
+		issuer: issuerOf(site),
+		jwksUrl: jwksUrlFor(app.base, site.websiteId),
+		audience: audienceOf(site),
+		claimMap: { subject: 'sub', email: 'email', phone: 'phone_number' },
+	});
+
+	/**
+	 * The last issuer request sent to the Portal, when it still matches what would be registered now.
+	 * @param {Site} site
+	 * @param {ReturnType<typeof registration>} body
+	 * @returns {Promise<{ status: string, requestedAt: string } | null>}
+	 */
+	const lastRequest = async (site, body) => {
+		const stored = /** @type {Record<string, any> | null} */ (await site.repos.issuerRequest.get());
+		return stored && stored.issuer === body.issuer && stored.jwksUrl === body.jwksUrl && stored.audience === body.audience
+			? { status: String(stored.status), requestedAt: String(stored.requestedAt) }
+			: null;
+	};
+
+	/**
 	 * The issuer of a website and how to register it in the Portal.
 	 * @param {Site} site
 	 */
@@ -1422,10 +1452,8 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		const records = await keysOf(site);
 		const published = publishedKeys(records, now(), RETAIN_MS);
 		const current = signingKey(records, now());
-		const iss = issuerOf(site);
-		const jwksUrl = jwksUrlFor(app.base, site.websiteId);
-		const claimMap = { subject: 'sub', email: 'email', phone: 'phone_number' };
-		const audience = audienceOf(site);
+		const body = registration(site);
+		const { issuer: iss, jwksUrl, audience, claimMap } = body;
 		return {
 			issuer: iss,
 			jwksUrl,
@@ -1435,12 +1463,63 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 			algorithm: 'EdDSA',
 			keys: published.map((k) => ({ kid: k.kid, activatesAt: iso(k.activatesAt), signing: k === current })),
 			registered: site.doc?.identity?.issuer === iss,
+			request: await lastRequest(site, body),
 			portal: {
 				method: 'PUT',
 				path: `/v1/merchants/${site.merchantId}/websites/${site.websiteId}/identity`,
-				body: { issuer: iss, jwksUrl, audience, claimMap },
+				body,
 			},
 		};
+	};
+
+	/**
+	 * Ask the Portal to make Signups the website's identity issuer (`PUT /v1/product/websites/:websiteId/identity`
+	 * through app-kit). The Portal keeps it pending until the merchant approves (202 `pending`) and answers `active`
+	 * once the same issuer is registered, so repeating is safe. The outcome is recorded for the dashboard.
+	 * @param {Site} site
+	 * @param {{ actor: { type: string, id?: string } }} context
+	 * @returns {Promise<Outcome>}
+	 */
+	const registerIssuer = async (site, { actor }) => {
+		if (!requestIssuer) return fail('unavailable', { detail: 'The Portal client is not configured.' });
+		const body = registration(site);
+		/** @type {{ status: 'pending' | 'active' }} */
+		let answer;
+		try {
+			answer = await requestIssuer({ websiteId: site.websiteId, ...body });
+		} catch (error) {
+			const { code, details } = /** @type {{ code?: string, details?: { status?: number } }} */ (error);
+			log?.warn?.('identity issuer request failed', { websiteId: site.websiteId, code, status: details?.status });
+			if (details?.status === 403)
+				return fail('forbidden', {
+					detail: 'The Portal refused the request (no active subscription, or the manifest lacks identityIssuer).',
+				});
+			if (details?.status === 429) return fail('rate_limited', { detail: 'The Portal is rate limiting issuer requests.' });
+			return fail(code === 'portal_timeout' || code === 'portal_unreachable' ? 'unavailable' : 'upstream_error', {
+				detail: 'The Portal could not take the identity issuer request; try again later.',
+			});
+		}
+		const requestedAt = iso();
+		await site.repos.issuerRequest.save({
+			issuer: body.issuer,
+			jwksUrl: body.jwksUrl,
+			audience: body.audience,
+			status: answer.status,
+			requestedAt,
+		});
+		await audit({
+			websiteId: site.websiteId,
+			actor,
+			action: 'issuer.registration_requested',
+			target: { type: 'website', id: site.websiteId },
+			after: { issuer: body.issuer, status: answer.status },
+		});
+		return ok(answer.status === 'pending' ? 202 : 200, {
+			status: answer.status,
+			registered: answer.status === 'active',
+			issuer: body.issuer,
+			requestedAt,
+		});
 	};
 
 	/**
@@ -1458,7 +1537,29 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 	};
 
 	/**
-	 * Daily maintenance of one website: due deletions, key rotation and pruning.
+	 * Daily: ask the Portal once to make Signups the website's issuer, while it is not registered and no request was
+	 * sent yet for the current issuer configuration (a rejected request is not repeated on its own; `POST
+	 * /v1/issuer:register` or the dashboard asks again). Best effort: a failure is logged and retried the next day.
+	 * @param {Site} site
+	 * @returns {Promise<number>} 1 when a request was sent
+	 */
+	const autoRegisterIssuer = async (site) => {
+		if (!requestIssuer || !site.settings.enabled('sessions') || site.doc?.identity?.issuer === issuerOf(site)) return 0;
+		try {
+			if (await lastRequest(site, registration(site))) return 0;
+			const outcome = await registerIssuer(site, { actor: { type: 'system', id: 'maintenance' } });
+			return outcome.ok ? 1 : 0;
+		} catch (error) {
+			log?.warn?.('identity issuer request failed', {
+				websiteId: site.websiteId,
+				error: /** @type {Error} */ (error)?.message,
+			});
+			return 0;
+		}
+	};
+
+	/**
+	 * Daily maintenance of one website: due deletions, key rotation and pruning, the issuer request.
 	 * @param {Site} site
 	 */
 	const maintain = async (site) => {
@@ -1471,12 +1572,14 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 			prunable.map((record) => record.generation),
 		);
 		if (pruned > 0) keyCache.delete(site.websiteId);
-		return { deletions, rotated: records.length > before ? 1 : 0, pruned };
+		const issuerRequested = await autoRegisterIssuer(site);
+		return { deletions, rotated: records.length > before ? 1 : 0, pruned, issuerRequested };
 	};
 
 	return Object.freeze({
 		jwks,
 		issuer,
+		registerIssuer,
 		rotateKeys,
 		requestChallenge,
 		verifyCode,

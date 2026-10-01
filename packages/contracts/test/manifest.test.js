@@ -19,6 +19,14 @@ describe('manifest schema', () => {
 		expect(validateManifest(packManifest()).ok).toBe(true);
 	});
 
+	it('accepts capabilities.identityIssuer (a product asking to become a website identity issuer)', () => {
+		for (const identityIssuer of [true, false]) {
+			const m = manifest();
+			m.capabilities.identityIssuer = identityIssuer;
+			expect(validateManifest(m)).toMatchObject({ ok: true });
+		}
+	});
+
 	it('is frozen and priced in integer millicredits', () => {
 		expect(Object.isFrozen(manifestSchema)).toBe(true);
 		expect(MILLICREDITS_PER_CREDIT).toBe(1000);
@@ -41,6 +49,7 @@ describe('manifest schema', () => {
 		['unknown mode', (m) => (m.elements[0].modes = ['D']), '/elements/0/modes/0', 'enum'],
 		['service without endpoints', (m) => delete m.endpoints, '/endpoints', 'required'],
 		['http endpoint', (m) => (m.endpoints.base = 'http://coupons.example.dev'), '/endpoints/base', 'pattern'],
+		['non-boolean identityIssuer', (m) => (m.capabilities.identityIssuer = 'yes'), '/capabilities/identityIssuer', 'type'],
 		['unknown resource', (m) => (m.requires.resources = ['mainframe']), '/requires/resources/0', 'enum'],
 		['bad retention duration', (m) => (m.retention.redemptions = '365 days'), '/retention/redemptions', 'format'],
 		[
@@ -170,12 +179,16 @@ describe('manifest semantics', () => {
 		);
 	});
 
-	it('requires element resources to be declared at product level', () => {
-		expectRule(
-			semantic((m) => (m.elements[0].requires.resources = ['ai'])),
-			MANIFEST_RULES.undeclaredResource,
-			'/elements/0/requires/resources/0',
-		);
+	it('accepts element resources on their own: product-level resources mean "always required"', () => {
+		expect(semantic((m) => (m.elements[0].requires.resources = ['ai']))).toEqual([]);
+		expect(
+			semantic((m) => {
+				delete m.requires;
+				m.elements[0].requires.resources = ['database', 'messaging'];
+			}),
+		).toEqual([]);
+		expect(semantic((m) => (m.requires.resources = ['database', 'storage']))).toEqual([]);
+		expect(MANIFEST_RULES.undeclaredResource).toBe('undeclaredResource');
 	});
 
 	it('checks plans: codes, elements and dependency closure', () => {

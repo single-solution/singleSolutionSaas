@@ -6,3 +6,4 @@ export const GET = forward('GET');
 export const POST = forward('POST');
 export const PATCH = forward('PATCH');
 export const DELETE = forward('DELETE');
+export const OPTIONS = forward('OPTIONS');

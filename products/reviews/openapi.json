@@ -1364,7 +1364,7 @@
 			"post": {
 				"operationId": "createPhotoUpload",
 				"tags": ["photos"],
-				"summary": "A presigned upload to the merchant's own bucket: PUT the bytes with the returned headers, then pass the id in photoIds. Type and size are checked again (HEAD) when the review is submitted. pk_ (SS-Identity or token) or sk_.",
+				"summary": "A presigned upload to the merchant's own bucket: PUT exactly `size` bytes with the returned headers (content-type and content-length are signed, so the bucket refuses another type or size; browsers set content-length from the body), then pass the id in photoIds. Type and size are checked again (HEAD) when the review is submitted. pk_ (SS-Identity or token) or sk_.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKey"
@@ -1402,7 +1402,8 @@
 										"method": "PUT",
 										"url": "https://bucket.example.com/reviews/web_1/photos/rph_0mf2k3x1rabcdefghjkmnpqr?X-Amz-Signature=abc",
 										"headers": {
-											"content-type": "image/jpeg"
+											"content-type": "image/jpeg",
+											"content-length": "482113"
 										}
 									},
 									"expiresAt": "2026-10-01T10:10:00.000Z",
@@ -4261,7 +4262,8 @@
 					},
 					"size": {
 						"type": "integer",
-						"minimum": 1
+						"minimum": 1,
+						"description": "exact byte length of the photo (at most the configured max_photo_bytes); signed into the upload as content-length"
 					},
 					"token": {
 						"type": "string"

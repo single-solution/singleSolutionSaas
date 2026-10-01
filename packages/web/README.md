@@ -52,7 +52,7 @@ ss.identify({ token: siteLoginJwt }); // bring-your-own identity (§5.3); `null`
 - **Page hide**: on `pagehide` and `visibilitychange → hidden` the queue goes to `navigator.sendBeacon` in chunks of
   ≤ `beaconMaxBytes` (60 kB) as `text/plain` (no CORS preflight). Beacons cannot carry headers, so the body is
   `{ key, identity?, events }` — **the ingest endpoint must accept both header and body authentication.**
-- **Consent**: every event has a category — `customer.* cart.* order.* inventory.* price.* file.*` are `necessary`
+- **Consent**: every event has a category — `customer.* cart.* order.* inventory.* price.* file.*` and `item.created|updated|deleted` are `necessary`
   (always granted), everything else `analytics`; override with `categories: { 'chat.*': 'functional' }` or per call
   `{ category }`. Events of non-granted categories are dropped, and revoking a category purges its queued events.
   Anonymous and session ids are persisted only while `analytics` is granted (otherwise they live for the page only).

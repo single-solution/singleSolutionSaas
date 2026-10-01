@@ -5,7 +5,7 @@ import { noopLogger } from '@ss/app-kit';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform, loadManifest, loadStrings } from '../adapters/platform.js';
 import { createSiteRegistry } from '../adapters/registry.js';
-import { createTokens, randomId, stableId, tokenSecret, unverifiedClaims } from '../adapters/tokens.js';
+import { createTokens, randomId, stableId, tokenSecret } from '../adapters/tokens.js';
 import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
 import { fromServer } from '../api/events.js';
 import { escapeHtml } from '../api/pages.js';
@@ -231,11 +231,6 @@ describe('adapters', () => {
 		expect(() => tokenSecret({ secret: 'short', signingKey: null })).toThrow(/ALERTS_TOKEN_SECRET/);
 		expect(randomId('als')).toMatch(/^als_[0-9a-z]{26}$/);
 		expect(stableId('alm', 'k')).toBe(stableId('alm', 'k'));
-		expect(unverifiedClaims(`h.${Buffer.from('{"tier":"gold"}').toString('base64url')}.s`)).toEqual({ tier: 'gold' });
-		expect(unverifiedClaims('h.bm9wZQ.s')).toBeNull();
-		expect(unverifiedClaims(`h.${Buffer.from('[1]').toString('base64url')}.s`)).toBeNull();
-		expect(unverifiedClaims('nodots')).toBeNull();
-		expect(unverifiedClaims(null)).toBeNull();
 	});
 
 	it('remembers websites in the control database', async () => {

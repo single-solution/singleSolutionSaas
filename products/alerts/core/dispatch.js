@@ -77,14 +77,24 @@ export const capCounters = (contactKey, now, settings) => [
 export const backoffMs = (attempt, baseMinutes) =>
 	Math.min(24 * HOUR_MS, Math.max(1, baseMinutes) * MINUTE_MS * 2 ** Math.max(0, Math.min(20, attempt - 1)));
 
+/** Failure codes that never succeed on retry: configuration errors, a refused message, an unsupported channel. */
+const NOT_RETRYABLE = new Set([
+	'not_implemented',
+	'resource_invalid',
+	'invalid_argument',
+	'provider_refused',
+	'channel_unsupported',
+]);
+
 /**
  * Whether a provider failure is worth retrying: network trouble, timeouts, 408/425/429 and 5xx are; other 4xx answers
- * (bad address, refused content) and configuration errors are not.
+ * (bad address, refused content), permanent SMTP refusals (5xx reply → `provider_refused` without HTTP status) and
+ * configuration errors are not.
  * @param {{ code?: string, status?: number }} failure
  */
 export const isRetryable = ({ code, status }) => {
 	if (typeof status === 'number' && status > 0) return status === 408 || status === 425 || status === 429 || status >= 500;
-	return code !== 'not_implemented' && code !== 'resource_invalid' && code !== 'invalid_argument';
+	return !NOT_RETRYABLE.has(code ?? '');
 };
 
 /**

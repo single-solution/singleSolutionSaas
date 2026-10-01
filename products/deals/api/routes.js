@@ -116,37 +116,15 @@ export const buildRoutes = (deals) => {
 		});
 
 	/**
-	 * The configured per-website rate limit (`quote_api.rate_per_minute`): headers for the response, or a 429 problem.
-	 * @param {any} ctx
-	 * @param {Site} s
-	 * @returns {Promise<{ headers: Record<string, string>, limited: unknown | null }>}
+	 * The configured per-website quote rate (`quote_api.rate_per_minute`) as an app-kit dynamic route limit: one window
+	 * per website shared by the quote, offers and price-lock routes (429 problem with `RateLimit-*` / `Retry-After`).
 	 */
-	const rateLimit = async (ctx, s) => {
-		const limit = s.settings.quote.rate_per_minute;
-		try {
-			const { count, resetAt } = await product.context.stores.rateLimits.hit(
-				`deals.quote|w:${s.websiteId}`,
-				RATE_WINDOW_MS,
-				app.now(),
-			);
-			const reset = Math.max(0, Math.ceil((resetAt - app.now()) / 1000));
-			const headers = {
-				'ratelimit-limit': String(limit),
-				'ratelimit-remaining': String(Math.max(0, limit - count)),
-				'ratelimit-reset': String(reset),
-			};
-			if (count > limit)
-				return {
-					headers,
-					limited: problem('rate_limited', 'Too many quotes for this website.', {
-						headers: { ...headers, 'retry-after': String(Math.max(1, reset)) },
-					}),
-				};
-			return { headers, limited: null };
-		} catch {
-			return { headers: {}, limited: null }; // a failing limiter store never blocks checkout
-		}
-	};
+	const quoteRate = Object.freeze({
+		windowMs: RATE_WINDOW_MS,
+		bucket: 'deals.quote',
+		/** @param {any} ctx */
+		limit: (ctx) => settingsForDoc(product, ctx.entitlement.doc).quote.rate_per_minute,
+	});
 
 	/** @param {Site} s */
 	const dealValidator = (s) => (/** @type {unknown} */ input) => validateDeal(input, s.settings.dealRules);
@@ -292,15 +270,14 @@ export const buildRoutes = (deals) => {
 			method: 'POST',
 			path: '/v1/quotes',
 			...website('quote_api', null),
+			rateLimit: quoteRate,
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const { headers, limited } = await rateLimit(ctx, s);
-				if (limited) return limited;
 				const problems = validateQuote(ctx.body, { maxLines: s.settings.quote.max_lines });
 				if (problems.length > 0) return invalid(problems);
 				const result = await service.quote(s, ctx.body, { customer: customerOf(ctx, s) });
 				if (!result.ok) return failure(result);
-				return created(result.quote, { location: `/v1/quotes/${result.quote.id}`, headers });
+				return created(result.quote, { location: `/v1/quotes/${result.quote.id}` });
 			},
 		}),
 		defineRoute({
@@ -417,6 +394,7 @@ export const buildRoutes = (deals) => {
 			method: 'GET',
 			path: '/v1/offers',
 			...website('badges', null),
+			rateLimit: quoteRate,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const refs = String(ctx.query.items ?? '')
@@ -432,23 +410,20 @@ export const buildRoutes = (deals) => {
 				if (refs.length === 0) return ok({ currency: body.currency ?? null, items: [], missing: [] });
 				const problems = validateOffers(body, { maxItems: s.settings.quote.max_lines });
 				if (problems.length > 0) return invalid(problems);
-				const { headers, limited } = await rateLimit(ctx, s);
-				if (limited) return limited;
-				return ok(await service.offers(s, body, { customer: customerOf(ctx, s), meter: ctx.requestId }), { headers });
+				return ok(await service.offers(s, body, { customer: customerOf(ctx, s), meter: ctx.requestId }));
 			},
 		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/offers:evaluate',
 			...website('badges', null),
+			rateLimit: quoteRate,
 			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateOffers(ctx.body, { maxItems: s.settings.quote.max_lines });
 				if (problems.length > 0) return invalid(problems);
-				const { headers, limited } = await rateLimit(ctx, s);
-				if (limited) return limited;
-				return ok(await service.offers(s, ctx.body, { customer: customerOf(ctx, s), meter: ctx.requestId }), { headers });
+				return ok(await service.offers(s, ctx.body, { customer: customerOf(ctx, s), meter: ctx.requestId }));
 			},
 		}),
 
@@ -457,31 +432,27 @@ export const buildRoutes = (deals) => {
 			method: 'POST',
 			path: '/v1/price-locks',
 			...website('price_locks', null),
+			rateLimit: quoteRate,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateOffers(ctx.body, { maxItems: s.settings.quote.max_lines });
 				if (problems.length > 0) return invalid(problems);
-				const { headers, limited } = await rateLimit(ctx, s);
-				if (limited) return limited;
 				const result = await service.offers(s, ctx.body, {
 					customer: customerOf(ctx, s),
 					meter: ctx.idempotencyKey ?? ctx.requestId,
 					forceLock: true,
 				});
-				return created(
-					{
-						currency: result.currency,
-						items: result.items.map((o) => ({
-							itemId: o.itemId,
-							variantId: o.variantId,
-							unitAmount: o.unitAmount,
-							price: o.price,
-							lock: o.lock ?? null,
-						})),
-						missing: result.missing,
-					},
-					{ headers },
-				);
+				return created({
+					currency: result.currency,
+					items: result.items.map((o) => ({
+						itemId: o.itemId,
+						variantId: o.variantId,
+						unitAmount: o.unitAmount,
+						price: o.price,
+						lock: o.lock ?? null,
+					})),
+					missing: result.missing,
+				});
 			},
 		}),
 		defineRoute({

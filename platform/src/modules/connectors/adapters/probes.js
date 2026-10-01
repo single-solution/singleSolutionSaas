@@ -333,8 +333,9 @@ export const createProbes = ({
 				resolve(buildReport({ steps: [{ name: 'reachability', ok: false, code }], startedAt, now: now() }));
 				return;
 			}
-			const secure = c.secure ?? true;
-			const port = c.port ?? (secure ? 465 : 587);
+			// implicit TLS on 465 (or when stated); other ports STARTTLS — the same default as the descriptor
+			const port = c.port ?? (c.secure === false ? 587 : 465);
+			const secure = c.secure ?? port === 465;
 			const guarded = lookupWithFlag();
 			let settled = false;
 			/** @param {CheckStep[]} steps */

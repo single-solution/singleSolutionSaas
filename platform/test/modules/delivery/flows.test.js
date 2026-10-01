@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { startMongo } from '../../helpers.js';
-import { BIG, M1, M2, PACK, SERVICE, W1, W2, bootDelivery, fileBytes, packManifest } from './fixtures.js';
+import { BIG, M1, M2, PACK, SERVICE, UI_FILES, W1, W2, bootDelivery, fileBytes, packManifest, uiBundleBody } from './fixtures.js';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 120_000 });
 
@@ -206,10 +206,10 @@ describe('compile, serve, rollback', () => {
 		};
 		// pack bar (A) + chat launcher (A, stub); tip (B only) and inbox (C only) are never delivered
 		const all = await elementsOf();
-		expect(all.keys).toEqual(['bar:pack', 'launcher:ss-element-stub@1']);
+		expect(all.keys).toEqual(['bar:pack', 'launcher:ss-element-stub@2']);
 		expect(all.manifest.csp.connectSrc).toEqual(['https://chat.example.net', 'https://portal.test']);
 		const loader = (await t.request('GET', `/w/${W1}/loader.js`)).text;
-		expect(loader).toContain('"stub":"ss-element-stub@1"');
+		expect(loader).toContain('"stub":"ss-element-stub@2"');
 		expect(loader).toContain('"api":"https://chat.example.net"');
 
 		// element switched off → gone
@@ -313,6 +313,68 @@ describe('compile, serve, rollback', () => {
 		expect(alias).toMatchObject({ compiledRequest: alias?.requested });
 		expect((await t.request('GET', `/w/${W1}/loader.js`)).text).toContain('"message":"v2"');
 		expect(await t.db.collection('delivery_artefacts').countDocuments({ websiteId: W1 })).toBe(1);
+	});
+});
+
+describe('service UI bundles (F.16)', () => {
+	it('replaces the element stub with the product signed modules once every asset is uploaded', async () => {
+		const t = await boot();
+		await t.subscribe(W1, SERVICE);
+		const first = await t.service.compile({ websiteId: W1 });
+		expect(first.artefact.elements.map((/** @type {any} */ e) => e.key)).toEqual(['launcher']);
+		const stubbed = await t.request('GET', `/w/${W1}/${first.version}/manifest.json`);
+		expect(stubbed.json.elements[0].delivery).toBe('ss-element-stub@2');
+
+		// packs cannot, forged signatures are refused (by catalog), a valid descriptor is pending until uploaded
+		await expect(t.service.submitUiBundle({ appId: PACK, body: uiBundleBody() })).rejects.toMatchObject({ code: 'conflict' });
+		await expect(t.service.submitUiBundle({ appId: SERVICE, body: uiBundleBody({ sig: 'forged' }) })).rejects.toMatchObject({
+			code: 'forbidden',
+		});
+		const submitted = await t.service.submitUiBundle({ appId: SERVICE, body: uiBundleBody() });
+		expect(submitted).toMatchObject({ version: 1, status: 'pending', elements: ['launcher'], missing: UI_FILES });
+		expect((await t.service.submitUiBundle({ appId: SERVICE, body: uiBundleBody() })).version).toBe(1); // idempotent
+
+		// the bytes must match the descriptor
+		const upload = (/** @type {string} */ path, /** @type {Uint8Array} */ bytes) =>
+			t.service.uploadUiAsset({ appId: SERVICE, version: 1, path, bytes, contentType: 'text/javascript' });
+		await expect(upload('headless/bar.js', Buffer.from('tampered'))).rejects.toMatchObject({
+			code: 'delivery_asset_mismatch',
+		});
+		await expect(upload('other.js', fileBytes('ui/bar.js'))).rejects.toMatchObject({ code: 'delivery_asset_mismatch' });
+		await expect(
+			t.service.uploadUiAsset({
+				appId: SERVICE,
+				version: 7,
+				path: 'ui/bar.js',
+				bytes: fileBytes('ui/bar.js'),
+				contentType: 'text/javascript',
+			}),
+		).rejects.toMatchObject({ code: 'not_found' });
+		expect((await upload('headless/bar.js', fileBytes('headless/bar.js'))).status).toBe('pending');
+		// still the stub while incomplete
+		const partial = await t.service.compile({ websiteId: W1 });
+		expect(partial.version).toBe(first.version);
+		const done = await upload('ui/bar.js', fileBytes('ui/bar.js'));
+		expect(done).toMatchObject({ status: 'ready', missing: [] });
+		expect((await t.service.listUiBundles({ appId: SERVICE })).items[0]).toMatchObject({ version: 1, status: 'ready' });
+
+		// ready → every subscribed website was asked to recompile; the compile ships the modules from /w/ui/
+		expect((await t.db.collection('delivery_aliases').findOne({ websiteId: W1 }))?.requested).toBeGreaterThan(0);
+		const out = await t.service.compile({ websiteId: W1 });
+		expect(out.changed).toBe(true);
+		const manifest = await t.request('GET', `/w/${W1}/${out.version}/manifest.json`);
+		expect(manifest.json.elements[0]).toMatchObject({ key: 'launcher', delivery: 'ui-bundle', uiBundleVersion: 1 });
+		expect(manifest.json.elements[0].modules.map((/** @type {any} */ m) => m.path)).toEqual(UI_FILES);
+		const loader = (await t.request('GET', `/w/${W1}/loader.js`)).text;
+		expect(loader).toContain(`"path":"ui/${SERVICE}/1/headless/bar.js"`);
+		expect(loader).toContain('"api":"https://chat.example.net"');
+		expect(loader).not.toContain('"stub":"ss-element-stub');
+		const served = await t.request('GET', `/w/ui/${SERVICE}/1/headless/bar.js`);
+		expect(served.status).toBe(200);
+		expect(served.headers.get('cache-control')).toContain('immutable');
+		expect(served.text).toBe(fileBytes('headless/bar.js').toString('utf8'));
+		// UI-bundle assets are not reachable as pack assets
+		expect((await t.request('GET', `/w/packs/${SERVICE}/1/headless/bar.js`)).status).toBe(404);
 	});
 });
 

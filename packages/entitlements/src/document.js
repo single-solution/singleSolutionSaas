@@ -42,6 +42,8 @@ export const SOURCE_NAMES = Object.freeze(
  * @property {{ prefix: string }} dataScope
  * @property {import('@ss/contracts').IdentitySection | null} [identity] the website's own customer identity issuer
  *   (bring-your-own identity, PLAN §5.3); omitted from the document when absent
+ * @property {import('@ss/contracts').WebsiteSection | null} [website] website defaults (`timeZone`, `language`,
+ *   `currency`); omitted from the document when absent or empty
  */
 
 /** @typedef {{ path: string, keyword: string, message: string }} Problem */
@@ -124,6 +126,7 @@ export const toDocument = (resolved, meta) => {
 		resources: meta.resources.map((r) => ({ kind: r.kind, ref: r.ref, status: r.status })),
 		dataScope: { prefix: meta.dataScope.prefix },
 		...(meta.identity ? { identity: meta.identity } : {}),
+		...(meta.website && Object.keys(meta.website).length > 0 ? { website: { ...meta.website } } : {}),
 		experiments: Object.values(resolved.experiments)
 			.map((e) => ({ element: e.element, variant: e.variant }))
 			.sort((a, b) => (a.element < b.element ? -1 : a.element > b.element ? 1 : 0)),

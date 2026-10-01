@@ -304,7 +304,7 @@ describe('merchant console smoke', () => {
 			(
 				await merchant.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/keys`, {
 					kind: 'pk',
-					scopes: ['events.publish'],
+					scopes: ['events.write'],
 				})
 			).ok,
 		).toBe(true);

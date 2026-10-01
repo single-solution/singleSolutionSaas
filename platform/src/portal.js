@@ -190,7 +190,7 @@ export const createPortal = ({
 		defineRoute({ method: 'POST', path: '/cron/:job', auth: 'cron', idempotent: false, handler: cronRoute }),
 	];
 
-	const handle = createApiHandler({
+	const api = createApiHandler({
 		routes: [...infraRoutes, ...composed.routes],
 		problems,
 		logger,
@@ -214,6 +214,26 @@ export const createPortal = ({
 		maxBodyBytes: config.maxBodyBytes,
 		trustProxyHeaders: config.trustProxyHeaders,
 	});
+	// a dedicated preview origin (`PREVIEW_ORIGIN`, F.16) serves the preview proxy and nothing else: no API, no
+	// console, no delivery artefacts — the delivery module in turn refuses `/p/*` on the Portal host
+	const previewHost = config.delivery?.previewOrigin ? new URL(config.delivery.previewOrigin).host : null;
+	/** @param {Request} request */
+	const handle = (request) => {
+		if (previewHost !== null) {
+			const url = new URL(request.url);
+			if (url.host === previewHost && !url.pathname.startsWith('/p/'))
+				return Promise.resolve(
+					new Response(
+						JSON.stringify(problems.create('not_found', { detail: 'The preview origin serves previews only.' })),
+						{
+							status: 404,
+							headers: { 'content-type': 'application/problem+json', 'cache-control': 'no-store' },
+						},
+					),
+				);
+		}
+		return api(request);
+	};
 
 	return Object.freeze({
 		config,

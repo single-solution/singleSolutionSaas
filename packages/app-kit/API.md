@@ -39,6 +39,14 @@ import {
 	createHttpConnector,
 	createHttpAi,
 	createHttpMessaging,
+	createSmtpMessaging,
+	SMTP_PORTS,
+	createOutbox,
+	createBackground,
+	detectRuntime,
+	REPLAY_COLLECTION,
+	REPLAY_HEADERS,
+	RESERVED_PROBLEM_MEMBERS,
 	presignUrl,
 	signHeaders,
 	createEvents,
@@ -88,7 +96,10 @@ createProduct({
   connectors: { [kind]: { [provider]: (ctx) => adapter } },             // e.g. payments adapters; ctx = { descriptor, websiteId, slug, send, policy, fetch, now }
   outbound: { allowHosts, allowHttpForAllowed, ports, maxRedirects, timeoutMs, maxBytes, resolve },
                             // @ss/net createOutboundPolicy options for connector calls; allowHosts ignored when nodeEnv === 'production'
-  outboundSend,             // (url, init) => { status, headers, body: Buffer, url } — replaces @ss/net safeFetch (tests)
+  outboundSend,             // (url, init) => { status, headers, body: Buffer, url } — replaces @ss/net safeFetch (tests; also behind outbound.fetch)
+  createSmtpTransport,      // replaces nodemailer's transport of the built-in smtp messaging adapter (tests)
+  background: { mode, intervalMs, everyRequests },  // automatic flushing of usage + event outbox (below); default mode 'auto',
+                            // 'off' when NODE_ENV=test; intervalMs 30 s (server timer), everyRequests 20 (serverless)
   auditSink,                // async (entry) => void; default: merchant DB collection `audit`
   problemBaseUri,           // RFC 9457 type base, default `<endpoints.base>/problems/`
   problemCodes,             // product-specific { code: { status, title } }
@@ -122,6 +133,8 @@ createProduct({
     verify(authorizationHeader, { origin, referer, requiredScopes, expectedKind, expectedEnv })
       → { ok: true, website: { websiteId, merchantId, domain, allowSubdomains, env, scopes, kind, keyId } }
       | { ok: false, code: unauthorized|invalid_credentials|origin_not_allowed|scope_missing|forbidden|unavailable, detail },
+    // a cold instance's concurrent first requests await the one in-flight revocation sync (single-flight) instead of
+    // answering 503; `unavailable` only when revocations could not be synced within the offline grace
     revoke(keyIds), sync(), isRevoked(keyId),
   },
   entitlements: {
@@ -131,7 +144,8 @@ createProduct({
     can(doc, elementKey), feature(doc, 'element.feature'), config(doc, elementKey), featuresOf(doc, elementKey),
   },
   identity: {                                                          // bring-your-own customer identity (PLAN F.14)
-    verify(request, { doc, body? }) → { ok: true, identity: { subject, email?, phone?, issuer } } | { ok: false, code },
+    verify(request, { doc, body? }) → { ok: true, identity: { subject, email?, phone?, issuer, claims } } | { ok: false, code },
+      // claims = the full verified JWT payload (deep-frozen), e.g. a tier claim: identity.claims.tier
       // reads SS-Identity (else body.identity, sendBeacon); verifies the JWT with doc.identity (issuer keys inline):
       // EdDSA | ES256 | RS256 matched to the key type, kid (or the only compatible key), iss, aud (when configured),
       // exp (required), nbf, iat (required, ≤ 24 h old), 60 s skew; codes: identity_missing | identity_not_configured |
@@ -146,12 +160,31 @@ createProduct({
   portal: {                                                            // signed client (client assertion, aud = Portal URL)
     entitlements(websiteId), revocations({ since }), usage(records, { idempotencyKey }), consumeLaunch({ jti }),
     heartbeat({ version, status, queues? }), rotateKey({ publicJwk }), resolveResource({ websiteId, kind }), jwks(),
-    publishEvent({ websiteId, type, data, idempotencyKey, env?, occurredAt?, context? }) → envelope,
-      // fills id (evt_…), occurredAt, env (from the website's entitlement), actor { type: 'product', id: slug },
-      // context { source: 'product', product: slug }; type must be in the product namespace or manifest `events.publishes`
+    publishEvent({ websiteId, type, data, idempotencyKey, id?, env?, occurredAt?, context? }) → envelope,
+      // fills id (evt_… derived from (websiteId, type, idempotencyKey) unless given), occurredAt, env (from the website's
+      // entitlement), actor { type: 'product', id: slug }, context { source: 'product', product: slug }; type must be in
+      // the product namespace or manifest `events.publishes`. DURABLE: the envelope is written to the control-store outbox
+      // (idempotent by event id), sent right away when the Portal answers, else retried with backoff by outbox.flush() /
+      // the background flusher; Portal `rejected` results and permanent 4xx are dead-lettered (kept 7 days). A delivery
+      // failure never throws; invalid input still throws invalid_event.
     publishEvents(envelopes),                                          // raw: POST /v1/product/events { events: [...] }
+    requestIdentityIssuer({ websiteId, issuer, jwksUrl | publicJwks, audience?, claimMap? })
+      → { status: 'pending', request } | { status: 'active', issuer },
+      // PUT /v1/product/websites/:websiteId/identity: ask to become the website's identity issuer (bring-your-own
+      // identity). Needs manifest capabilities.identityIssuer: true and an active subscription on the website (else
+      // portal_error 403). Stored pending (202) until the merchant approves it in the Portal (Website → Identity); a
+      // request equal to the active issuer answers active (200) — safe to repeat. Errors throw portal_error.
     baseUrl, jwksUrl,
   },
+  outbox: { flush({ maxBatches }?) → { sent, duplicates, rejected, failed, batches }, stats() → { pending, sent, dead } },
+    // event outbox (store `eventOutbox`, collection ss_kit_event_outbox): batches ≤ 50 events / ~200 kB per
+    // POST /v1/product/events; per-event results { id, status: accepted|duplicate|rejected }; envelope dropped once sent
+  outbound: {
+    fetch(url, init?) → { status, headers, body: Buffer, url },   // @ss/net safeFetch under the product's outbound policy:
+    policy,                                                        // public https only, DNS answers vetted at connect time,
+  },                                                               // same-origin GET/HEAD redirects, deadline, size cap
+  flush() → Promise<void>,           // flush the usage queue and the event outbox now (single-flight)
+  background: { mode: 'server'|'serverless'|'off', start(), stop() },
   data: {
     forWebsite(websiteId, { merchantId?, env? }?) → {
       websiteId, prefix,                                               // 'ss_<slug with - → _>_'
@@ -166,8 +199,22 @@ createProduct({
     forget(websiteId), closeIdle({ idleMs }?), closeAll(), prefix,
   },
   connectors: { ai(websiteId), messaging(websiteId), storage(websiteId), payments(websiteId), forget(websiteId) },
-    // storage: { presignPut({ key, contentType?, expiresIn? }), presignGet({ key, expiresIn?, downloadName? }), headObject, deleteObject, keyFor }
-    // ai: { request, complete(input) }   messaging: { request, send(message) }
+    // built-ins keyed by descriptor.provider as the Portal resolves it: storage `s3` (default); ai `http` (default) /
+    //   `generic-http`; messaging `http` (default) / `generic-http` (JSON POST through `send`) and `smtp` (nodemailer)
+    // storage: keys are ALWAYS relative to `<prefix><slug>/<websiteId>/` in arguments and results (an absolute key → invalid_key):
+    //   presignPut({ key, contentType?, contentLength?, expiresIn? = 300 }) → { method: 'PUT', url, headers, key, expiresAt }
+    //     content-type and content-length are SigV4 signed headers, so the bucket enforces type and exact size; the
+    //     client must send exactly `headers` (browsers set Content-Length from the body)
+    //   presignGet({ key, expiresIn?, downloadName? }) → { method: 'GET', url, key, expiresAt }
+    //   headObject({ key }) → { exists: false } | { exists: true, size, contentType, etag };  deleteObject({ key }) → { deleted: true }
+    //   fullKey(key) → absolute object key (keyFor = deprecated alias)
+    // ai: { request, complete(input) }   messaging (http): { request, send(message) }
+    // messaging (smtp): send({ to (1..50), subject, text?, html?, from?, replyTo?, headers? }) → { id, accepted, rejected };
+    //   descriptor baseUrl smtps://host:port (implicit TLS) | smtp://host:port (STARTTLS, requireTLS) or host/port/secure,
+    //   username|user, apiKey|password, from?; TLS ≥ 1.2 with certificate checks required except for outbound.allowHosts
+    //   (ignored in production); host vetted with checkHost (ports 25/465/587/2525) and every send dials an IP vetted by
+    //   resolveVetted (SNI = host); timeouts connect 10 s / greeting 10 s / socket 30 s; CR/LF and reserved headers refused;
+    //   errors invalid_argument | resource_invalid | timeout | upstream_error (details.reason, responseCode), never credentials
     // every connector call goes through @ss/net safeFetch under the `outbound` policy: https only, public addresses only
     // (checked again on each DNS answer at connect time), no redirects for providers, size cap; endpoints/baseUrls that
     // fail the policy are refused up front with resource_invalid
@@ -175,8 +222,8 @@ createProduct({
   audit: { record({ websiteId, actor: { type, id?, act? }, action, target?, before?, after?, requestId? }) → { ok, id? } },
   health: { healthz() → { status, body }, readyz() → { status: 200|503, body: { status: ok|degraded|unavailable, checks } } },
   handler(routes, options?) → (Request) → Promise<Response>,         // = createRequestHandler(product, routes, options)
-  heartbeat() → Portal heartbeat { version, status: 'ok', queues: { usagePending, usageDead } },
-  close(),                                                             // close pooled client-DB connections
+  heartbeat() → flushes the queues, then Portal heartbeat { version, status: 'ok', queues: { usagePending, usageDead, eventsPending, eventsDead } },
+  close(),                                                             // stop the background flusher, close pooled client-DB connections
   context,                                                             // internal wiring used by the handler and standardRoutes
 }
 ```
@@ -195,8 +242,12 @@ defineRoute({
   method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path,   // `:id` segments are params; '/v1/data:export' is a literal segment
   auth: 'website'|'launch'|'portal'|'none',
   scopes?, keyKind?: 'pk'|'sk', roles?, element?,      // element: 403 element_disabled unless enabled (402/403 for spend_cap/paused)
-  idempotent?: true|'optional'|false,                  // POST default true (428 without Idempotency-Key); replay of stored response
-  rateLimit?: { limit, windowMs | windowSeconds, key?(ctx) },
+  idempotent?: true|'optional'|false,                  // POST default true (428 without Idempotency-Key); replay (see below)
+  rateLimit?: { limit: number | (ctx) => number | Promise<number>, windowMs | windowSeconds, key?(ctx), bucket? },
+                                                       // evaluated after auth, entitlement, JSON body and identity;
+                                                       // limit ≥ 0 integer (0 = refuse all) or Infinity (no limit); an invalid
+                                                       // or throwing limit is logged and not enforced; `bucket` shares one
+                                                       // window between routes (default: the route id); 429 rate_limited + RateLimit-*
   rawBody?, maxBodyBytes?, entitlement?: false, cors?,
   identity?: 'required'|'optional',                    // website auth: ctx.identity from SS-Identity (401 identity_required |
                                                        // identity_invalid when required; null + ctx.identityProblem when optional)
@@ -204,7 +255,29 @@ defineRoute({
 })
 ctx = { request, requestId, method, path, params, query /* { name: first value } */, searchParams, headers, body, rawBody,
         idempotencyKey, website, websiteId, entitlement: { doc, stale, version } | null, session | null, portal | null,
-        identity: { subject, email?, phone?, issuer } | null, identityProblem: string | null, product, log }
+        identity: { subject, email?, phone?, issuer, claims } | null, identityProblem: string | null, product, log }
+```
+
+**Idempotency and privacy.** The product's control store keeps, per Idempotency-Key, only `{ _id: HMAC(principal, route,
+path, key), fingerprint: HMAC(method, path, query, body), response: { status, headers (allowlist: content-type,
+content-language, location, link, etag, last-modified, cache-control), replay: 'empty' | 'website' | 'none' } }` (HMAC key
+derived from the product signing key, TTL 24 h). The response **body** of a route with a website (`ctx.websiteId`) is
+stored in the merchant's own database (`ss_<slug>_idempotency` `{ websiteId, key, body, expireAt }` via
+`data.forWebsite`, unique `(websiteId, key)`, TTL 24 h). Routes without a website (e.g. `auth: 'portal'`) store no body;
+a replay of a response that had a body that is not available (no website, merchant DB down, expired) answers **409
+`idempotency_replay_no_body`** — never a second execution. 5xx results are not stored.
+
+**Background flushing.** `mode: 'server'` (long-lived process; auto-detected when no serverless platform variable is set):
+an unref'd timer flushes the usage queue and event outbox every `intervalMs`, started by the first request (or
+`product.background.start()`). `mode: 'serverless'` (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `NETLIFY`, `FUNCTION_TARGET`,
+`FUNCTIONS_WORKER_RUNTIME`): after a request that queued usage/events on this instance, and on every `everyRequests`-th
+request, the flush is scheduled with the framework's `after()` when the adapter provided one
+(`toNextRoute(handler, { after })` with `import { after } from 'next/server.js'`), else started in the background of the
+request. `heartbeat()` flushes too. Explicit `usage.flush()` / `outbox.flush()` / `product.flush()` remain; a product
+cron is no longer needed for delivery.
+
+```js
+
 ```
 
 - `auth: 'portal'` verifies with `@ss/protocol` `verifyRequest({ method, path, audience: appId, headers, rawBody, keyResolver,
@@ -215,12 +288,17 @@ replayStore })`. The path is the one the client addressed, including the query; 
 
 ```js
 ok(body, { status?, headers? }) ; created(body, { location?, headers? }) ; noContent() ;
-problem(code, detail?, { errors?, headers?, status? })   // return or throw; RFC 9457 with requestId + instance
+problem(code, detail?, { errors?, headers?, status?, extensions? })   // return or throw; RFC 9457 with requestId + instance
+  // extensions: RFC 9457 extension members, names /^[A-Za-z][A-Za-z0-9_]{2,63}$/, JSON values; may not redefine
+  // type, title, status, detail, instance, requestId, errors (TypeError at construction)
 paginate({ cursor, limit, url? }, { defaultLimit = 20, maxLimit = 100 })
   → { limit, after, fetchLimit, page(items, keyOf?) → { items, nextCursor, hasMore },
+      // keyOf may return a compound key (array of ≤ 8 strings/numbers/booleans/nulls/Dates → ISO strings), e.g.
+      // (r) => [r.createdAt, r.id]; the cursor encodes it opaquely and `after` is that array on the next page
       link(nextCursor) → '<path?cursor=…&limit=…>; rel="next"' | null,
       respond(items, keyOf?) → ok({ items, nextCursor, hasMore }) with the `Link` header }
-toNextRoute(handler, { stripPrefix = '/api' | false }?) → { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }
+toNextRoute(handler, { stripPrefix = '/api' | false, after? }?) → { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS }
+  // export OPTIONS too (CORS preflight); `after` = Next's after() for the post-response background flush
 ```
 
 `standardRoutes(product, { wellKnown = true, sso = true }?)` returns:
@@ -240,7 +318,7 @@ toNextRoute(handler, { stripPrefix = '/api' | false }?) → { GET, POST, PUT, PA
 `createMongoStores({ db, prefix = 'ss_kit_', now? })` and `createMemoryStores({ now? })` return:
 
 ```
-{ replay, nonce, burnedTokens, entitlements, usageQueue, revocations, sessions, idempotency, rateLimits, portalKeys, ping }
+{ replay, nonce, burnedTokens, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, ping }
 ```
 
 Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces are in `src/stores/types.js`.

@@ -28,7 +28,7 @@ photoIds })` validates like the API and posts the review. Wrap it with `createUs
 
 ## Photos
 
-`POST /v1/review-photos { contentType, size }` returns a presigned `PUT` to your bucket (send the returned headers).
+`POST /v1/review-photos { contentType, size }` returns a presigned `PUT` to your bucket (send the returned headers; `content-type` and `content-length` are signed, so the body must be exactly `size` bytes).
 Then submit the review with `photoIds`. The product checks the object (HEAD: exists, size, type) before attaching it.
 Images are stored as uploaded — EXIF metadata is not stripped (see README, "Notes and limits").
 

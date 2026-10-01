@@ -708,6 +708,7 @@
 				"x-ss-key-kind": "sk"
 			},
 			"post": {
+				"x-ss-certify": true,
 				"operationId": "createTrigger",
 				"tags": ["triggers"],
 				"summary": "Report one stock, price or custom change from your server (idempotent on `id` or the Idempotency-Key). Pending waiters whose condition now holds are claimed and alerted once. sk_ only.",

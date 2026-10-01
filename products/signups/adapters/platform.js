@@ -6,7 +6,7 @@
  */
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { configFromEnv, createHttpMessaging, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
+import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import { createSealer, sealSecret } from './crypto.js';
 import { INDEXES, MIGRATIONS } from './db.js';
 import { createSiteRegistry } from './registry.js';
@@ -127,8 +127,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const logger = overrides.logger ?? createLogger({ level: config.logLevel });
 	/** @type {SignupsApp['privacy']} */
 	const privacy = {};
-	/** @type {(ctx: any) => any} the merchant's own HTTP messaging gateway (Portal provider `generic-http`) */
-	const httpMessaging = ({ descriptor, send, policy }) => createHttpMessaging({ descriptor, send, policy });
 	const product = createProduct(
 		/** @type {any} */ ({
 			manifest,
@@ -144,7 +142,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			},
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
-			connectors: { messaging: { 'generic-http': httpMessaging } },
+			// messaging: app-kit's built-in adapters for the Portal providers `generic-http` and `smtp` (no registration)
 			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
 			// SSRF policy for merchant databases and connectors: in development the `ss dev` client database and local mocks
 			// live on loopback; app-kit ignores the allowlist when NODE_ENV=production

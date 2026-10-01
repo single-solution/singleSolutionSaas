@@ -102,6 +102,14 @@ describe('keys.verify', () => {
 		expect(await product.keys.verify(`Bearer ${key}`)).toMatchObject({ ok: false, code: 'unavailable' });
 	});
 
+	it('concurrent cold requests await the in-flight revocation sync (single-flight) instead of failing closed', async () => {
+		const { portal, product } = await setup();
+		const key = await websiteKey(portal, { kind: 'sk' });
+		const results = await Promise.all(Array.from({ length: 8 }, () => product.keys.verify(`Bearer ${key}`)));
+		expect(results.every((r) => r.ok)).toBe(true);
+		expect(portal.calls.filter((c) => c.path === '/v1/product/revocations')).toHaveLength(1);
+	});
+
 	it('reports unavailable Portal keys', async () => {
 		const { portal, product, clock } = await setup();
 		const key = await websiteKey(portal, { kind: 'sk' });

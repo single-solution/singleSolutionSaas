@@ -140,6 +140,7 @@ describe('POST /v1/otp/{id}/verify', () => {
 		const first = await h.call('POST', `/v1/otp/${sent.json.challengeId}/verify`, { body: { code: wrong } });
 		expect(first.status).toBe(422);
 		expect(first.json.errors[0]).toEqual({ path: '/code', code: 'attempts_remaining', message: '4' });
+		expect(first.json.attemptsRemaining).toBe(4);
 		const malformed = await h.call('POST', `/v1/otp/${sent.json.challengeId}/verify`, { body: { code: 'abc' } });
 		expect(malformed.json.errors[0].message).toBe('4'); // no attempt spent on a malformed code
 		const parallel = await Promise.all(

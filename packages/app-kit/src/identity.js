@@ -8,7 +8,8 @@
  * `jwk/jku/x5u/x5c` and `crit` refused), the key by `kid` (or the only compatible key), `iss` = issuer, `aud` contains
  * the audience when one is configured, `exp` (required) in the future, `nbf` reached, `iat` (required) not in the
  * future and at most 24 h old (60 s clock skew). The result maps the claims through `claimMap`:
- * `{ subject, email?, phone?, issuer }`.
+ * `{ subject, email?, phone?, issuer, claims }`, where `claims` is the full verified payload (deep-frozen), so products
+ * can read issuer-specific claims (e.g. a membership tier) without decoding the token again.
  * @module
  */
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
@@ -35,7 +36,7 @@ const REFUSED_HEADERS = Object.freeze(['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S
 const SEGMENT = /^[A-Za-z0-9_-]*$/;
 
 /**
- * @typedef {{ subject: string, email?: string, phone?: string, issuer: string }} CustomerIdentity
+ * @typedef {{ subject: string, email?: string, phone?: string, issuer: string, claims: Readonly<Record<string, unknown>> }} CustomerIdentity
  * @typedef {'identity_missing' | 'identity_not_configured' | 'malformed' | 'algorithm' | 'unknown_key' | 'signature'
  *   | 'issuer' | 'audience' | 'expired' | 'not_yet_valid' | 'too_old' | 'subject'} IdentityFailure
  * @typedef {{ ok: true, identity: CustomerIdentity } | { ok: false, code: IdentityFailure }} IdentityResult
@@ -55,6 +56,19 @@ const decodeJson = (segment) => {
 	} catch {
 		return null;
 	}
+};
+
+/**
+ * @template T
+ * @param {T} value
+ * @returns {T} the value, recursively frozen
+ */
+const deepFreeze = (value) => {
+	if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
+		for (const child of Object.values(value)) deepFreeze(child);
+		Object.freeze(value);
+	}
+	return value;
 };
 
 /**
@@ -140,6 +154,7 @@ export const verifyIdentityToken = (token, section, { now = Date.now } = {}) => 
 			...(email === undefined ? {} : { email }),
 			...(phone === undefined ? {} : { phone }),
 			issuer: section.issuer,
+			claims: deepFreeze(claims),
 		},
 	};
 };

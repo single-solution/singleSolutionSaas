@@ -31,7 +31,12 @@ afterEach(async () => {
  */
 export const startMongo = async () => {
 	const shared = process.env.SS_TEST_MONGO_URI;
-	const replSet = shared ? null : await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
+	// TTL monitor off, as in global-setup.js: expiry follows the injected clock, never the wall clock
+	const replSet = shared
+		? null
+		: await MongoMemoryReplSet.create({
+				replSet: { count: 1, storageEngine: 'wiredTiger', args: ['--setParameter', 'ttlMonitorEnabled=false'] },
+			});
 	const uri = shared ?? /** @type {MongoMemoryReplSet} */ (replSet).getUri();
 	const client = await new MongoClient(uri).connect();
 	const prefix = `t_${randomBytes(5).toString('hex')}`;

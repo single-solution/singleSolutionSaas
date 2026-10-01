@@ -32,13 +32,35 @@ import { PageProblem, WebsiteHeader } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
-/** Suggested scopes per key kind (any valid scope can be added). */
-export const SUGGESTED_SCOPES = Object.freeze({
-	pk: ['events.publish', 'elements.read', 'identity.federate'],
-	sk: ['events.publish', 'entitlements.read', 'graph.read', 'graph.write', 'checkout.write'],
-});
+/** Default scopes of a new key (also what the Portal applies when none are chosen). */
+export const DEFAULT_KEY_SCOPES = Object.freeze(['elements.read', 'events.write']);
 
-const SCOPE = /^[a-z*][a-z0-9_.:*@-]{0,127}$/;
+/** Platform scopes when the catalogue could not be loaded. */
+const FALLBACK_CATALOGUE = Object.freeze([
+	{ scope: 'elements.read', group: 'platform', label: 'Read elements', description: '' },
+	{ scope: 'events.write', group: 'platform', label: 'Send events', description: '' },
+]);
+
+/**
+ * The scope catalogue (`GET …/keys/scopes`, F.16) grouped for the form: platform scopes first, then one group per
+ * listed service product.
+ * @param {ReadonlyArray<{ scope: string, group: string, label: string, description?: string, product?: string }>} catalogue
+ * @returns {Array<{ group: string, title: string, options: Array<{ value: string, label: string }> }>}
+ */
+export const scopeGroups = (catalogue) => {
+	/** @type {Map<string, { group: string, title: string, options: Array<{ value: string, label: string }> }>} */
+	const groups = new Map();
+	for (const entry of catalogue) {
+		const group = groups.get(entry.group) ?? {
+			group: entry.group,
+			title: entry.group === 'platform' ? 'Platform' : (entry.product ?? entry.group),
+			options: [],
+		};
+		group.options.push({ value: entry.scope, label: `${entry.label} (${entry.scope})` });
+		groups.set(entry.group, group);
+	}
+	return [...groups.values()];
+};
 
 /**
  * @param {any} props loader result of `loadKeys`
@@ -51,8 +73,7 @@ export function KeysView(props) {
 	});
 	const [creating, setCreating] = useState(false);
 	const [kind, setKind] = useState(/** @type {'pk' | 'sk'} */ ('pk'));
-	const [scopes, setScopes] = useState(/** @type {string[]} */ (['events.publish']));
-	const [custom, setCustom] = useState('');
+	const [scopes, setScopes] = useState(/** @type {string[]} */ ([...DEFAULT_KEY_SCOPES]));
 	const [allowSubdomains, setAllowSubdomains] = useState(false);
 	const [expiresAt, setExpiresAt] = useState('');
 	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
@@ -67,11 +88,11 @@ export function KeysView(props) {
 	const { merchantId, website } = props;
 	const keys = /** @type {any[]} */ (data.items ?? []);
 	const base = api.keys(merchantId, website.websiteId);
+	const groups = scopeGroups(Array.isArray(props.scopes) && props.scopes.length > 0 ? props.scopes : FALLBACK_CATALOGUE);
 
 	const openCreate = () => {
 		setKind('pk');
-		setScopes(['events.publish']);
-		setCustom('');
+		setScopes([...DEFAULT_KEY_SCOPES]);
 		setAllowSubdomains(false);
 		setExpiresAt('');
 		setErrors({});
@@ -79,16 +100,10 @@ export function KeysView(props) {
 		setCreating(true);
 	};
 	const create = async () => {
-		const extra = custom
-			.split(/[\s,]+/)
-			.map((s) => s.trim())
-			.filter(Boolean);
-		const all = [...new Set([...scopes, ...extra])];
+		const all = [...new Set(scopes)];
 		/** @type {Record<string, string>} */
 		const local = {};
 		if (all.length === 0) local.scopes = 'Choose at least one scope.';
-		const bad = all.find((s) => !SCOPE.test(s));
-		if (bad) local.scopes = `“${bad}” is not a valid scope (lower-case letters, digits and . : _ - * @).`;
 		const exp = expiresAt ? new Date(`${expiresAt}T23:59:59Z`) : null;
 		if (exp && exp.getTime() <= Date.now() + 60_000) local.expiresAt = 'Choose a date in the future.';
 		setErrors(local);
@@ -262,27 +277,23 @@ export function KeysView(props) {
 					onChange={(v) => {
 						const next = v === 'sk' ? 'sk' : 'pk';
 						setKind(next);
-						setScopes(['events.publish']);
+						setScopes([...DEFAULT_KEY_SCOPES]);
 					}}
 					options={[
 						{ value: 'pk', label: 'Publishable (pk_) — for the browser' },
 						{ value: 'sk', label: 'Secret (sk_) — for your server only' },
 					]}
 				/>
-				<CheckboxGroup
-					legend="Scopes"
-					value={scopes}
-					onChange={setScopes}
-					options={SUGGESTED_SCOPES[kind].map((s) => ({ value: s, label: s }))}
-					error={errors.scopes}
-				/>
-				<Input
-					label="Other scopes"
-					value={custom}
-					onChange={(e) => setCustom(e.currentTarget.value)}
-					help="Separate with spaces or commas."
-					className="font-mono"
-				/>
+				{groups.map((g, i) => (
+					<CheckboxGroup
+						key={g.group}
+						legend={g.group === 'platform' ? 'Scopes' : `${g.title} scopes`}
+						value={scopes.filter((s) => g.options.some((o) => o.value === s))}
+						onChange={(chosen) => setScopes([...scopes.filter((s) => !g.options.some((o) => o.value === s)), ...chosen])}
+						options={g.options}
+						error={i === 0 ? (errors.scopes ?? errors['scopes.0']) : undefined}
+					/>
+				))}
 				{kind === 'pk' ? (
 					<Checkbox
 						label={`Also allow subdomains of ${website.domain}`}

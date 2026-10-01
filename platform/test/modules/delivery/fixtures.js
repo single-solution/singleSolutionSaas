@@ -245,6 +245,18 @@ export const fakeModules = (world) => [
 				if (!v) throw problem('not_found', 'No such version.');
 				return structuredClone(v.manifest);
 			},
+			// F.16: the real catalog verifies format, module references and the signature with the product keys
+			verifyUiBundle: async (/** @type {{ appId: string, body: any }} */ { appId, body }) => {
+				const entry = world.apps.get(appId);
+				if (!entry || entry.app.kind !== 'service') throw problem('conflict', 'Only service products publish UI bundles.');
+				if (body?.signature?.sig === 'forged') throw problem('forbidden', 'The UI bundle signature does not verify.');
+				return {
+					descriptor: structuredClone(body.descriptor),
+					signature: { ...body.signature },
+					slug: entry.app.slug,
+					elements: structuredClone(body.descriptor.manifest.elements),
+				};
+			},
 			versionDetail: async (/** @type {string} */ appId, /** @type {number} */ version) => {
 				const v = world.apps.get(appId)?.versions.get(version);
 				if (!v) throw problem('not_found', 'No such version.');
@@ -364,3 +376,17 @@ export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, deli
 
 	return { portal, world, commerce, service, storage, clock, logs: entries, cookie, request, uploadAll, subscribe, db };
 };
+
+/** UI bundle files of the chat service (the pack's module files, reused) and a descriptor body (F.16). */
+export const UI_FILES = Object.freeze(['headless/bar.js', 'ui/bar.js']);
+export const uiBundleBody = (/** @type {{ sig?: string }} */ { sig = 'A'.repeat(86) } = {}) => ({
+	descriptor: {
+		format: 'ss-pack-bundle@1',
+		manifest: {
+			product: { slug: 'chat-box', version: '1.1.0' },
+			elements: [{ key: 'launcher', headless: 'headless/bar.js#createBar', renderer: 'ui/bar.js#render' }],
+		},
+		assets: packAssets().filter((a) => UI_FILES.includes(a.path)),
+	},
+	signature: { kid: 'chat-1', alg: 'EdDSA', sig },
+});

@@ -154,7 +154,7 @@ describe('identity issuers (routes and service)', () => {
 
 	it('registers inline keys, exposes the document section, replaces and removes the issuer (audited, re-signed)', async () => {
 		const { h, owner, websiteId, path } = await setup();
-		expect((await owner.client.get(path)).json).toEqual({ issuer: null });
+		expect((await owner.client.get(path)).json).toEqual({ issuer: null, request: null });
 		expect(await h.service.identityFor(websiteId)).toBeNull();
 		const put = await owner.client.send('PUT', path, {
 			issuer: 'https://login.shop.example.com/',

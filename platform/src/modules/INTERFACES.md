@@ -9,12 +9,24 @@ expose (extra functions allowed). All functions are async, take plain objects, r
 Merchants, merchant users, staff users, partners, developers, sessions, websites, website keys.
 
 - `getMerchant(merchantId)` → `{ merchantId, name, status: active|suspended, createdAt }`
-- `getWebsite(websiteId)` → `{ websiteId, merchantId, domain, env: 'live'|'test', twinId, status, createdAt }`
+- `getWebsite(websiteId)` → `{ websiteId, merchantId, domain, env: 'live'|'test', twinId, status, timeZone, language,
+currency, createdAt }` — the **website settings** (F.16) are `null` when unset: `timeZone` (IANA, checked with `Intl`,
+  canonical spelling), `language` (BCP 47, `Intl.getCanonicalLocales`), `currency` (ISO 4217, upper case).
+  `updateWebsiteSettings({ merchantId, websiteId, settings, actor })` sets them on the live/test pair (`null` clears),
+  audits `website.settings_updated` and calls `commerce.invalidateWebsite` for both ids. Route:
+  `PATCH /v1/merchants/:merchantId/websites/:websiteId` (`websites.write`; staff via the Admin Console).
 - `listWebsites(merchantId)`
 - `websiteByDomain(domain)` (normalised via `@ss/contracts` `normaliseDomain`)
 - `suspendMerchant / resumeMerchant` (emit audit; commerce reacts via `onMerchantStatus` hook below)
-- Website keys: `issueKey({ websiteId, kind: 'pk'|'sk', scopes, expiresAt? })` → `{ keyId, key }` (shown once),
+- Website keys: `issueKey({ websiteId, kind: 'pk'|'sk', scopes?, expiresAt? })` → `{ keyId, key }` (shown once),
   `revokeKey({ keyId, reason })`, `revocationsSince(cursor)` → `{ keyIds, cursor }`.
+- **Key scope vocabulary** (F.16, `core/scopes.js`), checked on every issue (422 `validation_failed`, `/scopes/<i>`):
+  `elements.read` (element views and read routes; the Loader's key), `events.write` (Event Hub), and per listed
+  service product `<slug>.read` / `<slug>.write` (from `catalog.activeProducts({ kind: 'service' })`); `<group>.*`
+  grants a whole group (`events.*`, `<slug>.*`; products match it as a prefix). Empty or omitted scopes = the defaults
+  `['elements.read', 'events.write']`. `GET /v1/merchants/:merchantId/websites/:websiteId/keys/scopes` →
+  `{ defaults, items: [{ scope, group, label, description, product? }] }` (the console key form: one checkbox group
+  per product).
 - Website keys are signed with a **dedicated website-key signing key** (`WEBSITE_KEY_SIGNING_KEYS`), not the launch key.
 - Implements ports `sessionActor(session)` and `websiteKeyRevoked(claims, rawKey)` → `true` when the key is revoked,
   unknown, or (for `sk_`) its HMAC does not match `rawKey`; infra calls it after the offline signature check.
@@ -34,7 +46,19 @@ claimMap: { subject = 'sub', email?, phone? } }, actor })` (public signature key
   entitlement-document `identity` section `{ issuer, jwks, audience?, claimMap }` or null; a JWKS URL is refetched at
   most hourly when documents are rebuilt (failures keep the last good keys, retry after 5 min). Deleting or
   transferring a website drops its issuer. Routes: `GET|PUT|DELETE /v1/merchants/:merchantId/websites/:websiteId/identity`
-  (`websites.read` / `websites.write`), `POST …/identity/refresh`.
+  (`websites.read` / `websites.write`), `POST …/identity/refresh`. The GET also returns the pending product `request`.
+- **Product issuer requests** (F.16, `identity_issuer_requests`, `_id` = websiteId): `PUT
+/v1/product/websites/:websiteId/identity` (product auth, same body as the merchant PUT) is accepted only for a product
+  with an **active subscription** on the website whose accepted manifest declares **`capabilities.identityIssuer:
+true`** (else 403). A JWKS URL must yield a usable key now. The request is stored **pending** (202 `{ status:
+'pending', request }`; one per website, a newer one replaces it), audited `website.identity_issuer_requested` (actor
+  the product) and announced to the merchant owner (mail template `issuer_request`) and in the console (shell banner
+  from `GET /v1/merchants/:merchantId/notifications` → `{ items: [{ kind: 'identity_issuer_request', websiteId,
+domain, request }] }`, Website → Identity card). A request identical to the active issuer answers 200 `{ status:
+'active', issuer }` (safe to repeat on every product boot). The merchant decides with `POST …/identity/request/approve`
+  or `…/reject` (`websites.write`, optional `{ reason }`): approve re-checks eligibility and calls `setIssuer` with
+  `managedBy: { appId, slug, name }` (shown on the issuer); both are audited (`website.identity_request_approved |
+_rejected`). A merchant's own PUT clears `managedBy`. Deleting/transferring a website drops its requests.
 
 ## catalog (`modules/catalog`)
 
@@ -88,7 +112,14 @@ credits, settlement, spend caps.
 - Crons `settlement` (hourly), `reconciliation` (nightly).
 - Reads configuration layers from `config.layersFor(subscriptionId)`; resource status from
   `connectors.statusFor(websiteId)`; the website's identity issuer from `identity.identityFor(websiteId)` (document
-  `identity` section; it extends the content hash, so an issuer change or key rotation bumps the version).
+  `identity` section; it extends the content hash, so an issuer change or key rotation bumps the version) and the
+  website settings as the document **`website` section** `{ timeZone?, language?, currency? }` (only set values;
+  omitted when none; also in the content hash — F.16).
+- **Resources** (F.16): product-level `requires.resources` are always required (`@ss/entitlements` adds them to every
+  element, so a missing one disables every element); an element's kinds only while that element is on.
+  `resourceNeeds(websiteId)` → `[{ subscriptionId, appId, productSlug, kind, scope: 'product'|'element', elements,
+neededNow }]` from the last resolution (stored with the document); `websitesOfApp(appId)` → website ids with a live
+  subscription.
 - Calls `delivery.requestCompile(websiteId)` whenever a document version is bumped and when a subscription is
   cancelled (failures are logged, never fail commerce).
 - Emits `entitlement.changed@1` and `subscription.*@1` via integration.
@@ -111,6 +142,10 @@ Layered overrides with versions, locks, templates and scheduled changes for subs
 
 Event Hub and control-event delivery.
 
+- **Provenance** (F.16): ingest strips any producer-supplied `context.keyKind` and stamps the verified key's kind
+  (`pk` | `sk`, `@ss/contracts` `KEY_KINDS`) on the delivered envelope; actor types per key kind follow
+  `actorAllowedForKeyKind`. Product-published events lose any `keyKind` and are marked `context.source: 'product'`,
+  `context.product: <slug>`.
 - `ingest({ website, events })` (website keys; `@ss/contracts` envelope validation; dedupe `(websiteId,
 idempotencyKey)`; payloads are NOT persisted in Portal — only routing metadata: id, type, websiteId, receivedAt,
   delivery status) → `{ results }`
@@ -144,8 +179,13 @@ Client-owned resources (§1a): database, storage, ai, messaging, payments, analy
 - `rotate`, `revoke`, `assign({ connectorId, websiteIds })`
 - `statusFor(websiteId)` → `[{ kind, ref, status: connected|missing|failing|revoked }]`
 - `resolve({ appId, websiteId, kind })` → `{ kind, descriptor, expiresAt }` (F.9) — only for products whose manifest
-  `requires.resources` includes `kind` and that have an active subscription on that website; audited every time;
-  `expiresAt` ≤ 15 min.
+  requires `kind` (product level, or an element) and that have an active subscription on that website, and (F.16)
+  only while the kind is **needed now** per `commerce.resourceNeeds` (an element-level kind whose elements are all
+  off is refused, `element_off`); audited every time; `expiresAt` ≤ 15 min.
+- `GET /v1/merchants/:merchantId/websites/:websiteId/resources` adds `needs` (above); the console shows "needed now"
+  vs "needed if you enable …".
+- SMTP messaging descriptors: implicit TLS (`smtps://`) on port 465 (the default) unless `secure` says otherwise; any
+  other port is STARTTLS (`smtp://`).
 - Emits `resource.changed@1` via integration.
 
 ## delivery (`modules/delivery`)
@@ -176,36 +216,60 @@ active` subscriptions, whose manifest declares mode A. Packs → their headless 
 - `rollback({ websiteId, merchantId?, version, actor })`, `status({ websiteId, merchantId? })`, `snippet(...)`.
 - `uploadAsset({ appId, version, path, bytes, contentType, actor })` — bytes must equal the descriptor's sha256 and
   size (`delivery_asset_mismatch`), types js/mjs/css/json/svg/png/woff2 with per-type caps (415 / 413).
+- **Service UI bundles** (F.16, `delivery_ui_bundles`): a service product publishes the browser modules of its mode-A
+  elements itself. `POST /v1/product/ui-bundles` (product auth) with `{ descriptor, signature }` — the pack format
+  `ss-pack-bundle@1`, signature over `ss-pack-bundle.v1.<sha256(canonicalJson(descriptor))>` with a **registered
+  product key** (`catalog.verifyUiBundle`; no `publicJwk`), `descriptor.manifest` = `{ product: { slug, version },
+elements: [{ key, headless: 'file.js#export', renderer, strings? }] }` → `{ version, status: pending|ready, missing,
+uploadPath }` (same descriptor = same version). Then `PUT /v1/product/ui-bundles/:version/assets/<path>` per asset
+  (raw bytes, checks as for packs). When the last asset lands the bundle is `ready` (audited) and every subscribed
+  website recompiles; `GET /v1/product/ui-bundles` lists them. Assets are served immutable at
+  `/w/ui/<appId>/<version>/<path>`. The compiler uses the newest ready bundle for the elements the pinned manifest
+  declares mode A (budgets as for packs; the element API client is bound to `endpoints.base`), else the stub.
+  `manifest.json` records `delivery: 'pack' | 'ui-bundle' | 'ss-element-stub@2'`. Bundle data `assets` is
+  `<portal>/w/` and module paths start with `packs/` or `ui/`.
 - `createPreview({ merchantId, websiteId, body: { path?, base?: 'current'|'empty', elements?: [{ appId, key, config?,
 strings?, placement? }] }, actor })` → `{ previewId, url, expiresAt, version, budget, elements, warnings }`;
-  `servePreview({ token, path, search })`.
+  `servePreview({ token, path, search, host })`. With `PREVIEW_ORIGIN` (F.16) preview URLs use that origin, `/p/*` on
+  the Portal host is refused (`delivery_preview_refused`), and the preview host serves nothing but `/p/*` (404 from
+  `portal.handle` for API, `/w/*` and cron paths; `proxy.js` for console pages). There the page keeps `CSP: sandbox`
+  but adds `allow-same-origin` and admits the merchant's own scripts (`script-src https: 'unsafe-inline'`).
 - Job `delivery.compile`. Problems `delivery_budget_exceeded`, `delivery_asset_mismatch`, `delivery_preview_refused`.
 
 - Commerce calls `requestCompile` (see commerce); the compile reads only public service functions, so delivery has no
   write path into other modules except `identity.issueKey` / `revokeKey` for its one `pk_` key.
 
-**Element stub contract (`ss-element-stub@1`)** — how a service product's mode-A element runs inside the Loader with
-no product code in the bundle. The stub's headless core calls the product with the website's `pk_` key (`Authorization:
-Bearer pk_…`, `SS-Identity` when federated, `Idempotency-Key` on POST; Origin enforcement as for any `pk_` call):
-`GET <endpoints.base>/v1/elements/<key>/view` → view model; `POST <endpoints.base>/v1/elements/<key>/actions/<action>`
-(`action` matches `^[a-z][a-z0-9_]{0,39}$`, JSON body) → the next view model. View model (all optional, text only,
-never HTML): `{ title ≤ 200, body ≤ 2000, items: [{ text, href? }] ≤ 50, actions: [{ action, label ≤ 80 }] ≤ 10 }`.
+**Element stub contract (`ss-element-stub@2`; `@1` bundles keep working)** — how a service product's mode-A element
+without a UI bundle runs inside the Loader with no product code in the bundle. The stub's headless core calls the
+product with the website's `pk_` key (`Authorization: Bearer pk_…`, `SS-Identity` when federated, `Idempotency-Key` on
+POST; Origin enforcement as for any `pk_` call): `GET <endpoints.base>/v1/elements/<key>/view?ctx=<JSON>` → view
+model; `POST <endpoints.base>/v1/elements/<key>/actions/<action>?ctx=<JSON>` (`action` matches
+`^[a-z][a-z0-9_]{0,39}$`, JSON body) → the next view model. `ctx` (v2) is the page context `{ path ≤ 512, itemId? ≤
+128, pageType? ≤ 40 }`: item id / page type from `data-ss-item-id` / `data-ss-page-type` on the element's nearest
+ancestor, else the placement target, else `<html>` or `<meta name="ss:item-id|ss:page-type">`. View model (all
+optional, text only, never HTML): `{ title ≤ 200, body ≤ 2000, items: [{ text, href? }] ≤ 50, fields: [{ name
+(^[a-z][a-z0-9_]{0,39}$), type: text|email|tel|number|textarea|select|checkbox, label ≤ 200, required?, options?:
+[{ value, label? }] ≤ 50 }] ≤ 20, actions: [{ action, label ≤ 80 }] ≤ 10 }`. With fields, an action posts `{ ...input,
+fields: { <name>: string | number | null | boolean } }` (required fields are checked in the browser first); without
+fields the body is the action input as in v1.
 Errors are RFC 9457 problems. The stub renders with the Loader's safe `h()` (class names `ss-el`, `ss-el__title`,
-`ss-el__body`, `ss-el__items`, `ss-el__action`; design tokens via CSS variables), emits `<key>.action@1` (`{ action, ok? }`, catalogued in `@ss/contracts` `ELEMENT_EVENT_DATA` with `<key>.shown@1`), and exposes
+`ss-el__body`, `ss-el__items`, `ss-el__fields`, `ss-el__field`, `ss-el__input`, `ss-el__action`; design tokens via CSS variables), emits `<key>.action@1` (`{ action, ok? }`, catalogued in `@ss/contracts` `ELEMENT_EVENT_DATA` with `<key>.shown@1`), and exposes
 `actions.refresh()` / `actions.invoke(action, input)` on `SS.elements.get(key)`.
 
 ## Product API routes (`/v1/product/*`, `auth: 'product'`) — owned by the module named
 
-| Route                                | Module      |
-| ------------------------------------ | ----------- |
-| `GET /v1/product/entitlements`       | commerce    |
-| `GET /v1/product/revocations`        | identity    |
-| `POST /v1/product/usage`             | commerce    |
-| `POST /v1/product/launch/consume`    | catalog     |
-| `POST /v1/product/heartbeat`         | catalog     |
-| `POST /v1/product/keys/rotate`       | catalog     |
-| `POST /v1/product/events`            | integration |
-| `POST /v1/product/resources/resolve` | connectors  |
+| Route                                                                               | Module          |
+| ----------------------------------------------------------------------------------- | --------------- |
+| `GET /v1/product/entitlements`                                                      | commerce        |
+| `GET /v1/product/revocations`                                                       | identity        |
+| `POST /v1/product/usage`                                                            | commerce        |
+| `POST /v1/product/launch/consume`                                                   | catalog         |
+| `POST /v1/product/heartbeat`                                                        | catalog         |
+| `POST /v1/product/keys/rotate`                                                      | catalog         |
+| `POST /v1/product/events`                                                           | integration     |
+| `POST /v1/product/resources/resolve`                                                | connectors      |
+| `PUT /v1/product/websites/:websiteId/identity`                                      | identity (F.16) |
+| `POST\|GET /v1/product/ui-bundles` · `PUT /v1/product/ui-bundles/:version/assets/*` | delivery (F.16) |
 
 Website-facing: `POST /v1/events` (integration, `websiteKey`); delivery serves `/w/*` and `/p/*` (public). Console routes (`/v1/merchants/...`, `/v1/admin/...`)
 belong to the module owning the entity.

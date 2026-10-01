@@ -20,7 +20,7 @@ import { problem } from './http.js';
 /** @typedef {import('./config.js').SmtpConfig} SmtpConfig */
 
 /**
- * @typedef {'verify_email' | 'account_exists' | 'password_reset' | 'invite' | 'staff_welcome'} MailTemplate
+ * @typedef {'verify_email' | 'account_exists' | 'password_reset' | 'invite' | 'staff_welcome' | 'issuer_request'} MailTemplate
  *
  * @typedef {object} MailMessage
  * @property {string} to recipient address
@@ -101,6 +101,15 @@ const TEMPLATES = Object.freeze({
 		],
 		action: 'Set up account',
 		footer: 'The link expires and works once. If you did not expect this, contact your administrator.',
+	},
+	issuer_request: {
+		subject: (d) => `${d.productName ?? 'A product'} wants to become the identity issuer of ${d.domain ?? 'your website'}`,
+		lines: (d) => [
+			`${d.productName ?? 'A product'} asked to become the customer identity issuer of ${d.domain ?? 'your website'} on ${BRAND}.`,
+			'Once you approve, every product on the website accepts the sign-ins it issues. Nothing changes until you decide.',
+		],
+		action: 'Review the request',
+		footer: 'If you did not install this product or do not expect the request, reject it in the console.',
 	},
 });
 

@@ -33,7 +33,7 @@ import {
 	verifyRegistrationResponse,
 } from '@ss/protocol';
 import { problem } from '../../infra/http.js';
-import { checkBundleAssets, parseBundleUpload } from './core/bundle.js';
+import { checkBundleAssets, checkUiManifest, parseBundleUpload } from './core/bundle.js';
 import { diffManifests } from './core/diff.js';
 import { STALE_AFTER_MS, healthView, parseHeartbeat } from './core/health.js';
 import { launchRefusal, launchUrl } from './core/launch.js';
@@ -1027,6 +1027,40 @@ export const createCatalogService = (ctx, options = {}) => {
 		return createKeyResolver({ jwks, now: ctx.now });
 	};
 
+	/**
+	 * Verify a service product's signed **UI bundle** descriptor (F.16; delivery stores and serves it): the same
+	 * `ss-pack-bundle@1` descriptor and detached signature as packs, signed with one of the product's registered,
+	 * non-revoked keys (no key can be introduced this way). `manifest` is the UI subset checked by `checkUiManifest`.
+	 * @param {{ appId: string, body: unknown }} input
+	 * @returns {Promise<{ descriptor: import('./core/bundle.js').Descriptor, signature: import('./core/bundle.js').BundleSignature,
+	 *   slug: string, elements: Array<{ key: string, headless: string, renderer: string, strings?: string }> }>}
+	 */
+	const verifyUiBundle = async ({ appId, body }) => {
+		const app = await appDoc(appId);
+		if (app.kind !== 'service') fail('conflict', 'Only service products publish UI bundles; packs upload pack bundles.');
+		if (app.status === 'retired') fail('conflict', `${app.slug} is retired.`);
+		const parsed = parseBundleUpload(body);
+		if (!parsed.ok) return fail('catalog_bundle_invalid', 'The UI bundle upload is invalid.', { errors: parsed.errors });
+		const { descriptor, signature, publicJwk } = parsed.value;
+		if (publicJwk !== undefined)
+			fail('catalog_bundle_invalid', 'UI bundles are signed with a registered product key; publicJwk is not accepted.', {
+				errors: [{ path: '/publicJwk', message: 'unknown property' }],
+			});
+		const errors = checkUiManifest(descriptor.manifest, app.slug);
+		if (errors.length === 0)
+			errors.push(
+				...checkBundleAssets(/** @type {import('@ss/contracts').Manifest} */ (descriptor.manifest), descriptor.assets),
+			);
+		if (errors.length > 0) fail('catalog_bundle_invalid', 'The UI bundle descriptor is invalid.', { errors });
+		const resolver = await appKeys(appId);
+		if (!resolver || !(await verifyBundle({ descriptor, signature, keyResolver: resolver })))
+			fail('catalog_bundle_invalid', 'The UI bundle signature does not verify under the product keys.');
+		const manifest = /** @type {{ elements: Array<{ key: string, headless: string, renderer: string, strings?: string }> }} */ (
+			descriptor.manifest
+		);
+		return { descriptor, signature, slug: app.slug, elements: manifest.elements.map((e) => ({ ...e })) };
+	};
+
 	// ------------------------------------------------------------------------------------------------------------
 	// reads
 
@@ -1203,6 +1237,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		recordHeartbeat,
 		rotateKey,
 		consumeLaunch,
+		verifyUiBundle,
 	};
 };
 /** @typedef {ReturnType<typeof createCatalogService>} CatalogService */

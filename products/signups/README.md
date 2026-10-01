@@ -46,11 +46,21 @@ converge).
    with `*_verified`. Lifetime `sessions.access_ttl_minutes` (≤ 60, under app-kit's 24 h `iat` limit).
 2. Public keys: `GET /.well-known/jwks/<websiteId>.json` (cacheable); discovery at
    `<iss>/.well-known/openid-configuration`.
-3. **Register the issuer in the Portal once** (Website → Identity, or `PUT /v1/merchants/{m}/websites/{w}/identity`
-   with `{ issuer, jwksUrl, audience, claimMap: { subject: "sub", email: "email", phone: "phone_number" } }`).
-   `GET /v1/issuer` (sk_) returns exactly that call and whether the signed entitlement document already carries the
-   issuer (`registered`); the dashboard's Identity page shows it too. The Portal has **no product-facing API** to set a
-   website's issuer, so Signups cannot register itself (platform gap, see below).
+3. **Signups asks the Portal to become the website's issuer; the merchant approves.** The manifest declares
+   `capabilities.identityIssuer: true`, so Signups may call the Portal's product route
+   `PUT /v1/product/websites/{w}/identity` (app-kit `product.portal.requestIdentityIssuer`) with
+   `{ issuer, jwksUrl, audience, claimMap: { subject: "sub", email: "email", phone: "phone_number" } }`:
+   - `POST /v1/issuer:register` (sk_, idempotent) sends it and answers **202 `{ status: "pending" }`** — the Portal
+     stores the request, e-mails the merchant owner and shows it under Website → Identity — or **200
+     `{ status: "active", registered: true }`** once the merchant has approved (repeating is safe). The dashboard's
+     Identity page has the same action ("Request in the Portal") and shows the last request.
+   - The **daily job** sends the request once by itself for every website whose entitlement document does not carry
+     the issuer yet and that has no request for the current issuer configuration (a rejected request is not repeated
+     on its own). Failures (Portal down, 403) are logged and never fail the job; the next run retries.
+   - On approval the Portal makes Signups the website's active issuer (`managedBy` Signups), fetches the JWKS and
+     re-signs the entitlement documents; `GET /v1/issuer` then reports `registered: true`. The merchant can still set
+     or replace the issuer directly (Website → Identity, or `PUT /v1/merchants/{m}/websites/{w}/identity` with the
+     same body — `GET /v1/issuer` returns that call as `portal`), and may reject the request.
 4. From then on every product verifies the customer offline with app-kit (`identity: 'optional' | 'required'`). The
    Portal end-to-end test proves it: Loyalty serves `GET /v1/wallet` to a Signups token.
 
@@ -104,12 +114,14 @@ the access token in `SS-Identity`, server keys may name `?customerId=` instead).
 | Risk (sk)      | `GET /v1/risk-events`                                                                                                        |
 | Standard       | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export`, `/v1/data:anonymize` |
 
-Errors are RFC 9457 problems with stable codes (`code_invalid` — `errors[0]` carries `attempts_remaining` —,
+Errors are RFC 9457 problems with stable codes (`code_invalid` — RFC 9457 extension member `attemptsRemaining` (also `errors[0]` `attempts_remaining`, kept for v1 clients) —,
 `code_expired`, `attempts_exhausted`, `too_soon`, `send_limit`, `velocity_limit`, `identifier_invalid`,
 `identifier_blocked`, `channel_disabled`, `delivery_failed`, `consent_required` — `errors` list the documents —,
-`refresh_reused`, `refresh_conflict`, `session_ended`, `redirect_not_allowed`, `identity_required`, …).
+`refresh_reused`, `refresh_conflict`, `session_ended`, `redirect_not_allowed`, `identity_required`, …); 429s also carry `retryAfterSeconds`.
 
-**Messaging wire format.** The merchant's `generic-http` messaging connector receives `POST <baseUrl>/messages` with
+**Messaging.** Both connector kinds are app-kit built-ins (the product registers no adapter): `smtp` delivers e-mail
+codes only (`to`, `subject`, `text`; SMS / WhatsApp fail with `delivery_failed`). **Wire format of `generic-http`.** The
+merchant's `generic-http` messaging connector receives `POST <baseUrl>/messages` with
 `{ channel, to, subject?, text, purpose: otp | magic_link | new_device, lang, reference, idempotencyKey, variables }`
 and routes it to its e-mail / SMS / WhatsApp provider. A non-2xx answer, or a 2xx body such as `{ "sent": false }` /
 `{ "error": … }`, is a failed delivery (`502 delivery_failed`, the cooldown is released).
@@ -123,7 +135,8 @@ and routes it to its e-mail / SMS / WhatsApp provider. A non-2xx answer, or a 2x
 ## Dashboard (SSO)
 
 Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs, customers with verification badges, and the
-Identity page (issuer, JWKS URL, audience, claim map, published keys, registered or not). Demo launches show sandbox
+Identity page (issuer, JWKS URL, audience, claim map, published keys, registered or not, the last Portal request and a
+"Request in the Portal" button for merchant / admin / impersonation launches). Demo launches show sandbox
 data; impersonation shows the audit banner.
 
 ## Develop and certify
@@ -155,9 +168,13 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin — it is also the
    prefix of every website's issuer, so keep it stable.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
-5. Per merchant website: connect a database and a messaging connector, then register the issuer (above).
+5. Per merchant website: connect a database and a messaging connector; Signups then requests to be the issuer and the
+   merchant approves it in the Portal (above).
 
 ## Changelog
 
+- **Unreleased** — problems carry RFC 9457 extension members (`attemptsRemaining`, `retryAfterSeconds`); messaging
+  uses app-kit's built-in `generic-http` / `smtp` adapters; Signups requests to be the website's identity issuer
+  (`capabilities.identityIssuer`, `POST /v1/issuer:register`, daily job, dashboard button; the merchant approves).
 - **1.0.0** — first release: nine elements, sign-in and account renderers with headless cores, REST v1, issuer (JWKS,
   discovery, rotation), dashboard, daily job.

@@ -27,7 +27,7 @@
 		"offlineGrace": "PT24H"
 	},
 	"scopes": ["events.subscribe:inventory.changed@1", "events.subscribe:price.changed@1", "events.subscribe:custom.*"],
-	"requires": { "resources": ["database", "messaging"] },
+	"requires": { "resources": ["database"] },
 	"events": {
 		"consumes": ["custom.*", "inventory.changed@1", "price.changed@1"],
 		"publishes": ["alerts.subscribed@1", "alerts.sent@1"]

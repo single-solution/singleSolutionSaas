@@ -3,7 +3,7 @@
  * of field errors (`{ path, message }`, JSON-pointer paths). Objects are closed: unknown members are errors.
  * @module
  */
-import { normaliseDomain } from '@ss/contracts';
+import { isTimeZone, normaliseDomain } from '@ss/contracts';
 
 /** @typedef {{ path: string, message: string }} FieldError */
 /**
@@ -156,16 +156,62 @@ export const grants = (value) => {
 };
 
 /**
- * Website-key scopes: 1..32 unique scope patterns.
+ * Website-key scopes: 0..32 unique scope names (empty = the default scopes; the vocabulary is checked on issue,
+ * `core/scopes.js`).
  * @type {Field<string[]>}
  */
 export const scopes = (value) => {
-	if (!Array.isArray(value) || value.length === 0 || value.length > MAX_SCOPES)
-		return bad(`must be an array of 1..${MAX_SCOPES} scopes`);
+	if (!Array.isArray(value) || value.length > MAX_SCOPES) return bad(`must be an array of at most ${MAX_SCOPES} scopes`);
 	if (value.some((scope) => typeof scope !== 'string' || !SCOPE.test(scope))) return bad('contains an invalid scope');
 	if (new Set(value).size !== value.length) return bad('must not repeat scopes');
 	return okv(/** @type {string[]} */ ([...value]));
 };
+
+/**
+ * An IANA time zone name the runtime knows (`Intl`), in its canonical spelling (`europe/berlin` → `Europe/Berlin`).
+ * @type {Field<string>}
+ */
+export const timeZone = (value) => {
+	if (typeof value !== 'string' || !/^[A-Za-z][A-Za-z0-9_+/-]{0,63}$/.test(value) || !isTimeZone(value))
+		return bad('must be an IANA time zone such as Europe/Berlin');
+	return okv(new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone);
+};
+
+/**
+ * A BCP 47 language tag, canonicalised with `Intl.getCanonicalLocales` (`en-us` → `en-US`).
+ * @type {Field<string>}
+ */
+export const language = (value) => {
+	if (typeof value !== 'string' || value.length === 0 || value.length > 35 || !/^[A-Za-z0-9-]+$/.test(value))
+		return bad('must be a BCP 47 language tag such as en or de-CH');
+	try {
+		const [tag] = Intl.getCanonicalLocales(value);
+		return tag ? okv(tag) : bad('must be a BCP 47 language tag such as en or de-CH');
+	} catch {
+		return bad('must be a BCP 47 language tag such as en or de-CH');
+	}
+};
+
+/** ISO 4217 codes the runtime knows (empty when `Intl.supportedValuesOf` is unavailable: then the shape alone counts). */
+const CURRENCIES = new Set(typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('currency') : []);
+
+/**
+ * An ISO 4217 currency code, upper-cased (`eur` → `EUR`).
+ * @type {Field<string>}
+ */
+export const currency = (value) => {
+	if (typeof value !== 'string' || !/^[A-Za-z]{3}$/.test(value)) return bad('must be an ISO 4217 currency code such as EUR');
+	const code = value.toUpperCase();
+	return CURRENCIES.size === 0 || CURRENCIES.has(code) ? okv(code) : bad('must be an ISO 4217 currency code such as EUR');
+};
+
+/**
+ * `null` (clear the setting) or a value of `field`.
+ * @template T
+ * @param {Field<T>} field
+ * @returns {Field<T | null>}
+ */
+export const nullable = (field) => (value) => (value === null ? okv(null) : field(value));
 
 /**
  * A website domain, normalised with `@ss/contracts` `normaliseDomain` (public hosts only).
@@ -317,12 +363,25 @@ export const inputs = Object.freeze({
 		/** @type {(b: unknown, options?: { isPublicSuffix?: (domain: string) => boolean }) => Parsed<{ domain: string }>} */ (
 			(b, options) => object(b, { domain: domain(options) })
 		),
+	websiteSettings:
+		/** @type {(b: unknown) => Parsed<{ timeZone?: string | null, language?: string | null, currency?: string | null }>} */ (
+			(b) => {
+				const parsed = object(b, {
+					timeZone: { optional: nullable(timeZone) },
+					language: { optional: nullable(language) },
+					currency: { optional: nullable(currency) },
+				});
+				if (parsed.ok && Object.keys(parsed.value).length === 0)
+					return { ok: false, errors: [{ path: '', message: 'send at least one of timeZone, language, currency' }] };
+				return /** @type {any} */ (parsed);
+			}
+		),
 	keyIssue:
-		/** @type {(b: unknown) => Parsed<{ kind: 'pk' | 'sk', scopes: string[], expiresAt?: number, allowSubdomains?: boolean }>} */ (
+		/** @type {(b: unknown) => Parsed<{ kind: 'pk' | 'sk', scopes?: string[], expiresAt?: number, allowSubdomains?: boolean }>} */ (
 			(b) =>
 				object(b, {
 					kind: oneOf(/** @type {const} */ (['pk', 'sk'])),
-					scopes,
+					scopes: { optional: scopes },
 					expiresAt: { optional: timestamp },
 					allowSubdomains: { optional: bool },
 				})

@@ -47,7 +47,7 @@ the customer in the cart.
   with a single conditional `$inc` (`taken < max`); a refused claim gives back those already taken. Concurrent
   checkouts can never over-redeem a limited code (tested with four parallel reservations and through the real Portal).
 - **Lifecycle.** `pending → reserved → redeemed | released | expired` by compare-and-set; expired reservations are swept
-  lazily when a code is full and by the job (`/cron/sweep`, every 10 min, which also flushes usage and heartbeats).
+  lazily when a code is full and by the job (`/cron/sweep`, every 10 min, which also heartbeats; usage and events are flushed by app-kit itself).
   A late `order.completed@1` re-claims an expired reservation when `api.confirm_expired` allows and the use is free.
 - **Exactly once.** Reservation ids derive from `reference` or the Idempotency-Key; redemption counters count once per
   code (`counted`); usage records and events carry deterministic idempotency keys.

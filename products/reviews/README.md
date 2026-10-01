@@ -139,8 +139,10 @@ settlement).
 ## Notes and limits
 
 - **Photos are stored as uploaded.** Without image dependencies the product cannot re-encode images or strip EXIF
-  metadata (location, device). Uploads are restricted to `image/jpeg`, `image/png` and `image/webp`, the size is checked
-  with a HEAD request when the review is submitted, and photos stay private in the merchant's bucket (presigned view
+  metadata (location, device). Uploads are restricted to `image/jpeg`, `image/png` and `image/webp`; the presigned PUT
+  signs `content-type` and `content-length` (the bucket refuses another type or size, so the body must be exactly the
+  declared `size`), and a HEAD request re-checks type and size when the review is submitted (for stores that do not
+  enforce signed headers); stored keys are relative to the product's area of the bucket (`objectKey` is the full key), and photos stay private in the merchant's bucket (presigned view
   links) unless a public base URL is configured. Merchants who need EXIF stripping should process uploads in their
   bucket (e.g. a storage event function) or set a bucket lifecycle rule; tell shoppers that photos are published as-is.
   Pending upload slots expire after `retention.photos`; their objects need a bucket lifecycle rule on

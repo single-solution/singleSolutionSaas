@@ -29,10 +29,11 @@ export const balanceState = (meter) => {
 
 /**
  * @param {{ me: any, merchantId: string | null, websites: any[], meter: any, children: import('react').ReactNode,
+ *   notifications?: any[],
  *   impersonation?: { staffId: string, staffName?: string | null, expiresAt: string | null } | null }} props `impersonation`: the staff member
  *   acting as this user (session `via`) — shown as a banner on every page.
  */
-export function ConsoleShell({ me, merchantId, websites, meter, children, impersonation = null }) {
+export function ConsoleShell({ me, merchantId, websites, meter, children, impersonation = null, notifications = [] }) {
 	const pathname = usePathname() ?? '';
 	const match = /^\/websites\/(web_[0-9a-z]+)(?:\/([a-z-]+))?/.exec(pathname);
 	const currentWebsiteId = match?.[1] ?? null;
@@ -112,11 +113,31 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, impers
 				reaches zero.
 			</Callout>
 		) : null;
+	// F.16: a product asks to become a website's identity issuer (approve or reject on Website → Identity)
+	const requests = (Array.isArray(notifications) ? notifications : []).filter((n) => n?.kind === 'identity_issuer_request');
+	const requestBanner =
+		requests.length > 0 ? (
+			<Callout
+				tone="info"
+				title={`${requests[0].request?.product?.name ?? 'A product'} wants to become your identity issuer${
+					requests[0].domain ? ` on ${requests[0].domain}` : ''
+				}`}
+				actions={
+					<Link href={routes.identity(requests[0].websiteId)} className="text-sm font-semibold underline">
+						Review
+					</Link>
+				}>
+				{requests.length > 1
+					? `${requests.length} identity issuer requests are waiting for your decision.`
+					: 'Nothing changes until you approve the request.'}
+			</Callout>
+		) : null;
 	const banner =
-		impersonation || balanceBanner ? (
+		impersonation || balanceBanner || requestBanner ? (
 			<div className="space-y-3">
 				<ImpersonationBanner impersonation={impersonation} userEmail={me?.user?.email ?? null} />
 				{balanceBanner}
+				{requestBanner}
 			</div>
 		) : null;
 

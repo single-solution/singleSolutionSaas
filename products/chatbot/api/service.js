@@ -62,7 +62,7 @@ import { createKnowledge } from './knowledge.js';
  * @property {(usage: { websiteId: string, unit: string, quantity: number, idempotencyKey: string }) => Promise<unknown>} recordUsage
  * @property {(entry: Record<string, unknown>) => Promise<unknown>} audit
  * @property {(websiteId: string) => Promise<import('../adapters/ai.js').ChatAdapter>} ai the merchant's AI connector
- * @property {{ fetch: import('../adapters/outbound.js').Send }} outbound
+ * @property {{ fetch: import('../adapters/platform.js').Send }} outbound
  * @property {import('../adapters/tokens.js').Tokens} tokens
  * @property {(text: string) => string} hash
  * @property {(n: number) => Uint8Array} randomBytes

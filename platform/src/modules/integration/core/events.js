@@ -5,10 +5,12 @@
  */
 import {
 	CONTROL_EVENT_DATA,
+	eventEnvelopeSchema,
 	EVENT_PUBLISH_SCOPE,
 	EVENT_SUBSCRIBE_SCOPE,
 	LOADER_EVENT_DATA,
 	STANDARD_EVENT_DATA,
+	actorAllowedForKeyKind,
 	eventGlobMatches,
 	eventNamespace,
 	eventScopeOf,
@@ -134,12 +136,43 @@ const CONTROL_NAMESPACES = new Set(Object.keys(CONTROL_EVENT_DATA).map((type) =>
  */
 
 /**
- * Check one event sent by a website (key claims bind website and environment).
+ * Whether the contracts' envelope carries `context.keyKind` (provenance stamped by the Event Hub, F.16). Until it does,
+ * the Hub still strips any producer-supplied value but stamps nothing.
+ */
+export const KEY_KIND_SUPPORTED = Boolean(/** @type {any} */ (eventEnvelopeSchema).properties?.context?.properties?.keyKind);
+
+/**
+ * A copy of a raw event without producer-supplied provenance (`context.keyKind` is the Event Hub's to set).
  * @param {unknown} raw
+ * @returns {unknown}
+ */
+export const withoutProvenance = (raw) => {
+	if (!isObject(raw)) return raw;
+	const event = /** @type {Record<string, unknown>} */ (raw);
+	if (!isObject(event.context) || !Object.hasOwn(/** @type {object} */ (event.context), 'keyKind')) return raw;
+	const context = { .../** @type {Record<string, unknown>} */ (event.context) };
+	delete context.keyKind;
+	return { ...event, context };
+};
+
+/**
+ * Stamp the verified key kind of a website event (`pk` browser, `sk` server) when the contracts support it.
+ * @param {EventEnvelope} event
+ * @param {'pk' | 'sk'} kind
+ * @returns {EventEnvelope}
+ */
+export const stampKeyKind = (event, kind) =>
+	KEY_KIND_SUPPORTED ? /** @type {EventEnvelope} */ ({ ...event, context: { ...(event.context ?? {}), keyKind: kind } }) : event;
+
+/**
+ * Check one event sent by a website (key claims bind website and environment).
+ * @param {unknown} input
  * @param {{ websiteId: string, env: string, kind: 'pk' | 'sk' }} key
  * @returns {EventCheck}
  */
-export const checkWebsiteEvent = (raw, key) => {
+export const checkWebsiteEvent = (input, key) => {
+	// provenance is the Hub's: a producer-supplied `context.keyKind` is dropped, the verified one stamped below
+	const raw = withoutProvenance(input);
 	const checked = validateEvent(raw);
 	if (!checked.ok) {
 		const type = isObject(raw) ? /** @type {Record<string, unknown>} */ (raw).type : undefined;
@@ -150,21 +183,23 @@ export const checkWebsiteEvent = (raw, key) => {
 	if (isControlEvent(event.type)) return { ok: false, reason: 'control_event' };
 	if (event.websiteId !== key.websiteId) return { ok: false, reason: 'website_mismatch' };
 	if (event.env !== key.env) return { ok: false, reason: 'env_mismatch' };
-	const actor = event.actor.type;
-	if (key.kind === 'pk' ? actor !== 'customer' && actor !== 'anonymous' : actor === 'product' || actor === 'system')
-		return { ok: false, reason: 'actor_not_allowed' };
-	return { ok: true, event };
+	// one rule for every producer and consumer: @ss/contracts WEBSITE_KEY_ACTORS
+	if (!actorAllowedForKeyKind(key.kind, event.actor.type)) return { ok: false, reason: 'actor_not_allowed' };
+	return { ok: true, event: stampKeyKind(event, key.kind) };
 };
 
 /**
  * Check one event published by a product against its accepted manifest: envelope, platform namespaces refused,
  * declared in `events.publishes`, product namespace or a standard event covered by an `events.publish:` scope.
- * Product events without a catalogued data schema are checked on the envelope only.
- * @param {unknown} raw
+ * Product events without a catalogued data schema are checked on the envelope only. Provenance: a producer-supplied
+ * `context.keyKind` is dropped (it describes website keys only) and accepted events are marked `context.source:
+ * 'product'` with `context.product` = the publisher's slug.
+ * @param {unknown} input
  * @param {Manifest} manifest
  * @returns {EventCheck}
  */
-export const checkProductEvent = (raw, manifest) => {
+export const checkProductEvent = (input, manifest) => {
+	const raw = withoutProvenance(input);
 	const namespace = `${eventNamespace(manifest.product.slug)}.`;
 	const checked = validateEvent(raw);
 	const type = isObject(raw) ? /** @type {Record<string, unknown>} */ (raw).type : undefined;
@@ -180,11 +215,16 @@ export const checkProductEvent = (raw, manifest) => {
 	if (!(manifest.events?.publishes ?? []).includes(event.type)) return { ok: false, reason: 'not_declared' };
 	if (event.context?.product !== undefined && event.context.product !== manifest.product.slug)
 		return { ok: false, reason: 'product_mismatch' };
-	if (event.type.startsWith(namespace)) return { ok: true, event };
+	/** @type {EventEnvelope} */
+	const marked = /** @type {EventEnvelope} */ ({
+		...event,
+		context: { ...(event.context ?? {}), source: 'product', product: manifest.product.slug },
+	});
+	if (event.type.startsWith(namespace)) return { ok: true, event: marked };
 	if (!Object.hasOwn(STANDARD_EVENT_DATA, event.type)) return { ok: false, reason: 'outside_namespace' };
 	const publish = scopePatterns(manifest.scopes ?? [], EVENT_PUBLISH_SCOPE);
 	if (!publish.some((pattern) => eventGlobMatches(pattern, event.type))) return { ok: false, reason: 'publish_scope_missing' };
-	return { ok: true, event };
+	return { ok: true, event: marked };
 };
 
 /**

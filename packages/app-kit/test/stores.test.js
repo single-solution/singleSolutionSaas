@@ -106,6 +106,35 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect(retried[0]).toMatchObject({ attempts: 1, lastError: 'x' });
 	});
 
+	it('event outbox: unique ids, leases, ack drops the envelope, retry, dead letter, retention', async () => {
+		const clock = createClock();
+		const { eventOutbox } = factory(clock.now);
+		const envelope = (/** @type {string} */ id) => ({ id, type: 'coupon_box.created@1', data: { n: 1 } });
+		expect(await eventOutbox.enqueue({ id: 'e1', envelope: envelope('e1') })).toEqual({ inserted: true });
+		expect(await eventOutbox.enqueue({ id: 'e1', envelope: envelope('e1') })).toEqual({ inserted: false });
+		await eventOutbox.enqueue({ id: 'e2', envelope: envelope('e2') });
+		await eventOutbox.enqueue({ id: 'e3', envelope: envelope('e3') });
+		const first = await eventOutbox.lease({ now: clock.now(), limit: 2, leaseMs: 1000, owner: 'a' });
+		expect(first).toHaveLength(2);
+		expect(first[0]).toMatchObject({ attempts: 0, status: 'pending', envelope: { type: 'coupon_box.created@1' } });
+		const second = await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'b' });
+		expect(second).toHaveLength(1);
+		expect(await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'c' })).toEqual([]);
+		await eventOutbox.ack([first[0]?.id ?? ''], { now: clock.now(), retainMs: 10_000 });
+		await eventOutbox.retry([first[1]?.id ?? ''], { now: clock.now(), nextAttemptAt: clock.now() + 5000, error: 'x' });
+		await eventOutbox.deadLetter([second[0]?.id ?? ''], { now: clock.now(), error: 'rejected', retainMs: 10_000 });
+		for (const op of /** @type {const} */ (['ack', 'retry', 'deadLetter'])) {
+			await /** @type {any} */ (eventOutbox)[op]([], { now: 0, retainMs: 1, nextAttemptAt: 0, error: 'x' });
+			await /** @type {any} */ (eventOutbox)[op](['missing'], { now: 0, retainMs: 1, nextAttemptAt: 0, error: 'x' });
+		}
+		expect(await eventOutbox.stats()).toEqual({ pending: 1, sent: 1, dead: 1 });
+		expect(await eventOutbox.enqueue({ id: first[0]?.id ?? '', envelope: envelope('x') })).toEqual({ inserted: false });
+		clock.advance(5000);
+		const retried = await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'd' });
+		expect(retried).toHaveLength(1);
+		expect(retried[0]).toMatchObject({ attempts: 1, lastError: 'x' });
+	});
+
 	it('revocations accumulate with the cursor', async () => {
 		const { revocations } = factory(Date.now);
 		expect(await revocations.get()).toEqual({ keyIds: [], cursor: null, syncedAt: null });
@@ -136,7 +165,7 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect(await idempotency.begin('k', 'f1', clock.now() + 1000)).toEqual({ state: 'new' });
 		expect(await idempotency.begin('k', 'f1', clock.now() + 1000)).toEqual({ state: 'pending' });
 		expect(await idempotency.begin('k', 'f2', clock.now() + 1000)).toEqual({ state: 'mismatch' });
-		const response = { status: 201, headers: { 'content-type': 'application/json' }, body: '{"id":1}' };
+		const response = { status: 201, headers: { 'content-type': 'application/json' }, replay: /** @type {const} */ ('website') };
 		await idempotency.complete('k', response);
 		await idempotency.complete('missing', response);
 		expect(await idempotency.begin('k', 'f1', clock.now() + 1000)).toEqual({ state: 'done', response });

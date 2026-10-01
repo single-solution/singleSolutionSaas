@@ -35,7 +35,7 @@ export const VERSION = '0.1.0';
 export const USAGE = `ss — Single Solution developer CLI (SSPS v1)
 
 Usage:
-  ss app init <dir> --kind service|pack --slug <slug> --name <name> [--sdk-version <range>]
+  ss app init <dir> --kind service|pack --slug <slug> --name <name> [--sdk-version <range>] [--minimal]
   ss app validate [dir] [--json]
   ss dev [--dir <dir>] [--port <n>] [--fixture ss.dev.json] [--state <file>] [--mongo-uri <uri>]
   ss dev env                                   development env values (signing key, registration token + hash)
@@ -46,6 +46,7 @@ Usage:
   ss dev entitlements --website <id> --element <key> --enabled true|false [--layer website|merchant|platform|admin]
   ss dev subscription --website <id> --status active|paused|cancelled [--reason <code>]
   ss dev resource --website <id> --kind database|storage|ai|messaging|payments|analytics --status connected|missing|failing|revoked
+  ss dev identity [--website <id> --decision approve|reject]   list or decide identity-issuer requests
   ss dev settle [--hours <n>]
   ss dev state
   ss certify [dir] --url <product url> [--portal-url <url>] [--token <registration token>] [--state <file>] [--report <file>] [--json]
@@ -452,6 +453,18 @@ const dev = async (args, deps) => {
 			io.out(`${JSON.stringify(result.resources)}\n${deliveriesText(result.deliveries)}`);
 			return 0;
 		}
+		case 'identity': {
+			const { values } = parse(rest, { ...common, website: { type: 'string' }, decision: { type: 'string' } });
+			if (typeof values.website !== 'string') {
+				io.out(`${JSON.stringify(await call(values, 'identity', {}), null, 2)}\n`);
+				return 0;
+			}
+			if (values.decision !== 'approve' && values.decision !== 'reject')
+				return usageError(io, 'dev identity --website needs --decision approve|reject');
+			const result = await call(values, 'identity', { websiteId: values.website, decision: values.decision });
+			io.out(`identity issuer request ${result.request.status}\n${deliveriesText(result.deliveries)}`);
+			return 0;
+		}
 		case 'settle': {
 			const { values } = parse(rest, { ...common, hours: { type: 'string' }, fixture: { type: 'string' } });
 			const hours = typeof values.hours === 'string' ? Number(values.hours) : 1;
@@ -543,6 +556,7 @@ export const main = async (argv, deps) => {
 					slug: { type: 'string' },
 					name: { type: 'string' },
 					'sdk-version': { type: 'string' },
+					minimal: { type: 'boolean' },
 				});
 				const [dir] = positionals;
 				if (!dir) return usageError(io, 'app init needs a target directory');
@@ -554,6 +568,7 @@ export const main = async (argv, deps) => {
 					slug: String(values.slug ?? ''),
 					name: String(values.name ?? ''),
 					...(typeof values['sdk-version'] === 'string' ? { sdkVersion: values['sdk-version'] } : {}),
+					...(values.minimal === true ? { minimal: true } : {}),
 				});
 				io.out(
 					`Created ${kind} product '${values.slug}' in ${path.relative(full.cwd, result.dir) || '.'} (${result.files.length} files)\nNext: cd ${dir} && ss app validate${kind === 'service' ? ' && ss dev env > .env.local' : ''}\n`,

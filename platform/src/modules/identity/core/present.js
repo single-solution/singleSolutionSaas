@@ -24,6 +24,10 @@ export const presentWebsite = (w) => ({
 	env: w.env,
 	twinId: w.twinId,
 	status: w.status,
+	// website settings (F.16): products read them from the entitlement document's `website` section
+	timeZone: w.settings?.timeZone ?? null,
+	language: w.settings?.language ?? null,
+	currency: w.settings?.currency ?? null,
 	createdAt: iso(w.createdAt),
 	deletedAt: iso(w.deletedAt),
 });

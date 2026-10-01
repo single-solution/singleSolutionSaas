@@ -28,7 +28,7 @@ import {
 } from '../core/validate.js';
 import { repositoriesFor } from '../adapters/db.js';
 import { createMessenger } from '../adapters/messaging.js';
-import { DASHBOARD_ROLES, resolveDashboard } from './dashboard.js';
+import { DASHBOARD_ROLES, DASHBOARD_WRITE_ROLES, resolveDashboard } from './dashboard.js';
 import { createEventHandlers } from './events.js';
 import { createSignupsService } from './service.js';
 import { sessionView } from './session.js';
@@ -63,6 +63,15 @@ export const respond = (outcome) => {
 		return problem(outcome.code, outcome.detail, {
 			...(outcome.errors ? { errors: outcome.errors } : {}),
 			headers: outcome.retryAfter ? { 'retry-after': String(outcome.retryAfter) } : {},
+			// RFC 9457 extension members: `attemptsRemaining` (code_invalid), `retryAfterSeconds` (429s)
+			...(outcome.extensions || outcome.retryAfter
+				? {
+						extensions: {
+							...(outcome.extensions ?? {}),
+							...(outcome.retryAfter ? { retryAfterSeconds: outcome.retryAfter } : {}),
+						},
+					}
+				: {}),
 		});
 	if (outcome.status === 204) return noContent();
 	if (outcome.status === 201) return created(outcome.value);
@@ -82,6 +91,7 @@ export const createSignups = (app) => {
 		publish: (event) => product.portal.publishEvent(event),
 		recordUsage: (usage) => product.usage.record(usage),
 		audit: (entry) => product.audit.record(entry),
+		requestIssuer: (input) => product.portal.requestIdentityIssuer(input),
 		log: app.log,
 	});
 	/**
@@ -477,6 +487,15 @@ export const buildRoutes = (signups) => {
 			handler: async (ctx) => ok(await service.issuer(await site(ctx))),
 		}),
 		defineRoute({
+			// ask the Portal to make Signups this website's identity issuer (the merchant approves); idempotent
+			method: 'POST',
+			path: '/v1/issuer:register',
+			...website('sessions', 'sk'),
+			idempotent: 'optional',
+			rateLimit: { limit: 10, windowMs: 60 * 60_000 },
+			handler: async (ctx) => respond(await service.registerIssuer(await site(ctx), { actor: actor(ctx) })),
+		}),
+		defineRoute({
 			method: 'POST',
 			path: '/v1/issuer:rotate',
 			...website('sessions', 'sk'),
@@ -599,6 +618,26 @@ export const buildRoutes = (signups) => {
 				});
 				if (context.state !== 'ready') return problem('bad_request', 'Open the dashboard for a website.');
 				return ok({ demo: context.data.demo, overview: await context.data.overview(), issuer: await context.data.issuer() });
+			},
+		}),
+		defineRoute({
+			// the dashboard's "Request in the Portal" button (same as POST /v1/issuer:register)
+			method: 'POST',
+			path: '/v1/dashboard/issuer:register',
+			auth: 'launch',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: 'optional',
+			rateLimit: { limit: 10, windowMs: 60 * 60_000 },
+			handler: async (ctx) => {
+				const context = await resolveDashboard({ signups, sessionId: ctx.session.id, website: ctx.websiteId });
+				if (context.state !== 'ready') return problem('bad_request', 'Open the dashboard for a website.');
+				const view = sessionView(ctx.session);
+				const outcome = await context.data.registerIssuer(
+					view.actor
+						? { type: 'staff', id: view.actor }
+						: { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' },
+				);
+				return outcome ? respond(outcome) : problem('forbidden', 'The demo cannot change anything.');
 			},
 		}),
 	];

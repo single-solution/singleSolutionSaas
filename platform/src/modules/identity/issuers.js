@@ -120,10 +120,32 @@ export const createIssuers = (deps, { loadWebsite, collection, options = {} }) =
 		},
 
 		/**
-		 * Register or replace the website's identity issuer. A JWKS URL is fetched now and must yield a usable key.
-		 * @param {{ merchantId: string, websiteId: string, input: IssuerInput, actor: Actor, meta?: Meta }} input
+		 * The stored issuer record (internal: issuer requests compare against it), or null.
+		 * @param {{ merchantId: string, websiteId: string }} input
 		 */
-		setIssuer: async ({ merchantId, websiteId, input, actor, meta = {} }) => {
+		stored: async ({ merchantId, websiteId }) => stored(await loadWebsite(websiteId, merchantId)),
+
+		/**
+		 * Check an issuer input without storing it: a JWKS URL must yield a usable key now (product issuer requests).
+		 * @param {IssuerInput} input
+		 */
+		checkInput: async (input) => {
+			if (!input.jwksUrl) return { ok: true, kids: (input.publicJwks ?? []).map((k) => k.kid) };
+			const fetched = await fetchJwks(input.jwksUrl);
+			if (!fetched.ok)
+				throw problem('validation_failed', 'The JWKS URL did not yield a usable key.', {
+					errors: [{ path: '/jwksUrl', message: fetched.reason }],
+				});
+			return { ok: true, kids: fetched.keys.map((k) => k.kid) };
+		},
+
+		/**
+		 * Register or replace the website's identity issuer. A JWKS URL is fetched now and must yield a usable key.
+		 * `managedBy` names the product whose approved request set it (F.16); a merchant's own change clears it.
+		 * @param {{ merchantId: string, websiteId: string, input: IssuerInput, actor: Actor, meta?: Meta,
+		 *   managedBy?: { appId: string, slug: string, name: string } | null }} input
+		 */
+		setIssuer: async ({ merchantId, websiteId, input, actor, meta = {}, managedBy = null }) => {
 			const website = await loadWebsite(websiteId, merchantId);
 			if (website.status !== 'active') throw problem('conflict', 'The website is deleted.');
 			const at = new Date(ctx.now());
@@ -144,6 +166,7 @@ export const createIssuers = (deps, { loadWebsite, collection, options = {} }) =
 				jwksUrl: input.jwksUrl,
 				audience: input.audience,
 				claimMap: input.claimMap,
+				managedBy,
 				...keys,
 			};
 			await of(merchantId).updateOne({ _id: websiteId, merchantId }, { $set: doc }, { upsert: true });
@@ -158,6 +181,7 @@ export const createIssuers = (deps, { loadWebsite, collection, options = {} }) =
 						issuer: doc.issuer,
 						source: doc.jwksUrl ? 'jwks_url' : 'inline',
 						kids: doc.keys.map((/** @type {any} */ k) => k.kid),
+						...(managedBy ? { managedBy: managedBy.appId } : {}),
 					},
 					meta,
 				},

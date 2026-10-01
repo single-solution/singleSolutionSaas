@@ -45,10 +45,9 @@ export const cronAuthorized = (header, secret) => {
 /**
  * The cron route.
  * @param {{ app: { cronSecret: string | null, now: () => number, registry: { list: () => Promise<string[]> } },
- *   product: { usage: { flush: () => Promise<Record<string, number>> } },
  *   siteFor: (websiteId: string) => Promise<any>, service: { maintain: (site: any) => Promise<Record<string, number>> } }} chatbot
  */
-export const cronRoutes = ({ app, product, siteFor, service }) => [
+export const cronRoutes = ({ app, siteFor, service }) => [
 	defineRoute({
 		method: 'GET',
 		path: '/cron/maintenance',
@@ -70,8 +69,8 @@ export const cronRoutes = ({ app, product, siteFor, service }) => [
 				onError: (websiteId, error) =>
 					ctx.log?.error?.('maintenance failed', { websiteId, error: /** @type {Error} */ (error)?.message }),
 			});
-			const usage = await product.usage.flush().catch(() => null);
-			return ok({ ...report, usage });
+			// usage and events are flushed by app-kit's background flusher (after requests / heartbeat), not here
+			return ok(report);
 		},
 	}),
 ];

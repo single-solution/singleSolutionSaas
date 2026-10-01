@@ -10,7 +10,9 @@
  *   "idempotencyKey": "…", "variables": { "code"?, "link"?, "minutes"?, "brand", "device"? } }
  * ```
  *
- * and routes it to its e-mail / SMS / WhatsApp provider. A non-2xx answer (or a 2xx whose JSON body says it was not
+ * and routes it to its e-mail / SMS / WhatsApp provider. app-kit resolves the adapter from the Portal descriptor's
+ * `provider` (built-in `generic-http` and `smtp`). With an `smtp` connector only e-mail is delivered (`to`, `subject`,
+ * `text`); SMS / WhatsApp codes fail with `delivery_failed`. A non-2xx answer (or a 2xx whose JSON body says it was not
  * sent, as gateways sometimes do — the ibrahimMobiles lesson) is a failed delivery. Nothing about the message is
  * logged: it carries a secret.
  * @module
@@ -49,7 +51,17 @@ export const reportsFailure = (body) => {
 };
 
 /**
- * @param {{ connectors: { messaging: (websiteId: string) => Promise<{ send: (message: Record<string, unknown>) => Promise<unknown> }> },
+ * The e-mail sent through app-kit's `smtp` adapter: the rendered subject and text only.
+ * @param {OutboundMessage} message
+ */
+const mailOf = (message) => ({
+	to: message.to,
+	subject: message.subject ?? (message.text.split(/\r?\n/, 1)[0] ?? '').slice(0, 78).trim(),
+	text: message.text,
+});
+
+/**
+ * @param {{ connectors: { messaging: (websiteId: string) => Promise<{ provider?: string, send: (message: Record<string, unknown>) => Promise<unknown> }> },
  *   log?: { warn?: (message: string, fields?: Record<string, unknown>) => void } }} deps
  */
 export const createMessenger = ({ connectors, log }) =>
@@ -62,7 +74,15 @@ export const createMessenger = ({ connectors, log }) =>
 		send: async (websiteId, message) => {
 			try {
 				const adapter = await connectors.messaging(websiteId);
-				const body = await adapter.send({ ...message });
+				if (adapter.provider === 'smtp' && message.channel !== 'email') {
+					log?.warn?.('smtp messaging cannot deliver this channel', {
+						websiteId,
+						purpose: message.purpose,
+						channel: message.channel,
+					});
+					return { ok: false, code: 'delivery_failed' };
+				}
+				const body = await adapter.send(adapter.provider === 'smtp' ? mailOf(message) : { ...message });
 				if (reportsFailure(body)) {
 					log?.warn?.('messaging gateway reported a failure', {
 						websiteId,

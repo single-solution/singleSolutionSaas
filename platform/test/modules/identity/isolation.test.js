@@ -8,11 +8,12 @@ afterAll(teardownMongo, 60_000);
 /** Bodies that would be valid, so a refusal is about tenancy, never validation. */
 const BODIES = /** @type {Record<string, (ids: any) => unknown>} */ ({
 	'PATCH /v1/merchants/:merchantId': () => ({ name: 'pwned' }),
+	'PATCH /v1/merchants/:merchantId/websites/:websiteId': () => ({ timeZone: 'Europe/Berlin' }),
 	'POST /v1/merchants/:merchantId/team/invites': () => ({ email: 'intruder@example.com', roles: ['admin'] }),
 	'PATCH /v1/merchants/:merchantId/team/members/:userId': () => ({ roles: ['admin'] }),
 	'POST /v1/merchants/:merchantId/owner/transfer': (ids) => ({ userId: ids.userId, password: 'correct horse battery' }),
 	'POST /v1/merchants/:merchantId/websites': () => ({ domain: 'intruder.example.com' }),
-	'POST /v1/merchants/:merchantId/websites/:websiteId/keys': () => ({ kind: 'sk', scopes: ['*'] }),
+	'POST /v1/merchants/:merchantId/websites/:websiteId/keys': () => ({ kind: 'sk', scopes: ['events.*'] }),
 	'POST /v1/merchants/:merchantId/websites/:websiteId/keys/:keyId/rotate': () => ({ graceSeconds: 0 }),
 	'POST /v1/merchants/:merchantId/websites/:websiteId/keys/:keyId/revoke': () => ({ reason: 'x' }),
 });
@@ -30,7 +31,7 @@ const tenant = async (h, email, domain) => {
 	const websiteId = site.json.website.websiteId;
 	const key = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites/${websiteId}/keys`, {
 		kind: 'sk',
-		scopes: ['a'],
+		scopes: ['events.write'],
 	});
 	await owner.client.post(`/v1/merchants/${owner.merchantId}/team/invites`, { email: `member.${email}`, roles: ['editor'] });
 	const member = h.client();
@@ -134,7 +135,7 @@ describe('tenant isolation', () => {
 			}),
 		).rejects.toMatchObject({ code: 'not_found' });
 		await expect(
-			h.service.issueKey({ websiteId: b.ids.websiteId, merchantId: a.merchantId, kind: 'sk', scopes: ['*'] }),
+			h.service.issueKey({ websiteId: b.ids.websiteId, merchantId: a.merchantId, kind: 'sk', scopes: ['events.*'] }),
 		).rejects.toMatchObject({ code: 'not_found' });
 	});
 });

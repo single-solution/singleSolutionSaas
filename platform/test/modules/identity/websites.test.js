@@ -50,6 +50,32 @@ describe('websites', () => {
 		expect((await client.get(`/v1/merchants/${merchantId}/websites/${twin.websiteId}`)).json.env).toBe('test');
 	});
 
+	it('website settings: time zone, language, currency for the pair, validated, audited, documents re-signed (F.16)', async () => {
+		const h = await boot();
+		const owner = await h.signupOwner('settings@example.com');
+		const root = await h.staffUser('root@example.com');
+		const created = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'shop.example.com' });
+		const { websiteId } = created.json.website;
+		const twinId = created.json.twin.websiteId;
+		expect(created.json.website).toMatchObject({ timeZone: null, language: null, currency: null });
+		const path = `/v1/merchants/${owner.merchantId}/websites/${websiteId}`;
+		const bad = await owner.client.send('PATCH', path, { timeZone: 'Mars/Base', language: '??', currency: 'EURO' });
+		expect(bad.status).toBe(422);
+		expect(bad.json.errors.map((/** @type {any} */ e) => e.path).sort()).toEqual(['/currency', '/language', '/timeZone']);
+		expect((await owner.client.send('PATCH', path, {})).status).toBe(422);
+		const saved = await owner.client.send('PATCH', path, { timeZone: 'europe/berlin', language: 'de-de', currency: 'eur' });
+		expect(saved.status).toBe(200);
+		expect(saved.json).toMatchObject({ timeZone: 'Europe/Berlin', language: 'de-DE', currency: 'EUR' });
+		expect(await h.service.getWebsite(twinId)).toMatchObject({ timeZone: 'Europe/Berlin', currency: 'EUR' });
+		expect(h.commerce.invalidated).toEqual(expect.arrayContaining([websiteId, twinId]));
+		// staff (Admin Console) may change them too; null clears one
+		const cleared = await root.client.send('PATCH', path, { currency: null });
+		expect(cleared.json).toMatchObject({ timeZone: 'Europe/Berlin', currency: null });
+		const audit = await h.db.collection('platform_audit').find({ action: 'website.settings_updated' }).toArray();
+		expect(audit).toHaveLength(2);
+		expect(audit[1]).toMatchObject({ before: { currency: 'EUR' }, actor: { type: 'staff' } });
+	});
+
 	it('refuses public suffixes when a predicate is configured', async () => {
 		const h = await boot({ identity: { isPublicSuffix: (/** @type {string} */ d) => d === 'co.uk' } });
 		const { client, merchantId } = await h.signupOwner('o@example.com');
@@ -102,7 +128,7 @@ describe('websites', () => {
 		const twinId = site.json.twin.websiteId;
 		const key = await a.client.post(`/v1/merchants/${a.merchantId}/websites/${twinId}/keys`, {
 			kind: 'sk',
-			scopes: ['events.publish'],
+			scopes: ['events.write'],
 		});
 		await a.client.post(`/v1/merchants/${a.merchantId}/team/invites`, {
 			email: 'g@example.com',
@@ -124,7 +150,12 @@ describe('websites', () => {
 		const team = await a.client.get(`/v1/merchants/${a.merchantId}/team`);
 		expect(team.json.members.find((/** @type {any} */ m) => m.email === 'g@example.com').grants).toEqual([]);
 		expect(
-			(await a.client.post(`/v1/merchants/${a.merchantId}/websites/${websiteId}/keys`, { kind: 'pk', scopes: ['x'] })).status,
+			(
+				await a.client.post(`/v1/merchants/${a.merchantId}/websites/${websiteId}/keys`, {
+					kind: 'pk',
+					scopes: ['elements.read'],
+				})
+			).status,
 		).toBe(404);
 
 		// cooldown: another merchant waits, the same merchant may re-add at once
@@ -153,7 +184,7 @@ describe('websites', () => {
 		const { websiteId } = site.json.website;
 		const key = await a.client.post(`/v1/merchants/${a.merchantId}/websites/${websiteId}/keys`, {
 			kind: 'pk',
-			scopes: ['events.publish'],
+			scopes: ['events.write'],
 		});
 		await a.client.post(`/v1/merchants/${a.merchantId}/team/invites`, {
 			email: 'g@example.com',
@@ -186,7 +217,7 @@ describe('websites', () => {
 		expect(team.json.members.find((/** @type {any} */ m) => m.email === 'g@example.com').grants).toEqual([]);
 		const fresh = await b.client.post(`/v1/merchants/${b.merchantId}/websites/${websiteId}/keys`, {
 			kind: 'pk',
-			scopes: ['x'],
+			scopes: ['elements.read'],
 		});
 		expect(fresh.status).toBe(201);
 		for (const merchantId of [a.merchantId, b.merchantId]) {
@@ -271,7 +302,7 @@ describe('merchants (staff)', () => {
 			(
 				await a.client.post(`/v1/merchants/${a.merchantId}/websites/${site.json.website.websiteId}/keys`, {
 					kind: 'pk',
-					scopes: ['x'],
+					scopes: ['elements.read'],
 				})
 			).status,
 		).toBe(409);

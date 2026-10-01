@@ -15,6 +15,7 @@ export const DOCUMENT_RULES = Object.freeze({
 	duplicateResource: 'duplicateResource',
 	duplicateIdentityKey: 'duplicateIdentityKey',
 	timezone: 'timezone',
+	languageTag: 'languageTag',
 	timeWindow: 'timeWindow',
 	scheduleRange: 'scheduleRange',
 });
@@ -36,6 +37,19 @@ export const isTimeZone = (timeZone) => {
 	try {
 		new Intl.DateTimeFormat('en', { timeZone });
 		return true;
+	} catch {
+		return false;
+	}
+};
+
+/**
+ * True for a well-formed BCP-47 language tag (`en`, `pt-BR`, `zh-Hant-TW`) as the runtime's `Intl` understands it.
+ * @param {string} tag
+ * @returns {boolean}
+ */
+export const isLanguageTag = (tag) => {
+	try {
+		return Intl.getCanonicalLocales(tag).length === 1;
 	} catch {
 		return false;
 	}
@@ -102,6 +116,11 @@ export const checkEntitlementDocument = (doc) => {
 			out.push(at(['identity', 'jwks', index, 'kid'], DOCUMENT_RULES.duplicateIdentityKey, `duplicate key id '${key.kid}'`));
 		kids.add(key.kid);
 	}
+	const website = doc.website;
+	if (website?.timeZone !== undefined && !isTimeZone(website.timeZone))
+		out.push(at(['website', 'timeZone'], DOCUMENT_RULES.timezone, `unknown IANA time zone '${website.timeZone}'`));
+	if (website?.language !== undefined && !isLanguageTag(website.language))
+		out.push(at(['website', 'language'], DOCUMENT_RULES.languageTag, `'${website.language}' is not a BCP-47 language tag`));
 	return out;
 };
 

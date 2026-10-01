@@ -148,6 +148,42 @@ describe('messaging', () => {
 		expect(await down.send('web_1', message)).toEqual({ ok: false, code: 'delivery_failed' });
 		expect(JSON.stringify(warn.mock.calls)).not.toContain('secret 123');
 	});
+
+	it('delivers e-mail through the kit smtp adapter (subject and text only) and refuses other channels', async () => {
+		/** @type {any[]} */
+		const sent = [];
+		const smtp = createMessenger({
+			connectors: {
+				messaging: async () => ({
+					provider: 'smtp',
+					send: async (/** @type {any} */ mail) => {
+						sent.push(mail);
+						return { id: '<m@example.com>', accepted: [mail.to], rejected: [] };
+					},
+				}),
+			},
+		});
+		const email = {
+			channel: 'email',
+			to: 'a@example.org',
+			subject: 'Your code',
+			text: 'Code 123456',
+			purpose: 'otp',
+			lang: 'en',
+			reference: 'r',
+			idempotencyKey: 'k',
+			variables: { code: '123456' },
+		};
+		expect(await smtp.send('web_1', email)).toEqual({ ok: true });
+		expect(sent).toEqual([{ to: 'a@example.org', subject: 'Your code', text: 'Code 123456' }]);
+		await smtp.send('web_1', { ...email, subject: undefined });
+		expect(sent[1].subject).toBe('Code 123456');
+		expect(await smtp.send('web_1', { ...email, channel: 'sms', to: '+15551234567' })).toEqual({
+			ok: false,
+			code: 'delivery_failed',
+		});
+		expect(sent).toHaveLength(2);
+	});
 });
 
 describe('site registry', () => {

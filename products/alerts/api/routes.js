@@ -6,7 +6,6 @@
  * and replays the response); handlers are thin — validation and rules live in core/. The cron route lives in jobs/.
  */
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
-import { unverifiedClaims } from '../adapters/tokens.js';
 import { addressFor, contactIdOf } from '../core/contact.js';
 import { sanitizeItem } from '../core/subscription.js';
 import { CSV_COLUMNS, csvRowToInput, fromInventory, fromPrice, parseCsv } from '../core/triggers.js';
@@ -267,7 +266,7 @@ export const buildRoutes = (alerts) => {
 						body: ctx.body,
 						keyKind,
 						identity: ctx.identity,
-						claims: ctx.identity ? unverifiedClaims(ctx.headers.get('ss-identity')) : null,
+						claims: ctx.identity?.claims ?? null,
 						ip: ipOf(ctx.headers),
 					}),
 				);

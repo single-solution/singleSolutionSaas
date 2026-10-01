@@ -13,6 +13,7 @@ import { createAccounts } from './accounts.js';
 import { createAdmin } from './admin.js';
 import { createImpersonation } from './impersonation.js';
 import { createIssuers } from './issuers.js';
+import { createIssuerRequests } from './issuer-requests.js';
 import { C } from './schema.js';
 import { createAuditor, createRepo } from './repo.js';
 import { createTeams } from './teams.js';
@@ -77,17 +78,40 @@ export const createIdentityService = (ctx, options = {}) => {
 		signer,
 		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
 		activeMerchant: teams.activeMerchant,
+		products: async () =>
+			ctx.moduleNames().includes('catalog')
+				? /** @type {Array<{ slug: string, name?: string }>} */ (
+						await ctx.service('catalog').activeProducts({ kind: 'service' })
+					)
+				: [],
 	});
 	const issuers = createIssuers(deps, {
 		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
 		collection: ctx.collection(C.issuers),
 		...(options.issuers ? { options: options.issuers } : {}),
 	});
+	const issuerRequests = createIssuerRequests(deps, {
+		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
+		loadMerchant: (merchantId) => teams.loadMerchant(merchantId),
+		issuers,
+		collection: ctx.collection(C.issuerRequests),
+	});
 	const websites = createWebsites(deps, {
 		activeMerchant: teams.activeMerchant,
 		loadMerchant: teams.loadMerchant,
 		revokeWebsiteKeys: keys.revokeWebsiteKeys,
-		forgetIssuers: issuers.forget,
+		forgetIssuers: async (input) => {
+			await issuers.forget(input);
+			await issuerRequests.forget(input);
+		},
+		resign: async (websiteId) => {
+			if (!ctx.moduleNames().includes('commerce')) return;
+			try {
+				await ctx.service('commerce').invalidateWebsite(websiteId);
+			} catch (error) {
+				ctx.logger.warn('entitlement documents not re-signed after a settings change', { websiteId, error });
+			}
+		},
 		...(options.isPublicSuffix ? { isPublicSuffix: options.isPublicSuffix } : {}),
 	});
 	const admin = createAdmin(deps, {
@@ -141,6 +165,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		rotateKey: keys.rotateKey,
 		listKeys: keys.listKeys,
 		createWebsite: websites.createWebsite,
+		updateWebsiteSettings: websites.updateSettings,
 		deleteWebsite: websites.deleteWebsite,
 		transferWebsite: websites.transferWebsite,
 		getPartner: admin.partners.get,
@@ -168,6 +193,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		websites,
 		keys,
 		issuers,
+		issuerRequests,
 		admin,
 		impersonation,
 		mailer,

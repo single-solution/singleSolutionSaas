@@ -345,7 +345,8 @@ describe('Event Hub ingest', () => {
 		const paths = receiver.received.map((r) => r.path).sort();
 		expect(paths).toEqual(['/any/.well-known/ss-events', '/pages/.well-known/ss-events']);
 		expect(receiver.received.every((r) => r.verified)).toBe(true);
-		expect(receiver.received[0]?.event).toEqual(a);
+		// F.16: the Event Hub stamps the verified key kind
+		expect(receiver.received[0]?.event).toEqual({ ...a, context: { keyKind: 'pk' } });
 		expect(receiver.received[0]?.headers['ss-signature'].split(',').length).toBe(2); // dual-signed (2 Portal keys)
 
 		const record = await db.collection('integration_events').findOne({ eventId: a.id });

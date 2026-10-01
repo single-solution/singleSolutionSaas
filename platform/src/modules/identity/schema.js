@@ -21,6 +21,7 @@ export const C = Object.freeze({
 	developers: 'identity_developers',
 	notes: 'identity_merchant_notes',
 	issuers: 'identity_issuers',
+	issuerRequests: 'identity_issuer_requests',
 });
 
 export const collections = Object.freeze([
@@ -127,5 +128,13 @@ export const collections = Object.freeze([
 			'Bring-your-own customer identity issuers, one per website (`_id` = websiteId): issuer, JWKS URL or inline public keys (≤ 5, public material only), audience, claim map, key fetch status.',
 		tenant: 'merchant',
 		indexes: [{ keys: { merchantId: 1, _id: 1 } }],
+	}),
+	defineCollection({
+		module: 'identity',
+		name: C.issuerRequests,
+		description:
+			'Product requests to become a website identity issuer (F.16; `_id` = websiteId): product, requested issuer input (public keys only), status pending|approved|rejected, decision.',
+		tenant: 'merchant',
+		indexes: [{ keys: { merchantId: 1, status: 1, requestedAt: -1 } }],
 	}),
 ]);

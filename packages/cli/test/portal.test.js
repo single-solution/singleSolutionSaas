@@ -29,9 +29,9 @@ const manifestPromise = (async () => {
 	return /** @type {any} */ ((await loadManifest(dir)).manifest);
 })();
 
-/** @param {{ fixture?: unknown, now?: () => number }} [options] */
-const setup = async ({ fixture, now = () => T0 } = {}) => {
-	const manifest = await manifestPromise;
+/** @param {{ fixture?: unknown, now?: () => number, manifest?: (manifest: any) => any, fetch?: typeof fetch }} [options] */
+const setup = async ({ fixture, now = () => T0, manifest: mutate = (manifest) => manifest, fetch } = {}) => {
+	const manifest = mutate(structuredClone(await manifestPromise));
 	/** @type {string[]} */
 	const logs = [];
 	let changes = 0;
@@ -39,6 +39,7 @@ const setup = async ({ fixture, now = () => T0 } = {}) => {
 		fixture: normaliseFixture(fixture ?? {}),
 		portalUrl: PORTAL,
 		now,
+		...(fetch ? { fetch } : {}),
 		database: {
 			resolve: async ({ merchantId }) => ({
 				uri: `mongodb://127.0.0.1:1/client_${merchantId}`,
@@ -261,6 +262,86 @@ describe('emulated Portal: /v1/product/*', () => {
 		await expect(ctx.portal.revokeKey('key_nope')).rejects.toThrow(/no key/);
 	});
 
+	it('stores identity-issuer requests pending until approved, then answers active and signs the issuer in', async () => {
+		const route = '/v1/product/websites/web_devwebsite01/identity';
+		const { publicJwk } = await generateSigningKey({ kid: 'site-1' });
+		const body = {
+			issuer: 'https://login.example.com/',
+			publicJwks: [publicJwk],
+			audience: 'shop',
+			claimMap: { email: 'email' },
+		};
+		// the capability is required
+		const refused = await ctx.call('PUT', route, body);
+		expect(refused.status).toBe(403);
+		expect(JSON.stringify(refused.body)).toContain('capabilities.identityIssuer');
+		const capable = await setup({
+			manifest: (m) => ({ ...m, capabilities: { ...m.capabilities, identityIssuer: true } }),
+			fetch: /** @type {any} */ (
+				async (/** @type {string} */ url) =>
+					url === 'https://login.example.com/jwks.json'
+						? new Response(JSON.stringify({ keys: [{ ...publicJwk, extra: 'dropped' }] }))
+						: new Response('{}', { status: 404 })
+			),
+		});
+		const { call, portal, logs } = capable;
+		expect((await call('PUT', '/v1/product/websites/web_unknown000001/identity', body)).status).toBe(403);
+		expect((await call('PUT', route, { ...body, jwksUrl: 'https://x.example/' })).status).toBe(422);
+		expect((await call('PUT', route, { issuer: 'x', publicJwks: [] })).status).toBe(422);
+		expect((await call('PUT', route, { ...body, claimMap: { other: 'x' } })).status).toBe(422);
+		expect((await call('PUT', route, { ...body, extra: 1 })).status).toBe(422);
+		const pending = await call('PUT', route, body);
+		expect(pending.status).toBe(202);
+		expect(pending.body).toMatchObject({
+			status: 'pending',
+			request: { websiteId: 'web_devwebsite01', appId: 'app_testapplication1', status: 'pending' },
+		});
+		expect(/** @type {any} */ ((await call('PUT', route, body)).body).request.requestedAt).toBe(new Date(T0).toISOString());
+		expect(logs.some((line) => line.includes('requests issuer https://login.example.com/'))).toBe(true);
+		await expect(portal.decideIdentityRequest({ websiteId: 'web_devwebsite01', decision: 'maybe' })).rejects.toThrow(
+			/approve or reject/,
+		);
+		const decided = await portal.decideIdentityRequest({ websiteId: 'web_devwebsite01', decision: 'approve' });
+		expect(decided.request.status).toBe('approved');
+		expect(decided.issuer).toEqual({
+			issuer: 'https://login.example.com/',
+			jwks: [publicJwk],
+			audience: 'shop',
+			claimMap: { subject: 'sub', email: 'email' },
+		});
+		await expect(portal.decideIdentityRequest({ websiteId: 'web_devwebsite01', decision: 'approve' })).rejects.toThrow(
+			/no pending/,
+		);
+		const active = await call('PUT', route, body);
+		expect(active).toMatchObject({ status: 200, body: { status: 'active', issuer: { issuer: 'https://login.example.com/' } } });
+		const doc = /** @type {any} */ ((await call('GET', '/v1/product/entitlements?websiteId=web_devwebsite01')).body);
+		const verified = await verifyEntitlementDocument({
+			token: doc.document,
+			keyResolver: capable.resolver,
+			now: () => T0,
+			expectedDomain: 'shop.example.com',
+		});
+		expect(/** @type {any} */ (verified.payload).identity).toEqual(decided.issuer);
+		// a JWKS URL is fetched at approval (unknown members dropped); an unusable one fails; rejection keeps the issuer
+		const viaUrl = { issuer: 'https://login.example.com/', jwksUrl: 'https://login.example.com/jwks.json' };
+		expect((await call('PUT', route, viaUrl)).status).toBe(202);
+		const approved = await portal.decideIdentityRequest({ websiteId: 'web_devwebsite01', decision: 'approve' });
+		expect(approved.issuer?.jwks).toEqual([publicJwk]);
+		expect((await call('PUT', route, { ...viaUrl, jwksUrl: 'https://login.example.com/missing.json' })).status).toBe(202);
+		await expect(portal.decideIdentityRequest({ websiteId: 'web_devwebsite01', decision: 'approve' })).rejects.toThrow(
+			/no usable key/,
+		);
+		const rejected = await portal.decideIdentityRequest({ websiteId: 'web_devwebsite01', decision: 'reject' });
+		expect(rejected).toMatchObject({ request: { status: 'rejected' }, deliveries: [] });
+		expect(portal.identityIssuers().web_devwebsite01?.jwks).toEqual([publicJwk]);
+		expect(portal.identityRequests()).toHaveLength(1);
+		const restored = await createPortal({
+			fixture: normaliseFixture({}),
+			snapshot: JSON.parse(JSON.stringify(portal.snapshot())),
+		});
+		expect(restored.identityIssuers()).toEqual(portal.identityIssuers());
+	});
+
 	it('rotates product keys with an overlap window', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'app-key-2' });
 		const rotated = await ctx.call('POST', '/v1/product/keys/rotate', { publicJwk: toPublicJwk(privateJwk) });
@@ -312,6 +393,24 @@ describe('emulated Portal: /v1/product/*', () => {
 		expect(
 			(await ctx.call('POST', '/v1/product/resources/resolve', { websiteId: 'web_unknownsite01', kind: 'database' })).status,
 		).toBe(404);
+	});
+
+	it('resolves a kind only an element requires (product-level requires lists the always-required kinds)', async () => {
+		const own = await setup({
+			manifest: (manifest) => {
+				delete manifest.requires;
+				manifest.elements[0].requires = { resources: ['database'] };
+				return manifest;
+			},
+		});
+		const resolved = await own.call('POST', '/v1/product/resources/resolve', {
+			websiteId: 'web_devwebsite01',
+			kind: 'database',
+		});
+		expect(resolved.status).toBe(200);
+		expect(
+			(await own.call('POST', '/v1/product/resources/resolve', { websiteId: 'web_devwebsite01', kind: 'ai' })).status,
+		).toBe(403);
 	});
 });
 

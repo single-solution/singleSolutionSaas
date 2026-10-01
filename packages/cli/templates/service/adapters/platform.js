@@ -6,6 +6,9 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
+import { PRIVACY } from './privacy.js';
+
+export { PRIVACY };
 
 /**
  * @param {string} file
@@ -40,9 +43,6 @@ export const loadStrings = async (root) => {
 		await Promise.all(files.map(async (file) => [file.slice(0, -5), await readJson(path.join(root, 'strings', file))])),
 	);
 };
-
-/** Personal data this product stores (drives POST /v1/data:export and /v1/data:anonymize). */
-export const PRIVACY = Object.freeze({ collections: [{ name: 'notes', subjectField: 'customerId', fields: ['text'] }] });
 
 /**
  * Build the product.

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
 import { closeMongoClients } from '../../../src/infra/db.js';
-import { BUNDLE_FORMAT } from '../../../src/modules/catalog/core/bundle.js';
+import { BUNDLE_FORMAT, checkUiManifest } from '../../../src/modules/catalog/core/bundle.js';
 import { PORTAL_URL, startMongo } from '../../helpers.js';
 import { bootPortal, problemOf } from './boot.js';
 import { startFakeProduct } from './fakes/product.js';
@@ -259,5 +259,84 @@ describe('catalog reads', () => {
 		problemOf(await t.staff('GET', '/v1/admin/apps', { roles: [] }), 403);
 		problemOf(await t.staff('GET', '/v1/admin/apps/app_nope'), 404);
 		problemOf(await t.staff('GET', '/v1/admin/apps/app_nope/versions'), 404);
+	});
+});
+
+describe('service UI bundles (F.16)', () => {
+	it('verifies the signed descriptor with the product keys and checks the UI manifest', async () => {
+		const t = await boot();
+		const p = await startFakeProduct({
+			manifest: serviceManifest(),
+			portalUrl: PORTAL_URL,
+			fetchJwks: t.jwks,
+			now: t.clock.now,
+		});
+		products.push(p);
+		const registered = await t.staff('POST', '/v1/admin/apps/register', { body: { baseUrl: p.url, token: p.token } });
+		expect(registered.status).toBe(201);
+		const appId = /** @type {string} */ (registered.json.appId);
+		const slug = serviceManifest().product.slug;
+		const ui = {
+			product: { slug, version: '1.0.0' },
+			elements: [{ key: 'bar', headless: 'headless/bar.js#createBar', renderer: 'ui/bar.js#render' }],
+		};
+		const signed = await bundle(p.signer, { manifest: ui });
+		const verified = await t.service().verifyUiBundle({ appId, body: signed });
+		expect(verified).toMatchObject({ slug, elements: ui.elements, signature: { kid: signed.signature.kid } });
+
+		const refusal = (/** @type {any} */ body) => t.service().verifyUiBundle({ appId, body });
+		const other = await generateSigningKey({ kid: 'other' });
+		await expect(refusal(await bundle(createSigner(other.privateJwk), { manifest: ui }))).rejects.toMatchObject({
+			code: 'catalog_bundle_invalid',
+		});
+		await expect(refusal({ ...signed, publicJwk: other.publicJwk })).rejects.toMatchObject({ code: 'catalog_bundle_invalid' });
+		await expect(
+			refusal(await bundle(p.signer, { manifest: { ...ui, product: { slug: 'someone-else', version: '1' } } })),
+		).rejects.toMatchObject({ code: 'catalog_bundle_invalid' });
+		await expect(
+			refusal(await bundle(p.signer, { manifest: { ...ui, elements: [{ ...ui.elements[0], renderer: 'missing.js#x' }] } })),
+		).rejects.toMatchObject({ code: 'catalog_bundle_invalid' });
+		// packs publish pack bundles, not UI bundles
+		const dev = await generateSigningKey({ kid: 'dev-ui' });
+		const pack = await t.staff('POST', '/v1/admin/packs', {
+			body: await bundle(createSigner(dev.privateJwk), { publicJwk: dev.publicJwk }),
+		});
+		await expect(t.service().verifyUiBundle({ appId: pack.json.app.appId, body: signed })).rejects.toMatchObject({
+			code: 'conflict',
+		});
+	});
+});
+
+describe('checkUiManifest', () => {
+	it('accepts only the UI subset of a manifest', () => {
+		const ok = { product: { slug: 's', version: '1' }, elements: [{ key: 'a', headless: 'h.js#h', renderer: 'r.js#r' }] };
+		expect(checkUiManifest(ok, 's')).toEqual([]);
+		expect(checkUiManifest('x', 's')).toHaveLength(1);
+		const paths = checkUiManifest(
+			{
+				product: { slug: 's' },
+				extra: 1,
+				elements: [
+					{ key: 'A', headless: 'h', renderer: 'r.js#r', strings: 'x.txt', price: 1 },
+					{ key: 'a', headless: 'h.js#h', renderer: 'r.js#r' },
+					{ key: 'a', headless: 'h.js#h', renderer: 'r.js#r' },
+					4,
+				],
+			},
+			's',
+		).map((e) => e.path);
+		expect(paths).toEqual(
+			expect.arrayContaining([
+				'/descriptor/manifest/extra',
+				'/descriptor/manifest/product/version',
+				'/descriptor/manifest/elements/0/price',
+				'/descriptor/manifest/elements/0/key',
+				'/descriptor/manifest/elements/0/headless',
+				'/descriptor/manifest/elements/0/strings',
+				'/descriptor/manifest/elements/2/key',
+				'/descriptor/manifest/elements/3',
+			]),
+		);
+		expect(checkUiManifest({ product: { slug: 's', version: '1' }, elements: [] }, 's')).toHaveLength(1);
 	});
 });

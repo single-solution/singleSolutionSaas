@@ -14,7 +14,9 @@ import { assertMillicredits, normaliseRate } from './units.js';
  *   per-plan bounds), quota `x-period` / `x-hardStop` / `x-unit`, rate `x-per` / `x-unit`.
  * - plans `{ code, name?, description?, elements, addons? }`: `elements` are included and on by default,
  *   `addons` are allowed but off by default; anything else is unavailable on that plan.
- * - element `requires` is `{ resources: [resourceKind] }` (a bare array is accepted too).
+ * - element `requires` is `{ resources: [resourceKind] }` (a bare array is accepted too). The product-level
+ *   `requires.resources` means "always required": those kinds are added to every element's `requires`, so a
+ *   product-level kind that is not connected disables every element (`resource_missing`).
  * - prices are integer millicredits: `price.hourly`, `price.metered[] = { unit, perUnit, per = 1, included }`.
  * - `priceBook` is `{ version, effectiveFrom }`; the Portal may pass the full history as `priceBooks[]`
  *   (each optionally with `base`, `elements` and `metered` overrides, all integer millicredits).
@@ -77,7 +79,8 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {string} key
  * @property {string} name
  * @property {readonly string[]} dependsOn Direct dependencies (sorted).
- * @property {readonly string[]} requires Resource kinds that must be connected (sorted).
+ * @property {readonly string[]} requires Resource kinds that must be connected (sorted): the element's own kinds plus
+ *   the product-level (always required) kinds.
  * @property {boolean} defaultEnabled Product default when the subscription has no plan (default false).
  * @property {readonly string[]} features Fully-qualified feature keys (sorted).
  */
@@ -117,6 +120,7 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {Readonly<Record<string, ElementDef>>} elements
  * @property {Readonly<Record<string, FeatureDef>>} features
  * @property {Readonly<Record<string, PlanDef>>} plans
+ * @property {readonly string[]} [requires] Product-level resource kinds, required for every subscription (sorted).
  * @property {readonly PriceBook[]} priceBooks Sorted by `effectiveFrom`, then `version`.
  * @property {readonly string[]} elementOrder Topological order (dependencies first, ties by key).
  */
@@ -163,6 +167,7 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @typedef {object} ProductInput
  * @property {{ slug: string, version?: string }} product
  * @property {readonly ElementInput[]} elements
+ * @property {{ resources?: readonly string[] } | readonly string[]} [requires] Product-level (always required) kinds.
  * @property {readonly PlanInput[]} [plans]
  * @property {PriceBookInput} [priceBook]
  * @property {readonly PriceBookInput[]} [priceBooks] Full price-book history (Portal-side); overrides `priceBook`.
@@ -434,6 +439,17 @@ const price = (amount, label) => {
 };
 
 /**
+ * Resource kinds of a `requires` value (`{ resources }` or a bare array).
+ * @param {{ resources?: readonly string[] } | readonly string[] | undefined} requires
+ * @returns {readonly string[]}
+ */
+const resourceKinds = (requires) => {
+	if (Array.isArray(requires)) return requires;
+	const object = /** @type {{ resources?: readonly string[] } | undefined} */ (requires);
+	return object?.resources ?? [];
+};
+
+/**
  * Normalises a product definition.
  * @param {ProductInput} input
  * @returns {Product}
@@ -448,6 +464,7 @@ export const normaliseProduct = (input) => {
 	const planCodes = new Set(planInputs.map((plan) => plan.code));
 	if (planCodes.size !== planInputs.length) throw catalogError('duplicate_plan', 'plan codes must be unique');
 
+	const productRequires = sortedUnique(resourceKinds(input.requires));
 	/** @type {Record<string, ElementDef>} */
 	const elements = {};
 	/** @type {Record<string, FeatureDef>} */
@@ -465,9 +482,7 @@ export const normaliseProduct = (input) => {
 			features[feature.key] = feature;
 			featureKeys.push(feature.key);
 		}
-		const requires = Array.isArray(el.requires)
-			? el.requires
-			: /** @type {{ resources?: readonly string[] }} */ ((el.requires ?? {}).resources ?? []);
+		const requires = [...resourceKinds(el.requires), ...productRequires];
 		elements[el.key] = {
 			key: el.key,
 			name: el.name ?? el.key,
@@ -499,7 +514,7 @@ export const normaliseProduct = (input) => {
 	for (const plan of planInputs) plans[plan.code] = normalisePlan(plan, elements, features);
 
 	const priceBooks = normalisePriceBooks(input, elements, elementPrices, metered, planCodes);
-	return { slug, version, elements, features, plans, priceBooks, elementOrder };
+	return { slug, version, elements, features, plans, requires: productRequires, priceBooks, elementOrder };
 };
 
 /**

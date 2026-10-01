@@ -155,24 +155,24 @@ export const buildRoutes = (chatbot) => {
 	const notFound = () => problem('not_found', 'No such conversation.');
 
 	/**
-	 * Per-visitor message rate (`window.messages_per_minute`, per website configuration — app-kit's route limit is static).
-	 * @param {any} ctx
-	 * @param {Site} s
-	 * @param {string} subject
+	 * Per-visitor message rate (`window.messages_per_minute`, per website configuration) as an app-kit dynamic route
+	 * limit: browsers are limited per customer / guest marker, servers per conversation; agent and bot replies posted
+	 * by the merchant's server are not limited.
 	 */
-	const overRate = async (ctx, s, subject) => {
-		const limit = s.settings.window.messages_per_minute;
-		try {
-			const { count } = await product.context.stores.rateLimits.hit(
-				`chatbot:messages|${ctx.websiteId}|${subject}`,
-				60_000,
-				app.now(),
-			);
-			return count > limit;
-		} catch {
-			return false;
-		}
-	};
+	const messageRate = Object.freeze({
+		windowMs: 60_000,
+		/** @param {any} ctx */
+		limit: (ctx) => {
+			const author = ctx.body?.author;
+			if (isServer(ctx) && (author === 'agent' || author === 'bot')) return Number.POSITIVE_INFINITY;
+			return settingsForDoc(product, ctx.entitlement.doc).window.messages_per_minute;
+		},
+		/** @param {any} ctx */
+		key: (ctx) => {
+			const owner = isServer(ctx) ? null : ownerOf(ctx);
+			return `w:${ctx.websiteId}|${owner?.customerId ?? owner?.visitorId ?? `c:${ctx.params.id}`}`;
+		},
+	});
 
 	/** Dashboard session → site (null = pick a website / demo). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? site(ctx) : null);
@@ -425,6 +425,7 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/conversations/:id/messages',
 			...website('window'),
+			rateLimit: messageRate,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const conversation = await conversationFor(ctx, s, ctx.params.id);
@@ -452,8 +453,6 @@ export const buildRoutes = (chatbot) => {
 							identity: conversation.customerId ? { subject: conversation.customerId, email: null } : null,
 						}
 					: ownerOf(ctx);
-				if (await overRate(ctx, s, owner.customerId ?? owner.visitorId ?? conversation.id))
-					return problem('rate_limited', 'Too many messages; wait a moment.', { headers: { 'retry-after': '60' } });
 				const result = await service.customerMessage(s, conversation, {
 					text: body.text,
 					action: body.action,

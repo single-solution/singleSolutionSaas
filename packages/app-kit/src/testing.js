@@ -1,8 +1,9 @@
 /**
  * A fake Portal for product tests, built only from `@ss/protocol` primitives: it signs entitlement documents,
  * website keys, launches and events with its own Ed25519 key, publishes a JWKS, verifies the product's client
- * assertions, deduplicates usage by idempotency key, serves revocations and resource descriptors, and can simulate
- * outages. `fetch` routes requests for the Portal origin and delegates anything else to `fallbackFetch`.
+ * assertions, deduplicates usage by idempotency key, serves revocations and resource descriptors, records
+ * identity-issuer requests (approve or reject them as the merchant), and can simulate outages. `fetch` routes requests
+ * for the Portal origin and delegates anything else to `fallbackFetch`.
  *
  * Test/development only — never deploy it.
  * @module
@@ -96,6 +97,16 @@ export const createFakePortal = async ({
 	const failures = new Map();
 	/** @type {Set<string>} */
 	const rejectUsage = new Set();
+	/** @type {Set<string>} event types answered `rejected` */
+	const rejectEvents = new Set();
+	/** @type {Set<string>} `${websiteId}|${idempotencyKey}` of accepted events (the Event Hub dedupes on it) */
+	const seenEvents = new Set();
+	/** @type {Map<string, { status: 'pending' | 'approved' | 'rejected', appId: string, input: Record<string, unknown> }>} */
+	const identityRequests = new Map();
+	/** @type {Map<string, Record<string, unknown>>} approved (active) issuers by websiteId */
+	const identityIssuers = new Map();
+	/** @type {Set<string>} websites whose identity requests are refused (403) */
+	const refuseIdentity = new Set();
 	const state = { down: false };
 
 	/**
@@ -147,7 +158,20 @@ export const createFakePortal = async ({
 		const caller = await authenticate(request);
 		calls.push({ method: request.method, path, ...(caller ? { appId: caller } : {}) });
 		if (!caller) return json(401, { type: `${base}/problems/invalid_credentials`, title: 'Invalid credentials', status: 401 });
-		const body = request.method === 'POST' ? await request.json().catch(() => null) : null;
+		const body = request.method === 'POST' || request.method === 'PUT' ? await request.json().catch(() => null) : null;
+		const identityPath = /^\/v1\/product\/websites\/([^/]+)\/identity$/.exec(path);
+		if (request.method === 'PUT' && identityPath) {
+			const websiteId = decodeURIComponent(identityPath[1] ?? '');
+			if (refuseIdentity.has(websiteId))
+				return json(403, { type: `${base}/problems/forbidden`, title: 'Forbidden', status: 403 });
+			if (!isObject(body) || typeof body.issuer !== 'string')
+				return json(422, { type: `${base}/problems/validation_failed`, title: 'Validation failed', status: 422 });
+			const input = { claimMap: { subject: 'sub' }, ...body };
+			const active = identityIssuers.get(websiteId);
+			if (active && JSON.stringify(active) === JSON.stringify(input)) return json(200, { status: 'active', issuer: active });
+			identityRequests.set(websiteId, { status: 'pending', appId: caller, input });
+			return json(202, { status: 'pending', request: { websiteId, status: 'pending', ...input } });
+		}
 		switch (`${request.method} ${path}`) {
 			case 'GET /v1/product/entitlements': {
 				const token = documents.get(target.searchParams.get('websiteId') ?? '');
@@ -180,9 +204,19 @@ export const createFakePortal = async ({
 				return json(200, { ok: true });
 			case 'POST /v1/product/keys/rotate':
 				return json(200, { ok: true });
-			case 'POST /v1/product/events':
+			case 'POST /v1/product/events': {
 				published.push(body);
-				return json(202, { accepted: true });
+				// like the Event Hub: per-event results, dedupe on (websiteId, idempotencyKey)
+				const results = (isObject(body) && Array.isArray(body.events) ? body.events : []).map((/** @type {any} */ e) => {
+					const ids = { id: e?.id, idempotencyKey: e?.idempotencyKey };
+					if (rejectEvents.has(e?.type)) return { ...ids, status: 'rejected', reason: 'invalid_event' };
+					const dedupe = `${e?.websiteId}|${e?.idempotencyKey}`;
+					if (seenEvents.has(dedupe)) return { ...ids, status: 'duplicate' };
+					seenEvents.add(dedupe);
+					return { ...ids, status: 'accepted' };
+				});
+				return json(202, { accepted: results.filter((r) => r.status === 'accepted').length, results });
+			}
 			case 'POST /v1/product/resources/resolve': {
 				const key = isObject(body) ? `${body.websiteId}|${body.kind}` : '';
 				const resource = resources.get(key);
@@ -217,6 +251,25 @@ export const createFakePortal = async ({
 		},
 		/** @param {string} key */
 		rejectUsageKey: (key) => rejectUsage.add(key),
+		/** Identity-issuer requests (`PUT /v1/product/websites/:websiteId/identity`) by websiteId. */
+		identityRequests,
+		/**
+		 * Decide a pending identity-issuer request as the merchant: `approve` makes it the active issuer (a repeated
+		 * identical request then answers `active`). Returns the request, or null when none is pending.
+		 * @param {string} websiteId
+		 * @param {'approve' | 'reject'} decision
+		 */
+		decideIdentityRequest: (websiteId, decision) => {
+			const pending = identityRequests.get(websiteId);
+			if (!pending || pending.status !== 'pending') return null;
+			pending.status = decision === 'approve' ? 'approved' : 'rejected';
+			if (decision === 'approve') identityIssuers.set(websiteId, pending.input);
+			return pending;
+		},
+		/** Answer identity-issuer requests for this website with 403. @param {string} websiteId */
+		refuseIdentityRequests: (websiteId) => refuseIdentity.add(websiteId),
+		/** Answer events of this type with `rejected`. @param {string} type */
+		rejectEventType: (type) => rejectEvents.add(type),
 		/** Trust this product key for client assertions. @param {PublicJwk} jwk */
 		trustProductKey: (jwk) => {
 			productKey = jwk;

@@ -84,6 +84,14 @@ describe('toDocument', () => {
 		expect(bad.ok).toBe(false);
 	});
 
+	it('carries the website defaults when given (and omits them when absent or empty)', () => {
+		const website = { timeZone: 'Europe/Berlin', language: 'de-DE', currency: 'EUR' };
+		expect(documentOf(toDocument(resolve(), { ...META, website })).website).toEqual(website);
+		expect(documentOf(toDocument(resolve(), { ...META, website: {} }))).not.toHaveProperty('website');
+		expect(documentOf(toDocument(resolve(), { ...META, website: null }))).not.toHaveProperty('website');
+		expect(toDocument(resolve(), { ...META, website: { timeZone: 'Mars/Olympus' } }).ok).toBe(false);
+	});
+
 	it.each(/** @type {const} */ (['active', 'paused', 'suspended', 'spend_cap']))('round-trips runtime state %s', (state) => {
 		const resolved = resolve({
 			subscription: { ...SUB, status: state === 'spend_cap' ? 'active' : state },

@@ -9,9 +9,11 @@ import {
 	adaptHeadless,
 	adaptRenderer,
 	adoptStyles,
+	pageContext,
 	start,
 	stubDefinition,
 	unavailableClient,
+	viewFields,
 } from '../../../src/modules/delivery/runtime/entry.js';
 import { RUNTIME_AUDIENCE, RUNTIME_CORE } from '../../../src/modules/delivery/runtime/generated.js';
 import { PACK, PACK_FILES } from './fixtures.js';
@@ -19,7 +21,8 @@ import { PACK, PACK_FILES } from './fixtures.js';
 vi.setConfig({ testTimeout: 30_000 });
 
 const WEBSITE = 'web_0123456789abcdefghjkmnpq';
-const ASSETS = 'https://portal.test/w/packs/';
+const ASSETS = 'https://portal.test/w/';
+const PACK_BASE = `${ASSETS}packs/`;
 
 /** Let the default `load` trigger (a 0 ms timer) fire, then wait for every mount. @param {any} instance */
 const settled = async (instance) => {
@@ -42,7 +45,7 @@ const page = () =>
 
 /** Pack modules from their source text (data: URLs; the fixtures have no relative imports). */
 const importPack = async (/** @type {string} */ url) => {
-	const path = url.slice(`${ASSETS}${PACK}/1/`.length);
+	const path = url.slice(`${PACK_BASE}${PACK}/1/`.length);
 	const source = /** @type {Record<string, string>} */ (PACK_FILES)[path];
 	if (!source) throw new Error(`unknown module ${url}`);
 	return import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
@@ -62,8 +65,8 @@ const data = (extra = {}) => ({
 			config: { message: 'Free shipping' },
 			strings: { 'bar.label': 'Notice' },
 			placement: { selectors: [{ selector: '#main', position: 'prepend' }] },
-			headless: { path: `${PACK}/1/headless/bar.js`, name: 'createBar' },
-			renderer: { path: `${PACK}/1/ui/bar.js`, name: 'render' },
+			headless: { path: `packs/${PACK}/1/headless/bar.js`, name: 'createBar' },
+			renderer: { path: `packs/${PACK}/1/ui/bar.js`, name: 'render' },
 		},
 	],
 	...extra,
@@ -191,7 +194,10 @@ describe('start(): mounting compiled elements', () => {
 		);
 		await settled(instance);
 		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Need help?'));
-		expect(calls[0]?.url).toBe('https://chat.example.net/v1/elements/launcher/view');
+		// v2: the page context travels as ?ctx= (path; item id / page type from data-ss-* attributes)
+		const first = new URL(String(calls[0]?.url));
+		expect(`${first.origin}${first.pathname}`).toBe('https://chat.example.net/v1/elements/launcher/view');
+		expect(JSON.parse(String(first.searchParams.get('ctx')))).toEqual({ path: '/collections/sale' });
 		expect(calls[0]?.init.headers.authorization ?? calls[0]?.init.headers.Authorization).toBe('Bearer pk_live_test');
 		expect(window.document.querySelector('.ss-el__body')?.textContent).toBe('We reply in minutes');
 		expect(window.document.querySelector('.ss-el__items a')?.getAttribute('href')).toBe('https://chat.example.net/faq');
@@ -199,11 +205,102 @@ describe('start(): mounting compiled elements', () => {
 		expect(buttons).toHaveLength(1); // invalid action names are dropped
 		/** @type {any} */ (buttons[0]).click();
 		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Connected'));
-		expect(calls[1]?.url).toBe('https://chat.example.net/v1/elements/launcher/actions/open');
+		expect(String(calls[1]?.url).split('?')[0]).toBe('https://chat.example.net/v1/elements/launcher/actions/open');
 		expect(calls[1]?.init.method).toBe('POST');
 		expect(await window.SS.elements.get('launcher').actions.invoke('Bad!')).toMatchObject({ ok: false });
 		instance.destroy();
 		vi.unstubAllGlobals();
+	});
+
+	it('stub v2: page context from data-ss-* attributes, input fields posted with actions; v1 data stays compatible', async () => {
+		const { window } = new JSDOM(
+			'<!doctype html><html data-ss-page-type="product"><head></head><body><article data-ss-item-id="sku-9"><main id="main"></main></article></body></html>',
+			{ url: 'https://shop.example.com/p/sku-9', runScripts: 'outside-only', pretendToBeVisual: true },
+		);
+		vi.stubGlobal('document', window.document);
+		/** @type {Array<{ url: string, init: any }>} */
+		const calls = [];
+		/** @type {any} */
+		const fetch = async (/** @type {string} */ url, /** @type {any} */ init = {}) => {
+			calls.push({ url, init });
+			const view =
+				calls.length === 1
+					? {
+							title: 'Notify me',
+							fields: [
+								{ name: 'email', type: 'email', label: 'E-mail', required: true },
+								{
+									name: 'size',
+									type: 'select',
+									label: 'Size',
+									options: [{ value: 's', label: 'Small' }, { value: 'm' }],
+								},
+								{ name: 'agree', type: 'checkbox', label: 'Agree' },
+								{ name: 'qty', type: 'number', label: 'Qty' },
+								{ name: 'Bad Name', type: 'text', label: 'x' },
+								{ name: 'html', type: 'html', label: 'x' },
+							],
+							actions: [{ action: 'subscribe', label: 'Notify me' }],
+						}
+					: { title: 'Done' };
+			return new Response(JSON.stringify(view), { status: 200, headers: { 'content-type': 'application/json' } });
+		};
+		const spec = { key: 'notify', stub: STUB_PROTOCOL, api: 'https://alerts.example.net', config: {}, strings: {} };
+		const instance = start(
+			/** @type {any} */ (data({ elements: [{ ...spec, placement: { selectors: [{ selector: '#main' }] } }] })),
+			{ window, fetch, storage: null },
+		);
+		await settled(instance);
+		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Notify me'));
+		const ctx = JSON.parse(String(new URL(String(calls[0]?.url)).searchParams.get('ctx')));
+		expect(ctx).toEqual({ path: '/p/sku-9', itemId: 'sku-9', pageType: 'product' });
+		const inputs = window.document.querySelectorAll('.ss-el__input');
+		expect([...inputs].map((/** @type {any} */ el) => el.getAttribute('name'))).toEqual(['email', 'size', 'agree', 'qty']);
+		expect(window.document.querySelectorAll('.ss-el__input option')).toHaveLength(2);
+		const email = /** @type {any} */ (window.document.querySelector('input[name="email"]'));
+		// a required field left empty blocks the action
+		/** @type {any} */ (window.document.querySelector('.ss-el__action')).click();
+		await new Promise((r) => setTimeout(r, 20));
+		expect(calls).toHaveLength(1);
+		email.value = 'a@b.test';
+		/** @type {any} */ (window.document.querySelector('input[name="agree"]')).checked = true;
+		/** @type {any} */ (window.document.querySelector('input[name="qty"]')).value = '2';
+		/** @type {any} */ (window.document.querySelector('.ss-el__action')).click();
+		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Done'));
+		expect(String(calls[1]?.url).split('?')[0]).toBe('https://alerts.example.net/v1/elements/notify/actions/subscribe');
+		expect(JSON.parse(calls[1]?.init.body)).toEqual({ fields: { email: 'a@b.test', size: 's', agree: true, qty: 2 } });
+		instance.destroy();
+
+		// v1 bundles: no ctx, same view model
+		calls.length = 0;
+		const v1 = start(/** @type {any} */ (data({ elements: [{ ...spec, stub: 'ss-element-stub@1' }] })), {
+			window,
+			fetch,
+			storage: null,
+		});
+		await settled(v1);
+		await vi.waitFor(() => expect(calls.length).toBeGreaterThan(0));
+		expect(calls[0]?.url).toBe('https://alerts.example.net/v1/elements/notify/view');
+		v1.destroy();
+		vi.unstubAllGlobals();
+	});
+
+	it('the page context falls back to <meta> and the placement target; view fields are sanitised', () => {
+		const { window } = new JSDOM(
+			'<!doctype html><html><head><meta name="ss:item-id" content="it-1"></head><body><div id="t" data-ss-page-type="cart"></div></body></html>',
+			{ url: 'https://shop.example.com/cart' },
+		);
+		expect(pageContext(window, 'x', { selectors: [{ selector: '#t' }, { selector: '##bad' }] })).toEqual({
+			path: '/cart',
+			itemId: 'it-1',
+			pageType: 'cart',
+		});
+		expect(pageContext(null, 'x', undefined)).toEqual({ path: '/' });
+		expect(viewFields('nope')).toEqual([]);
+		expect(viewFields(Array.from({ length: 30 }, (_, i) => ({ name: `f${i}`, type: 'text', label: 'L' })))).toHaveLength(20);
+		expect(viewFields([{ name: 'a', type: 'select', options: [{ value: 1 }, { label: 'no value' }] }])).toEqual([
+			{ name: 'a', type: 'select', label: 'a', required: false, options: [{ value: '1', label: '1' }] },
+		]);
 	});
 
 	it('the stub reports a missing element API', async () => {
@@ -229,6 +326,8 @@ describe('the compiled loader in a page', () => {
 				...data().elements[0],
 				compiledPlacement: { audience: program },
 				kind: 'pack',
+				delivery: 'pack',
+				moduleVersion: 1,
 				appId: PACK,
 				manifestVersion: 1,
 				headless: { path: 'headless/bar.js', name: 'createBar' },
@@ -259,7 +358,7 @@ describe('the compiled loader in a page', () => {
 		Object.defineProperty(second, 'innerWidth', { value: 1280 });
 		/** Pack modules evaluated inside the page's realm (as a browser would). @param {string} url */
 		const importInPage = async (url) => {
-			const source = /** @type {Record<string, string>} */ (PACK_FILES)[url.slice(`${ASSETS}${PACK}/1/`.length)] ?? '';
+			const source = /** @type {Record<string, string>} */ (PACK_FILES)[url.slice(`${PACK_BASE}${PACK}/1/`.length)] ?? '';
 			const exports = second.eval('({})');
 			second.eval(`(function (exports) {${source.replace(/export const (\w+)/g, 'exports.$1')}})`)(exports);
 			return exports;

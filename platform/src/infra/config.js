@@ -46,8 +46,9 @@ import { isObject } from './util.js';
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound hosts outbound calls may reach although private or
  *   plain http (`OUTBOUND_DEV_ALLOW_HOSTS`; always empty in production)
  * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify e-mail, resets, invites)
- * @property {{ storage: AssetStorageConfig | null, budgetKb: number }} delivery platform-owned artefact storage (our
- *   software only: pack assets and compiled website bundles — never client data) and the default website budget
+ * @property {{ storage: AssetStorageConfig | null, budgetKb: number, previewOrigin: string | null }} delivery
+ *   platform-owned artefact storage (our software only: pack assets and compiled website bundles — never client data),
+ *   the default website budget, and the dedicated cookie-less preview origin (`PREVIEW_ORIGIN`, F.16) or null
  */
 
 /**
@@ -100,6 +101,11 @@ export const ENV_VARS = Object.freeze([
 		'Platform-owned artefact storage (pack assets, compiled website bundles): JSON `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }` for an S3-compatible bucket, or `memory` / `file:<dir>` outside production.',
 	],
 	['DELIVERY_BUDGET_KB', false, 'Default per-website bundle budget in KB gzip (default 60): Loader + Σ element budget.js.'],
+	[
+		'PREVIEW_ORIGIN',
+		false,
+		'Dedicated cookie-less origin that serves only the preview proxy (`/p/*`), e.g. https://preview.example-previews.com — a host that is not the Portal host (ideally another registrable domain). When set, preview links use it and the Portal host refuses `/p/*`.',
+	],
 	['PROBLEM_BASE_URI', false, 'RFC 9457 problem type base URI (default `<PORTAL_URL>/problems/`).'],
 	['PORTAL_ENV', false, 'production | preview | development | test (default from NODE_ENV).'],
 	['PORTAL_VERSION', false, 'Version string reported by /healthz and /v1/system/info (default `dev`).'],
@@ -477,6 +483,23 @@ export const loadConfig = (env = process.env) => {
 		problems.push('PLATFORM_ASSET_STORAGE endpoint must use https in production and preview');
 	const budgetKb = intOf(read('DELIVERY_BUDGET_KB'), 60, { min: 1, max: 1024 });
 	if (budgetKb === null) problems.push('DELIVERY_BUDGET_KB must be an integer 1..1024');
+	const previewText = read('PREVIEW_ORIGIN');
+	/** @type {string | null} */
+	let previewOrigin = null;
+	if (previewText) {
+		try {
+			const url = new URL(previewText);
+			const local = LOCAL.has(url.hostname) || url.hostname.endsWith('.localhost');
+			if (url.username || url.password || url.search || url.hash || (url.pathname !== '/' && url.pathname !== ''))
+				throw new Error('not an origin');
+			if (url.protocol !== 'https:' && (strict || !local || url.protocol !== 'http:')) throw new Error('scheme');
+			previewOrigin = url.origin;
+			if (portalOrigin && new URL(portalOrigin).host === url.host)
+				problems.push('PREVIEW_ORIGIN must be a different host from PORTAL_URL');
+		} catch {
+			problems.push('PREVIEW_ORIGIN must be an https origin (scheme and host only; http only for localhost in development)');
+		}
+	}
 
 	// Problems base
 	let problemBaseUri = read('PROBLEM_BASE_URI') ?? (portalUrl ? `${portalUrl}/problems/` : '');
@@ -554,6 +577,7 @@ export const loadConfig = (env = process.env) => {
 		delivery: Object.freeze({
 			storage: assetStorage ? Object.freeze(assetStorage) : null,
 			budgetKb: /** @type {number} */ (budgetKb),
+			previewOrigin,
 		}),
 	});
 };

@@ -93,12 +93,16 @@
 	"dashboard.kpi.deletions": "Pending deletions",
 	"dashboard.customers.empty": "No customers yet.",
 	"dashboard.customers.search": "E-mail or phone",
-	"dashboard.identity.intro": "Signups issues the customer tokens of this website. Register it once in the Portal (Website → Identity) so every other product accepts them.",
+	"dashboard.identity.intro": "Signups issues the customer tokens of this website. Signups asks the Portal to register it as the website's issuer; once the merchant approves (Website → Identity), every other product accepts these tokens.",
 	"dashboard.identity.issuer": "Issuer",
 	"dashboard.identity.jwks": "JWKS URL",
 	"dashboard.identity.audience": "Audience",
 	"dashboard.identity.claims": "Claim map: subject = sub, email = email, phone = phone_number",
 	"dashboard.identity.registered": "Registered in the Portal: other products accept these tokens.",
 	"dashboard.identity.not_registered": "Not registered yet: other products do not accept these tokens until the issuer is set in the Portal.",
-	"dashboard.identity.keys": "Published keys: {count}"
+	"dashboard.identity.keys": "Published keys: {count}",
+	"dashboard.identity.request": "Request in the Portal",
+	"dashboard.identity.pending": "Request sent: the merchant approves it in the Portal (Website → Identity).",
+	"dashboard.identity.requested": "Requested in the Portal on {at}: waiting for the merchant's approval (Website → Identity).",
+	"dashboard.identity.requested_active": "The Portal reported this issuer as active on {at}; the next entitlement update carries it."
 }

@@ -77,6 +77,79 @@ import { simulateSettlement } from './settle.js';
  * @property {string} receivedAt
  */
 /** @typedef {{ status: number, headers: Record<string, string>, body: unknown }} PortalResponse */
+/**
+ * @typedef {object} IdentityInput the body of `PUT /v1/product/websites/:websiteId/identity`
+ * @property {string} issuer
+ * @property {string | null} jwksUrl
+ * @property {Record<string, unknown>[] | null} publicJwks
+ * @property {string | null} audience
+ * @property {{ subject: string, email?: string, phone?: string }} claimMap
+ */
+/**
+ * @typedef {object} IdentityRequest
+ * @property {string} websiteId
+ * @property {string} appId
+ * @property {'pending' | 'approved' | 'rejected'} status
+ * @property {IdentityInput} input
+ * @property {string} requestedAt
+ * @property {string | null} decidedAt
+ */
+/**
+ * @typedef {object} IdentityIssuer
+ * @property {string} appId
+ * @property {IdentityInput} input
+ * @property {import('@ss/contracts').IdentitySection} section
+ */
+
+/** Public JWK members an identity issuer key may carry into the entitlement document. */
+const JWK_MEMBERS = Object.freeze(['kty', 'kid', 'alg', 'use', 'crv', 'x', 'y', 'n', 'e']);
+const PRINTABLE = /^[\x21-\x7e]{1,255}$/;
+const CLAIM = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+/**
+ * Parse an identity-issuer request body (the Portal's rules, simplified for local development).
+ * @param {Record<string, unknown>} body
+ * @returns {{ ok: true, input: IdentityInput } | { ok: false, detail: string }}
+ */
+export const parseIdentityInput = (body) => {
+	const { issuer, jwksUrl, publicJwks, audience, claimMap } = body;
+	const unknown = Object.keys(body).filter(
+		(name) => !['issuer', 'jwksUrl', 'publicJwks', 'audience', 'claimMap'].includes(name),
+	);
+	if (unknown.length > 0) return { ok: false, detail: `${unknown.join(', ')} is not allowed` };
+	if (typeof issuer !== 'string' || !PRINTABLE.test(issuer)) return { ok: false, detail: 'issuer must be printable' };
+	const hasUrl = jwksUrl !== undefined && jwksUrl !== null;
+	const hasKeys = publicJwks !== undefined && publicJwks !== null;
+	if (hasUrl === hasKeys) return { ok: false, detail: 'give exactly one of jwksUrl and publicJwks' };
+	if (hasUrl && (typeof jwksUrl !== 'string' || !/^https?:\/\//.test(jwksUrl)))
+		return { ok: false, detail: 'jwksUrl must be an http(s) URL' };
+	if (hasKeys && (!Array.isArray(publicJwks) || publicJwks.length === 0 || publicJwks.length > 5 || !publicJwks.every(isObject)))
+		return { ok: false, detail: 'publicJwks must list 1–5 keys' };
+	if (audience !== undefined && audience !== null && (typeof audience !== 'string' || !PRINTABLE.test(audience)))
+		return { ok: false, detail: 'audience must be printable' };
+	/** @type {{ subject: string, email?: string, phone?: string }} */
+	const claims = { subject: 'sub' };
+	if (claimMap !== undefined && claimMap !== null) {
+		if (!isObject(claimMap)) return { ok: false, detail: 'claimMap must be an object' };
+		for (const [name, value] of Object.entries(claimMap)) {
+			if (!['subject', 'email', 'phone'].includes(name)) return { ok: false, detail: `claimMap.${name} is not allowed` };
+			if (value === null || value === undefined || value === '') continue;
+			if (typeof value !== 'string' || !CLAIM.test(value))
+				return { ok: false, detail: `claimMap.${name} must be a claim name` };
+			claims[/** @type {'subject' | 'email' | 'phone'} */ (name)] = value;
+		}
+	}
+	return {
+		ok: true,
+		input: {
+			issuer,
+			jwksUrl: hasUrl ? /** @type {string} */ (jwksUrl) : null,
+			publicJwks: hasKeys ? /** @type {Record<string, unknown>[]} */ (publicJwks) : null,
+			audience: typeof audience === 'string' ? audience : null,
+			claimMap: claims,
+		},
+	};
+};
 
 /** Default lifetime of signed entitlement documents (the product caches them and survives outages via offlineGrace). */
 export const DEFAULT_ENTITLEMENT_TTL_SECONDS = 600;
@@ -181,6 +254,10 @@ export const createPortal = async ({
 	const usageBatches = new Map();
 	/** @type {Map<string, Record<string, unknown>>} */
 	const heartbeats = new Map();
+	/** @type {Map<string, IdentityRequest>} identity-issuer requests by websiteId (the last one per website) */
+	const identityRequests = new Map(Object.entries(snapshot?.identityRequests ?? {}));
+	/** @type {Map<string, IdentityIssuer>} approved issuers by websiteId (copied into the entitlement documents) */
+	const identityIssuers = new Map(Object.entries(snapshot?.identityIssuers ?? {}));
 	/** @type {WeakMap<Manifest, ReturnType<typeof normaliseProduct>>} */
 	const products = new WeakMap();
 	for (const subscription of fixture.subscriptions) {
@@ -309,6 +386,7 @@ export const createPortal = async ({
 				.filter(([kind]) => /** @type {readonly string[]} */ (RESOURCE_KINDS).includes(kind))
 				.map(([kind, status]) => ({ kind, ref: `res_${kind}_${website.id}`, status })),
 			dataScope: { prefix: `ss_${app.manifest.product.slug.replace(/-/g, '_')}_` },
+			identity: identityIssuers.get(websiteId)?.section ?? null,
 		});
 		if (!result.ok) {
 			const detail =
@@ -353,6 +431,99 @@ export const createPortal = async ({
 	const isText = (value) => typeof value === 'string' && value.length > 0 && value.length <= 256;
 
 	/**
+	 * `PUT /v1/product/websites/:websiteId/identity`: a product asks to become the website's identity issuer. Like the
+	 * Portal: active subscription and manifest `capabilities.identityIssuer: true` required (else 403); stored pending
+	 * (202) until decided with `decideIdentityRequest` (`ss dev identity`); a request equal to the active issuer answers
+	 * 200 `active`.
+	 * @param {App} app
+	 * @param {string} websiteId
+	 * @param {Record<string, unknown>} body
+	 * @returns {PortalResponse}
+	 */
+	const requestIdentity = (app, websiteId, body) => {
+		const subscription = websiteOf(websiteId) ? subscriptionOf(app, websiteId) : undefined;
+		if (!subscription || subscription.status !== 'active')
+			return fail('forbidden', 'This product may not request to become the identity issuer of this website.');
+		if (app.manifest.capabilities?.identityIssuer !== true)
+			return fail('forbidden', 'The product manifest does not declare capabilities.identityIssuer.');
+		const parsed = parseIdentityInput(body);
+		if (!parsed.ok) return fail('validation_failed', parsed.detail);
+		const same = JSON.stringify(parsed.input);
+		const active = identityIssuers.get(websiteId);
+		if (active && JSON.stringify(active.input) === same) return json({ status: 'active', issuer: active.section });
+		const pending = identityRequests.get(websiteId);
+		if (pending?.status === 'pending' && pending.appId === app.appId && JSON.stringify(pending.input) === same)
+			return json({ status: 'pending', request: pending }, 202);
+		/** @type {IdentityRequest} */
+		const request = {
+			websiteId,
+			appId: app.appId,
+			status: 'pending',
+			input: parsed.input,
+			requestedAt: iso(),
+			decidedAt: null,
+		};
+		identityRequests.set(websiteId, request);
+		onChange();
+		log(`identity  ${websiteId}  ${app.manifest.product.slug} requests issuer ${parsed.input.issuer} (ss dev identity)`);
+		return json({ status: 'pending', request }, 202);
+	};
+
+	/**
+	 * The public keys of an identity input: inline, or fetched from its JWKS URL now (no refresh in the emulator).
+	 * @param {IdentityInput} input
+	 * @returns {Promise<Record<string, unknown>[]>}
+	 */
+	const identityKeys = async (input) => {
+		/** @type {unknown} */
+		let keys = input.publicJwks;
+		if (input.jwksUrl) {
+			try {
+				const response = await fetch(input.jwksUrl, { headers: { accept: 'application/json' } });
+				const jwks = response.ok ? await response.json() : null;
+				keys = isObject(jwks) ? jwks.keys : null;
+			} catch {
+				keys = null;
+			}
+		}
+		const list = Array.isArray(keys) ? keys.filter(isObject).slice(0, 5) : [];
+		if (list.length === 0) throw portalError('jwks_unavailable', 'the issuer JWKS yielded no usable key');
+		return list.map((key) => Object.fromEntries(JWK_MEMBERS.filter((name) => name in key).map((name) => [name, key[name]])));
+	};
+
+	/**
+	 * Decide the pending identity-issuer request of a website as the merchant. `approve` makes it the active issuer
+	 * (copied into the entitlement documents) and announces `entitlement.changed@1`.
+	 * @param {{ websiteId: string, decision: string }} input
+	 */
+	const decideIdentityRequest = async ({ websiteId, decision }) => {
+		const request = identityRequests.get(websiteId);
+		if (!request || request.status !== 'pending')
+			throw portalError('unknown_website', `no pending identity issuer request for ${websiteId}`);
+		if (decision !== 'approve' && decision !== 'reject')
+			throw portalError('invalid_decision', 'decision must be approve or reject');
+		if (decision === 'approve') {
+			const jwks = await identityKeys(request.input);
+			identityIssuers.set(websiteId, {
+				appId: request.appId,
+				input: request.input,
+				section: /** @type {import('@ss/contracts').IdentitySection} */ ({
+					issuer: request.input.issuer,
+					jwks,
+					...(request.input.audience ? { audience: request.input.audience } : {}),
+					claimMap: request.input.claimMap,
+				}),
+			});
+		}
+		request.status = decision === 'approve' ? 'approved' : 'rejected';
+		request.decidedAt = iso();
+		onChange();
+		log(`identity  ${websiteId}  request ${request.status}`);
+		const deliveries = decision === 'approve' ? await notifyEntitlement(websiteId) : [];
+		return { request, issuer: identityIssuers.get(websiteId)?.section ?? null, deliveries };
+	};
+
+	/**
 	 * `/v1/product/*` — the API app-kit's signed Portal client calls.
 	 * @param {{ method: string, path: string, query?: URLSearchParams, headers?: Record<string, string | undefined>, body?: unknown }} request
 	 * @returns {Promise<PortalResponse>}
@@ -362,6 +533,9 @@ export const createPortal = async ({
 		if (!app) return fail('unauthorized', 'a valid client assertion (Authorization: Bearer <ss-assertion+jwt>) is required');
 		const route = `${method.toUpperCase()} ${path}`;
 		const input = isObject(body) ? body : {};
+		const identityPath = /^\/v1\/product\/websites\/([^/]+)\/identity$/.exec(path);
+		if (identityPath && method.toUpperCase() === 'PUT')
+			return requestIdentity(app, decodeURIComponent(identityPath[1] ?? ''), input);
 		switch (route) {
 			case 'GET /v1/product/entitlements': {
 				const websiteId = query.get('websiteId') ?? '';
@@ -519,7 +693,12 @@ export const createPortal = async ({
 				const kind = typeof input.kind === 'string' ? input.kind : '';
 				const website = websiteOf(websiteId);
 				if (!website || !subscriptionOf(app, websiteId)) return fail('not_found', 'no subscription for this website');
-				if (!(app.manifest.requires?.resources ?? []).includes(/** @type {any} */ (kind)))
+				// a kind is resolvable when required at product level (always) or by any element
+				const required = [
+					...(app.manifest.requires?.resources ?? []),
+					...app.manifest.elements.flatMap((element) => element.requires?.resources ?? []),
+				];
+				if (!required.includes(/** @type {any} */ (kind)))
 					return fail('forbidden', `the manifest does not require '${kind}'`);
 				if (website.resources[kind] !== 'connected')
 					return fail('resource_missing', `${kind} is not connected for this website`);
@@ -993,6 +1172,9 @@ export const createPortal = async ({
 		usage: () => [...usage],
 		published: () => [...published],
 		heartbeats: () => Object.fromEntries(heartbeats),
+		decideIdentityRequest,
+		identityRequests: () => [...identityRequests.values()],
+		identityIssuers: () => Object.fromEntries([...identityIssuers].map(([websiteId, issuer]) => [websiteId, issuer.section])),
 		fixture: () => fixture,
 		snapshot: () => ({
 			version: 1,
@@ -1003,6 +1185,8 @@ export const createPortal = async ({
 			usage,
 			published,
 			docVersions: Object.fromEntries(docVersions),
+			identityRequests: Object.fromEntries(identityRequests),
+			identityIssuers: Object.fromEntries(identityIssuers),
 			layers: Object.fromEntries(fixture.subscriptions.map((subscription) => [subscription.id, subscription.layers])),
 		}),
 	});

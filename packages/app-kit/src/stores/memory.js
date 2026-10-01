@@ -52,6 +52,8 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 	const windows = new Map();
 	/** @type {{ jwks: unknown, fetchedAt: number } | null} */
 	let portalKeys = null;
+	/** @type {Map<string, { id: string, envelope: Record<string, unknown> | null, attempts: number, status: 'pending' | 'sent' | 'dead', lastError?: string, nextAttemptAt: number, leaseUntil: number, expireAt: number | null }>} */
+	const outbox = new Map();
 
 	/** @param {QueuedUsage & { expireAt: number | null }} record */
 	const live = (record) => record.expireAt === null || record.expireAt > now();
@@ -164,6 +166,58 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 			stats: async () => {
 				const out = { pending: 0, sent: 0, dead: 0 };
 				for (const record of usage.values()) if (live(record)) out[record.status] += 1;
+				return out;
+			},
+		}),
+		eventOutbox: Object.freeze({
+			enqueue: async ({ id, envelope }) => {
+				const existing = outbox.get(id);
+				if (existing && (existing.expireAt === null || existing.expireAt > now())) return { inserted: false };
+				outbox.set(id, { id, envelope, attempts: 0, status: 'pending', nextAttemptAt: 0, leaseUntil: 0, expireAt: null });
+				return { inserted: true };
+			},
+			lease: async ({ now: t, limit, leaseMs }) => {
+				/** @type {import('./types.js').OutboxEvent[]} */
+				const out = [];
+				for (const record of outbox.values()) {
+					if (out.length >= limit) break;
+					if (record.status !== 'pending' || record.nextAttemptAt > t || record.leaseUntil > t || !record.envelope) continue;
+					record.leaseUntil = t + leaseMs;
+					out.push({
+						id: record.id,
+						envelope: record.envelope,
+						attempts: record.attempts,
+						status: record.status,
+						...(record.lastError === undefined ? {} : { lastError: record.lastError }),
+					});
+				}
+				return out;
+			},
+			ack: async (ids, { now: t, retainMs }) => {
+				for (const id of ids) {
+					const record = outbox.get(id);
+					if (!record) continue;
+					Object.assign(record, { status: 'sent', envelope: null, leaseUntil: 0, expireAt: t + retainMs });
+				}
+			},
+			retry: async (ids, { nextAttemptAt, error }) => {
+				for (const id of ids) {
+					const record = outbox.get(id);
+					if (!record || record.status !== 'pending') continue;
+					Object.assign(record, { attempts: record.attempts + 1, nextAttemptAt, leaseUntil: 0, lastError: error });
+				}
+			},
+			deadLetter: async (ids, { now: t, error, retainMs }) => {
+				for (const id of ids) {
+					const record = outbox.get(id);
+					if (!record) continue;
+					Object.assign(record, { status: 'dead', leaseUntil: 0, lastError: error, expireAt: t + retainMs });
+				}
+			},
+			stats: async () => {
+				const out = { pending: 0, sent: 0, dead: 0 };
+				for (const record of outbox.values())
+					if (record.expireAt === null || record.expireAt > now()) out[record.status] += 1;
 				return out;
 			},
 		}),

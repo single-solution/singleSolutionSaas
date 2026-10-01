@@ -33,12 +33,15 @@ import {
 } from '../../../src/modules/commerce/core/catalog.js';
 import {
 	DOCUMENT_TTL_MS,
+	documentHash,
 	enabledElements,
 	isFresh,
 	nextVersion,
 	quotaCrossed,
 	quotaWatch,
+	resourceNeeds,
 	validityWindow,
+	websiteSection,
 } from '../../../src/modules/commerce/core/documents.js';
 import {
 	checkCreditOperation,
@@ -584,5 +587,39 @@ describe('billing composition', () => {
 		});
 		expect(hasFindings(drift)).toBe(true);
 		expect(normaliseProduct).toBeTypeOf('function');
+	});
+});
+
+describe('documents: website section, hash and resource needs (F.16)', () => {
+	it('builds the website section from set settings and extends the content hash', () => {
+		expect(websiteSection({ timeZone: null, language: undefined })).toBeNull();
+		expect(websiteSection({ timeZone: 'UTC', currency: 'EUR', language: null })).toEqual({ timeZone: 'UTC', currency: 'EUR' });
+		expect(documentHash('h', null, null)).toBe('h');
+		const identityOnly = documentHash('h', { issuer: 'x' });
+		expect(documentHash('h', { issuer: 'x' }, null)).toBe(identityOnly);
+		expect(documentHash('h', null, { timeZone: 'UTC' })).not.toBe('h');
+		expect(documentHash('h', { issuer: 'x' }, { timeZone: 'UTC' })).not.toBe(identityOnly);
+	});
+
+	it('product-level kinds are always needed, element-level kinds only while the element is on', () => {
+		const manifest = {
+			requires: { resources: ['database'] },
+			elements: [
+				{ key: 'a', requires: { resources: ['ai', 'database'] } },
+				{ key: 'b', requires: { resources: ['storage'] } },
+				{ key: 'c', requires: { resources: ['storage'] } },
+				{ key: 'd' },
+			],
+		};
+		expect(
+			resourceNeeds(manifest, {
+				a: { enabled: false, reason: 'not_in_plan' },
+				b: { enabled: false, reason: 'resource_missing' },
+			}),
+		).toEqual([
+			{ kind: 'ai', scope: 'element', elements: ['a'], neededNow: false },
+			{ kind: 'database', scope: 'product', elements: ['a'], neededNow: true },
+			{ kind: 'storage', scope: 'element', elements: ['b', 'c'], neededNow: true },
+		]);
 	});
 });

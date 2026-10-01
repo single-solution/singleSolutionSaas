@@ -30,11 +30,18 @@ const names = (pattern, max = 100) => ({
 	uniqueItems: true,
 	items: { type: 'string', minLength: 1, maxLength: 64, pattern },
 });
-const requires = {
+/** @param {string} description */
+const requiresOf = (description) => ({
 	type: 'object',
 	additionalProperties: false,
-	properties: { resources: { type: 'array', uniqueItems: true, items: ref('resourceKind') } },
-};
+	properties: { resources: { type: 'array', uniqueItems: true, items: ref('resourceKind'), description } },
+});
+const elementRequires = requiresOf(
+	'Client resource kinds this element needs; the element is disabled (resource_missing) while one is not connected.',
+);
+const productRequires = requiresOf(
+	'Client resource kinds every subscription needs, whatever elements are enabled; while one is not connected every element is disabled (resource_missing). Kinds only some elements need belong on those elements.',
+);
 
 const element = {
 	type: 'object',
@@ -82,7 +89,7 @@ const element = {
 			},
 		},
 		dependsOn: { type: 'array', maxItems: 50, uniqueItems: true, items: ref('elementKey') },
-		requires,
+		requires: elementRequires,
 		features: { $ref: SCHEMA_IDS.featureSchema },
 		strings: ref('relativePath'),
 		placement: { type: 'boolean' },
@@ -152,6 +159,7 @@ export const manifestSchema = deepFreeze({
 			additionalProperties: false,
 			properties: {
 				adminLaunch: { type: 'boolean' },
+				identityIssuer: { type: 'boolean' },
 				sandbox: { type: 'boolean' },
 				localEnforcement: {
 					type: 'array',
@@ -162,7 +170,7 @@ export const manifestSchema = deepFreeze({
 			},
 		},
 		scopes: names(PATTERNS.scope, 200),
-		requires,
+		requires: productRequires,
 		events: {
 			type: 'object',
 			additionalProperties: false,

@@ -6,9 +6,10 @@
  *
  * Selection (per subscription): the signed document must be `runtime.state = active`; an element is delivered when
  * the document enables it **and** its manifest declares mode A. Pack elements ship their own headless + renderer
- * modules (stored, hash-verified assets); service-product elements get the element stub (`ss-element-stub@1`, see
- * `runtime/entry.js`) bound to the product's API base. Anything that cannot be delivered is skipped with a warning
- * (fail closed for that element, never for the website).
+ * modules (stored, hash-verified assets). Service-product elements ship the modules of the product's signed **UI
+ * bundle** when its current ready bundle covers the element (F.16; same descriptor and checks as packs, bound to the
+ * product's API base), else the generic element stub (`ss-element-stub@2`, see `runtime/entry.js`). Anything that
+ * cannot be delivered is skipped with a warning (fail closed for that element, never for the website).
  *
  * Determinism: inputs are sorted and embedded as canonical JSON, no timestamps enter the artefact, and the version is
  * the first 16 hex digits of the SHA-256 of the bundle rendered with a zero version — the same inputs always produce
@@ -23,7 +24,9 @@ import { compile as compileRule } from '@ss/rules';
 import { sha256Hex, sha384Integrity } from './assets.js';
 
 export const BUNDLE_FORMAT = 'ss-website-bundle@1';
-export const STUB_PROTOCOL = 'ss-element-stub@1';
+export const STUB_PROTOCOL = 'ss-element-stub@2';
+/** Delivery kinds recorded per element in `manifest.json`. */
+export const DELIVERY_KINDS = Object.freeze({ pack: 'pack', ui: 'ui-bundle', stub: STUB_PROTOCOL });
 export const VERSION_PATTERN = /^[0-9a-f]{16}$/;
 const ZERO_VERSION = '0'.repeat(16);
 const MODULE_REF = /^((?!\/)(?!.*\.\.)[A-Za-z0-9_./-]+\.m?js)#([A-Za-z_$][A-Za-z0-9_$]*)$/;
@@ -41,6 +44,14 @@ const MAX_STRING_BYTES = 64 * 1024;
  * @property {ReadonlyMap<string, { sha256: string, size: number }>} assets uploaded, hash-verified pack assets by path
  * @property {ReadonlyMap<string, Record<string, unknown>>} strings parsed string catalogs by asset path
  * @property {ReadonlyMap<string, number>} gzipBytes gzip size of each stored JS asset by path
+ * @property {UiBundle | null} [ui] service products: the current ready UI bundle (its assets are in `assets`,
+ *   `strings` and `gzipBytes`), or null
+ */
+
+/**
+ * @typedef {object} UiBundle a service product's signed UI bundle (F.16)
+ * @property {number} version delivery's UI bundle version (served under `ui/<appId>/<version>/`)
+ * @property {ReadonlyMap<string, { headless: string, renderer: string, strings?: string }>} elements by element key
  */
 
 /**
@@ -60,6 +71,8 @@ const MAX_STRING_BYTES = 64 * 1024;
  * @property {string} slug
  * @property {'pack' | 'service'} kind
  * @property {number} manifestVersion
+ * @property {'pack' | 'ui' | 'stub'} delivery how the element ships: pack modules, UI-bundle modules or the stub
+ * @property {number} moduleVersion version of the module directory (pack catalog version or UI bundle version)
  * @property {string} key
  * @property {number} budgetKb declared `budget.js`
  * @property {number} actualGzipBytes gzip size of the element's own modules (packs; 0 for stubs)
@@ -165,23 +178,40 @@ export const selectElements = (sources, candidates = null) => {
 				config: { ...config, ...(candidate?.config ?? {}) },
 				placement,
 			};
+			/** @type {{ headless?: unknown, renderer?: unknown, strings?: unknown }} */
+			let modules = /** @type {any} */ (element);
+			/** @type {'pack' | 'ui'} */
+			let delivery = 'pack';
 			if (source.kind === 'service') {
 				if (!source.apiBase || !source.apiBase.startsWith('https://')) {
 					warn('no_api_base', 'the service product has no https API base');
 					continue;
 				}
-				selected.push({
-					...base,
-					actualGzipBytes: 0,
-					strings: stringCatalog(candidate?.strings),
-					headless: null,
-					renderer: null,
-					api: source.apiBase,
-				});
-				continue;
+				const ui = source.ui?.elements.get(element.key);
+				const usable =
+					ui &&
+					[parseModuleRef(ui.headless), parseModuleRef(ui.renderer)].every(
+						(ref) => ref !== null && source.assets.has(ref.path),
+					);
+				if (!ui || !usable) {
+					if (ui) warn('ui_assets_missing', 'the UI bundle modules are not uploaded; the element stub is delivered');
+					selected.push({
+						...base,
+						delivery: 'stub',
+						moduleVersion: 0,
+						actualGzipBytes: 0,
+						strings: stringCatalog(candidate?.strings),
+						headless: null,
+						renderer: null,
+						api: source.apiBase,
+					});
+					continue;
+				}
+				modules = ui;
+				delivery = 'ui';
 			}
-			const headless = parseModuleRef(element.headless);
-			const renderer = parseModuleRef(element.renderer);
+			const headless = parseModuleRef(modules.headless);
+			const renderer = parseModuleRef(modules.renderer);
 			const missing = [headless, renderer]
 				.filter((ref) => ref !== null)
 				.map((ref) => /** @type {{ path: string }} */ (ref).path)
@@ -194,10 +224,12 @@ export const selectElements = (sources, candidates = null) => {
 				warn('assets_missing', `not uploaded: ${missing.join(', ')}`);
 				continue;
 			}
-			const stringsPath = typeof element.strings === 'string' ? element.strings : null;
+			const stringsPath = typeof modules.strings === 'string' ? modules.strings : null;
 			const files = [...new Set([headless.path, renderer.path])];
 			selected.push({
 				...base,
+				delivery,
+				moduleVersion: delivery === 'ui' ? /** @type {UiBundle} */ (source.ui).version : source.manifestVersion,
 				actualGzipBytes: files.reduce((sum, path) => sum + (source.gzipBytes.get(path) ?? 0), 0),
 				strings: {
 					...stringCatalog(stringsPath ? source.strings.get(stringsPath) : null),
@@ -205,7 +237,7 @@ export const selectElements = (sources, candidates = null) => {
 				},
 				headless: { ...headless, sha256: /** @type {{ sha256: string }} */ (source.assets.get(headless.path)).sha256 },
 				renderer: { ...renderer, sha256: /** @type {{ sha256: string }} */ (source.assets.get(renderer.path)).sha256 },
-				api: null,
+				api: delivery === 'ui' ? source.apiBase : null,
 			});
 		}
 	}
@@ -257,11 +289,12 @@ export const compilePlacement = (placement) => {
 };
 
 /**
- * Module path relative to the asset base: `<appId>/<catalog version>/<file>` (immutable, hash-verified).
+ * Module path relative to the asset base (`<portal>/w/`): `packs/<appId>/<catalog version>/<file>` for packs,
+ * `ui/<appId>/<UI bundle version>/<file>` for service UI bundles (immutable, hash-verified).
  * @param {Selected} s
  * @param {{ path: string } | null} ref
  */
-const assetPath = (s, ref) => `${s.appId}/${s.manifestVersion}/${ref?.path ?? ''}`;
+const assetPath = (s, ref) => `${s.delivery === 'ui' ? 'ui' : 'packs'}/${s.appId}/${s.moduleVersion}/${ref?.path ?? ''}`;
 
 /**
  * The data `start()` receives (see `runtime/entry.js` `CompiledData`).
@@ -283,11 +316,12 @@ export const bundleData = ({ websiteId, env, version, publicKey, eventsUrl, asse
 				...(s.compiledPlacement ? { placement: s.compiledPlacement } : {}),
 				config: s.config,
 				strings: s.strings,
-				...(s.kind === 'service'
+				...(s.delivery === 'stub'
 					? { stub: STUB_PROTOCOL, api: s.api }
 					: {
 							headless: { path: assetPath(s, s.headless), name: s.headless?.name },
 							renderer: { path: assetPath(s, s.renderer), name: s.renderer?.name },
+							...(s.api ? { api: s.api } : {}),
 						}),
 			};
 		}),
@@ -396,7 +430,8 @@ export const bundleManifest = ({ websiteId, env, version, text, portalOrigin, co
 				key: e.key,
 				kind: e.kind,
 				manifestVersion: e.manifestVersion,
-				delivery: e.kind === 'service' ? STUB_PROTOCOL : 'pack',
+				delivery: DELIVERY_KINDS[e.delivery],
+				...(e.delivery === 'ui' ? { uiBundleVersion: e.moduleVersion } : {}),
 				budgetKb: e.budgetKb,
 				audience: e.audience,
 				modules: [e.headless, e.renderer]

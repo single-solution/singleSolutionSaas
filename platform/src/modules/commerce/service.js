@@ -83,7 +83,17 @@ export const createCommerceService = (ctx) => {
 			}
 			return { invalidated: count };
 		},
+		/**
+		 * Websites with a live subscription of an app (delivery recompiles them when the app's UI bundle changes).
+		 * @param {string} appId
+		 * @returns {Promise<string[]>}
+		 */
+		websitesOfApp: async (appId) => [
+			...new Set((await repo.liveSubscriptionsOfApp(appId)).map((sub) => String(sub.websiteId))),
+		],
 		previewDocument: subscriptions.previewDocument,
+		/** Resource needs of a website's live subscriptions (connectors resolve and the console Resources page). */
+		resourceNeeds: subscriptions.resourceNeedsOf,
 		onMerchantStatus: subscriptions.onMerchantStatus,
 		// documents and usage
 		documentFor: subscriptions.documentFor,

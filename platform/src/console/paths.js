@@ -58,6 +58,8 @@ export const api = Object.freeze({
 		`/v1/merchants/${e(m)}/websites/${e(w)}/keys/${e(k)}`,
 	resources: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/resources`,
 	identity: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/identity`,
+	keyScopes: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/keys/scopes`,
+	notifications: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/notifications`,
 	deliveries: (
 		/** @type {string} */ m,
 		/** @type {string} */ w,

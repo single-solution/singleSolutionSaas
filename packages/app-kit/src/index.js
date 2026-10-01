@@ -15,6 +15,10 @@ export { createData, guardFilter, guardPipeline, guardUpdate, planIndexes } from
 export { createConnectors, PAYMENTS_METHODS } from './connectors/index.js';
 export { createS3Storage } from './connectors/storage.js';
 export { createHttpConnector, createHttpAi, createHttpMessaging } from './connectors/http.js';
+export { createSmtpMessaging, SMTP_PORTS } from './connectors/smtp.js';
+export { createOutbox } from './outbox.js';
+export { createBackground, detectRuntime } from './background.js';
+export { REPLAY_COLLECTION, REPLAY_HEADERS } from './http/replay.js';
 export { presignUrl, signHeaders } from './connectors/sigv4.js';
 export { createEvents, checkEvent, CONTROL_EVENTS } from './events.js';
 export { createAudit } from './audit.js';
@@ -23,7 +27,7 @@ export { createIdentity, verifyIdentityToken, identityTokenOf, IDENTITY_HEADER, 
 export { createPrivacy } from './privacy.js';
 export { createRequestHandler } from './http/handler.js';
 export { defineRoute } from './http/routes.js';
-export { ok, created, noContent, problem, paginate, isProblem } from './http/results.js';
+export { ok, created, noContent, problem, paginate, isProblem, RESERVED_PROBLEM_MEMBERS } from './http/results.js';
 export { standardRoutes, resolveStrings } from './http/standard.js';
 export { toNextRoute } from './http/next.js';
 export { isKitError, collectionPrefix } from './util.js';

@@ -9,8 +9,9 @@ import { displayName } from './text.js';
 /**
  * @typedef {object} StoredPhoto
  * @property {string} id
- * @property {string} key object key relative to the product's area of the merchant's bucket (connector `keyFor`)
- * @property {string} [objectKey] the full object key in the bucket
+ * @property {string} key object key relative to the product's area of the merchant's bucket (what the storage
+ *   connector takes and returns)
+ * @property {string} [objectKey] the full object key in the bucket (connector `fullKey(key)`, for public base URLs)
  * @property {string} contentType
  * @property {number} size
  */

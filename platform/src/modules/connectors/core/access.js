@@ -1,6 +1,8 @@
 /**
  * Resolve authorisation (pure): may product `appId` obtain the `kind` resource of a website? Only when it has an
- * active subscription on that website and its accepted manifest requires the kind (top level or in an element).
+ * active subscription on that website and the kind is needed (F.16): a product-level `requires.resources` kind
+ * always, an element-level kind only while a requiring element is on (commerce `resourceNeeds`; without them, any
+ * kind the accepted manifest requires).
  * @module
  */
 
@@ -26,10 +28,11 @@ export const requiredKinds = (manifest) => {
 };
 
 /**
- * @param {{ appId: string, websiteId: string, kind: string, subscriptions: unknown, manifest: unknown }} input
- * @returns {{ ok: true, subscriptionId: string } | { ok: false, reason: 'no_subscription' | 'not_required' }}
+ * @param {{ appId: string, websiteId: string, kind: string, subscriptions: unknown, manifest: unknown,
+ *   needs?: ReadonlyArray<{ appId: string, kind: string, neededNow: boolean }> | null }} input
+ * @returns {{ ok: true, subscriptionId: string } | { ok: false, reason: 'no_subscription' | 'not_required' | 'element_off' }}
  */
-export const decideResolve = ({ appId, websiteId, kind, subscriptions, manifest }) => {
+export const decideResolve = ({ appId, websiteId, kind, subscriptions, manifest, needs = null }) => {
 	const list = Array.isArray(subscriptions) ? subscriptions : [];
 	const active = list.find(
 		(/** @type {any} */ s) =>
@@ -37,5 +40,7 @@ export const decideResolve = ({ appId, websiteId, kind, subscriptions, manifest 
 	);
 	if (!active) return { ok: false, reason: 'no_subscription' };
 	if (!requiredKinds(manifest).has(kind)) return { ok: false, reason: 'not_required' };
+	if (Array.isArray(needs) && !needs.some((n) => n.appId === appId && n.kind === kind && n.neededNow))
+		return { ok: false, reason: 'element_off' };
 	return { ok: true, subscriptionId: String(active.subscriptionId) };
 };

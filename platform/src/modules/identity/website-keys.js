@@ -11,6 +11,7 @@ import { problem } from '../../infra/http.js';
 import { DEFAULT_GRACE_SECONDS } from './core/inputs.js';
 import { claimsMatch, expirySeconds, keyHint, keyStatus, presentKey, rotationRevokeAt } from './core/keys.js';
 import { decodeRevocationCursor, REVOCATION_PAGE, revocationFilter, revocationPage } from './core/revocations.js';
+import { checkScopes, scopeCatalogue } from './core/scopes.js';
 
 /** @typedef {import('./repo.js').Deps} Deps */
 /** @typedef {import('./repo.js').Meta} Meta */
@@ -27,10 +28,23 @@ export const REVOKE_JOB = 'identity.key_revoked';
  *   signer: () => Signer,
  *   loadWebsite: (websiteId: string, merchantId?: string) => Promise<Record<string, any>>,
  *   activeMerchant: (merchantId: string) => Promise<Record<string, any>>,
- * }} hooks
+ *   products?: () => Promise<ReadonlyArray<{ slug: string, name?: string }>>,
+ * }} hooks `products`: listed service products (their `<slug>.read|write` scopes)
  */
 export const createWebsiteKeys = (deps, hooks) => {
 	const { ctx, repo, audit } = deps;
+
+	/** The scope catalogue (F.16): platform scopes + one read/write pair per listed service product. */
+	const catalogue = async () => {
+		/** @type {ReadonlyArray<{ slug: string, name?: string }>} */
+		let products = [];
+		try {
+			products = (await hooks.products?.()) ?? [];
+		} catch (error) {
+			ctx.logger.warn('product list unavailable for the scope catalogue', { error });
+		}
+		return scopeCatalogue(products);
+	};
 
 	/**
 	 * Tell products (best effort; products also poll the revocation list).
@@ -131,11 +145,13 @@ export const createWebsiteKeys = (deps, hooks) => {
 	return Object.freeze({
 		/**
 		 * Issue a key for a website (key shown once).
-		 * @param {{ websiteId: string, merchantId?: string, kind: 'pk' | 'sk', scopes: string[], expiresAt?: number | string,
+		 * @param {{ websiteId: string, merchantId?: string, kind: 'pk' | 'sk', scopes?: string[], expiresAt?: number | string,
 		 *   allowSubdomains?: boolean, actor?: Actor | AuditActor, meta?: Meta }} input `expiresAt`: epoch ms or ISO string
 		 */
-		issueKey: async ({ websiteId, merchantId, kind, scopes, expiresAt, allowSubdomains = false, actor, meta = {} }) => {
+		issueKey: async ({ websiteId, merchantId, kind, scopes = [], expiresAt, allowSubdomains = false, actor, meta = {} }) => {
 			const who = actor ?? { type: /** @type {'system'} */ ('system'), id: 'identity' };
+			const checked = checkScopes(scopes, await catalogue());
+			if (!checked.ok) throw problem('validation_failed', 'The key scopes are invalid.', { errors: checked.errors });
 			const website = await hooks.loadWebsite(websiteId, merchantId);
 			if (website.status !== 'active') throw problem('not_found', 'No such website.');
 			await hooks.activeMerchant(String(website.merchantId));
@@ -149,7 +165,7 @@ export const createWebsiteKeys = (deps, hooks) => {
 				website,
 				keyId,
 				kind,
-				scopes,
+				scopes: checked.value,
 				allowSubdomains,
 				actor: who,
 				...(expiresAtMs === undefined ? {} : { expiresAtMs }),
@@ -166,6 +182,9 @@ export const createWebsiteKeys = (deps, hooks) => {
 			);
 			return { ...metadata, key };
 		},
+
+		/** The scope catalogue keys are checked against (console key form). */
+		scopeCatalogue: catalogue,
 
 		/**
 		 * Key metadata of a website, newest first.

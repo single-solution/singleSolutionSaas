@@ -61,8 +61,9 @@ export const descriptorOf = (kind, provider, c) => {
 		}
 		case 'messaging':
 			if (provider === 'smtp') {
-				const secure = c.secure ?? true;
-				const port = c.port ?? (secure ? 465 : 587);
+				// implicit TLS only on 465 unless stated; any other port (587, 25, 2525) is STARTTLS (`smtp://`)
+				const port = c.port ?? (c.secure === false ? 587 : 465);
+				const secure = c.secure ?? port === 465;
 				return {
 					provider,
 					baseUrl: `${secure ? 'smtps' : 'smtp'}://${c.host}:${port}`,

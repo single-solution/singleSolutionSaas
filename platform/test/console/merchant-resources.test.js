@@ -76,13 +76,13 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 		withToasts(<KeysView {...await loaders.loadKeys(b.api, merchantId, websiteId)} />);
 		expect(shows('No keys yet')).toBe(true);
 		await press('Create key');
-		await check('events.publish', dialog());
+		// the F.16 vocabulary: platform scopes (defaults on) + one group per listed service product
+		await check('Read elements (elements.read)', dialog());
+		await check('Send events (events.write)', dialog());
 		await pressDialog('Create key');
 		expect(shows('Choose at least one scope.')).toBe(true);
-		fillDialog('Other scopes', 'BAD SCOPE');
-		await pressDialog('Create key');
-		expect(shows('is not a valid scope')).toBe(true);
-		fillDialog('Other scopes', 'events.publish, elements.read');
+		await check('Read elements (elements.read)', dialog());
+		await check('Send events (events.write)', dialog());
 		fillDialog('Expires (optional)', day(-3));
 		await pressDialog('Create key');
 		expect(shows('Choose a date in the future.')).toBe(true);
@@ -100,13 +100,11 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 		// a secret key, then one the server refuses (unknown scope)
 		await press('Create key');
 		await check('Secret (sk_) — for your server only', dialog());
-		await check('graph.read', dialog());
 		await pressDialog('Create key');
 		await until(() => shows('Never put an sk_ key in a web page'));
 		await pressDialog('I have copied it');
 		await press('Create key');
-		await check('events.publish', dialog());
-		fillDialog('Other scopes', 'graph.write');
+		await check('Send events (events.write)', dialog());
 		await pressDialog('Create key');
 		await until(() => b.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/keys')).length >= 3);
 		await settle(2);

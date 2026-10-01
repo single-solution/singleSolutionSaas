@@ -93,7 +93,7 @@ describe('identity service wiring', () => {
 		expect((await users.findOne({ _id: owner.userId }))?.passwordHash).toMatch(/^scrypt\$32768\$/);
 		const site = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'x.example.com' });
 		const base = `/v1/merchants/${owner.merchantId}/websites/${site.json.website.websiteId}/keys`;
-		const issued = await owner.client.post(base, { kind: 'pk', scopes: ['a'] });
+		const issued = await owner.client.post(base, { kind: 'pk', scopes: ['events.write'] });
 		const header =
 			String(issued.json.key)
 				.replace(/^pk_(live|test)_/, '')

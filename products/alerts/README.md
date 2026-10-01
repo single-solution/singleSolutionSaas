@@ -128,24 +128,19 @@ message at the provider → unsubscribe (GET changes nothing, POST stops) → us
    in `manifest.json` must be the deployment's https origin (it is also the origin of the hosted unsubscribe pages).
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
 
-## Platform gaps found (worked around here)
+## Platform gaps (resolved in the kit)
 
-- `@ss/app-kit` messaging connector: the Portal resolves HTTP messaging descriptors with `provider: 'generic-http'`,
-  but app-kit's built-in messaging adapter is keyed `http`, so `connectors.messaging()` throws `not_implemented`
-  without a product-registered adapter (`adapters/messaging.js` registers both). SMTP descriptors (`smtps://…`) have
-  no app-kit adapter at all.
-- `ss certify` emulator (`packages/cli/src/emulator/events.js` `SAMPLE_DATA`) has no sample for
-  `inventory.changed@1` / `price.changed@1`, so `events.delivery` fails when one is the first consumed type
-  (`custom.*` is listed first here).
-- `ss certify` picks the first element with `api.resources` and requires a create-style `POST` with pagination on its
-  first resource, which is why `triggers` is listed before the base element `types`.
-- `@ss/app-kit` `keys.verify`: concurrent first requests on a cold instance answer 503 `unavailable` instead of
-  awaiting the in-flight revocation sync.
-- The entitlement document carries no website time zone or default language (`dispatch.time_zone`,
-  `capture.default_lang` are features), and `identity.verify` returns only `subject/email/phone` — the waitlist tier is
-  read from the payload of the token app-kit has just verified.
-- Event provenance is inferred from the actor type (browser keys may only send `customer`/`anonymous`); the Event Hub
-  does not stamp the key kind on deliveries.
+- Messaging: app-kit's built-in `generic-http` and `smtp` adapters match the Portal's descriptors, so the product
+  registers none. Over SMTP, e-mail alerts go out as plain text with the List-Unsubscribe headers; SMS needs an HTTP
+  gateway (`channel_unsupported`, not retried); SMTP 5xx replies fail permanently, 4xx replies and timeouts are retried.
+- `ss certify` uses the resource marked `x-ss-certify: true` in `openapi.json` (`POST /v1/triggers`) and has samples for
+  every catalogued event (`inventory.changed@1`, `price.changed@1` included).
+- `keys.verify` awaits the in-flight revocation sync on a cold instance (no 503 for concurrent first requests).
+- The waitlist tier is read from `ctx.identity.claims` (the payload app-kit verified), not by decoding the token again.
+- Manifest: product-level `requires` lists only `database`; `messaging` is required by `dispatch`.
+- Still pending on the Portal: the entitlement document's `website { timeZone, language }` (until it is filled,
+  `dispatch.time_zone` and `capture.default_lang` are features) and `context.keyKind` on deliveries (provenance is
+  inferred from the actor type until then).
 
 ## Changelog
 

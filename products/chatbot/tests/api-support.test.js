@@ -202,7 +202,7 @@ describe('handoff and the inbox', () => {
 		expect((await h.call('POST', '/v1/inbox/canned-replies:render', { idempotencyKey: null, body: {} })).status).toBe(422);
 	});
 
-	it('runs maintenance: SLA breaches, snooze wake-ups, auto-close, purge and usage flush', async () => {
+	it('runs maintenance: SLA breaches, snooze wake-ups, auto-close and purge', async () => {
 		const { id } = await guest('please talk to someone now');
 		const snooze = await guest('snooze me');
 		await h.call('PATCH', `/v1/conversations/${snooze.id}`, {

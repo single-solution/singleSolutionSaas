@@ -58,14 +58,9 @@ describe('platform and maintenance', () => {
 			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
 		);
 	});
-	it('flushes usage and sends the heartbeat; failures are reported per step', async () => {
-		const ok = await runMaintenance({ usage: { flush: async () => ({ sent: 1 }) }, heartbeat: async () => undefined });
-		expect(ok).toEqual({ usage: { sent: 1 }, heartbeat: 'sent' });
-		const failing = await runMaintenance({
-			usage: { flush: async () => Promise.reject(new Error('x')) },
-			heartbeat: async () => Promise.reject(new Error('y')),
-		});
-		expect(failing).toEqual({ usage: { error: 'failed' }, heartbeat: 'failed' });
+	it('sends the heartbeat (app-kit flushes the queues first); a failure is reported', async () => {
+		expect(await runMaintenance({ heartbeat: async () => undefined })).toEqual({ heartbeat: 'sent' });
+		expect(await runMaintenance({ heartbeat: async () => Promise.reject(new Error('y')) })).toEqual({ heartbeat: 'failed' });
 		expect(cronAuthorized(`Bearer ${CRON_SECRET}`, CRON_SECRET)).toBe(true);
 		expect(cronAuthorized('Bearer nope', CRON_SECRET)).toBe(false);
 		expect(cronAuthorized(null, CRON_SECRET)).toBe(false);
@@ -87,7 +82,7 @@ describe('cron route', () => {
 		const response = await request({ authorization: `Bearer ${CRON_SECRET}` });
 		expect(response.status).toBe(200);
 		const body = await response.json();
-		expect(body.usage).toMatchObject({ rejected: 0 });
+		expect(body.heartbeat).toBe('sent');
 		expect(['sent', 'failed']).toContain(body.heartbeat);
 	});
 });

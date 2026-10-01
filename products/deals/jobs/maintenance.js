@@ -19,18 +19,13 @@ export const cronAuthorized = (header, secret) => {
 };
 
 /**
- * Run one maintenance pass; each step is independent (a failing heartbeat never blocks the usage flush).
- * @param {{ usage: { flush: (options?: { maxBatches?: number }) => Promise<Record<string, number>> }, heartbeat: () => Promise<unknown> }} product
- * @param {{ maxBatches?: number }} [options]
+ * Run one maintenance pass: the heartbeat (app-kit flushes the usage queue and the event outbox first; it also flushes
+ * after requests, so this job is no longer needed for delivery).
+ * @param {{ heartbeat: () => Promise<unknown> }} product
  */
-export const runMaintenance = async (product, { maxBatches = 20 } = {}) => {
+export const runMaintenance = async (product) => {
 	/** @type {Record<string, unknown>} */
 	const out = {};
-	try {
-		out.usage = await product.usage.flush({ maxBatches });
-	} catch {
-		out.usage = { error: 'failed' };
-	}
 	try {
 		await product.heartbeat();
 		out.heartbeat = 'sent';

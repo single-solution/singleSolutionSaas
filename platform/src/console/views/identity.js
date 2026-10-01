@@ -116,6 +116,7 @@ export function IdentityView(props) {
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [busy, setBusy] = useState(false);
 	const [removing, setRemoving] = useState(false);
+	const [request, setRequest] = useState(/** @type {Record<string, any> | null} */ (ok ? (props.request ?? null) : null));
 	if (!ok) return <PageProblem problem={props.problem} />;
 	const { merchantId, website } = props;
 	const path = api.identity(merchantId, website.websiteId);
@@ -154,6 +155,23 @@ export function IdentityView(props) {
 		setIssuer(result.data.issuer);
 		toast.show({ title: result.data.issuer.lastError ? 'Keys could not be fetched' : 'Keys refreshed' });
 	};
+	/** @param {'approve' | 'reject'} decision */
+	const decide = async (decision) => {
+		setBusy(true);
+		setProblem(null);
+		const result = await apiFetch(`${path}/request/${decision}`, { method: 'POST', body: {} });
+		setBusy(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		setRequest(null);
+		if (result.data.issuer) {
+			setIssuer(result.data.issuer);
+			setForm(formOf(result.data.issuer));
+		}
+		toast.show({ title: decision === 'approve' ? 'Identity issuer approved' : 'Request rejected' });
+	};
 	const remove = async () => {
 		setBusy(true);
 		setProblem(null);
@@ -177,6 +195,34 @@ export function IdentityView(props) {
 				signed with EdDSA, ES256 or RS256). Your site sends the token in the <span className="font-mono">SS-Identity</span>{' '}
 				header; products verify it offline with the public keys below. Tokens must expire and be at most 24 hours old.
 			</Callout>
+			{request ? (
+				<Card
+					title={`${request.product?.name ?? 'A product'} wants to become your identity issuer`}
+					subtitle={`Requested ${formatDateTime(request.requestedAt)}. Nothing changes until you decide.`}
+					actions={
+						<span className="inline-flex gap-2">
+							<Button size="sm" onClick={() => void decide('approve')} loading={busy}>
+								Approve
+							</Button>
+							<Button size="sm" variant="ghost" onClick={() => void decide('reject')} disabled={busy}>
+								Reject
+							</Button>
+						</span>
+					}>
+					<KeyValueList
+						items={[
+							{ label: 'Issuer', value: <span className="font-mono text-xs">{request.issuer}</span> },
+							{ label: 'Keys', value: request.source === 'jwks_url' ? `JWKS URL ${request.jwksUrl}` : 'Inline keys' },
+							{ label: 'Key ids', value: (request.kids ?? []).join(', ') || '—' },
+							{ label: 'Audience', value: request.audience ?? 'Any' },
+						]}
+					/>
+					<p className="mt-3 text-sm text-muted">
+						Approving replaces the current issuer{issuer ? ` (${issuer.issuer})` : ''}: every product on this website then
+						accepts the sign-ins this product issues.
+					</p>
+				</Card>
+			) : null}
 			{issuer ? (
 				<Card
 					title="Current issuer"
@@ -196,6 +242,9 @@ export function IdentityView(props) {
 						items={[
 							{ label: 'Issuer', value: <span className="font-mono text-xs">{issuer.issuer}</span> },
 							{ label: 'Audience', value: issuer.audience ?? 'Any' },
+							...(issuer.managedBy
+								? [{ label: 'Managed by', value: issuer.managedBy.name ?? issuer.managedBy.slug }]
+								: []),
 							{
 								label: 'Keys',
 								value: (

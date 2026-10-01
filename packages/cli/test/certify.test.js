@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
-import { formatReport, nextCursorOf, problemShapeError, runCertification } from '../src/certify/index.js';
+import { certificationTarget, formatReport, nextCursorOf, problemShapeError, runCertification } from '../src/certify/index.js';
 import { initApp } from '../src/init.js';
 import { loadManifest } from '../src/manifest.js';
 import { createFakeProduct } from './helpers/fake-product.js';
@@ -138,6 +138,26 @@ describe('ss certify (service)', () => {
 		}
 	}, 120_000);
 
+	it('certifies the resource marked x-ss-certify and fails on a mark outside the Mode C resources', async () => {
+		const file = path.join(dir, 'openapi.json');
+		const original = await readFile(file, 'utf8');
+		const spec = JSON.parse(original);
+		try {
+			spec.paths['/v1/notes'].post['x-ss-certify'] = true;
+			await writeFile(file, JSON.stringify(spec, null, '\t'));
+			const marked = await certify();
+			expect(failed(marked)).toEqual([]);
+			expect(marked.checks.find((check) => check.id === 'certify.target')?.detail).toBe('/v1/notes of notes (x-ss-certify)');
+			spec.paths['/healthz'] = { ...spec.paths['/healthz'], 'x-ss-certify': true };
+			await writeFile(file, JSON.stringify(spec, null, '\t'));
+			const twice = await certify();
+			expect(failed(twice)).toContain('certify.target');
+			expect(twice.ok).toBe(false);
+		} finally {
+			await writeFile(file, original);
+		}
+	}, 120_000);
+
 	it('skips the live suite without --url and without a token', async () => {
 		const noUrl = await runCertification({ dir });
 		expect(noUrl.checks.map((check) => `${check.id}:${check.status}`)).toEqual(['project.validate:pass', 'service.url:skip']);
@@ -188,6 +208,57 @@ describe('ss certify (pack)', () => {
 });
 
 describe('certify helpers', () => {
+	it('chooses the certification resource: x-ss-certify, else the first Mode C resource', () => {
+		const element = (/** @type {string} */ key, /** @type {string[]} */ resources, modes = ['C']) => ({
+			key,
+			name: key,
+			modes,
+			price: { hourly: 0 },
+			api: { resources },
+		});
+		const manifest = /** @type {any} */ ({
+			elements: [
+				element('widget', ['widgets'], ['A', 'B']),
+				element('alpha', ['alphas', 'alpha-items']),
+				element('beta', ['betas']),
+			],
+		});
+		expect(certificationTarget(manifest, {})).toMatchObject({
+			ok: true,
+			resource: 'alphas',
+			source: 'first',
+			element: { key: 'alpha' },
+		});
+		expect(certificationTarget(manifest, { '/v1/betas': { get: { 'x-ss-certify': true } } })).toMatchObject({
+			ok: true,
+			resource: 'betas',
+			source: 'x-ss-certify',
+			element: { key: 'beta' },
+		});
+		expect(certificationTarget(manifest, { '/v1/alpha-items': { 'x-ss-certify': true, get: {} } })).toMatchObject({
+			resource: 'alpha-items',
+			element: { key: 'alpha' },
+		});
+		expect(certificationTarget(manifest, { '/v1/betas': { get: { 'x-ss-certify': false } } })).toMatchObject({
+			resource: 'alphas',
+		});
+		expect(certificationTarget(manifest, { '/v1/widgets': { 'x-ss-certify': true } })).toMatchObject({
+			ok: false,
+			problem: expect.stringMatching(/not \/v1\/<resource>/),
+		});
+		expect(certificationTarget(manifest, { '/v1/betas/{id}': { get: { 'x-ss-certify': true } } })).toMatchObject({ ok: false });
+		expect(
+			certificationTarget(manifest, {
+				'/v1/betas': { 'x-ss-certify': true },
+				'/v1/alphas': { post: { 'x-ss-certify': true } },
+			}),
+		).toMatchObject({ ok: false, problem: expect.stringMatching(/2 paths/) });
+		expect(certificationTarget(/** @type {any} */ ({ elements: [element('ui', [], ['A', 'B'])] }), {})).toMatchObject({
+			ok: true,
+			resource: undefined,
+		});
+	});
+
 	/** @param {number} status @param {Record<string, string>} headers @param {unknown} json */
 	const result = (status, headers, json) => ({ status, headers: new Headers(headers), text: JSON.stringify(json), json });
 	it('recognises RFC 9457 problems', () => {

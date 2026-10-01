@@ -10,6 +10,8 @@
  * - `sessions`: signed-in devices with the current refresh-token hash and previous hashes (reuse detection).
  * - `consents`: append-only acceptance records; `data_requests`: export / deletion requests;
  *   `orders`: order summaries for the account pages; `risk_events`: blocked attempts and new-device sign-ins.
+ * - `issuer_requests`: one document per website — the last request to become its identity issuer sent to the Portal
+ *   (issuer, JWKS URL, audience, Portal status, time); no customer data.
  * @module
  */
 
@@ -24,6 +26,7 @@ export const COLLECTIONS = Object.freeze({
 	dataRequests: 'data_requests',
 	orders: 'orders',
 	riskEvents: 'risk_events',
+	issuerRequests: 'issuer_requests',
 });
 
 /**
@@ -73,6 +76,7 @@ export const INDEXES = /** @type {any} */ ([
 	{ collection: 'orders', keys: { websiteId: 1, customerId: 1, updatedAt: -1 }, name: 'website_customer' },
 	{ collection: 'risk_events', keys: { websiteId: 1, occurredAt: -1, id: -1 }, name: 'website_time' },
 	{ collection: 'risk_events', keys: { purgeAt: 1 }, name: 'purge', expireAfterSeconds: 0 },
+	{ collection: 'issuer_requests', keys: { websiteId: 1 }, name: 'website', unique: true },
 ]);
 
 /**
@@ -132,6 +136,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 	const dataRequests = c.dataRequests;
 	const orders = c.orders;
 	const riskEvents = c.riskEvents;
+	const issuerRequests = c.issuerRequests;
 	/** Fields of a document created by an upsert. */
 	const onInsert = () => ({ ...stamp, createdAt: new Date(now()), schemaVersion: 1 });
 	const w = { websiteId };
@@ -465,6 +470,24 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				const filter =
 					at && id ? { ...w, $or: [{ occurredAt: { $lt: at } }, { occurredAt: at, id: { $lt: id } }] } : { ...w };
 				return (await riskEvents.find(filter, { sort: { occurredAt: -1, id: -1 }, limit: fetchLimit }).toArray()).map(strip);
+			},
+		}),
+
+		issuerRequest: Object.freeze({
+			/** The last identity-issuer request sent to the Portal, or null. */
+			get: async () => strip(await issuerRequests.findOne({ ...w })),
+			/**
+			 * Record the outcome of a request (one document per website).
+			 * @param {{ issuer: string, jwksUrl: string, audience: string, status: string, requestedAt: string }} set
+			 */
+			save: async (set) => {
+				const run = () => issuerRequests.updateOne({ ...w }, { $set: set, $setOnInsert: onInsert() }, { upsert: true });
+				try {
+					await run();
+				} catch (error) {
+					if (!isDuplicateKey(error)) throw error;
+					await run(); // concurrent first request of the same website
+				}
 			},
 		}),
 	});

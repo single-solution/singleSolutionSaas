@@ -8,6 +8,7 @@ import {
 	Badge,
 	Button,
 	ButtonLink,
+	Callout,
 	Card,
 	ConfirmDialog,
 	Dialog,
@@ -263,11 +264,104 @@ export function WebsitesView(props) {
 }
 
 /**
+ * The request body of the website settings form (empty fields clear a setting), or null when nothing changed.
+ * @param {{ timeZone: string, language: string, currency: string }} form
+ * @param {Record<string, any>} website
+ * @returns {Record<string, string | null> | null}
+ */
+export const settingsBody = (form, website) => {
+	/** @type {Record<string, string | null>} */
+	const body = {};
+	for (const name of /** @type {const} */ (['timeZone', 'language', 'currency'])) {
+		const value = form[name].trim() === '' ? null : form[name].trim();
+		if (value !== (website[name] ?? null)) body[name] = value;
+	}
+	return Object.keys(body).length > 0 ? body : null;
+};
+
+/**
+ * Website settings (F.16): time zone, default language and store currency. Products receive them in every
+ * entitlement document (`website` section) and use them as defaults. Shared by the merchant and admin consoles.
+ * @param {{ merchantId: string, website: Record<string, any>, onSaved?: (website: Record<string, any>) => void,
+ *   fetcher?: typeof apiFetch }} props `fetcher`: the Admin Console passes its staff client
+ */
+export function WebsiteSettingsCard({ merchantId, website, onSaved, fetcher = apiFetch }) {
+	const toast = useToast();
+	const [current, setCurrent] = useState(website);
+	const [form, setForm] = useState({
+		timeZone: website.timeZone ?? '',
+		language: website.language ?? '',
+		currency: website.currency ?? '',
+	});
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const [busy, setBusy] = useState(false);
+	const errors = problem ? fieldErrors(problem) : {};
+	/** @param {'timeZone' | 'language' | 'currency'} key */
+	const set = (key) => (/** @type {{ currentTarget: { value: string } }} */ e) =>
+		setForm({ ...form, [key]: e.currentTarget.value });
+	const save = async () => {
+		const body = settingsBody(form, current);
+		if (!body) return;
+		setBusy(true);
+		setProblem(null);
+		const result = await fetcher(api.website(merchantId, current.websiteId), { method: 'PATCH', body });
+		setBusy(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		setCurrent(result.data);
+		setForm({
+			timeZone: result.data.timeZone ?? '',
+			language: result.data.language ?? '',
+			currency: result.data.currency ?? '',
+		});
+		onSaved?.(result.data);
+		toast.show({ title: 'Website settings saved', description: 'Products receive them within minutes.' });
+	};
+	return (
+		<Card
+			title="Website settings"
+			subtitle="Defaults every product on this website uses (they apply to the live site and its test twin).">
+			<div className="space-y-4">
+				<div className="grid gap-4 sm:grid-cols-3">
+					<Input
+						label="Time zone"
+						value={form.timeZone}
+						onChange={set('timeZone')}
+						error={errors.timeZone}
+						help="IANA name, e.g. Europe/Berlin (empty: UTC)"
+					/>
+					<Input
+						label="Language"
+						value={form.language}
+						onChange={set('language')}
+						error={errors.language}
+						help="BCP 47 tag, e.g. en or de-CH"
+					/>
+					<Input
+						label="Currency"
+						value={form.currency}
+						onChange={set('currency')}
+						error={errors.currency}
+						help="ISO 4217 code, e.g. EUR"
+					/>
+				</div>
+				<FormError problem={problem} fields={['timeZone', 'language', 'currency']} />
+				<Button size="sm" onClick={() => void save()} loading={busy} disabled={!settingsBody(form, current)}>
+					Save settings
+				</Button>
+			</div>
+		</Card>
+	);
+}
+
+/**
  * @param {any} props loader result of `loadWebsiteOverview`
  */
 export function WebsiteOverviewView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const { website, catalog, resources, meter } = props;
+	const { website, catalog, resources, meter, issuerRequest } = props;
 	const subs = /** @type {any[]} */ (props.subscriptions ?? []).filter((s) => s.status !== 'cancelled');
 	const lines = /** @type {any[]} */ (meter?.subscriptions ?? []).filter((l) => l.websiteId === website.websiteId);
 	const burn = lines.reduce((sum, l) => sum + (l.burnRatePerHour ?? 0), 0);
@@ -277,6 +371,18 @@ export function WebsiteOverviewView(props) {
 	return (
 		<div className="space-y-6">
 			<WebsiteHeader website={website} active="overview" />
+			{issuerRequest ? (
+				<Callout
+					tone="info"
+					title={`${issuerRequest.product?.name ?? 'A product'} wants to become your identity issuer`}
+					actions={
+						<Link href={routes.identity(website.websiteId)} className="text-sm font-semibold underline">
+							Review
+						</Link>
+					}>
+					Approve or reject it on the Identity tab.
+				</Callout>
+			) : null}
 			<div className="grid gap-4 sm:grid-cols-3">
 				<Stat
 					label="Products"
@@ -359,6 +465,7 @@ export function WebsiteOverviewView(props) {
 					</ul>
 				)}
 			</Card>
+			<WebsiteSettingsCard merchantId={props.merchantId} website={website} />
 		</div>
 	);
 }

@@ -1,7 +1,9 @@
 /**
  * Production stores on the product's own control database (NOT a merchant database). Every collection has the
  * indexes it needs (unique `_id`, TTL on `expireAt`) created lazily and idempotently on first use. Documents hold
- * ids, hashes, signed documents and counters only — never merchant or customer payloads.
+ * ids, hashes (HMACs), signed documents and counters — never merchant or customer payloads — with one bounded
+ * exception: the event outbox holds an event envelope until it is delivered (the envelope is dropped on success;
+ * dead-lettered events keep it for at most 7 days).
  * @module
  */
 
@@ -28,6 +30,7 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 		burnedTokens: `${prefix}registration`,
 		entitlements: `${prefix}entitlements`,
 		usageQueue: `${prefix}usage_queue`,
+		eventOutbox: `${prefix}event_outbox`,
 		revocations: `${prefix}revocations`,
 		state: `${prefix}state`,
 		sessions: `${prefix}sessions`,
@@ -50,6 +53,9 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 				col(names.usageQueue).createIndex({ status: 1, nextAttemptAt: 1 }, { name: 'due' }),
 				col(names.usageQueue).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.usageQueue).createIndex({ leaseToken: 1 }, { name: 'lease', sparse: true }),
+				col(names.eventOutbox).createIndex({ status: 1, nextAttemptAt: 1 }, { name: 'due' }),
+				col(names.eventOutbox).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
+				col(names.eventOutbox).createIndex({ leaseToken: 1 }, { name: 'lease', sparse: true }),
 				col(names.sessions).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.idempotency).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.rateLimits).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
@@ -221,6 +227,89 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 			},
 			stats: async () => {
 				const rows = await col(names.usageQueue)
+					.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }])
+					.toArray();
+				const out = { pending: 0, sent: 0, dead: 0 };
+				for (const row of rows) if (row._id in out) out[/** @type {'pending'} */ (row._id)] = row.n;
+				return out;
+			},
+		}),
+		eventOutbox: Object.freeze({
+			enqueue: async ({ id, envelope }) => {
+				await ensureIndexes();
+				try {
+					await col(names.eventOutbox).insertOne(
+						/** @type {any} */ ({
+							_id: id,
+							envelope,
+							status: 'pending',
+							attempts: 0,
+							nextAttemptAt: new Date(0),
+							leaseUntil: new Date(0),
+							createdAt: new Date(now()),
+						}),
+					);
+					return { inserted: true };
+				} catch (error) {
+					if (isDuplicateKey(error)) return { inserted: false };
+					throw error;
+				}
+			},
+			lease: async ({ now: t, limit, leaseMs, owner }) => {
+				await ensureIndexes();
+				const c = col(names.eventOutbox);
+				const at = new Date(t);
+				const due = { status: 'pending', nextAttemptAt: { $lte: at }, leaseUntil: { $lte: at } };
+				const candidates = await c
+					.find(/** @type {any} */ (due), { projection: { _id: 1 } })
+					.sort({ nextAttemptAt: 1 })
+					.limit(limit)
+					.toArray();
+				if (candidates.length === 0) return [];
+				leaseSeq += 1;
+				const leaseToken = `${owner}:${t}:${leaseSeq}`;
+				await c.updateMany(/** @type {any} */ ({ ...due, _id: { $in: candidates.map((doc) => doc._id) } }), {
+					$set: { leaseUntil: new Date(t + leaseMs), leaseToken },
+				});
+				const leased = await c.find(/** @type {any} */ ({ leaseToken })).toArray();
+				return leased.map((doc) => ({
+					id: String(doc._id),
+					envelope: doc.envelope,
+					attempts: doc.attempts,
+					status: doc.status,
+					...(doc.lastError === undefined ? {} : { lastError: doc.lastError }),
+				}));
+			},
+			ack: async (ids, { now: t, retainMs }) => {
+				if (ids.length === 0) return;
+				await col(names.eventOutbox).updateMany(/** @type {any} */ ({ _id: { $in: ids } }), {
+					$set: { status: 'sent', sentAt: new Date(t), expireAt: new Date(t + retainMs), leaseUntil: new Date(0) },
+					$unset: { leaseToken: '', envelope: '' },
+				});
+			},
+			retry: async (ids, { nextAttemptAt, error }) => {
+				if (ids.length === 0) return;
+				await col(names.eventOutbox).updateMany(/** @type {any} */ ({ _id: { $in: ids }, status: 'pending' }), {
+					$set: { nextAttemptAt: new Date(nextAttemptAt), leaseUntil: new Date(0), lastError: error },
+					$inc: { attempts: 1 },
+					$unset: { leaseToken: '' },
+				});
+			},
+			deadLetter: async (ids, { now: t, error, retainMs }) => {
+				if (ids.length === 0) return;
+				await col(names.eventOutbox).updateMany(/** @type {any} */ ({ _id: { $in: ids } }), {
+					$set: {
+						status: 'dead',
+						deadAt: new Date(t),
+						lastError: error,
+						leaseUntil: new Date(0),
+						expireAt: new Date(t + retainMs),
+					},
+					$unset: { leaseToken: '' },
+				});
+			},
+			stats: async () => {
+				const rows = await col(names.eventOutbox)
 					.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }])
 					.toArray();
 				const out = { pending: 0, sent: 0, dead: 0 };

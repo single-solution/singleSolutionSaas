@@ -16,12 +16,16 @@ import { settingsFrom } from './settings.js';
  * @property {() => Promise<Record<string, number>>} overview
  * @property {(query: { email?: string, limit?: number }) => Promise<CustomerView[]>} customers
  * @property {() => Promise<Record<string, any>>} issuer
+ * @property {(actor: { type: string, id?: string }) => Promise<import('./service.js').Outcome | null>} registerIssuer ask
+ *   the Portal to make Signups the website's identity issuer (null in the demo: nothing can be changed)
  */
 
 /** Customers listed per dashboard page. */
 export const DASHBOARD_PAGE = 50;
 /** Launch roles that may open the dashboard. */
 export const DASHBOARD_ROLES = Object.freeze(['merchant', 'demo', 'platform_admin', 'impersonate', 'partner', 'developer']);
+/** Launch roles that may change something from the dashboard. */
+export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin', 'impersonate']);
 
 /**
  * @param {{ service: import('./service.js').SignupsService, site: Site }} input
@@ -36,6 +40,7 @@ export const liveDashboard = ({ service, site }) => ({
 			service.viewOf(site, /** @type {any} */ (customer)),
 		),
 	issuer: () => service.issuer(site),
+	registerIssuer: (actor) => service.registerIssuer(site, { actor }),
 });
 
 /**
@@ -89,7 +94,9 @@ export const demoDashboard = ({ now, base }) => {
 			algorithm: 'EdDSA',
 			keys: [{ kid: 'demo-1', activatesAt: at(30), signing: true }],
 			registered: false,
+			request: null,
 		}),
+		registerIssuer: async () => null,
 	};
 };
 

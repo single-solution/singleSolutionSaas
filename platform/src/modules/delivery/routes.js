@@ -5,13 +5,15 @@
  * | Route                                                                       | Auth             |
  * | --------------------------------------------------------------------------- | ---------------- |
  * | `PUT  /v1/admin/packs/:appId/versions/:version/assets/<path>`               | staff            |
+ * | `POST /v1/product/ui-bundles` · `GET /v1/product/ui-bundles`                 | product          |
+ * | `PUT  /v1/product/ui-bundles/:version/assets/<path>`                        | product          |
  * | `GET  /v1/merchants/:merchantId/websites/:websiteId/delivery`               | merchant, staff  |
  * | `GET  /v1/merchants/:merchantId/websites/:websiteId/delivery/snippet`       | merchant, staff  |
  * | `POST /v1/merchants/:merchantId/websites/:websiteId/delivery/compile`       | merchant, staff  |
  * | `POST /v1/merchants/:merchantId/websites/:websiteId/delivery/rollback`      | merchant, staff  |
  * | `POST /v1/merchants/:merchantId/websites/:websiteId/preview`                | merchant, staff  |
  * | `GET  /w/:websiteId/loader.js` · `/w/:websiteId/:version/{loader.js,manifest.json}` | public   |
- * | `GET  /w/packs/:appId/:version/<path>`                                      | public           |
+ * | `GET  /w/packs/:appId/:version/<path>` · `/w/ui/:appId/:version/<path>`     | public           |
  * | `GET  /p/:token[/<path>]`                                                   | public           |
  *
  * `<path>` spans up to {@link MAX_PATH_SEGMENTS} segments (one route per depth; the router matches whole segments).
@@ -58,6 +60,50 @@ export const deliveryRoutes = (delivery) => [
 					bytes: ctx.rawBytes,
 					contentType: ctx.headers.get('content-type'),
 					...caller(ctx),
+				}),
+		}),
+	),
+
+	// ---- service products: their own signed UI bundle (F.16) ------------------------------------------------------
+	defineRoute({
+		method: 'POST',
+		path: '/v1/product/ui-bundles',
+		auth: 'product',
+		idempotent: 'optional',
+		maxBodyBytes: 256 * 1024,
+		rateLimit: { limit: 30, windowMs: 60 * 60_000 },
+		handler: (ctx) =>
+			delivery.submitUiBundle({
+				appId: /** @type {{ appId: string }} */ (ctx.app).appId,
+				body: ctx.body,
+				requestId: ctx.requestId,
+				ip: ctx.ip,
+			}),
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/product/ui-bundles',
+		auth: 'product',
+		rateLimit: { limit: 60, windowMs: 60_000 },
+		handler: (ctx) => delivery.listUiBundles({ appId: /** @type {{ appId: string }} */ (ctx.app).appId }),
+	}),
+	...Array.from({ length: MAX_PATH_SEGMENTS }, (_, i) =>
+		defineRoute({
+			method: 'PUT',
+			path: `/v1/product/ui-bundles/:version/assets/${segments(i + 1)}`,
+			auth: 'product',
+			rawBody: true,
+			maxBodyBytes: MAX_UPLOAD_BYTES,
+			rateLimit: { limit: 600, windowMs: 60 * 60_000 },
+			handler: (ctx) =>
+				delivery.uploadUiAsset({
+					appId: /** @type {{ appId: string }} */ (ctx.app).appId,
+					version: ctx.params.version ?? '',
+					path: joined(ctx, i + 1),
+					bytes: ctx.rawBytes,
+					contentType: ctx.headers.get('content-type'),
+					requestId: ctx.requestId,
+					ip: ctx.ip,
 				}),
 		}),
 	),
@@ -142,19 +188,22 @@ export const deliveryRoutes = (delivery) => [
 				}),
 		}),
 	),
-	...Array.from({ length: MAX_PATH_SEGMENTS }, (_, i) =>
-		defineRoute({
-			method: 'GET',
-			path: `/w/packs/:appId/:version/${segments(i + 1)}`,
-			auth: 'public',
-			handler: (ctx) =>
-				delivery.serveAsset({
-					appId: ctx.params.appId ?? '',
-					version: ctx.params.version ?? '',
-					path: joined(ctx, i + 1),
-					ifNoneMatch: ctx.headers.get('if-none-match'),
-				}),
-		}),
+	.../** @type {const} */ (['packs', 'ui']).flatMap((dir) =>
+		Array.from({ length: MAX_PATH_SEGMENTS }, (_, i) =>
+			defineRoute({
+				method: 'GET',
+				path: `/w/${dir}/:appId/:version/${segments(i + 1)}`,
+				auth: 'public',
+				handler: (ctx) =>
+					delivery.serveAsset({
+						appId: ctx.params.appId ?? '',
+						version: ctx.params.version ?? '',
+						path: joined(ctx, i + 1),
+						ifNoneMatch: ctx.headers.get('if-none-match'),
+						bundle: dir === 'ui' ? 'ui' : 'pack',
+					}),
+			}),
+		),
 	),
 	...Array.from({ length: MAX_PATH_SEGMENTS + 1 }, (_, depth) =>
 		defineRoute({
@@ -171,6 +220,7 @@ export const deliveryRoutes = (delivery) => [
 					token: ctx.params.token ?? '',
 					path: `/${Array.from({ length: depth }, (_, i) => encodeURIComponent(ctx.params[`p${i}`] ?? '')).join('/')}`,
 					search: new URL(ctx.request.url).search,
+					host: new URL(ctx.request.url).host,
 				}),
 		}),
 	),

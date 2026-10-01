@@ -28,6 +28,11 @@ export const MANIFEST_RULES = Object.freeze({
 	rendererRequiresModeA: 'rendererRequiresModeA',
 	uiRequiresModeB: 'uiRequiresModeB',
 	statefulRequiresModeC: 'statefulRequiresModeC',
+	/**
+	 * Retired (never reported since v1.x): element `requires.resources` no longer has to be repeated at product level.
+	 * Product-level `requires.resources` now means "required by every subscription, whatever elements are enabled";
+	 * element-level kinds gate only that element. Kept so consumers matching on the id keep compiling.
+	 */
 	undeclaredResource: 'undeclaredResource',
 	duplicatePlanCode: 'duplicatePlanCode',
 	unknownPlan: 'unknownPlan',
@@ -554,7 +559,6 @@ export const checkManifest = (manifest) => {
 		return seen;
 	};
 
-	const declaredResources = new Set(manifest.requires?.resources ?? []);
 	const planCodes = (manifest.plans ?? []).map((plan) => plan.code);
 
 	const isPack = manifest.product.kind === 'pack';
@@ -622,17 +626,6 @@ export const checkManifest = (manifest) => {
 			out.push(
 				at([...base, 'api'], MANIFEST_RULES.modeCRequiresApi, 'mode C requires api.resources on the element or a dependency'),
 			);
-		}
-		for (const [resourceIndex, resource] of (element.requires?.resources ?? []).entries()) {
-			if (!declaredResources.has(resource)) {
-				out.push(
-					at(
-						[...base, 'requires', 'resources', resourceIndex],
-						MANIFEST_RULES.undeclaredResource,
-						`resource '${resource}' must also be listed in the product requires.resources`,
-					),
-				);
-			}
 		}
 		/** @type {Set<string>} */
 		const units = new Set();

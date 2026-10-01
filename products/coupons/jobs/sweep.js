@@ -59,7 +59,7 @@ export const cronAuthorized = (header, secret) => {
 /**
  * The cron route.
  * @param {{ app: { cronSecret: string | null, registry: { list: () => Promise<string[]> } },
- *   product: { usage: { flush: () => Promise<Record<string, number>> }, heartbeat: () => Promise<unknown> },
+ *   product: { heartbeat: () => Promise<unknown> },
  *   siteFor: (websiteId: string) => Promise<any>, service: { sweep: (site: any, options: { limit: number }) => Promise<number> } }} coupons
  */
 export const cronRoutes = ({ app, product, siteFor, service }) => [
@@ -77,20 +77,13 @@ export const cronRoutes = ({ app, product, siteFor, service }) => [
 				onError: (websiteId, error) =>
 					ctx.log?.error?.('sweep job failed', { websiteId, error: /** @type {Error} */ (error)?.message }),
 			});
-			/** @type {Record<string, unknown>} */
-			let usage = {};
 			try {
-				usage = await product.usage.flush();
-			} catch (error) {
-				ctx.log?.warn?.('usage flush failed', { error: /** @type {Error} */ (error)?.message });
-				usage = { failed: true };
-			}
-			try {
+				// app-kit flushes the usage queue and the event outbox before the heartbeat (and after requests)
 				await product.heartbeat();
 			} catch {
 				// the Portal may be unreachable; the heartbeat is retried on the next run
 			}
-			return ok({ ...swept, usage });
+			return ok(swept);
 		},
 	}),
 ];

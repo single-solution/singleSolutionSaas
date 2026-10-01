@@ -7,11 +7,40 @@
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS, eventDataSchemaId } from './schema-ids.js';
 import { PATTERNS, RESOURCE_STATUSES, commonRef as ref } from './common.js';
+import { ITEM_STATUSES } from './graph/item.js';
 
 /** Actor types that can cause an event. */
 export const ACTOR_TYPES = Object.freeze(
 	/** @type {const} */ (['customer', 'anonymous', 'staff', 'merchant', 'system', 'product']),
 );
+
+/**
+ * Kinds of website keys an event can be ingested with: `pk` (publishable, used from browsers of the bound domain)
+ * and `sk` (secret, servers only). The Portal Event Hub records the kind in `context.keyKind` on delivery.
+ */
+export const KEY_KINDS = Object.freeze(/** @type {const} */ (['pk', 'sk']));
+
+/**
+ * Actor types a website event may carry per ingesting key kind (the Portal refuses others with
+ * `actor_not_allowed`): `pk_` keys speak only for shoppers (`customer`, `anonymous`); `sk_` keys for anyone but the
+ * platform itself (`product` and `system` are reserved for products' own publishing and the Portal).
+ */
+export const WEBSITE_KEY_ACTORS = Object.freeze({
+	pk: Object.freeze(/** @type {const} */ (['customer', 'anonymous'])),
+	sk: Object.freeze(/** @type {const} */ (['customer', 'anonymous', 'staff', 'merchant'])),
+});
+
+/**
+ * True when a website event ingested with a `kind` key may carry actor type `actorType` ({@link WEBSITE_KEY_ACTORS}).
+ * Unknown kinds or actor types are never allowed.
+ * @param {unknown} kind `'pk'` or `'sk'`
+ * @param {unknown} actorType envelope `actor.type`
+ * @returns {boolean}
+ */
+export const actorAllowedForKeyKind = (kind, actorType) =>
+	(kind === 'pk' || kind === 'sk') &&
+	typeof actorType === 'string' &&
+	/** @type {readonly string[]} */ (WEBSITE_KEY_ACTORS[kind]).includes(actorType);
 
 /** Where an event entered the platform. */
 export const EVENT_SOURCES = Object.freeze(/** @type {const} */ (['loader', 'server', 'product', 'portal', 'import', 'webhook']));
@@ -72,6 +101,12 @@ export const eventEnvelopeSchema = deepFreeze({
 				pageUrl: url,
 				referrer: url,
 				userAgent: text(512),
+				keyKind: {
+					type: 'string',
+					enum: [...KEY_KINDS],
+					description:
+						'Kind of website key the event was ingested with (pk or sk). Set by the Portal Event Hub on delivery; producers cannot set it (the Portal strips any value it receives). Absent for events that did not come through a website key (product-published, Portal, imports).',
+				},
 			},
 		},
 	},
@@ -117,6 +152,65 @@ const identity = {
  * @param {string[]} required
  */
 const data = (properties, required) => ({ type: 'object', required, additionalProperties: false, properties });
+
+const reasonCode = { type: 'string', minLength: 1, maxLength: 200, pattern: '^[a-z][a-z0-9_.:-]*$' };
+const signedQuantity = { type: 'integer', minimum: -Number.MAX_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER };
+
+/** Small attribute map of catalog events (`{ color: 'red', sizes: ['S', 'M'] }`); the Graph item allows more. */
+const itemAttributes = {
+	type: 'object',
+	maxProperties: 50,
+	propertyNames: { maxLength: 64, pattern: '^[A-Za-z][A-Za-z0-9_]*$' },
+	additionalProperties: {
+		anyOf: [
+			{ type: ['string', 'number', 'boolean'], maxLength: 500 },
+			{ type: 'array', maxItems: 20, items: { type: ['string', 'number', 'boolean'], maxLength: 500 } },
+		],
+	},
+};
+
+/**
+ * A sellable variant in a catalog event. Prices are integer minor units in the item's `currency`; `inventory` is the
+ * available quantity (negative when oversold).
+ */
+const itemVariant = data(
+	{
+		variantId: id,
+		sku: text(100),
+		title: text(300),
+		attributes: itemAttributes,
+		price: ref('minorUnits'),
+		compareAtPrice: ref('minorUnits'),
+		cost: ref('minorUnits'),
+		inventory: signedQuantity,
+	},
+	['variantId', 'price'],
+);
+
+/**
+ * Catalog item snapshot carried by `item.created@1` / `item.updated@1` (Website Graph item conventions, PLAN §5):
+ * `currency` is the one currency of every variant amount and is required with `variants`.
+ */
+const itemSnapshot = {
+	itemId: id,
+	title: text(300),
+	status: { type: 'string', enum: [...ITEM_STATUSES] },
+	brand: text(200),
+	collections: { type: 'array', maxItems: 100, uniqueItems: true, items: id },
+	attributes: itemAttributes,
+	currency: ref('currency'),
+	variants: { type: 'array', maxItems: 1000, items: itemVariant },
+};
+
+/**
+ * Item event data with the {@link itemSnapshot}.
+ * @param {Record<string, unknown>} properties
+ * @param {string[]} required
+ */
+const itemData = (properties, required) => ({
+	...data({ ...itemSnapshot, ...properties }, required),
+	dependentRequired: { variants: ['currency'] },
+});
 
 /**
  * Who an order belongs to, as an identity reference (never a profile): the Graph customer id and/or the federated
@@ -245,20 +339,40 @@ export const STANDARD_EVENT_DATA = deepFreeze({
 		},
 		['orderId', 'amount'],
 	),
+	'item.created@1': itemData({}, ['itemId', 'title']),
+	'item.updated@1': itemData({ changed: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: text(64) } }, [
+		'itemId',
+	]),
+	'item.deleted@1': data({ itemId: id, reason: reasonCode }, ['itemId']),
+	// `quantity` / `previousQuantity` are on hand; `available` / `previousAvailable` are sellable (on hand − reserved)
 	'inventory.changed@1': data(
 		{
 			itemId: id,
 			variantId: id,
+			sku: text(100),
 			locationId: id,
-			quantity: { type: 'integer', minimum: -Number.MAX_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER },
-			previousQuantity: { type: 'integer', minimum: -Number.MAX_SAFE_INTEGER, maximum: Number.MAX_SAFE_INTEGER },
+			quantity: signedQuantity,
+			previousQuantity: signedQuantity,
+			available: signedQuantity,
+			previousAvailable: signedQuantity,
+			reason: reasonCode,
 		},
 		['itemId', 'quantity'],
 	),
-	'price.changed@1': data({ itemId: id, variantId: id, priceListId: id, price: ref('money'), previousPrice: ref('money') }, [
-		'itemId',
-		'price',
-	]),
+	'price.changed@1': data(
+		{
+			itemId: id,
+			variantId: id,
+			sku: text(100),
+			priceListId: id,
+			price: ref('money'),
+			previousPrice: ref('money'),
+			compareAtPrice: ref('money'),
+			previousCompareAtPrice: ref('money'),
+			reason: reasonCode,
+		},
+		['itemId', 'price'],
+	),
 	'file.uploaded@1': data(
 		{
 			fileId: id,
@@ -278,7 +392,6 @@ export const customEventDataSchema = deepFreeze({
 	maxProperties: 200,
 });
 
-const reasonCode = { type: 'string', minLength: 1, maxLength: 200, pattern: '^[a-z][a-z0-9_.:-]*$' };
 const subscriptionLifecycle = data({ subscriptionId: ref('subscriptionId'), websiteId: ref('websiteId'), reason: reasonCode }, [
 	'subscriptionId',
 	'websiteId',

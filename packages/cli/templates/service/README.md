@@ -41,3 +41,23 @@ pnpm test                      # unit tests
 ss app validate                # manifest, anatomy, import direction, DOM-free cores, tokens, strings
 ss certify . --url http://localhost:3000 --token <fresh token>   # certification suite (restart the product first)
 ```
+
+## Remove the `notes` sample
+
+`ss app init --minimal` generates this project without the sample (one placeholder Mode C element `status` with
+`GET /v1/status` instead). To remove it by hand from a generated project:
+
+1. Delete `core/notes.js`, `headless/notes.js`, `ui/notes.js`, `api/notes.js`, `api/events.js`, `adapters/db.js`,
+   `jobs/purge-deleted.js`, `schemas/notes.features.json`, `schemas/events/<namespace>.note_created@1.json` and the
+   tests `tests/core.test.js`, `tests/headless.test.js`, `tests/ui.test.js`, `tests/api.test.js`, `tests/helpers.js`,
+   `tests/memory-collection.js`.
+2. `manifest.json`: replace the `notes` element with your own (a service product needs at least one element), update
+   `plans[].elements`, drop `capabilities.localEnforcement` `limit:notes.*`, `retention.notes`, the
+   `order.placed@1` consume and its `events.subscribe:` scope, and the `note_created` publish.
+3. `openapi.json`: remove `/v1/notes` and `/v1/notes/{id}` and document your element's `api.resources` (mark the one
+   `ss certify` should exercise with `"x-ss-certify": true`).
+4. `api/routes.js`: drop the notes routes and handlers; `wireEvents` registers nothing until you consume events.
+5. `adapters/privacy.js`: list your own personal-data collections; when you store none, pass `export` /
+   `anonymize` handlers that answer empty results (as `--minimal` does) so the Portal's data requests succeed.
+6. `strings/en.json`: remove the `notes.*` keys (keep `dashboard.*`).
+7. Run `ss app validate` and `pnpm test`.

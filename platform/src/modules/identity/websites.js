@@ -3,7 +3,8 @@
  * shares the domain under a distinct id. A domain is claimed globally in `identity_domains` (`_id` = domain, so
  * concurrent claims race on the unique `_id`); deleting a website keeps the claim for a 30-day cooldown during which
  * only the same merchant may re-add it. Staff may transfer a website pair between merchants (keys are revoked —
- * they embed the merchant). Every mutation is audited.
+ * they embed the merchant). Website settings (`timeZone`, `language`, `currency`; F.16) apply to the pair and reach
+ * products through the entitlement document's `website` section. Every mutation is audited.
  * @module
  */
 import { normaliseDomain } from '@ss/contracts';
@@ -37,7 +38,8 @@ const movable = (doc) => {
  *   revokeWebsiteKeys: (input: { merchantId: string, websiteIds: string[], reason: string, actor: any, meta?: Meta }) => Promise<string[]>,
  *   isPublicSuffix?: (domain: string) => boolean,
  *   forgetIssuers?: (input: { merchantId: string, websiteIds: string[] }) => Promise<unknown>,
- * }} hooks
+ *   resign?: (websiteId: string) => Promise<unknown>,
+ * }} hooks `resign`: re-sign the website's entitlement documents (commerce)
  */
 export const createWebsites = (deps, hooks) => {
 	const { ctx, repo, audit } = deps;
@@ -159,6 +161,45 @@ export const createWebsites = (deps, hooks) => {
 				website: presentWebsite({ ...live, merchantId, createdAt: at }),
 				twin: presentWebsite({ ...test, merchantId, createdAt: at }),
 			};
+		},
+
+		/**
+		 * Change the website settings of a pair (either id): `timeZone` (IANA), `language` (BCP 47), `currency`
+		 * (ISO 4217); `null` clears one. Re-signs the documents of both websites (the `website` section is hashed).
+		 * @param {{ merchantId: string, websiteId: string, settings: { timeZone?: string | null, language?: string | null,
+		 *   currency?: string | null }, actor: Actor, meta?: Meta }} input
+		 */
+		updateSettings: async ({ merchantId, websiteId, settings, actor, meta = {} }) => {
+			const website = await loadWebsite(websiteId, merchantId);
+			if (website.status !== 'active') throw problem('not_found', 'No such website.');
+			const ids = [String(website._id), String(website.twinId)];
+			const before = { ...(website.settings ?? {}) };
+			/** @type {Record<string, unknown>} */
+			const set = {};
+			/** @type {Record<string, ''>} */
+			const unset = {};
+			for (const [name, value] of Object.entries(settings)) {
+				if (value === undefined) continue;
+				if (value === null) unset[`settings.${name}`] = '';
+				else set[`settings.${name}`] = value;
+			}
+			await repo.websites.of(merchantId).updateMany(
+				{ merchantId, _id: { $in: ids }, status: 'active' },
+				{
+					...(Object.keys(set).length > 0 ? { $set: set } : {}),
+					...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
+				},
+			);
+			const updated = await loadWebsite(String(website._id), merchantId);
+			const liveId = liveIdOf(website);
+			await audit(
+				actor,
+				'website.settings_updated',
+				{ type: 'website', id: liveId, merchantId, websiteId: liveId },
+				{ before, after: { ...(updated.settings ?? {}) }, meta },
+			);
+			for (const id of ids) await hooks.resign?.(id);
+			return presentWebsite(updated);
 		},
 
 		/**

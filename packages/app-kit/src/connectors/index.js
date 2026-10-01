@@ -1,7 +1,8 @@
 /**
  * Connectors: thin adapters that obtain the merchant's credentials through `portal.resolveResource` (short-lived
- * descriptors, cached no longer than `expiresAt`) and execute with them. Built-in: S3-compatible storage, generic
- * HTTP AI and messaging. Payments is an interface only — register a provider adapter via `adapters.payments`.
+ * descriptors, cached no longer than `expiresAt`) and execute with them. Built-in (keyed by the descriptor's
+ * `provider`, as the Portal resolves it): storage `s3`; ai `generic-http` / `http`; messaging `generic-http` / `http`
+ * (JSON over HTTPS) and `smtp` (nodemailer, TLS required). A descriptor without `provider` uses `s3` / `http`. Payments is an interface only — register a provider adapter via `adapters.payments`.
  * Any kind can be overridden per provider: `adapters: { ai: { anthropic: (ctx) => adapter } }`.
  *
  * Every outbound call goes through `send` — by default `@ss/net` `safeFetch` under the outbound policy built from
@@ -12,6 +13,7 @@
 import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { createSingleFlight, kitError } from '../util.js';
 import { createHttpAi, createHttpMessaging } from './http.js';
+import { createSmtpMessaging } from './smtp.js';
 import { createS3Storage } from './storage.js';
 
 /** @typedef {'ai' | 'messaging' | 'storage' | 'payments'} ConnectorKind */
@@ -29,6 +31,7 @@ import { createS3Storage } from './storage.js';
  * @property {import('@ss/net').OutboundPolicy} policy the outbound policy `send` enforces
  * @property {typeof globalThis.fetch} fetch unguarded fetch (Portal calls only — never merchant-supplied URLs)
  * @property {() => number} now
+ * @property {import('./smtp.js').CreateSmtpTransport} [createSmtpTransport] replaces nodemailer's transport (tests)
  */
 /** @typedef {(context: AdapterContext) => any} AdapterFactory */
 
@@ -46,14 +49,28 @@ import { createS3Storage } from './storage.js';
 /** Payment method names of the interface. */
 export const PAYMENTS_METHODS = Object.freeze(['createPayment', 'capture', 'refund', 'status', 'verifyWebhook']);
 
-/** @type {Record<ConnectorKind, Record<string, AdapterFactory>>} */
+/** @type {AdapterFactory} */
+const httpAi = ({ descriptor, send, policy }) => createHttpAi({ descriptor, send, policy });
+/** @type {AdapterFactory} */
+const httpMessaging = ({ descriptor, send, policy }) => createHttpMessaging({ descriptor, send, policy });
+
+/**
+ * Built-in adapters, keyed by the descriptor's `provider` exactly as the Portal resolves it.
+ * @type {Record<ConnectorKind, Record<string, AdapterFactory>>}
+ */
 const BUILT_IN = {
 	storage: {
 		s3: ({ descriptor, websiteId, slug, send, now, policy }) =>
 			createS3Storage({ descriptor, websiteId, slug, send, now, policy }),
 	},
-	ai: { http: ({ descriptor, send, policy }) => createHttpAi({ descriptor, send, policy }) },
-	messaging: { http: ({ descriptor, send, policy }) => createHttpMessaging({ descriptor, send, policy }) },
+	// `http` is the default when a descriptor names no provider; `generic-http` is the name the Portal resolves
+	ai: { http: httpAi, 'generic-http': httpAi },
+	messaging: {
+		http: httpMessaging,
+		'generic-http': httpMessaging,
+		smtp: ({ descriptor, policy, createSmtpTransport }) =>
+			createSmtpMessaging({ descriptor, policy, ...(createSmtpTransport ? { createTransport: createSmtpTransport } : {}) }),
+	},
 	payments: {},
 };
 
@@ -66,7 +83,9 @@ const BUILT_IN = {
  *   send?: OutboundSend,
  *   now?: () => number,
  *   adapters?: Partial<Record<ConnectorKind, Record<string, AdapterFactory>>>,
- * }} options `outbound` builds the policy; `send` replaces `safeFetch` (tests)
+ *   createSmtpTransport?: import('./smtp.js').CreateSmtpTransport,
+ * }} options `outbound` builds the policy; `send` replaces `safeFetch` (tests); `createSmtpTransport` replaces
+ *   nodemailer's transport factory of the built-in `smtp` adapter (tests)
  */
 export const createConnectors = ({
 	portal,
@@ -76,6 +95,7 @@ export const createConnectors = ({
 	send: injectedSend,
 	now = Date.now,
 	adapters = {},
+	createSmtpTransport,
 }) => {
 	const policy = createOutboundPolicy(outbound);
 	/** @type {OutboundSend} */
@@ -107,7 +127,16 @@ export const createConnectors = ({
 			const provider = providerOf(kind, descriptor);
 			const factory = adapters[kind]?.[provider] ?? BUILT_IN[kind][provider];
 			if (!factory) throw kitError('not_implemented', `no ${kind} adapter for provider '${provider}'`);
-			const adapter = factory({ descriptor, websiteId, slug, send, policy, fetch, now });
+			const adapter = factory({
+				descriptor,
+				websiteId,
+				slug,
+				send,
+				policy,
+				fetch,
+				now,
+				...(createSmtpTransport ? { createSmtpTransport } : {}),
+			});
 			if (kind === 'payments') {
 				for (const method of PAYMENTS_METHODS) {
 					if (typeof adapter?.[method] !== 'function')

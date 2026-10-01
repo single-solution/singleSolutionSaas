@@ -209,17 +209,35 @@ describe('photos', () => {
 			body: { contentType: 'image/jpeg', size: 1200 },
 		});
 		expect(slot.status, JSON.stringify(slot.json)).toBe(201);
-		expect(slot.json.upload).toMatchObject({ method: 'PUT', headers: { 'content-type': 'image/jpeg' } });
+		expect(slot.json.upload).toMatchObject({
+			method: 'PUT',
+			headers: { 'content-type': 'image/jpeg', 'content-length': '1200' },
+		});
 		expect(slot.json.upload.url).toMatch(/^https:\/\/s3\.example\.com\/shop-media\/reviews\/web_/);
+		// type and declared size are signed headers: the bucket refuses any other body
+		expect(new URL(slot.json.upload.url).searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;content-type;host');
 		const stored = await h.collection('photos').findOne({ websiteId: WEBSITE, id: slot.json.id });
-		expect(stored).toMatchObject({ status: 'pending', customerId: 'cus_photo' });
+		expect(stored).toMatchObject({ status: 'pending', customerId: 'cus_photo', key: `photos/${slot.json.id}`, size: 1200 });
+		// keys stay relative; the full object key is kept for public base URLs
+		expect(stored?.objectKey).toBe(`reviews/${WEBSITE}/photos/${slot.json.id}`);
+		expect(new URL(slot.json.upload.url).pathname).toBe(`/shop-media/reviews/${WEBSITE}/photos/${slot.json.id}`);
 		// not uploaded yet → refused
 		const early = await h.call('POST', '/v1/reviews', {
 			as: 'cus_photo',
 			body: { itemId: 'itm_p', rating: 5, body: text, photoIds: [slot.json.id] },
 		});
 		expect(early.status).toBe(422);
+		// a store that ignores the signed length: the HEAD check still refuses another size than declared
 		h.providers.upload(String(stored?.objectKey), 1100, 'image/jpeg');
+		expect(
+			(
+				await h.call('POST', '/v1/reviews', {
+					as: 'cus_photo',
+					body: { itemId: 'itm_p', rating: 5, body: text, photoIds: [slot.json.id] },
+				})
+			).status,
+		).toBe(422);
+		h.providers.upload(String(stored?.objectKey), 1200, 'image/jpeg');
 		const review = await h.call('POST', '/v1/reviews', {
 			as: 'cus_photo',
 			body: { itemId: 'itm_p', rating: 5, body: text, photoIds: [slot.json.id] },

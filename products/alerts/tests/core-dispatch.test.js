@@ -15,6 +15,7 @@ import {
 	templateFor,
 	tidy,
 } from '../core/dispatch.js';
+import { createMessenger } from '../adapters/messaging.js';
 import en from '../strings/en.json' with { type: 'json' };
 
 /** @type {import('../core/dispatch.js').DispatchSettings} */
@@ -60,6 +61,9 @@ describe('timing', () => {
 		expect(isRetryable({ status: 400 })).toBe(false);
 		expect(isRetryable({ code: 'timeout' })).toBe(true);
 		expect(isRetryable({ code: 'not_implemented' })).toBe(false);
+		expect(isRetryable({ code: 'provider_refused' })).toBe(false);
+		expect(isRetryable({ code: 'channel_unsupported' })).toBe(false);
+		expect(isRetryable({ code: 'upstream_error' })).toBe(true);
 		expect(afterFailure({ attempts: 1, failure: { status: 500 }, now: NOON }, settings)).toEqual({
 			action: 'retry',
 			at: NOON + 120_000,
@@ -194,5 +198,66 @@ describe('templates', () => {
 			renderMessage({ kind: 'alert', items: [item('a', 'x'), item('b', 'x')], channel: 'sms', lang: 'en', common }, sources)
 				?.subject,
 		).toBeNull();
+	});
+});
+
+describe('messenger over the kit SMTP adapter', () => {
+	/** @param {(message: any) => Promise<any>} send */
+	const messengerWith = (send) =>
+		createMessenger({ connectors: { messaging: async () => ({ kind: 'messaging', provider: 'smtp', send }) } });
+	const message = {
+		id: 'msg_1',
+		channel: 'email',
+		to: { email: 'buyer@example.org' },
+		lang: 'en',
+		subject: 'Back in stock',
+		text: 'Your item is back.\nBuy now.',
+		headers: { 'List-Unsubscribe': '<https://alerts.example.com/u/t>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
+		metadata: { alertId: 'al_1' },
+	};
+
+	it('sends e-mail as mail (subject, text, unsubscribe headers) and keeps the message id', async () => {
+		/** @type {any[]} */
+		const sent = [];
+		const send = messengerWith(async (mail) => {
+			sent.push(mail);
+			return { id: '<m1@example.com>', accepted: [mail.to], rejected: [] };
+		});
+		expect(await send('web_1', message, { path: '/messages' })).toEqual({ ok: true, providerMessageId: '<m1@example.com>' });
+		expect(sent[0]).toEqual({
+			to: 'buyer@example.org',
+			subject: 'Back in stock',
+			text: 'Your item is back.\nBuy now.',
+			headers: message.headers,
+		});
+		await send('web_1', { ...message, subject: null }, { path: '/messages' });
+		expect(sent[1].subject).toBe('Your item is back.');
+	});
+
+	it('refuses SMS and maps permanent / transient SMTP failures', async () => {
+		const ok = messengerWith(async () => ({ id: null }));
+		expect(await ok('web_1', { ...message, channel: 'sms', to: { phone: '+15551234567' } }, { path: '/m' })).toEqual({
+			ok: false,
+			code: 'channel_unsupported',
+		});
+		/** @param {Record<string, unknown>} fields */
+		const failing = (fields) =>
+			messengerWith(async () => {
+				throw Object.assign(new Error('x'), { name: 'AppKitError', ...fields });
+			});
+		expect(
+			await failing({ code: 'upstream_error', details: { reason: 'EENVELOPE', responseCode: 550 } })('web_1', message, {
+				path: '/m',
+			}),
+		).toEqual({ ok: false, code: 'provider_refused' });
+		expect(
+			await failing({ code: 'upstream_error', details: { reason: 'EENVELOPE', responseCode: 451 } })('web_1', message, {
+				path: '/m',
+			}),
+		).toEqual({ ok: false, code: 'upstream_error' });
+		expect(await failing({ code: 'timeout', details: { reason: 'ETIMEDOUT' } })('web_1', message, { path: '/m' })).toEqual({
+			ok: false,
+			code: 'timeout',
+		});
 	});
 });

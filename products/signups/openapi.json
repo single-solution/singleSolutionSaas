@@ -582,7 +582,7 @@
 			"post": {
 				"operationId": "verifyCode",
 				"tags": ["otp"],
-				"summary": "Verify a code: on success the customer is created if new and signed in (access + refresh tokens). Failures: code_invalid (errors[0] carries attempts_remaining), code_expired, attempts_exhausted, consent_required (errors list the documents; send the same code again with consents). Single-use by construction: no Idempotency-Key.",
+				"summary": "Verify a code: on success the customer is created if new and signed in (access + refresh tokens). Failures: code_invalid (the `attemptsRemaining` extension member, also errors[0] attempts_remaining), code_expired, attempts_exhausted, consent_required (errors list the documents; send the same code again with consents). Single-use by construction: no Idempotency-Key.",
 				"parameters": [
 					{
 						"name": "id",
@@ -1113,7 +1113,56 @@
 												"phone": "phone_number"
 											}
 										}
+									},
+									"request": {
+										"status": "pending",
+										"requestedAt": "2026-10-01T10:00:00.000Z"
 									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/issuer:register": {
+			"post": {
+				"operationId": "registerIssuer",
+				"tags": ["sessions"],
+				"summary": "Ask the Portal to make Signups this website’s identity issuer (the body of GET /v1/issuer `portal.body`, sent with the product’s own credentials). The Portal keeps the request pending until the merchant approves it (Website → Identity); once approved the same call answers active, so it is safe to repeat. The daily job sends it once by itself while the issuer is not registered. sk_ only.",
+				"x-ss-key-kind": "sk",
+				"responses": {
+					"202": {
+						"description": "Pending the merchant’s approval",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/IssuerRegistration"
+								},
+								"example": {
+									"status": "pending",
+									"registered": false,
+									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+									"requestedAt": "2026-10-01T10:00:00.000Z"
+								}
+							}
+						}
+					},
+					"200": {
+						"description": "Already the website’s active issuer",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/IssuerRegistration"
+								},
+								"example": {
+									"status": "active",
+									"registered": true,
+									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+									"requestedAt": "2026-10-01T10:00:00.000Z"
 								}
 							}
 						}
@@ -2255,7 +2304,8 @@
 									"code": "attempts_remaining",
 									"message": "4"
 								}
-							]
+							],
+							"attemptsRemaining": 4
 						}
 					}
 				}
@@ -2300,6 +2350,16 @@
 								}
 							}
 						}
+					},
+					"attemptsRemaining": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "RFC 9457 extension member (code_invalid): verification attempts left for this code."
+					},
+					"retryAfterSeconds": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "RFC 9457 extension member (429 too_soon / send_limit / velocity_limit): seconds until a retry can succeed; mirrors Retry-After."
 					}
 				}
 			},
@@ -2722,10 +2782,25 @@
 						}
 					},
 					"registered": {
-						"type": "boolean"
+						"type": "boolean",
+						"description": "Whether the signed entitlement document already carries this issuer."
 					},
 					"portal": {
 						"type": "object"
+					},
+					"request": {
+						"type": ["object", "null"],
+						"description": "The last request Signups sent to the Portal to become this website’s identity issuer (POST /v1/issuer:register or the daily job), while it matches the current issuer; null otherwise.",
+						"properties": {
+							"status": {
+								"type": "string",
+								"enum": ["pending", "active"]
+							},
+							"requestedAt": {
+								"type": "string",
+								"format": "date-time"
+							}
+						}
 					}
 				}
 			},
@@ -2849,6 +2924,27 @@
 					"download": {
 						"type": "string",
 						"description": "export requests: where to GET the data"
+					}
+				}
+			},
+			"IssuerRegistration": {
+				"type": "object",
+				"required": ["status", "registered", "issuer", "requestedAt"],
+				"properties": {
+					"status": {
+						"type": "string",
+						"enum": ["pending", "active"],
+						"description": "pending: waiting for the merchant’s approval in the Portal; active: the Portal already has this issuer."
+					},
+					"registered": {
+						"type": "boolean"
+					},
+					"issuer": {
+						"type": "string"
+					},
+					"requestedAt": {
+						"type": "string",
+						"format": "date-time"
 					}
 				}
 			}

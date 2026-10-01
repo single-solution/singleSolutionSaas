@@ -19,11 +19,14 @@ const now = () => T0;
 describe('verifyIdentityToken', () => {
 	it.each(/** @type {const} */ (['EdDSA', 'ES256', 'RS256']))('accepts %s tokens and maps the claims', (alg) => {
 		const issuer = createTestIdentityIssuer({ alg });
-		const result = verifyIdentityToken(issuer.sign(claims({ phone_number: '+96550000000' })), issuer.section, { now });
+		const payload = claims({ phone_number: '+96550000000', tier: { name: 'gold' } });
+		const result = verifyIdentityToken(issuer.sign(payload), issuer.section, { now });
 		expect(result).toEqual({
 			ok: true,
-			identity: { subject: 'cust-42', email: 'a@example.com', phone: '+96550000000', issuer: ISSUER },
+			identity: { subject: 'cust-42', email: 'a@example.com', phone: '+96550000000', issuer: ISSUER, claims: payload },
 		});
+		const identity = /** @type {any} */ (result).identity;
+		expect(Object.isFrozen(identity.claims) && Object.isFrozen(identity.claims.tier)).toBe(true);
 	});
 
 	it('refuses every malformed, mismatched, expired or forged token with a stable code', () => {
@@ -131,7 +134,12 @@ describe('route option identity', () => {
 		const token = issuer.sign(claims());
 		const me = await call('/v1/me', { headers: { ...headers, 'ss-identity': token } });
 		expect(me.status).toBe(200);
-		expect(me.json.identity).toEqual({ subject: 'cust-42', email: 'a@example.com', issuer: ISSUER });
+		expect(me.json.identity).toMatchObject({
+			subject: 'cust-42',
+			email: 'a@example.com',
+			issuer: ISSUER,
+			claims: { sub: 'cust-42' },
+		});
 		const missing = await call('/v1/me', { headers });
 		expect([missing.status, missing.json.type]).toEqual([401, expect.stringMatching(/identity_required$/)]);
 		const forged = createTestIdentityIssuer().sign(claims());
@@ -147,7 +155,10 @@ describe('route option identity', () => {
 			headers: { ...headers, 'content-type': 'application/json' },
 			body: JSON.stringify({ identity: token }),
 		});
-		expect(beacon.json).toEqual({ identity: { subject: 'cust-42', email: 'a@example.com', issuer: ISSUER }, problem: null });
+		expect(beacon.json).toMatchObject({
+			identity: { subject: 'cust-42', email: 'a@example.com', issuer: ISSUER },
+			problem: null,
+		});
 		const anonymous = await call('/v1/beacon', {
 			method: 'POST',
 			headers: { ...headers, 'ss-identity': 'wt1.legacy.token' },

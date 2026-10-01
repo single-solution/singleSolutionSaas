@@ -107,6 +107,26 @@ describe('two instances on shared MongoDB control stores', () => {
 		const replay = await post(b, 'SAVE10', 'idem-1');
 		expect(replay.headers.get('idempotent-replayed')).toBe('true');
 		expect((await replay.json()).id).toBe(id);
+		// privacy: the control store keeps only HMACs, status and allowlisted headers; the body is in the merchant's DB
+		const control = await controlDb.collection('ss_kit_idempotency').find({}).toArray();
+		expect(control).toHaveLength(1);
+		expect(control[0]?.response).toEqual({ status: 201, headers: { 'content-type': 'application/json' }, replay: 'website' });
+		expect(JSON.stringify(control)).not.toContain(id);
+		expect(control[0]?._id).toMatch(/^[0-9a-f]{64}$/);
+		const bodies = await mongo.client.db('merchant_int').collection('ss_coupon_box_idempotency').find({}).toArray();
+		expect(bodies).toHaveLength(1);
+		expect(bodies[0]).toMatchObject({
+			websiteId: WEBSITE,
+			merchantId: MERCHANT,
+			key: control[0]?._id,
+			body: JSON.stringify({ id }),
+		});
+		expect(bodies[0]?.expireAt).toBeInstanceOf(Date);
+		// the body expired (TTL) or was removed: the replay cannot return it and says so
+		await mongo.client.db('merchant_int').collection('ss_coupon_box_idempotency').deleteMany({});
+		const gone = await post(a, 'SAVE10', 'idem-1');
+		expect(gone.status).toBe(409);
+		expect((await gone.json()).type).toMatch(/\/idempotency_replay_no_body$/);
 		expect(
 			await mongo.client.db('merchant_int').collection('ss_coupon_box_coupons').countDocuments({ websiteId: WEBSITE }),
 		).toBe(1);

@@ -129,5 +129,9 @@ elements, 10 mc metered for the tokens above the included amount).
 
 ## Changelog
 
+- **Unreleased** — knowledge pages and webhook tools use app-kit's `product.outbound.fetch` (the private connector
+  workaround is gone); `window.messages_per_minute` is an app-kit dynamic route limit on
+  `POST /v1/conversations/{id}/messages` (per customer / guest marker for browsers, per conversation for servers; agent
+  and bot replies are not limited); the maintenance job no longer flushes usage (the kit does).
 - **1.0.0** — first release: thirteen elements, three renderers, six headless cores, REST v1 (45 paths), dashboard,
   maintenance cron.

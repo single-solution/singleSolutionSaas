@@ -61,6 +61,10 @@ const admin = async (portal, name, input) => {
 			return portal.setSubscriptionStatus(/** @type {any} */ (input));
 		case 'resource':
 			return portal.setResource(/** @type {any} */ (input));
+		case 'identity':
+			return input.websiteId
+				? portal.decideIdentityRequest({ websiteId: String(input.websiteId), decision: String(input.decision ?? '') })
+				: { requests: portal.identityRequests(), issuers: portal.identityIssuers() };
 		case 'state':
 			return {
 				portalUrl: portal.portalUrl,
@@ -76,6 +80,7 @@ const admin = async (portal, name, input) => {
 				usage: portal.usage(),
 				published: portal.published(),
 				heartbeats: portal.heartbeats(),
+				identityRequests: portal.identityRequests(),
 			};
 		default:
 			throw Object.assign(new Error(`unknown admin operation ${name}`), { code: 'unknown_operation' });

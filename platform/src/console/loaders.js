@@ -56,10 +56,16 @@ export const loadSession = async (api) => {
  * @param {string} merchantId
  */
 export const loadFrame = async (api, merchantId) => {
-	const [websites, meter] = await Promise.all([api.get(paths.websites(merchantId)), api.get(paths.meter(merchantId))]);
+	const [websites, meter, notifications] = await Promise.all([
+		api.get(paths.websites(merchantId)),
+		api.get(paths.meter(merchantId)),
+		api.get(paths.notifications(merchantId)),
+	]);
 	return {
 		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
 		meter: orElse(meter, null),
+		// F.16: pending actions such as a product asking to become a website's identity issuer
+		notifications: /** @type {any[]} */ (orElse(notifications, { items: [] }).items ?? []),
 	};
 };
 
@@ -99,11 +105,12 @@ const websiteBase = async (api, merchantId, websiteId) => {
  * @param {string} websiteId
  */
 export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
-	const [{ website, catalog }, subscriptions, resources, meter] = await Promise.all([
+	const [{ website, catalog }, subscriptions, resources, meter, identity] = await Promise.all([
 		websiteBase(api, merchantId, websiteId),
 		api.get(paths.subscriptions(merchantId, websiteId)),
 		api.get(paths.resources(merchantId, websiteId)),
 		api.get(paths.meter(merchantId)),
+		api.get(paths.identity(merchantId, websiteId)),
 	]);
 	const failed = firstFailure(website);
 	if (failed) return failed;
@@ -115,6 +122,8 @@ export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
 		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
 		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
 		meter: orElse(meter, null),
+		// F.16: a product's pending request to become the identity issuer (shown as a notice)
+		issuerRequest: /** @type {any} */ (identity.ok ? (identity.data?.request ?? null) : null),
 	};
 };
 
@@ -238,9 +247,10 @@ const nextDay = (day) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).t
  * @param {string} websiteId
  */
 export const loadKeys = async (api, merchantId, websiteId) => {
-	const [website, keys] = await Promise.all([
+	const [website, keys, scopes] = await Promise.all([
 		api.get(paths.website(merchantId, websiteId)),
 		api.get(paths.keys(merchantId, websiteId)),
+		api.get(paths.keyScopes(merchantId, websiteId)),
 	]);
 	const failed = firstFailure(website, keys);
 	if (failed) return failed;
@@ -249,6 +259,8 @@ export const loadKeys = async (api, merchantId, websiteId) => {
 		merchantId,
 		website: website.ok ? website.data : null,
 		keys: /** @type {any[]} */ (keys.ok ? keys.data.items : []),
+		// F.16: the scope vocabulary (platform scopes + per listed service product)
+		scopes: /** @type {any[]} */ (orElse(scopes, { items: [] }).items ?? []),
 	};
 };
 
@@ -270,6 +282,7 @@ export const loadIdentity = async (api, merchantId, websiteId) => {
 		merchantId,
 		website: website.ok ? website.data : null,
 		issuer: /** @type {any} */ (identity.ok ? (identity.data?.issuer ?? null) : null),
+		request: /** @type {any} */ (identity.ok ? (identity.data?.request ?? null) : null),
 	};
 };
 
@@ -294,6 +307,7 @@ export const loadResources = async (api, merchantId, websiteId) => {
 		website: website.ok ? website.data : null,
 		catalog,
 		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
+		needs: /** @type {any[] | null} */ (orElse(resources, { needs: null }).needs ?? null),
 		connectors: /** @type {any[]} */ (connectors.ok ? connectors.data.items : []),
 		connectorsCursor: /** @type {string | null} */ (connectors.ok ? (connectors.data.nextCursor ?? null) : null),
 		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),

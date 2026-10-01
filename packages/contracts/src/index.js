@@ -32,7 +32,7 @@ export {
 	isUtcTimestamp,
 	jsonEqual,
 } from './manifest-semantics.js';
-export { DOCUMENT_RULES, checkEntitlementDocument, checkPlacement, isTimeZone } from './document-semantics.js';
+export { DOCUMENT_RULES, checkEntitlementDocument, checkPlacement, isLanguageTag, isTimeZone } from './document-semantics.js';
 export { PROBLEM_CODES, problem, createProblemFactory } from './errors.js';
 export {
 	ID_PREFIXES,
@@ -61,6 +61,7 @@ export { deepFreeze } from './util.js';
 /** @typedef {import('./types.js').EntitlementDocument} EntitlementDocument */
 /** @typedef {import('./types.js').IdentitySection} IdentitySection */
 /** @typedef {import('./types.js').IdentityJwk} IdentityJwk */
+/** @typedef {import('./types.js').WebsiteSection} WebsiteSection */
 /** @typedef {import('./types.js').EventEnvelope} EventEnvelope */
 /** @typedef {import('./types.js').PlatformEventEnvelope} PlatformEventEnvelope */
 /** @typedef {import('./types.js').AnyEventEnvelope} AnyEventEnvelope */

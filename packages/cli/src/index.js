@@ -38,7 +38,7 @@ export { createPortal, portalError, DEFAULT_ENTITLEMENT_TTL_SECONDS, KEY_ROTATIO
 export { createEmulatorServer } from './emulator/server.js';
 export { simulateSettlement, formatSettlement } from './emulator/settle.js';
 export { createDatabaseResolver, withDatabase } from './emulator/mongo.js';
-export { buildEnvelope, SAMPLE_DATA, withVersion } from './emulator/events.js';
+export { buildEnvelope, SAMPLE_DATA, sampleData, sampleFromSchema, withVersion } from './emulator/events.js';
 export { runCertification, formatReport, certificationFixture, problemShapeError, nextCursorOf } from './certify/index.js';
 
 /** @typedef {import('./manifest.js').Problem} Problem */

@@ -171,12 +171,12 @@ describe('compiler helpers', () => {
 			version: '',
 			publicKey: 'pk_live_x',
 			eventsUrl: 'https://portal.test/v1/events',
-			assetBase: 'https://portal.test/w/packs/',
+			assetBase: 'https://portal.test/w/',
 			elements,
 		});
 		expect(data.elements.map((e) => e.key)).toEqual(['bar', 'launcher']);
-		expect(data.elements[0]).toMatchObject({ headless: { path: `${PACK}/1/headless/bar.js`, name: 'createBar' } });
-		expect(data.elements[1]).toMatchObject({ stub: 'ss-element-stub@1', api: 'https://chat.example.net' });
+		expect(data.elements[0]).toMatchObject({ headless: { path: `packs/${PACK}/1/headless/bar.js`, name: 'createBar' } });
+		expect(data.elements[1]).toMatchObject({ stub: 'ss-element-stub@2', api: 'https://chat.example.net' });
 		const a = versionedLoader({ data, core: 'var __ssr={start(){}};', audience: null });
 		const b = versionedLoader({
 			data: bundleData({
@@ -467,10 +467,11 @@ describe('PLATFORM_ASSET_STORAGE configuration', () => {
 		);
 		expect(full).toMatchObject({ endpoint: 'https://r2.example.net', sessionToken: 'T', forcePathStyle: true, prefix: 'a/b/' });
 
-		expect(loadConfig(await testEnv()).delivery).toEqual({ storage: null, budgetKb: 60 });
+		expect(loadConfig(await testEnv()).delivery).toEqual({ previewOrigin: null, storage: null, budgetKb: 60 });
 		expect(loadConfig(await testEnv({ PLATFORM_ASSET_STORAGE: 'memory', DELIVERY_BUDGET_KB: '80' })).delivery).toEqual({
 			storage: { kind: 'memory' },
 			budgetKb: 80,
+			previewOrigin: null,
 		});
 		const prod = await testEnv({ PORTAL_ENV: 'production', NODE_ENV: 'production' });
 		expect(() => loadConfig({ ...prod, PLATFORM_ASSET_STORAGE: 'memory' })).toThrow(/S3-compatible bucket in production/);
@@ -481,5 +482,13 @@ describe('PLATFORM_ASSET_STORAGE configuration', () => {
 		expect(() => loadConfig(bogus)).toThrow(/PLATFORM_ASSET_STORAGE must be/);
 		const zero = await testEnv({ DELIVERY_BUDGET_KB: '0' });
 		expect(() => loadConfig(zero)).toThrow(/DELIVERY_BUDGET_KB/);
+	});
+
+	it('PREVIEW_ORIGIN: an https origin on another host (F.16)', async () => {
+		const env = await testEnv({ PREVIEW_ORIGIN: 'https://preview.example-previews.test' });
+		expect(loadConfig(env).delivery.previewOrigin).toBe('https://preview.example-previews.test');
+		for (const bad of ['https://preview.test/p', 'ftp://preview.test', 'https://u:p@preview.test', 'not a url'])
+			expect(() => loadConfig({ ...env, PREVIEW_ORIGIN: bad })).toThrow(/PREVIEW_ORIGIN must be/);
+		expect(() => loadConfig({ ...env, PREVIEW_ORIGIN: new URL(String(env.PORTAL_URL)).origin })).toThrow(/different host/);
 	});
 });

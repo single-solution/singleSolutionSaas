@@ -30,7 +30,7 @@ describe('website keys', () => {
 	it('issues pk_/sk_ verifiable with @ss/protocol; stores only the sk_ HMAC; lists metadata only', async () => {
 		const h = await boot();
 		const s = await site(h);
-		const sk = await s.client.post(s.base, { kind: 'sk', scopes: ['events.publish', 'config.*'] });
+		const sk = await s.client.post(s.base, { kind: 'sk', scopes: ['events.write', 'elements.read'] });
 		expect(sk.status).toBe(201);
 		expect(sk.json.key).toMatch(/^sk_live_/);
 		expect(sk.json).toMatchObject({
@@ -38,7 +38,7 @@ describe('website keys', () => {
 			env: 'live',
 			status: 'active',
 			websiteId: s.websiteId,
-			scopes: ['events.publish', 'config.*'],
+			scopes: ['events.write', 'elements.read'],
 		});
 		expect(sk.headers.get('idempotent-replayed')).toBeNull();
 		const claims = await verifyWebsiteKey({
@@ -61,7 +61,7 @@ describe('website keys', () => {
 
 		const pk = await s.client.post(`/v1/merchants/${s.merchantId}/websites/${s.twinId}/keys`, {
 			kind: 'pk',
-			scopes: ['events.publish'],
+			scopes: ['events.write'],
 			allowSubdomains: true,
 			expiresAt: new Date(h.clock.now() + 3600_000).toISOString(),
 		});
@@ -106,21 +106,44 @@ describe('website keys', () => {
 		expect((await whoami(h, pk.json.key, { origin: 'https://evil.example.org' })).status).toBe(403);
 
 		// validation
-		expect((await s.client.post(s.base, { kind: 'xk', scopes: ['a'] })).status).toBe(422);
-		expect((await s.client.post(s.base, { kind: 'pk', scopes: [] })).status).toBe(422);
+		expect((await s.client.post(s.base, { kind: 'xk', scopes: ['events.write'] })).status).toBe(422);
+		// F.16 vocabulary: empty = the defaults; unknown scopes and unknown wildcard groups are refused
+		const defaulted = await s.client.post(s.base, { kind: 'pk', scopes: [] });
+		expect(defaulted.status).toBe(201);
+		expect(defaulted.json.scopes).toEqual(['elements.read', 'events.write']);
+		expect((await s.client.post(s.base, { kind: 'pk' })).json.scopes).toEqual(['elements.read', 'events.write']);
+		const unknown = await s.client.post(s.base, { kind: 'pk', scopes: ['events.write', 'graph.write', 'nope.*'] });
+		expect(unknown.status).toBe(422);
+		expect(unknown.json.errors.map((/** @type {any} */ e) => e.path)).toEqual(['/scopes/1', '/scopes/2']);
+		expect((await s.client.post(s.base, { kind: 'sk', scopes: ['events.*'] })).status).toBe(201);
+		const catalogue = await s.client.get(`${s.base}/scopes`);
+		expect(catalogue.status).toBe(200);
+		expect(catalogue.json.defaults).toEqual(['elements.read', 'events.write']);
+		expect(catalogue.json.items.map((/** @type {any} */ e) => e.scope)).toEqual([
+			'elements.read',
+			'events.write',
+			'signups.read',
+			'signups.write',
+		]);
+		expect((await s.client.post(s.base, { kind: 'sk', scopes: ['signups.write', 'signups.*'] })).status).toBe(201);
 		expect((await s.client.post(s.base, { kind: 'pk', scopes: ['a', 'a'] })).status).toBe(422);
 		expect(
-			(await s.client.post(s.base, { kind: 'pk', scopes: ['a'], expiresAt: new Date(h.clock.now() - 1000).toISOString() }))
-				.status,
+			(
+				await s.client.post(s.base, {
+					kind: 'pk',
+					scopes: ['events.write'],
+					expiresAt: new Date(h.clock.now() - 1000).toISOString(),
+				})
+			).status,
 		).toBe(422);
-		expect((await s.client.post(s.base, { kind: 'pk', scopes: ['a'], expiresAt: 'tomorrow' })).status).toBe(422);
+		expect((await s.client.post(s.base, { kind: 'pk', scopes: ['events.write'], expiresAt: 'tomorrow' })).status).toBe(422);
 		await expect(
-			h.service.issueKey({ websiteId: s.websiteId, kind: 'pk', scopes: ['a'], expiresAt: 'garbage' }),
+			h.service.issueKey({ websiteId: s.websiteId, kind: 'pk', scopes: ['events.write'], expiresAt: 'garbage' }),
 		).rejects.toMatchObject({ code: 'validation_failed' });
 		const viaService = await h.service.issueKey({
 			websiteId: s.websiteId,
 			kind: 'pk',
-			scopes: ['a'],
+			scopes: ['events.write'],
 			expiresAt: h.clock.now() + 7200_000,
 		});
 		expect(viaService).toMatchObject({ kind: 'pk', status: 'active' });
@@ -133,7 +156,7 @@ describe('website keys', () => {
 	it('revokes immediately: authenticator, revocation list, key.revoked@1, idempotent', async () => {
 		const h = await boot();
 		const s = await site(h);
-		const sk = (await s.client.post(s.base, { kind: 'sk', scopes: ['events.publish'] })).json;
+		const sk = (await s.client.post(s.base, { kind: 'sk', scopes: ['events.write'] })).json;
 		const first = await revocations(h);
 		expect(first.status).toBe(200);
 		expect(first.json.keyIds).toEqual([]);
@@ -166,7 +189,7 @@ describe('website keys', () => {
 		await expect(h.service.revokeKey({ keyId: 'key_00000000000000000000000000', reason: 'x' })).rejects.toMatchObject({
 			code: 'not_found',
 		});
-		const k2 = await h.service.issueKey({ websiteId: s.websiteId, kind: 'pk', scopes: ['a'] });
+		const k2 = await h.service.issueKey({ websiteId: s.websiteId, kind: 'pk', scopes: ['events.write'] });
 		expect((await h.service.revokeKey({ keyId: k2.keyId, reason: 'service' })).status).toBe('revoked');
 		const audit = await h.portal.shared.audit.list({ targetId: sk.keyId });
 		expect(audit.map((e) => [e.action, e.reason])).toEqual(
@@ -180,7 +203,7 @@ describe('website keys', () => {
 	it('rotates with a grace period, then revokes the old key (scheduled job)', async () => {
 		const h = await boot();
 		const s = await site(h);
-		const old = (await s.client.post(s.base, { kind: 'sk', scopes: ['events.publish'] })).json;
+		const old = (await s.client.post(s.base, { kind: 'sk', scopes: ['events.write'] })).json;
 		const rotated = await s.client.post(`${s.base}/${old.keyId}/rotate`, { graceSeconds: 3600 });
 		expect(rotated.status).toBe(201);
 		expect(rotated.json).toMatchObject({
@@ -231,7 +254,7 @@ describe('website keys', () => {
 		// expiry is carried over on rotation when still ahead
 		const expiring = await s.client.post(s.base, {
 			kind: 'pk',
-			scopes: ['a'],
+			scopes: ['events.write'],
 			expiresAt: new Date(h.clock.now() + 86_400_000).toISOString(),
 		});
 		const carried = await s.client.post(`${s.base}/${expiring.json.keyId}/rotate`, {});
@@ -241,7 +264,7 @@ describe('website keys', () => {
 	it('the websiteKeyRevoked port fails closed for unknown, relabelled or mismatched keys', async () => {
 		const h = await boot();
 		const s = await site(h);
-		const sk = (await s.client.post(s.base, { kind: 'sk', scopes: ['a'] })).json;
+		const sk = (await s.client.post(s.base, { kind: 'sk', scopes: ['events.write'] })).json;
 		const claims = await verifyWebsiteKey({
 			key: sk.key,
 			keyResolver: h.service.websiteKeyResolver(),
@@ -261,7 +284,7 @@ describe('website keys', () => {
 			merchantId: s.merchantId,
 			domain: 'shop.example.com',
 			env: 'live',
-			scopes: ['*'],
+			scopes: ['events.*'],
 			keyId: 'key_forged000000000000000000',
 			now: h.clock.now,
 		});
@@ -272,7 +295,7 @@ describe('website keys', () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'website-keys-2026-10' });
 		const h = await boot({ identity: { websiteKeySigningKeys: [privateJwk] } });
 		const s = await site(h);
-		const pk = (await s.client.post(s.base, { kind: 'pk', scopes: ['a'] })).json;
+		const pk = (await s.client.post(s.base, { kind: 'pk', scopes: ['events.write'] })).json;
 		expect(pk.kid).toBe('website-keys-2026-10');
 		expect(h.service.websiteKeySigningSource()).toBe('option');
 		expect(h.service.websiteKeyJwks().keys.map((k) => k.kid)).toEqual(['website-keys-2026-10']);
@@ -292,11 +315,11 @@ describe('website keys', () => {
 	it('works without the integration module and survives a failing one', async () => {
 		const solo = await boot({ integration: false });
 		const s = await site(solo);
-		const key = (await s.client.post(s.base, { kind: 'pk', scopes: ['a'] })).json;
+		const key = (await s.client.post(s.base, { kind: 'pk', scopes: ['events.write'] })).json;
 		expect((await s.client.post(`${s.base}/${key.keyId}/revoke`, {})).json.status).toBe('revoked');
 		const broken = await boot({ integration: { fail: true } });
 		const b = await site(broken);
-		const k2 = (await b.client.post(b.base, { kind: 'pk', scopes: ['a'] })).json;
+		const k2 = (await b.client.post(b.base, { kind: 'pk', scopes: ['events.write'] })).json;
 		expect((await b.client.post(`${b.base}/${k2.keyId}/revoke`, {})).json.status).toBe('revoked');
 		expect(broken.entries.some((e) => e.msg === 'key.revoked@1 could not be emitted')).toBe(true);
 	});

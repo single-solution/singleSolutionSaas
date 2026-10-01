@@ -80,22 +80,5 @@
 	"dashboard.rules.reads": "Reads: {paths}",
 	"dashboard.rules.always": "Always (no condition)",
 	"dashboard.settings.intro": "Limits, stacking, code formats, reservations and every other setting are configured in the Portal.",
-	"dashboard.settings.open": "Open the configuration in the Portal",
-	"notes.title": "Notes",
-	"notes.add": "Add note",
-	"notes.pin": "Pin",
-	"notes.unpin": "Unpin",
-	"notes.remove": "Delete",
-	"notes.remove.label": "Delete note: {text}",
-	"notes.empty": "No notes yet.",
-	"notes.loading": "Loading notes…",
-	"notes.form.label": "New note",
-	"notes.list.label": "Your notes",
-	"notes.input.label": "Note text",
-	"notes.input.placeholder": "Write a note",
-	"notes.error.text_required": "Please write something first.",
-	"notes.error.text_too_long": "Notes can have at most {max} characters.",
-	"notes.error.text_invalid": "This note is not valid.",
-	"notes.error.limit_reached": "You have reached the limit of {max} notes.",
-	"notes.error.request_failed": "Something went wrong. Please try again."
+	"dashboard.settings.open": "Open the configuration in the Portal"
 }

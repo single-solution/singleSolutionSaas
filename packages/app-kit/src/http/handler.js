@@ -3,14 +3,15 @@
  * serverless and edge-style runtimes). Pipeline per request:
  *
  *   request id → route match (404/405, CORS preflight) → body read with a byte cap (413) → auth (website key /
- *   launch session / Portal signature / none) → entitlement + element gating → rate limit (429) → JSON parse
- *   (415/400) → Idempotency-Key (428/409/replay) → handler → RFC 9457 problems for every error.
+ *   launch session / Portal signature / none) → entitlement + element gating → JSON parse (415/400) → customer
+ *   identity → rate limit (429; limit and key may be functions of the context) → Idempotency-Key (428/409/replay) →
+ *   handler → RFC 9457 problems for every error. After the response, the background flusher may run.
  * @module
  */
 import { STOPPED_STATES, can } from '../entitlements.js';
 import { createId } from '@ss/contracts';
-import { sha256Hex } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
+import { replayHeaders } from './replay.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
 
 /** @typedef {import('./routes.js').RouteDefinition} RouteDefinition */
@@ -59,6 +60,18 @@ export const rememberOriginalPath = (request, path) => {
  * @returns {string | undefined}
  */
 const originalPathOf = (request) => ORIGINAL_PATHS.get(request);
+
+/** Per-request `after()` schedulers registered by adapters (e.g. Next.js `after` through `toNextRoute`). */
+const SCHEDULERS = new WeakMap();
+
+/**
+ * Register the framework's `after(fn)` for a request: the kit's background flush then runs after the response.
+ * @param {Request} request
+ * @param {(task: () => Promise<unknown>) => void} after
+ */
+export const rememberScheduler = (request, after) => {
+	SCHEDULERS.set(request, after);
+};
 
 /**
  * @param {URLSearchParams} params
@@ -150,6 +163,8 @@ export const createRequestHandler = (product, routes, options = {}) => {
 					requestId,
 					instance,
 				});
+				// RFC 9457 extension members (names validated by `problem()`; standard members cannot be clobbered)
+				if (result.extensions) doc = Object.freeze({ ...result.extensions, ...doc });
 			} catch {
 				doc = problems.create('internal_error', { requestId, instance });
 			}
@@ -194,6 +209,11 @@ export const createRequestHandler = (product, routes, options = {}) => {
 		 */
 		const finish = (rendered) => {
 			const headers = new Headers({ ...rendered.headers, ...extra });
+			try {
+				ctxKit.background?.afterRequest(SCHEDULERS.get(request));
+			} catch (error) {
+				log.warn('background scheduling failed', { error });
+			}
 			log.info('request', {
 				method,
 				path: pathname,
@@ -346,35 +366,6 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				}
 			}
 
-			// rate limit
-			if (r.rateLimit) {
-				const forwarded = trustForwardedFor ? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() : undefined;
-				const subject = r.rateLimit.key
-					? r.rateLimit.key(ctx)
-					: ctx.website
-						? `w:${ctx.website.websiteId}`
-						: ctx.session
-							? `s:${ctx.session.subject}`
-							: `ip:${forwarded ?? 'unknown'}`;
-				try {
-					const { count, resetAt } = await stores.rateLimits.hit(
-						`${r.id}|${subject}`,
-						/** @type {number} */ (r.rateLimit.windowMs),
-						now(),
-					);
-					const reset = Math.max(0, Math.ceil((resetAt - now()) / 1000));
-					extra['ratelimit-limit'] = String(r.rateLimit.limit);
-					extra['ratelimit-remaining'] = String(Math.max(0, r.rateLimit.limit - count));
-					extra['ratelimit-reset'] = String(reset);
-					if (count > r.rateLimit.limit) {
-						extra['retry-after'] = String(Math.max(1, reset));
-						return fail(problem('rate_limited', 'Too many requests.'));
-					}
-				} catch (error) {
-					log.warn('rate limit store failed; allowing request', { error });
-				}
-			}
-
 			// JSON body
 			if (!r.rawBody && ctx.rawBody.length > 0) {
 				const type = (request.headers.get('content-type') ?? '').toLowerCase();
@@ -406,9 +397,55 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				}
 			}
 
+			// rate limit (the limit may depend on the request, e.g. a plan feature: `limit: (ctx) => number`)
+			/** @type {number | null} */
+			let limit = null;
+			if (r.rateLimit) {
+				try {
+					const value = typeof r.rateLimit.limit === 'function' ? await r.rateLimit.limit(ctx) : r.rateLimit.limit;
+					if (value === Number.POSITIVE_INFINITY || value === null) limit = null;
+					else if (Number.isSafeInteger(value) && value >= 0) limit = value;
+					else log.error('rate limit is not a non-negative integer; not limiting', { route: r.id });
+				} catch (error) {
+					log.error('rate limit function failed; not limiting', { route: r.id, error });
+				}
+			}
+			if (r.rateLimit && limit !== null) {
+				const forwarded = trustForwardedFor ? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() : undefined;
+				const subject = r.rateLimit.key
+					? await r.rateLimit.key(ctx)
+					: ctx.website
+						? `w:${ctx.website.websiteId}`
+						: ctx.session
+							? `s:${ctx.session.subject}`
+							: `ip:${forwarded ?? 'unknown'}`;
+				try {
+					const { count, resetAt } = await stores.rateLimits.hit(
+						`${r.rateLimit.bucket ?? r.id}|${subject}`,
+						/** @type {number} */ (r.rateLimit.windowMs),
+						now(),
+					);
+					const reset = Math.max(0, Math.ceil((resetAt - now()) / 1000));
+					extra['ratelimit-limit'] = String(limit);
+					extra['ratelimit-remaining'] = String(Math.max(0, limit - count));
+					extra['ratelimit-reset'] = String(reset);
+					if (count > limit) {
+						extra['retry-after'] = String(Math.max(1, reset));
+						return fail(problem('rate_limited', 'Too many requests.'));
+					}
+				} catch (error) {
+					log.warn('rate limit store failed; allowing request', { error });
+				}
+			}
+
 			// idempotency
 			/** @type {string | null} */
 			let idempotencyRecord = null;
+			const replayStamp = ctx.website
+				? { merchantId: ctx.website.merchantId, env: ctx.website.env }
+				: ctx.entitlement
+					? { merchantId: ctx.entitlement.doc.merchantId, env: ctx.entitlement.doc.env }
+					: {};
 			const idempotent = method === 'POST' ? (r.idempotent ?? true) : false;
 			if (idempotent) {
 				const key = request.headers.get('idempotency-key');
@@ -417,8 +454,8 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				} else {
 					if (!IDEMPOTENCY_KEY.test(key)) return fail(problem('bad_request', 'The Idempotency-Key is invalid.'));
 					const principal = ctx.website?.websiteId ?? ctx.session?.subject ?? (ctx.portal ? 'portal' : 'anonymous');
-					idempotencyRecord = sha256Hex(`${principal}\n${r.id}\n${pathname}\n${key}`);
-					const fingerprint = sha256Hex(`${method}\n${pathname}\n${url.search}\n${ctx.rawBody}`);
+					idempotencyRecord = ctxKit.hmac(`key\n${principal}\n${r.id}\n${pathname}\n${key}`);
+					const fingerprint = ctxKit.hmac(`fingerprint\n${method}\n${pathname}\n${url.search}\n${ctx.rawBody}`);
 					const begun = await stores.idempotency.begin(idempotencyRecord, fingerprint, now() + 24 * 60 * 60_000);
 					if (begun.state === 'mismatch')
 						return fail(problem('idempotency_conflict', 'This Idempotency-Key was used with a different request.'));
@@ -427,8 +464,27 @@ export const createRequestHandler = (product, routes, options = {}) => {
 						return fail(problem('conflict', 'A request with this Idempotency-Key is still in progress.'));
 					}
 					if (begun.state === 'done') {
+						const stored = begun.response;
+						const replay = stored.replay ?? 'none';
+						/** @type {string | null} */
+						let body = null;
+						if (replay === 'website' && ctx.websiteId) {
+							body = await ctxKit.replayBodies.get({
+								websiteId: ctx.websiteId,
+								stamp: replayStamp,
+								key: idempotencyRecord,
+							});
+						}
+						if (replay !== 'empty' && body === null) {
+							return fail(
+								problem(
+									'idempotency_replay_no_body',
+									'This request was already processed, but its response body is not available for replay.',
+								),
+							);
+						}
 						extra['idempotent-replayed'] = 'true';
-						return finish(begun.response);
+						return finish({ status: stored.status, headers: stored.headers, body });
 					}
 				}
 			}
@@ -459,8 +515,20 @@ export const createRequestHandler = (product, routes, options = {}) => {
 			}
 			if (idempotencyRecord) {
 				if (rendered.status < 500) {
+					const hasBody = rendered.body !== null && rendered.body !== '';
+					/** @type {StoredResponse['replay']} */
+					let replay = hasBody ? 'none' : 'empty';
+					if (hasBody && ctx.websiteId) {
+						const put = await ctxKit.replayBodies.put({
+							websiteId: ctx.websiteId,
+							stamp: replayStamp,
+							key: idempotencyRecord,
+							body: /** @type {string} */ (rendered.body),
+						});
+						if (put) replay = 'website';
+					}
 					/** @type {StoredResponse} */
-					const stored = { status: rendered.status, headers: rendered.headers, body: rendered.body ?? '' };
+					const stored = { status: rendered.status, headers: replayHeaders(rendered.headers), replay };
 					await stores.idempotency.complete(idempotencyRecord, stored);
 				} else await stores.idempotency.release(idempotencyRecord);
 			}

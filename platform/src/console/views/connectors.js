@@ -310,6 +310,46 @@ export function CheckReport({ report }) {
 }
 
 /**
+ * Which resource kinds the website needs now and which only once an element is enabled (F.16). Uses the Portal's
+ * `needs` (per product and kind) when present, else every product-level kind as needed now.
+ * @param {any[] | null} needs
+ * @param {any[]} subscriptions
+ * @param {any[]} catalog
+ * @returns {{ now: Map<string, string[]>, ifEnabled: Map<string, string[]> }}
+ */
+export const neededResources = (needs, subscriptions, catalog) => {
+	/** @type {Map<string, string[]>} */
+	const now = new Map();
+	/** @type {Map<string, string[]>} */
+	const ifEnabled = new Map();
+	/** @param {Map<string, string[]>} map @param {string} kind @param {string} label */
+	const add = (map, kind, label) => {
+		const list = map.get(kind) ?? [];
+		if (!list.includes(label)) map.set(kind, [...list, label]);
+	};
+	if (Array.isArray(needs)) {
+		for (const need of needs) {
+			const name = productName(catalog, need.appId, need.productSlug);
+			if (need.neededNow) add(now, need.kind, name);
+			else
+				for (const key of need.elements ?? []) {
+					const element = catalog
+						.find((p) => p.appId === need.appId)
+						?.elements?.find((/** @type {any} */ e) => e.key === key);
+					add(ifEnabled, need.kind, `${element?.name ?? key} (${name})`);
+				}
+		}
+		return { now, ifEnabled };
+	}
+	for (const s of subscriptions) {
+		if (s.status === 'cancelled') continue;
+		const product = catalog.find((p) => p.appId === s.appId);
+		for (const k of product?.requires ?? []) add(now, k, productName(catalog, s.appId, s.productSlug));
+	}
+	return { now, ifEnabled };
+};
+
+/**
  * @param {any} props loader result of `loadResources`
  */
 export function ConnectorsView(props) {
@@ -317,6 +357,7 @@ export function ConnectorsView(props) {
 	const ok = props.ok === true;
 	const [connectors, setConnectors] = useState(/** @type {any[]} */ (ok ? props.connectors : []));
 	const [resources, setResources] = useState(/** @type {any[]} */ (ok ? props.resources : []));
+	const [needs, setNeeds] = useState(/** @type {any[] | null} */ (ok ? (props.needs ?? null) : null));
 	const [form, setForm] = useState(/** @type {null | { mode: 'create' | 'rotate', connector?: any }} */ (null));
 	const [kind, setKind] = useState('database');
 	const [provider, setProvider] = useState('mongodb');
@@ -338,15 +379,13 @@ export function ConnectorsView(props) {
 	const reload = async () => {
 		const [c, r] = await Promise.all([apiFetch(api.connectors(merchantId)), apiFetch(api.resources(merchantId, websiteId))]);
 		if (c.ok) setConnectors(c.data.items ?? []);
-		if (r.ok) setResources(r.data.resources ?? []);
+		if (r.ok) {
+			setResources(r.data.resources ?? []);
+			setNeeds(r.data.needs ?? null);
+		}
 	};
-	const required = new Map();
-	for (const s of /** @type {any[]} */ (subscriptions)) {
-		if (s.status === 'cancelled') continue;
-		const product = catalog.find((/** @type {any} */ p) => p.appId === s.appId);
-		for (const k of product?.requires ?? [])
-			required.set(k, [...(required.get(k) ?? []), productName(catalog, s.appId, s.productSlug)]);
-	}
+	// F.16: needed now = product-level kinds and kinds of elements that are on; the rest only if an element is enabled
+	const { now: required, ifEnabled } = neededResources(needs, subscriptions, catalog);
 	const statusOf = (/** @type {string} */ k) => resources.find((r) => r.kind === k)?.status ?? 'missing';
 	const here = connectors.filter((c) => (c.websiteIds ?? []).includes(websiteId));
 	const others = connectors.filter((c) => !(c.websiteIds ?? []).includes(websiteId));
@@ -492,7 +531,10 @@ export function ConnectorsView(props) {
 								</div>
 								<p className="text-xs text-muted">{k.help}</p>
 								{needed && status !== 'connected' ? (
-									<p className="text-xs font-medium text-warning">Needed by {needed.join(', ')}</p>
+									<p className="text-xs font-medium text-warning">Needed now by {needed.join(', ')}</p>
+								) : null}
+								{ifEnabled.get(k.kind) && status !== 'connected' ? (
+									<p className="text-xs text-muted">Needed if you enable {ifEnabled.get(k.kind)?.join(', ')}</p>
 								) : null}
 								{status === 'missing' ? (
 									<div>

@@ -126,13 +126,14 @@ describe('merchant accounts', () => {
 		expect((await dev.get(`/v1/merchants/${merchantId}/websites/${otherId}`)).status).toBe(403);
 		const key = await dev.post(`/v1/merchants/${merchantId}/websites/${twinId}/keys`, {
 			kind: 'pk',
-			scopes: ['events.publish'],
+			scopes: ['events.write'],
 		});
 		expect(key.status).toBe(201);
 		expect(key.json.env).toBe('test');
-		expect((await dev.post(`/v1/merchants/${merchantId}/websites/${otherId}/keys`, { kind: 'pk', scopes: ['x'] })).status).toBe(
-			403,
-		);
+		expect(
+			(await dev.post(`/v1/merchants/${merchantId}/websites/${otherId}/keys`, { kind: 'pk', scopes: ['elements.read'] }))
+				.status,
+		).toBe(403);
 		expect((await dev.del(`/v1/merchants/${merchantId}/websites/${websiteId}`)).status).toBe(403);
 		expect((await dev.get(`/v1/merchants/${merchantId}`)).status).toBe(403);
 		expect((await dev.get(`/v1/merchants/${merchantId}/team`)).status).toBe(403);

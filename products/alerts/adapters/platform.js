@@ -9,7 +9,6 @@ import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import { addressFor, contactIdOf } from '../core/contact.js';
 import { INDEXES, MIGRATIONS, repositoriesFor } from './db.js';
-import { MESSAGING_ADAPTERS } from './messaging.js';
 import { createSiteRegistry } from './registry.js';
 import { createTokens, randomId, stableId, tokenSecret } from './tokens.js';
 
@@ -186,7 +185,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			privacy: createPrivacyHandlers({ repoFor, tokens, now }),
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
-			connectors: { messaging: MESSAGING_ADAPTERS },
 			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
 			// SSRF policy for merchant databases and providers: in development the `ss dev` client database and local
 			// mock providers live on loopback; app-kit ignores the allowlist when NODE_ENV=production

@@ -8,7 +8,6 @@
  * @module
  */
 import { isProtocolError, originAllowed, verifyWebsiteKey } from '@ss/protocol';
-import { createSingleFlight } from './util.js';
 
 /** @typedef {import('@ss/protocol').KeyResolver} KeyResolver */
 /** @typedef {import('./stores/types.js').RevocationStore} RevocationStore */
@@ -68,7 +67,8 @@ export const createWebsiteKeys = ({
 	let syncedAt = -Infinity;
 	let checkedAt = -Infinity;
 	let loaded = false;
-	const singleFlight = /** @type {(key: string, run: () => Promise<void>) => Promise<void>} */ (createSingleFlight());
+	/** @type {Promise<void> | null} the sync in flight (concurrent cold requests await it instead of failing closed) */
+	let inflight = null;
 
 	const load = async () => {
 		const state = await store.get();
@@ -78,9 +78,10 @@ export const createWebsiteKeys = ({
 		loaded = true;
 	};
 
-	/** Pull new revocations from the Portal (and pick up what other instances stored). */
-	const sync = () =>
-		singleFlight('sync', async () => {
+	/** Pull new revocations from the Portal (and pick up what other instances stored); single-flight. */
+	const sync = () => {
+		if (inflight) return inflight;
+		const running = (async () => {
 			checkedAt = now();
 			// merge what other instances stored (pushed `key.revoked` events land on one instance only)
 			await load().catch(() => {});
@@ -93,9 +94,15 @@ export const createWebsiteKeys = ({
 			} catch (error) {
 				logger.warn('revocation sync failed', { code: /** @type {any} */ (error)?.code ?? 'error' });
 			}
+		})().finally(() => {
+			inflight = null;
 		});
+		inflight = running;
+		return running;
+	};
 
 	const ensureFresh = async () => {
+		if (inflight) await inflight;
 		if (now() - syncedAt >= syncIntervalMs && now() - checkedAt >= Math.min(30_000, syncIntervalMs)) await sync();
 		else if (!loaded) await load().catch(() => {});
 	};

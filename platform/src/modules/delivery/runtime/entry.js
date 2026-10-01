@@ -11,11 +11,18 @@
  *   (`createX({ config, strings, client, identity, emit })` → `{ state, actions, subscribe, destroy }`), which is
  *   adapted to a definition. A renderer export receives the Loader's props plus `dom` (the document); a module-level
  *   `styles` string is adopted once per page (constructable stylesheet, else a `<style nonce>`).
- * - **Service-product elements** have no code of their own in the bundle: the **element stub** (`ss-element-stub@1`)
- *   is a generic headless core + renderer that talks to the product's REST API with the website's `pk_` key:
- *   `GET  <api>/v1/elements/<key>/view` → a view model, `POST <api>/v1/elements/<key>/actions/<action>` → the next view
- *   model (`Idempotency-Key` added by the element API client). View model (all optional, text only, never HTML):
- *   `{ title, body, items: [{ text, href? }] (≤ 50), actions: [{ action, label }] (≤ 10) }`.
+ * - **Service-product elements** either ship the modules of the product's signed UI bundle (loaded like pack modules,
+ *   with the element API client bound to the product's API base) or, without one, the **element stub**
+ *   (`ss-element-stub@2`; `@1` data is still accepted): a generic headless core + renderer that talks to the
+ *   product's REST API with the website's `pk_` key:
+ *   `GET  <api>/v1/elements/<key>/view?ctx=<JSON>` → a view model, `POST <api>/v1/elements/<key>/actions/<action>?ctx=`
+ *   → the next view model (`Idempotency-Key` added by the element API client). `ctx` is the page context
+ *   `{ path, itemId?, pageType? }` (item id / page type from `data-ss-item-id` / `data-ss-page-type` on the element's
+ *   nearest ancestor, else the placement target, else `<html>` / `<meta name="ss:item-id|ss:page-type">`). View model
+ *   (all optional, text only, never HTML): `{ title, body, items: [{ text, href? }] (≤ 50), fields: [{ name, type,
+ *   label, required?, options? }] (≤ 20), actions: [{ action, label }] (≤ 10) }`; an action posts `{ ...input,
+ *   fields: { <name>: value } }` when the view has fields (v1 products never send fields, so their bodies are
+ *   unchanged).
  * - Pack elements receive a placeholder Graph client (every call resolves to a `graph_unavailable` result) until the
  *   Website Graph API exists.
  * @module
@@ -24,10 +31,16 @@ import { err, problem } from '../../../../../packages/web/src/element.js';
 import { createClient } from '../../../../../packages/web/src/client.js';
 import { boot } from '../../../../../packages/web/src/loader.js';
 
-export const STUB_PROTOCOL = 'ss-element-stub@1';
+export const STUB_PROTOCOL = 'ss-element-stub@2';
+/** Stub protocols this runtime runs (v2 is a superset of v1). */
+export const STUB_PROTOCOLS = Object.freeze(['ss-element-stub@1', STUB_PROTOCOL]);
 const ACTION = /^[a-z][a-z0-9_]{0,39}$/;
+const FIELD_NAME = /^[a-z][a-z0-9_]{0,39}$/;
+const FIELD_TYPES = Object.freeze(['text', 'email', 'tel', 'number', 'textarea', 'select', 'checkbox']);
 const MAX_ITEMS = 50;
 const MAX_ACTIONS = 10;
+const MAX_FIELDS = 20;
+const MAX_OPTIONS = 50;
 
 /**
  * @param {unknown} value
@@ -147,14 +160,94 @@ export const adaptRenderer = (mod, name, win, nonce) => {
 };
 
 /**
+ * Page context of a stub element: the path, and the item id / page type of the element's surroundings.
+ * @param {any} win
+ * @param {string} key
+ * @param {Record<string, any> | undefined} placement
+ * @returns {{ path: string, itemId?: string, pageType?: string }}
+ */
+export const pageContext = (win, key, placement) => {
+	const doc = win?.document;
+	const path = text(win?.location?.pathname ?? '/', 512) || '/';
+	/** @param {string} name @returns {string | undefined} */
+	const lookup = (name) => {
+		/** @type {any[]} */
+		const nodes = [];
+		try {
+			const container = doc?.querySelector?.(`[data-ss-element="${key}"]`);
+			const near = container?.closest?.(`[${name}]`);
+			if (near) nodes.push(near);
+			for (const entry of Array.isArray(placement?.selectors) ? placement.selectors : []) {
+				const target = typeof entry?.selector === 'string' ? doc?.querySelector?.(entry.selector) : null;
+				if (target) nodes.push(target.closest?.(`[${name}]`) ?? target);
+			}
+		} catch {
+			/* an invalid selector never breaks the element */
+		}
+		nodes.push(doc?.documentElement);
+		for (const node of nodes) {
+			const value = node?.getAttribute?.(name);
+			if (typeof value === 'string' && value !== '') return value;
+		}
+		const meta = doc?.querySelector?.(`meta[name="ss:${name.slice('data-ss-'.length)}"]`)?.getAttribute?.('content');
+		return typeof meta === 'string' && meta !== '' ? meta : undefined;
+	};
+	const itemId = lookup('data-ss-item-id');
+	const pageType = lookup('data-ss-page-type');
+	return {
+		path,
+		...(itemId ? { itemId: text(itemId, 128) } : {}),
+		...(pageType ? { pageType: text(pageType, 40) } : {}),
+	};
+};
+
+/**
+ * The input fields of a view model (`fields`, ≤ 20; unknown types and names are dropped).
+ * @param {unknown} value
+ * @returns {Array<{ name: string, type: string, label: string, required: boolean, options: Array<{ value: string, label: string }> }>}
+ */
+export const viewFields = (value) =>
+	(Array.isArray(value) ? value : [])
+		.filter((f) => isObject(f) && typeof f.name === 'string' && FIELD_NAME.test(f.name) && FIELD_TYPES.includes(f.type))
+		.slice(0, MAX_FIELDS)
+		.map((/** @type {any} */ f) => ({
+			name: f.name,
+			type: f.type,
+			label: text(f.label, 200) || f.name,
+			required: f.required === true,
+			options:
+				f.type === 'select' && Array.isArray(f.options)
+					? f.options
+							.filter(
+								(/** @type {unknown} */ o) => isObject(o) && (typeof o.value === 'string' || typeof o.value === 'number'),
+							)
+							.slice(0, MAX_OPTIONS)
+							.map((/** @type {any} */ o) => ({
+								value: text(o.value, 200),
+								label: text(o.label, 200) || text(o.value, 200),
+							}))
+					: [],
+		}));
+
+/**
  * Headless core of the element stub (service products).
  * @param {string} key
+ * @param {{ context?: () => Record<string, unknown> }} [options] page context sent as `?ctx=` (v2)
  */
-export const stubDefinition = (key) => ({
+export const stubDefinition = (key, options = {}) => ({
 	key,
 	initialState: { status: 'idle', view: null, error: null },
 	create: (/** @type {any} */ { store, client, emit }) => {
 		const base = `/v1/elements/${key}`;
+		/** @returns {{ query?: Record<string, string> }} */
+		const query = () => {
+			if (!options.context) return {};
+			try {
+				return { query: { ctx: JSON.stringify(options.context()) } };
+			} catch {
+				return {};
+			}
+		};
 		/** @param {any} result */
 		const apply = (result) => {
 			if (result.ok) store.setState({ status: 'ready', view: isObject(result.value) ? result.value : null, error: null });
@@ -164,7 +257,7 @@ export const stubDefinition = (key) => ({
 		const load = async () => {
 			if (!client) return apply(err(problem('invalid_request', { detail: 'no element API' })));
 			store.setState({ status: 'loading' });
-			return apply(await client.get(`${base}/view`));
+			return apply(await client.get(`${base}/view`, query()));
 		};
 		void load();
 		return {
@@ -173,7 +266,7 @@ export const stubDefinition = (key) => ({
 				invoke: async (/** @type {unknown} */ action, /** @type {unknown} */ input = {}) => {
 					if (typeof action !== 'string' || !ACTION.test(action) || !client)
 						return err(problem('invalid_request', { detail: 'unknown action' }));
-					const result = apply(await client.post(`${base}/actions/${action}`, isObject(input) ? input : {}));
+					const result = apply(await client.post(`${base}/actions/${action}`, isObject(input) ? input : {}, query()));
 					if (result.ok) emit('action', { action });
 					return result;
 				},
@@ -182,18 +275,79 @@ export const stubDefinition = (key) => ({
 	},
 });
 
-/** Default renderer of the element stub: the view model as text, links and buttons (the Loader's safe `h`). */
+/** @type {WeakMap<object, { view: unknown, inputs: Map<string, any> }>} rendered node → its view and inputs */
+const rendered = new WeakMap();
+
+/**
+ * One input of a view model's `fields`.
+ * @param {any} h
+ * @param {string} id
+ * @param {ReturnType<typeof viewFields>[number]} field
+ * @param {Map<string, any>} inputs
+ */
+const fieldNode = (h, id, field, inputs) => {
+	const ref = (/** @type {any} */ el) => inputs.set(field.name, el);
+	const common = { id, name: field.name, required: field.required, ref, className: 'ss-el__input' };
+	const control =
+		field.type === 'textarea'
+			? h('textarea', { ...common, rows: 3 })
+			: field.type === 'select'
+				? h(
+						'select',
+						common,
+						...field.options.map((/** @type {{ value: string, label: string }} */ o) =>
+							h('option', { value: o.value }, o.label),
+						),
+					)
+				: h('input', { ...common, type: field.type });
+	return field.type === 'checkbox'
+		? h('label', { className: 'ss-el__field ss-el__field--checkbox', htmlFor: id }, control, field.label)
+		: h('div', { className: 'ss-el__field' }, h('label', { htmlFor: id }, field.label), control);
+};
+
+/**
+ * Values of the rendered inputs (`checkbox` → boolean, `number` → number or null, else text).
+ * @param {Map<string, any>} inputs
+ * @param {ReturnType<typeof viewFields>} fields
+ */
+const fieldValues = (inputs, fields) => {
+	/** @type {Record<string, unknown>} */
+	const out = {};
+	for (const field of fields) {
+		const el = inputs.get(field.name);
+		if (!el) continue;
+		if (field.type === 'checkbox') out[field.name] = el.checked === true;
+		else if (field.type === 'number') out[field.name] = el.value === '' ? null : Number(el.value);
+		else out[field.name] = text(el.value, 5000);
+	}
+	return out;
+};
+
+/** Default renderer of the element stub: the view model as text, links, inputs and buttons (the Loader's safe `h`). */
 export const stubRenderer = Object.freeze({
 	render: (/** @type {any} */ { state, actions, h, element }) => {
 		const view = isObject(state.view) ? state.view : {};
 		const items = Array.isArray(view.items) ? view.items.filter(isObject).slice(0, MAX_ITEMS) : [];
+		const fields = viewFields(view.fields);
+		/** @type {Map<string, any>} */
+		const inputs = new Map();
 		/** @type {any[]} */
 		const buttons = Array.isArray(view.actions)
 			? view.actions
 					.filter((/** @type {unknown} */ a) => isObject(a) && typeof a.action === 'string' && ACTION.test(a.action))
 					.slice(0, MAX_ACTIONS)
 			: [];
-		return h(
+		/** @param {string} action */
+		const invoke = (action) => {
+			if (fields.length === 0) return actions.invoke(action);
+			const missing = fields.find((f) => f.required && inputs.get(f.name)?.checkValidity?.() === false);
+			if (missing) {
+				inputs.get(missing.name)?.reportValidity?.();
+				return undefined;
+			}
+			return actions.invoke(action, { fields: fieldValues(inputs, fields) });
+		};
+		const node = h(
 			'div',
 			{
 				className: `ss-el ss-el--${element.key}`,
@@ -212,14 +366,31 @@ export const stubRenderer = Object.freeze({
 						),
 					)
 				: null,
+			fields.length > 0
+				? h(
+						'div',
+						{ className: 'ss-el__fields', role: 'group' },
+						...fields.map((field) => fieldNode(h, `ss-${element.key}-${field.name}`, field, inputs)),
+					)
+				: null,
 			...buttons.map((/** @type {any} */ b) =>
-				h(
-					'button',
-					{ type: 'button', className: 'ss-el__action', onClick: () => actions.invoke(b.action) },
-					text(b.label, 80),
-				),
+				h('button', { type: 'button', className: 'ss-el__action', onClick: () => invoke(b.action) }, text(b.label, 80)),
 			),
 		);
+		rendered.set(node, { view: state.view, inputs });
+		return node;
+	},
+	/**
+	 * Keep the node (and what the visitor typed) while only the status changes; render anew for a new view model.
+	 * @param {any} node
+	 * @param {any} props
+	 */
+	update: (node, props) => {
+		const previous = rendered.get(node);
+		if (!previous || previous.view !== props.state.view) return stubRenderer.render(props);
+		node.setAttribute('aria-busy', props.state.status === 'loading' ? 'true' : 'false');
+		node.setAttribute('data-ss-status', props.state.status);
+		return node;
 	},
 });
 
@@ -231,8 +402,8 @@ export const stubRenderer = Object.freeze({
  * @property {Record<string, unknown>} [strings]
  * @property {{ path: string, name: string }} [headless] pack module (relative to `data.assets`) and export
  * @property {{ path: string, name: string }} [renderer]
- * @property {string} [stub] `ss-element-stub@1` for service-product elements
- * @property {string} [api] the service product's API base (stub only)
+ * @property {string} [stub] `ss-element-stub@2` (or `@1`) for service-product elements without a UI bundle
+ * @property {string} [api] the service product's API base (stub and service UI-bundle modules)
  * @property {Record<string, unknown>} [reserve]
  */
 
@@ -243,7 +414,7 @@ export const stubRenderer = Object.freeze({
  * @property {string} version
  * @property {string} key the website's public `pk_` key (events, element APIs)
  * @property {string} events events ingest URL
- * @property {string} assets base URL of pack modules (ends with `/`)
+ * @property {string} assets base URL of element modules (ends with `/`; paths start with `packs/` or `ui/`)
  * @property {{ sampleRate?: number }} [rum]
  * @property {CompiledElement[]} elements
  */
@@ -279,12 +450,21 @@ export const start = (data, options = {}) => {
 			strings: spec.strings ?? {},
 			...(spec.reserve ? { reserve: spec.reserve } : {}),
 		};
-		if (spec.stub === STUB_PROTOCOL)
-			return { ...common, headless: stubDefinition(spec.key), renderer: stubRenderer, api: { baseUrl: String(spec.api) } };
+		if (typeof spec.stub === 'string' && STUB_PROTOCOLS.includes(spec.stub))
+			return {
+				...common,
+				headless: stubDefinition(
+					spec.key,
+					spec.stub === STUB_PROTOCOL ? { context: () => pageContext(win, spec.key, spec.placement) } : {},
+				),
+				renderer: stubRenderer,
+				api: { baseUrl: String(spec.api) },
+			};
 		const headless = /** @type {{ path: string, name: string }} */ (spec.headless);
 		const renderer = spec.renderer;
 		return {
 			...common,
+			...(typeof spec.api === 'string' ? { api: { baseUrl: spec.api } } : {}),
 			headless: () => importModule(url(headless)).then((mod) => adaptHeadless(mod?.[headless.name], spec.key)),
 			...(renderer
 				? { renderer: () => importModule(url(renderer)).then((mod) => adaptRenderer(mod, renderer.name, win, nonce)) }

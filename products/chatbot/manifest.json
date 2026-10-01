@@ -30,7 +30,7 @@
 		"offlineGrace": "PT24H"
 	},
 	"scopes": ["events.subscribe:order.*@1", "events.subscribe:customer.*@1"],
-	"requires": { "resources": ["database", "ai"] },
+	"requires": { "resources": ["database"] },
 	"events": {
 		"consumes": ["order.*@1", "customer.*@1"],
 		"publishes": [

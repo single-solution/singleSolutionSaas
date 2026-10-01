@@ -1,6 +1,6 @@
 /**
  * Knowledge service: FAQ entries and web pages indexed into chunks in the merchant database, and BM25 search. Pages
- * are fetched through the kit's SSRF guard (adapters/outbound.js); the pure parts (HTML → text, chunking, ranking)
+ * are fetched through the kit's SSRF guard (app-kit `product.outbound.fetch`); the pure parts (HTML → text, chunking, ranking)
  * are core/knowledge.js.
  */
 import { faqChunks, htmlToText, pageChunks, passages, queryTerms, rank } from '../core/knowledge.js';

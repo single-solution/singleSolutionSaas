@@ -2,10 +2,11 @@
  * Next.js App Router adapter: `export const { GET, POST, PATCH, DELETE } = toNextRoute(handler)` in a catch-all
  * `route.js`. A leading `/api` is stripped so routes are declared as `/v1/...` whether Next serves them under
  * `/api/v1/...` (e.g. through a `/v1/:path*` → `/api/v1/:path*` rewrite) or directly. The path the client addressed is
- * kept for Portal request signatures.
+ * kept for Portal request signatures. Pass Next's `after` (`import { after } from 'next/server.js'`) so the kit's
+ * background flush of the usage queue and event outbox runs after the response on serverless deployments.
  * @module
  */
-import { rememberOriginalPath } from './handler.js';
+import { rememberOriginalPath, rememberScheduler } from './handler.js';
 
 /**
  * @param {Request} request
@@ -31,11 +32,16 @@ const stripPrefix = (request, prefix) => {
 
 /**
  * @param {(request: Request) => Promise<Response>} handler
- * @param {{ stripPrefix?: string | false }} [options] default strips `/api`
+ * @param {{ stripPrefix?: string | false, after?: (task: () => Promise<unknown>) => void }} [options] default strips
+ *   `/api`; `after` = the framework's post-response scheduler (Next.js `after`)
  * @returns {Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS', (request: Request, context?: unknown) => Promise<Response>>}
  */
-export const toNextRoute = (handler, { stripPrefix: prefix = '/api' } = {}) => {
+export const toNextRoute = (handler, { stripPrefix: prefix = '/api', after } = {}) => {
 	/** @param {Request} request */
-	const route = (request) => handler(prefix ? stripPrefix(request, prefix) : request);
+	const route = (request) => {
+		const target = prefix ? stripPrefix(request, prefix) : request;
+		if (typeof after === 'function') rememberScheduler(target, after);
+		return handler(target);
+	};
 	return Object.freeze({ GET: route, POST: route, PUT: route, PATCH: route, DELETE: route, HEAD: route, OPTIONS: route });
 };

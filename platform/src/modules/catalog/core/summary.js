@@ -85,6 +85,8 @@ export const catalogEntry = (app, manifest, { detail = false } = {}) => ({
 	capabilities: {
 		adminLaunch: manifest.capabilities?.adminLaunch === true,
 		sandbox: manifest.capabilities?.sandbox === true,
+		// F.16: the product may ask to become a website's identity issuer (merchant approval required)
+		identityIssuer: /** @type {Record<string, unknown> | undefined} */ (manifest.capabilities)?.identityIssuer === true,
 	},
 	requires: [...(manifest.requires?.resources ?? [])],
 	elements: manifest.elements.map((element) =>

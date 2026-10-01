@@ -28,6 +28,10 @@ export const DEFAULT_EVENT_CATEGORIES = Object.freeze({
 	'inventory.*': NECESSARY,
 	'price.*': NECESSARY,
 	'file.*': NECESSARY,
+	// catalogue changes (not `item.*`: `item.viewed` stays analytics)
+	'item.created': NECESSARY,
+	'item.updated': NECESSARY,
+	'item.deleted': NECESSARY,
 	'*': 'analytics',
 });
 

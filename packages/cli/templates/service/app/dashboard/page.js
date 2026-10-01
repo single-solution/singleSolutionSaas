@@ -5,8 +5,8 @@
  * impersonation shows the audit banner and ends at the launch's `impExp`.
  */
 import { createElement as h } from 'react';
-import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers.js';
+import { redirect } from 'next/navigation.js';
 import { createTranslator } from '../../headless/strings.js';
 import { sessionView } from '../../api/session.js';
 import { getProduct, getStrings } from '../_lib/product.js';

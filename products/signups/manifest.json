@@ -17,6 +17,7 @@
 	},
 	"capabilities": {
 		"adminLaunch": true,
+		"identityIssuer": true,
 		"sandbox": true,
 		"localEnforcement": [
 			"limit:otp.max_sends_per_identity_hour",
@@ -29,7 +30,7 @@
 		"offlineGrace": "PT24H"
 	},
 	"scopes": ["events.subscribe:order.*", "events.publish:customer.*"],
-	"requires": { "resources": ["database", "messaging"] },
+	"requires": { "resources": ["database"] },
 	"events": {
 		"consumes": ["order.placed@1", "order.completed@1", "order.cancelled@1", "order.refunded@1"],
 		"publishes": [

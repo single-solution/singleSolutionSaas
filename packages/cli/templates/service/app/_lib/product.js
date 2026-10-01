@@ -3,6 +3,7 @@
  * `globalThis`: Next.js bundles route handlers and pages separately, and they must share one product (its in-memory
  * development stores hold the dashboard sessions created by `/sso`).
  */
+import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform, loadStrings } from '../../adapters/platform.js';
 import { buildRoutes, wireEvents } from '../../api/routes.js';
@@ -23,10 +24,12 @@ export const getStrings = () => (shared().strings ??= loadStrings(process.cwd())
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).
- * @param {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} method
+ * Every route file also exports `OPTIONS` so browsers' CORS preflights reach app-kit; `after` lets app-kit finish
+ * work (event outbox, usage) after the response is sent.
+ * @param {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS'} method
  */
 export const forward = (method) => async (/** @type {Request} */ request, /** @type {unknown} */ context) => {
 	const state = shared();
-	state.next ??= getProduct().then((instance) => toNextRoute(createRequestHandler(instance, buildRoutes(instance))));
+	state.next ??= getProduct().then((instance) => toNextRoute(createRequestHandler(instance, buildRoutes(instance)), { after }));
 	return /** @type {any} */ ((await state.next)[method])(request, context);
 };

@@ -281,10 +281,10 @@ describe('request handler', () => {
 		const first = await handle(req('/v1/coupons', { method: 'POST', json: { code: 'A' }, headers }));
 		expect(first.status).toBe(201);
 		expect(first.headers.get('location')).toBe('/v1/coupons/1');
+		// no merchant database is connected here, so the replay body could not be stored: 409, never a re-run
 		const replay = await handle(req('/v1/coupons', { method: 'POST', json: { code: 'A' }, headers }));
-		expect(replay.status).toBe(201);
-		expect(replay.headers.get('idempotent-replayed')).toBe('true');
-		expect(await body(replay)).toEqual({ n: 1, body: { code: 'A' } });
+		expect(replay.status).toBe(409);
+		expect(await body(replay)).toMatchObject({ type: `${BASE}/problems/idempotency_replay_no_body` });
 		const conflict = await handle(req('/v1/coupons', { method: 'POST', json: { code: 'B' }, headers }));
 		expect(await body(conflict)).toMatchObject({ status: 409, type: `${BASE}/problems/idempotency_conflict` });
 		const missing = await handle(req('/v1/coupons', { method: 'POST', json: {}, headers: { authorization: `Bearer ${sk}` } }));

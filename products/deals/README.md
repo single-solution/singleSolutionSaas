@@ -130,12 +130,13 @@ window → price lock honoured after the window closed → commit (uses in the m
 1. Create a Vercel project with this directory as root (framework: Next.js); `next.config.js` sets the monorepo root.
 2. Environment (Production): `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY`, `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID`
    (optional), `SS_PRODUCT_DB_URI` (required in production), `CRON_SECRET` (maintenance cron in `vercel.json`,
-   every 5 minutes: usage flush + heartbeat), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars), `SS_LOG_LEVEL` (optional).
+   every 5 minutes: heartbeat — app-kit flushes usage and events itself, after requests), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars), `SS_LOG_LEVEL` (optional).
 3. Deploy, register from the Portal admin with the deployment URL and token, review and activate; `endpoints.base` in
    `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
 
 ## Changelog
 
+- **Unreleased** — the quote rate limit is app-kit's dynamic route limit (`rateLimit.limit(ctx)` = `quote_api.rate_per_minute`, one shared bucket for quotes, offers and price locks; counted before validation); the maintenance job no longer flushes usage (the kit does).
 - **1.0.0** — first release: ten elements, badges and deals page renderers and headless cores, REST v1, dashboard,
   maintenance cron.
