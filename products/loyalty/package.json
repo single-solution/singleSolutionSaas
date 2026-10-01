@@ -3,7 +3,7 @@
 	"version": "1.0.0",
 	"private": true,
 	"type": "module",
-	"description": "Loyalty & Rewards \u2014 SSPS v1 service product (earn rules, redemption, tiers, expiry, referrals, wallet, adjustments, reversal).",
+	"description": "Loyalty & Rewards — SSPS v1 service product (earn rules, redemption, tiers, expiry, referrals, wallet, adjustments, reversal).",
 	"scripts": {
 		"dev": "next dev --port 3000",
 		"build": "next build",
@@ -27,7 +27,6 @@
 	"devDependencies": {
 		"@ss/cli": "workspace:*",
 		"@ss/protocol": "workspace:*",
-		"@ss/web": "workspace:*",
 		"@tailwindcss/postcss": "^4.3.3",
 		"tailwindcss": "^4.3.3"
 	},

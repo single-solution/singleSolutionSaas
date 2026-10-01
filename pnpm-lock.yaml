@@ -11,6 +11,9 @@ importers:
       '@eslint/js':
         specifier: ^9.39.5
         version: 9.39.5
+      '@ss/cli':
+        specifier: workspace:*
+        version: link:packages/cli
       '@types/node':
         specifier: ^22.20.4
         version: 22.20.4
@@ -53,18 +56,12 @@ importers:
       '@ss/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@ss/entitlements':
-        specifier: workspace:*
-        version: link:../entitlements
       '@ss/net':
         specifier: workspace:*
         version: link:../net
       '@ss/protocol':
         specifier: workspace:*
         version: link:../protocol
-      '@ss/rules':
-        specifier: workspace:*
-        version: link:../rules
       mongodb:
         specifier: ^6.20.0
         version: 6.21.0
@@ -101,9 +98,6 @@ importers:
       '@ss/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@ss/rules':
-        specifier: workspace:*
-        version: link:../rules
 
   packages/net: {}
 
@@ -209,9 +203,6 @@ importers:
       '@ss/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ss/web':
-        specifier: workspace:*
-        version: link:../../packages/web
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -252,9 +243,6 @@ importers:
       '@ss/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ss/web':
-        specifier: workspace:*
-        version: link:../../packages/web
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -295,9 +283,6 @@ importers:
       '@ss/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ss/web':
-        specifier: workspace:*
-        version: link:../../packages/web
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -338,9 +323,6 @@ importers:
       '@ss/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ss/web':
-        specifier: workspace:*
-        version: link:../../packages/web
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -381,9 +363,6 @@ importers:
       '@ss/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ss/web':
-        specifier: workspace:*
-        version: link:../../packages/web
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -424,9 +403,6 @@ importers:
       '@ss/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ss/web':
-        specifier: workspace:*
-        version: link:../../packages/web
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -442,9 +418,6 @@ importers:
       '@ss/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@ss/rules':
-        specifier: workspace:*
-        version: link:../../packages/rules
       '@ss/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -467,9 +440,6 @@ importers:
       '@ss/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ss/web':
-        specifier: workspace:*
-        version: link:../../packages/web
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3

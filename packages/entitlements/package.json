@@ -12,7 +12,6 @@
 		"src"
 	],
 	"dependencies": {
-		"@ss/rules": "workspace:*",
 		"@ss/contracts": "workspace:*"
 	}
 }

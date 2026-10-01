@@ -13,7 +13,8 @@
 		"db:migrate": "node scripts/db.js migrate",
 		"db:migrate:dry": "node scripts/db.js migrate --dry-run",
 		"db:memory": "node scripts/dev-mongo.js",
-		"env:dev": "node scripts/dev-env.js"
+		"env:dev": "node scripts/dev-env.js",
+		"admin:bootstrap": "node --env-file=.env.local scripts/bootstrap-admin.js"
 	},
 	"dependencies": {
 		"@ss/contracts": "workspace:*",
