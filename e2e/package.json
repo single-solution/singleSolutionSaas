@@ -28,6 +28,7 @@
 		"@ss/product-coupons": "workspace:^",
 		"@ss/product-deals": "workspace:^",
 		"@ss/product-loyalty": "workspace:^",
+		"@ss/product-pdp": "workspace:^",
 		"@ss/product-reviews": "workspace:^",
 		"@ss/product-signups": "workspace:^",
 		"@ss/protocol": "workspace:^",
