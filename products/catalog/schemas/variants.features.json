@@ -1,0 +1,172 @@
+{
+	"type": "object",
+	"title": "Variants & stock",
+	"additionalProperties": false,
+	"properties": {
+		"max_variants_per_item": {
+			"type": "integer",
+			"title": "Variants per item",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-plan": {
+				"starter": {
+					"default": 100,
+					"max": 100
+				},
+				"pro": {
+					"default": 250,
+					"max": 1000
+				}
+			},
+			"x-ui": {
+				"group": "Limits",
+				"order": 1,
+				"widget": "number"
+			}
+		},
+		"uniqueness": {
+			"type": "string",
+			"title": "Variant uniqueness",
+			"description": "options: no two variants of an item share the same option values; sku: SKUs are unique within the item; both; or none.",
+			"default": "options",
+			"enum": ["options", "sku", "options_and_sku", "none"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Rules",
+				"order": 2
+			}
+		},
+		"unique_sku_across_items": {
+			"type": "boolean",
+			"title": "SKUs unique across the catalog",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Rules",
+				"order": 3,
+				"widget": "switch"
+			}
+		},
+		"option_pools": {
+			"type": "boolean",
+			"title": "Per-item option pools",
+			"default": true,
+			"x-kind": "flag",
+			"description": "An item may restrict each option to a pool of allowed values; variants outside the pool are refused.",
+			"x-ui": {
+				"group": "Rules",
+				"order": 4,
+				"widget": "switch"
+			}
+		},
+		"track_inventory": {
+			"type": "boolean",
+			"title": "Track stock",
+			"default": true,
+			"x-kind": "flag",
+			"description": "Default for new variants; each variant may override it.",
+			"x-ui": {
+				"group": "Stock",
+				"order": 5,
+				"widget": "switch"
+			}
+		},
+		"backorders": {
+			"type": "string",
+			"title": "When stock runs out",
+			"description": "deny: sold out; allow: keep selling (stock goes negative).",
+			"default": "deny",
+			"enum": ["deny", "allow"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Stock",
+				"order": 6
+			}
+		},
+		"low_stock_threshold": {
+			"type": "integer",
+			"title": "Low stock threshold",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 100000,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Stock",
+				"order": 7
+			}
+		},
+		"show_quantity": {
+			"type": "boolean",
+			"title": "Show exact stock to shoppers",
+			"default": false,
+			"x-kind": "flag",
+			"description": "Off: public reads only say in stock, low stock or sold out.",
+			"x-ui": {
+				"group": "Stock",
+				"order": 8,
+				"widget": "switch"
+			}
+		},
+		"decrement_on_order": {
+			"type": "boolean",
+			"title": "Take stock on order.placed@1",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Orders",
+				"order": 9,
+				"widget": "switch"
+			}
+		},
+		"restock_on_cancel": {
+			"type": "boolean",
+			"title": "Give stock back on order.cancelled@1",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Orders",
+				"order": 10,
+				"widget": "switch"
+			}
+		},
+		"restock_on_refund": {
+			"type": "boolean",
+			"title": "Give refunded lines back on order.refunded@1",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Orders",
+				"order": 11,
+				"widget": "switch"
+			}
+		},
+		"reservation_ttl_minutes": {
+			"type": "integer",
+			"title": "Stock reservation lifetime (minutes)",
+			"description": "A reservation not turned into an order (order.placed@1 with the same orderId) is released after this.",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 1440,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Orders",
+				"order": 12
+			}
+		},
+		"max_lines_per_reservation": {
+			"type": "integer",
+			"title": "Lines per reservation",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 500,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Orders",
+				"order": 13,
+				"widget": "number"
+			}
+		}
+	}
+}
