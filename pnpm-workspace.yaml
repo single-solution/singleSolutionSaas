@@ -4,3 +4,4 @@ packages:
    - 'products/*'
 allowBuilds:
    esbuild: true
+   mongodb-memory-server: false

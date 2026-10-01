@@ -8,7 +8,7 @@ import addFormatsModule from 'ajv-formats';
 import { ALL_SCHEMAS, GRAPH_ENTITY_SCHEMAS } from './schemas/index.js';
 import { SCHEMA_IDS, eventDataSchemaId } from './schemas/schema-ids.js';
 import { FEATURE_EXTENSION_KEYWORDS } from './schemas/feature-schema.js';
-import { CUSTOM_EVENT_PREFIX } from './schemas/event-envelope.js';
+import { CUSTOM_EVENT_PREFIX, ELEMENT_UI_EVENT_MAX_BYTES, isElementUiEvent } from './schemas/event-envelope.js';
 import { PATTERNS } from './schemas/common.js';
 import { checkManifest } from './manifest-semantics.js';
 import { checkEntitlementDocument, checkPlacement } from './document-semantics.js';
@@ -200,7 +200,20 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 		const problems = run(SCHEMA_IDS.eventEnvelope, value);
 		const event = /** @type {import('./types.js').EventEnvelope} */ (value);
 		if (problems.length > 0) return result(event, problems);
-		const dataId = event.type.startsWith(CUSTOM_EVENT_PREFIX) ? eventDataSchemaId('custom.*') : eventDataSchemaId(event.type);
+		let dataId = event.type.startsWith(CUSTOM_EVENT_PREFIX) ? eventDataSchemaId('custom.*') : eventDataSchemaId(event.type);
+		// An element UI event is recognised only when the envelope names the emitting element (context.element).
+		if (!has(dataId) && isElementUiEvent(event.type) && event.context?.element === event.type.split('.')[0]) {
+			if (JSON.stringify(event.data).length > ELEMENT_UI_EVENT_MAX_BYTES) {
+				return result(event, [
+					{
+						path: '/data',
+						keyword: 'maxSize',
+						message: `must serialize to at most ${ELEMENT_UI_EVENT_MAX_BYTES} characters`,
+					},
+				]);
+			}
+			dataId = eventDataSchemaId('element-ui');
+		}
 		if (!has(dataId))
 			return result(event, [{ path: '/type', keyword: 'eventType', message: `unknown event type '${event.type}'` }]);
 		return result(event, run(dataId, event.data, '/data'));

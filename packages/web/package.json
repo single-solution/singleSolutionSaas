@@ -1,0 +1,32 @@
+{
+	"name": "@ss/web",
+	"version": "0.1.0",
+	"description": "Browser SDK: website events, identity federation, element runtime (headless cores) and the Loader client.",
+	"type": "module",
+	"license": "UNLICENSED",
+	"private": true,
+	"exports": {
+		".": "./src/index.js",
+		"./client": "./src/client.js",
+		"./element": "./src/element.js",
+		"./renderer": "./src/renderer.js",
+		"./loader": "./src/loader.js",
+		"./audience": "./src/audience.js",
+		"./react": "./src/adapters/react.js"
+	},
+	"files": [
+		"src"
+	],
+	"dependencies": {
+		"@ss/rules": "workspace:*"
+	},
+	"sideEffects": false,
+	"peerDependencies": {
+		"react": ">=18"
+	},
+	"peerDependenciesMeta": {
+		"react": {
+			"optional": true
+		}
+	}
+}

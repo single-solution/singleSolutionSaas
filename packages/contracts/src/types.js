@@ -162,7 +162,7 @@
  * @property {string} idempotencyKey
  * @property {{ type: string, id?: string }} actor
  * @property {Record<string, unknown>} data
- * @property {Record<string, unknown>} [context]
+ * @property {{ element?: string } & Record<string, unknown>} [context]
  */
 
 /**

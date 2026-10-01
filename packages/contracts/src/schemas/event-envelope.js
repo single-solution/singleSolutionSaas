@@ -6,7 +6,7 @@
  */
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS, eventDataSchemaId } from './schema-ids.js';
-import { PATTERNS, commonRef as ref } from './common.js';
+import { PATTERNS, RESOURCE_STATUSES, commonRef as ref } from './common.js';
 
 /** Actor types that can cause an event. */
 export const ACTOR_TYPES = Object.freeze(
@@ -201,6 +201,134 @@ export const customEventDataSchema = deepFreeze({
 	type: 'object',
 	maxProperties: 200,
 });
+
+const reasonCode = { type: 'string', minLength: 1, maxLength: 200, pattern: '^[a-z][a-z0-9_.:-]*$' };
+const subscriptionLifecycle = data({ subscriptionId: ref('subscriptionId'), websiteId: ref('websiteId'), reason: reasonCode }, [
+	'subscriptionId',
+	'websiteId',
+]);
+const ms = { type: 'number', minimum: 0, maximum: 3_600_000 };
+
+/**
+ * Platform control events (Portal → product). Only the Portal publishes these; products may consume them.
+ * Resource `status` uses {@link RESOURCE_STATUSES}, the same vocabulary as entitlement documents.
+ */
+export const CONTROL_EVENT_DATA = deepFreeze({
+	'entitlement.changed@1': data(
+		{
+			subscriptionId: ref('subscriptionId'),
+			websiteId: ref('websiteId'),
+			version: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+			document: {
+				type: 'string',
+				maxLength: 65_536,
+				pattern: '^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]*\\.[A-Za-z0-9_-]+$',
+				description: 'Signed entitlement document as a compact JWS.',
+			},
+		},
+		['subscriptionId', 'websiteId', 'version'],
+	),
+	'key.revoked@1': data(
+		{ keyIds: { type: 'array', minItems: 1, maxItems: 1000, uniqueItems: true, items: id }, revokedAt: ref('timestamp') },
+		['keyIds', 'revokedAt'],
+	),
+	'resource.changed@1': data(
+		{
+			websiteId: ref('websiteId'),
+			kind: ref('resourceKind'),
+			status: { type: 'string', enum: [...RESOURCE_STATUSES] },
+			ref: id,
+		},
+		['websiteId', 'kind', 'status', 'ref'],
+	),
+	'subscription.activated@1': subscriptionLifecycle,
+	'subscription.paused@1': subscriptionLifecycle,
+	'subscription.resumed@1': subscriptionLifecycle,
+	'subscription.cancelled@1': subscriptionLifecycle,
+	'manifest.accepted@1': data({ appId: id, version: ref('semver') }, ['appId', 'version']),
+});
+
+/** Loader events (website → Portal), emitted by the web SDK only. */
+export const LOADER_EVENT_DATA = deepFreeze({
+	'loader.vitals@1': data(
+		{
+			lcp: ms,
+			cls: { type: 'number', minimum: 0, maximum: 100 },
+			inp: ms,
+			elements: {
+				type: 'array',
+				maxItems: 200,
+				items: data({ key: ref('elementKey'), mountMs: ms }, ['key', 'mountMs']),
+			},
+			sampled: { const: true },
+		},
+		['elements', 'sampled'],
+	),
+	'loader.element_failed@1': data(
+		{
+			element: ref('elementKey'),
+			code: { type: 'string', minLength: 1, maxLength: 64, pattern: PATTERNS.elementKey },
+			message: text(500),
+		},
+		['element', 'code', 'message'],
+	),
+});
+
+/** Largest serialized size (UTF-16 code units of `JSON.stringify`) of an element UI event's data. */
+export const ELEMENT_UI_EVENT_MAX_BYTES = 8192;
+
+/** Data schema for element UI events (`<element>.<verb>@1`): products define the payload, so only the size is capped. */
+export const elementUiEventDataSchema = deepFreeze({
+	$schema: 'https://json-schema.org/draft/2020-12/schema',
+	$id: eventDataSchemaId('element-ui'),
+	type: 'object',
+	maxProperties: 50,
+});
+
+const SNAKE = '[a-z][a-z0-9]*(?:_[a-z0-9]+)*';
+const ELEMENT_UI_EVENT = new RegExp(`^(${SNAKE})\\.(${SNAKE})@1$`);
+
+/**
+ * Namespaces that are never element UI events: standard, control, loader and custom events.
+ * @returns {ReadonlySet<string>}
+ */
+const reservedNamespaces = () =>
+	new Set(
+		[
+			...Object.keys(STANDARD_EVENT_DATA),
+			...Object.keys(CONTROL_EVENT_DATA),
+			...Object.keys(LOADER_EVENT_DATA),
+			'custom.x@1',
+		].map((type) => type.split('.')[0] ?? ''),
+	);
+
+/** Namespaces reserved for catalogued events. */
+export const RESERVED_EVENT_NAMESPACES = Object.freeze([...reservedNamespaces()]);
+
+/**
+ * True when `type` has the element UI event shape `<element>.<verb>@1` (both snake_case) outside reserved namespaces.
+ * @param {unknown} type
+ * @returns {boolean}
+ */
+export const isElementUiEvent = (type) => {
+	if (typeof type !== 'string') return false;
+	const match = ELEMENT_UI_EVENT.exec(type);
+	return match !== null && match[1] !== undefined && match[1].length <= 40 && !RESERVED_EVENT_NAMESPACES.includes(match[1]);
+};
+
+/** Every catalogued event data schema keyed by `type@v`: standard, control and loader. */
+export const EVENT_CATALOGUE = deepFreeze({ ...STANDARD_EVENT_DATA, ...CONTROL_EVENT_DATA, ...LOADER_EVENT_DATA });
+
+/**
+ * Catalogued event data schemas as standalone schemas with `$id`s.
+ * @returns {ReadonlyArray<Record<string, unknown>>}
+ */
+export const catalogueEventDataSchemas = () =>
+	Object.entries(EVENT_CATALOGUE).map(([type, schema]) => ({
+		$schema: 'https://json-schema.org/draft/2020-12/schema',
+		$id: eventDataSchemaId(type),
+		...schema,
+	}));
 
 /**
  * Standard event data schemas as standalone schemas with `$id`s.

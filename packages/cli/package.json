@@ -1,0 +1,23 @@
+{
+	"name": "@ss/cli",
+	"version": "0.1.0",
+	"description": "Developer CLI: app init, validate, dev (local Portal emulator), register, certify.",
+	"type": "module",
+	"license": "UNLICENSED",
+	"private": true,
+	"exports": {
+		".": "./src/index.js"
+	},
+	"files": [
+		"src"
+	],
+	"dependencies": {
+		"@ss/contracts": "workspace:*",
+		"@ss/entitlements": "workspace:*",
+		"@ss/protocol": "workspace:*",
+		"@ss/rules": "workspace:*"
+	},
+	"bin": {
+		"ss": "./src/bin.js"
+	}
+}

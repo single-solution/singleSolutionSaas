@@ -6,15 +6,12 @@
  */
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
-import { FEATURE_SOURCES, PATTERNS, commonRef as ref } from './common.js';
+import { FEATURE_SOURCES, PATTERNS, RESOURCE_STATUSES, commonRef as ref } from './common.js';
 
 /** Runtime states of a subscription. */
 export const RUNTIME_STATES = Object.freeze(
 	/** @type {const} */ (['active', 'paused', 'suspended', 'spend_cap', 'quota_exhausted', 'resource_missing']),
 );
-
-/** Connection status of a client resource. */
-export const RESOURCE_STATUSES = Object.freeze(/** @type {const} */ (['connected', 'missing', 'failing', 'revoked']));
 
 const reason = { type: 'string', minLength: 1, maxLength: 200, pattern: '^[a-z][a-z0-9_.:-]*$' };
 

@@ -37,6 +37,7 @@ export {
 } from './website-keys.js';
 export { DEFAULT_GRACE_MS, ENTITLEMENT_TYP, signEntitlementDocument, verifyEntitlementDocument } from './entitlement-doc.js';
 export { EVENT_HEADERS, signEvent, verifyEvent } from './events.js';
+export { canonicalRequestPath, signRequest, verifyRequest } from './requests.js';
 export {
 	REGISTRATION_RESPONSE_TYP,
 	REGISTRATION_TYP,
@@ -63,5 +64,6 @@ export { canonicalJson } from './encoding.js';
 /** @typedef {import('./website-keys.js').WebsiteKeyClaims} WebsiteKeyClaims */
 /** @typedef {import('./entitlement-doc.js').EntitlementPayload} EntitlementPayload */
 /** @typedef {import('./events.js').EventHeaders} EventHeaders */
+/** @typedef {import('./requests.js').RequestHeaders} RequestHeaders */
 /** @typedef {import('./registration.js').RegistrationResult} RegistrationResult */
 /** @typedef {import('./registration.js').RegistrationProofClaims} RegistrationProofClaims */

@@ -1,0 +1,9 @@
+{
+	"type": "object",
+	"required": ["noteId"],
+	"additionalProperties": false,
+	"properties": {
+		"noteId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"sourceEventId": { "type": "string", "minLength": 1, "maxLength": 128 }
+	}
+}

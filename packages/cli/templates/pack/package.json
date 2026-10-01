@@ -1,0 +1,26 @@
+{
+	"name": "{{slug}}",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "{{name}} — SSPS v1 element pack.",
+	"exports": {
+		"./headless/*": "./headless/*",
+		"./ui/*": "./ui/*"
+	},
+	"scripts": {
+		"dev": "ss dev",
+		"test": "node --test \"tests/**/*.test.js\"",
+		"validate": "ss app validate .",
+		"certify": "ss certify ."
+	},
+	"dependencies": {
+		"@ss/contracts": "{{sdkVersion}}"
+	},
+	"devDependencies": {
+		"@ss/cli": "{{sdkVersion}}"
+	},
+	"engines": {
+		"node": ">=22"
+	}
+}

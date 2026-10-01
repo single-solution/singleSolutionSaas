@@ -43,6 +43,9 @@ export const RESOURCE_KINDS = Object.freeze(
 	/** @type {const} */ (['database', 'storage', 'ai', 'messaging', 'payments', 'analytics']),
 );
 
+/** Connection status of a client resource; the one vocabulary for entitlement documents and `resource.changed@1`. */
+export const RESOURCE_STATUSES = Object.freeze(/** @type {const} */ (['connected', 'missing', 'failing', 'revoked']));
+
 /** Consumption modes (PLAN Part E §1). */
 export const MODES = Object.freeze(/** @type {const} */ (['A', 'B', 'C']));
 

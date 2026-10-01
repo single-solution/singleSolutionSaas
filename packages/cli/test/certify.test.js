@@ -1,0 +1,197 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import path from 'node:path';
+import { writeFile } from 'node:fs/promises';
+import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { formatReport, nextCursorOf, problemShapeError, runCertification } from '../src/certify/index.js';
+import { initApp } from '../src/init.js';
+import { loadManifest } from '../src/manifest.js';
+import { createFakeProduct } from './helpers/fake-product.js';
+import { freePort, removeDir, tempDir } from './helpers/util.js';
+
+const TOKEN = 'rt_certify_registration_token_0123456789';
+const database = {
+	resolve: async (/** @type {{ merchantId: string }} */ { merchantId }) => ({
+		uri: `mongodb://127.0.0.1:1/client_${merchantId}`,
+		dbName: `client_${merchantId}`,
+	}),
+};
+
+/** @type {string} */
+let root;
+/** @type {string} */
+let dir;
+/** @type {unknown} */
+let manifest;
+
+beforeAll(async () => {
+	root = await tempDir('ss-certify-');
+	dir = path.join(root, 'svc');
+	await initApp({ dir, kind: 'service', slug: 'cert-notes', name: 'Cert Notes' });
+	manifest = (await loadManifest(dir)).manifest;
+});
+afterAll(async () => {
+	await removeDir(root);
+});
+
+/** @param {Record<string, boolean>} [broken] @param {Partial<Parameters<typeof runCertification>[0]>} [options] */
+const certify = async (broken = {}, options = {}) => {
+	const portalUrl = `http://127.0.0.1:${await freePort()}`;
+	const product = createFakeProduct({
+		manifest,
+		portalUrl,
+		tokenHash: hashRegistrationToken(TOKEN),
+		signingKey: (await generateSigningKey({ kid: 'cert-app-1' })).privateJwk,
+		broken,
+	});
+	const url = await product.start();
+	try {
+		return await runCertification({ dir, url, portalUrl, token: TOKEN, database, ...options });
+	} finally {
+		await product.stop();
+	}
+};
+
+/** @param {import('../src/certify/index.js').CertificationReport} report */
+const failed = (report) => report.checks.filter((check) => check.status === 'fail').map((check) => check.id);
+
+describe('ss certify (service)', () => {
+	it('certifies a conformant product end to end', async () => {
+		/** @type {string[]} */
+		const lines = [];
+		const report = await certify({}, { log: (line) => lines.push(line) });
+		expect(failed(report)).toEqual([]);
+		expect(report.ok).toBe(true);
+		const ids = report.checks.map((check) => check.id);
+		for (const id of [
+			'registration.handshake',
+			'registration.single-use',
+			'launch.merchant',
+			'launch.demo',
+			'launch.admin',
+			'launch.impersonate',
+			'launch.partner',
+			'launch.developer',
+			'launch.replay',
+			'launch.expired',
+			'launch.audience',
+			'launch.forged',
+			'keys.pk-foreign-origin',
+			'gating.element-disabled',
+			'idempotency.replay',
+			'pagination.cursor',
+			'standard.healthz',
+			'events.idempotent',
+			'events.tampered',
+			'data.guard',
+			'data.export',
+			'data.anonymize',
+			'entitlement.offline-grace',
+		])
+			expect(ids).toContain(id);
+		expect(report.summary.skipped).toBe(0);
+		expect(formatReport(report)).toContain('CERTIFIABLE (Listed)');
+		expect(lines.some((line) => line.startsWith('PASS'))).toBe(true);
+	}, 60_000);
+
+	it.each([
+		[{ originCheck: true }, ['keys.pk-foreign-origin']],
+		[
+			{ problems: true },
+			['keys.missing', 'keys.pk-foreign-origin', 'errors.problem', 'gating.element-disabled', 'idempotency.required'],
+		],
+		[{ gating: true }, ['gating.element-disabled']],
+		[{ idempotency: true }, ['idempotency.replay']],
+		[{ pagination: true }, []],
+		[{ launchReplay: true }, ['launch.replay']],
+		[{ eventDedupe: true }, ['events.idempotent']],
+		[{ dataGuard: true }, ['data.guard']],
+		[{ offlineGrace: true }, ['entitlement.offline-grace']],
+		[{ controlEvents: true }, ['control.key-revoked', 'control.entitlement-changed']],
+		[{ siteEvents: true }, ['standard.events']],
+		[{ sessionView: true }, []],
+	])(
+		'detects a broken product %o',
+		async (broken, expected) => {
+			const report = await certify(broken);
+			for (const id of expected) expect(failed(report)).toContain(id);
+			if (expected.length > 0) expect(report.ok).toBe(false);
+			if (expected.length > 0) expect(formatReport(report)).toContain('NOT CERTIFIABLE');
+		},
+		60_000,
+	);
+
+	it('skips the live suite without --url and without a token', async () => {
+		const noUrl = await runCertification({ dir });
+		expect(noUrl.checks.map((check) => `${check.id}:${check.status}`)).toEqual(['project.validate:pass', 'service.url:skip']);
+		const report = await certify({}, { token: undefined });
+		expect(report.checks.find((check) => check.id === 'registration.handshake')?.status).toBe('skip');
+		expect(report.checks.at(-1)?.id).toBe('live');
+	}, 60_000);
+
+	it('fails fast when the Portal port is busy or the project is invalid', async () => {
+		const port = await freePort();
+		const { createServer } = await import('node:http');
+		const blocker = createServer().listen(port, '127.0.0.1');
+		await new Promise((resolve) => blocker.once('listening', resolve));
+		try {
+			const report = await runCertification({
+				dir,
+				url: 'http://127.0.0.1:1',
+				portalUrl: `http://127.0.0.1:${port}`,
+				database,
+			});
+			expect(report.checks.find((check) => check.id === 'emulator.start')).toMatchObject({
+				status: 'fail',
+				detail: expect.stringMatching(/busy/),
+			});
+		} finally {
+			blocker.close();
+		}
+		const broken = path.join(root, 'broken');
+		await initApp({ dir: broken, kind: 'service', slug: 'broken', name: 'Broken' });
+		await writeFile(path.join(broken, 'manifest.json'), '{}');
+		const report = await runCertification({ dir: broken, url: 'http://127.0.0.1:1' });
+		expect(report).toMatchObject({ ok: false, kind: 'unknown', checks: [{ id: 'project.validate', status: 'fail' }] });
+	});
+});
+
+describe('ss certify (pack)', () => {
+	it('validates and smoke-tests headless core and renderer', async () => {
+		const pack = path.join(root, 'pack');
+		await initApp({ dir: pack, kind: 'pack', slug: 'cert-pack', name: 'Cert Pack' });
+		const report = await runCertification({ dir: pack });
+		expect(report.checks.map((check) => `${check.id}:${check.status}`)).toEqual([
+			'project.validate:pass',
+			'pack.notes.headless:pass',
+			'pack.notes.renderer:pass',
+		]);
+		expect(report.kind).toBe('pack');
+	});
+});
+
+describe('certify helpers', () => {
+	/** @param {number} status @param {Record<string, string>} headers @param {unknown} json */
+	const result = (status, headers, json) => ({ status, headers: new Headers(headers), text: JSON.stringify(json), json });
+	it('recognises RFC 9457 problems', () => {
+		expect(
+			problemShapeError(result(404, { 'content-type': 'application/problem+json' }, { type: 'x', title: 'y', status: 404 })),
+		).toBeNull();
+		expect(problemShapeError(result(404, { 'content-type': 'application/json' }, {}))).toMatch(/content-type/);
+		expect(problemShapeError(result(404, { 'content-type': 'application/problem+json' }, null))).toMatch(/object/);
+		expect(problemShapeError(result(404, { 'content-type': 'application/problem+json' }, { type: 1 }))).toMatch(
+			/type and title/,
+		);
+		expect(
+			problemShapeError(result(404, { 'content-type': 'application/problem+json' }, { type: 'x', title: 'y', status: 400 })),
+		).toMatch(/≠/);
+	});
+	it('finds next cursors in Link, X-Next-Cursor or the body', () => {
+		expect(nextCursorOf(result(200, { link: '</v1/a?cursor=c1>; rel="next", </v1/a>; rel="first"' }, {}))).toEqual({
+			cursor: 'c1',
+			source: 'Link',
+		});
+		expect(nextCursorOf(result(200, { 'x-next-cursor': 'c2' }, {}))).toEqual({ cursor: 'c2', source: 'X-Next-Cursor' });
+		expect(nextCursorOf(result(200, {}, { nextCursor: 'c3' }))).toEqual({ cursor: 'c3', source: 'body.nextCursor' });
+		expect(nextCursorOf(result(200, { link: '</v1/a>; rel="next"' }, {}))).toBeNull();
+	});
+});

@@ -1,0 +1,83 @@
+/**
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
+ * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL) and the project files (manifest with
+ * feature schemas inlined, string catalogs). This is the only place that reads the environment.
+ */
+import { readFile, readdir } from 'node:fs/promises';
+import path from 'node:path';
+import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
+
+/**
+ * @param {string} file
+ * @returns {Promise<any>}
+ */
+const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
+
+/**
+ * Load manifest.json and inline element feature `$ref`s (app-kit and the Portal take features inline).
+ * @param {string} root
+ */
+export const loadManifest = async (root) => {
+	const manifest = await readJson(path.join(root, 'manifest.json'));
+	const elements = await Promise.all(
+		manifest.elements.map(async (/** @type {any} */ element) =>
+			typeof element.features?.$ref === 'string'
+				? { ...element, features: await readJson(path.join(root, element.features.$ref)) }
+				: element,
+		),
+	);
+	return { ...manifest, elements };
+};
+
+/**
+ * Load every `strings/<lang>.json` catalog.
+ * @param {string} root
+ * @returns {Promise<Record<string, Record<string, string>>>}
+ */
+export const loadStrings = async (root) => {
+	const files = (await readdir(path.join(root, 'strings'))).filter((file) => /^[a-z]{2,3}(?:-[A-Za-z0-9]+)*\.json$/.test(file));
+	return Object.fromEntries(
+		await Promise.all(files.map(async (file) => [file.slice(0, -5), await readJson(path.join(root, 'strings', file))])),
+	);
+};
+
+/** Personal data this product stores (drives POST /v1/data:export and /v1/data:anonymize). */
+export const PRIVACY = Object.freeze({ collections: [{ name: 'notes', subjectField: 'customerId', fields: ['text'] }] });
+
+/**
+ * Build the product.
+ * @param {{ env?: Record<string, string | undefined>, root?: string, overrides?: Record<string, unknown> }} [options]
+ */
+export const createPlatform = async ({ env = process.env, root = process.cwd(), overrides = {} } = {}) => {
+	const config = configFromEnv(env);
+	const missing = [
+		['SS_PORTAL_URL', config.portalUrl],
+		['SS_APP_SIGNING_KEY', config.signingKey],
+		['SS_REGISTRATION_TOKEN_HASH', config.registrationTokenHash],
+	].filter(([, value]) => !value);
+	if (missing.length > 0)
+		throw new Error(`Missing environment variables: ${missing.map(([name]) => name).join(', ')} (run \`ss dev env\`)`);
+	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
+	/** @type {unknown} */
+	let stores;
+	if (config.productDbUri) {
+		const { MongoClient } = await import('mongodb');
+		const client = new MongoClient(config.productDbUri, { maxPoolSize: 5 });
+		const mongoStores = createMongoStores({ db: client.db() });
+		await mongoStores.ensureIndexes();
+		stores = mongoStores;
+	}
+	return createProduct({
+		manifest,
+		strings,
+		portalUrl: config.portalUrl,
+		appId: config.appId,
+		signingKey: config.signingKey,
+		registrationTokenHash: config.registrationTokenHash,
+		logger: createLogger({ level: config.logLevel }),
+		privacy: PRIVACY,
+		devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
+		...(stores === undefined ? {} : { stores }),
+		...overrides,
+	});
+};

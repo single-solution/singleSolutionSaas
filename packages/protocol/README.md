@@ -19,6 +19,7 @@ App Protocol primitives shared by the Portal and every product (PLAN.md §8, §1
 | `website-keys.js`    | `issueWebsiteKey`, `verifyWebsiteKey`, `originAllowed`, `normalizeDomain`, `hashSecretKey`, `compareSecretKey`                                                      |
 | `entitlement-doc.js` | `signEntitlementDocument`, `verifyEntitlementDocument`, `DEFAULT_GRACE_MS`                                                                                          |
 | `events.js`          | `signEvent`, `verifyEvent`, `EVENT_HEADERS`                                                                                                                         |
+| `requests.js`        | `signRequest`, `verifyRequest`, `canonicalRequestPath`                                                                                                              |
 | `registration.js`    | `createRegistrationRequest` + `verifyRegistrationResponse` (Portal), `createRegistrationHandler` (product), `hashManifest`, `hashRegistrationToken`, `canonicalUrl` |
 | `errors.js`          | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                             |
 
@@ -27,15 +28,16 @@ App Protocol primitives shared by the Portal and every product (PLAN.md §8, §1
 Every signed object has its own JOSE `typ`, and each verifier accepts only its own, so a token of one kind can never be
 replayed as another (a launch as an assertion, an entitlement document as a website key, …).
 
-| Object               | `typ`                          | Lifetime                             | Replay protection                   |
-| -------------------- | ------------------------------ | ------------------------------------ | ----------------------------------- |
-| Launch               | `ss-launch+jwt`                | 60 s default, ≤ 300 s                | `consume(jti)` — single use         |
-| Client assertion     | `ss-assertion+jwt`             | ≤ 300 s                              | replay store on `iss\|jti`          |
-| Website key          | `ss-website-key+jws`           | optional `exp`; revocable by `keyId` | n/a (bearer credential)             |
-| Entitlement document | `ss-entitlement+jws`           | `validUntil` + offline grace         | n/a (idempotent state)              |
-| Registration request | `ss-registration+jws`          | `iat` ± 5 min                        | nonce store + one-time token burn   |
-| Registration proof   | `ss-registration-response+jws` | `iat` ± 5 min                        | echoes the Portal's request nonce   |
-| Event delivery       | detached, `SS-*` header        | `SS-Timestamp` ± 300 s               | replay store on `timestamp\|sha256` |
+| Object                   | `typ`                          | Lifetime                             | Replay protection                               |
+| ------------------------ | ------------------------------ | ------------------------------------ | ----------------------------------------------- |
+| Launch                   | `ss-launch+jwt`                | 60 s default, ≤ 300 s                | `consume(jti)` — single use                     |
+| Client assertion         | `ss-assertion+jwt`             | ≤ 300 s                              | replay store on `iss\|jti`                      |
+| Website key              | `ss-website-key+jws`           | optional `exp`; revocable by `keyId` | n/a (bearer credential)                         |
+| Entitlement document     | `ss-entitlement+jws`           | `validUntil` + offline grace         | n/a (idempotent state)                          |
+| Registration request     | `ss-registration+jws`          | `iat` ± 5 min                        | nonce store + one-time token burn               |
+| Registration proof       | `ss-registration-response+jws` | `iat` ± 5 min                        | echoes the Portal's request nonce               |
+| Event delivery           | detached, `SS-*` header        | `SS-Timestamp` ± 300 s               | replay store on `timestamp\|sha256`             |
+| Portal → product request | detached, `SS-*` header        | `SS-Timestamp` ± 300 s               | replay store on `ts\|METHOD\|aud\|path\|sha256` |
 
 Common JWS rules (`jws.js`): header must be `alg: EdDSA` (no `none`, no HMAC, no RSA) with a `kid` and the expected
 `typ`; `jwk`, `jku`, `x5u`, `x5c`, `x5t`, `crit`, `b64`, `zip` are refused, so a token can never tell the verifier
@@ -195,6 +197,41 @@ Portal / Event Hub                                         Product
   verifier accepts the delivery when any entry verifies under a trusted, unrevoked key.
 - `SS-Key-Id` is a routing and logging hint only; verification uses the `kid` inside each signature entry.
 - Always verify the raw bytes before parsing JSON. Duplicate headers are treated as missing.
+- Event signatures cover the body only, so use them only for deliveries to one fixed endpoint (the product's
+  declared events endpoint). Every other Portal → product call must use signed requests (below).
+
+## Signed Portal → product requests
+
+```
+Portal                                                      Product
+  │ headers = signRequest({ signer(s), method, path,          │
+  │   audience: appId, body, timestamp })                     │
+  │── POST /v1/data:export?b=2&a=1 ──────────────────────────▶│ verifyRequest({ method, path: req.url,
+  │   SS-Timestamp: 1790812800                                │   audience: ownAppId, headers, rawBody,
+  │   SS-Signature: v1;kid=portal-2;sig=<b64url>              │   keyResolver, replayStore, toleranceSec: 300 })
+  │   SS-Key-Id: portal-2                                     │  1. |now − ts| ≤ 300 s
+  │                                                           │  2. Ed25519 over
+  │                                                           │     "ss-request.v1.<ts>.<METHOD>.<aud>.<canonicalPath>.<sha256hex(body)>"
+  │                                                           │  3. replay store on "<ts>|<METHOD>|<aud>|<path>|<sha256>"
+```
+
+- Body-only signatures would let a captured signed body be replayed to another endpoint, or with another method,
+  inside the tolerance window. Request signatures bind method, path, query and audience as well as the body.
+- `ss-request.v1.` differs from `ss-event.v1.`: an event signature never verifies as a request and vice versa.
+- `audience` is the receiving product's appId, which may not contain `/`. It stops a product from replaying a Portal
+  request it received to another product that trusts the same Portal key. The message stays unambiguous because the
+  canonical path always starts with `/` and the body hash is a fixed 64 hex characters.
+- `canonicalRequestPath(path)`:
+   - The target must be a path starting with a single `/`. A scheme, authority, fragment, whitespace, control
+     character or backslash is rejected.
+   - Dot segments are resolved and the path is percent-encoded by the WHATWG parser. Escape hex is then upper-cased
+     and escapes of unreserved characters are decoded.
+   - Query parameters are decoded, sorted by name and then value (duplicates kept) and re-encoded with strict RFC 3986
+     encoding. Reordering and equivalent encodings (`%31` for `1`, `+` for a space) therefore verify, while any change
+     of a name or value does not. An empty query is dropped.
+   - A trailing slash is significant.
+- Verify against the path the Portal addressed (normally `req.url`). If a proxy rewrites paths, pass the original path.
+- The method is upper-cased and the body defaults to empty (for GET).
 
 ## Registration handshake (one-time token + pinned Portal URL)
 

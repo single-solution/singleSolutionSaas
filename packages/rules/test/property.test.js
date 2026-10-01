@@ -4,7 +4,18 @@ import { check, compile, deserialize, evaluate, explain, format, serialize, vali
 
 /** @typedef {import('../src/ast.js').Node} Node */
 
+/**
+ * CI runs are deterministic (fixed seed). Set RULES_FUZZ=1 for a deep, randomly seeded run
+ * (RULES_FUZZ_SCALE multiplies numRuns, default 20); failures print the seed and path to replay.
+ */
+const FUZZ = process.env.RULES_FUZZ === '1';
+const SCALE = Number(process.env.RULES_FUZZ_SCALE) || 20;
+const SEED = 20261001;
+/** @param {number} numRuns @returns {fc.Parameters<unknown>} */
+const runs = (numRuns) => (FUZZ ? { numRuns: numRuns * SCALE } : { numRuns, seed: SEED });
+
 const NOW = Date.UTC(2026, 9, 1, 12);
+const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype']);
 const NAMES = ['a', 'b', 'order', 'customer', 'event', 'x_1', 'now', 'website'];
 const KEYS = ['total', 'lines', 'tags', 'in', 'and', 'data', 'price'];
 const DATA_KEYS = [...KEYS, 'x-y', '', 'x', 'y'];
@@ -61,7 +72,11 @@ function astArb(depth, inLambda) {
 		{ weight: 3, arbitrary: leaf },
 		fc.array(sub, { maxLength: 3 }).map((items) => /** @type {Node} */ ({ type: 'list', items })),
 		fc.record({ object: sub, key: fc.constantFrom(...KEYS) }).map((r) => /** @type {Node} */ ({ type: 'member', ...r })),
-		fc.record({ object: sub, index: sub }).map((r) => /** @type {Node} */ ({ type: 'index', ...r })),
+		fc
+			.record({ object: sub, index: sub })
+			// Literal forbidden keys are compile/validation errors by contract (fc.string is biased towards '__proto__').
+			.filter(({ index }) => !(index.type === 'literal' && typeof index.value === 'string' && FORBIDDEN.has(index.value)))
+			.map((r) => /** @type {Node} */ ({ type: 'index', ...r })),
 		sub.map((arg) => /** @type {Node} */ ({ type: 'unary', op: 'not', arg })),
 		notNumberLiteral.map((arg) => /** @type {Node} */ ({ type: 'unary', op: '-', arg })),
 		fc
@@ -169,7 +184,7 @@ describe('property: robustness', () => {
 				}
 				expect(check(src).ok).toBe(r.ok);
 			}),
-			{ numRuns: 1000 },
+			runs(1000),
 		);
 	});
 
@@ -183,7 +198,7 @@ describe('property: robustness', () => {
 					expect(explain(r.program, ctx, { now: NOW }).ok).toBe(e.ok);
 				}
 			}),
-			{ numRuns: 2000 },
+			runs(2000),
 		);
 	});
 
@@ -197,7 +212,7 @@ describe('property: robustness', () => {
 				expect(typeof r.ok).toBe('boolean');
 				if (!r.ok) expect(['max_steps', 'list_too_long', 'string_too_long']).toContain(r.error.code);
 			}),
-			{ numRuns: 1000 },
+			runs(1000),
 		);
 	});
 
@@ -207,7 +222,7 @@ describe('property: robustness', () => {
 				expect(typeof validateProgram({ v: 1, ast: value }).ok).toBe('boolean');
 				expect(evaluate(/** @type {any} */ ({ v: 1, ast: value })).ok !== undefined).toBe(true);
 			}),
-			{ numRuns: 500 },
+			runs(500),
 		);
 	});
 });
@@ -220,7 +235,7 @@ describe('property: determinism and round-trips', () => {
 				if (!v.ok) return;
 				expect(evaluate(v.program, ctx, { now: NOW })).toEqual(evaluate(v.program, ctx, { now: NOW }));
 			}),
-			{ numRuns: 500 },
+			runs(500),
 		);
 	});
 
@@ -234,7 +249,7 @@ describe('property: determinism and round-trips', () => {
 				if (!again.ok) throw new Error(`${src}: ${again.error.message}`);
 				expect(again.program).toEqual(v.program);
 			}),
-			{ numRuns: 1000 },
+			runs(1000),
 		);
 	});
 
@@ -249,7 +264,7 @@ describe('property: determinism and round-trips', () => {
 				expect(back.program).toEqual(v.program);
 				expect(evaluate(back.program, ctx, { now: NOW })).toEqual(evaluate(v.program, ctx, { now: NOW }));
 			}),
-			{ numRuns: 300 },
+			runs(300),
 		);
 	});
 
@@ -263,7 +278,7 @@ describe('property: determinism and round-trips', () => {
 				expect(b.ok).toBe(a.ok);
 				if (a.ok && b.ok) expect(b.value).toEqual(a.value);
 			}),
-			{ numRuns: 300 },
+			runs(300),
 		);
 	});
 });

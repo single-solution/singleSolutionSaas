@@ -6,7 +6,12 @@ import { commonSchema } from './common.js';
 import { featureMetaSchema } from './feature-schema.js';
 import { manifestSchema } from './manifest.js';
 import { entitlementDocumentSchema } from './entitlement-document.js';
-import { eventEnvelopeSchema, customEventDataSchema, standardEventDataSchemas } from './event-envelope.js';
+import {
+	eventEnvelopeSchema,
+	customEventDataSchema,
+	elementUiEventDataSchema,
+	catalogueEventDataSchemas,
+} from './event-envelope.js';
 import { placementSchema } from './placement.js';
 import { problemSchema } from './problem.js';
 import {
@@ -52,7 +57,8 @@ export const ALL_SCHEMAS = deepFreeze([
 	entitlementDocumentSchema,
 	eventEnvelopeSchema,
 	customEventDataSchema,
-	...standardEventDataSchemas(),
+	elementUiEventDataSchema,
+	...catalogueEventDataSchemas(),
 	placementSchema,
 	problemSchema,
 	customerSchema,

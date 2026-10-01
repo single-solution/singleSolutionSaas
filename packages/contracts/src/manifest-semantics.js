@@ -5,7 +5,7 @@
  */
 import { FEATURE_KEYWORDS, FEATURE_TYPES } from './schemas/feature-schema.js';
 import { PATTERNS } from './schemas/common.js';
-import { STANDARD_EVENT_DATA } from './schemas/event-envelope.js';
+import { CONTROL_EVENT_DATA, LOADER_EVENT_DATA, STANDARD_EVENT_DATA } from './schemas/event-envelope.js';
 import { isPlainObject, pointer } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
@@ -44,6 +44,7 @@ export const MANIFEST_RULES = Object.freeze({
 	experimentsDisabled: 'experimentsDisabled',
 	eventNotSubscribed: 'eventNotSubscribed',
 	publishOutsideNamespace: 'publishOutsideNamespace',
+	platformEventNotPublishable: 'platformEventNotPublishable',
 	publishScopeMissing: 'publishScopeMissing',
 	packEndpoints: 'packEndpoints',
 	packAdminLaunch: 'packAdminLaunch',
@@ -714,6 +715,8 @@ export const checkManifest = (manifest) => {
 	const publish = scopePatterns(scopes, EVENT_PUBLISH_SCOPE);
 	const namespace = `${eventNamespace(manifest.product.slug)}.`;
 	for (const [index, type] of (manifest.events?.consumes ?? []).entries()) {
+		// Control events are delivered by the Portal to every product; no subscribe scope is needed.
+		if (Object.hasOwn(CONTROL_EVENT_DATA, type)) continue;
 		if (!subscribe.some((pattern) => eventGlobMatches(pattern, type))) {
 			out.push(
 				at(
@@ -724,7 +727,20 @@ export const checkManifest = (manifest) => {
 			);
 		}
 	}
+	const platformNamespaces = new Set(
+		[...Object.keys(CONTROL_EVENT_DATA), ...Object.keys(LOADER_EVENT_DATA)].map((type) => type.split('.')[0]),
+	);
 	for (const [index, type] of (manifest.events?.publishes ?? []).entries()) {
+		if (platformNamespaces.has(type.split('.')[0])) {
+			out.push(
+				at(
+					['events', 'publishes', index],
+					MANIFEST_RULES.platformEventNotPublishable,
+					`'${type}' is a platform event; only the Portal or Loader publishes it`,
+				),
+			);
+			continue;
+		}
 		if (type.startsWith(namespace)) continue;
 		if (!Object.hasOwn(STANDARD_EVENT_DATA, type)) {
 			out.push(
