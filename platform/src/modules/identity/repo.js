@@ -47,6 +47,7 @@ export const createRepo = (ctx) => {
 	/** @type {TenantRepository} */ const invites = ctx.collection(C.invites);
 	/** @type {TenantRepository} */ const websites = ctx.collection(C.websites);
 	/** @type {TenantRepository} */ const keys = ctx.collection(C.keys);
+	/** @type {TenantRepository} */ const notes = ctx.collection(C.notes);
 	const secret = ctx.config.sessionSecret;
 
 	/** @param {TenantRepository} repo */
@@ -68,6 +69,8 @@ export const createRepo = (ctx) => {
 		invites: scoped(invites),
 		websites: scoped(websites),
 		keys: scoped(keys),
+		/** append-only (insert and reads only) */
+		notes: scoped(notes),
 		/** @param {string} prefix */
 		id: (prefix) => createId(prefix, { randomBytes: ctx.randomBytes }),
 		/**

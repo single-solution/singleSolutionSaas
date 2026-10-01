@@ -7,6 +7,7 @@
 import { problem } from '../../infra/http.js';
 import { presentMerchant, presentParty, presentStaff } from './core/present.js';
 import { insertUnique, requireMailer, sendQuietly } from './repo.js';
+import { parseMerchantQuery, prefixPattern } from './core/search.js';
 
 /** @typedef {import('./repo.js').Deps} Deps */
 /** @typedef {import('./repo.js').Meta} Meta */
@@ -153,16 +154,78 @@ export const createAdmin = (deps, hooks) => {
 		resumeMerchant: setStatus('active'),
 
 		/**
-		 * Merchants page (by id), optionally filtered by status.
-		 * @param {{ after: string | null, limit: number, status?: string }} input
+		 * Merchants page (by id), optionally filtered by status and searched by `q`: a case- and accent-insensitive
+		 * prefix of the name (index `{ nameKey: 1 }`), or — when `q` contains `@` — a prefix of a team member's
+		 * e-mail (unique e-mail index, then memberships by user).
+		 * @param {{ after: string | null, limit: number, status?: string, q?: string }} input
 		 */
-		listMerchants: async ({ after, limit, status }) =>
-			repo.merchants
-				.find({ ...(status ? { status } : {}), ...(after ? { _id: { $gt: after } } : {}) })
-				.sort({ _id: 1 })
-				.limit(limit)
-				.toArray(),
+		listMerchants: async ({ after, limit, status, q }) => {
+			const search = parseMerchantQuery(q);
+			/** @type {Record<string, unknown>} */
+			const filter = { ...(status ? { status } : {}), ...(after ? { _id: { $gt: after } } : {}) };
+			if (search?.kind === 'name') filter.nameKey = { $regex: prefixPattern(search.prefix) };
+			if (search?.kind === 'email') {
+				const users = await repo.users
+					.find({ email: { $regex: prefixPattern(search.prefix) } })
+					.project({ _id: 1 })
+					.limit(200)
+					.toArray();
+				if (users.length === 0) return [];
+				const members = await repo.memberships
+					.all()
+					.find({ userId: { $in: users.map((u) => String(u._id)) } })
+					.project({ merchantId: 1 })
+					.limit(1000)
+					.toArray();
+				const ids = [...new Set(members.map((m) => String(m.merchantId)))];
+				filter._id = after ? { $gt: after, $in: ids } : { $in: ids };
+			}
+			return repo.merchants.find(filter).sort({ _id: 1 }).limit(limit).toArray();
+		},
 		presentMerchant,
+
+		// -----------------------------------------------------------------------------------------------------------
+		// Merchant notes (append-only, staff only)
+
+		/**
+		 * Newest-first staff notes of a merchant (keyset pagination on `{ createdAt, _id }`).
+		 * @param {{ merchantId: string, before?: { at: Date, id: string } | null, limit: number }} input
+		 */
+		listNotes: async ({ merchantId, before = null, limit }) => {
+			await hooks.loadMerchant(merchantId);
+			const filter = {
+				merchantId,
+				...(before ? { $or: [{ createdAt: { $lt: before.at } }, { createdAt: before.at, _id: { $lt: before.id } }] } : {}),
+			};
+			const docs = await repo.notes.of(merchantId).find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit).toArray();
+			return docs.map(presentNote);
+		},
+
+		/**
+		 * Append a note (audited on the merchant's chain; the body is not copied into the audit entry).
+		 * @param {{ merchantId: string, body: string, actor: Actor, meta?: Meta }} input
+		 */
+		addNote: async ({ merchantId, body, actor, meta = {} }) => {
+			await hooks.loadMerchant(merchantId);
+			const staff = await repo.staff.findOne({ _id: actor.id });
+			const doc = {
+				_id: repo.id('nte'),
+				merchantId,
+				body,
+				by: { staffId: actor.id, name: staff?.name ?? null, email: staff?.email ?? null },
+			};
+			await repo.notes.of(merchantId).insertOne(doc);
+			await audit(
+				actor,
+				'merchant.note_added',
+				{ type: 'merchant', id: merchantId, merchantId },
+				{
+					after: { noteId: doc._id, length: body.length },
+					meta,
+				},
+			);
+			return presentNote({ ...doc, createdAt: new Date(ctx.now()) });
+		},
 
 		// -----------------------------------------------------------------------------------------------------------
 		// Staff
@@ -279,3 +342,12 @@ export const createAdmin = (deps, hooks) => {
 	});
 };
 /** @typedef {ReturnType<typeof createAdmin>} Admin */
+
+/** @param {Record<string, any>} n */
+export const presentNote = (n) => ({
+	noteId: String(n._id),
+	merchantId: n.merchantId,
+	body: n.body,
+	by: n.by,
+	at: n.createdAt instanceof Date ? n.createdAt.toISOString() : null,
+});

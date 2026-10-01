@@ -27,7 +27,7 @@
  * @property {string} [merchantId] merchant_user / website actors
  * @property {Array<{ websiteId: string, roles: string[] }>} [grants] website-scoped merchant roles
  * @property {string[]} [permissions] explicit extra permission patterns (rarely needed)
- * @property {{ type: 'staff', id: string }} [via] impersonation: the staff member acting as this user
+ * @property {{ type: 'staff', id: string, name?: string | null }} [via] impersonation: the staff member acting as this user
  *
  * @typedef {{ merchantId?: string | null, websiteId?: string | null }} Resource
  */

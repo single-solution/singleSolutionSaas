@@ -266,6 +266,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 					{ subscriptionId: sub._id, websiteId: sub.websiteId, version, document: jws },
 					{ appIds: [sub.appId], websiteId: sub.websiteId },
 				);
+			if (bumped) await deps.requestCompile(sub.websiteId);
 			return { jws, version, document };
 		}
 		throw problem('conflict', 'The entitlement document changed concurrently; retry.');
@@ -583,6 +584,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		if (!updated) throw problem('conflict', 'The subscription changed concurrently; retry.');
 		await repo.closePauses(updated, null, at);
 		await repo.deleteDocument(updated.merchantId, updated._id);
+		await deps.requestCompile(updated.websiteId);
 		await audit(caller, 'subscription.cancelled', updated, {
 			before: { status: sub.status },
 			after: { status: 'cancelled' },

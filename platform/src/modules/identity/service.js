@@ -11,6 +11,7 @@
 import { createJwks, createKeyResolver, createSigner, toPublicJwk } from '@ss/protocol';
 import { createAccounts } from './accounts.js';
 import { createAdmin } from './admin.js';
+import { createImpersonation } from './impersonation.js';
 import { createAuditor, createRepo } from './repo.js';
 import { createTeams } from './teams.js';
 import { createWebsiteKeys } from './website-keys.js';
@@ -85,6 +86,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		staffSetupLink: accounts.staffSetupLink,
 		staffWelcomeTtlMs: accounts.STAFF_WELCOME_TTL_MS,
 	});
+	const impersonation = createImpersonation(deps, { loadMerchant: teams.loadMerchant });
 
 	/**
 	 * `sessionActor` port: the live actor of a session, or null when the account or membership is gone.
@@ -151,6 +153,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		websites,
 		keys,
 		admin,
+		impersonation,
 		mailer,
 	};
 };

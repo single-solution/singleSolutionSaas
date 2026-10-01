@@ -239,12 +239,19 @@ export const createAudit = ({
 	/**
 	 * Newest-first entries. `before` is the `{ at, id }` of the last entry of the previous page (keyset pagination
 	 * over the `{ at: -1, _id: -1 }` order).
-	 * @param {{ merchantId?: string | null, targetId?: string, actorId?: string, before?: { at: Date | number, id: string } | null, limit?: number }} [query]
+	 * `scope` filters one chain; `action` is an exact action or a dotted prefix ending in `.*` (`credits.*`).
+	 * @param {{ merchantId?: string | null, scope?: string, action?: string, targetId?: string, actorId?: string,
+	 *   before?: { at: Date | number, id: string } | null, limit?: number }} [query]
 	 */
-	const list = async ({ merchantId, targetId, actorId, before = null, limit = 50 } = {}) => {
+	const list = async ({ merchantId, scope, action, targetId, actorId, before = null, limit = 50 } = {}) => {
 		/** @type {Record<string, unknown>} */
 		const filter = {};
 		if (merchantId !== undefined) filter.merchantId = merchantId;
+		if (scope) filter.scope = scope;
+		if (action)
+			filter.action = action.endsWith('.*')
+				? { $regex: `^${action.slice(0, -2).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.` }
+				: action;
 		if (targetId) filter['target.id'] = targetId;
 		if (actorId) filter['actor.id'] = actorId;
 		if (before) {

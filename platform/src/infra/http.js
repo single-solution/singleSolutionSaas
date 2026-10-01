@@ -361,6 +361,7 @@ export const matchRoute = (routes, method, pathname) => {
  * @property {Headers} headers
  * @property {unknown} body parsed JSON (undefined when empty or for `rawBody` routes)
  * @property {string} rawBody
+ * @property {Uint8Array} rawBytes the body bytes (`rawBody` is their UTF-8 decoding), e.g. binary uploads
  * @property {string | null} ip client IP (only when proxy headers are trusted)
  * @property {AuthMode | null} authMode
  * @property {Actor | null} actor
@@ -375,12 +376,12 @@ export const matchRoute = (routes, method, pathname) => {
 /**
  * @param {Request} request
  * @param {number} max
- * @returns {Promise<{ ok: true, text: string } | { ok: false }>}
+ * @returns {Promise<{ ok: true, text: string, bytes: Uint8Array } | { ok: false }>}
  */
 const readBody = async (request, max) => {
 	const declared = Number(request.headers.get('content-length') ?? '0');
 	if (Number.isFinite(declared) && declared > max) return { ok: false };
-	if (!request.body) return { ok: true, text: '' };
+	if (!request.body) return { ok: true, text: '', bytes: new Uint8Array(0) };
 	const reader = request.body.getReader();
 	/** @type {Uint8Array[]} */
 	const chunks = [];
@@ -395,7 +396,8 @@ const readBody = async (request, max) => {
 		}
 		chunks.push(value);
 	}
-	return { ok: true, text: Buffer.concat(chunks).toString('utf8') };
+	const bytes = Buffer.concat(chunks);
+	return { ok: true, text: bytes.toString('utf8'), bytes };
 };
 
 /**
@@ -551,11 +553,14 @@ export const createApiHandler = ({
 
 			// body (before auth; signatures and fingerprints cover the raw bytes)
 			let rawBody = '';
+			/** @type {Uint8Array} */
+			let rawBytes = new Uint8Array(0);
 			if (BODY_METHODS.has(method)) {
 				const cap = route.maxBodyBytes ?? maxBodyBytes;
 				const read = await readBody(request, cap);
 				if (!read.ok) return fail(problem('payload_too_large', `The body exceeds ${cap} bytes.`));
 				rawBody = read.text;
+				rawBytes = read.bytes;
 			}
 
 			// authentication
@@ -598,6 +603,7 @@ export const createApiHandler = ({
 				headers: request.headers,
 				body: undefined,
 				rawBody,
+				rawBytes,
 				ip,
 				authMode: auth.mode,
 				actor,
@@ -698,7 +704,8 @@ export const createApiHandler = ({
 			try {
 				const out = await route.handler(ctx);
 				if (out instanceof Response) {
-					const text = await out.text();
+					// bytes pass through unchanged (binary assets); a stored idempotent response keeps its text
+					const text = record ? await out.text() : /** @type {any} */ (new Uint8Array(await out.arrayBuffer()));
 					rendered = {
 						status: out.status,
 						headers: [...out.headers.entries()].filter(([name]) => name !== 'set-cookie'),

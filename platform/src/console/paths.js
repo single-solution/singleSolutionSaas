@@ -71,6 +71,7 @@ export const api = Object.freeze({
 	config: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ s) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/subscriptions/${e(s)}/config`,
 	launch: (/** @type {string} */ m, /** @type {string} */ appId) => `/v1/merchants/${e(m)}/apps/${e(appId)}/launch`,
+	demo: (/** @type {string} */ m, /** @type {string} */ appId) => `/v1/merchants/${e(m)}/apps/${e(appId)}/demo`,
 	balance: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/balance`,
 	meter: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/meter`,
 	statement: (

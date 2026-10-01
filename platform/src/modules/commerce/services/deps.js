@@ -76,6 +76,18 @@ export const createDeps = (ctx) => {
 		/** @param {string} websiteId @returns {Promise<{ kind: string, ref?: string, status: string }[]>} */
 		statusFor: async (websiteId) => (await optional('connectors')?.statusFor(websiteId)) ?? [],
 		/**
+		 * Ask `delivery` to recompile the website bundle (a document version changed or a subscription ended); a failure
+		 * is logged, never fails commerce.
+		 * @param {string} websiteId
+		 */
+		requestCompile: async (websiteId) => {
+			try {
+				await optional('delivery')?.requestCompile(websiteId);
+			} catch (error) {
+				ctx.logger.warn('delivery recompile not requested', { websiteId, error });
+			}
+		},
+		/**
 		 * Emit a control event; delivery problems are logged, never fail a money operation.
 		 * @param {string} type @param {Record<string, unknown>} data @param {{ appIds?: string[], websiteId?: string }} target
 		 */

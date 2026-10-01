@@ -25,7 +25,7 @@ import {
 import { platformError } from './infra/errors.js';
 import { INFRA_PROBLEMS, createApiHandler, defineRoute, ok, problem } from './infra/http.js';
 import { createPlatformMailer } from './infra/mailer.js';
-import { createCronRunner, createJobs } from './infra/jobs.js';
+import { createCronRunner, createCronRuns, createJobs } from './infra/jobs.js';
 import { composeModules, moduleProblems } from './infra/modules.js';
 import { can, websitesVisible } from './infra/rbac.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from './infra/schema.js';
@@ -120,6 +120,8 @@ export const createPortal = ({
 		secretHasher: createSecretHasher(config.websiteKeyPepper),
 		audit,
 		jobs,
+		// the runner is built after the modules (it needs their crons); names are read when asked
+		cronRuns: createCronRuns({ runs: repos.appendOnly(COLLECTIONS.cronRuns), names: () => cron.names() }),
 		withTransaction: createTransactionRunner(db.client),
 		verifyWebsiteKey,
 		mailer: mailer ?? createPlatformMailer({ config, logger: logger.child({ component: 'mailer' }) }),

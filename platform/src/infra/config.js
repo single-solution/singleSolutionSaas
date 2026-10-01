@@ -46,6 +46,15 @@ import { isObject } from './util.js';
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound hosts outbound calls may reach although private or
  *   plain http (`OUTBOUND_DEV_ALLOW_HOSTS`; always empty in production)
  * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify e-mail, resets, invites)
+ * @property {{ storage: AssetStorageConfig | null, budgetKb: number }} delivery platform-owned artefact storage (our
+ *   software only: pack assets and compiled website bundles — never client data) and the default website budget
+ */
+
+/**
+ * Platform asset storage (`PLATFORM_ASSET_STORAGE`): an S3-compatible bucket we own, or a development store.
+ * @typedef {{ kind: 'memory' } | { kind: 'file', dir: string } | { kind: 's3', endpoint: string | null, region: string,
+ *   bucket: string, accessKeyId: string, secretAccessKey: string, sessionToken: string | null, forcePathStyle: boolean | null,
+ *   prefix: string }} AssetStorageConfig
  */
 
 /**
@@ -85,6 +94,12 @@ export const ENV_VARS = Object.freeze([
 		'Platform mailer: `smtp(s)://user:pass@host:port` (STARTTLS required in production for smtp://).',
 	],
 	['PLATFORM_MAIL_FROM', false, 'Sender of platform mail, `Name <address>` or `address` (required with PLATFORM_SMTP_URL).'],
+	[
+		'PLATFORM_ASSET_STORAGE',
+		false,
+		'Platform-owned artefact storage (pack assets, compiled website bundles): JSON `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }` for an S3-compatible bucket, or `memory` / `file:<dir>` outside production.',
+	],
+	['DELIVERY_BUDGET_KB', false, 'Default per-website bundle budget in KB gzip (default 60): Loader + Σ element budget.js.'],
 	['PROBLEM_BASE_URI', false, 'RFC 9457 problem type base URI (default `<PORTAL_URL>/problems/`).'],
 	['PORTAL_ENV', false, 'production | preview | development | test (default from NODE_ENV).'],
 	['PORTAL_VERSION', false, 'Version string reported by /healthz and /v1/system/info (default `dev`).'],
@@ -250,6 +265,62 @@ export const parseSmtpUrl = (text) => {
 	}
 };
 
+const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
+const REGION = /^[a-z0-9-]{1,40}$/;
+const PREFIX = /^(?:[A-Za-z0-9_-]+\/)*$/;
+
+/**
+ * Parse `PLATFORM_ASSET_STORAGE` (null when invalid).
+ * @param {string} text
+ * @returns {AssetStorageConfig | null}
+ */
+export const parseAssetStorage = (text) => {
+	if (text === 'memory') return { kind: 'memory' };
+	if (text.startsWith('file:')) {
+		const dir = text.slice(5).trim();
+		return dir.length > 0 && !dir.includes('\0') ? { kind: 'file', dir } : null;
+	}
+	/** @type {unknown} */
+	let parsed;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		return null;
+	}
+	if (!isObject(parsed)) return null;
+	const { endpoint, region, bucket, accessKeyId, secretAccessKey, sessionToken, forcePathStyle, prefix, ...rest } = parsed;
+	if (Object.keys(rest).length > 0) return null;
+	/** @param {unknown} v */
+	const str = (v) => typeof v === 'string' && v.length > 0 && v.length <= 2048;
+	if (!str(region) || !REGION.test(/** @type {string} */ (region))) return null;
+	if (!str(bucket) || !BUCKET.test(/** @type {string} */ (bucket))) return null;
+	if (!str(accessKeyId) || !str(secretAccessKey)) return null;
+	if (sessionToken !== undefined && !str(sessionToken)) return null;
+	if (forcePathStyle !== undefined && typeof forcePathStyle !== 'boolean') return null;
+	if (prefix !== undefined && (typeof prefix !== 'string' || prefix.length > 200 || !PREFIX.test(prefix))) return null;
+	if (endpoint !== undefined) {
+		try {
+			const url = new URL(/** @type {string} */ (endpoint));
+			if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password || url.search || url.hash)
+				return null;
+			if (url.pathname !== '/' && url.pathname !== '') return null;
+		} catch {
+			return null;
+		}
+	}
+	return {
+		kind: 's3',
+		endpoint: endpoint === undefined ? null : new URL(/** @type {string} */ (endpoint)).origin,
+		region: /** @type {string} */ (region),
+		bucket: /** @type {string} */ (bucket),
+		accessKeyId: /** @type {string} */ (accessKeyId),
+		secretAccessKey: /** @type {string} */ (secretAccessKey),
+		sessionToken: sessionToken === undefined ? null : /** @type {string} */ (sessionToken),
+		forcePathStyle: forcePathStyle === undefined ? null : /** @type {boolean} */ (forcePathStyle),
+		prefix: prefix === undefined ? '' : /** @type {string} */ (prefix),
+	};
+};
+
 /**
  * @param {string | undefined} text
  * @param {number} fallback
@@ -393,6 +464,20 @@ export const loadConfig = (env = process.env) => {
 	if (mailFrom !== null && !MAIL_FROM.test(mailFrom)) problems.push('PLATFORM_MAIL_FROM must be `Name <address>` or an address');
 	if (smtpText && mailFrom === null) problems.push('PLATFORM_MAIL_FROM is required with PLATFORM_SMTP_URL');
 
+	// Delivery: platform-owned artefact storage (never a client connector) and the default website budget
+	const storageText = read('PLATFORM_ASSET_STORAGE');
+	const assetStorage = storageText ? parseAssetStorage(storageText) : null;
+	if (storageText && !assetStorage)
+		problems.push(
+			'PLATFORM_ASSET_STORAGE must be `memory`, `file:<dir>` or JSON { endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }',
+		);
+	if (assetStorage && assetStorage.kind !== 's3' && strict)
+		problems.push('PLATFORM_ASSET_STORAGE must be an S3-compatible bucket in production and preview');
+	if (assetStorage?.kind === 's3' && assetStorage.endpoint?.startsWith('http:') && strict)
+		problems.push('PLATFORM_ASSET_STORAGE endpoint must use https in production and preview');
+	const budgetKb = intOf(read('DELIVERY_BUDGET_KB'), 60, { min: 1, max: 1024 });
+	if (budgetKb === null) problems.push('DELIVERY_BUDGET_KB must be an integer 1..1024');
+
 	// Problems base
 	let problemBaseUri = read('PROBLEM_BASE_URI') ?? (portalUrl ? `${portalUrl}/problems/` : '');
 	try {
@@ -466,5 +551,9 @@ export const loadConfig = (env = process.env) => {
 		sessions: Object.freeze(sessions),
 		outbound: Object.freeze({ allowHosts: Object.freeze(allowHosts) }),
 		mail: Object.freeze({ smtp: smtp ? Object.freeze(smtp) : null, from: mailFrom }),
+		delivery: Object.freeze({
+			storage: assetStorage ? Object.freeze(assetStorage) : null,
+			budgetKb: /** @type {number} */ (budgetKb),
+		}),
 	});
 };

@@ -152,7 +152,7 @@ export function ProductsView(props) {
 	/** @param {any} product */
 	const tryDemo = async (product) => {
 		setDemo({ appId: product.appId, problem: null, busy: true });
-		const result = await apiFetch(api.launch(merchantId, product.appId), { method: 'POST', body: {} });
+		const result = await apiFetch(api.demo(merchantId, product.appId), { method: 'POST', body: {} });
 		if (result.ok && typeof result.data?.url === 'string') {
 			window.location.assign(result.data.url);
 			return;

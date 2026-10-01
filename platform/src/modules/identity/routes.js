@@ -5,7 +5,8 @@
  *   staff login and the MFA routes a half-signed-in staff session may reach (`mfa: false`).
  * - `/v1/me/*` (staff or merchant session): profile, password, MFA, sessions, merchant switch.
  * - `/v1/merchants/:merchantId/*` (merchant session or staff): merchant, team, websites, keys.
- * - `/v1/admin/*` (staff): merchants, websites, staff users, partners, developers.
+ * - `/v1/admin/*` (staff): merchants (search, notes, impersonation), websites, staff users, partners, developers.
+ * - `POST /v1/auth/impersonation/exchange` (staff): one-time impersonation token → merchant session cookie.
  * - `GET /v1/product/revocations?since=` (client assertion, F.9).
  *
  * Responses that carry secrets (website keys, MFA secrets and recovery codes, challenges) opt out of idempotent
@@ -69,7 +70,7 @@ const ownMerchant = (c) => {
  * @returns {RouteDefinition[]}
  */
 export const identityRoutes = (ctx, service) => {
-	const { accounts, teams, websites, keys, admin } = service;
+	const { accounts, teams, websites, keys, admin, impersonation } = service;
 
 	/**
 	 * @param {RequestContext} c
@@ -133,7 +134,11 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/auth/merchant/logout',
 			auth: 'merchant',
 			idempotent: false,
-			handler: async (c) => noContent({ cookies: [(await accounts.logout('merchant', tokenOf(c, 'merchant'))).cookie] }),
+			handler: async (c) => {
+				// signing out of an impersonation session ends the impersonation (audited on both chains)
+				if (c.session?.via) await impersonation.ended({ session: sessionOf(c), meta: metaOf(c) });
+				return noContent({ cookies: [(await accounts.logout('merchant', tokenOf(c, 'merchant'))).cookie] });
+			},
 		},
 		{
 			method: 'POST',
@@ -220,6 +225,25 @@ export const identityRoutes = (ctx, service) => {
 			mfa: false,
 			idempotent: false,
 			handler: async (c) => noContent({ cookies: [(await accounts.logout('staff', tokenOf(c, 'staff'))).cookie] }),
+		},
+		{
+			// the second step of an impersonation: the staff member's browser trades the one-time token for the
+			// merchant session cookie (single use, bound to the staff member who started it)
+			method: 'POST',
+			path: '/v1/auth/impersonation/exchange',
+			auth: 'staff',
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) => {
+				const { token } = valid(inputs.tokenOnly(c.body));
+				const out = await impersonation.exchange({ token, actor: actorOf(c), meta: metaOf(c) });
+				return withCookie({
+					cookie: ctx.cookies.set('merchant', out.token, out.maxAgeSeconds),
+					merchantId: out.merchantId,
+					userId: out.userId,
+					expiresAt: out.expiresAt,
+				});
+			},
 		},
 		{
 			method: 'POST',
@@ -575,10 +599,13 @@ export const identityRoutes = (ctx, service) => {
 			handler: async (c) => {
 				const page = paginate({ cursor: c.query.cursor, limit: c.query.limit, url: c.request.url });
 				const status = c.query.status === 'active' || c.query.status === 'suspended' ? c.query.status : undefined;
+				const q = typeof c.query.q === 'string' ? c.query.q : undefined;
+				if (q !== undefined && q.length > 120) throw problem('bad_request', 'q must be at most 120 characters');
 				const rows = await admin.listMerchants({
 					after: typeof page.after === 'string' ? page.after : null,
 					limit: page.fetchLimit,
 					...(status ? { status } : {}),
+					...(q ? { q } : {}),
 				});
 				return page.respond(rows, (m) => String(m._id), admin.presentMerchant);
 			},
@@ -618,6 +645,49 @@ export const identityRoutes = (ctx, service) => {
 					await admin.resumeMerchant({
 						merchantId: /** @type {string} */ (c.params.merchantId),
 						...valid(inputs.reason(c.body)),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				),
+		},
+		{
+			method: 'POST',
+			path: '/v1/admin/merchants/:merchantId/impersonate',
+			auth: 'staff',
+			permission: 'platform.impersonate',
+			// the response carries a one-time token: never stored for idempotent replay
+			idempotent: 'no-store',
+			rateLimit: { limit: 30, windowMs: 60_000 },
+			handler: async (c) =>
+				ok(
+					await impersonation.start({
+						merchantId: /** @type {string} */ (c.params.merchantId),
+						...valid(inputs.impersonate(c.body)),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				),
+		},
+		{
+			method: 'GET',
+			path: '/v1/admin/merchants/:merchantId/notes',
+			auth: 'staff',
+			permission: 'platform.merchants.read',
+			handler: async (c) => {
+				const limit = /^\d{1,3}$/.test(c.query.limit ?? '') ? Math.min(100, Math.max(1, Number(c.query.limit))) : 100;
+				return ok({ items: await admin.listNotes({ merchantId: /** @type {string} */ (c.params.merchantId), limit }) });
+			},
+		},
+		{
+			method: 'POST',
+			path: '/v1/admin/merchants/:merchantId/notes',
+			auth: 'staff',
+			permission: 'platform.merchants.write',
+			handler: async (c) =>
+				created(
+					await admin.addNote({
+						merchantId: /** @type {string} */ (c.params.merchantId),
+						...valid(inputs.note(c.body)),
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),

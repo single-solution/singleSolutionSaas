@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { loadFrame } from '../../../src/console/loaders.js';
+import { loadImpersonation } from '../../../src/console/admin/loaders.js';
 import { ConsoleShell } from '../../../src/console/views/shell.js';
 import { consoleApi, consoleSession } from '../_lib/server.js';
 
@@ -12,9 +13,18 @@ export default async function ConsoleLayout({ children }) {
 		if (session.status === 401) redirect('/login');
 		throw new Error(session.problem?.detail ?? 'The console is unavailable.');
 	}
-	const frame = session.merchantId ? await loadFrame(await consoleApi(), session.merchantId) : { websites: [], meter: null };
+	const api = await consoleApi();
+	const [frame, impersonation] = await Promise.all([
+		session.merchantId ? loadFrame(api, session.merchantId) : { websites: [], meter: null },
+		loadImpersonation(api),
+	]);
 	return (
-		<ConsoleShell me={session.me} merchantId={session.merchantId} websites={frame.websites} meter={frame.meter}>
+		<ConsoleShell
+			me={session.me}
+			merchantId={session.merchantId}
+			websites={frame.websites}
+			meter={frame.meter}
+			impersonation={impersonation}>
 			{children}
 		</ConsoleShell>
 	);

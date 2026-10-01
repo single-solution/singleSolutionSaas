@@ -2,7 +2,7 @@
  * HTTP routes of the `catalog` module: thin adapters from requests to the service.
  *
  * Public:   GET  /v1/catalog/products · GET /v1/catalog/products/:slug
- * Merchant: POST /v1/merchants/:merchantId/apps/:appId/launch
+ * Merchant: POST /v1/merchants/:merchantId/apps/:appId/launch · POST /v1/merchants/:merchantId/apps/:appId/demo
  * Staff:    /v1/admin/apps… (register, packs, list, detail, versions, refresh, review, lifecycle, environments, keys,
  *           launch)
  * Product:  POST /v1/product/heartbeat · /v1/product/keys/rotate · /v1/product/launch/consume (F.9)
@@ -11,6 +11,7 @@
 import { created, defineRoute, ok, paginate, problem } from '../../infra/http.js';
 import {
 	parseConsume,
+	parseDemoLaunch,
 	parseEnvironments,
 	parseLifecycle,
 	parseMerchantLaunch,
@@ -114,6 +115,37 @@ export const catalogRoutes = (service, deps) => [
 				scope: { merchantId, ...(websiteId ? { websiteId } : {}) },
 				...(subscriptions ? { subscriptions } : {}),
 				...(via ? { actor: via } : {}),
+				requestId: ctx.requestId,
+				ip: ctx.ip,
+			});
+			return ok({ url: launch.url, expiresAt: launch.expiresAt });
+		},
+	}),
+
+	// ---------------------------------------------------------------- merchant demo ("Try demo")
+	defineRoute({
+		method: 'POST',
+		path: '/v1/merchants/:merchantId/apps/:appId/demo',
+		auth: 'merchant',
+		permission: 'subscriptions.read',
+		resource: (ctx) => ({ merchantId: ctx.params.merchantId ?? null, websiteId: null }),
+		idempotent: 'optional',
+		rateLimit: { limit: 30, windowMs: 60_000 },
+		handler: async (ctx) => {
+			valid(parseDemoLaunch(ctx.body));
+			const actor = /** @type {Actor} */ (ctx.actor);
+			const appId = /** @type {string} */ (ctx.params.appId);
+			// merchants try listed products only (staff can still demo pending apps from the admin launch route)
+			const app = await service.getApp(appId);
+			if (app.status !== 'active' && app.status !== 'deprecated')
+				return problem('catalog_launch_refused', `An app that is ${app.status} cannot be tried yet.`);
+			// a demo carries no merchant or website scope (@ss/protocol): the product shows its sandbox
+			const launch = await service.issueLaunch({
+				kind: 'demo',
+				appId,
+				subject: actor.id,
+				user: { id: actor.id },
+				scope: {},
 				requestId: ctx.requestId,
 				ip: ctx.ip,
 			});

@@ -1,0 +1,87 @@
+{
+	"type": "object",
+	"title": "Tiers",
+	"additionalProperties": false,
+	"properties": {
+		"tiers": {
+			"type": "array",
+			"title": "Tiers",
+			"description": "Ordered by threshold. A member qualifies for the highest tier whose threshold the qualifying metric reaches.",
+			"default": [
+				{
+					"key": "bronze",
+					"name": "Bronze",
+					"threshold": 0,
+					"multiplier": 1,
+					"perks": { "free_shipping": false, "priority_support": false, "early_access": false }
+				},
+				{
+					"key": "silver",
+					"name": "Silver",
+					"threshold": 1000,
+					"multiplier": 1.25,
+					"perks": { "free_shipping": false, "priority_support": false, "early_access": true }
+				},
+				{
+					"key": "gold",
+					"name": "Gold",
+					"threshold": 5000,
+					"multiplier": 1.5,
+					"perks": { "free_shipping": true, "priority_support": true, "early_access": true }
+				}
+			],
+			"maxItems": 20,
+			"x-kind": "config",
+			"x-plan": { "pro": { "max": 10 } },
+			"x-ui": { "widget": "list", "group": "Tiers", "order": 1 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "name", "threshold"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"name": { "type": "string", "title": "Name", "minLength": 1, "maxLength": 80 },
+					"threshold": { "type": "integer", "title": "Threshold", "minimum": 0, "maximum": 1000000000000 },
+					"multiplier": { "type": "number", "title": "Earn multiplier", "minimum": 0, "maximum": 10 },
+					"perks": {
+						"type": "object",
+						"title": "Perks",
+						"additionalProperties": false,
+						"properties": {
+							"free_shipping": { "type": "boolean", "title": "Free shipping (via Checkout)" },
+							"priority_support": { "type": "boolean", "title": "Priority support" },
+							"early_access": { "type": "boolean", "title": "Early access" }
+						}
+					}
+				}
+			}
+		},
+		"basis": {
+			"type": "string",
+			"title": "Qualifying metric",
+			"description": "points_earned: points earned in the window; spend: completed order spend (minor units) in the window.",
+			"default": "points_earned",
+			"enum": ["points_earned", "spend"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Qualification", "order": 2 }
+		},
+		"window_months": {
+			"type": "integer",
+			"title": "Qualification window (months, 0 = lifetime)",
+			"default": 12,
+			"minimum": 0,
+			"maximum": 60,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Qualification", "order": 3 }
+		},
+		"downgrade": {
+			"type": "string",
+			"title": "Downgrade policy",
+			"description": "never: tiers only go up; end_of_period: a tier is kept until its review date (achieved + window); immediate: re-evaluated on every change.",
+			"default": "end_of_period",
+			"enum": ["never", "end_of_period", "immediate"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Qualification", "order": 4 }
+		}
+	}
+}

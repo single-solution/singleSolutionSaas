@@ -5,6 +5,7 @@
  */
 import { verifyPassword } from '../../infra/auth.js';
 import { problem } from '../../infra/http.js';
+import { nameKey } from './core/search.js';
 import { linkFor } from './core/links.js';
 import { presentInvite, presentMember, presentMerchant } from './core/present.js';
 import { applyMemberChange, checkOwnerTransfer, grantsSomething, isOwner, unknownGrantWebsites } from './core/team.js';
@@ -80,7 +81,7 @@ export const createTeams = (deps) => {
 		 */
 		renameMerchant: async ({ merchantId, name, actor, meta = {} }) => {
 			const before = await loadMerchant(merchantId);
-			await repo.merchants.updateOne({ _id: merchantId }, { $set: { name } });
+			await repo.merchants.updateOne({ _id: merchantId }, { $set: { name, nameKey: nameKey(name) } });
 			await audit(
 				actor,
 				'merchant.renamed',

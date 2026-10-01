@@ -24,6 +24,15 @@
 		"platform/src/**/*.js",
 		"platform/test/**/*.js",
 		"packages/ui/src/**/*.js",
-		"platform/src/console/**/*.js"
+		"platform/src/console/**/*.js",
+		"products/*/core/**/*.js",
+		"products/*/headless/**/*.js",
+		"products/*/ui/**/*.js",
+		"products/*/api/**/*.js",
+		"products/*/adapters/**/*.js",
+		"products/*/jobs/**/*.js",
+		"products/*/app/**/*.js",
+		"products/*/tests/**/*.js",
+		"products/*/serve.js"
 	]
 }

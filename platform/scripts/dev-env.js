@@ -22,6 +22,8 @@ const lines = [
 	`CRON_SECRET=${randomBytes(32).toString('base64url')}`,
 	// local products, object stores and databases may be reached over loopback / plain http (ignored in production)
 	`OUTBOUND_DEV_ALLOW_HOSTS=localhost,127.0.0.1,::1`,
+	// delivery artefacts (pack assets, compiled website bundles) on local disk; production uses an S3-compatible bucket
+	`PLATFORM_ASSET_STORAGE=file:.data/assets`,
 	`LOG_LEVEL=debug`,
 ];
 process.stdout.write(`${lines.join('\n')}\n`);

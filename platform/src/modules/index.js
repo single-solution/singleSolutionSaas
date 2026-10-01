@@ -11,6 +11,7 @@ import { identityModule } from './identity/index.js';
 import { configModule } from './config/index.js';
 import { connectorsModule } from './connectors/index.js';
 import { commerceModule } from './commerce/index.js';
+import { deliveryModule } from './delivery/index.js';
 
 /** @type {ReadonlyArray<Readonly<import('../infra/modules.js').ModuleDefinition>>} */
 export const modules = Object.freeze([
@@ -21,4 +22,5 @@ export const modules = Object.freeze([
 	configModule,
 	connectorsModule,
 	commerceModule,
+	deliveryModule,
 ]);

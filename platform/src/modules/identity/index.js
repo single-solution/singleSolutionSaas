@@ -10,7 +10,8 @@
  */
 import { defineModule } from '../../infra/modules.js';
 import { identityRoutes } from './routes.js';
-import { collections } from './schema.js';
+import { nameKey } from './core/search.js';
+import { C, collections } from './schema.js';
 import { createIdentityService } from './service.js';
 import { REVOKE_JOB } from './website-keys.js';
 
@@ -28,6 +29,18 @@ export const createIdentityModule = (options = {}) =>
 	defineModule({
 		name: 'identity',
 		collections,
+		migrations: [
+			{
+				id: '202610020000-identity-merchant-name-key',
+				description: 'Backfill `nameKey` (normalised name for merchant search) on merchants.',
+				plan: async () => [`set ${C.merchants}.nameKey = normalised name where missing`],
+				up: async ({ db }) => {
+					const merchants = db.collection(C.merchants);
+					for await (const m of merchants.find({ nameKey: { $exists: false } }, { projection: { name: 1 } }))
+						await merchants.updateOne({ _id: m._id }, { $set: { nameKey: nameKey(m.name) } });
+				},
+			},
+		],
 		problems: IDENTITY_PROBLEMS,
 		service: (ctx) => createIdentityService(ctx, options),
 		routes: (ctx) => identityRoutes(ctx, ctx.service('identity')),

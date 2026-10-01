@@ -9,6 +9,7 @@ import { AppShell, Button, Callout, Icon, ToastProvider, formatCredits, formatHo
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { WEBSITE_TABS, routes } from '../paths.js';
+import { ImpersonationBanner } from '../admin/views/impersonation.js';
 
 /** Hours of credits left under which the banner warns. */
 export const LOW_BALANCE_HOURS = 24;
@@ -27,9 +28,11 @@ export const balanceState = (meter) => {
 };
 
 /**
- * @param {{ me: any, merchantId: string | null, websites: any[], meter: any, children: import('react').ReactNode }} props
+ * @param {{ me: any, merchantId: string | null, websites: any[], meter: any, children: import('react').ReactNode,
+ *   impersonation?: { staffId: string, staffName?: string | null, expiresAt: string | null } | null }} props `impersonation`: the staff member
+ *   acting as this user (session `via`) — shown as a banner on every page.
  */
-export function ConsoleShell({ me, merchantId, websites, meter, children }) {
+export function ConsoleShell({ me, merchantId, websites, meter, children, impersonation = null }) {
 	const pathname = usePathname() ?? '';
 	const match = /^\/websites\/(web_[0-9a-z]+)(?:\/([a-z-]+))?/.exec(pathname);
 	const currentWebsiteId = match?.[1] ?? null;
@@ -84,7 +87,7 @@ export function ConsoleShell({ me, merchantId, websites, meter, children }) {
 	};
 
 	const state = balanceState(meter);
-	const banner =
+	const balanceBanner =
 		state === 'empty' ? (
 			<Callout
 				tone="danger"
@@ -108,6 +111,13 @@ export function ConsoleShell({ me, merchantId, websites, meter, children }) {
 				At the current spend of {formatCredits(meter.burnRatePerHour)} per hour your subscriptions pause when the balance
 				reaches zero.
 			</Callout>
+		) : null;
+	const banner =
+		impersonation || balanceBanner ? (
+			<div className="space-y-3">
+				<ImpersonationBanner impersonation={impersonation} userEmail={me?.user?.email ?? null} />
+				{balanceBanner}
+			</div>
 		) : null;
 
 	const selectClass =

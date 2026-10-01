@@ -17,6 +17,7 @@ import {
 	verifyTotp,
 } from '../../infra/auth.js';
 import { problem } from '../../infra/http.js';
+import { nameKey } from './core/search.js';
 import { newPassword } from './core/inputs.js';
 import { linkFor } from './core/links.js';
 import { presentMerchant, presentStaff, presentUser, iso } from './core/present.js';
@@ -182,7 +183,14 @@ export const createAccounts = (deps) => {
 			};
 			await insertUnique(() => repo.users.insertOne(user), 'conflict', 'An account with this e-mail already exists.');
 			const merchantId = repo.id('mer');
-			const merchant = { _id: merchantId, name: merchantName, status: 'active', ownerUserId: user._id, suspension: null };
+			const merchant = {
+				_id: merchantId,
+				name: merchantName,
+				nameKey: nameKey(merchantName),
+				status: 'active',
+				ownerUserId: user._id,
+				suspension: null,
+			};
 			await repo.merchants.insertOne(merchant);
 			await repo.memberships.of(merchantId).insertOne({ _id: repo.id('mbr'), userId: user._id, roles: ['owner'], grants: [] });
 			const actor = { type: /** @type {'merchant_user'} */ ('merchant_user'), id: user._id };

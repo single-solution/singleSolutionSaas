@@ -41,6 +41,7 @@ export {
 export { Table } from './Table.js';
 export { Tabs, TabNav } from './Tabs.js';
 export { Dialog, Drawer, ConfirmDialog, useFocusTrap, focusableIn } from './overlay.js';
+export { TypedConfirmDialog } from './TypedConfirm.js';
 export { ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell } from './AppShell.js';

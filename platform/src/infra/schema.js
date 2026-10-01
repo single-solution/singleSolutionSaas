@@ -69,6 +69,8 @@ export const INFRA_COLLECTIONS = Object.freeze([
 			{ keys: { merchantId: 1, at: -1, _id: -1 } },
 			{ keys: { 'target.id': 1, at: -1 } },
 			{ keys: { 'actor.id': 1, at: -1 } },
+			{ keys: { action: 1, at: -1 } },
+			{ keys: { scope: 1, at: -1, _id: -1 } },
 			{ keys: { at: -1, _id: -1 } },
 		],
 	}),

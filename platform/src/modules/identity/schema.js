@@ -19,6 +19,7 @@ export const C = Object.freeze({
 	keys: 'identity_website_keys',
 	partners: 'identity_partners',
 	developers: 'identity_developers',
+	notes: 'identity_merchant_notes',
 });
 
 export const collections = Object.freeze([
@@ -37,8 +38,9 @@ export const collections = Object.freeze([
 	defineCollection({
 		module: 'identity',
 		name: C.merchants,
-		description: 'Merchants (tenant roots): name, status active|suspended, owner. `_id` = merchantId.',
-		indexes: [{ keys: { status: 1, _id: 1 } }],
+		description:
+			'Merchants (tenant roots): name, `nameKey` (normalised name for prefix search), status active|suspended, owner. `_id` = merchantId.',
+		indexes: [{ keys: { status: 1, _id: 1 } }, { keys: { nameKey: 1, _id: 1 } }],
 	}),
 	defineCollection({
 		module: 'identity',
@@ -108,5 +110,13 @@ export const collections = Object.freeze([
 		name: C.developers,
 		description: 'Developers (product builders) with app grants.',
 		indexes: [{ keys: { email: 1 }, unique: true }, { keys: { 'grants.appId': 1 } }],
+	}),
+	defineCollection({
+		module: 'identity',
+		name: C.notes,
+		description: 'Staff notes on merchants (append-only; author staff id, body ≤ 2000 chars).',
+		tenant: 'merchant',
+		appendOnly: true,
+		indexes: [{ keys: { merchantId: 1, createdAt: -1, _id: -1 } }],
 	}),
 ]);

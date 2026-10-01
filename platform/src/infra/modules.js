@@ -32,6 +32,7 @@ import { platformError } from './errors.js';
  * @property {ReturnType<typeof import('./crypto.js').createSecretHasher>} secretHasher website secret keys at rest
  * @property {import('./audit.js').Audit} audit
  * @property {import('./jobs.js').Jobs} jobs
+ * @property {import('./jobs.js').CronRuns} cronRuns last run of every registered cron (read only, health pages)
  * @property {import('./db.js').Locks} locks
  * @property {import('./db.js').WithTransaction} withTransaction run `fn(session)` in a retried multi-document
  *   transaction; pass `{ session }` to every repository call inside it

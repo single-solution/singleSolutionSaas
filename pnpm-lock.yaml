@@ -173,6 +173,49 @@ importers:
         specifier: ^4.3.3
         version: 4.3.3
 
+  products/loyalty:
+    dependencies:
+      '@ss/app-kit':
+        specifier: workspace:*
+        version: link:../../packages/app-kit
+      '@ss/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@ss/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
+      '@ss/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      mongodb:
+        specifier: ^6.21.0
+        version: 6.21.0
+      next:
+        specifier: ^16.3.7
+        version: 16.3.7(@types/node@22.20.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react:
+        specifier: ^19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.3.0
+        version: 19.3.0(react@19.3.0)
+    devDependencies:
+      '@ss/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@ss/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@ss/web':
+        specifier: workspace:*
+        version: link:../../packages/web
+      '@tailwindcss/postcss':
+        specifier: ^4.3.3
+        version: 4.3.3
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
+
 packages:
 
   '@alloc/quick-lru@5.3.0':

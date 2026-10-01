@@ -352,4 +352,8 @@ export const inputs = Object.freeze({
 		(b) => object(b, { merchantId: idOf('mer'), roles: { optional: roles(ASSIGNABLE_MERCHANT_ROLES) } })
 	),
 	developerGrant: /** @type {(b: unknown) => Parsed<{ appId: string }>} */ ((b) => object(b, { appId })),
+	impersonate: /** @type {(b: unknown) => Parsed<{ userId: string, minutes: number, reason: string }>} */ (
+		(b) => object(b, { userId: idOf('usr'), minutes: int(1, 60), reason: text(500) })
+	),
+	note: /** @type {(b: unknown) => Parsed<{ body: string }>} */ ((b) => object(b, { body: text(2000) })),
 });

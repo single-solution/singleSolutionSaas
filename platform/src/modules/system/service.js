@@ -3,6 +3,7 @@
  * @module
  */
 import { buildInfo } from './core/info.js';
+import { createOps } from './ops.js';
 import { createSystemRepo } from './repo.js';
 import { SETTINGS } from './schema.js';
 
@@ -16,6 +17,7 @@ import { SETTINGS } from './schema.js';
 export const createSystemService = (ctx) => {
 	const repo = createSystemRepo(ctx.collection(SETTINGS));
 	return {
+		...createOps(ctx),
 		info: async () =>
 			buildInfo({
 				portalUrl: ctx.config.portalUrl,

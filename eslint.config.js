@@ -35,6 +35,11 @@ export default [
 		rules: { 'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z]', ignoreRestSiblings: true }] },
 	},
 	{
+		// products import their JSON feature schemas and string catalogs with import attributes (ES2025)
+		files: ['products/**/*.js'],
+		languageOptions: { ecmaVersion: 2025 },
+	},
+	{
 		files: ['**/test/**/*.js', '**/*.test.js'],
 		languageOptions: { globals: { ...globals.node } },
 		rules: { 'no-param-reassign': 'off' },

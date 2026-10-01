@@ -203,6 +203,17 @@ export const parseStaffLaunch = (body) => {
 };
 
 /**
+ * Merchant demo launch body (`POST /v1/merchants/:merchantId/apps/:appId/demo`): no fields — a demo is never scoped
+ * to the merchant or a website.
+ * @param {unknown} body
+ * @returns {Parsed<Record<string, never>>}
+ */
+export const parseDemoLaunch = (body) => {
+	const { errors } = open(body ?? {}, []);
+	return done(errors, /** @type {Record<string, never>} */ ({}));
+};
+
+/**
  * Merchant launch body (`POST /v1/merchants/:merchantId/apps/:appId/launch`).
  * @param {unknown} body
  * @returns {Parsed<{ websiteId: string | null }>}

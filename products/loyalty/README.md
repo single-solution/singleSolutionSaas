@@ -1,0 +1,116 @@
+# Loyalty & Rewards (`loyalty`)
+
+An SSPS v1 **service product** (PLAN Part D §3, Part E). Merchants reward customers with points for purchases and any
+other event, let them redeem points at any checkout, grow them through tiers, expire unused points, reward referrals and
+show a wallet on the website — drop-in, headless or API only. **All loyalty data lives in the merchant's own MongoDB**
+(connected in the Portal); this deployment keeps only caches, queues and website ids.
+
+Built on `@ss/app-kit` (registration, SSO launches, website keys, entitlements with offline grace, events, usage,
+client-owned data) and `@ss/rules` (conditions). Business rules live only in `core/` (pure) and `headless/`.
+
+## Elements
+
+Every element is switchable per website and priced in millicredits per hour; every setting is a feature with a schema,
+a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — nothing is hard-coded.
+
+| Element       | Modes   | Price /h | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------- | ------- | -------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `earn_rules`  | C       |      400 | Members and their points. Rules: trigger `type@v` (`order.placed`, `order.completed`, `customer.created`, `custom.*`) + optional rules@1 `when` + formula (`fixed`, `percent` of an amount field, `per_unit`) + caps per event and per customer period (day/week/month/year, website time zone) + exclusions (items, SKUs, shipping, tax, discounts). Manual/API earns. Metered: `point_transaction` (1 mc per 10; starter 2 000 / pro 20 000 included) |
+| `redeem`      | C       |      300 | `quote` / `redeem` / `release` / `confirm` for any checkout (idempotent): minimum points, maximum share of the transaction, conversion rate (`rate_points` → `rate_value_minor`), with or without offers                                                                                                                                                                                                                                                |
+| `wallet`      | A, B, C |      200 | Balance badge, tier progress, points expiring soon, history; default renderer ≤ 8 KB, headless core, `GET /v1/wallet` with customer wallet tokens                                                                                                                                                                                                                                                                                                       |
+| `tiers`       | C       |      300 | Ladder by points earned or spend in a rolling window of local months, earn multipliers, perk flags, downgrade policy (`never`, `end_of_period`, `immediate`)                                                                                                                                                                                                                                                                                            |
+| `expiry`      | C       |      100 | Lots expire FIFO `months` after they were earned (+ grace days); `loyalty.expiring@1` notices `notice_days` ahead; daily job                                                                                                                                                                                                                                                                                                                            |
+| `referrals`   | C       |      300 | Codes (`<prefix><random>`), attribution (API or `customer.created@1` `source: "referral:<CODE>"`), window, rewards for both sides on the referee's first qualifying order, fraud caps (self, duplicates, existing customers, per month, lifetime)                                                                                                                                                                                                       |
+| `adjustments` | C       |      100 | Manual credits/debits with reason codes and notes (API and dashboard), audited in the merchant database                                                                                                                                                                                                                                                                                                                                                 |
+| `reversal`    | C       |      100 | `order.cancelled@1` / `order.refunded@1`: redeemed points back first, then earned points reversed (proportionally for partial refunds), capped at the balance or allowed negative                                                                                                                                                                                                                                                                       |
+
+Plans: **starter** = earn_rules, redeem, wallet (+ add-ons reversal, adjustments); **pro** = everything but referrals
+(+ add-on referrals). Trial 48 h.
+
+**Events.** Consumes `order.placed@1` (order snapshot: customer, lines, amounts), `order.completed@1`,
+`order.cancelled@1`, `order.refunded@1`, `customer.created@1`; custom events arrive through `POST /v1/activities`.
+Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `loyalty.expiring@1` (schemas in
+`schemas/events/`).
+
+## How it works
+
+- **Member document = unit of consistency.** Balance, FIFO lots, debt, tier buckets, cap usage and a short journal move
+  together under an optimistic `version` — no multi-document transactions, so standalone MongoDB works too.
+- **Exactly once.** Every movement has a deterministic source key (`earn:order.completed@1:<orderId>`,
+  `redeem:<id>`, `return:<id>`, `reverse:<orderId>:<claim>`, `adjust:<Idempotency-Key>` …). The append-only ledger
+  (`ss_loyalty_transactions`) is unique on it; the journal repairs a ledger write lost to a crash; transaction ids,
+  usage records and published events derive from it. Reversals are claimed on the order first, so concurrent refunds
+  never reverse more than was earned.
+- **Lots.** Credits open lots; spending consumes the oldest first. Released or refunded redemptions are restored into
+  their original lots (original expiry) — a redeem/release cannot extend the life of points.
+- **Data.** Collections `ss_loyalty_{members,transactions,orders,redemptions,referrals,audit}` in the merchant
+  database, `websiteId` first in every index, created lazily; versioned migrations; export/anonymise via the
+  Portal-signed standard routes.
+
+## API (Mode C)
+
+`openapi.json` documents every operation with examples. Highlights (`sk_` = server key, `pk_` = browser key):
+
+| Operation              | Route                                                                                                     |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- |
+| Earn (manual / server) | `POST /v1/earnings` (sk, Idempotency-Key) · `GET /v1/earnings` (sk; pk only with a wallet token)          |
+| Members                | `GET /v1/members?q=` · `GET /v1/members/{customerId}` · `…/balance` · `…/history` (cursor)                |
+| Rules                  | `GET /v1/rules` (with diagnostics) · `POST /v1/rules:check`                                               |
+| Custom events          | `POST /v1/activities` `{ type: "custom.<name>@1", customerId, data }`                                     |
+| Checkout               | `POST /v1/redemptions:quote` · `POST /v1/redemptions` · `POST /v1/redemptions/{id}/release` · `…/confirm` |
+| Wallet                 | `POST /v1/wallet-tokens` (sk, for the signed-in customer) · `GET /v1/wallet` (pk + `SS-Identity`)         |
+| Tiers, expiry          | `GET /v1/tiers` · `POST /v1/expiry:run`                                                                   |
+| Referrals              | `POST /v1/referral-codes` · `POST /v1/referrals` · `GET /v1/referrals/{customerId}`                       |
+| Adjustments            | `POST /v1/adjustments` · `GET /v1/adjustments`                                                            |
+| Standard               | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export     | anonymize` |
+
+Errors are RFC 9457 problems with stable codes (`insufficient_points`, `below_minimum`, `above_maximum`,
+`offers_not_allowed`, `self_referral`, `identity_required`, …).
+
+**Headless (Mode B).** `headless/wallet.js#createWallet({ config, strings, client, emit })` → `{ state, actions: { load,
+loadMore }, subscribe, validate, strings, t, formatPoints, destroy }`; `client.wallet({ cursor })` calls
+`GET /v1/wallet`. **Drop-in (Mode A).** `ui/wallet.js#render({ state, actions, strings, theme: { variant: 'badge' |
+'panel' }, slots, dom })`, design tokens only.
+
+## Dashboard (SSO)
+
+Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs, earn rules with live rules@1 validation, member
+search, member detail with history and audited adjustments, settings (link to the subscription's configuration in the
+Portal — the product never stores merchant configuration). Demo launches ("Try demo") show sandbox data computed with
+the real core; impersonation shows the audit banner.
+
+## Develop and certify
+
+```sh
+ss dev env > .env.local        # signing key, token hash, portal URL (keep the printed registration token)
+ss dev                         # local Portal emulator (ss.dev.json)
+pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
+ss dev register --url http://localhost:3000 --token <token>
+ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+ss certify . --url http://localhost:3000 --token <fresh token>   # restart the product first (fresh token)
+pnpm test                      # from the monorepo: vitest (core, headless, renderer, API on MongoDB, certify, Portal e2e)
+```
+
+The test suite includes `tests/certify.test.js` (the full `ss certify` suite, every check must pass) and
+`tests/portal-e2e.test.js` (the real Portal in process: staff bootstrap → catalog handshake → activation → merchant
+signup → website → credits → subscription → database connector → Event Hub delivery → points in the merchant DB →
+hourly settlement).
+
+## Deploy to Vercel
+
+1. Create a Vercel project with this directory as root (framework: Next.js). In the monorepo, `next.config.js` sets the
+   workspace root automatically.
+2. Environment variables (Production):
+   - `SS_PORTAL_URL` — the Portal URL this product trusts (pinned).
+   - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
+     registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
+   - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required in production.
+   - `CRON_SECRET` — for the daily cron in `vercel.json` (`/cron/expiry`, 02:15 UTC).
+   - `LOYALTY_WALLET_SECRET` — optional (≥ 32 chars); `SS_LOG_LEVEL` — optional.
+3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
+   review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
+4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
+
+## Changelog
+
+- **1.0.0** — first release: eight elements, wallet renderer and headless core, REST v1, dashboard, daily job.

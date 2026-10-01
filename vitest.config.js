@@ -9,7 +9,7 @@ export default defineConfig({
 		jsx: 'automatic',
 	},
 	test: {
-		include: ['packages/*/test/**/*.test.js', 'platform/test/**/*.test.js'],
+		include: ['packages/*/test/**/*.test.js', 'platform/test/**/*.test.js', 'products/*/tests/**/*.test.js'],
 		environment: 'node',
 		// one MongoMemoryReplSet for the whole run (SS_TEST_MONGO_URI); platform test files get fresh databases
 		globalSetup: ['platform/test/global-setup.js'],
@@ -17,7 +17,12 @@ export default defineConfig({
 		testTimeout: 30000,
 		coverage: {
 			provider: 'v8',
-			include: ['packages/*/src/**', 'platform/src/**'],
+			include: [
+				'packages/*/src/**',
+				'platform/src/**',
+				'products/*/{core,headless,ui,api,adapters,jobs}/**',
+				'products/*/serve.js',
+			],
 			thresholds: { lines: 90, functions: 90, branches: 85 },
 		},
 	},

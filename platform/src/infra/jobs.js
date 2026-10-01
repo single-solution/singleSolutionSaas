@@ -316,6 +316,33 @@ export const createJobs = ({
 		fail,
 		runBatch,
 		/**
+		 * Queue health (read only): `queued` (due or scheduled, first attempt), `retrying` (queued after a failure),
+		 * `leased` (running) and `dead` jobs.
+		 * @returns {Promise<{ queued: number, leased: number, retrying: number, dead: number }>}
+		 */
+		queueHealth: async () => {
+			const rows = await repo
+				.aggregate([
+					{ $match: { status: { $in: ['queued', 'running', 'dead'] } } },
+					{
+						$group: {
+							_id: {
+								$cond: [
+									{ $eq: ['$status', 'queued'] },
+									{ $cond: [{ $gt: ['$attempts', 0] }, 'retrying', 'queued'] },
+									{ $cond: [{ $eq: ['$status', 'running'] }, 'leased', 'dead'] },
+								],
+							},
+							n: { $sum: 1 },
+						},
+					},
+				])
+				.toArray();
+			const out = { queued: 0, leased: 0, retrying: 0, dead: 0 };
+			for (const row of rows) if (Object.hasOwn(out, row._id)) out[/** @type {keyof typeof out} */ (row._id)] = row.n;
+			return out;
+		},
+		/**
 		 * @param {{ name?: string, limit?: number }} [query]
 		 */
 		deadLetters: async ({ name, limit = 50 } = {}) =>
@@ -431,3 +458,51 @@ export const createCronRunner = ({
 	});
 };
 /** @typedef {ReturnType<typeof createCronRunner>} CronRunner */
+
+/**
+ * Read model of cron runs (`platform_cron_runs`) for health pages: the last run of every registered cron (`names`
+ * is read lazily, so the runner may be created after this).
+ * @param {{ runs: ReadOps, names: () => readonly string[] }} options
+ */
+export const createCronRuns = ({ runs, names }) =>
+	Object.freeze({
+		/**
+		 * @returns {Promise<Array<{ name: string, status: string, lastRun: { id: string, status: string, trigger: string,
+		 *   startedAt: string, finishedAt: string | null, durationMs: number | null, stats: unknown, error: unknown } | null }>>}
+		 */
+		latest: async () => {
+			const rows = await runs
+				.aggregate([{ $sort: { name: 1, startedAt: -1 } }, { $group: { _id: '$name', doc: { $first: '$$ROOT' } } }])
+				.toArray();
+			const byName = new Map(rows.map((r) => [String(r._id), r.doc]));
+			const all = [...new Set([...names(), ...byName.keys()])].sort();
+			return all.map((name) => {
+				const doc = byName.get(name);
+				return {
+					name,
+					status: doc ? String(doc.status) : 'never_run',
+					lastRun: doc
+						? {
+								id: String(doc._id),
+								status: String(doc.status),
+								trigger: String(doc.trigger ?? 'cron'),
+								startedAt: new Date(doc.startedAt).toISOString(),
+								finishedAt: doc.finishedAt ? new Date(doc.finishedAt).toISOString() : null,
+								durationMs: typeof doc.durationMs === 'number' ? doc.durationMs : null,
+								stats: doc.stats ?? null,
+								error: doc.error ?? null,
+							}
+						: null,
+				};
+			});
+		},
+		/**
+		 * The last finished run of one cron.
+		 * @param {string} name
+		 */
+		last: async (name) => {
+			const doc = await runs.find({ name }).sort({ startedAt: -1 }).limit(1).next();
+			return doc ?? null;
+		},
+	});
+/** @typedef {ReturnType<typeof createCronRuns>} CronRuns */
