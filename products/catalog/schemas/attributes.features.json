@@ -1,0 +1,102 @@
+{
+	"type": "object",
+	"title": "Attributes & filters",
+	"additionalProperties": false,
+	"properties": {
+		"max_attributes": {
+			"type": "integer",
+			"title": "Maximum attributes",
+			"default": 50,
+			"minimum": 1,
+			"maximum": 500,
+			"x-kind": "limit",
+			"x-plan": {
+				"starter": {
+					"default": 50,
+					"max": 50
+				},
+				"pro": {
+					"default": 200,
+					"max": 500
+				}
+			},
+			"x-ui": {
+				"group": "Limits",
+				"order": 1,
+				"widget": "number"
+			}
+		},
+		"max_options_per_attribute": {
+			"type": "integer",
+			"title": "Options per attribute",
+			"default": 200,
+			"minimum": 1,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Limits",
+				"order": 2,
+				"widget": "number"
+			}
+		},
+		"card_positions": {
+			"type": "array",
+			"title": "Card positions",
+			"description": "Where an attribute may show on item cards.",
+			"default": ["title_chips", "image_overlay", "hidden"],
+			"minItems": 1,
+			"maxItems": 10,
+			"uniqueItems": true,
+			"items": {
+				"type": "string",
+				"title": "Position",
+				"maxLength": 40,
+				"minLength": 1,
+				"pattern": "^[a-z][a-z0-9_]{0,39}$"
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Display",
+				"order": 3
+			}
+		},
+		"facets": {
+			"type": "boolean",
+			"title": "Facet counts",
+			"default": true,
+			"x-kind": "flag",
+			"description": "GET /v1/attributes:facets counts the public items per filterable option.",
+			"x-ui": {
+				"group": "Filters",
+				"order": 4,
+				"widget": "switch"
+			}
+		},
+		"max_facet_values": {
+			"type": "integer",
+			"title": "Values per facet",
+			"default": 50,
+			"minimum": 1,
+			"maximum": 500,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Filters",
+				"order": 5,
+				"widget": "number"
+			}
+		},
+		"facet_items_scan": {
+			"type": "integer",
+			"title": "Items scanned for facet counts",
+			"default": 20000,
+			"minimum": 100,
+			"maximum": 200000,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Filters",
+				"order": 6,
+				"widget": "number"
+			}
+		}
+	}
+}

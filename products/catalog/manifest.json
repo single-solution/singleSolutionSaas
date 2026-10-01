@@ -1,0 +1,382 @@
+{
+	"ssps": "1",
+	"product": {
+		"slug": "catalog",
+		"name": "Catalog & PIM",
+		"kind": "service",
+		"version": "1.0.0",
+		"category": "commerce",
+		"description": "Headless item data for any website: items of any kind (physical goods, services, digital, rentals) with merchant-defined types, statuses, custom fields and scheduled publishing; variants with option pools, prices in minor units, private cost and stock; attributes with facets; a collections tree; brands; media by URL or storage key; CSV import with a dry-run diff and conflict policy; tokened, cacheable shopping feeds; and the catalog REST API. Publishes the standard item, inventory and price events. All data lives in the merchant's own database."
+	},
+	"endpoints": {
+		"base": "https://catalog.example.com",
+		"dashboard": "/dashboard",
+		"demo": "/dashboard",
+		"events": "/.well-known/ss-events",
+		"register": "/.well-known/ss-register"
+	},
+	"capabilities": {
+		"adminLaunch": true,
+		"sandbox": true,
+		"localEnforcement": [
+			"limit:items.max_items",
+			"limit:variants.max_variants_per_item",
+			"limit:attributes.max_attributes",
+			"limit:collections.max_collections",
+			"limit:collections.max_depth",
+			"limit:brands.max_brands",
+			"limit:media.max_media_per_item",
+			"limit:media_uploads.max_upload_bytes",
+			"limit:import_export.max_rows",
+			"limit:feeds.max_items_per_feed",
+			"rate:api.read_rate_per_minute",
+			"rate:api.write_rate_per_minute"
+		],
+		"offlineGrace": "PT24H"
+	},
+	"scopes": ["events.subscribe:order.*", "events.publish:item.*", "events.publish:inventory.*", "events.publish:price.*"],
+	"requires": {
+		"resources": ["database"]
+	},
+	"events": {
+		"consumes": ["order.placed@1", "order.cancelled@1", "order.refunded@1"],
+		"publishes": ["item.created@1", "item.updated@1", "item.deleted@1", "inventory.changed@1", "price.changed@1"]
+	},
+	"elements": [
+		{
+			"key": "items",
+			"name": "Items",
+			"description": "Items of any kind with merchant-defined item types, statuses, custom fields, translations, SEO fields and scheduled publishing; public listing with filters, sorts and cursor pages. Limited by items.max_items.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 300
+			},
+			"budget": {
+				"js": 8
+			},
+			"dependsOn": [],
+			"features": {
+				"$ref": "schemas/items.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"customFields": ["item"],
+			"experiments": true,
+			"api": {
+				"resources": ["items", "item-schema"]
+			},
+			"headless": "headless/items.js#createItems",
+			"renderer": "ui/items.js#render",
+			"variants": ["grid", "list"],
+			"slots": ["before", "after", "empty"],
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "variants",
+			"name": "Variants & stock",
+			"description": "Variant matrix per item: option dimensions, per-item option pools, uniqueness rules, per-variant price, compare-at price, private cost, SKU, barcode and stock; atomic stock reservations and stock that follows order.placed@1, order.cancelled@1 and order.refunded@1.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 7
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/variants.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"api": {
+				"resources": ["variants", "stock-reservations"]
+			},
+			"headless": "headless/variants.js#createVariantPicker",
+			"renderer": "ui/variants.js#render",
+			"variants": ["buttons", "selects"],
+			"slots": ["before", "after"],
+			"a11y": {
+				"role": "group",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "attributes",
+			"name": "Attributes & filters",
+			"description": "Attribute definitions (text, number, boolean, select, multi-select) with options and units, filter visibility, card position, per-collection scope and conditional visibility; facet counts for filters.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 6
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/attributes.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"api": {
+				"resources": ["attributes"]
+			},
+			"headless": "headless/filters.js#createFilters",
+			"renderer": "ui/filters.js#render",
+			"variants": ["sidebar", "bar"],
+			"slots": ["before", "after"],
+			"a11y": {
+				"role": "group",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "collections",
+			"name": "Collections",
+			"description": "Categories and collections as a tree with a depth limit, manual ordering, marketing copy, SEO fields and a visibility cascade.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 6
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/collections.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"api": {
+				"resources": ["collections"]
+			},
+			"headless": "headless/collections.js#createCollections",
+			"renderer": "ui/collections.js#render",
+			"variants": ["tree", "cards"],
+			"slots": ["before", "after"],
+			"a11y": {
+				"role": "navigation",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "brands",
+			"name": "Brands",
+			"description": "Brand registry with logos, descriptions and optional scoping to collections.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 0
+			},
+			"budget": {
+				"js": 5
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/brands.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"api": {
+				"resources": ["brands"]
+			},
+			"headless": "headless/brands.js#createBrands",
+			"renderer": "ui/brands.js#render",
+			"variants": ["logos", "list"],
+			"slots": ["before", "after"],
+			"a11y": {
+				"role": "list",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "media",
+			"name": "Media",
+			"description": "Images and videos per item and variant, referenced by URL or by a key in the merchant's storage, with count limits, a responsive size ladder and alt-text templates. Files themselves belong to the Files product or your own storage.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 0
+			},
+			"budget": {
+				"js": 8
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/media.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"api": {
+				"resources": ["media"]
+			},
+			"headless": "headless/gallery.js#createGallery",
+			"renderer": "ui/gallery.js#render",
+			"variants": ["gallery", "strip"],
+			"slots": ["before", "after"],
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "media_uploads",
+			"name": "Media uploads",
+			"description": "Optional: presigned uploads straight to the merchant's own bucket through the storage connector, with type and size limits, and signed links for private keys.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["media"],
+			"requires": {
+				"resources": ["storage"]
+			},
+			"features": {
+				"$ref": "schemas/media_uploads.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["media-uploads"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "import_export",
+			"name": "Import & export",
+			"description": "CSV templates and exports with configurable columns; imports with column mapping, row validation, a dry-run diff and a conflict policy (skip, overwrite or fail) guarded by item versions; images by URL.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/import_export.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["imports", "exports"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "feeds",
+			"name": "Feeds",
+			"description": "Shopping and marketing feeds (XML, CSV, TSV, JSON) generated from settings-driven field mapping and condition mapping, served at tokened public URLs with cache headers and ETags.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/feeds.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["feeds"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "api",
+			"name": "Catalog API",
+			"description": "Server-to-server REST read and write access with the website's sk_ key: write scope, separate read and write rate limits, private cost exposure; metered per request.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100,
+				"metered": [
+					{
+						"unit": "request",
+						"perUnit": 1,
+						"per": 100,
+						"included": {
+							"starter": 100000,
+							"pro": 1000000
+						}
+					}
+				]
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["items"],
+			"features": {
+				"$ref": "schemas/api.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["catalog-stats"]
+			},
+			"headless": null,
+			"renderer": null
+		}
+	],
+	"plans": [
+		{
+			"code": "starter",
+			"name": "Starter",
+			"description": "Items, variants and stock, attributes, collections, brands, media and the API; uploads, import/export and feeds as add-ons.",
+			"elements": ["items", "variants", "attributes", "collections", "brands", "media", "api"],
+			"addons": ["media_uploads", "import_export", "feeds"]
+		},
+		{
+			"code": "pro",
+			"name": "Pro",
+			"description": "Everything, with higher bounds.",
+			"elements": [
+				"items",
+				"variants",
+				"attributes",
+				"collections",
+				"brands",
+				"media",
+				"media_uploads",
+				"import_export",
+				"feeds",
+				"api"
+			]
+		}
+	],
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
+	"trialHours": 48
+}
