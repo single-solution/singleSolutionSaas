@@ -1,0 +1,392 @@
+{
+	"type": "object",
+	"title": "Contact footer features",
+	"additionalProperties": false,
+	"properties": {
+		"business_name": {
+			"type": "string",
+			"title": "Business name",
+			"description": "Shown in the copyright line.",
+			"default": "",
+			"maxLength": 120,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 1,
+				"widget": "text"
+			}
+		},
+		"contacts": {
+			"type": "array",
+			"title": "Contacts",
+			"description": "Phone numbers, e-mail addresses, postal addresses, WhatsApp numbers or links, as written (any format; phone links keep digits and +).",
+			"default": [],
+			"maxItems": 12,
+			"items": {
+				"type": "object",
+				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": ["phone", "email", "address", "whatsapp", "link"]
+					},
+					"label": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"value": {
+						"type": "string",
+						"maxLength": 300
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					}
+				},
+				"required": ["kind", "value"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 2,
+				"widget": "list"
+			}
+		},
+		"hours": {
+			"type": "array",
+			"title": "Opening hours",
+			"description": "Rows of days and times, as text in your own words.",
+			"default": [],
+			"maxItems": 14,
+			"items": {
+				"type": "object",
+				"properties": {
+					"days": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"time": {
+						"type": "string",
+						"maxLength": 60
+					}
+				},
+				"required": ["days"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 3,
+				"widget": "list"
+			}
+		},
+		"socials": {
+			"type": "array",
+			"title": "Social links",
+			"description": "Profile links (label and URL).",
+			"default": [],
+			"maxItems": 12,
+			"items": {
+				"type": "object",
+				"properties": {
+					"label": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					}
+				},
+				"required": ["label", "href"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 4,
+				"widget": "list"
+			}
+		},
+		"links": {
+			"type": "array",
+			"title": "Policy and information links",
+			"description": "Links to policies and pages (label and URL).",
+			"default": [],
+			"maxItems": 20,
+			"items": {
+				"type": "object",
+				"properties": {
+					"label": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					}
+				},
+				"required": ["label", "href"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 5,
+				"widget": "list"
+			}
+		},
+		"show_year": {
+			"type": "boolean",
+			"title": "Show the year",
+			"description": "Show the current year in the copyright line.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Content",
+				"order": 6,
+				"widget": "switch"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders (the shared placement v1: paths, selectors, page types, devices, schedule, consent, triggers, frequency incl. dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "[data-ss-slot=\"footer\"]",
+						"position": "append"
+					}
+				]
+			},
+			"properties": {
+				"paths": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"selectors": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "object",
+						"properties": {
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"position": {
+								"type": "string",
+								"enum": ["before", "after", "prepend", "append", "replace"]
+							}
+						},
+						"required": ["selector"],
+						"additionalProperties": false
+					}
+				},
+				"pageTypes": {
+					"type": "array",
+					"maxItems": 50,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64,
+						"pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+					}
+				},
+				"devices": {
+					"type": "array",
+					"maxItems": 3,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"enum": ["mobile", "tablet", "desktop"]
+					}
+				},
+				"referrers": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"schedule": {
+					"type": "object",
+					"properties": {
+						"timezone": {
+							"type": "string",
+							"maxLength": 64
+						},
+						"from": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"until": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"windows": {
+							"type": "array",
+							"maxItems": 50,
+							"items": {
+								"type": "object",
+								"properties": {
+									"days": {
+										"type": "array",
+										"maxItems": 7,
+										"uniqueItems": true,
+										"items": {
+											"type": "string",
+											"enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+										}
+									},
+									"start": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									},
+									"end": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									}
+								},
+								"required": ["start", "end"],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": ["timezone"],
+					"additionalProperties": false
+				},
+				"consent": {
+					"type": "array",
+					"maxItems": 20,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64
+					}
+				},
+				"triggers": {
+					"type": "array",
+					"maxItems": 10,
+					"items": {
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": ["load", "idle", "scroll", "exit", "selector-click", "event"]
+							},
+							"delayMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"afterMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"percent": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 100
+							},
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"event": {
+								"type": "string",
+								"maxLength": 120
+							}
+						},
+						"required": ["type"],
+						"additionalProperties": false
+					}
+				},
+				"frequency": {
+					"type": "object",
+					"properties": {
+						"maxPerSession": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerDay": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerVisitor": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"cooldown": {
+							"type": "string",
+							"format": "duration"
+						},
+						"dismissMemory": {
+							"type": "string",
+							"format": "duration"
+						}
+					},
+					"additionalProperties": false
+				},
+				"audience": {
+					"type": "string",
+					"maxLength": 4000
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Placement",
+				"order": 7,
+				"widget": "placement"
+			}
+		}
+	}
+}

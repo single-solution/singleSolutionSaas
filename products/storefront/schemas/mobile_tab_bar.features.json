@@ -1,0 +1,301 @@
+{
+	"type": "object",
+	"title": "Mobile tab bar features",
+	"additionalProperties": false,
+	"properties": {
+		"tabs": {
+			"type": "array",
+			"title": "Tabs",
+			"description": "Two to six tabs: key, link, icon and a label (the string mobile_tab_bar.tab.<key> wins when it exists, so labels are translatable).",
+			"default": [
+				{
+					"key": "home",
+					"href": "/",
+					"icon": "home"
+				}
+			],
+			"maxItems": 6,
+			"items": {
+				"type": "object",
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z][a-z0-9_]{0,31}$",
+						"maxLength": 32
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					},
+					"icon": {
+						"type": "string",
+						"enum": ["home", "search", "tag", "cart", "user", "chat", "heart", "menu", "grid", "phone"]
+					},
+					"label": {
+						"type": "string",
+						"maxLength": 40
+					}
+				},
+				"required": ["key", "href"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 1,
+				"widget": "list"
+			}
+		},
+		"show_labels": {
+			"type": "boolean",
+			"title": "Show labels",
+			"description": "Show labels under the icons (without, each tab keeps an accessible name).",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Appearance",
+				"order": 2,
+				"widget": "switch"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders (the shared placement v1: paths, selectors, page types, devices, schedule, consent, triggers, frequency incl. dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "body",
+						"position": "append"
+					}
+				],
+				"devices": ["mobile", "tablet"]
+			},
+			"properties": {
+				"paths": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"selectors": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "object",
+						"properties": {
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"position": {
+								"type": "string",
+								"enum": ["before", "after", "prepend", "append", "replace"]
+							}
+						},
+						"required": ["selector"],
+						"additionalProperties": false
+					}
+				},
+				"pageTypes": {
+					"type": "array",
+					"maxItems": 50,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64,
+						"pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+					}
+				},
+				"devices": {
+					"type": "array",
+					"maxItems": 3,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"enum": ["mobile", "tablet", "desktop"]
+					}
+				},
+				"referrers": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"schedule": {
+					"type": "object",
+					"properties": {
+						"timezone": {
+							"type": "string",
+							"maxLength": 64
+						},
+						"from": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"until": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"windows": {
+							"type": "array",
+							"maxItems": 50,
+							"items": {
+								"type": "object",
+								"properties": {
+									"days": {
+										"type": "array",
+										"maxItems": 7,
+										"uniqueItems": true,
+										"items": {
+											"type": "string",
+											"enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+										}
+									},
+									"start": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									},
+									"end": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									}
+								},
+								"required": ["start", "end"],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": ["timezone"],
+					"additionalProperties": false
+				},
+				"consent": {
+					"type": "array",
+					"maxItems": 20,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64
+					}
+				},
+				"triggers": {
+					"type": "array",
+					"maxItems": 10,
+					"items": {
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": ["load", "idle", "scroll", "exit", "selector-click", "event"]
+							},
+							"delayMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"afterMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"percent": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 100
+							},
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"event": {
+								"type": "string",
+								"maxLength": 120
+							}
+						},
+						"required": ["type"],
+						"additionalProperties": false
+					}
+				},
+				"frequency": {
+					"type": "object",
+					"properties": {
+						"maxPerSession": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerDay": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerVisitor": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"cooldown": {
+							"type": "string",
+							"format": "duration"
+						},
+						"dismissMemory": {
+							"type": "string",
+							"format": "duration"
+						}
+					},
+					"additionalProperties": false
+				},
+				"audience": {
+					"type": "string",
+					"maxLength": 4000
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Placement",
+				"order": 3,
+				"widget": "placement"
+			}
+		}
+	}
+}

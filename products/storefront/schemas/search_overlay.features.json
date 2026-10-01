@@ -1,0 +1,490 @@
+{
+	"type": "object",
+	"title": "Search overlay features",
+	"additionalProperties": false,
+	"properties": {
+		"source": {
+			"type": "string",
+			"title": "Data source",
+			"description": "api: the Site Search product (GET /v1/search) or the Catalog (GET /v1/items) with the website browser key; json or page: search the items locally.",
+			"default": "page",
+			"enum": ["page", "json", "api"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 1,
+				"widget": "select"
+			}
+		},
+		"source_url": {
+			"type": "string",
+			"title": "Source URL",
+			"description": "The public JSON file (json), or the Single Solution product API base (api). https, or a path on this website.",
+			"default": "",
+			"maxLength": 2048,
+			"pattern": "^(|https://\\S+|/\\S*)$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 2,
+				"widget": "text"
+			}
+		},
+		"source_key": {
+			"type": "string",
+			"title": "Website browser key",
+			"description": "The website's browser key (pk_…) for the product API. Never a secret sk_ key: this value is visible in the page.",
+			"default": "",
+			"maxLength": 1003,
+			"pattern": "^(|pk_[A-Za-z0-9_.-]{8,1000})$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 3,
+				"widget": "text"
+			}
+		},
+		"page_data_id": {
+			"type": "string",
+			"title": "Page data element id",
+			"description": "Id of the <script type=\"application/json\"> holding the data when the source is the page.",
+			"default": "ss-items",
+			"maxLength": 64,
+			"pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 4,
+				"widget": "text",
+				"advanced": true
+			}
+		},
+		"currency": {
+			"type": "string",
+			"title": "Default currency",
+			"description": "ISO 4217 code for items without their own currency (empty: prices without a currency are not shown).",
+			"default": "",
+			"maxLength": 3,
+			"pattern": "^([A-Z]{3})?$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 5,
+				"widget": "text"
+			}
+		},
+		"locale": {
+			"type": "string",
+			"title": "Locale",
+			"description": "BCP 47 language tag for prices and sorting (empty: the page language).",
+			"default": "",
+			"maxLength": 35,
+			"pattern": "^([A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*)?$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 6,
+				"widget": "text",
+				"advanced": true
+			}
+		},
+		"fields": {
+			"type": "object",
+			"title": "Field mapping",
+			"description": "Which JSON fields hold each item property; | separates alternatives (url|href), dots reach nested values (images.0.url). Empty fields use the defaults.",
+			"default": {},
+			"properties": {
+				"id": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"title": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"href": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"image": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"image_alt": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"price": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"compare_at": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"currency": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"brand": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"badges": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"attributes": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"variants": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"collections": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"in_stock": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"rank": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"created_at": {
+					"type": "string",
+					"maxLength": 200
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 7,
+				"widget": "group",
+				"advanced": true
+			}
+		},
+		"api_path": {
+			"type": "string",
+			"title": "API path",
+			"description": "/v1/search (Site Search) or /v1/items (Catalog).",
+			"default": "/v1/search",
+			"enum": ["/v1/search", "/v1/items"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 8,
+				"widget": "select"
+			}
+		},
+		"results_path": {
+			"type": "string",
+			"title": "Results page",
+			"description": "The website’s own results page; Enter submits the query to it.",
+			"default": "/search",
+			"maxLength": 200,
+			"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Search",
+				"order": 9,
+				"widget": "text"
+			}
+		},
+		"param": {
+			"type": "string",
+			"title": "Query parameter",
+			"description": "Name of the query parameter of the results page.",
+			"default": "q",
+			"maxLength": 16,
+			"pattern": "^[a-z][a-z0-9_]{0,15}$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Search",
+				"order": 10,
+				"widget": "text"
+			}
+		},
+		"min_chars": {
+			"type": "integer",
+			"title": "Characters before suggesting",
+			"description": "Instant results start after this many characters.",
+			"default": 2,
+			"minimum": 1,
+			"maximum": 10,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Search",
+				"order": 11,
+				"widget": "number"
+			}
+		},
+		"max_results": {
+			"type": "integer",
+			"title": "Suggestions",
+			"description": "Most instant results shown.",
+			"default": 8,
+			"minimum": 1,
+			"maximum": 20,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Search",
+				"order": 12,
+				"widget": "number"
+			}
+		},
+		"hotkey": {
+			"type": "boolean",
+			"title": "Slash opens search",
+			"description": "The / key opens the search (outside text fields).",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Search",
+				"order": 13,
+				"widget": "switch"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders (the shared placement v1: paths, selectors, page types, devices, schedule, consent, triggers, frequency incl. dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "[data-ss-slot=\"search\"]",
+						"position": "append"
+					}
+				]
+			},
+			"properties": {
+				"paths": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"selectors": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "object",
+						"properties": {
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"position": {
+								"type": "string",
+								"enum": ["before", "after", "prepend", "append", "replace"]
+							}
+						},
+						"required": ["selector"],
+						"additionalProperties": false
+					}
+				},
+				"pageTypes": {
+					"type": "array",
+					"maxItems": 50,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64,
+						"pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+					}
+				},
+				"devices": {
+					"type": "array",
+					"maxItems": 3,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"enum": ["mobile", "tablet", "desktop"]
+					}
+				},
+				"referrers": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"schedule": {
+					"type": "object",
+					"properties": {
+						"timezone": {
+							"type": "string",
+							"maxLength": 64
+						},
+						"from": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"until": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"windows": {
+							"type": "array",
+							"maxItems": 50,
+							"items": {
+								"type": "object",
+								"properties": {
+									"days": {
+										"type": "array",
+										"maxItems": 7,
+										"uniqueItems": true,
+										"items": {
+											"type": "string",
+											"enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+										}
+									},
+									"start": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									},
+									"end": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									}
+								},
+								"required": ["start", "end"],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": ["timezone"],
+					"additionalProperties": false
+				},
+				"consent": {
+					"type": "array",
+					"maxItems": 20,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64
+					}
+				},
+				"triggers": {
+					"type": "array",
+					"maxItems": 10,
+					"items": {
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": ["load", "idle", "scroll", "exit", "selector-click", "event"]
+							},
+							"delayMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"afterMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"percent": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 100
+							},
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"event": {
+								"type": "string",
+								"maxLength": 120
+							}
+						},
+						"required": ["type"],
+						"additionalProperties": false
+					}
+				},
+				"frequency": {
+					"type": "object",
+					"properties": {
+						"maxPerSession": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerDay": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerVisitor": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"cooldown": {
+							"type": "string",
+							"format": "duration"
+						},
+						"dismissMemory": {
+							"type": "string",
+							"format": "duration"
+						}
+					},
+					"additionalProperties": false
+				},
+				"audience": {
+					"type": "string",
+					"maxLength": 4000
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Placement",
+				"order": 14,
+				"widget": "placement"
+			}
+		}
+	}
+}
