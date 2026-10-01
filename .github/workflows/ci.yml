@@ -31,33 +31,25 @@ jobs:
    # every unit on its own (PLAN F.17): its own check (format, lint, typecheck, tests with coverage thresholds),
    # plus `next build` for deployables and `ss app validate` for products. The Portal's check includes
    # `runtime:check` (node scripts/build-delivery-runtime.js --check).
+   units:
+      runs-on: ubuntu-latest
+      outputs:
+         list: ${{ steps.find.outputs.list }}
+      steps:
+         - uses: actions/checkout@v4
+         - id: find
+           # every folder with a package.json is a unit; new products join CI automatically
+           run: echo "list=$(ls -d packages/*/ platform/ products/*/ e2e/ | sed 's:/$::' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+
    unit:
       name: ${{ matrix.unit }}
+      needs: units
       runs-on: ubuntu-latest
       timeout-minutes: 20
       strategy:
          fail-fast: false
          matrix:
-            unit:
-               - packages/config
-               - packages/contracts
-               - packages/rules
-               - packages/entitlements
-               - packages/protocol
-               - packages/net
-               - packages/app-kit
-               - packages/web
-               - packages/ui
-               - packages/cli
-               - platform
-               - products/alerts
-               - products/chatbot
-               - products/coupons
-               - products/deals
-               - products/loyalty
-               - products/reviews
-               - products/signups
-               - e2e
+            unit: ${{ fromJson(needs.units.outputs.list) }}
       steps:
          - uses: actions/checkout@v4
          - uses: pnpm/action-setup@v4
