@@ -226,9 +226,9 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 				method: 'GET',
 				path: '/.well-known/ss-app.json',
 				auth: 'none',
-				handler: () => {
-					const { status, body } = product.manifestRoute();
-					return ok(body, { status, headers: { 'cache-control': 'public, max-age=60' } });
+				handler: async () => {
+					const { status, body, headers } = await product.manifestRoute();
+					return ok(body, { status, headers });
 				},
 			}),
 			defineRoute({

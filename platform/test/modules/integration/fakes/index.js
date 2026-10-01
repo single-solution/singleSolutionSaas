@@ -43,7 +43,12 @@ export const createWorld = () => {
 				return state.revoked.has(claims.keyId);
 			},
 		}),
-		ports: () => ({ websiteKeyRevoked: (/** @type {any} */ claims) => state.revoked.has(claims.keyId) }),
+		ports: () => ({
+			websiteKeyRevoked: (/** @type {any} */ claims) => {
+				if (state.failures.revocation) throw new Error('identity down');
+				return state.revoked.has(claims.keyId);
+			},
+		}),
 	});
 
 	const catalog = defineModule({

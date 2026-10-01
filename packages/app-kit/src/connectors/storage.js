@@ -1,10 +1,14 @@
 /**
  * S3-compatible storage adapter executing with the merchant's own credentials (their bucket, their keys). Objects are
  * namespaced `<descriptor.prefix><slug>/<websiteId>/<key>` so a product can only reach its own area of the bucket.
+ * Signing is `@ss/net` SigV4; server-side calls go through the outbound `send` (`@ss/net` `safeFetch` under the
+ * product's outbound policy), so a descriptor cannot point the product at an internal address.
  * @module
  */
+import { checkUrl, createOutboundPolicy, isNetError, objectUrl, presignV4, signV4 } from '@ss/net';
 import { kitError } from '../util.js';
-import { presignUrl, signHeaders, uriEncode } from './sigv4.js';
+
+/** @typedef {import('./index.js').OutboundSend} OutboundSend */
 
 /**
  * @typedef {object} StorageDescriptor
@@ -37,50 +41,60 @@ const checkKey = (key) => {
 
 /**
  * @param {Record<string, unknown>} descriptor
+ * @param {import('@ss/net').OutboundPolicy} policy
  * @returns {StorageDescriptor}
  */
-const checkDescriptor = (descriptor) => {
+const checkDescriptor = (descriptor, policy) => {
 	for (const name of ['bucket', 'region', 'accessKeyId', 'secretAccessKey']) {
 		if (typeof descriptor[name] !== 'string' || descriptor[name] === '')
 			throw kitError('resource_invalid', `storage descriptor needs ${name}`);
 	}
 	if (descriptor.endpoint !== undefined) {
-		const url = new URL(String(descriptor.endpoint));
-		const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-		if (url.protocol !== 'https:' && !(local && url.protocol === 'http:'))
-			throw kitError('resource_invalid', 'storage endpoint must be https');
+		const checked = checkUrl(String(descriptor.endpoint), policy);
+		if (!checked.ok) throw kitError('resource_invalid', `storage endpoint refused (${checked.reason})`);
 	}
 	return /** @type {StorageDescriptor} */ (/** @type {unknown} */ (descriptor));
 };
 
 /**
- * @param {{ descriptor: Record<string, unknown>, websiteId: string, slug: string, fetch: typeof globalThis.fetch, now: () => number }} options
+ * @param {{ descriptor: Record<string, unknown>, websiteId: string, slug: string, send: OutboundSend, now: () => number,
+ *   policy?: import('@ss/net').OutboundPolicy }} options `policy` vets the endpoint up front (default: public https only)
  */
-export const createS3Storage = ({ descriptor, websiteId, slug, fetch, now }) => {
-	const d = checkDescriptor(descriptor);
+export const createS3Storage = ({ descriptor, websiteId, slug, send, now, policy = createOutboundPolicy() }) => {
+	const d = checkDescriptor(descriptor, policy);
 	const credentials = {
 		accessKeyId: d.accessKeyId,
 		secretAccessKey: d.secretAccessKey,
 		...(d.sessionToken ? { sessionToken: d.sessionToken } : {}),
 	};
 	const base = `${d.prefix ?? ''}${slug}/${websiteId}/`;
-	const pathStyle = d.forcePathStyle ?? d.endpoint !== undefined;
+	const store = {
+		region: d.region,
+		bucket: d.bucket,
+		...(d.endpoint === undefined ? {} : { endpoint: d.endpoint }),
+		...(d.forcePathStyle === undefined ? {} : { forcePathStyle: d.forcePathStyle }),
+	};
 
 	/** @param {string} key */
 	const keyFor = (key) => `${base}${checkKey(key)}`;
 
 	/** @param {string} fullKey */
-	const urlFor = (fullKey) => {
-		const encoded = uriEncode(fullKey, true);
-		if (d.endpoint) {
-			const endpoint = new URL(d.endpoint);
-			return pathStyle
-				? `${endpoint.origin}/${uriEncode(d.bucket)}/${encoded}`
-				: `${endpoint.protocol}//${d.bucket}.${endpoint.host}/${encoded}`;
+	const urlFor = (fullKey) => objectUrl(store, fullKey);
+
+	/**
+	 * Signed server-side request.
+	 * @param {'HEAD' | 'DELETE'} method
+	 * @param {string} url
+	 */
+	const call = async (method, url) => {
+		try {
+			return await send(url, { method, headers: signV4({ method, url, region: d.region, now: now(), ...credentials }) });
+		} catch (error) {
+			const timeout = isNetError(error, 'timeout');
+			throw kitError(timeout ? 'timeout' : 'upstream_error', `storage ${method} failed`, {
+				...(isNetError(error) ? { reason: error.code } : {}),
+			});
 		}
-		return pathStyle
-			? `https://s3.${d.region}.amazonaws.com/${uriEncode(d.bucket)}/${encoded}`
-			: `https://${d.bucket}.s3.${d.region}.amazonaws.com/${encoded}`;
 	};
 
 	/** @param {number | undefined} expiresIn */
@@ -105,10 +119,10 @@ export const createS3Storage = ({ descriptor, websiteId, slug, fetch, now }) => 
 			const seconds = ttl(expiresIn);
 			/** @type {Record<string, string>} */
 			const headers = contentType ? { 'content-type': contentType } : {};
-			const url = presignUrl({
+			const url = presignV4({
 				method: 'PUT',
 				url: urlFor(fullKey),
-				credentials,
+				...credentials,
 				region: d.region,
 				now: now(),
 				expiresIn: seconds,
@@ -127,10 +141,10 @@ export const createS3Storage = ({ descriptor, websiteId, slug, fetch, now }) => 
 			const query = downloadName
 				? { 'response-content-disposition': `attachment; filename="${downloadName.replace(/["\\\r\n]/g, '_')}"` }
 				: {};
-			const url = presignUrl({
+			const url = presignV4({
 				method: 'GET',
 				url: urlFor(fullKey),
-				credentials,
+				...credentials,
 				region: d.region,
 				now: now(),
 				expiresIn: seconds,
@@ -140,29 +154,21 @@ export const createS3Storage = ({ descriptor, websiteId, slug, fetch, now }) => 
 		},
 		/** @param {{ key: string }} input */
 		headObject: async ({ key }) => {
-			const url = urlFor(keyFor(key));
-			const response = await fetch(url, {
-				method: 'HEAD',
-				headers: signHeaders({ method: 'HEAD', url, credentials, region: d.region, now: now() }),
-			});
+			const response = await call('HEAD', urlFor(keyFor(key)));
 			if (response.status === 404) return { exists: false };
-			if (!response.ok)
+			if (response.status < 200 || response.status > 299)
 				throw kitError('upstream_error', `storage HEAD answered ${response.status}`, { status: response.status });
 			return {
 				exists: true,
-				size: Number(response.headers.get('content-length') ?? 0),
-				contentType: response.headers.get('content-type') ?? undefined,
-				etag: response.headers.get('etag') ?? undefined,
+				size: Number(response.headers['content-length'] ?? 0),
+				contentType: response.headers['content-type'],
+				etag: response.headers.etag,
 			};
 		},
 		/** @param {{ key: string }} input */
 		deleteObject: async ({ key }) => {
-			const url = urlFor(keyFor(key));
-			const response = await fetch(url, {
-				method: 'DELETE',
-				headers: signHeaders({ method: 'DELETE', url, credentials, region: d.region, now: now() }),
-			});
-			if (!response.ok && response.status !== 404) {
+			const response = await call('DELETE', urlFor(keyFor(key)));
+			if ((response.status < 200 || response.status > 299) && response.status !== 404) {
 				throw kitError('upstream_error', `storage DELETE answered ${response.status}`, { status: response.status });
 			}
 			return { deleted: true };

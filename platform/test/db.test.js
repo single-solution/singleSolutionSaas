@@ -4,6 +4,7 @@ import {
 	createLocks,
 	createRegistry,
 	createRepositories,
+	createTransactionRunner,
 	defineCollection,
 	ensureIndexes,
 	getMongoClient,
@@ -88,7 +89,7 @@ describe('collection definitions and registry', () => {
 
 describe('ensureIndexes', () => {
 	it('creates declared indexes idempotently and reports undeclared ones', async () => {
-		const db = mongo.db('db_indexes');
+		const db = mongo.db('db_indexes', { fresh: true });
 		const registry = createRegistry([...INFRA_COLLECTIONS, ...DEFS]);
 		const dry = await ensureIndexes(db, registry, { dryRun: true });
 		expect(dry.created).toContain('demo_things.slug_1');
@@ -384,5 +385,104 @@ describe('getMongoClient', () => {
 		const real = getMongoClient({ uri: mongo.uri });
 		expect((await real.db('admin').command({ ping: 1 })).ok).toBe(1);
 		await closeMongoClients();
+	});
+});
+
+describe('transactions', () => {
+	it('commits all writes through the guarded repositories, or none', async () => {
+		const db = mongo.db('db_tx');
+		const registry = createRegistry(DEFS);
+		await ensureIndexes(db, registry);
+		const r = createRepositories(db, registry);
+		const withTransaction = createTransactionRunner(mongo.client);
+		const things = r.mutable('demo_things');
+		const value = await withTransaction(async (session) => {
+			await things.insertOne({ _id: 'tx1', slug: 'tx-1' }, { session });
+			await things.updateOne({ _id: 'tx1' }, { $set: { n: 1 } }, { session });
+			// not visible outside the transaction before the commit
+			expect(await things.findOne({ _id: 'tx1' })).toBeNull();
+			return 'ok';
+		});
+		expect(value).toBe('ok');
+		expect(await things.findOne({ _id: 'tx1' })).toMatchObject({ n: 1 });
+
+		await expect(
+			withTransaction(async (session) => {
+				await things.insertOne({ _id: 'tx2', slug: 'tx-2' }, { session });
+				await things.insertOne({ _id: 'tx3', slug: 'tx-1' }, { session }); // unique slug violation
+			}),
+		).rejects.toMatchObject({ code: 11000 });
+		expect(await things.countDocuments({ _id: { $in: ['tx2', 'tx3'] } })).toBe(0);
+		// guards still apply inside transactions
+		await expect(withTransaction(async (session) => things.find({ $where: '1' }, { session }).toArray())).rejects.toThrow(
+			/\$where/,
+		);
+	});
+
+	it('retries transient transaction errors and unknown commit results, within bounds', async () => {
+		/** @param {string} label */
+		const labelled = (label) => Object.assign(new Error(label), { hasErrorLabel: (/** @type {string} */ l) => l === label });
+		/** @param {{ fnErrors?: Error[], commitErrors?: Error[] }} plan */
+		const fakeClient = (plan) => {
+			const log = /** @type {string[]} */ ([]);
+			let active = false;
+			const session = /** @type {any} */ ({
+				startTransaction: () => {
+					active = true;
+					log.push('start');
+				},
+				inTransaction: () => active,
+				commitTransaction: async () => {
+					const error = plan.commitErrors?.shift();
+					log.push(error ? `commit:${error.message}` : 'commit');
+					if (error) throw error;
+					active = false;
+				},
+				abortTransaction: async () => {
+					active = false;
+					log.push('abort');
+				},
+				endSession: async () => void log.push('end'),
+			});
+			return { log, client: /** @type {any} */ ({ startSession: () => session }) };
+		};
+		const run = (/** @type {any} */ plan, /** @type {any} */ options = {}) => {
+			const { log, client } = fakeClient(plan);
+			const withTransaction = createTransactionRunner(client, options);
+			let calls = 0;
+			const result = withTransaction(async () => {
+				calls += 1;
+				const error = plan.fnErrors?.shift();
+				if (error) throw error;
+				return calls;
+			});
+			return { log, result };
+		};
+
+		const transient = run({ fnErrors: [labelled('TransientTransactionError')] });
+		expect(await transient.result).toBe(2);
+		expect(transient.log).toEqual(['start', 'abort', 'start', 'commit', 'end']);
+
+		const unknown = run({ commitErrors: [labelled('UnknownTransactionCommitResult')] });
+		expect(await unknown.result).toBe(1);
+		expect(unknown.log).toEqual(['start', 'commit:UnknownTransactionCommitResult', 'commit', 'end']);
+
+		const transientCommit = run({ commitErrors: [labelled('TransientTransactionError')] });
+		expect(await transientCommit.result).toBe(2);
+		expect(transientCommit.log).toEqual(['start', 'commit:TransientTransactionError', 'start', 'commit', 'end']);
+
+		const exhausted = run(
+			{ fnErrors: [labelled('TransientTransactionError'), labelled('TransientTransactionError')] },
+			{ maxAttempts: 2 },
+		);
+		await expect(exhausted.result).rejects.toThrow('TransientTransactionError');
+		expect(exhausted.log.at(-1)).toBe('end');
+
+		const fatalCommit = run({ commitErrors: [new Error('boom')] });
+		await expect(fatalCommit.result).rejects.toThrow('boom');
+
+		let t = 0;
+		const late = run({ fnErrors: [labelled('TransientTransactionError')] }, { timeoutMs: 10, clock: () => (t += 20) });
+		await expect(late.result).rejects.toThrow('TransientTransactionError');
 	});
 });

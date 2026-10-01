@@ -9,7 +9,9 @@
  * - `lease` atomically claims one due job (`queued` with `runAt ≤ now`, or `running` whose lease expired — the
  *   worker died) and gives it a visibility timeout; every lease counts an attempt.
  * - `complete` / `fail` only act while the caller still holds the lease (`leaseToken`), so a slow worker whose
- *   lease was taken over cannot overwrite the new owner's outcome.
+ *   lease was taken over cannot overwrite the new owner's outcome. `complete(job, { dropPayload: true })` unsets the
+ *   payload of the done record (jobs enqueued with `dropPayload: true` are completed that way by `runBatch`), so
+ *   payloads that must not outlive their delivery are gone as soon as the job succeeds.
  * - failures retry with exponential backoff and jitter (5 s · 2^(attempt-1), capped at 1 h) until `maxAttempts`,
  *   then the job is dead-lettered; `permanentFailure()` dead-letters at once. Dead jobs can be replayed.
  *
@@ -36,6 +38,7 @@ import { defaultRandomBytes, isDuplicateKey, isObject, randomToken } from './uti
  * @property {number} maxAttempts
  * @property {string} leaseToken
  * @property {Date} createdAt
+ * @property {boolean} dropPayload the payload is removed when the job completes
  */
 
 /**
@@ -89,6 +92,7 @@ const toJob = (doc) => ({
 	maxAttempts: doc.maxAttempts,
 	leaseToken: doc.leaseToken,
 	createdAt: doc.createdAt,
+	dropPayload: doc.dropPayload === true,
 });
 
 /**
@@ -107,10 +111,11 @@ export const createJobs = ({
 }) => {
 	/**
 	 * Enqueue a job. With a `key`, enqueueing the same key again returns the existing job (`inserted: false`).
-	 * @param {{ name: string, payload?: unknown, key?: string, runAt?: Date | number, maxAttempts?: number }} input
+	 * `dropPayload: true` removes the payload once the job succeeds.
+	 * @param {{ name: string, payload?: unknown, key?: string, runAt?: Date | number, maxAttempts?: number, dropPayload?: boolean }} input
 	 * @returns {Promise<{ id: string, inserted: boolean }>}
 	 */
-	const enqueue = async ({ name, payload = null, key, runAt, maxAttempts = defaultMaxAttempts }) => {
+	const enqueue = async ({ name, payload = null, key, runAt, maxAttempts = defaultMaxAttempts, dropPayload = false }) => {
 		if (typeof name !== 'string' || !NAME.test(name)) throw platformError('invalid_argument', `invalid job name: ${name}`);
 		if (key !== undefined && (typeof key !== 'string' || key.length === 0 || key.length > 256))
 			throw platformError('invalid_argument', 'job key must be 1..256 chars');
@@ -124,6 +129,7 @@ export const createJobs = ({
 				name,
 				...(key === undefined ? {} : { key }),
 				payload,
+				...(dropPayload ? { dropPayload: true } : {}),
 				status: 'queued',
 				attempts: 0,
 				maxAttempts,
@@ -208,15 +214,16 @@ export const createJobs = ({
 
 	/**
 	 * @param {Job} job
+	 * @param {{ dropPayload?: boolean }} [options] `dropPayload`: unset the payload of the done record
 	 * @returns {Promise<boolean>} false when the lease was lost
 	 */
-	const complete = async (job) => {
+	const complete = async (job, { dropPayload = false } = {}) => {
 		const t = now();
 		const result = await repo.updateOne(
 			{ _id: job.id, leaseToken: job.leaseToken, status: 'running' },
 			{
 				$set: { status: 'done', finishedAt: new Date(t), updatedAt: new Date(t), expireAt: new Date(t + doneRetentionMs) },
-				$unset: { leaseToken: '', leaseUntil: '' },
+				$unset: { leaseToken: '', leaseUntil: '', ...(dropPayload ? { payload: '' } : {}) },
 			},
 		);
 		return result.modifiedCount === 1;
@@ -283,7 +290,7 @@ export const createJobs = ({
 						deadline,
 						logger: logger.child({ jobId: job.id, job: job.name }),
 					});
-					if (await complete(job)) stats.succeeded += 1;
+					if (await complete(job, { dropPayload: job.dropPayload })) stats.succeeded += 1;
 					else stats.lost += 1;
 				} catch (error) {
 					logger.warn('job failed', { jobId: job.id, job: job.name, attempt: job.attempts, error });

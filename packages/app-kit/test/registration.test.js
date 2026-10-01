@@ -12,6 +12,7 @@ describe('registration', () => {
 			overrides: { appId: null, registrationTokenHash: hashRegistrationToken(TOKEN) },
 		});
 		portal.trustProductKey(/** @type {any} */ (null));
+		expect((await product.manifestRoute()).headers).not.toHaveProperty('ss-manifest-signature');
 		const request = await portal.registrationRequest({ token: TOKEN, audience: BASE });
 		const handle = product.handler(standardRoutes(product));
 		const res = await handle(
@@ -26,6 +27,8 @@ describe('registration', () => {
 		const verified = await portal.completeRegistration({ response, nonce: request.nonce });
 		expect(verified.appId).toBe('app_test');
 		expect(logs.some((l) => l.msg.includes('registered'))).toBe(true);
+		// once registered, the served manifest is signed for the learned appId
+		expect((await product.manifestRoute()).headers['ss-manifest-signature']).toMatch(/\./);
 		// the product now authenticates to the Portal with the learned appId
 		await entitle(portal);
 		expect((await product.entitlements.forWebsite(WEBSITE)).ok).toBe(true);

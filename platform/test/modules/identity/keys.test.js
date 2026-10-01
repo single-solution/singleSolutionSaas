@@ -56,7 +56,7 @@ describe('website keys', () => {
 			keyId: sk.json.keyId,
 			allowSubdomains: false,
 		});
-		expect(h.service.websiteKeySigningSource()).toBe('portal');
+		expect(h.service.websiteKeySigningSource()).toBe('infra');
 		expect(h.service.websiteKeyJwks().keys.length).toBeGreaterThan(0);
 
 		const pk = await s.client.post(`/v1/merchants/${s.merchantId}/websites/${s.twinId}/keys`, {
@@ -253,9 +253,9 @@ describe('website keys', () => {
 		expect(await h.service.isKeyRevoked(claims, `${sk.key}x`)).toBe(true); // HMAC mismatch
 		expect(await h.service.isKeyRevoked({ ...claims, websiteId: s.twinId })).toBe(true);
 		expect(await h.service.isKeyRevoked({ ...claims, env: 'test' })).toBe(true);
-		// a key signed with the Portal key but never issued (no record) is refused
+		// a key signed with the website-key signer but never issued (no record) is refused
 		const forged = await issueWebsiteKey({
-			signer: h.portal.shared.keys.signer,
+			signer: h.portal.shared.keys.websiteKeySigner,
 			kind: 'sk',
 			websiteId: s.websiteId,
 			merchantId: s.merchantId,

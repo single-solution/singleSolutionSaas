@@ -28,13 +28,18 @@ export const MAX_IMPERSONATION_SECONDS = 3600;
 /** @typedef {typeof LAUNCH_KINDS[number]} LaunchKind */
 /** @typedef {{ id: string, email?: string, name?: string, roles?: string[] }} LaunchUser */
 /**
- * @typedef {{ merchantId?: string, websiteId?: string, websiteIds?: string[], partnerId?: string, developerId?: string,
- *   permissions?: string[] }} LaunchScope
+ * What a launch may act on. Admin launches carry either `{ all: true }` (app-wide management, nothing else) or a
+ * merchant scope `{ merchantId, subscriptions? }`.
+ * @typedef {{ all?: true, merchantId?: string, websiteId?: string, websiteIds?: string[], subscriptions?: string[],
+ *   partnerId?: string, developerId?: string, permissions?: string[] }} LaunchScope
  */
 /**
  * @typedef {{ iss: string, aud: string, sub: string, iat: number, nbf: number, exp: number, jti: string, kind: LaunchKind,
  *   user: LaunchUser, scope: LaunchScope, subscriptions?: unknown[], act?: { sub: string }, impExp?: number }} LaunchClaims
  */
+
+/** Scope members allowed next to `all: true` (none: app-wide scope is exclusive, except `permissions`). */
+const ALL_SCOPE_MEMBERS = new Set(['all', 'permissions']);
 
 /**
  * @param {unknown} value
@@ -43,9 +48,17 @@ export const MAX_IMPERSONATION_SECONDS = 3600;
 const nonEmpty = (value) => typeof value === 'string' && value.length > 0;
 
 /**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+const stringList = (value) => Array.isArray(value) && value.length <= 1000 && value.every(nonEmpty);
+
+/**
  * Return why `claims` violate the kind/scope rules, or `null` when consistent.
- *  - every kind: `user.id`, `scope` object
- *  - merchant/admin: `scope.merchantId`; admin is always merchant-scoped
+ *  - every kind: `user.id`, `scope` object; `scope.subscriptions` (when present) is a list of ids
+ *  - merchant: `scope.merchantId`
+ *  - admin: either `scope.all === true` (app-wide; then no merchant/website/subscription members) or `scope.merchantId`
+ *  - `scope.all` only for admin
  *  - demo: no `scope.merchantId` (sandbox data only)
  *  - partner: `scope.partnerId`; developer: `scope.developerId`
  *  - impersonate: `act.sub` (the staff actor, ≠ `sub`), `scope.merchantId`, `impExp` with iat < impExp ≤ iat + 1 h
@@ -59,10 +72,18 @@ export const kindScopeViolation = (claims) => {
 	if (!isObject(user) || !nonEmpty(user.id)) return 'user.id is required';
 	if (!isObject(scope)) return 'scope is required';
 	if (kind !== 'impersonate' && (act !== undefined || impExp !== undefined)) return 'act/impExp only allowed for impersonate';
+	if (scope.subscriptions !== undefined && !stringList(scope.subscriptions)) return 'scope.subscriptions must be a list of ids';
+	if (scope.all !== undefined) {
+		if (kind !== 'admin') return 'scope.all is only allowed for admin launches';
+		if (scope.all !== true) return 'scope.all must be true';
+		const extra = Object.keys(scope).find((key) => !ALL_SCOPE_MEMBERS.has(key));
+		return extra === undefined ? null : `scope.all excludes scope.${extra}`;
+	}
 	switch (kind) {
 		case 'merchant':
+			return nonEmpty(scope.merchantId) ? null : 'merchant launch requires scope.merchantId';
 		case 'admin':
-			return nonEmpty(scope.merchantId) ? null : `${kind} launch requires scope.merchantId`;
+			return nonEmpty(scope.merchantId) ? null : 'admin launch requires scope.all or scope.merchantId';
 		case 'demo':
 			return scope.merchantId === undefined ? null : 'demo launch must not carry scope.merchantId';
 		case 'partner':

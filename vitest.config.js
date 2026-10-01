@@ -4,6 +4,8 @@ export default defineConfig({
 	test: {
 		include: ['packages/*/test/**/*.test.js', 'platform/test/**/*.test.js'],
 		environment: 'node',
+		// one MongoMemoryReplSet for the whole run (SS_TEST_MONGO_URI); platform test files get fresh databases
+		globalSetup: ['platform/test/global-setup.js'],
 		hookTimeout: 60000,
 		testTimeout: 30000,
 		coverage: {

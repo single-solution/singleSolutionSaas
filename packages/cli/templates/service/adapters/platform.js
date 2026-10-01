@@ -77,6 +77,11 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		logger: createLogger({ level: config.logLevel }),
 		privacy: PRIVACY,
 		devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
+		// SSRF policy for merchant databases and connectors: in development the `ss dev` client database and local mocks
+		// live on loopback; app-kit ignores the allowlist when NODE_ENV=production
+		outbound: {
+			allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],
+		},
 		...(stores === undefined ? {} : { stores }),
 		...overrides,
 	});

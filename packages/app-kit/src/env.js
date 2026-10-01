@@ -5,7 +5,8 @@
 
 /**
  * @param {Record<string, string | undefined>} [env] defaults to `process.env`
- * @returns {{ portalUrl: string | undefined, appId: string | null, signingKey: string | undefined, registrationTokenHash: string | undefined, productDbUri: string | undefined, logLevel: string }}
+ * @returns {{ portalUrl: string | undefined, appId: string | null, signingKey: string | undefined, registrationTokenHash: string | undefined, productDbUri: string | undefined, logLevel: string, outboundAllowHosts: string[] }}
+ *   `outboundAllowHosts` comes from `SS_OUTBOUND_ALLOW_HOSTS` (comma-separated; development only — ignored in production)
  */
 export const configFromEnv = (env = process.env) => ({
 	portalUrl: env.SS_PORTAL_URL,
@@ -14,4 +15,8 @@ export const configFromEnv = (env = process.env) => ({
 	registrationTokenHash: env.SS_REGISTRATION_TOKEN_HASH,
 	productDbUri: env.SS_PRODUCT_DB_URI,
 	logLevel: env.SS_LOG_LEVEL ?? 'info',
+	outboundAllowHosts: (env.SS_OUTBOUND_ALLOW_HOSTS ?? '')
+		.split(',')
+		.map((host) => host.trim())
+		.filter((host) => host !== ''),
 });

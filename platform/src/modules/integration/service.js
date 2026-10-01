@@ -10,8 +10,8 @@
  * @module
  */
 import { createHash } from 'node:crypto';
-import { createId } from '@ss/contracts';
-import { originAllowed, signEvent, verifyWebsiteKey } from '@ss/protocol';
+import { createId, eventScopeOf } from '@ss/contracts';
+import { signEvent } from '@ss/protocol';
 import { isProblem, problem } from '../../infra/http.js';
 import {
 	DELIVERY_STATUSES,
@@ -53,14 +53,14 @@ import { createTransport } from './transport.js';
 /** @typedef {import('./repo.js').EventRecord} EventRecord */
 /** @typedef {import('./transport.js').ResolveHost} ResolveHost */
 
+/**
+ * Label of platform-scoped events (no website) in internal keys: the sealed-payload AAD and delivery job keys.
+ * Never placed in an event envelope.
+ */
+const PLATFORM_SCOPE = 'platform';
+
 /** Job name of a delivery attempt. */
 export const DELIVER_JOB = 'integration.deliver';
-
-/**
- * Website id used in the envelope of a control event that targets products without a website (for example
- * `manifest.accepted@1`): the v1 envelope requires a `websiteId`, so platform-wide events carry this sentinel.
- */
-export const PLATFORM_WEBSITE_ID = `web_${'0'.repeat(26)}`;
 
 /**
  * @typedef {object} IntegrationOptions
@@ -106,21 +106,6 @@ export const createIntegrationService = (ctx, options = {}) => {
 		...(options.resolveHost ? { resolveHost: options.resolveHost } : {}),
 	});
 	const log = ctx.logger;
-	// Website keys are verified against the website-key signer when infra provides one, else the Portal keys
-	// (exactly what the `websiteKey` authenticator uses).
-	const websiteKeyResolver = /** @type {any} */ (ctx.keys).websiteKeyResolver ?? ctx.keys.keyResolver;
-
-	/**
-	 * @param {string} name
-	 * @returns {any | null}
-	 */
-	const optionalService = (name) => {
-		try {
-			return ctx.service(name);
-		} catch {
-			return null;
-		}
-	};
 
 	const unavailable = () =>
 		problem('unavailable', 'Event routing is temporarily unavailable.', { headers: { 'retry-after': '5' } });
@@ -129,30 +114,13 @@ export const createIntegrationService = (ctx, options = {}) => {
 	// Website keys (header and body authentication share this path)
 
 	/**
-	 * Verify a website key like the `websiteKey` authenticator: offline signature, revocation (identity), origin for pk_.
+	 * Verify a website key exactly like the `websiteKey` authenticator (one infra implementation: signature with the
+	 * website-key resolver, revocation port with the raw key, origin for pk_).
 	 * @param {{ key: string, origin: string | null, referer: string | null }} input
 	 * @returns {Promise<WebsiteClaims>}
 	 */
-	const verifyKey = async ({ key, origin, referer }) => {
-		if (!/^(pk|sk)_/.test(key)) throw problem('invalid_credentials', 'The website key is invalid.');
-		const identity = optionalService('identity');
-		if (!identity || typeof identity.websiteKeyRevoked !== 'function')
-			throw problem('unavailable', 'Website key verification is not available.', { headers: { 'retry-after': '30' } });
-		/** @type {import('@ss/protocol').WebsiteKeyClaims} */
-		let claims;
-		try {
-			claims = await verifyWebsiteKey({ key, keyResolver: websiteKeyResolver, revocations: [], now: ctx.now });
-		} catch {
-			throw problem('invalid_credentials', 'The website key is invalid.');
-		}
-		if (await identity.websiteKeyRevoked(claims)) throw problem('invalid_credentials', 'The website key is revoked.');
-		if (
-			claims.kind === 'pk' &&
-			!originAllowed({ origin, referer, domain: claims.domain, allowSubdomains: claims.allowSubdomains, env: claims.env })
-		)
-			throw problem('origin_not_allowed', 'This key cannot be used from this origin.');
-		return /** @type {WebsiteClaims} */ (claims);
-	};
+	const verifyKey = async ({ key, origin, referer }) =>
+		/** @type {WebsiteClaims} */ (await ctx.verifyWebsiteKey({ key, origin, referer }));
 
 	// -----------------------------------------------------------------------------------------------------------
 	// Routing
@@ -240,7 +208,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 	const fanout = async (record, event, targets, kind) => {
 		if (targets.length > 0) {
 			const sealed = ctx.envelope.seal(JSON.stringify(event), {
-				aad: { websiteId: record.websiteId, eventId: record.eventId },
+				aad: { websiteId: record.websiteId ?? PLATFORM_SCOPE, eventId: record.eventId },
 			});
 			for (const appId of targets) {
 				const { deliveryId } = await repo.ensureDelivery({
@@ -255,9 +223,10 @@ export const createIntegrationService = (ctx, options = {}) => {
 				});
 				await ctx.jobs.enqueue({
 					name: DELIVER_JOB,
-					key: jobKey(record.websiteId, record.eventId, appId),
+					key: jobKey(record.websiteId ?? PLATFORM_SCOPE, record.eventId, appId),
 					payload: { deliveryId, sealed },
 					maxAttempts,
+					dropPayload: true,
 				});
 			}
 		}
@@ -277,7 +246,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 			_id: createId('iev', { randomBytes: ctx.randomBytes }),
 			eventId: event.id,
 			type: event.type,
-			websiteId: event.websiteId,
+			websiteId: event.websiteId ?? null,
 			merchantId,
 			env: event.env,
 			source,
@@ -291,7 +260,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 			await fanout(record, event, targets, kind);
 			return 'accepted';
 		}
-		const existing = await repo.eventByKey(event.websiteId, event.idempotencyKey);
+		const existing = await repo.eventByKey(event.websiteId ?? null, event.idempotencyKey);
 		if (existing && existing.fanout === 'pending' && existing.eventId === event.id)
 			await fanout(existing, event, targets, kind);
 		return 'duplicate';
@@ -476,14 +445,18 @@ export const createIntegrationService = (ctx, options = {}) => {
 	 * @param {string} type
 	 * @param {unknown} data
 	 * @param {{ appIds?: string[], websiteId?: string }} [target]
-	 * @returns {Promise<{ eventId: string, websiteId: string, deliveries: number, appIds: string[] }>}
+	 * @returns {Promise<{ eventId: string, websiteId: string | null, deliveries: number, appIds: string[] }>}
 	 */
 	const emitControl = async (type, data, { appIds, websiteId } = {}) => {
 		if (!isControlEvent(type)) throw problem('validation_failed', `${type} is not a control event.`);
 		if (appIds !== undefined && (!Array.isArray(appIds) || appIds.some((id) => typeof id !== 'string' || id === '')))
 			throw problem('validation_failed', 'appIds must be a list of app ids.');
-		if (!websiteId && (!appIds || appIds.length === 0))
-			throw problem('validation_failed', 'A control event needs appIds or a websiteId.');
+		const platform = eventScopeOf(type) === 'platform';
+		// platform-scoped events (e.g. manifest.accepted@1) concern products, not a website: they go to appIds only
+		if (platform && websiteId) throw problem('validation_failed', `${type} is platform-scoped; target appIds, not a website.`);
+		if (platform && (!appIds || appIds.length === 0))
+			throw problem('validation_failed', `${type} is platform-scoped and needs appIds.`);
+		if (!platform && !websiteId) throw problem('validation_failed', `${type} needs a websiteId.`);
 		/** @type {'live' | 'test'} */
 		let env = ctx.config.env === 'production' ? 'live' : 'test';
 		/** @type {string | null} */
@@ -498,7 +471,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		const built = buildControlEvent({
 			type,
 			data,
-			websiteId: websiteId ?? PLATFORM_WEBSITE_ID,
+			websiteId: websiteId ?? null,
 			env,
 			id,
 			occurredAt: new Date(ctx.now()).toISOString(),
@@ -515,7 +488,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 			targets = [...subscribed].filter(([, status]) => status !== 'cancelled').map(([appId]) => appId);
 		}
 		await accept({ event: built.event, merchantId, source: 'portal', publisherAppId: null, targets, kind: 'control' });
-		return { eventId: id, websiteId: built.event.websiteId, deliveries: targets.length, appIds: targets };
+		return { eventId: id, websiteId: built.event.websiteId ?? null, deliveries: targets.length, appIds: targets };
 	};
 
 	// -----------------------------------------------------------------------------------------------------------
@@ -545,7 +518,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 		/** @type {string} */
 		let body;
 		try {
-			body = ctx.envelope.openText(sealed, { aad: { websiteId: delivery.websiteId, eventId: delivery.eventId } });
+			body = ctx.envelope.openText(sealed, {
+				aad: { websiteId: delivery.websiteId ?? PLATFORM_SCOPE, eventId: delivery.eventId },
+			});
 		} catch {
 			return { ok: false, code: 'payload_unavailable', permanent: true };
 		}
@@ -754,9 +729,10 @@ export const createIntegrationService = (ctx, options = {}) => {
 		if (!changed) throw problem('conflict', 'The delivery is being replayed.');
 		await ctx.jobs.enqueue({
 			name: DELIVER_JOB,
-			key: jobKey(delivery.websiteId, delivery.eventId, delivery.appId, replays),
+			key: jobKey(delivery.websiteId ?? PLATFORM_SCOPE, delivery.eventId, delivery.appId, replays),
 			payload: { deliveryId, sealed: letter.sealed },
 			maxAttempts,
+			dropPayload: true,
 		});
 		await repo.deleteDeadLetter(deliveryId);
 		await repo.bump(delivery.eventRecordId, { dead: -1 });

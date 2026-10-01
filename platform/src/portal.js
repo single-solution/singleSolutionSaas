@@ -4,7 +4,7 @@
  *
  * The returned object is what the Next.js adapters in `app/` call:
  * - `handle(request)` — the Portal API (`/v1/*` for modules, `/cron/:job` for cron triggers)
- * - `jwks()` — the published Portal JWKS
+ * - `jwks()` — the published JWKS (Portal keys and website-key signing keys, distinct kids)
  * - `readyz()` — dependency check
  * - `ensureIndexes()`, `migrate()` — operational entry points (scripts, deploy pipeline)
  * @module
@@ -12,11 +12,19 @@
 import { createProblemFactory } from '@ss/contracts';
 import { createAudit } from './infra/audit.js';
 import { clearCookie, createLoginThrottle, createSessions, serializeCookie, sessionCookieName } from './infra/auth.js';
-import { createAuthenticators } from './infra/authenticators.js';
+import { createAuthenticators, createWebsiteKeyVerifier } from './infra/authenticators.js';
 import { createEnvelope, createPortalKeys, createSecretHasher } from './infra/crypto.js';
-import { createLocks, createRegistry, createRepositories, ensureIndexes, runMigrations } from './infra/db.js';
+import {
+	createLocks,
+	createRegistry,
+	createRepositories,
+	createTransactionRunner,
+	ensureIndexes,
+	runMigrations,
+} from './infra/db.js';
 import { platformError } from './infra/errors.js';
-import { createApiHandler, defineRoute, ok, problem } from './infra/http.js';
+import { INFRA_PROBLEMS, createApiHandler, defineRoute, ok, problem } from './infra/http.js';
+import { createPlatformMailer } from './infra/mailer.js';
 import { createCronRunner, createJobs } from './infra/jobs.js';
 import { composeModules, moduleProblems } from './infra/modules.js';
 import { can, websitesVisible } from './infra/rbac.js';
@@ -25,6 +33,11 @@ import { createIdempotencyStore, createRateLimitStore, createReplayStore } from 
 import { defaultRandomBytes } from './infra/util.js';
 
 /** @typedef {import('./infra/config.js').PortalConfig} PortalConfig */
+
+/** Built-in cron that verifies the audit hash chains (scheduled nightly in `vercel.json`). */
+export const AUDIT_VERIFY_CRON = 'audit_verify';
+/** Built-in job doing the same verification on demand. */
+export const AUDIT_VERIFY_JOB = 'audit.verify';
 /** @typedef {import('./infra/modules.js').ModuleDefinition} ModuleDefinition */
 /** @typedef {import('./infra/modules.js').SharedContext} SharedContext */
 /** @typedef {import('./infra/logger.js').Logger} Logger */
@@ -42,7 +55,7 @@ export const healthz = ({ version = 'dev', now = Date.now } = {}) =>
 /**
  * @param {{ config: Readonly<PortalConfig>, db: import('mongodb').Db, modules: ReadonlyArray<Readonly<ModuleDefinition>>,
  *   logger: Logger, now?: () => number, randomBytes?: (n: number) => Uint8Array, random?: () => number,
- *   pingTimeoutMs?: number }} options
+ *   pingTimeoutMs?: number, mailer?: import('./infra/mailer.js').Mailer }} options
  */
 export const createPortal = ({
 	config,
@@ -53,11 +66,15 @@ export const createPortal = ({
 	randomBytes = defaultRandomBytes,
 	random = Math.random,
 	pingTimeoutMs = 2_000,
+	mailer,
 }) => {
 	const registry = createRegistry([...INFRA_COLLECTIONS, ...modules.flatMap((m) => m.collections ?? [])]);
 	const repos = createRepositories(db, registry, { now });
-	const problems = createProblemFactory({ baseUri: config.problemBaseUri, codes: moduleProblems(modules) });
-	const keys = createPortalKeys(config.signingKeys);
+	const moduleCodes = moduleProblems(modules);
+	for (const code of Object.keys(moduleCodes))
+		if (Object.hasOwn(INFRA_PROBLEMS, code)) throw new TypeError(`problem code ${code} is reserved by the infra layer`);
+	const problems = createProblemFactory({ baseUri: config.problemBaseUri, codes: { ...INFRA_PROBLEMS, ...moduleCodes } });
+	const keys = createPortalKeys(config.signingKeys, config.websiteKeySigningKeys);
 	const locks = createLocks(repos.mutable(COLLECTIONS.locks), { now, randomBytes });
 	const sessions = createSessions({
 		repo: repos.mutable(COLLECTIONS.sessions),
@@ -75,6 +92,22 @@ export const createPortal = ({
 		logger: logger.child({ component: 'jobs' }),
 	});
 
+	// ports are known once the modules are composed; the verifier reads them lazily
+	/** @type {import('./infra/authenticators.js').AuthPorts} */
+	let ports = {};
+	const verifyWebsiteKey = createWebsiteKeyVerifier({
+		keyResolver: keys.websiteKeyResolver,
+		revoked: () => ports.websiteKeyRevoked,
+		now,
+	});
+	const audit = createAudit({
+		repo: repos.appendOnly(COLLECTIONS.audit),
+		locks,
+		now,
+		randomBytes,
+		logger: logger.child({ component: 'audit' }),
+	});
+
 	/** @type {SharedContext} */
 	const shared = Object.freeze({
 		config,
@@ -85,8 +118,11 @@ export const createPortal = ({
 		keys,
 		envelope: createEnvelope({ keks: config.keks, randomBytes }),
 		secretHasher: createSecretHasher(config.websiteKeyPepper),
-		audit: createAudit({ repo: repos.appendOnly(COLLECTIONS.audit), now, randomBytes }),
+		audit,
 		jobs,
+		withTransaction: createTransactionRunner(db.client),
+		verifyWebsiteKey,
+		mailer: mailer ?? createPlatformMailer({ config, logger: logger.child({ component: 'mailer' }) }),
 		locks,
 		sessions,
 		loginThrottle: createLoginThrottle({ repo: repos.mutable(COLLECTIONS.loginThrottle), secret: config.sessionSecret, now }),
@@ -110,12 +146,25 @@ export const createPortal = ({
 			return repos.repo(name);
 		},
 	});
+	ports = composed.ports;
+
+	if (Object.hasOwn(composed.jobs, AUDIT_VERIFY_JOB)) throw new TypeError(`job ${AUDIT_VERIFY_JOB} is reserved`);
+	for (const name of ['drain', AUDIT_VERIFY_CRON])
+		if (Object.hasOwn(composed.crons, name)) throw new TypeError(`cron ${name} is reserved`);
+	/** @type {Record<string, import('./infra/jobs.js').JobHandler>} */
+	const jobHandlers = {
+		...composed.jobs,
+		// built-in: the same verification on demand (`jobs.enqueue({ name: 'audit.verify' })`)
+		[AUDIT_VERIFY_JOB]: async (_payload, { deadline, signal }) => audit.verifyAll({ deadline, signal }),
+	};
 
 	const cron = createCronRunner({
 		crons: {
 			// built-in: drain the job queue within the cron time budget
 			drain: async ({ deadline }) =>
-				jobs.runBatch({ handlers: composed.jobs, deadlineMs: Math.max(0, deadline - now()), owner: 'cron:drain' }),
+				jobs.runBatch({ handlers: jobHandlers, deadlineMs: Math.max(0, deadline - now()), owner: 'cron:drain' }),
+			// built-in: recompute every audit hash chain (nightly)
+			[AUDIT_VERIFY_CRON]: async ({ deadline, signal }) => audit.verifyAll({ deadline, signal }),
 			...composed.crons,
 		},
 		locks,
@@ -146,7 +195,7 @@ export const createPortal = ({
 		authenticators: createAuthenticators({
 			sessions,
 			cookieSecure: config.cookieSecure,
-			portalKeyResolver: keys.keyResolver,
+			verifyWebsiteKey,
 			portalUrl: config.portalUrl,
 			replayStore,
 			cronSecret: config.cronSecret,
@@ -155,6 +204,7 @@ export const createPortal = ({
 		}),
 		can,
 		idempotency: createIdempotencyStore(repos.mutable(COLLECTIONS.idempotency), { now }),
+		idempotencySecret: config.idempotencySecret,
 		rateLimits: createRateLimitStore(repos.mutable(COLLECTIONS.rateLimits)),
 		portalOrigin: config.portalOrigin,
 		now,
@@ -170,9 +220,9 @@ export const createPortal = ({
 		modules: composed,
 		cron,
 		handle,
-		/** Published JWKS (current + previous keys). */
+		/** Published JWKS: Portal keys (current + previous) and website-key signing keys. */
 		jwks: () =>
-			new Response(JSON.stringify(keys.jwks()), {
+			new Response(JSON.stringify(keys.publishedJwks()), {
 				status: 200,
 				headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=300, stale-while-revalidate=60' },
 			}),

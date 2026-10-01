@@ -28,6 +28,7 @@ const makeData = (options = {}) => {
 	const clock = options.clock ?? createClock();
 	let ttlMs = options.ttlMs ?? 60_000;
 	const data = createData({
+		outbound: { allowHosts: ['127.0.0.1'] },
 		portal: {
 			resolveResource: async ({ websiteId }) => {
 				resolved.push(websiteId);
@@ -439,6 +440,7 @@ describe('data.forWebsite (MongoDB)', () => {
 			slug: 's',
 			randomBytes: seededRandom(),
 			logger,
+			outbound: { allowHosts: ['127.0.0.1'] },
 			clientOptions: { serverSelectionTimeoutMS: 200 },
 			autoSweep: true,
 			idleMs: 10_000,
@@ -446,6 +448,81 @@ describe('data.forWebsite (MongoDB)', () => {
 		await expect(unreachable.forWebsite(WEBSITE)).rejects.toMatchObject({ code: 'resource_unavailable' });
 		expect(JSON.stringify(entries)).not.toContain('secret');
 		await unreachable.closeAll();
+	});
+
+	it('refuses merchant databases the outbound policy does not allow', async () => {
+		const { logger, entries } = createTestLogger();
+		/** @param {string} uri @param {Record<string, any>} [extra] */
+		const dataFor = (uri, extra = {}) =>
+			createData({
+				portal: { resolveResource: async () => ({ kind: 'database', descriptor: { uri }, expiresAt: 'nope' }) },
+				slug: 's',
+				randomBytes: seededRandom(),
+				logger,
+				autoSweep: false,
+				createClient: () => {
+					throw new Error('must not connect');
+				},
+				...extra,
+			});
+		/** @type {Array<[string, string]>} */
+		const cases = [
+			[mongo.uriFor('x'), 'loopback_address'], // no allowlist: the in-memory server on 127.0.0.1 is refused
+			['mongodb://u:p@10.0.0.5:27017/x?tls=true', 'private_address'],
+			['mongodb://u:p@169.254.169.254/x?tls=true', 'metadata_address'],
+			['mongodb+srv://u:p@db.internal/x', 'internal_name'],
+			['mongodb://u:p@[::1]:27017/x?tls=true', 'loopback_address'],
+			['mongodb://u:p@2130706433/x?tls=true', 'loopback_address'],
+			['mongodb://u:p@db.example.com/x', 'tls_required'],
+			['mongodb+srv://u:p@c.example.net/x?tlsCAFile=/etc/passwd', 'option_tlscafile'],
+			['mongodb+srv://u:p@c.example.net/x?authMechanism=MONGODB-AWS', 'auth_mechanism'],
+		];
+		for (const [uri, reason] of cases) {
+			const error = await dataFor(uri)
+				.forWebsite(WEBSITE)
+				.catch((/** @type {any} */ e) => e);
+			expect(error, uri).toMatchObject({ code: 'resource_invalid', message: `client database refused (${reason})` });
+		}
+		// allowlisting another host does not admit loopback
+		const other = await dataFor(mongo.uriFor('x'), { outbound: { allowHosts: ['10.0.0.5'] } })
+			.forWebsite(WEBSITE)
+			.catch((/** @type {any} */ e) => e);
+		expect(other.code).toBe('resource_invalid');
+		expect(JSON.stringify(entries)).not.toContain('p@');
+		expect(entries.some((e) => e.msg === 'client database refused by the outbound policy')).toBe(true);
+	});
+
+	it('connects through the guarded lookup', async () => {
+		/** @type {any[]} */
+		const seenOptions = [];
+		const resolved = /** @type {string[]} */ ([]);
+		const uri = mongo.uriFor('guarded').replace('127.0.0.1', 'db.dev.test');
+		const data = createData({
+			portal: { resolveResource: async () => ({ kind: 'database', descriptor: { uri }, expiresAt: 'nope' }) },
+			slug: 'guarded',
+			randomBytes: seededRandom(),
+			logger: createTestLogger().logger,
+			autoSweep: false,
+			outbound: {
+				allowHosts: ['db.dev.test', '127.0.0.1'],
+				resolve: async (/** @type {string} */ host) => {
+					resolved.push(host);
+					return [{ address: '127.0.0.1', family: 4 }];
+				},
+			},
+			clientOptions: { lookup: /** @type {any} */ (() => {}), directConnection: true },
+			createClient: (/** @type {string} */ u, /** @type {any} */ options) => {
+				seenOptions.push(options);
+				return new MongoClient(u, options);
+			},
+		});
+		const scope = await data.forWebsite(WEBSITE);
+		await scope.collection('things').insertOne({ websiteId: WEBSITE, n: 1 });
+		expect(await scope.collection('things').countDocuments({ websiteId: WEBSITE })).toBe(1);
+		expect(resolved).toContain('db.dev.test');
+		expect(typeof seenOptions[0]?.lookup).toBe('function');
+		expect(seenOptions[0]?.lookup.length).toBe(3); // the guarded lookup, not the clientOptions override
+		await data.closeAll();
 	});
 });
 

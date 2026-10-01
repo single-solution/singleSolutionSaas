@@ -15,6 +15,7 @@
 	"dependencies": {
 		"@ss/contracts": "workspace:*",
 		"@ss/entitlements": "workspace:*",
+		"@ss/net": "workspace:*",
 		"@ss/protocol": "workspace:*",
 		"@ss/rules": "workspace:*",
 		"mongodb": "^6.20.0"

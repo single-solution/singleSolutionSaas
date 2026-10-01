@@ -1,11 +1,15 @@
 /**
  * Generic HTTP connector for merchant-owned providers (AI, messaging): JSON requests to the provider base URL from
  * the resolved descriptor, authenticated with the merchant's API key. Only relative paths under the base URL are
- * allowed (no SSRF through the path), https only (http on localhost for development). Credentials are never logged
- * and never appear in errors.
+ * allowed (no SSRF through the path). Requests go through the outbound `send` — `@ss/net` `safeFetch` under the
+ * product's outbound policy: https only (http only for allowlisted development hosts), every DNS answer vetted at
+ * connect time, no redirects, response size cap. Credentials are never logged and never appear in errors.
  * @module
  */
+import { checkUrl, createOutboundPolicy, isNetError } from '@ss/net';
 import { isObject, kitError } from '../util.js';
+
+/** @typedef {import('./index.js').OutboundSend} OutboundSend */
 
 /**
  * @typedef {object} HttpDescriptor
@@ -21,32 +25,32 @@ import { isObject, kitError } from '../util.js';
 
 /**
  * @param {Record<string, unknown>} descriptor
+ * @param {import('@ss/net').OutboundPolicy} policy
  * @returns {HttpDescriptor}
  */
-const checkDescriptor = (descriptor) => {
+const checkDescriptor = (descriptor, policy) => {
 	if (typeof descriptor.baseUrl !== 'string' || typeof descriptor.apiKey !== 'string' || descriptor.apiKey === '') {
 		throw kitError('resource_invalid', 'connector descriptor needs baseUrl and apiKey');
 	}
-	/** @type {URL} */
-	let url;
-	try {
-		url = new URL(descriptor.baseUrl);
-	} catch {
-		throw kitError('resource_invalid', 'connector baseUrl is invalid');
+	if (/[?#]/.test(descriptor.baseUrl)) throw kitError('resource_invalid', 'connector baseUrl must be plain');
+	const checked = checkUrl(descriptor.baseUrl, policy);
+	if (!checked.ok) {
+		throw kitError(
+			'resource_invalid',
+			checked.reason === 'https_required'
+				? 'connector baseUrl must be https'
+				: `connector baseUrl refused (${checked.reason})`,
+		);
 	}
-	const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-	if (url.protocol !== 'https:' && !(local && url.protocol === 'http:'))
-		throw kitError('resource_invalid', 'connector baseUrl must be https');
-	if (url.username || url.password || url.search || url.hash)
-		throw kitError('resource_invalid', 'connector baseUrl must be plain');
 	return /** @type {HttpDescriptor} */ (/** @type {unknown} */ (descriptor));
 };
 
 /**
- * @param {{ descriptor: Record<string, unknown>, kind: string, fetch: typeof globalThis.fetch, timeoutMs?: number }} options
+ * @param {{ descriptor: Record<string, unknown>, kind: string, send: OutboundSend, timeoutMs?: number,
+ *   policy?: import('@ss/net').OutboundPolicy }} options `policy` vets the base URL up front (default: public https only)
  */
-export const createHttpConnector = ({ descriptor, kind, fetch, timeoutMs = 30_000 }) => {
-	const d = checkDescriptor(descriptor);
+export const createHttpConnector = ({ descriptor, kind, send, timeoutMs = 30_000, policy = createOutboundPolicy() }) => {
+	const d = checkDescriptor(descriptor, policy);
 	const base = new URL(d.baseUrl);
 	const basePath = base.pathname.replace(/\/+$/, '');
 
@@ -71,21 +75,23 @@ export const createHttpConnector = ({ descriptor, kind, fetch, timeoutMs = 30_00
 		if (body !== undefined) h['content-type'] = 'application/json';
 		if (d.authScheme === 'header') h[(d.authHeader ?? 'x-api-key').toLowerCase()] = d.apiKey;
 		else h.authorization = `Bearer ${d.apiKey}`;
-		/** @type {Response} */
+		/** @type {import('@ss/net').SafeResponse} */
 		let response;
 		try {
-			response = await fetch(url, {
+			response = await send(url.href, {
 				method,
 				headers: h,
 				...(body === undefined ? {} : { body: JSON.stringify(body) }),
-				signal: AbortSignal.timeout(t),
+				timeoutMs: t,
 				redirect: 'error',
 			});
 		} catch (error) {
-			const timeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-			throw kitError(timeout ? 'timeout' : 'upstream_error', `${kind} provider request failed`);
+			const timeout = isNetError(error, 'timeout');
+			throw kitError(timeout ? 'timeout' : 'upstream_error', `${kind} provider request failed`, {
+				...(isNetError(error) ? { reason: error.code } : {}),
+			});
 		}
-		const text = await response.text();
+		const text = response.body.toString('utf8');
 		/** @type {unknown} */
 		let parsed = text;
 		try {
@@ -93,7 +99,7 @@ export const createHttpConnector = ({ descriptor, kind, fetch, timeoutMs = 30_00
 		} catch {
 			// keep text
 		}
-		return { ok: response.ok, status: response.status, body: parsed };
+		return { ok: response.status >= 200 && response.status <= 299, status: response.status, body: parsed };
 	};
 
 	/**
@@ -107,10 +113,10 @@ export const createHttpConnector = ({ descriptor, kind, fetch, timeoutMs = 30_00
 
 /**
  * AI adapter: `complete(input)` POSTs `{ model, ...input }` to `paths.complete` (default `/v1/chat/completions`).
- * @param {{ descriptor: Record<string, unknown>, fetch: typeof globalThis.fetch }} options
+ * @param {{ descriptor: Record<string, unknown>, send: OutboundSend, policy?: import('@ss/net').OutboundPolicy }} options
  */
-export const createHttpAi = ({ descriptor, fetch }) => {
-	const http = createHttpConnector({ descriptor, kind: 'ai', fetch });
+export const createHttpAi = ({ descriptor, send, policy }) => {
+	const http = createHttpConnector({ descriptor, kind: 'ai', send, ...(policy ? { policy } : {}) });
 	return Object.freeze({
 		...http,
 		/** @param {Record<string, unknown>} input */
@@ -127,10 +133,10 @@ export const createHttpAi = ({ descriptor, fetch }) => {
 
 /**
  * Messaging adapter: `send(message)` POSTs the message to `paths.send` (default `/messages`).
- * @param {{ descriptor: Record<string, unknown>, fetch: typeof globalThis.fetch }} options
+ * @param {{ descriptor: Record<string, unknown>, send: OutboundSend, policy?: import('@ss/net').OutboundPolicy }} options
  */
-export const createHttpMessaging = ({ descriptor, fetch }) => {
-	const http = createHttpConnector({ descriptor, kind: 'messaging', fetch });
+export const createHttpMessaging = ({ descriptor, send, policy }) => {
+	const http = createHttpConnector({ descriptor, kind: 'messaging', send, ...(policy ? { policy } : {}) });
 	return Object.freeze({
 		...http,
 		/** @param {Record<string, unknown>} message */

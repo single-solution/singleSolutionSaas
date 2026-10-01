@@ -16,7 +16,7 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
-import { isObject, sha256Hex } from './util.js';
+import { hmacHex, isObject, sha256Hex } from './util.js';
 
 /** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('./rbac.js').Actor} Actor */
@@ -38,6 +38,17 @@ const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const CORS_HEADERS = 'authorization, content-type, idempotency-key, x-request-id';
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
+
+/**
+ * Problem codes the infra layer adds to `@ss/contracts`' set (registered by the composition root).
+ *
+ * `idempotency_replay_no_body` (409): the request was already completed under this `Idempotency-Key` on a route
+ * whose response is never stored (`idempotent: 'no-store'`, e.g. responses carrying secrets). The original status
+ * is named in `detail`; retry with a new key to perform the operation again.
+ */
+export const INFRA_PROBLEMS = Object.freeze({
+	idempotency_replay_no_body: Object.freeze({ status: 409, title: 'Idempotent replay without a stored response' }),
+});
 
 // ---------------------------------------------------------------------------------------------------------------
 // Results
@@ -208,7 +219,9 @@ export const paginate = ({ cursor, limit, url } = {}, { defaultLimit = 20, maxLi
  * @property {boolean} [mfa] staff sessions must have completed MFA (default true; false only for the MFA step itself)
  * @property {'pk' | 'sk'} [keyKind] websiteKey: restrict to one key kind
  * @property {string[]} [scopes] websiteKey: scopes the key must grant
- * @property {boolean | 'optional'} [idempotent] POST: true = Idempotency-Key required (default), 'optional', false
+ * @property {boolean | 'optional' | 'no-store'} [idempotent] POST: true = Idempotency-Key required (default),
+ *   'optional', false, or 'no-store' — the key is optional and only the status and fingerprint are kept, so a replay
+ *   answers 409 `idempotency_replay_no_body` instead of re-sending the response (use for responses with secrets)
  * @property {{ limit: number, windowMs: number, key?: (ctx: RequestContext) => string }} [rateLimit]
  * @property {number} [maxBodyBytes]
  * @property {boolean} [rawBody] do not parse JSON (handler reads `ctx.rawBody`)
@@ -394,6 +407,7 @@ const readBody = async (request, max) => {
  *   authenticators: Partial<Record<AuthMode, Authenticator>>,
  *   can: (actor: Actor | null, permission: string, resource?: Resource) => boolean,
  *   idempotency: IdempotencyStore,
+ *   idempotencySecret?: Uint8Array,
  *   rateLimits: RateLimitStore,
  *   portalOrigin: string,
  *   now?: () => number,
@@ -411,6 +425,7 @@ export const createApiHandler = ({
 	authenticators,
 	can,
 	idempotency,
+	idempotencySecret,
 	rateLimits,
 	portalOrigin,
 	now = Date.now,
@@ -419,6 +434,9 @@ export const createApiHandler = ({
 	trustProxyHeaders = false,
 	basePath = '/api',
 }) => {
+	if (!idempotencySecret || idempotencySecret.length < 32)
+		throw new TypeError('idempotencySecret (at least 32 bytes) is required for request fingerprints');
+	const fingerprintKey = Buffer.from(idempotencySecret);
 	const compiled = compileRoutes(routes);
 	for (const route of compiled) {
 		for (const mode of route.modes) {
@@ -640,6 +658,7 @@ export const createApiHandler = ({
 			/** @type {string | null} */
 			let record = null;
 			const idempotent = method === 'POST' ? (route.idempotent ?? true) : false;
+			const noStore = idempotent === 'no-store';
 			if (idempotent) {
 				const key = request.headers.get('idempotency-key');
 				if (key === null) {
@@ -649,7 +668,8 @@ export const createApiHandler = ({
 					ctx.idempotencyKey = key;
 					const principal = actor ? `${actor.type}:${actor.id}` : `anon:${ip ?? 'unknown'}`;
 					record = sha256Hex(`${principal}\n${route.id}\n${pathname}\n${key}`);
-					const fingerprint = sha256Hex(`${method}\n${pathname}\n${url.search}\n${rawBody}`);
+					// keyed: bodies may hold passwords or credentials, a plain hash could be brute-forced offline
+					const fingerprint = hmacHex(fingerprintKey, `ss-idem.v1\n${method}\n${pathname}\n${url.search}\n${rawBody}`);
 					const begun = await idempotency.begin(record, fingerprint, now() + IDEMPOTENCY_TTL_MS);
 					if (begun.state === 'mismatch')
 						return fail(problem('idempotency_conflict', 'This Idempotency-Key was used with a different request.'));
@@ -659,7 +679,15 @@ export const createApiHandler = ({
 					}
 					if (begun.state === 'done') {
 						extra['idempotent-replayed'] = 'true';
-						return finish(begun.response);
+						if (begun.response.body === null) {
+							return fail(
+								problem(
+									'idempotency_replay_no_body',
+									`This request already completed with status ${begun.response.status}; its response is not stored. Use a new Idempotency-Key to repeat it.`,
+								),
+							);
+						}
+						return finish(/** @type {StoredResponse} */ (begun.response));
 					}
 				}
 			}
@@ -688,9 +716,9 @@ export const createApiHandler = ({
 			}
 			if (record) {
 				// cookies are never stored: a replay does not re-issue a session
-				if (rendered.status < 500)
-					await idempotency.complete(record, { status: rendered.status, headers: rendered.headers, body: rendered.body });
-				else await idempotency.release(record);
+				if (rendered.status >= 500) await idempotency.release(record);
+				else if (noStore) await idempotency.complete(record, { status: rendered.status, headers: [], body: null });
+				else await idempotency.complete(record, { status: rendered.status, headers: rendered.headers, body: rendered.body });
 			}
 			return finish(rendered);
 		} catch (error) {

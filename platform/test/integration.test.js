@@ -52,7 +52,12 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 		ports: () => ({
 			appKeys: (/** @type {string} */ appId) =>
 				appJwks && appId === 'app_probe' ? createKeyResolver({ jwks: appJwks }) : null,
-			...(withWebsitePort ? { websiteKeyRevoked: (/** @type {any} */ claims) => revoked.has(claims.keyId) } : {}),
+			...(withWebsitePort
+				? {
+						websiteKeyRevoked: (/** @type {any} */ claims, /** @type {string} */ rawKey) =>
+							revoked.has(claims.keyId) || !rawKey.startsWith(`${claims.kind}_`),
+					}
+				: {}),
 		}),
 		jobs: (ctx) => ({
 			'probe.add': async (payload) => void (await ctx.service('probe').add(payload.merchantId, payload.name)),
@@ -131,7 +136,7 @@ const login = async (portal, input) => {
 
 describe('Portal end to end', () => {
 	it('boots, ensures indexes, migrates and serves public info, JWKS and health', async () => {
-		const { portal, call } = await boot({ dbName: 'it_boot' });
+		const { portal, call } = await boot({ dbName: 'it_boot', db: mongo.db('it_boot', { fresh: true }) });
 		const indexes = await portal.ensureIndexes();
 		expect(indexes.created).toEqual(
 			expect.arrayContaining(['probe_items.tenant', `${COLLECTIONS.audit}.merchantId_1_at_-1__id_-1`]),
@@ -153,7 +158,8 @@ describe('Portal end to end', () => {
 		expect((await call('GET', '/v1/system/info')).status).toBe(200);
 
 		const jwks = await portal.jwks().json();
-		expect(jwks.keys.map((/** @type {any} */ k) => k.kid)).toEqual(['portal-2026-10', 'portal-2026-04']);
+		// Portal keys and the dedicated website-key signing key, distinct kids
+		expect(jwks.keys.map((/** @type {any} */ k) => k.kid)).toEqual(['portal-2026-10', 'portal-2026-04', 'website-2026-10']);
 		expect(JSON.stringify(jwks)).not.toContain('"d"');
 		const ready = await portal.readyz();
 		expect([ready.status, (await ready.json()).checks]).toEqual([200, { database: 'ok' }]);
@@ -311,10 +317,14 @@ describe('Portal end to end', () => {
 	it('website keys: offline verification, revocation port, origin and scopes', async () => {
 		const revoked = new Set();
 		const { portal, call, clock } = await boot({ dbName: 'it_keys', modules: [systemModule, probeModule({ revoked })] });
-		const issue = async (/** @type {'pk' | 'sk'} */ kind, keyId = `key_${kind}`) =>
+		const issue = async (
+			/** @type {'pk' | 'sk'} */ kind,
+			keyId = `key_${kind}`,
+			signer = portal.shared.keys.websiteKeySigner,
+		) =>
 			(
 				await issueWebsiteKey({
-					signer: portal.shared.keys.signer,
+					signer,
 					kind,
 					websiteId: WEBSITE,
 					merchantId: MERCHANT,
@@ -351,6 +361,9 @@ describe('Portal end to end', () => {
 		revoked.add('key_sk');
 		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${sk}` } })).status).toBe(401);
 		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer sk_live_garbage` } })).status).toBe(401);
+		// a token signed with the Portal (launch/document) key is not a website key
+		const portalSigned = await issue('sk', 'key_portal', portal.shared.keys.signer);
+		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${portalSigned}` } })).status).toBe(401);
 
 		// a key signed by someone else's key never verifies
 		const { privateJwk } = await generateSigningKey({ kid: 'portal-2026-10' });
@@ -390,7 +403,7 @@ describe('Portal end to end', () => {
 		});
 		expect((await call('GET', '/api/cron/nope', { headers: auth })).status).toBe(404);
 		expect((await call('GET', '/api/cron/broken', { headers: auth })).status).toBe(500);
-		expect(portal.cron.names()).toEqual(['drain', 'settlement', 'broken']);
+		expect(portal.cron.names()).toEqual(['drain', 'audit_verify', 'settlement', 'broken']);
 		const db = mongo.db('it_cron');
 		const runs = await db.collection(COLLECTIONS.cronRuns).find({}).toArray();
 		expect(runs.map((r) => `${r.name}:${r.trigger}:${r.status}`).sort()).toEqual([
@@ -538,13 +551,14 @@ describe('runtime', () => {
 		expect(() => getPortal({ env: {} })).toThrow(/Invalid Portal configuration/);
 		/** @type {string[]} */
 		const lines = [];
-		const env = await testEnv({ MONGODB_URI: `${mongo.uri.replace(/\/?(\?|$)/, '/it_runtime$1')}`, LOG_LEVEL: 'info' });
+		const runtimeDb = mongo.dbName('it_runtime');
+		const env = await testEnv({ MONGODB_URI: `${mongo.uri.replace(/\/?(\?|$)/, `/${runtimeDb}$1`)}`, LOG_LEVEL: 'info' });
 		const portal = getPortal({ env, write: (line) => lines.push(line) });
 		expect(getPortal({ env: {} })).toBe(portal);
 		const res = await portal.handle(new Request(`${PORTAL_URL}/v1/system/info`));
 		expect(res.status).toBe(200);
 		expect(lines.some((line) => JSON.parse(line).msg === 'request')).toBe(true);
-		expect(portal.config.mongo.dbName).toBe('it_runtime');
+		expect(portal.config.mongo.dbName).toBe(runtimeDb);
 
 		// the Next.js adapters delegate to the cached instance
 		const api = await import('../app/api/[...path]/route.js');
@@ -553,7 +567,7 @@ describe('runtime', () => {
 		expect((await cronRoute.GET(new Request(`${PORTAL_URL}/api/cron/drain`))).status).toBe(401);
 		expect(cronRoute.maxDuration).toBe(60);
 		const jwks = await import('../app/.well-known/jwks.json/route.js');
-		expect((await jwks.GET().json()).keys).toHaveLength(2);
+		expect((await jwks.GET().json()).keys).toHaveLength(3);
 		const ready = await import('../app/readyz/route.js');
 		expect((await ready.GET()).status).toBe(200);
 		const health = await import('../app/healthz/route.js');
@@ -563,5 +577,147 @@ describe('runtime', () => {
 		delete process.env.PORTAL_URL;
 		expect((await ready.GET()).status).toBe(503); // config invalid
 		if (prev !== undefined) process.env.PORTAL_URL = prev;
+	});
+});
+
+describe('infra hardening (Mongo)', () => {
+	it('ctx.verifyWebsiteKey: the authenticator logic for keys outside the header (kind, env, scopes, origin, raw key)', async () => {
+		const seenKeys = /** @type {string[]} */ ([]);
+		const watcher = defineModule({
+			name: 'watcher',
+			ports: () => ({
+				websiteKeyRevoked: (/** @type {any} */ claims, /** @type {string} */ rawKey) => {
+					seenKeys.push(rawKey);
+					return claims.keyId === 'key_revoked';
+				},
+			}),
+		});
+		const { portal, clock } = await boot({ dbName: 'it_verify', modules: [systemModule, watcher] });
+		const verify = portal.modules.context('watcher').verifyWebsiteKey;
+		const issue = async (/** @type {'pk' | 'sk'} */ kind, /** @type {Record<string, any>} */ over = {}) =>
+			(
+				await issueWebsiteKey({
+					signer: portal.shared.keys.websiteKeySigner,
+					kind,
+					websiteId: WEBSITE,
+					merchantId: MERCHANT,
+					domain: 'shop.example.com',
+					env: 'live',
+					scopes: ['events.write'],
+					keyId: `key_${kind}`,
+					now: clock.now,
+					...over,
+				})
+			).key;
+		const sk = await issue('sk');
+		const pk = await issue('pk');
+		const codeOf = async (/** @type {any} */ check) =>
+			verify(check).then(
+				() => 'ok',
+				(/** @type {any} */ e) => e.code,
+			);
+		expect((await verify({ key: sk, scopes: ['events.write'], keyKind: 'sk', env: 'live' })).keyId).toBe('key_sk');
+		expect(seenKeys).toEqual([sk]);
+		expect(await codeOf({ key: sk, keyKind: 'pk' })).toBe('forbidden');
+		expect(await codeOf({ key: sk, env: 'test' })).toBe('forbidden');
+		expect(await codeOf({ key: sk, scopes: ['config.write'] })).toBe('scope_missing');
+		expect(await codeOf({ key: pk })).toBe('origin_not_allowed');
+		expect(await codeOf({ key: pk, origin: 'https://shop.example.com' })).toBe('ok');
+		expect(await codeOf({ key: pk, referer: 'https://shop.example.com/cart' })).toBe('ok');
+		expect(await codeOf({ key: await issue('sk', { keyId: 'key_revoked' }) })).toBe('invalid_credentials');
+		expect(await codeOf({ key: 'not-a-key' })).toBe('invalid_credentials');
+		expect(await codeOf({ key: await issue('sk', { signer: portal.shared.keys.signer }) })).toBe('invalid_credentials');
+		const unavailable = await boot({
+			dbName: 'it_verify_none',
+			modules: [systemModule, probeModule({ withWebsitePort: false })],
+		});
+		expect(
+			await unavailable.portal.modules
+				.context('probe')
+				.verifyWebsiteKey({ key: sk })
+				.catch((/** @type {any} */ e) => e.code),
+		).toBe('unavailable');
+	});
+
+	it('hash-chains audit entries and verifies them with the audit_verify cron and the audit.verify job', async () => {
+		const { portal, call, config } = await boot({ dbName: 'it_audit_chain' });
+		await portal.ensureIndexes();
+		const audit = portal.shared.audit;
+		const actor = /** @type {const} */ ({ type: 'staff', id: 'stf_1' });
+		await audit.record({ actor, action: 'staff.created', target: { type: 'staff', id: 'stf_2' } });
+		await audit.record({ actor, action: 'credits.adjusted', target: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT } });
+		await audit.record({ actor, action: 'credits.adjusted', target: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT } });
+		const auth = { authorization: `Bearer ${config.cronSecret}` };
+		const run = await call('GET', '/api/cron/audit_verify', { headers: auth });
+		expect(run.json).toMatchObject({ status: 'ok', stats: { scopes: 2, verified: 2, entries: 3, broken: [] } });
+		const raw = mongo.db('it_audit_chain').collection(COLLECTIONS.audit);
+		await raw.updateOne({ merchantId: MERCHANT, seq: 1 }, { $set: { action: 'credits.refunded' } });
+		await portal.shared.jobs.enqueue({ name: 'audit.verify' });
+		const drained = await call('GET', '/api/cron/drain', { headers: auth });
+		expect(drained.json.stats).toMatchObject({ leased: 1, succeeded: 1 });
+		expect((await call('GET', '/api/cron/audit_verify', { headers: auth })).json.stats.broken).toEqual([
+			{ scope: `merchant:${MERCHANT}`, seq: 1, id: expect.stringMatching(/^aud_/), reason: 'hash' },
+		]);
+	});
+
+	it("idempotent 'no-store' routes keep only the status in the shared store", async () => {
+		let runs = 0;
+		const secrets = defineModule({
+			name: 'secrets',
+			routes: () => [
+				defineRoute({
+					method: 'POST',
+					path: '/v1/secrets',
+					auth: 'public',
+					idempotent: 'no-store',
+					handler: () => created({ secret: `sk_secret_${(runs += 1)}` }),
+				}),
+			],
+		});
+		const { call } = await boot({ dbName: 'it_no_store', modules: [secrets] });
+		const headers = { 'idempotency-key': 'once' };
+		const first = await call('POST', '/v1/secrets', { headers, body: { password: 'hunter2-long' } });
+		expect(first.json.secret).toBe('sk_secret_1');
+		const replay = await call('POST', '/v1/secrets', { headers, body: { password: 'hunter2-long' } });
+		expect([replay.status, replay.json.type]).toEqual([409, `${PORTAL_URL}/problems/idempotency_replay_no_body`]);
+		expect(runs).toBe(1);
+		const stored = JSON.stringify(await mongo.db('it_no_store').collection(COLLECTIONS.idempotency).find({}).toArray());
+		expect(stored).not.toContain('sk_secret');
+		expect(stored).not.toContain('hunter2');
+	});
+
+	it('offers transactions, the platform mailer and platform.config.write; reserves infra names', async () => {
+		const { portal } = await boot({ dbName: 'it_shared' });
+		await portal.ensureIndexes();
+		const ctx = portal.modules.context('probe');
+		expect(ctx.mailer.available).toBe(true); // logging mailer in the test environment
+		const items = ctx.collection('probe_items').forMerchant(MERCHANT);
+		await expect(
+			ctx.withTransaction(async (session) => {
+				await items.insertOne({ name: 'rolled back' }, { session });
+				throw new Error('abort');
+			}),
+		).rejects.toThrow('abort');
+		expect(await items.countDocuments({ merchantId: MERCHANT })).toBe(0);
+		await ctx.withTransaction(async (session) => items.insertOne({ name: 'kept' }, { session }));
+		expect(await items.countDocuments({ merchantId: MERCHANT })).toBe(1);
+
+		const { can } = portal.shared.rbac;
+		expect(can({ type: 'staff', id: 's', roles: ['admin'] }, 'platform.config.write')).toBe(true);
+		expect(can({ type: 'staff', id: 's', roles: ['superadmin'] }, 'platform.config.write')).toBe(true);
+		expect(can({ type: 'staff', id: 's', roles: ['support'] }, 'platform.config.write')).toBe(false);
+		expect(can({ type: 'merchant_user', id: 'u', merchantId: MERCHANT, roles: ['owner'] }, 'platform.config.write')).toBe(
+			false,
+		);
+
+		const config = await testConfig();
+		const { logger } = createTestLogger();
+		const build = (/** @type {any} */ definition) =>
+			createPortal({ config, db: mongo.db('it_reserved'), modules: [defineModule({ name: 'clash', ...definition })], logger });
+		expect(() => build({ crons: () => ({ audit_verify: async () => ({}) }) })).toThrow(/reserved/);
+		expect(() => build({ crons: () => ({ drain: async () => ({}) }) })).toThrow(/reserved/);
+		expect(() => build({ problems: { idempotency_replay_no_body: { status: 409, title: 'x' } } })).toThrow(/reserved/);
+		const auditModule = defineModule({ name: 'audit', jobs: () => ({ 'audit.verify': async () => undefined }) });
+		expect(() => createPortal({ config, db: mongo.db('it_reserved'), modules: [auditModule], logger })).toThrow(/reserved/);
 	});
 });

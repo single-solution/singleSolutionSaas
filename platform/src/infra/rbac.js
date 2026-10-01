@@ -72,6 +72,7 @@ export const PLATFORM_PERMISSIONS = Object.freeze([
 	'platform.jobs.manage',
 	'platform.audit.read',
 	'platform.settings.write',
+	'platform.config.write',
 	'platform.staff.manage',
 ]);
 

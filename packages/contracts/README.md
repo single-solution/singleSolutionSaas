@@ -55,6 +55,12 @@ if (!result.ok) return errors.fromValidation(result.problems, { code: 'invalid_m
   `x-hardStop`, `x-unit`; rates need `x-per` (second|minute|hour) and may set `x-unit`.
 - **Events**: every consumed type needs an `events.subscribe:<glob>` scope; published types must be in the product namespace
   (`<slug>.*`, `-` → `_`) or be standard events covered by an `events.publish:<glob>` scope.
+- **Event scopes**: the envelope has an optional `scope`, either `'website'` (the default) or `'platform'`.
+  Website-scoped events require `websiteId`. Platform-scoped events concern a product or the platform as a whole and
+  must not carry one. Each catalogued type has a fixed scope (`eventScopeOf(type)`), and `validateEvent` refuses a
+  mismatch at `/scope` (rule `eventScope`). `PLATFORM_SCOPED_EVENTS` is currently `['manifest.accepted@1']`, so it is
+  sent with `scope: 'platform'` and no `websiteId`. A sentinel website id is refused. JSDoc types:
+  `EventEnvelope` (website), `PlatformEventEnvelope` and `AnyEventEnvelope`.
 - **Element packs** have no endpoints or admin launch, only modes A/B, no `api.resources`, and only `graph.*` /
   `events.publish:*` scopes; their state goes through the Website Graph. Service products need `endpoints.base`,
   `register` and `events`.

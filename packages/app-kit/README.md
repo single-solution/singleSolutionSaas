@@ -7,8 +7,19 @@ problems. The binding API is [`API.md`](./API.md); this file is the quickstart.
 
 - JavaScript ESM, functional, JSDoc-typed. Every side effect (fetch, clock, randomness, logger, stores, Mongo client) is
   injected, with defaults.
-- All cryptography and validation come from `@ss/protocol` and `@ss/contracts`. The kit re-implements none of it. The
-  only exception is S3 SigV4 (HMAC-SHA-256 from `node:crypto`), which is checked against the AWS reference vectors.
+- All cryptography and validation come from `@ss/protocol` and `@ss/contracts`, and S3 SigV4 and SSRF-safe outbound
+  networking come from `@ss/net`. The kit re-implements none of it. `presignUrl` and `signHeaders` remain as thin
+  wrappers over `@ss/net` `presignV4` and `signV4`.
+- Connector calls to merchant providers (AI, messaging, object stores) go through `@ss/net` `safeFetch` under the
+  `outbound` policy. They accept only public https destinations, and every DNS answer is vetted at connect time. For a
+  local MinIO or a mock provider in development, set `outbound: { allowHosts: ['localhost'] }`. The same policy guards the
+  merchant database: the URI must pass `isSafeMongoUri`, otherwise it is refused with `resource_invalid`, and the
+  `MongoClient` connects through `guardedLookup`. The allowlist is
+  ignored in production.
+- `GET /.well-known/ss-app.json` is cacheable for 5 minutes. Once the appId is known, it carries
+  `SS-Manifest-Signature` (`@ss/protocol` `signManifest` with the product key).
+- Platform-scoped control events (`scope: 'platform'`, no `websiteId`, e.g. `manifest.accepted@1`) are accepted and
+  deduplicated under `platform`.
 - The kit never writes to the console. Pass a logger (`createLogger({ level, write })` gives JSON lines). Fields that look
   like credentials (`uri`, `apiKey`, `secretAccessKey`, `token`, `authorization`, `descriptor`, …) are redacted.
 

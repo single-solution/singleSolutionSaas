@@ -1163,6 +1163,7 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 - Domains: `normaliseDomain` lowercases, punycodes, strips scheme/path/port/trailing dot, rejects IPs (incl. odd forms), `localhost`, single labels and wildcards unless `allowLocal`; public-suffix rejection is an injected predicate.
 - Ids: `<prefix>_` + 128 random bits as 26 lowercase Crockford base32 chars.
 - Problems follow RFC 9457 with a configurable type base URI (`createProblemFactory({ baseUri })`) and 32 stable codes.
+- **Event scopes:** the envelope's optional `scope` is `website` (the default, `websiteId` required) or `platform` (no `websiteId`). Each catalogued type has a fixed scope. `manifest.accepted@1` is platform-scoped, and sentinel website ids are refused.
 
 ## F.4 Rules language (`@ss/rules`, `rules@1`)
 
@@ -1183,6 +1184,8 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 - **Events:** `SS-Signature: v1;kid=<kid>;sig=<b64url>` (up to 4 entries for dual-signing during rotation) over `ss-event.v1.${timestamp}.${sha256hex(body)}`; `SS-Key-Id` is only a hint; replay key `ts|sha256(body)` within tolerance (300 s).
 - **Registration:** the product stores only SHA-256 of the one-time token; the Portal JWKS is fetched only from the pinned origin (default `<pinned>/.well-known/jwks.json`; body URLs ignored); the Portal's signed request binds `sha256(token)`; wrong tokens rejected before any fetch; the token burns atomically before `onRegistered`, and a failure after burn requires a new token; every failure returns the same generic 401. **Proof-of-possession:** the product signs `{ manifestHash, jkt, nonce, portalUrl, iat }` with the key it registers (`typ ss-registration-response+jws`); the Portal verifies signature, thumbprint, nonce echo, URL, manifest hash and freshness (± 5 min).
 - **Replay/nonce stores in production** are one shared atomic TTL store (MongoDB unique `_id` + TTL index) in the control plane.
+- **Pack bundle signatures** (`signBundle` / `verifyBundle`) are detached Ed25519 signatures over `ss-pack-bundle.v1.<sha256(canonicalJson(descriptor))>`.
+- **Signed manifests:** `/.well-known/ss-app.json` carries `SS-Manifest-Signature`, a JWS with `typ ss-manifest+jws` and payload `{ appId, manifestHash, iat }`, signed with the registered product key. It is cached for 5 minutes and is unsigned before registration. The Portal checks it with `verifyManifest` (default max age 24 h) before importing a refreshed manifest.
 
 ## F.7 Browser SDK (`@ss/web`)
 
@@ -1223,3 +1226,10 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
    - `POST /v1/product/resources/resolve` `{ websiteId, kind }` → `{ kind, descriptor, expiresAt }` where descriptor is: database `{ uri, dbName? }`; storage `{ bucket, region, accessKeyId, secretAccessKey, sessionToken?, endpoint?, forcePathStyle?, prefix? }`; ai / messaging `{ baseUrl, apiKey, provider?, model?, authScheme?, authHeader?, headers?, paths? }`; payments (interface only in v1).
    - `POST /v1/product/heartbeat` `{ version, status, queues? }`; `POST /v1/product/keys/rotate` `{ publicJwk }`; `POST /v1/product/events` (envelope batch).
    - Client-assertion audience and launch issuer = canonical pinned Portal URL.
+
+## F.10 Outbound networking (`@ss/net`)
+
+- There is one SSRF guard for the Portal and the products. `checkUrl` runs before DNS: https only, no userinfo, ports 443/8443, public IP literals, no internal names and no numeric IP spellings. `guardedLookup` runs at connect time: every DNS answer is classified, one refused answer refuses the name, and the socket is pinned to the vetted answers. It is also passed as the MongoDB driver's `lookup`.
+- `safeFetch` follows redirects only for GET/HEAD, only to the same origin by default, at most 3 times. One deadline covers the whole call, there is a body cap, and errors are typed (`bad_url`, `ssrf_blocked`, `timeout`, `too_large`, `redirect_refused`, `aborted`, `network`).
+- The development allowlist (`allowHosts`) admits exact hosts or IPs. These may be private and may use http. Callers enable the allowlist only outside production; app-kit ignores it when `nodeEnv === 'production'`.
+- AWS SigV4 (`signV4` / `presignV4`) lives here and is verified against the AWS vectors.

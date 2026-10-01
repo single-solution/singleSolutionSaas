@@ -10,29 +10,28 @@ beforeAll(setupMongo, 120_000);
 afterAll(teardownMongo, 60_000);
 
 describe('identity service wiring', () => {
-	it('selects the website-key signer: option › infra dedicated signer › Portal signer', async () => {
+	it('selects the website-key signer: option › the infra dedicated signer', async () => {
 		const { privateJwk: portal } = await generateSigningKey({ kid: 'portal' });
 		const { privateJwk: dedicated } = await generateSigningKey({ kid: 'website-keys' });
-		const keys = createPortalKeys([portal]);
+		const { privateJwk: option } = await generateSigningKey({ kid: 'website-option' });
+		const keys = createPortalKeys([portal], [dedicated]);
 		const ctx = /** @type {any} */ ({ keys });
-		expect(websiteKeySigning(ctx, {}).source).toBe('portal');
-		expect(websiteKeySigning(ctx, {}).jwks().keys[0]?.kid).toBe('portal');
-		const infra = createPortalKeys([dedicated]);
-		const withInfra = /** @type {any} */ ({
-			keys: { ...keys, websiteKeySigner: infra.signer, websiteKeyResolver: infra.keyResolver, websiteKeyJwks: infra.jwks },
-		});
-		const selected = websiteKeySigning(withInfra, {});
-		expect([selected.source, selected.signer.kid, selected.jwks().keys[0]?.kid]).toEqual([
+		const selected = websiteKeySigning(ctx, {});
+		expect([selected.source, selected.signer.kid, selected.jwks().keys.map((k) => k.kid)]).toEqual([
 			'infra',
 			'website-keys',
-			'website-keys',
+			['website-keys'],
 		]);
-		const bare = websiteKeySigning(/** @type {any} */ ({ keys: { ...keys, websiteKeySigner: infra.signer } }), {});
-		expect([bare.keyResolver, bare.jwks().keys[0]?.kid]).toEqual([keys.keyResolver, 'portal']);
-		expect(websiteKeySigning(withInfra, { websiteKeySigningKeys: [dedicated] }).source).toBe('option');
+		expect(selected.keyResolver).toBe(keys.websiteKeyResolver);
+		const chosen = websiteKeySigning(ctx, { websiteKeySigningKeys: [option] });
+		expect([chosen.source, chosen.signer.kid, chosen.jwks().keys[0]?.kid]).toEqual([
+			'option',
+			'website-option',
+			'website-option',
+		]);
 	});
 
-	it('defaults: logging mailer outside production, no mailer in production', async () => {
+	it('defaults: the platform mailer (logging outside production, none in production without SMTP)', async () => {
 		const dev = await boot({ identity: { mailer: undefined } });
 		const res = await dev.call('POST', '/v1/auth/merchant/signup', {
 			body: { email: 'dev@example.com', password: 'a long password', merchantName: 'D' },
@@ -42,7 +41,6 @@ describe('identity service wiring', () => {
 			to: 'dev@example.com',
 			template: 'verify_email',
 		});
-		expect(dev.entries.some((e) => e.msg.startsWith('website keys are signed with the Portal signer'))).toBe(false);
 
 		const prod = await boot({ identity: { mailer: undefined }, env: { PORTAL_ENV: 'production' } });
 		expect(
@@ -80,7 +78,7 @@ describe('identity service wiring', () => {
 		expect(h.mailer.sent.filter((m) => m.template === 'password_reset')).toHaveLength(0);
 	});
 
-	it('re-hashes weaker password hashes on login and logs the Portal-signer fallback once', async () => {
+	it('re-hashes weaker password hashes on login; website keys are signed by the dedicated signer', async () => {
 		const h = await boot();
 		const owner = await h.signupOwner('o@example.com');
 		const { hashPassword } = await import('../../../src/infra/auth.js');
@@ -95,8 +93,13 @@ describe('identity service wiring', () => {
 		expect((await users.findOne({ _id: owner.userId }))?.passwordHash).toMatch(/^scrypt\$32768\$/);
 		const site = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'x.example.com' });
 		const base = `/v1/merchants/${owner.merchantId}/websites/${site.json.website.websiteId}/keys`;
-		await owner.client.post(base, { kind: 'pk', scopes: ['a'] });
-		await owner.client.post(base, { kind: 'pk', scopes: ['a'] });
-		expect(h.entries.filter((e) => e.msg.startsWith('website keys are signed with the Portal signer'))).toHaveLength(1);
+		const issued = await owner.client.post(base, { kind: 'pk', scopes: ['a'] });
+		const header =
+			String(issued.json.key)
+				.replace(/^pk_(live|test)_/, '')
+				.split('.')[0] ?? '';
+		const { kid } = JSON.parse(Buffer.from(header, 'base64url').toString('utf8'));
+		expect(kid).toBe(h.portal.shared.keys.websiteKeySigner.kid);
+		expect(h.portal.shared.keys.signers.some((s) => s.kid === kid)).toBe(false);
 	});
 });

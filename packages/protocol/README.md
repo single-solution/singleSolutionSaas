@@ -10,18 +10,20 @@ App Protocol primitives shared by the Portal and every product (PLAN.md §8, §1
   or secrets, so they are safe to log.
 - No URLs, issuers or audiences are hard-coded: they are all parameters.
 
-| Module               | Exports                                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `keys.js`            | `generateSigningKey`, `createSigner`, `importPublicKey`, `importPrivateKey`, `exportPublicJwk`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`      |
-| `launch.js`          | `issueLaunch`, `verifyLaunch`, `kindScopeViolation`, `LAUNCH_KINDS`, `LAUNCH_TYP`, TTL constants                                                                    |
-| `assertion.js`       | `signAssertion`, `verifyAssertion`, `ASSERTION_TYP`, `MAX_ASSERTION_LIFETIME_SECONDS`                                                                               |
-| `replay.js`          | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                               |
-| `website-keys.js`    | `issueWebsiteKey`, `verifyWebsiteKey`, `originAllowed`, `normalizeDomain`, `hashSecretKey`, `compareSecretKey`                                                      |
-| `entitlement-doc.js` | `signEntitlementDocument`, `verifyEntitlementDocument`, `DEFAULT_GRACE_MS`                                                                                          |
-| `events.js`          | `signEvent`, `verifyEvent`, `EVENT_HEADERS`                                                                                                                         |
-| `requests.js`        | `signRequest`, `verifyRequest`, `canonicalRequestPath`                                                                                                              |
-| `registration.js`    | `createRegistrationRequest` + `verifyRegistrationResponse` (Portal), `createRegistrationHandler` (product), `hashManifest`, `hashRegistrationToken`, `canonicalUrl` |
-| `errors.js`          | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                             |
+| Module                  | Exports                                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keys.js`               | `generateSigningKey`, `createSigner`, `importPublicKey`, `importPrivateKey`, `exportPublicJwk`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`      |
+| `launch.js`             | `issueLaunch`, `verifyLaunch`, `kindScopeViolation`, `LAUNCH_KINDS`, `LAUNCH_TYP`, TTL constants                                                                    |
+| `assertion.js`          | `signAssertion`, `verifyAssertion`, `ASSERTION_TYP`, `MAX_ASSERTION_LIFETIME_SECONDS`                                                                               |
+| `replay.js`             | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                               |
+| `website-keys.js`       | `issueWebsiteKey`, `verifyWebsiteKey`, `originAllowed`, `normalizeDomain`, `hashSecretKey`, `compareSecretKey`                                                      |
+| `entitlement-doc.js`    | `signEntitlementDocument`, `verifyEntitlementDocument`, `DEFAULT_GRACE_MS`                                                                                          |
+| `events.js`             | `signEvent`, `verifyEvent`, `EVENT_HEADERS`                                                                                                                         |
+| `requests.js`           | `signRequest`, `verifyRequest`, `canonicalRequestPath`                                                                                                              |
+| `registration.js`       | `createRegistrationRequest` + `verifyRegistrationResponse` (Portal), `createRegistrationHandler` (product), `hashManifest`, `hashRegistrationToken`, `canonicalUrl` |
+| `bundle.js`             | `signBundle`, `verifyBundle`, `bundleSigningInput`, `BUNDLE_SIGNING_PREFIX` (element-pack bundles)                                                                  |
+| `manifest-signature.js` | `signManifest`, `verifyManifest`, `MANIFEST_TYP`, `MANIFEST_SIGNATURE_HEADER`, `DEFAULT_MANIFEST_MAX_AGE_SECONDS`                                                   |
+| `errors.js`             | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                             |
 
 ## Token types
 
@@ -36,6 +38,8 @@ replayed as another (a launch as an assertion, an entitlement document as a webs
 | Entitlement document     | `ss-entitlement+jws`           | `validUntil` + offline grace         | n/a (idempotent state)                          |
 | Registration request     | `ss-registration+jws`          | `iat` ± 5 min                        | nonce store + one-time token burn               |
 | Registration proof       | `ss-registration-response+jws` | `iat` ± 5 min                        | echoes the Portal's request nonce               |
+| Manifest signature       | `ss-manifest+jws`              | `iat` ≤ `maxAgeSec` (24 h) old       | n/a (binds `appId` + manifest hash)             |
+| Pack bundle signature    | detached, `ss-pack-bundle.v1.` | none (pinned developer key)          | n/a (binds the descriptor hash)                 |
 | Event delivery           | detached, `SS-*` header        | `SS-Timestamp` ± 300 s               | replay store on `timestamp\|sha256`             |
 | Portal → product request | detached, `SS-*` header        | `SS-Timestamp` ± 300 s               | replay store on `ts\|METHOD\|aud\|path\|sha256` |
 
@@ -89,7 +93,7 @@ Kind/scope rules (`kindScopeViolation`), enforced both when issuing and when ver
 | kind          | must carry                                                                        | must not carry            |
 | ------------- | --------------------------------------------------------------------------------- | ------------------------- |
 | `merchant`    | `scope.merchantId`                                                                | `act`, `impExp`           |
-| `admin`       | `scope.merchantId` (admins are always scoped to a merchant)                       | `act`, `impExp`           |
+| `admin`       | `scope.all: true` (app-wide) **or** `scope.merchantId` (+ `scope.subscriptions?`) | `act`, `impExp`           |
 | `demo`        | —                                                                                 | `scope.merchantId`, `act` |
 | `partner`     | `scope.partnerId`                                                                 | `act`, `impExp`           |
 | `developer`   | `scope.developerId`                                                               | `act`, `impExp`           |
@@ -97,6 +101,11 @@ Kind/scope rules (`kindScopeViolation`), enforced both when issuing and when ver
 
 `impExp` is the maximum session length the product may grant for an impersonation (at most 1 h), independent of the
 60 s launch lifetime. Products must show the audit banner and record `act.sub` on every action.
+
+`scope.all: true` (app-wide management, e.g. platform staff administering the product itself) is allowed only for
+`admin` and is exclusive: next to it only `permissions` may appear (no `merchantId`, `websiteId(s)`, `subscriptions`).
+`scope.subscriptions`, when present on any kind, must be a list of non-empty ids. The JSDoc types `LaunchScope`,
+`LaunchUser` and `LaunchClaims` are exported from the package index.
 
 ## Client assertions (product → Portal)
 
@@ -292,6 +301,30 @@ Developer              Portal                                              Produ
 - Portal-side error codes: `malformed` (shape, JWK, claims), `unknown_kid` (proof header kid ≠ JWK kid), `signature`
   (bad signature, thumbprint or manifest hash), `replay` (nonce not echoed), `audience` (other Portal), `subject` (other
   app), `expired` / `not_yet_valid` (outside ±5 min), `wrong_type`.
+
+## Pack bundle signatures
+
+Element packs are published as signed bundles rather than through the registration handshake. The developer signs
+`ss-pack-bundle.v1.<sha256hex(canonicalJson(descriptor))>` with Ed25519. The signature is detached:
+`{ kid, alg: 'EdDSA', sig: <base64url 64 bytes> }`.
+
+- `signBundle({ signer, descriptor })` → `BundleSignature`.
+- `verifyBundle({ descriptor, signature, publicJwk | keys | keyResolver })` → `Promise<boolean>`. It never throws.
+  `publicJwk` is the pinned developer key, whose `kid` must match. `keys` are candidates matched by `kid`.
+  `keyResolver` is any `KeyResolver`.
+
+The output is byte-compatible with the Portal catalog's former `signatures.js`. The tests pin a signature vector.
+
+## Signed manifests
+
+A registered product serves `GET /.well-known/ss-app.json` with `SS-Manifest-Signature: <compact JWS>`
+(`typ: ss-manifest+jws`), signed with its registered key. The payload is `{ appId, manifestHash, iat }`, where
+`manifestHash = hashManifest(manifest)`, the same hash as the registration proof. Before importing a refreshed
+manifest, the Portal runs `verifyManifest({ manifest, jws, keyResolver /* the app's registered JWKS */, expectedAppId,
+now, maxAgeSec = 86400, skewSeconds = 300 })`. It returns `{ appId, manifestHash, iat, kid }` or throws `wrong_type`,
+`signature` (bad signature or manifest mismatch), `issuer` (another app), `expired` (older than `maxAgeSec`),
+`not_yet_valid`, `malformed` or `unknown_kid`. A compromised host or CDN therefore cannot swap the manifest without
+the product key. Before registration, a product has no appId and serves the manifest unsigned.
 
 ## Testing
 

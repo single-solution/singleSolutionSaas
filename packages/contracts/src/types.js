@@ -156,6 +156,7 @@
  * @typedef {object} EventEnvelope
  * @property {string} id
  * @property {string} type `name@version`
+ * @property {'website'} [scope] default `website` (see {@link PlatformEventEnvelope} for platform-scoped events)
  * @property {string} websiteId
  * @property {'live' | 'test'} env
  * @property {string} occurredAt
@@ -164,6 +165,13 @@
  * @property {Record<string, unknown>} data
  * @property {{ element?: string } & Record<string, unknown>} [context]
  */
+
+/**
+ * A platform-scoped event (e.g. `manifest.accepted@1`): `scope: 'platform'` and no `websiteId`.
+ * @typedef {Omit<EventEnvelope, 'scope' | 'websiteId'> & { scope: 'platform', websiteId?: undefined }} PlatformEventEnvelope
+ */
+
+/** @typedef {EventEnvelope | PlatformEventEnvelope} AnyEventEnvelope */
 
 /**
  * @typedef {object} Placement

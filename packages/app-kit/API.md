@@ -78,7 +78,10 @@ createProduct({
   defaultLang,              // 'en'
   data: { indexes, migrations, createClient, clientOptions, idleMs },   // indexes/migrations applied lazily per website
   privacy: { collections: [{ name, subjectField = 'customerId', fields: [] }] } | { export(input), anonymize(input) },
-  connectors: { [kind]: { [provider]: (ctx) => adapter } },             // e.g. payments adapters
+  connectors: { [kind]: { [provider]: (ctx) => adapter } },             // e.g. payments adapters; ctx = { descriptor, websiteId, slug, send, policy, fetch, now }
+  outbound: { allowHosts, allowHttpForAllowed, ports, maxRedirects, timeoutMs, maxBytes, resolve },
+                            // @ss/net createOutboundPolicy options for connector calls; allowHosts ignored when nodeEnv === 'production'
+  outboundSend,             // (url, init) => { status, headers, body: Buffer, url } — replaces @ss/net safeFetch (tests)
   auditSink,                // async (entry) => void; default: merchant DB collection `audit`
   problemBaseUri,           // RFC 9457 type base, default `<endpoints.base>/problems/`
   problemCodes,             // product-specific { code: { status, title } }
@@ -101,7 +104,8 @@ createProduct({
     dispatch(event, meta) → { duplicate },                             // dedupe on event id, then handlers
     effects(websiteId, eventId) → number,                              // handler runs (dev probes only, else 0)
   },
-  manifestRoute: () => ({ status: 200, body: manifest }),              // GET /.well-known/ss-app.json
+  manifestRoute: async () => ({ status: 200, body: manifest, headers }),  // GET /.well-known/ss-app.json
+        // headers: cache-control public, max-age=300; ss-manifest-signature: <@ss/protocol signManifest JWS> once the appId is known
   launch: {
     verify(token) → { ok: true, claims, role, scope } | { ok: false, code },   // role: merchant|demo|platform_admin|impersonate|partner|developer
     exchange(token, { ttlMs }?) → { ok: true, session } | { ok: false, code },  // opaque session `ses_…`; impersonation ends at impExp
@@ -148,6 +152,9 @@ createProduct({
   connectors: { ai(websiteId), messaging(websiteId), storage(websiteId), payments(websiteId), forget(websiteId) },
     // storage: { presignPut({ key, contentType?, expiresIn? }), presignGet({ key, expiresIn?, downloadName? }), headObject, deleteObject, keyFor }
     // ai: { request, complete(input) }   messaging: { request, send(message) }
+    // every connector call goes through @ss/net safeFetch under the `outbound` policy: https only, public addresses only
+    // (checked again on each DNS answer at connect time), no redirects for providers, size cap; endpoints/baseUrls that
+    // fail the policy are refused up front with resource_invalid
     // payments: interface { createPayment, capture, refund, status, verifyWebhook } — provided by an injected adapter
   audit: { record({ websiteId, actor: { type, id?, act? }, action, target?, before?, after?, requestId? }) → { ok, id? } },
   health: { healthz() → { status, body }, readyz() → { status: 200|503, body: { status: ok|degraded|unavailable, checks } } },
@@ -222,9 +229,14 @@ Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces ar
 
 ### Environment
 
-`configFromEnv(env = process.env)` → `{ portalUrl, appId, signingKey, registrationTokenHash, productDbUri, logLevel }`. It reads
+`configFromEnv(env = process.env)` → `{ portalUrl, appId, signingKey, registrationTokenHash, productDbUri, logLevel, outboundAllowHosts }`. It reads
 `SS_PORTAL_URL`, `SS_APP_ID`, `SS_APP_SIGNING_KEY` (private JWK JSON), `SS_REGISTRATION_TOKEN_HASH`, `SS_PRODUCT_DB_URI`
-(the product's own control DB) and `SS_LOG_LEVEL`.
+(the product's own control DB), `SS_LOG_LEVEL` and `SS_OUTBOUND_ALLOW_HOSTS` (comma-separated development allowlist for
+`outbound.allowHosts`; ignored in production).
+
+The merchant database is vetted with `@ss/net` `isSafeMongoUri` under the `outbound` policy before connecting (refused →
+`resource_invalid`), and the `MongoClient` dials every host through `guardedLookup` (the `lookup` option cannot be
+overridden by `data.clientOptions`).
 
 ### Portal endpoints app-kit calls
 

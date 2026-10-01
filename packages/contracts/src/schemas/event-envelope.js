@@ -16,6 +16,12 @@ export const ACTOR_TYPES = Object.freeze(
 /** Where an event entered the platform. */
 export const EVENT_SOURCES = Object.freeze(/** @type {const} */ (['loader', 'server', 'product', 'portal', 'import', 'webhook']));
 
+/**
+ * Event scopes: `website` events (the default) belong to one website and carry `websiteId`; `platform` events concern
+ * a product or the platform as a whole (e.g. `manifest.accepted@1`) and carry no `websiteId`.
+ */
+export const EVENT_SCOPES = Object.freeze(/** @type {const} */ (['website', 'platform']));
+
 /** Prefix of merchant-defined events; their data is any object validated elsewhere. */
 export const CUSTOM_EVENT_PREFIX = 'custom.';
 
@@ -30,11 +36,16 @@ export const eventEnvelopeSchema = deepFreeze({
 	$id: SCHEMA_IDS.eventEnvelope,
 	title: 'Event envelope v1',
 	type: 'object',
-	required: ['id', 'type', 'websiteId', 'env', 'occurredAt', 'idempotencyKey', 'actor', 'data'],
+	required: ['id', 'type', 'env', 'occurredAt', 'idempotencyKey', 'actor', 'data'],
 	additionalProperties: false,
+	// `websiteId` is required for website-scoped events (the default) and absent from platform-scoped ones
+	if: { required: ['scope'], properties: { scope: { const: 'platform' } } },
+	then: { properties: { websiteId: false } },
+	else: { required: ['websiteId'], properties: { websiteId: true } },
 	properties: {
 		id,
 		type: ref('eventType'),
+		scope: { type: 'string', enum: [...EVENT_SCOPES], default: 'website' },
 		websiteId: ref('websiteId'),
 		env: ref('env'),
 		occurredAt: ref('timestamp'),
@@ -247,6 +258,17 @@ export const CONTROL_EVENT_DATA = deepFreeze({
 	'subscription.cancelled@1': subscriptionLifecycle,
 	'manifest.accepted@1': data({ appId: id, version: ref('semver') }, ['appId', 'version']),
 });
+
+/** Catalogued event types that are platform-scoped (envelope `scope: 'platform'`, no `websiteId`). */
+export const PLATFORM_SCOPED_EVENTS = Object.freeze(/** @type {const} */ (['manifest.accepted@1']));
+
+/**
+ * The envelope scope an event type requires: `platform` for {@link PLATFORM_SCOPED_EVENTS}, else `website`.
+ * @param {string} type `name@version`
+ * @returns {typeof EVENT_SCOPES[number]}
+ */
+export const eventScopeOf = (type) =>
+	/** @type {readonly string[]} */ (PLATFORM_SCOPED_EVENTS).includes(type) ? 'platform' : 'website';
 
 /** Loader events (website → Portal), emitted by the web SDK only. */
 export const LOADER_EVENT_DATA = deepFreeze({

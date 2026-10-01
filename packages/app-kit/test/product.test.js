@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createAudit, createHealth, createPortalClient, createProduct } from '../src/index.js';
-import { createSigner, generateSigningKey } from '@ss/protocol';
+import { createJwks, createKeyResolver, createSigner, generateSigningKey, verifyManifest } from '@ss/protocol';
 import { PORTAL_URL, WEBSITE, createClock, entitle, manifest, setup } from './helpers.js';
 import { createFakePortal, entitlementPayload } from '../src/testing.js';
 
@@ -36,7 +36,31 @@ describe('createProduct', () => {
 			/private member/,
 		);
 		const product = createProduct({ ...base, manifest: manifest(), signingKey: JSON.stringify(privateJwk) });
-		expect(product.manifestRoute()).toEqual({ status: 200, body: manifest() });
+		// before registration (no appId) the manifest is served unsigned
+		expect(await product.manifestRoute()).toEqual({
+			status: 200,
+			body: manifest(),
+			headers: { 'cache-control': 'public, max-age=300' },
+		});
+	});
+
+	it('signs the served manifest with the product key once the appId is known', async () => {
+		const { product, publicJwk, clock } = await setup();
+		const first = await product.manifestRoute();
+		const jws = first.headers['ss-manifest-signature'];
+		expect(typeof jws).toBe('string');
+		const claims = await verifyManifest({
+			manifest: first.body,
+			jws,
+			keyResolver: createKeyResolver({ jwks: createJwks([publicJwk]), now: clock.now }),
+			expectedAppId: 'app_test',
+			now: clock.now,
+		});
+		expect(claims).toMatchObject({ appId: 'app_test', kid: 'product-1', iat: clock.now() / 1000 });
+		clock.advance(60_000);
+		expect((await product.manifestRoute()).headers['ss-manifest-signature']).toBe(jws);
+		clock.advance(3_600_000);
+		expect((await product.manifestRoute()).headers['ss-manifest-signature']).not.toBe(jws);
 	});
 
 	it('sends heartbeats and publishes events through the signed client', async () => {

@@ -8,7 +8,7 @@ import addFormatsModule from 'ajv-formats';
 import { ALL_SCHEMAS, GRAPH_ENTITY_SCHEMAS } from './schemas/index.js';
 import { SCHEMA_IDS, eventDataSchemaId } from './schemas/schema-ids.js';
 import { FEATURE_EXTENSION_KEYWORDS } from './schemas/feature-schema.js';
-import { CUSTOM_EVENT_PREFIX, ELEMENT_UI_EVENT_MAX_BYTES, isElementUiEvent } from './schemas/event-envelope.js';
+import { CUSTOM_EVENT_PREFIX, ELEMENT_UI_EVENT_MAX_BYTES, eventScopeOf, isElementUiEvent } from './schemas/event-envelope.js';
 import { PATTERNS } from './schemas/common.js';
 import { checkManifest } from './manifest-semantics.js';
 import { checkEntitlementDocument, checkPlacement } from './document-semantics.js';
@@ -51,6 +51,8 @@ export const problemsFromAjv = (errors, prefix = '') => {
 			message = 'has an invalid property name';
 		} else if (error.keyword === 'enum' && Array.isArray(params.allowedValues)) {
 			message = `must be one of: ${params.allowedValues.map((value) => JSON.stringify(value)).join(', ')}`;
+		} else if (error.keyword === 'false schema') {
+			message = 'is not allowed';
 		} else if (error.keyword === 'const') {
 			message = `must equal ${JSON.stringify(params.allowedValue)}`;
 		}
@@ -200,6 +202,13 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 		const problems = run(SCHEMA_IDS.eventEnvelope, value);
 		const event = /** @type {import('./types.js').EventEnvelope} */ (value);
 		if (problems.length > 0) return result(event, problems);
+		const scope = /** @type {import('./types.js').AnyEventEnvelope} */ (event).scope ?? 'website';
+		const expectedScope = eventScopeOf(event.type);
+		if (scope !== expectedScope) {
+			return result(event, [
+				{ path: '/scope', keyword: 'eventScope', message: `${event.type} is a ${expectedScope}-scoped event` },
+			]);
+		}
 		let dataId = event.type.startsWith(CUSTOM_EVENT_PREFIX) ? eventDataSchemaId('custom.*') : eventDataSchemaId(event.type);
 		// An element UI event is recognised only when the envelope names the emitting element (context.element).
 		if (!has(dataId) && isElementUiEvent(event.type) && event.context?.element === event.type.split('.')[0]) {

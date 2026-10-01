@@ -172,7 +172,10 @@ describe('standard routes', () => {
 
 	it('well-known manifest, events passthrough, and toggles', async () => {
 		const { call, portal } = await app();
-		expect((await body(await call('/.well-known/ss-app.json'))).product.slug).toBe('coupon-box');
+		const served = await call('/.well-known/ss-app.json');
+		expect(served.headers.get('cache-control')).toBe('public, max-age=300');
+		expect(served.headers.get('ss-manifest-signature')).toMatch(/^[\w-]+\.[\w-]+\.[\w-]+$/);
+		expect((await body(served)).product.slug).toBe('coupon-box');
 		const delivery = await portal.signEvent({ ...orderEvent(), websiteId: WEBSITE, env: 'live' });
 		const res = await call('/.well-known/ss-events', { method: 'POST', body: delivery.body, headers: delivery.headers });
 		expect(await body(res)).toEqual({ received: true });

@@ -187,12 +187,20 @@ describe('launch kind/scope rules', () => {
 		['merchant', { scope: { merchantId: 'm' } }],
 		['demo', { scope: {} }],
 		['admin', { scope: { merchantId: 'm', permissions: ['orders.read'] }, user: { id: 'staff_1', roles: ['support'] } }],
+		['admin', { scope: { all: true } }],
+		['admin', { scope: { all: true, permissions: ['apps.manage'] } }],
+		['admin', { scope: { merchantId: 'm', subscriptions: ['sub_1', 'sub_2'] } }],
+		['merchant', { scope: { merchantId: 'm', subscriptions: [] } }],
 		['partner', { scope: { partnerId: 'p' } }],
 		['developer', { scope: { developerId: 'd' } }],
 		['impersonate', { scope: { merchantId: 'm' }, actor: 'staff_1', impersonationSeconds: 900 }],
 	])('accepts a valid %s launch', async (kind, extra) => {
 		const clock = createClock();
-		const { token } = await issueLaunch({ ...(await baseIssue(clock)), kind: /** @type {any} */ (kind), ...extra });
+		const { token } = await issueLaunch({
+			...(await baseIssue(clock)),
+			kind: /** @type {any} */ (kind),
+			.../** @type {any} */ (extra),
+		});
 		const claims = await verify(clock, token);
 		expect(claims.kind).toBe(kind);
 		if (kind === 'impersonate') {
@@ -204,6 +212,14 @@ describe('launch kind/scope rules', () => {
 	it.each([
 		['merchant without merchantId', { kind: 'merchant', scope: {} }],
 		['admin without scope', { kind: 'admin', scope: {} }],
+		['admin with all and a merchant', { kind: 'admin', scope: { all: true, merchantId: 'm' } }],
+		['admin with all and subscriptions', { kind: 'admin', scope: { all: true, subscriptions: ['s'] } }],
+		['admin with all: false', { kind: 'admin', scope: { all: false, merchantId: 'm' } }],
+		['admin with all: "yes"', { kind: 'admin', scope: { all: 'yes' } }],
+		['merchant with all', { kind: 'merchant', scope: { all: true, merchantId: 'm' } }],
+		['impersonate with all', { kind: 'impersonate', scope: { all: true }, actor: 'staff_1' }],
+		['subscriptions not a list', { kind: 'admin', scope: { merchantId: 'm', subscriptions: 'sub_1' } }],
+		['subscriptions with an empty id', { kind: 'admin', scope: { merchantId: 'm', subscriptions: [''] } }],
 		['demo with a real merchant', { kind: 'demo', scope: { merchantId: 'm' } }],
 		['partner without partnerId', { kind: 'partner', scope: {} }],
 		['developer without developerId', { kind: 'developer', scope: {} }],
@@ -254,5 +270,22 @@ describe('launch kind/scope rules', () => {
 	it('kindScopeViolation returns null for valid claims', () => {
 		expect(kindScopeViolation({ kind: 'demo', user: { id: 'u' }, scope: {} })).toBeNull();
 		expect(kindScopeViolation({ kind: 'demo', user: { id: 'u' } })).toBe('scope is required');
+	});
+
+	it('kindScopeViolation explains admin scope violations', () => {
+		const user = { id: 'u' };
+		expect(kindScopeViolation({ kind: 'admin', user, scope: { all: true } })).toBeNull();
+		expect(kindScopeViolation({ kind: 'admin', user, scope: { merchantId: 'm', subscriptions: ['s'] } })).toBeNull();
+		expect(kindScopeViolation({ kind: 'admin', user, scope: {} })).toBe('admin launch requires scope.all or scope.merchantId');
+		expect(kindScopeViolation({ kind: 'admin', user, scope: { all: true, websiteId: 'w' } })).toBe(
+			'scope.all excludes scope.websiteId',
+		);
+		expect(kindScopeViolation({ kind: 'admin', user, scope: { all: 1 } })).toBe('scope.all must be true');
+		expect(kindScopeViolation({ kind: 'partner', user, scope: { all: true, partnerId: 'p' } })).toBe(
+			'scope.all is only allowed for admin launches',
+		);
+		expect(kindScopeViolation({ kind: 'admin', user, scope: { merchantId: 'm', subscriptions: [1] } })).toBe(
+			'scope.subscriptions must be a list of ids',
+		);
 	});
 });

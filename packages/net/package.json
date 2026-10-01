@@ -1,0 +1,15 @@
+{
+	"name": "@ss/net",
+	"version": "0.1.0",
+	"description": "Safe outbound networking shared by the Portal and products: SSRF policy, DNS-pinned lookups, guarded fetch, AWS SigV4 signing.",
+	"type": "module",
+	"license": "UNLICENSED",
+	"private": true,
+	"exports": {
+		".": "./src/index.js"
+	},
+	"files": [
+		"src"
+	],
+	"dependencies": {}
+}

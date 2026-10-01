@@ -36,7 +36,7 @@ export const createIdentityModule = (options = {}) =>
 		}),
 		ports: (ctx) => ({
 			sessionActor: (session) => ctx.service('identity').sessionActor(session),
-			websiteKeyRevoked: (claims) => ctx.service('identity').isKeyRevoked(claims),
+			websiteKeyRevoked: (claims, rawKey) => ctx.service('identity').isKeyRevoked(claims, rawKey),
 		}),
 	});
 

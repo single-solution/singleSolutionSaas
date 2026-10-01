@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createProblemFactory } from '@ss/contracts';
 import { can } from '../src/infra/rbac.js';
 import {
+	INFRA_PROBLEMS,
 	accepted,
 	compileRoutes,
 	createApiHandler,
@@ -19,6 +20,7 @@ import {
 import { createClock, createTestLogger, MERCHANT, MERCHANT_2 } from './helpers.js';
 
 const ORIGIN = 'https://portal.test';
+const SECRET = Buffer.alloc(32, 9);
 
 /** In-memory twins of the Mongo stores (same interfaces). */
 const memoryStores = () => {
@@ -98,8 +100,9 @@ const build = (routes, overrides = {}) => {
 		routes,
 		problems: createProblemFactory({
 			baseUri: 'https://errors.test/',
-			codes: { custom_code: { status: 418, title: 'Custom' } },
+			codes: { ...INFRA_PROBLEMS, custom_code: { status: 418, title: 'Custom' } },
 		}),
+		idempotencySecret: SECRET,
 		logger,
 		authenticators: fakeAuthenticators(),
 		can,
@@ -467,6 +470,58 @@ describe('request pipeline', () => {
 		expect(
 			(await call('POST', '/v1/fails', { headers: { 'idempotency-key': 'f1' } })).headers.get('idempotent-replayed'),
 		).toBeNull();
+		// fingerprints are keyed HMACs (a body with a password cannot be brute-forced from the store)
+		const fingerprints = [...stores.records.values()].map((r) => r.fingerprint);
+		expect(fingerprints.every((f) => /^[0-9a-f]{64}$/.test(f))).toBe(true);
+		const { createHash } = await import('node:crypto');
+		const plain = createHash('sha256')
+			.update(`POST\n/v1/things\n\n${JSON.stringify({ a: 1 })}`)
+			.digest('hex');
+		expect(fingerprints).not.toContain(plain);
+	});
+
+	it("'no-store' routes keep only the status: replays answer 409 idempotency_replay_no_body", async () => {
+		let counter = 0;
+		const { call, stores } = build([
+			{
+				method: 'POST',
+				path: '/v1/secrets',
+				auth: 'public',
+				idempotent: 'no-store',
+				handler: () => created({ secret: `s3cret-${(counter += 1)}` }, { headers: { 'x-secret': 'header-secret' } }),
+			},
+			{
+				method: 'POST',
+				path: '/v1/secrets/fail',
+				auth: 'public',
+				idempotent: 'no-store',
+				handler: () => problem('unavailable'),
+			},
+		]);
+		const first = await call('POST', '/v1/secrets', { headers: { 'idempotency-key': 'n1' }, body: { password: 'pw' } });
+		expect([first.status, first.json.secret]).toEqual([201, 's3cret-1']);
+		const stored = JSON.stringify([...stores.records.values()]);
+		expect(stored).not.toContain('s3cret');
+		expect(stored).not.toContain('header-secret');
+		expect(stored).not.toContain('pw');
+		const replay = await call('POST', '/v1/secrets', { headers: { 'idempotency-key': 'n1' }, body: { password: 'pw' } });
+		expect(replay.status).toBe(409);
+		expect(replay.json.type).toBe('https://errors.test/idempotency_replay_no_body');
+		expect(replay.json.detail).toContain('status 201');
+		expect(replay.headers.get('idempotent-replayed')).toBe('true');
+		expect(counter).toBe(1); // not executed twice
+		// a different body under the same key is still a conflict, the key stays optional
+		expect(
+			(await call('POST', '/v1/secrets', { headers: { 'idempotency-key': 'n1' }, body: { password: 'x' } })).json.type,
+		).toBe('https://errors.test/idempotency_conflict');
+		expect((await call('POST', '/v1/secrets', { body: { password: 'pw' } })).status).toBe(201);
+		// 5xx outcomes are released so the retry runs
+		expect((await call('POST', '/v1/secrets/fail', { headers: { 'idempotency-key': 'n2' } })).status).toBe(503);
+		expect((await call('POST', '/v1/secrets/fail', { headers: { 'idempotency-key': 'n2' } })).status).toBe(503);
+	});
+
+	it('refuses to build without a fingerprint secret', () => {
+		expect(() => build([], { idempotencySecret: Buffer.alloc(8) })).toThrow(/idempotencySecret/);
 	});
 
 	it('renders handler outcomes: values, results, Responses, thrown problems and crashes', async () => {

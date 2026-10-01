@@ -12,6 +12,7 @@ import {
 	createRegistrationHandler,
 	createSigner,
 	isProtocolError,
+	signManifest,
 	toPublicJwk,
 	verifyRequest,
 } from '@ss/protocol';
@@ -32,6 +33,11 @@ import { createUsage } from './usage.js';
 import { defaultRandomBytes, isObject, kitError, parseDurationMs } from './util.js';
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
+
+/** `cache-control` max-age of `/.well-known/ss-app.json` (seconds). */
+const MANIFEST_CACHE_SECONDS = 300;
+/** A manifest signature is reused for at most this long, then re-signed with a fresh `iat`. */
+const MANIFEST_RESIGN_MS = 3_600_000;
 /** @typedef {import('./stores/types.js').Stores} Stores */
 /** @typedef {import('./logger.js').Logger} Logger */
 
@@ -62,6 +68,9 @@ import { defaultRandomBytes, isObject, kitError, parseDurationMs } from './util.
  * @property {string} [defaultLang] default `en`
  * @property {{ indexes?: import('./data.js').IndexDefinition[], migrations?: import('./data.js').MigrationStep[], createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => import('mongodb').MongoClient, clientOptions?: import('mongodb').MongoClientOptions, idleMs?: number }} [data]
  * @property {Record<string, Record<string, import('./connectors/index.js').AdapterFactory>>} [connectors] provider adapters per kind
+ * @property {import('@ss/net').OutboundPolicyOptions} [outbound] SSRF policy of connector calls and the merchant database (`@ss/net`); `allowHosts`
+ *   is ignored when `nodeEnv === 'production'`
+ * @property {import('./connectors/index.js').OutboundSend} [outboundSend] replaces `safeFetch` for connector calls (tests)
  * @property {{ collections?: import('./privacy.js').PrivacyCollection[], export?: (input: any) => Promise<unknown>, anonymize?: (input: any) => Promise<unknown> }} [privacy]
  * @property {((entry: any) => Promise<unknown>) | null} [auditSink]
  * @property {{ entitlementTtlMs?: number, revocationSyncMs?: number }} [cache]
@@ -166,6 +175,9 @@ export const createProduct = (options) => {
 		return knownAppId;
 	};
 
+	/** @type {{ appId: string, at: number, jws: string } | null} the current manifest signature (re-signed hourly) */
+	let manifestSignature = null;
+
 	const portal = createPortalClient({ portalUrl: pinnedPortal, appId: resolveAppId, signer, fetch, now, randomBytes });
 	const graceMs = parseDurationMs(manifest.capabilities?.offlineGrace, DEFAULT_GRACE_MS);
 	// The last good Portal JWKS is persisted so cold instances can verify during a Portal outage. Serving stays bounded
@@ -232,22 +244,35 @@ export const createProduct = (options) => {
 			return result.ok ? result.doc.subscriptionId : null;
 		},
 	});
-	const data = createData({ portal, slug: manifest.product.slug, now, randomBytes, logger, ...(options.data ?? {}) });
-	const connectors = createConnectors({ portal, slug: manifest.product.slug, fetch, now, adapters: options.connectors ?? {} });
+	const production = (options.nodeEnv ?? process.env.NODE_ENV) === 'production';
+	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
+	if (production && allowHosts.length > 0) logger.warn('outbound.allowHosts is ignored in production');
+	const outbound = { ...outboundRest, allowHosts: production ? [] : allowHosts };
+	const data = createData({ portal, slug: manifest.product.slug, now, randomBytes, logger, outbound, ...(options.data ?? {}) });
+	const connectors = createConnectors({
+		portal,
+		slug: manifest.product.slug,
+		fetch,
+		now,
+		adapters: options.connectors ?? {},
+		outbound,
+		...(options.outboundSend ? { send: options.outboundSend } : {}),
+	});
 	const audit = createAudit({ data, now, sink: options.auditSink ?? null });
-	const devProbes = options.devProbes === true && (options.nodeEnv ?? process.env.NODE_ENV) !== 'production';
+	const devProbes = options.devProbes === true && !production;
 	const events = createEvents({ keyResolver, replay: stores.replay, now, logger, trackEffects: devProbes });
 	const health = createHealth({ product: manifest.product, portal, ping: stores.ping ?? null, now });
 	const privacy = createPrivacy({ data, now, ...(options.privacy ?? {}) });
 
 	events.on('entitlement.changed', async (event) => {
-		await entitlements.refresh(event.websiteId);
+		if (event.websiteId) await entitlements.refresh(event.websiteId);
 	});
 	events.on('key.revoked', async (event) => {
 		const ids = Array.isArray(event.data.keyIds) ? event.data.keyIds : [event.data.keyId];
 		await keys.revoke(/** @type {string[]} */ (ids));
 	});
 	events.on('resource.changed', (event) => {
+		if (!event.websiteId) return;
 		data.forget(event.websiteId);
 		connectors.forget(event.websiteId);
 	});
@@ -424,7 +449,24 @@ export const createProduct = (options) => {
 		manifest,
 		registration,
 		events: Object.freeze({ handle: events.handle, on: events.on, dispatch: events.dispatch, effects: events.effects }),
-		manifestRoute: () => ({ status: 200, body: manifest }),
+		/**
+		 * The manifest as served at `/.well-known/ss-app.json`: once the appId is known (after registration) it carries
+		 * `SS-Manifest-Signature` (`@ss/protocol` `signManifest` with the product key); cacheable for 5 minutes.
+		 * @returns {Promise<{ status: number, body: Manifest, headers: Record<string, string> }>}
+		 */
+		manifestRoute: async () => {
+			/** @type {Record<string, string>} */
+			const headers = { 'cache-control': `public, max-age=${MANIFEST_CACHE_SECONDS}` };
+			const id = await resolveAppId().catch(() => null);
+			if (id) {
+				const at = now();
+				if (!manifestSignature || manifestSignature.appId !== id || at - manifestSignature.at > MANIFEST_RESIGN_MS) {
+					manifestSignature = { appId: id, at, jws: await signManifest({ signer, manifest, appId: id, now: () => at }) };
+				}
+				headers['ss-manifest-signature'] = manifestSignature.jws;
+			}
+			return { status: 200, body: manifest, headers };
+		},
 		launch,
 		keys,
 		entitlements,

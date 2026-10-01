@@ -14,7 +14,7 @@ const isDuplicateKey = (error) => typeof error === 'object' && error !== null &&
  * @property {string} _id
  * @property {string} eventId
  * @property {string} type
- * @property {string} websiteId
+ * @property {string | null} websiteId null for platform-scoped events (`scope: 'platform'`, e.g. manifest.accepted@1)
  * @property {string | null} merchantId
  * @property {string} env
  * @property {'website' | 'product' | 'portal'} source
@@ -52,7 +52,7 @@ export const createIntegrationRepo = ({ events, deliveries, deadLetters, now }) 
 			}
 		},
 		/**
-		 * @param {string} websiteId
+		 * @param {string | null} websiteId
 		 * @param {string} idempotencyKey
 		 * @returns {Promise<EventRecord | null>}
 		 */
@@ -69,7 +69,7 @@ export const createIntegrationRepo = ({ events, deliveries, deadLetters, now }) 
 		/**
 		 * Create (or find) the delivery record of (website, event, app).
 		 * @param {{ _id: string, eventRecordId: string, eventId: string, type: string, kind: 'event' | 'control',
-		 *   websiteId: string, merchantId: string | null, appId: string }} input
+		 *   websiteId: string | null, merchantId: string | null, appId: string }} input
 		 * @returns {Promise<{ deliveryId: string, inserted: boolean, status: string }>}
 		 */
 		ensureDelivery: async (input) => {
@@ -117,7 +117,7 @@ export const createIntegrationRepo = ({ events, deliveries, deadLetters, now }) 
 			deliveries.aggregate([{ $match: match }, { $group: { _id: '$status', n: { $sum: 1 } } }]).toArray(),
 
 		/**
-		 * @param {{ _id: string, websiteId: string, merchantId: string | null, appId: string, eventId: string, type: string,
+		 * @param {{ _id: string, websiteId: string | null, merchantId: string | null, appId: string, eventId: string, type: string,
 		 *   sealed: string, attempts: number, lastErrorCode: string, expireAt: Date }} entry
 		 */
 		putDeadLetter: async (entry) => {

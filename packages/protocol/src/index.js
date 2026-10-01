@@ -48,6 +48,14 @@ export {
 	hashRegistrationToken,
 	verifyRegistrationResponse,
 } from './registration.js';
+export { BUNDLE_SIGNING_PREFIX, bundleSigningInput, signBundle, verifyBundle } from './bundle.js';
+export {
+	DEFAULT_MANIFEST_MAX_AGE_SECONDS,
+	MANIFEST_SIGNATURE_HEADER,
+	MANIFEST_TYP,
+	signManifest,
+	verifyManifest,
+} from './manifest-signature.js';
 export { canonicalJson } from './encoding.js';
 
 /** @typedef {import('./errors.js').ProtocolError} ProtocolError */
@@ -59,6 +67,10 @@ export { canonicalJson } from './encoding.js';
 /** @typedef {import('./keys.js').KeyResolver} KeyResolver */
 /** @typedef {import('./replay.js').ReplayStore} ReplayStore */
 /** @typedef {import('./launch.js').LaunchClaims} LaunchClaims */
+/** @typedef {import('./launch.js').LaunchScope} LaunchScope */
+/** @typedef {import('./launch.js').LaunchUser} LaunchUser */
+/** @typedef {import('./bundle.js').BundleSignature} BundleSignature */
+/** @typedef {import('./manifest-signature.js').ManifestSignatureClaims} ManifestSignatureClaims */
 /** @typedef {import('./launch.js').LaunchKind} LaunchKind */
 /** @typedef {import('./assertion.js').AssertionClaims} AssertionClaims */
 /** @typedef {import('./website-keys.js').WebsiteKeyClaims} WebsiteKeyClaims */

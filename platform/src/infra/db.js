@@ -14,6 +14,10 @@
  *     cross-collection stages are refused) or the explicit `acrossMerchants()` view for staff/system code;
  *   - every repository refuses `$where` and the `$out` / `$merge` write stages (which could bypass append-only).
  * - `createLocks` — lease locks (unique `_id`, expiry takeover) used by migrations and cron runs.
+ * - `createTransactionRunner` — `withTransaction(async (session) => …)` over a driver session: snapshot reads,
+ *   majority commit, whole-transaction retry on `TransientTransactionError` and commit retry on
+ *   `UnknownTransactionCommitResult`. Repository operations take the driver options, so `{ session }` is passed to
+ *   them like any other option (the guards are unchanged).
  * - `runMigrations` — versioned, ordered, recorded migrations under a lock, with a read-only dry run.
  * @module
  */
@@ -186,20 +190,22 @@ export const indexSpecs = (def) => {
 };
 
 /**
- * Create every declared index (idempotent). With `dryRun`, only reports what would be created.
+ * Create every declared index (idempotent). With `dryRun`, only reports what would be created. Collections are
+ * processed `concurrency` at a time (default 8).
  * @param {Db} db
  * @param {Registry} registry
- * @param {{ dryRun?: boolean, logger?: Logger }} [options]
+ * @param {{ dryRun?: boolean, logger?: Logger, concurrency?: number }} [options]
  * @returns {Promise<{ created: string[], existing: string[], undeclared: string[] }>}
  */
-export const ensureIndexes = async (db, registry, { dryRun = false, logger } = {}) => {
+export const ensureIndexes = async (db, registry, { dryRun = false, logger, concurrency = 8 } = {}) => {
 	/** @type {string[]} */
 	const created = [];
 	/** @type {string[]} */
 	const existing = [];
 	/** @type {string[]} */
 	const undeclared = [];
-	for (const def of registry.all()) {
+	/** @param {Readonly<CollectionDefinition>} def */
+	const ensureOne = async (def) => {
 		const specs = indexSpecs(def);
 		/** @type {Set<string>} */
 		let present = new Set();
@@ -208,11 +214,27 @@ export const ensureIndexes = async (db, registry, { dryRun = false, logger } = {
 		} catch (error) {
 			if (/** @type {any} */ (error)?.codeName !== 'NamespaceNotFound') throw error;
 		}
+		const missing = specs.filter((spec) => !present.has(spec.name));
+		if (!dryRun && missing.length > 0) await db.collection(def.name).createIndexes(/** @type {any} */ (missing));
+		return { def, specs, present };
+	};
+	// collections are independent: create their indexes concurrently (bounded), report in registry order
+	const defs = registry.all();
+	/** @type {Array<{ def: Readonly<CollectionDefinition>, specs: PlannedIndex[], present: Set<string> }>} */
+	const results = new Array(defs.length);
+	let next = 0;
+	const worker = async () => {
+		while (next < defs.length) {
+			const index = next;
+			next += 1;
+			results[index] = await ensureOne(/** @type {Readonly<CollectionDefinition>} */ (defs[index]));
+		}
+	};
+	await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, defs.length)) }, worker));
+	for (const { def, specs, present } of results) {
 		for (const spec of specs) (present.has(spec.name) ? existing : created).push(`${def.name}.${spec.name}`);
 		for (const name of present)
 			if (name !== '_id_' && !specs.some((s) => s.name === name)) undeclared.push(`${def.name}.${name}`);
-		const missing = specs.filter((spec) => !present.has(spec.name));
-		if (!dryRun && missing.length > 0) await db.collection(def.name).createIndexes(/** @type {any} */ (missing));
 	}
 	logger?.info('indexes ensured', { created: created.length, existing: existing.length, undeclared, dryRun });
 	return { created, existing, undeclared };
@@ -573,6 +595,70 @@ export const createLocks = (locks, { now = Date.now, randomBytes = defaultRandom
 	});
 };
 /** @typedef {ReturnType<typeof createLocks>} Locks */
+
+// ---------------------------------------------------------------------------------------------------------------
+// Transactions
+
+/**
+ * @param {unknown} error
+ * @param {string} label
+ */
+const hasLabel = (error, label) =>
+	isObject(error) && typeof error.hasErrorLabel === 'function' && /** @type {any} */ (error).hasErrorLabel(label) === true;
+
+/**
+ * @typedef {<T>(fn: (session: import('mongodb').ClientSession) => Promise<T>) => Promise<T>} WithTransaction
+ */
+
+/**
+ * Transaction runner over a client (needs a replica set). `fn` may run more than once (transient errors restart
+ * the whole transaction), so it must only touch the database through the given session and keep side effects
+ * (mail, events, HTTP) outside. A non-transient error aborts and propagates unchanged.
+ * @param {Pick<MongoClient, 'startSession'>} client
+ * @param {{ maxAttempts?: number, maxCommitAttempts?: number, timeoutMs?: number, clock?: () => number }} [options]
+ * @returns {WithTransaction}
+ */
+export const createTransactionRunner = (
+	client,
+	{ maxAttempts = 5, maxCommitAttempts = 5, timeoutMs = 30_000, clock = Date.now } = {},
+) => {
+	return async (fn) => {
+		const session = client.startSession();
+		const until = clock() + timeoutMs;
+		try {
+			for (let attempt = 1; ; attempt += 1) {
+				session.startTransaction({
+					readConcern: { level: 'snapshot' },
+					writeConcern: { w: 'majority' },
+					readPreference: 'primary',
+				});
+				/** @type {any} */
+				let value;
+				try {
+					value = await fn(session);
+				} catch (error) {
+					if (session.inTransaction()) await session.abortTransaction().catch(() => undefined);
+					if (hasLabel(error, 'TransientTransactionError') && attempt < maxAttempts && clock() < until) continue;
+					throw error;
+				}
+				for (let commit = 1; ; commit += 1) {
+					try {
+						await session.commitTransaction();
+						return value;
+					} catch (error) {
+						if (hasLabel(error, 'UnknownTransactionCommitResult') && commit < maxCommitAttempts && clock() < until)
+							continue;
+						if (hasLabel(error, 'TransientTransactionError') && attempt < maxAttempts && clock() < until) break;
+						throw error;
+					}
+				}
+				// a transient commit failure: run the whole transaction again
+			}
+		} finally {
+			await session.endSession();
+		}
+	};
+};
 
 // ---------------------------------------------------------------------------------------------------------------
 // Migrations

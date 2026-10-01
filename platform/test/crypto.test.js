@@ -19,32 +19,53 @@ const codeOf = (fn) => {
 };
 
 describe('portal keys', () => {
-	it('signs with the first key and publishes all of them', async () => {
+	it('signs with the first key and publishes all of them, website keys with their dedicated signer', async () => {
 		const { privateJwk: current } = await generateSigningKey({ kid: 'portal-new' });
 		const { privateJwk: previous } = await generateSigningKey({ kid: 'portal-old' });
-		const keys = createPortalKeys([current, previous]);
+		const { privateJwk: website } = await generateSigningKey({ kid: 'website-new' });
+		const { privateJwk: websiteOld } = await generateSigningKey({ kid: 'website-old' });
+		const keys = createPortalKeys([current, previous], [website, websiteOld]);
 		expect(keys.activeKid).toBe('portal-new');
 		expect(keys.signers.map((s) => s.kid)).toEqual(['portal-new', 'portal-old']);
 		const jwks = keys.jwks();
 		expect(jwks.keys.map((k) => k.kid)).toEqual(['portal-new', 'portal-old']);
 		expect(JSON.stringify(jwks)).not.toContain('"d"');
+		expect(keys.websiteKeySigner.kid).toBe('website-new');
+		expect(keys.websiteKeySigners.map((s) => s.kid)).toEqual(['website-new', 'website-old']);
+		expect(keys.websiteKeyJwks().keys.map((k) => k.kid)).toEqual(['website-new', 'website-old']);
+		const published = keys.publishedJwks();
+		expect(published.keys.map((k) => k.kid)).toEqual(['portal-new', 'portal-old', 'website-new', 'website-old']);
+		expect(JSON.stringify(published)).not.toContain('"d"');
 
-		// website keys signed by either key verify against the Portal's own resolver
-		for (const signer of keys.signers) {
-			const { key } = await issueWebsiteKey({
-				signer,
-				kind: 'sk',
-				websiteId: WEBSITE,
-				merchantId: MERCHANT,
-				domain: 'shop.example.com',
-				env: 'live',
-				scopes: [],
-				keyId: 'key_1',
-			});
-			const claims = await verifyWebsiteKey({ key, keyResolver: keys.keyResolver, revocations: [] });
+		/** @param {import('@ss/protocol').Signer} signer */
+		const issue = async (signer) =>
+			(
+				await issueWebsiteKey({
+					signer,
+					kind: 'sk',
+					websiteId: WEBSITE,
+					merchantId: MERCHANT,
+					domain: 'shop.example.com',
+					env: 'live',
+					scopes: [],
+					keyId: 'key_1',
+				})
+			).key;
+		// website keys signed by either website-key signer verify with the website-key resolver only
+		for (const signer of keys.websiteKeySigners) {
+			const key = await issue(signer);
+			const claims = await verifyWebsiteKey({ key, keyResolver: keys.websiteKeyResolver, revocations: [] });
 			expect(claims.kid).toBe(signer.kid);
+			await expect(verifyWebsiteKey({ key, keyResolver: keys.keyResolver, revocations: [] })).rejects.toThrow();
 		}
-		expect(() => createPortalKeys([])).toThrow();
+		// a token signed with the Portal key is never a website key
+		const forged = await issue(keys.signer);
+		await expect(verifyWebsiteKey({ key: forged, keyResolver: keys.websiteKeyResolver, revocations: [] })).rejects.toThrow();
+
+		expect(codeOf(() => createPortalKeys([], [website]))).toBe('config_invalid');
+		expect(codeOf(() => createPortalKeys([current], []))).toBe('config_invalid');
+		const { privateJwk: clash } = await generateSigningKey({ kid: 'portal-new' });
+		expect(codeOf(() => createPortalKeys([current], [clash]))).toBe('config_invalid');
 	});
 });
 

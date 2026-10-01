@@ -137,6 +137,37 @@ describe('job queue', () => {
 	});
 });
 
+describe('payload dropping', () => {
+	it('complete(job, { dropPayload }) unsets the payload; runBatch does it for jobs enqueued with dropPayload', async () => {
+		const { jobs, db } = await setup();
+		const raw = db.collection(COLLECTIONS.jobs);
+		const kept = await jobs.enqueue({ name: 'demo.keep', payload: { secret: 'kept' } });
+		const dropped = await jobs.enqueue({ name: 'demo.drop', payload: { secret: 'sealed' }, dropPayload: true });
+		const stats = await jobs.runBatch({
+			handlers: {
+				'demo.keep': async () => undefined,
+				'demo.drop': async (payload) => expect(payload).toEqual({ secret: 'sealed' }),
+			},
+			deadlineMs: 60_000,
+		});
+		expect(stats.succeeded).toBe(2);
+		expect(await raw.findOne({ _id: /** @type {any} */ (kept.id) })).toMatchObject({
+			status: 'done',
+			payload: { secret: 'kept' },
+		});
+		const done = await raw.findOne({ _id: /** @type {any} */ (dropped.id) });
+		expect(done?.status).toBe('done');
+		expect(done).not.toHaveProperty('payload');
+
+		// explicit completion
+		const manual = await jobs.enqueue({ name: 'demo.manual', payload: { secret: 'x' } });
+		const job = /** @type {import('../src/infra/jobs.js').Job} */ (await jobs.lease({ names: ['demo.manual'], leaseMs: 1000 }));
+		expect(job.dropPayload).toBe(false);
+		expect(await jobs.complete(job, { dropPayload: true })).toBe(true);
+		expect(await raw.findOne({ _id: /** @type {any} */ (manual.id) })).not.toHaveProperty('payload');
+	});
+});
+
 describe('cron runner', () => {
 	it('runs known crons under a lock and records every run', async () => {
 		const { r, locks, logger, clock } = await setup();

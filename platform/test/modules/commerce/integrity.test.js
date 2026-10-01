@@ -118,24 +118,37 @@ describe('ledger integrity', () => {
 		await expect(h.credit('mer_zzzzzzzzzzzzzzzzzzzzzzzzzz', 5)).rejects.toMatchObject({ code: 'not_found' });
 	});
 
-	it('rolls the cached balance forward after a crash between the ledger insert and the account update', async () => {
+	it('commits ledger entries and the account move atomically; still rolls forward entries left outside a transaction', async () => {
 		const h = await bootCommerce({ mongo, dbName: 'cm_rollforward' });
 		await h.credit(M1, 1000, 'first');
+		const accountOf = () => h.db.collection('commerce_accounts').findOne({ _id: /** @type {any} */ (M1) });
+		// a crash between the ledger insert and the account update aborts the whole transaction
 		const faulty = faultyService(h.ctx, { accountUpdatesToFail: 1 });
 		await expect(
 			faulty.addCredits({ merchantId: M1, amountMillicredits: 500, reference: 'second', note: 'n', actor: STAFF }),
 		).rejects.toThrow(/simulated crash/);
-		expect((await h.service.balance(M1)).balanceMillicredits).toBe(1500); // pending entry counted
-		const account = await h.db.collection('commerce_accounts').findOne({ _id: /** @type {any} */ (M1) });
-		expect(account).toMatchObject({ seq: 1, balance: 1000 });
-		// the retried request is idempotent and the next append repairs the cache
+		expect((await h.service.balance(M1)).balanceMillicredits).toBe(1000);
+		expect(await h.db.collection('commerce_ledger').countDocuments({ merchantId: M1 })).toBe(1);
+		expect(await accountOf()).toMatchObject({ seq: 1, balance: 1000 });
+		// so the retried request is applied, once
+		expect((await h.credit(M1, 500, 'second')).duplicate).toBe(false);
 		expect((await h.credit(M1, 500, 'second')).duplicate).toBe(true);
-		await h.credit(M1, 250, 'third');
-		expect(await h.db.collection('commerce_accounts').findOne({ _id: /** @type {any} */ (M1) })).toMatchObject({
-			seq: 3,
-			balance: 1750,
-		});
-		expect(await h.service.verifyChain(M1)).toMatchObject({ ok: true, balance: 1750 });
+		expect(await accountOf()).toMatchObject({ seq: 2, balance: 1500 });
+
+		// entries written without a transaction (an older writer) are still rolled into the account cache
+		const legacy = faultyService(
+			{ ...h.ctx, withTransaction: (/** @type {any} */ fn) => fn(undefined) },
+			{ accountUpdatesToFail: 1 },
+		);
+		await expect(
+			legacy.addCredits({ merchantId: M1, amountMillicredits: 500, reference: 'third', note: 'n', actor: STAFF }),
+		).rejects.toThrow(/simulated crash/);
+		expect((await h.service.balance(M1)).balanceMillicredits).toBe(2000); // pending entry counted
+		expect(await accountOf()).toMatchObject({ seq: 2, balance: 1500 });
+		expect((await h.credit(M1, 500, 'third')).duplicate).toBe(true);
+		await h.credit(M1, 250, 'fourth');
+		expect(await accountOf()).toMatchObject({ seq: 4, balance: 2250 });
+		expect(await h.service.verifyChain(M1)).toMatchObject({ ok: true, balance: 2250 });
 	});
 
 	it('detects tampering, deletion and cache drift; reconciliation raises alerts and audit entries', async () => {

@@ -14,7 +14,6 @@ import {
 } from '@ss/protocol';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { createIntegrationModule } from '../../../src/modules/integration/index.js';
-import { PLATFORM_WEBSITE_ID } from '../../../src/modules/integration/service.js';
 import { createPortal } from '../../../src/portal.js';
 import {
 	MERCHANT,
@@ -172,7 +171,7 @@ const boot = async (dbName, { options = {}, withoutIdentity = false } = {}) => {
 	const key = async (kind, over = {}) =>
 		(
 			await issueWebsiteKey({
-				signer: over.signer ?? portal.shared.keys.signer,
+				signer: over.signer ?? portal.shared.keys.websiteKeySigner,
 				kind,
 				websiteId: over.websiteId ?? WEBSITE,
 				merchantId: over.merchantId ?? MERCHANT,
@@ -955,7 +954,7 @@ describe('control events', () => {
 			{ appId: 'app_pages', version: '1.2.0' },
 			{ appIds: ['app_pages'] },
 		);
-		expect(platform.websiteId).toBe(PLATFORM_WEBSITE_ID);
+		expect(platform.websiteId).toBeNull();
 		await drain();
 		const got = receiver.received.filter((r) => r.verified).map((r) => [r.path.split('/')[1], r.event.type]);
 		expect(got).toEqual(
@@ -967,8 +966,9 @@ describe('control events', () => {
 			]),
 		);
 		const manifestEvent = receiver.received.find((r) => r.event?.type === 'manifest.accepted@1')?.event;
+		expect(manifestEvent).not.toHaveProperty('websiteId');
 		expect(manifestEvent).toMatchObject({
-			websiteId: PLATFORM_WEBSITE_ID,
+			scope: 'platform',
 			env: 'test',
 			actor: { type: 'system' },
 			context: { source: 'portal' },
@@ -996,6 +996,13 @@ describe('control events', () => {
 		await expect(svc().emitControl('manifest.accepted@1', { appId: 'a', version: '1.0.0' })).rejects.toMatchObject({
 			code: 'validation_failed',
 		});
+		// platform-scoped events never target a website; website-scoped ones always do
+		await expect(
+			svc().emitControl('manifest.accepted@1', { appId: 'a', version: '1.0.0' }, { appIds: ['a'], websiteId: WEBSITE }),
+		).rejects.toMatchObject({ code: 'validation_failed' });
+		await expect(
+			svc().emitControl('key.revoked@1', { keyIds: ['k'], revokedAt: '2026-10-01T10:00:00.000Z' }, { appIds: ['a'] }),
+		).rejects.toMatchObject({ code: 'validation_failed' });
 		await expect(
 			svc().emitControl('manifest.accepted@1', { appId: 'a', version: '1.0.0' }, { appIds: [''] }),
 		).rejects.toMatchObject({

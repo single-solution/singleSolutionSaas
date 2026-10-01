@@ -5,7 +5,8 @@
  * Signing keys (`PORTAL_SIGNING_KEYS`): the first key signs; every configured key is published in the JWKS so
  * tokens signed by the previous key keep verifying during the overlap. Rotation: prepend the new key (optionally
  * with `nbf`), keep the old one (with `exp` = end of overlap), then remove it. Website keys are signed by the
- * Portal key, so retiring a key requires re-issuing website keys (F.5).
+ * dedicated website-key signer (`WEBSITE_KEY_SIGNING_KEYS`), so rotating the Portal key never touches them; retiring
+ * a website-key signing key requires re-issuing the website keys it signed (F.5).
  *
  * Envelope encryption: each record gets a fresh 256-bit data key; the plaintext is sealed with AES-256-GCM under
  * that data key with the caller's AAD (e.g. `{ merchantId, connectorId }`), and the data key is wrapped with
@@ -30,25 +31,48 @@ const TAG = 16;
 const KEY = 32;
 
 /**
- * Portal signing keys: active signer, all signers (for dual-signing events during rotation), the published JWKS
- * and a resolver over our own public keys (to verify tokens the Portal issued, such as website keys).
+ * Portal signing keys: active signer, all signers (for dual-signing events during rotation), the Portal JWKS and a
+ * resolver over our own public keys (to verify tokens the Portal issued, such as launches). Website keys have a
+ * **dedicated** signer (`WEBSITE_KEY_SIGNING_KEYS`, F.5) with its own resolver: a token signed by the Portal key is
+ * never accepted as a website key, and the other way round. Both key sets are published together
+ * (`publishedJwks()`, served at `/.well-known/jwks.json`) with distinct kids, so products verify website keys offline.
  * @param {ReadonlyArray<PrivateJwk>} signingKeys
+ * @param {ReadonlyArray<PrivateJwk>} websiteKeySigningKeys
  */
-export const createPortalKeys = (signingKeys) => {
+export const createPortalKeys = (signingKeys, websiteKeySigningKeys) => {
 	if (!Array.isArray(signingKeys) || signingKeys.length === 0)
 		throw platformError('config_invalid', 'at least one signing key is required');
+	if (!Array.isArray(websiteKeySigningKeys) || websiteKeySigningKeys.length === 0)
+		throw platformError('config_invalid', 'at least one website-key signing key is required');
+	const portalPublic = signingKeys.map((jwk) => toPublicJwk(jwk));
+	const websitePublic = websiteKeySigningKeys.map((jwk) => toPublicJwk(jwk));
+	const portalKids = new Set(portalPublic.map((jwk) => jwk.kid));
+	if (websitePublic.some((jwk) => portalKids.has(jwk.kid)))
+		throw platformError('config_invalid', 'website-key signing kids must differ from the Portal signing kids');
 	const signers = signingKeys.map((jwk) => createSigner(jwk));
-	const jwks = createJwks(signingKeys.map((jwk) => toPublicJwk(jwk)));
-	const keyResolver = createKeyResolver({ jwks });
+	const websiteKeySigners = websiteKeySigningKeys.map((jwk) => createSigner(jwk));
+	const jwks = createJwks(portalPublic);
+	const websiteKeyJwks = createJwks(websitePublic);
+	const published = createJwks([...portalPublic, ...websitePublic]);
 	return Object.freeze({
 		/** @type {Signer} */
 		signer: /** @type {Signer} */ (signers[0]),
 		/** @type {ReadonlyArray<Signer>} */
 		signers: Object.freeze(signers),
 		activeKid: /** @type {Signer} */ (signers[0]).kid,
-		/** @returns {Jwks} */
+		/** Portal keys only. @returns {Jwks} */
 		jwks: () => jwks,
-		keyResolver,
+		keyResolver: createKeyResolver({ jwks }),
+		/** Signs website keys (`pk_` / `sk_`) — nothing else. @type {Signer} */
+		websiteKeySigner: /** @type {Signer} */ (websiteKeySigners[0]),
+		/** @type {ReadonlyArray<Signer>} */
+		websiteKeySigners: Object.freeze(websiteKeySigners),
+		/** Resolver over the website-key signing keys only. */
+		websiteKeyResolver: createKeyResolver({ jwks: websiteKeyJwks }),
+		/** Website-key public keys only. @returns {Jwks} */
+		websiteKeyJwks: () => websiteKeyJwks,
+		/** Everything the Portal publishes: Portal keys followed by website-key keys. @returns {Jwks} */
+		publishedJwks: () => published,
 	});
 };
 /** @typedef {ReturnType<typeof createPortalKeys>} PortalKeys */

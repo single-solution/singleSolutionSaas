@@ -288,21 +288,40 @@ describe('control events and routing', () => {
 			id: 'evt_0123456789abcdefghjkmnpq',
 			occurredAt: '2026-10-01T10:00:00.000Z',
 		};
-		const built = buildControlEvent({ ...input, type: 'manifest.accepted@1', data: { appId: 'app_1', version: '1.2.0' } });
+		const platformInput = { env: input.env, id: input.id, occurredAt: input.occurredAt };
+		const built = buildControlEvent({
+			...platformInput,
+			type: 'manifest.accepted@1',
+			data: { appId: 'app_1', version: '1.2.0' },
+		});
 		expect(built).toMatchObject({
 			ok: true,
 			event: {
 				type: 'manifest.accepted@1',
+				scope: 'platform',
 				actor: { type: 'system' },
 				idempotencyKey: input.id,
 				context: { source: 'portal' },
 			},
 		});
+		expect(built.ok && built.event).not.toHaveProperty('websiteId');
+		// platform-scoped types never carry a website; website-scoped types always do
+		expect(buildControlEvent({ ...input, type: 'manifest.accepted@1', data: { appId: 'app_1', version: '1.2.0' } })).toEqual({
+			ok: false,
+			reason: 'platform_scoped',
+		});
+		expect(buildControlEvent({ ...platformInput, type: 'key.revoked@1', data: { keyIds: ['key_1'] } })).toEqual({
+			ok: false,
+			reason: 'website_required',
+		});
+		expect(
+			buildControlEvent({ ...input, type: 'key.revoked@1', data: { keyIds: ['key_1'], revokedAt: input.occurredAt } }),
+		).toMatchObject({ ok: true, event: { websiteId: WEBSITE } });
 		expect(buildControlEvent({ ...input, type: 'page.viewed@1', data: {} })).toEqual({
 			ok: false,
 			reason: 'unknown_control_event',
 		});
-		expect(buildControlEvent({ ...input, type: 'manifest.accepted@1', data: {} })).toMatchObject({
+		expect(buildControlEvent({ ...platformInput, type: 'manifest.accepted@1', data: {} })).toMatchObject({
 			ok: false,
 			reason: 'invalid_event',
 		});

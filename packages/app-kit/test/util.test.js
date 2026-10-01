@@ -123,6 +123,7 @@ describe('configFromEnv', () => {
 				SS_REGISTRATION_TOKEN_HASH: 'h',
 				SS_PRODUCT_DB_URI: 'mongodb://x',
 				SS_LOG_LEVEL: 'debug',
+				SS_OUTBOUND_ALLOW_HOSTS: ' minio.dev , 127.0.0.1,,',
 			}),
 		).toEqual({
 			portalUrl: 'https://p',
@@ -131,8 +132,9 @@ describe('configFromEnv', () => {
 			registrationTokenHash: 'h',
 			productDbUri: 'mongodb://x',
 			logLevel: 'debug',
+			outboundAllowHosts: ['minio.dev', '127.0.0.1'],
 		});
-		expect(configFromEnv({ SS_APP_ID: '' })).toMatchObject({ appId: null, logLevel: 'info' });
+		expect(configFromEnv({ SS_APP_ID: '' })).toMatchObject({ appId: null, logLevel: 'info', outboundAllowHosts: [] });
 		expect(configFromEnv()).toHaveProperty('logLevel');
 	});
 });

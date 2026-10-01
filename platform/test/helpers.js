@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+import { afterEach, expect } from 'vitest';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { MongoClient } from 'mongodb';
 import { generateSigningKey } from '@ss/protocol';
@@ -9,19 +11,82 @@ export const MERCHANT = 'mer_0123456789abcdefghjkmnpq';
 export const MERCHANT_2 = 'mer_1123456789abcdefghjkmnpq';
 export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 
-/** Single-node replica set for one test file. */
+/** @type {Set<(testName: string) => Promise<void>>} */
+const releasers = new Set();
+// databases a test opened are wiped and recycled when it ends (see startMongo)
+afterEach(async () => {
+	const name = expect.getState().currentTestName ?? '';
+	for (const release of releasers) await release(name);
+});
+
+/**
+ * Databases of one test file on the run's shared replica set (`SS_TEST_MONGO_URI`, started once by
+ * `global-setup.js`; a private one is started when the variable is absent, e.g. a run without the global setup).
+ *
+ * Every name maps to a database of this file (`t_<random>_<n>`), so test files never share data, and `stop()`
+ * drops them. Creating collections and indexes dominates test time, so a database first opened inside a test is
+ * **recycled** when that test ends: its documents are deleted (collections and indexes stay) and the next new name
+ * gets it. Databases opened in hooks (`beforeAll`) live until `stop()`. `db(name, { fresh: true })` always creates
+ * a new database (for tests that inspect index or collection creation).
+ */
 export const startMongo = async () => {
-	const replSet = await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
-	const uri = replSet.getUri();
+	const shared = process.env.SS_TEST_MONGO_URI;
+	const replSet = shared ? null : await MongoMemoryReplSet.create({ replSet: { count: 1, storageEngine: 'wiredTiger' } });
+	const uri = shared ?? /** @type {MongoMemoryReplSet} */ (replSet).getUri();
 	const client = await new MongoClient(uri).connect();
+	const prefix = `t_${randomBytes(5).toString('hex')}`;
+	let counter = 0;
+	/** @type {Set<string>} every physical database of this file */
+	const created = new Set();
+	/** @type {Map<string, { physical: string, test: string | null }>} logical name → physical database */
+	const assigned = new Map();
+	/** @type {string[]} wiped databases ready for reuse */
+	const free = [];
+	/** @param {string} [name] @param {{ fresh?: boolean }} [options] */
+	const dbName = (name = 'main', { fresh = false } = {}) => {
+		const existing = assigned.get(name);
+		if (existing) return existing.physical;
+		const test = expect.getState().currentTestName ?? null;
+		const physical = (!fresh && free.shift()) || `${prefix}_${(counter += 1)}`;
+		created.add(physical);
+		assigned.set(name, { physical, test });
+		return physical;
+	};
+	/** @param {string} testName */
+	const release = async (testName) => {
+		for (const [name, entry] of [...assigned]) {
+			if (entry.test === null || entry.test !== testName) continue;
+			assigned.delete(name);
+			const db = client.db(entry.physical);
+			const collections = await db.listCollections({}, { nameOnly: true }).toArray();
+			await Promise.all(
+				collections.filter((c) => !c.name.startsWith('system.')).map((c) => db.collection(c.name).deleteMany({})),
+			);
+			free.push(entry.physical);
+		}
+	};
+	releasers.add(release);
 	return {
 		uri,
 		client,
-		/** @param {string} name */
-		db: (name) => client.db(name),
+		dbName,
+		/** @param {string} [name] @param {{ fresh?: boolean }} [options] */
+		db: (name, options) => client.db(dbName(name, options)),
 		stop: async () => {
-			await client.close();
-			await replSet.stop();
+			releasers.delete(release);
+			try {
+				await Promise.all(
+					[...created].map((name) =>
+						client
+							.db(name)
+							.dropDatabase()
+							.catch(() => undefined),
+					),
+				);
+			} finally {
+				await client.close();
+				await replSet?.stop();
+			}
 		},
 	};
 };
@@ -76,11 +141,13 @@ export const b64 = (n, fill = 7) => Buffer.alloc(n, fill).toString('base64');
 export const testEnv = async (overrides = {}) => {
 	const { privateJwk } = await generateSigningKey({ kid: 'portal-2026-10' });
 	const { privateJwk: previous } = await generateSigningKey({ kid: 'portal-2026-04' });
+	const { privateJwk: website } = await generateSigningKey({ kid: 'website-2026-10' });
 	return {
 		NODE_ENV: 'test',
 		MONGODB_URI: 'mongodb://127.0.0.1:27017/ss_portal_test',
 		PORTAL_URL,
 		PORTAL_SIGNING_KEYS: JSON.stringify([privateJwk, previous]),
+		WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([website]),
 		SECRETS_KEK: `kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}`,
 		SESSION_SECRET: b64(32, 3),
 		WEBSITE_KEY_PEPPER: b64(32, 4),

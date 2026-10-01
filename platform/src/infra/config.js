@@ -5,6 +5,7 @@
  * `platform/README.md` and listed in {@link ENV_VARS}.
  * @module
  */
+import { createPrivateKey, hkdfSync } from 'node:crypto';
 import { canonicalUrl, toPublicJwk } from '@ss/protocol';
 import { platformError } from './errors.js';
 import { isObject } from './util.js';
@@ -28,9 +29,13 @@ import { isObject } from './util.js';
  * @property {boolean} cookieSecure true unless the Portal runs on plain-http localhost
  * @property {{ uri: string, dbName: string, maxPoolSize: number }} mongo control-plane database only
  * @property {ReadonlyArray<PrivateJwk>} signingKeys first = active signer; all are published in the JWKS
+ * @property {ReadonlyArray<PrivateJwk>} websiteKeySigningKeys dedicated website-key signers (first signs; all published)
+ * @property {boolean} websiteKeySigningDerived true when no `WEBSITE_KEY_SIGNING_KEYS` was given outside production and
+ *   the key was derived from `SESSION_SECRET` (development convenience only)
  * @property {ReadonlyArray<{ id: string, key: Buffer }>} keks key-encryption keys; first = active (wraps new data keys)
  * @property {Buffer} sessionSecret HMAC key for session ids, recovery codes and throttle keys at rest
  * @property {Buffer} websiteKeyPepper HMAC pepper for website secret keys at rest
+ * @property {Buffer} idempotencySecret HMAC key of idempotency fingerprints (`IDEMPOTENCY_SECRET` or derived)
  * @property {string} cronSecret bearer secret for `/api/cron/*`
  * @property {string} problemBaseUri RFC 9457 type base
  * @property {string} logLevel
@@ -38,6 +43,18 @@ import { isObject } from './util.js';
  * @property {number} maxBodyBytes default JSON body cap
  * @property {number} cronDeadlineMs time budget of one cron invocation
  * @property {{ staff: SessionPolicy, merchant: SessionPolicy }} sessions
+ * @property {{ allowHosts: ReadonlyArray<string> }} outbound hosts outbound calls may reach although private or
+ *   plain http (`OUTBOUND_DEV_ALLOW_HOSTS`; always empty in production)
+ * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify e-mail, resets, invites)
+ */
+
+/**
+ * @typedef {object} SmtpConfig
+ * @property {string} host
+ * @property {number} port
+ * @property {boolean} secure implicit TLS (`smtps://`); otherwise STARTTLS (required in production)
+ * @property {string | null} user
+ * @property {string | null} pass
  */
 
 /** Documented environment variables: `[name, required, description]`. */
@@ -47,10 +64,27 @@ export const ENV_VARS = Object.freeze([
 	['MONGODB_MAX_POOL_SIZE', false, 'Connection pool size per instance (default 10).'],
 	['PORTAL_URL', true, 'Canonical Portal URL, e.g. https://portal.example.com (https unless localhost in development).'],
 	['PORTAL_SIGNING_KEYS', true, 'JSON array of private Ed25519 JWKs with unique kids; the first signs, all are published.'],
+	[
+		'WEBSITE_KEY_SIGNING_KEYS',
+		false,
+		'JSON array of private Ed25519 JWKs that sign website keys only (first signs, all published; kids distinct from the Portal keys). Required in production; derived from SESSION_SECRET elsewhere.',
+	],
 	['SECRETS_KEK', true, 'Key-encryption keys: `kid:base64(32 bytes)[,kid:base64…]`, first = active; or one bare base64 key.'],
 	['SESSION_SECRET', true, 'At least 32 bytes (base64 or text): HMAC key for session ids and recovery codes at rest.'],
 	['WEBSITE_KEY_PEPPER', true, 'At least 32 bytes (base64 or text): HMAC pepper for website secret keys at rest.'],
 	['CRON_SECRET', true, 'At least 32 characters; cron routes require `Authorization: Bearer <CRON_SECRET>`.'],
+	['IDEMPOTENCY_SECRET', false, 'At least 32 bytes: HMAC key of idempotency fingerprints (default: HKDF of SESSION_SECRET).'],
+	[
+		'OUTBOUND_DEV_ALLOW_HOSTS',
+		false,
+		'Comma-separated hosts/IPs outbound calls may reach although private or plain http (ignored in production).',
+	],
+	[
+		'PLATFORM_SMTP_URL',
+		false,
+		'Platform mailer: `smtp(s)://user:pass@host:port` (STARTTLS required in production for smtp://).',
+	],
+	['PLATFORM_MAIL_FROM', false, 'Sender of platform mail, `Name <address>` or `address` (required with PLATFORM_SMTP_URL).'],
 	['PROBLEM_BASE_URI', false, 'RFC 9457 problem type base URI (default `<PORTAL_URL>/problems/`).'],
 	['PORTAL_ENV', false, 'production | preview | development | test (default from NODE_ENV).'],
 	['PORTAL_VERSION', false, 'Version string reported by /healthz and /v1/system/info (default `dev`).'],
@@ -156,6 +190,66 @@ export const parseSigningKeys = (text) => {
 	return keys;
 };
 
+/** PKCS#8 DER prefix of an Ed25519 private key (RFC 8410); the 32-byte seed follows. */
+const ED25519_PKCS8 = Buffer.from('302e020100300506032b657004220420', 'hex');
+
+/**
+ * Deterministic Ed25519 key from a secret (HKDF-SHA-256, labelled), for development website-key signing when
+ * `WEBSITE_KEY_SIGNING_KEYS` is not set. Never used in production.
+ * @param {Uint8Array} secret
+ * @param {string} label
+ * @returns {PrivateJwk}
+ */
+export const deriveSigningKey = (secret, label) => {
+	const seed = Buffer.from(hkdfSync('sha256', secret, Buffer.alloc(0), `ss-derived-ed25519.v1|${label}`, 32));
+	const jwk = createPrivateKey({ key: Buffer.concat([ED25519_PKCS8, seed]), format: 'der', type: 'pkcs8' }).export({
+		format: 'jwk',
+	});
+	const pub = toPublicJwk({ ...jwk, kid: `${label}-${String(jwk.x).slice(0, 8)}` });
+	return { ...pub, d: /** @type {string} */ (jwk.d) };
+};
+
+/**
+ * Derive a 32-byte subkey from a secret (HKDF-SHA-256).
+ * @param {Uint8Array} secret
+ * @param {string} label
+ * @returns {Buffer}
+ */
+export const deriveSecret = (secret, label) =>
+	Buffer.from(hkdfSync('sha256', secret, Buffer.alloc(0), `ss-derived-secret.v1|${label}`, 32));
+
+const MAIL_FROM = /^(?:[^<>\r\n]{1,100} <[^\s@<>]{1,64}@[^\s@<>]{1,255}>|[^\s@<>]{1,64}@[^\s@<>]{1,255})$/;
+const HOST_ENTRY = /^(?:\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]{1,253}|[0-9a-fA-F:]{2,39})$/;
+
+/**
+ * Parse `PLATFORM_SMTP_URL`.
+ * @param {string} text
+ * @returns {SmtpConfig | null}
+ */
+export const parseSmtpUrl = (text) => {
+	/** @type {URL} */
+	let url;
+	try {
+		url = new URL(text);
+	} catch {
+		return null;
+	}
+	if ((url.protocol !== 'smtp:' && url.protocol !== 'smtps:') || !url.hostname) return null;
+	if ((url.pathname && url.pathname !== '/') || url.search || url.hash) return null;
+	const secure = url.protocol === 'smtps:';
+	try {
+		return {
+			host: url.hostname.replace(/^\[|\]$/g, ''),
+			port: url.port ? Number(url.port) : secure ? 465 : 587,
+			secure,
+			user: url.username ? decodeURIComponent(url.username) : null,
+			pass: url.password ? decodeURIComponent(url.password) : null,
+		};
+	} catch {
+		return null;
+	}
+};
+
 /**
  * @param {string | undefined} text
  * @param {number} fallback
@@ -250,6 +344,55 @@ export const loadConfig = (env = process.env) => {
 	const cronSecret = required('CRON_SECRET');
 	if (cronSecret && cronSecret.length < 32) problems.push('CRON_SECRET must be at least 32 characters');
 
+	// Website-key signer (dedicated: never the Portal launch/document key)
+	const websiteText = read('WEBSITE_KEY_SIGNING_KEYS');
+	/** @type {PrivateJwk[] | null} */
+	let websiteKeySigningKeys = null;
+	if (websiteText) {
+		websiteKeySigningKeys = parseSigningKeys(websiteText);
+		if (!websiteKeySigningKeys) {
+			problems.push(
+				'WEBSITE_KEY_SIGNING_KEYS must be a JSON array of private Ed25519 JWKs (kty OKP, crv Ed25519, x, d, kid) with unique kids',
+			);
+		}
+	} else if (portalEnv === 'production') problems.push('WEBSITE_KEY_SIGNING_KEYS is required in production');
+	else if (sessionSecret) websiteKeySigningKeys = [deriveSigningKey(sessionSecret, 'website-dev')];
+	if (websiteKeySigningKeys && signingKeys) {
+		const portalKids = new Set(signingKeys.map((k) => k.kid));
+		const portalXs = new Set(signingKeys.map((k) => k.x));
+		if (websiteKeySigningKeys.some((k) => portalKids.has(k.kid) || portalXs.has(k.x)))
+			problems.push('WEBSITE_KEY_SIGNING_KEYS must use keys and kids distinct from PORTAL_SIGNING_KEYS');
+	}
+
+	// Idempotency fingerprints
+	const idempotencyText = read('IDEMPOTENCY_SECRET');
+	/** @type {Buffer | null} */
+	let idempotencySecret = null;
+	if (idempotencyText) {
+		idempotencySecret = secretBytes(idempotencyText, 32);
+		if (!idempotencySecret) problems.push('IDEMPOTENCY_SECRET must be at least 32 bytes');
+	} else if (sessionSecret) idempotencySecret = deriveSecret(sessionSecret, 'idempotency');
+
+	// Outbound development allowlist (never in production)
+	const allowText = read('OUTBOUND_DEV_ALLOW_HOSTS');
+	const allowHosts =
+		allowText && portalEnv !== 'production'
+			? allowText
+					.split(',')
+					.map((entry) => entry.trim().toLowerCase())
+					.filter(Boolean)
+			: [];
+	if (allowHosts.some((entry) => !HOST_ENTRY.test(entry)))
+		problems.push('OUTBOUND_DEV_ALLOW_HOSTS must be comma-separated host names or IP addresses');
+
+	// Platform mailer
+	const smtpText = read('PLATFORM_SMTP_URL');
+	const smtp = smtpText ? parseSmtpUrl(smtpText) : null;
+	if (smtpText && !smtp) problems.push('PLATFORM_SMTP_URL must be smtp://user:pass@host:port or smtps://user:pass@host:port');
+	const mailFrom = read('PLATFORM_MAIL_FROM') ?? null;
+	if (mailFrom !== null && !MAIL_FROM.test(mailFrom)) problems.push('PLATFORM_MAIL_FROM must be `Name <address>` or an address');
+	if (smtpText && mailFrom === null) problems.push('PLATFORM_MAIL_FROM is required with PLATFORM_SMTP_URL');
+
 	// Problems base
 	let problemBaseUri = read('PROBLEM_BASE_URI') ?? (portalUrl ? `${portalUrl}/problems/` : '');
 	try {
@@ -311,6 +454,9 @@ export const loadConfig = (env = process.env) => {
 		keks: Object.freeze(/** @type {Array<{ id: string, key: Buffer }>} */ (keks)),
 		sessionSecret: /** @type {Buffer} */ (sessionSecret),
 		websiteKeyPepper: /** @type {Buffer} */ (websiteKeyPepper),
+		websiteKeySigningKeys: Object.freeze(/** @type {PrivateJwk[]} */ (websiteKeySigningKeys)),
+		websiteKeySigningDerived: !websiteText,
+		idempotencySecret: /** @type {Buffer} */ (idempotencySecret),
 		cronSecret,
 		problemBaseUri,
 		logLevel,
@@ -318,5 +464,7 @@ export const loadConfig = (env = process.env) => {
 		maxBodyBytes: /** @type {number} */ (maxBodyBytes),
 		cronDeadlineMs: /** @type {number} */ (cronDeadlineMs),
 		sessions: Object.freeze(sessions),
+		outbound: Object.freeze({ allowHosts: Object.freeze(allowHosts) }),
+		mail: Object.freeze({ smtp: smtp ? Object.freeze(smtp) : null, from: mailFrom }),
 	});
 };

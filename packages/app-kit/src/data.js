@@ -14,6 +14,7 @@
  * - `migrate` runs lazy, versioned steps per website under a lock document with a lease.
  * @module
  */
+import { createOutboundPolicy, guardedLookup, isSafeMongoUri } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { collectionPrefix, createSingleFlight, isObject, kitError, randomToken, sha256Hex } from './util.js';
 
@@ -352,6 +353,7 @@ const poolRegistry = () => {
  *   logger: Logger,
  *   createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => MongoClient,
  *   clientOptions?: import('mongodb').MongoClientOptions,
+ *   outbound?: import('@ss/net').OutboundPolicyOptions,
  *   idleMs?: number,
  *   indexes?: IndexDefinition[],
  *   migrations?: MigrationStep[],
@@ -376,7 +378,12 @@ export const createData = ({
 	lockWaitMs = 30_000,
 	sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 	autoSweep = true,
+	outbound = {},
 }) => {
+	// SSRF guard for the merchant database: the URI is vetted before connecting and every host the driver dials
+	// (seed list, SRV answers, discovered replica-set members) is resolved through the guarded lookup.
+	const policy = createOutboundPolicy(outbound);
+	const lookup = guardedLookup(policy);
 	const prefix = collectionPrefix(slug);
 	const owner = randomToken(randomBytes, 9);
 	const defaultTarget = targetVersion(migrations);
@@ -423,6 +430,11 @@ export const createData = ({
 			if (typeof uri !== 'string' || !/^mongodb(\+srv)?:\/\//.test(uri)) {
 				throw kitError('resource_invalid', 'database descriptor has no mongodb uri');
 			}
+			const safe = isSafeMongoUri(uri, policy);
+			if (!safe.ok) {
+				logger.warn('client database refused by the outbound policy', { code: safe.code, reason: safe.reason });
+				throw kitError('resource_invalid', `client database refused (${safe.reason})`, { reason: safe.code });
+			}
 			const expires = Date.parse(expiresAt);
 			const entry = {
 				uri,
@@ -447,6 +459,7 @@ export const createData = ({
 				connectTimeoutMS: 5_000,
 				appName: `ss-${slug}`,
 				...clientOptions,
+				lookup: /** @type {any} */ (lookup),
 			};
 			const connecting = Promise.resolve()
 				.then(() => createClient(uri, options).connect())

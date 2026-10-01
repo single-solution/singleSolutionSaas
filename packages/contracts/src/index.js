@@ -59,6 +59,8 @@ export { deepFreeze } from './util.js';
 /** @typedef {import('./types.js').FeatureNode} FeatureNode */
 /** @typedef {import('./types.js').EntitlementDocument} EntitlementDocument */
 /** @typedef {import('./types.js').EventEnvelope} EventEnvelope */
+/** @typedef {import('./types.js').PlatformEventEnvelope} PlatformEventEnvelope */
+/** @typedef {import('./types.js').AnyEventEnvelope} AnyEventEnvelope */
 /** @typedef {import('./types.js').Placement} Placement */
 /** @typedef {import('./errors.js').Problem} Problem */
 /** @typedef {import('./errors.js').ProblemFactory} ProblemFactory */

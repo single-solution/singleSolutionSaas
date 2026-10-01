@@ -6,8 +6,9 @@
  * - Admin console (`auth: 'staff'`, `platform.merchants.read`): list and status only — never previews or secrets.
  * - Product API (`auth: 'product'`): `POST /v1/product/resources/resolve` (F.9), rate limited per app + website.
  *
- * Routes whose bodies carry credentials, and the resolve route whose response does, are not idempotency-recorded:
- * the idempotency store keeps a body fingerprint and the response, which must never cover secrets.
+ * Routes whose bodies carry credentials (create, rotate) use `idempotent: 'no-store'`: the store keeps only the
+ * status and an HMAC fingerprint, so a retry with the same key answers 409 `idempotency_replay_no_body` instead of
+ * running twice. The resolve route, whose response carries credentials, is not idempotency-recorded.
  * @module
  */
 import { created, defineRoute, noContent, ok, paginate, problem } from '../../infra/http.js';
@@ -89,7 +90,7 @@ export const connectorsRoutes = (service) => [
 		path: BASE,
 		auth: 'merchant',
 		permission: 'connectors.manage',
-		idempotent: false,
+		idempotent: 'no-store',
 		maxBodyBytes: 64 * 1024,
 		rateLimit: { limit: 30, windowMs: 60_000 },
 		handler: async (ctx) => {
@@ -168,7 +169,7 @@ export const connectorsRoutes = (service) => [
 		path: `${ONE}/rotate`,
 		auth: 'merchant',
 		permission: 'connectors.manage',
-		idempotent: false,
+		idempotent: 'no-store',
 		maxBodyBytes: 64 * 1024,
 		rateLimit: { limit: 20, windowMs: 60_000 },
 		handler: async (ctx) =>

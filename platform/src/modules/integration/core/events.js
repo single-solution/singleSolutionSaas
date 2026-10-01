@@ -11,6 +11,7 @@ import {
 	STANDARD_EVENT_DATA,
 	eventGlobMatches,
 	eventNamespace,
+	eventScopeOf,
 	validateEvent,
 } from '@ss/contracts';
 
@@ -187,16 +188,20 @@ export const checkProductEvent = (raw, manifest) => {
 };
 
 /**
- * Build and validate a Portal control event.
- * @param {{ type: string, data: unknown, websiteId: string, env: 'live' | 'test', id: string, occurredAt: string }} input
+ * Build and validate a Portal control event. Website-scoped types need `websiteId`; platform-scoped types
+ * (`eventScopeOf(type) === 'platform'`, e.g. `manifest.accepted@1`) carry `scope: 'platform'` and no `websiteId`.
+ * @param {{ type: string, data: unknown, websiteId?: string | null, env: 'live' | 'test', id: string, occurredAt: string }} input
  * @returns {{ ok: true, event: EventEnvelope } | { ok: false, reason: string, errors?: Array<{ path: string, message: string }> }}
  */
-export const buildControlEvent = ({ type, data, websiteId, env, id, occurredAt }) => {
+export const buildControlEvent = ({ type, data, websiteId = null, env, id, occurredAt }) => {
 	if (!isControlEvent(type)) return { ok: false, reason: 'unknown_control_event' };
+	const platform = eventScopeOf(type) === 'platform';
+	if (platform && websiteId) return { ok: false, reason: 'platform_scoped' };
+	if (!platform && !websiteId) return { ok: false, reason: 'website_required' };
 	const event = {
 		id,
 		type,
-		websiteId,
+		...(platform ? { scope: 'platform' } : { websiteId }),
 		env,
 		occurredAt,
 		idempotencyKey: id,

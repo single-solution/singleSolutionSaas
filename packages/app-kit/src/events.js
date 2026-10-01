@@ -93,7 +93,8 @@ export const createEvents = ({ keyResolver, replay, now = Date.now, logger, tole
 	 * @returns {Promise<{ duplicate: boolean }>}
 	 */
 	const dispatch = async (event, meta) => {
-		const dedupeId = `event-id|${event.websiteId}|${event.id}`;
+		const owner = event.websiteId ?? 'platform';
+		const dedupeId = `event-id|${owner}|${event.id}`;
 		if (await replay.seen(dedupeId, now() + DEDUPE_MS)) return { duplicate: true };
 		const matching = [
 			...(handlers.get(event.type) ?? []),
@@ -103,7 +104,7 @@ export const createEvents = ({ keyResolver, replay, now = Date.now, logger, tole
 		try {
 			for (const handler of matching) await handler(event, meta);
 			if (trackEffects && matching.length > 0) {
-				const key = `${event.websiteId}|${event.id}`;
+				const key = `${owner}|${event.id}`;
 				effects.set(key, (effects.get(key) ?? 0) + 1);
 			}
 		} catch (error) {

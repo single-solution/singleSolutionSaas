@@ -33,6 +33,7 @@ describe('two instances on shared MongoDB control stores', () => {
 				fetch: portal.fetch,
 				now: clock.now,
 				stores: createMongoStores({ db: controlDb, now: clock.now }),
+				outbound: { allowHosts: ['127.0.0.1'] },
 				data: {
 					indexes: [{ collection: 'coupons', keys: { websiteId: 1, code: 1 }, unique: true }],
 					migrations: [{ version: 1, up: async () => {} }],

@@ -1,6 +1,7 @@
 /**
  * HTTP routes of the `config` module: merchant console (website subscriptions, merchant-wide app defaults,
  * templates) and admin console (platform policies, admin overrides, locks). Thin adapters over the service.
+ * Admin writes (overrides, locks, rollbacks, platform policies) need the staff permission `platform.config.write`.
  * @module
  */
 import { created, defineRoute, ok } from '../../infra/http.js';
@@ -395,7 +396,7 @@ export const configRoutes = (service) => [
 		method: 'PATCH',
 		path: ADMIN_SUB,
 		auth: 'staff',
-		permission: 'config.write',
+		permission: 'platform.config.write',
 		handler: async (c) => {
 			const { reason, level, change } = split(c.body);
 			return ok(
@@ -413,7 +414,7 @@ export const configRoutes = (service) => [
 		method: 'PUT',
 		path: `${ADMIN_SUB}/locks`,
 		auth: 'staff',
-		permission: 'config.write',
+		permission: 'platform.config.write',
 		handler: async (c) => {
 			const { reason, level, rest } = split(c.body);
 			const lvl = level ?? 'admin';
@@ -452,7 +453,7 @@ export const configRoutes = (service) => [
 		method: 'POST',
 		path: `${ADMIN_SUB}/rollback`,
 		auth: 'staff',
-		permission: 'config.write',
+		permission: 'platform.config.write',
 		handler: async (c) => {
 			const { reason, level, rest } = split(c.body);
 			return ok(
@@ -479,7 +480,7 @@ export const configRoutes = (service) => [
 		method: 'PATCH',
 		path: PLATFORM,
 		auth: 'staff',
-		permission: 'platform.apps.manage',
+		permission: 'platform.config.write',
 		handler: async (c) => {
 			const { reason, change } = split(c.body);
 			return ok(await service.applyChange({ target: { appId: P(c).appId }, level: 'platform', change, reason, ...meta(c) }));
@@ -496,7 +497,7 @@ export const configRoutes = (service) => [
 		method: 'POST',
 		path: `${PLATFORM}/rollback`,
 		auth: 'staff',
-		permission: 'platform.apps.manage',
+		permission: 'platform.config.write',
 		handler: async (c) => {
 			const { reason, rest } = split(c.body);
 			return ok(

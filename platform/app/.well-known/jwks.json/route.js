@@ -1,4 +1,4 @@
-// Portal JWKS (current + previous signing keys).
+// Published JWKS: Portal signing keys (current + previous) and the website-key signing keys (distinct kids).
 import { getPortal } from '../../../src/runtime.js';
 
 export const dynamic = 'force-dynamic';

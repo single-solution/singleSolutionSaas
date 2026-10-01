@@ -33,6 +33,11 @@ import { platformError } from './errors.js';
  * @property {import('./audit.js').Audit} audit
  * @property {import('./jobs.js').Jobs} jobs
  * @property {import('./db.js').Locks} locks
+ * @property {import('./db.js').WithTransaction} withTransaction run `fn(session)` in a retried multi-document
+ *   transaction; pass `{ session }` to every repository call inside it
+ * @property {import('./authenticators.js').WebsiteKeyVerifier} verifyWebsiteKey the `websiteKey` authenticator's
+ *   verification, for keys carried outside the `Authorization` header (throws infra problems)
+ * @property {import('./mailer.js').Mailer} mailer platform mailer (verify e-mail, password reset, invite, staff setup)
  * @property {import('./auth.js').Sessions} sessions
  * @property {import('./auth.js').LoginThrottle} loginThrottle
  * @property {import('@ss/protocol').ReplayStore} replayStore

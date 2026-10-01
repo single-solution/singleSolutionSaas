@@ -3,16 +3,14 @@
  * Composes the account, team, website, key and admin services over one repository, and implements the infra
  * ports `sessionActor` (live roles; deactivated users and removed members → null) and `websiteKeyRevoked`.
  *
- * Website keys are signed with a **dedicated website-key signer**. Until the infra exposes one
- * (`ctx.keys.websiteKeySigner` from `WEBSITE_KEY_SIGNING_KEYS`), the signer comes from the module option
- * `websiteKeySigningKeys`, and falls back to the Portal signer (logged once) so keys stay verifiable by the infra
- * `websiteKey` authenticator and the published JWKS.
+ * Website keys are signed with the **dedicated website-key signer** `ctx.keys.websiteKeySigner`
+ * (`WEBSITE_KEY_SIGNING_KEYS`), whose public keys the infra publishes and the `websiteKey` authenticator verifies
+ * with. The module option `websiteKeySigningKeys` overrides it (tests and embedded setups).
  * @module
  */
 import { createJwks, createKeyResolver, createSigner, toPublicJwk } from '@ss/protocol';
 import { createAccounts } from './accounts.js';
 import { createAdmin } from './admin.js';
-import { createLogMailer, createUnavailableMailer } from './mailer.js';
 import { createAuditor, createRepo } from './repo.js';
 import { createTeams } from './teams.js';
 import { createWebsiteKeys } from './website-keys.js';
@@ -28,16 +26,16 @@ import { createWebsites } from './websites.js';
 
 /**
  * @typedef {object} IdentityOptions
- * @property {import('./mailer.js').Mailer} [mailer] e-mail port (default: logging mailer outside production, none in production)
+ * @property {import('./mailer.js').Mailer} [mailer] e-mail port (default: the platform mailer `ctx.mailer`)
  * @property {ReadonlyArray<PrivateJwk>} [websiteKeySigningKeys] dedicated website-key signing keys (first signs)
  * @property {(domain: string) => boolean} [isPublicSuffix] refuse public suffixes as website domains
  */
 
 /**
- * Select the website-key signer: module option › infra dedicated signer › Portal signer (fallback).
+ * Select the website-key signer: module option › the infra's dedicated website-key signer.
  * @param {ModuleContext} ctx
  * @param {IdentityOptions} options
- * @returns {{ signer: Signer, keyResolver: KeyResolver, jwks: () => Jwks, source: 'option' | 'infra' | 'portal' }}
+ * @returns {{ signer: Signer, keyResolver: KeyResolver, jwks: () => Jwks, source: 'option' | 'infra' }}
  */
 export const websiteKeySigning = (ctx, options) => {
 	const configured = options.websiteKeySigningKeys ?? [];
@@ -50,15 +48,12 @@ export const websiteKeySigning = (ctx, options) => {
 			source: 'option',
 		};
 	}
-	const keys = /** @type {Record<string, any>} */ (ctx.keys);
-	if (keys.websiteKeySigner)
-		return {
-			signer: keys.websiteKeySigner,
-			keyResolver: keys.websiteKeyResolver ?? ctx.keys.keyResolver,
-			jwks: () => (typeof keys.websiteKeyJwks === 'function' ? keys.websiteKeyJwks() : ctx.keys.jwks()),
-			source: 'infra',
-		};
-	return { signer: ctx.keys.signer, keyResolver: ctx.keys.keyResolver, jwks: () => ctx.keys.jwks(), source: 'portal' };
+	return {
+		signer: ctx.keys.websiteKeySigner,
+		keyResolver: ctx.keys.websiteKeyResolver,
+		jwks: () => ctx.keys.websiteKeyJwks(),
+		source: 'infra',
+	};
 };
 
 /**
@@ -67,17 +62,10 @@ export const websiteKeySigning = (ctx, options) => {
  */
 export const createIdentityService = (ctx, options = {}) => {
 	const repo = createRepo(ctx);
-	const mailer = options.mailer ?? (ctx.config.isProduction ? createUnavailableMailer() : createLogMailer(ctx.logger));
+	const mailer = options.mailer ?? ctx.mailer;
 	const deps = { ctx, repo, mailer, audit: createAuditor(ctx) };
 	const signing = websiteKeySigning(ctx, options);
-	let warned = false;
-	const signer = () => {
-		if (signing.source === 'portal' && !warned) {
-			warned = true;
-			ctx.logger.warn('website keys are signed with the Portal signer (no dedicated website-key signer configured)');
-		}
-		return signing.signer;
-	};
+	const signer = () => signing.signer;
 
 	const accounts = createAccounts(deps);
 	const teams = createTeams(deps);
@@ -148,7 +136,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		getDeveloper: admin.developers.get,
 		getStaff: admin.getStaff,
 		bootstrapSuperadmin: admin.bootstrapSuperadmin,
-		/** Public keys that verify website keys (to publish in the JWKS once the signer is dedicated). */
+		/** Public keys that verify website keys (published by the infra in the Portal JWKS). */
 		websiteKeyJwks: () => signing.jwks(),
 		websiteKeyResolver: () => signing.keyResolver,
 		websiteKeySigningSource: () => signing.source,

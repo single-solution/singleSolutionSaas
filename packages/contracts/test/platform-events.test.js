@@ -12,8 +12,17 @@ import {
 	STANDARD_EVENT_DATA,
 	validateEvent,
 } from '../src/index.js';
+import { EVENT_SCOPES, PLATFORM_SCOPED_EVENTS, eventScopeOf } from '../src/index.js';
 import { SUBSCRIPTION, WEBSITE, event, manifest } from './fixtures.js';
 import { expectProblem, expectRule } from './helpers.js';
+
+/**
+ * Copy of `value` without `key`.
+ * @param {Record<string, any>} value
+ * @param {string} key
+ * @returns {Record<string, any>}
+ */
+const omitKey = (value, key) => Object.fromEntries(Object.entries(value).filter(([name]) => name !== key));
 
 const jws = 'eyJhbGciOiJFZERTQSJ9.eyJ2IjoxfQ.c2lnbmF0dXJl';
 const lifecycle = { subscriptionId: SUBSCRIPTION, websiteId: WEBSITE, reason: 'balance_zero' };
@@ -39,8 +48,19 @@ describe('platform control and loader events', () => {
 		expect(standardEventDataSchemas()).toHaveLength(Object.keys(STANDARD_EVENT_DATA).length);
 	});
 
+	/**
+	 * Envelope in the scope the type requires (platform-scoped events carry no websiteId).
+	 * @param {string} type
+	 * @param {Record<string, unknown>} data
+	 */
+	const scoped = (type, data) => {
+		if (eventScopeOf(type) === 'website') return event(type, data);
+		const rest = omitKey(event(type, data), 'websiteId');
+		return { ...rest, scope: 'platform' };
+	};
+
 	it.each(Object.entries(valid))('accepts %s', (type, data) => {
-		expect(validateEvent({ ...event(type, data), actor: { type: 'system' } })).toMatchObject({ ok: true });
+		expect(validateEvent({ ...scoped(type, data), actor: { type: 'system' } })).toMatchObject({ ok: true });
 	});
 
 	/** @type {Array<[string, Record<string, unknown>, string, string]>} */
@@ -66,7 +86,45 @@ describe('platform control and loader events', () => {
 		['loader.element_failed@1', { element: 'x', code: 'Bad Code', message: 'm' }, '/data/code', 'pattern'],
 	];
 	it.each(invalid)('rejects %s %j', (type, data, path, keyword) => {
-		expectProblem(validateEvent(event(type, data)), path, keyword);
+		expectProblem(validateEvent(scoped(type, data)), path, keyword);
+	});
+});
+
+describe('event scopes', () => {
+	const accepted = { appId: 'prd_1', version: '1.4.0' };
+	const order = { orderId: 'ord_1' };
+
+	it('declares the scopes and which events are platform-scoped', () => {
+		expect(EVENT_SCOPES).toEqual(['website', 'platform']);
+		expect(PLATFORM_SCOPED_EVENTS).toEqual(['manifest.accepted@1']);
+		expect(eventScopeOf('manifest.accepted@1')).toBe('platform');
+		expect(eventScopeOf('order.completed@1')).toBe('website');
+	});
+
+	it('accepts platform-scoped events without websiteId and website events with an explicit scope', () => {
+		const noWebsite = omitKey(event('manifest.accepted@1', accepted), 'websiteId');
+		expect(validateEvent({ ...noWebsite, scope: 'platform' })).toMatchObject({ ok: true });
+		expect(validateEvent({ ...event('order.completed@1', order), scope: 'website' })).toMatchObject({ ok: true });
+	});
+
+	it('requires websiteId only for website-scoped events', () => {
+		const noWebsite = omitKey(event('order.completed@1', order), 'websiteId');
+		expectProblem(validateEvent(noWebsite), '/websiteId', 'required');
+		expectProblem(validateEvent({ ...noWebsite, scope: 'website' }), '/websiteId', 'required');
+		const withWebsite = { ...event('manifest.accepted@1', accepted), scope: 'platform' };
+		const result = validateEvent(withWebsite);
+		expectProblem(result, '/websiteId', 'false schema');
+		expect(result.ok ? [] : result.problems.map((p) => p.message)).toContain('is not allowed');
+		expectProblem(validateEvent({ ...event('order.completed@1', order), scope: 'global' }), '/scope', 'enum');
+	});
+
+	it('binds each catalogued type to its scope', () => {
+		// manifest.accepted@1 is platform-scoped: a website envelope (e.g. a sentinel websiteId) is refused
+		expectProblem(validateEvent(event('manifest.accepted@1', accepted)), '/scope', 'eventScope');
+		const noWebsite = omitKey(event('order.completed@1', order), 'websiteId');
+		expectProblem(validateEvent({ ...noWebsite, scope: 'platform' }), '/scope', 'eventScope');
+		const custom = omitKey(event('custom.thing@1', {}), 'websiteId');
+		expectProblem(validateEvent({ ...custom, scope: 'platform' }), '/scope', 'eventScope');
 	});
 });
 

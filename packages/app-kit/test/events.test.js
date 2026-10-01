@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { checkEvent } from '../src/index.js';
 import { WEBSITE, entitle, setup, websiteKey } from './helpers.js';
 
+/**
+ * Copy of `value` without `key`.
+ * @param {Record<string, any>} value
+ * @param {string} key
+ * @returns {Record<string, any>}
+ */
+const omitKey = (value, key) => Object.fromEntries(Object.entries(value).filter(([name]) => name !== key));
+
 const envelope = (/** @type {Record<string, any>} */ overrides = {}) => ({
 	id: 'evt_0123456789abcdefghjkmnpq',
 	type: 'order.placed@1',
@@ -48,6 +56,44 @@ describe('events.handle', () => {
 		});
 		expect(seen).toEqual([['evt_0123456789abcdefghjkmnpq', 'portal'], ['*']]);
 		off();
+	});
+
+	it('accepts platform-scoped control events (no websiteId) and refuses scope mismatches', async () => {
+		const { portal, product } = await setup();
+		/** @type {any[]} */
+		const seen = [];
+		product.events.on('manifest.accepted', (/** @type {any} */ event) => {
+			seen.push([event.scope, event.websiteId, event.data.version]);
+		});
+		const platformEnvelope = omitKey(
+			envelope({
+				id: 'evt_1123456789abcdefghjkmnpq',
+				type: 'manifest.accepted@1',
+				scope: 'platform',
+				data: { appId: 'app_test', version: '1.5.0' },
+			}),
+			'websiteId',
+		);
+		const delivery = await portal.signEvent(platformEnvelope);
+		expect(await product.events.handle({ headers: delivery.headers, rawBody: delivery.body })).toEqual({
+			status: 200,
+			body: { received: true },
+		});
+		const retry = await portal.signEvent({ ...platformEnvelope, context: { source: 'portal' } });
+		expect(await product.events.handle({ headers: retry.headers, rawBody: retry.body })).toEqual({
+			status: 200,
+			body: { received: true, duplicate: true },
+		});
+		expect(seen).toEqual([['platform', undefined, '1.5.0']]);
+		// the former sentinel-website form of manifest.accepted@1 is refused
+		const legacy = await portal.signEvent(
+			envelope({
+				id: 'evt_2123456789abcdefghjkmnpq',
+				type: 'manifest.accepted@1',
+				data: { appId: 'app_test', version: '1.5.0' },
+			}),
+		);
+		expect((await product.events.handle({ headers: legacy.headers, rawBody: legacy.body })).status).toBe(400);
 	});
 
 	it('rejects unsigned, tampered, malformed and invalid events', async () => {

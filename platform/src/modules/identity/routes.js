@@ -9,7 +9,7 @@
  * - `GET /v1/product/revocations?since=` (client assertion, F.9).
  *
  * Responses that carry secrets (website keys, MFA secrets and recovery codes, challenges) opt out of idempotent
- * replay (`idempotent: false`): the idempotency store persists response bodies.
+ * replay (`idempotent: 'no-store'`): the idempotency store persists response bodies.
  * @module
  */
 import { readCookie } from '../../infra/auth.js';
@@ -99,7 +99,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/merchant/signup',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => ok(await accounts.signup(valid(inputs.signup(c.body))), { status: 202 }),
 		},
@@ -107,7 +107,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/merchant/verify-email',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) =>
 				withCookie(await accounts.verifyEmail(valid(inputs.tokenOnly(c.body)), metaOf(c)), { status: 201 }),
@@ -116,7 +116,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/merchant/login',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => withCookie(await accounts.merchantLogin(valid(inputs.login(c.body)), metaOf(c))),
 		},
@@ -124,7 +124,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/merchant/login/mfa',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => withCookie(await accounts.merchantLoginMfa(valid(inputs.mfaChallenge(c.body)), metaOf(c))),
 		},
@@ -139,7 +139,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/merchant/password-reset',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) =>
 				ok(await accounts.requestPasswordReset('merchant', valid(inputs.emailOnly(c.body))), { status: 202 }),
@@ -148,7 +148,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/merchant/password-reset/confirm',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => {
 				await accounts.confirmPasswordReset('merchant', valid(inputs.resetConfirm(c.body)), metaOf(c));
@@ -159,7 +159,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/invites/accept',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => withCookie(await accounts.acceptInvite(valid(inputs.inviteAccept(c.body)), metaOf(c))),
 		},
@@ -170,7 +170,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/staff/login',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => withCookie(await accounts.staffLogin(valid(inputs.staffLogin(c.body)), metaOf(c))),
 		},
@@ -179,7 +179,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/auth/staff/mfa/verify',
 			auth: 'staff',
 			mfa: false,
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) =>
 				withCookie(
@@ -194,7 +194,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/auth/staff/mfa/enrol',
 			auth: 'staff',
 			mfa: false,
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) => ok(await accounts.mfaEnrol('staff', sessionOf(c).subject)),
 		},
 		{
@@ -202,7 +202,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/auth/staff/mfa/confirm',
 			auth: 'staff',
 			mfa: false,
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) =>
 				withCookie(
@@ -225,7 +225,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/staff/password-reset',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => ok(await accounts.requestPasswordReset('staff', valid(inputs.emailOnly(c.body))), { status: 202 }),
 		},
@@ -233,7 +233,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/staff/password-reset/confirm',
 			auth: 'public',
-			idempotent: false,
+			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => {
 				await accounts.confirmPasswordReset('staff', valid(inputs.resetConfirm(c.body)), metaOf(c));
@@ -253,7 +253,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/me/password',
 			auth: ['staff', 'merchant'],
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) => {
 				const kind = kindOf(c);
 				await accounts.changePassword(
@@ -268,7 +268,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/me/merchant',
 			auth: 'merchant',
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) =>
 				withCookie(
 					await accounts.switchMerchant({
@@ -282,14 +282,14 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/me/mfa/enrol',
 			auth: 'merchant',
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) => ok(await accounts.mfaEnrol('merchant', sessionOf(c).subject)),
 		},
 		{
 			method: 'POST',
 			path: '/v1/me/mfa/confirm',
 			auth: 'merchant',
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) =>
 				withCookie(
 					await accounts.mfaConfirm(
@@ -303,7 +303,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/me/mfa/disable',
 			auth: 'merchant',
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) =>
 				ok(await accounts.mfaDisable({ ...valid(inputs.mfaDisable(c.body)), id: sessionOf(c).subject }, metaOf(c))),
 		},
@@ -311,7 +311,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/me/mfa/recovery-codes',
 			auth: ['staff', 'merchant'],
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) =>
 				ok(
 					await accounts.regenerateRecoveryCodes(
@@ -434,7 +434,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/merchants/:merchantId/owner/transfer',
 			auth: ['merchant', 'staff'],
 			permission: 'merchant.owner.transfer',
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) =>
 				ok(
 					await teams.transferOwnership({
@@ -507,7 +507,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys',
 			auth: ['merchant', 'staff'],
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) => {
 				const body = valid(inputs.keyIssue(c.body));
 				const { merchantId, website } = await authorizedWebsite(c, 'keys.manage');
@@ -529,7 +529,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/:keyId/rotate',
 			auth: ['merchant', 'staff'],
-			idempotent: false,
+			idempotent: 'no-store',
 			handler: async (c) => {
 				const body = valid(inputs.keyRotate(c.body));
 				const { merchantId, website } = await authorizedWebsite(c, 'keys.manage');

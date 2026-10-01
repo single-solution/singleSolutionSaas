@@ -10,7 +10,9 @@ import { isDuplicateKey } from './util.js';
 
 /**
  * @typedef {{ status: number, headers: Array<[string, string]>, body: string }} StoredResponse
- * @typedef {{ state: 'new' } | { state: 'pending' } | { state: 'mismatch' } | { state: 'done', response: StoredResponse }} IdempotencyBegin
+ * @typedef {{ status: number, headers: Array<[string, string]>, body: string | null }} IdempotentOutcome a stored
+ *   response, or only its status (`body: null`) for no-store routes
+ * @typedef {{ state: 'new' } | { state: 'pending' } | { state: 'mismatch' } | { state: 'done', response: IdempotentOutcome }} IdempotencyBegin
  */
 
 /**
@@ -42,8 +44,9 @@ export const createReplayStore = (repo, { now = Date.now } = {}) =>
 	});
 
 /**
- * Idempotency records: `begin` claims a key (or reports pending / mismatch / the stored response), `complete`
- * stores the response, `release` forgets a key whose request failed with a 5xx (so the retry runs).
+ * Idempotency records: `begin` claims a key (or reports pending / mismatch / the stored outcome), `complete`
+ * stores the outcome (the full response, or only the status with `body: null`), `release` forgets a key whose
+ * request failed with a 5xx (so the retry runs). Fingerprints are keyed HMACs computed by the HTTP layer.
  * @param {MutableOps} repo
  * @param {{ now?: () => number }} [options]
  */
@@ -68,11 +71,13 @@ export const createIdempotencyStore = (repo, { now = Date.now } = {}) =>
 			const doc = await repo.findOne({ _id: key });
 			if (!doc) return { state: 'pending' };
 			if (doc.fingerprint !== fingerprint) return { state: 'mismatch' };
-			return doc.response ? { state: 'done', response: /** @type {StoredResponse} */ (doc.response) } : { state: 'pending' };
+			return doc.response
+				? { state: 'done', response: /** @type {IdempotentOutcome} */ (doc.response) }
+				: { state: 'pending' };
 		},
 		/**
 		 * @param {string} key
-		 * @param {StoredResponse} response
+		 * @param {IdempotentOutcome} response
 		 */
 		complete: async (key, response) => {
 			await repo.updateOne({ _id: key }, { $set: { response } });

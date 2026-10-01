@@ -214,19 +214,24 @@ export const createWebsites = (deps, hooks) => {
 				actor,
 				meta,
 			});
-			// tenant records cannot change merchantId: move them (delete + insert, compensating on failure)
-			await source.deleteMany({ merchantId: fromMerchantId, _id: { $in: ids } });
-			try {
-				await target.insertMany(docs.map(movable));
-			} catch (error) {
-				await target.deleteMany({ merchantId: toMerchantId, _id: { $in: ids } });
-				await source.insertMany(docs.map(movable));
-				throw error;
-			}
-			await repo.domains.updateOne({ _id: website.domain, websiteId: liveId }, { $set: { merchantId: toMerchantId } });
-			await repo.memberships
-				.of(fromMerchantId)
-				.updateMany({ merchantId: fromMerchantId, 'grants.websiteId': liveId }, { $pull: { grants: { websiteId: liveId } } });
+			// tenant records cannot change merchantId: move them (delete + insert) with the domain claim and the
+			// membership grants in one transaction, so a failure leaves the website exactly where it was
+			await ctx.withTransaction(async (session) => {
+				await source.deleteMany({ merchantId: fromMerchantId, _id: { $in: ids } }, { session });
+				await target.insertMany(docs.map(movable), { session });
+				await repo.domains.updateOne(
+					{ _id: website.domain, websiteId: liveId },
+					{ $set: { merchantId: toMerchantId } },
+					{ session },
+				);
+				await repo.memberships
+					.of(fromMerchantId)
+					.updateMany(
+						{ merchantId: fromMerchantId, 'grants.websiteId': liveId },
+						{ $pull: { grants: { websiteId: liveId } } },
+						{ session },
+					);
+			});
 			for (const merchantId of [fromMerchantId, toMerchantId]) {
 				await audit(
 					actor,

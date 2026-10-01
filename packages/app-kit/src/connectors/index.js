@@ -3,19 +3,31 @@
  * descriptors, cached no longer than `expiresAt`) and execute with them. Built-in: S3-compatible storage, generic
  * HTTP AI and messaging. Payments is an interface only — register a provider adapter via `adapters.payments`.
  * Any kind can be overridden per provider: `adapters: { ai: { anthropic: (ctx) => adapter } }`.
+ *
+ * Every outbound call goes through `send` — by default `@ss/net` `safeFetch` under the outbound policy built from
+ * `outbound` options (public https only; allowlisted development hosts may be private / plain http). Custom adapters
+ * receive the same `send` and `policy` in their context and should use them instead of `fetch`.
  * @module
  */
+import { createOutboundPolicy, safeFetch } from '@ss/net';
 import { createSingleFlight, kitError } from '../util.js';
 import { createHttpAi, createHttpMessaging } from './http.js';
 import { createS3Storage } from './storage.js';
 
 /** @typedef {'ai' | 'messaging' | 'storage' | 'payments'} ConnectorKind */
 /**
+ * Outbound HTTP(S) call with `safeFetch` semantics (`@ss/net`): resolves `{ status, headers, body: Buffer, url }`,
+ * rejects with a `NetError`.
+ * @typedef {(url: string, init?: import('@ss/net').SafeFetchInit) => Promise<import('@ss/net').SafeResponse>} OutboundSend
+ */
+/**
  * @typedef {object} AdapterContext
  * @property {Record<string, unknown>} descriptor merchant credentials — never log it
  * @property {string} websiteId
  * @property {string} slug
- * @property {typeof globalThis.fetch} fetch
+ * @property {OutboundSend} send SSRF-guarded outbound HTTP (use this, not `fetch`)
+ * @property {import('@ss/net').OutboundPolicy} policy the outbound policy `send` enforces
+ * @property {typeof globalThis.fetch} fetch unguarded fetch (Portal calls only — never merchant-supplied URLs)
  * @property {() => number} now
  */
 /** @typedef {(context: AdapterContext) => any} AdapterFactory */
@@ -37,10 +49,11 @@ export const PAYMENTS_METHODS = Object.freeze(['createPayment', 'capture', 'refu
 /** @type {Record<ConnectorKind, Record<string, AdapterFactory>>} */
 const BUILT_IN = {
 	storage: {
-		s3: ({ descriptor, websiteId, slug, fetch, now }) => createS3Storage({ descriptor, websiteId, slug, fetch, now }),
+		s3: ({ descriptor, websiteId, slug, send, now, policy }) =>
+			createS3Storage({ descriptor, websiteId, slug, send, now, policy }),
 	},
-	ai: { http: ({ descriptor, fetch }) => createHttpAi({ descriptor, fetch }) },
-	messaging: { http: ({ descriptor, fetch }) => createHttpMessaging({ descriptor, fetch }) },
+	ai: { http: ({ descriptor, send, policy }) => createHttpAi({ descriptor, send, policy }) },
+	messaging: { http: ({ descriptor, send, policy }) => createHttpMessaging({ descriptor, send, policy }) },
 	payments: {},
 };
 
@@ -48,12 +61,25 @@ const BUILT_IN = {
  * @param {{
  *   portal: { resolveResource: (input: { websiteId: string, kind: any }) => Promise<{ descriptor: Record<string, unknown>, expiresAt: string }> },
  *   slug: string,
- *   fetch: typeof globalThis.fetch,
+ *   fetch?: typeof globalThis.fetch,
+ *   outbound?: import('@ss/net').OutboundPolicyOptions,
+ *   send?: OutboundSend,
  *   now?: () => number,
  *   adapters?: Partial<Record<ConnectorKind, Record<string, AdapterFactory>>>,
- * }} options
+ * }} options `outbound` builds the policy; `send` replaces `safeFetch` (tests)
  */
-export const createConnectors = ({ portal, slug, fetch, now = Date.now, adapters = {} }) => {
+export const createConnectors = ({
+	portal,
+	slug,
+	fetch = globalThis.fetch,
+	outbound = {},
+	send: injectedSend,
+	now = Date.now,
+	adapters = {},
+}) => {
+	const policy = createOutboundPolicy(outbound);
+	/** @type {OutboundSend} */
+	const send = injectedSend ?? ((url, init) => safeFetch(url, init, policy));
 	/** @type {Map<string, { adapter: any, expiresAt: number }>} */
 	const cache = new Map();
 	const once = /** @type {(key: string, run: () => Promise<any>) => Promise<any>} */ (createSingleFlight());
@@ -81,7 +107,7 @@ export const createConnectors = ({ portal, slug, fetch, now = Date.now, adapters
 			const provider = providerOf(kind, descriptor);
 			const factory = adapters[kind]?.[provider] ?? BUILT_IN[kind][provider];
 			if (!factory) throw kitError('not_implemented', `no ${kind} adapter for provider '${provider}'`);
-			const adapter = factory({ descriptor, websiteId, slug, fetch, now });
+			const adapter = factory({ descriptor, websiteId, slug, send, policy, fetch, now });
 			if (kind === 'payments') {
 				for (const method of PAYMENTS_METHODS) {
 					if (typeof adapter?.[method] !== 'function')

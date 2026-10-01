@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { ENV_VARS, loadConfig, parseKeks, parseSigningKeys } from '../src/infra/config.js';
+import { generateSigningKey } from '@ss/protocol';
+import {
+	ENV_VARS,
+	deriveSecret,
+	deriveSigningKey,
+	loadConfig,
+	parseKeks,
+	parseSigningKeys,
+	parseSmtpUrl,
+} from '../src/infra/config.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { b64, testEnv } from './helpers.js';
 
@@ -159,6 +168,92 @@ describe('loadConfig', () => {
 		const names = ENV_VARS.map(([name]) => name);
 		expect(names).toContain('PORTAL_SIGNING_KEYS');
 		expect(new Set(names).size).toBe(names.length);
+	});
+});
+
+describe('website-key signer, idempotency secret, outbound allowlist and mail', () => {
+	it('loads the dedicated website-key signer; requires it in production; derives one elsewhere', async () => {
+		const config = loadConfig(await testEnv());
+		expect(config.websiteKeySigningKeys.map((k) => k.kid)).toEqual(['website-2026-10']);
+		expect(config.websiteKeySigningDerived).toBe(false);
+		expect(problemsOf(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: undefined, PORTAL_ENV: 'production' }))).toEqual([
+			'WEBSITE_KEY_SIGNING_KEYS is required in production',
+		]);
+		const dev = loadConfig(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: undefined }));
+		expect(dev.websiteKeySigningDerived).toBe(true);
+		expect(dev.websiteKeySigningKeys[0]?.kid).toMatch(/^website-dev-/);
+		// deterministic per SESSION_SECRET, distinct from it otherwise
+		const again = loadConfig(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: undefined }));
+		expect(again.websiteKeySigningKeys[0]?.x).toBe(dev.websiteKeySigningKeys[0]?.x);
+		expect(deriveSigningKey(Buffer.alloc(32, 1), 'a').x).not.toBe(deriveSigningKey(Buffer.alloc(32, 2), 'a').x);
+		expect(problemsOf(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: '[1]' }))).toEqual([
+			expect.stringContaining('WEBSITE_KEY_SIGNING_KEYS must be a JSON array'),
+		]);
+		// never the Portal's keys (by kid or by key)
+		const env = await testEnv();
+		const [portal] = JSON.parse(/** @type {string} */ (env.PORTAL_SIGNING_KEYS));
+		expect(problemsOf({ ...env, WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([{ ...portal, kid: 'other' }]) })).toEqual([
+			expect.stringContaining('distinct'),
+		]);
+		const { privateJwk: sameKid } = await generateSigningKey({ kid: portal.kid });
+		expect(problemsOf({ ...env, WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([sameKid]) })).toEqual([
+			expect.stringContaining('distinct'),
+		]);
+	});
+
+	it('uses IDEMPOTENCY_SECRET or derives the fingerprint key from SESSION_SECRET', async () => {
+		const derived = loadConfig(await testEnv());
+		expect(derived.idempotencySecret.equals(deriveSecret(derived.sessionSecret, 'idempotency'))).toBe(true);
+		expect(derived.idempotencySecret.equals(derived.sessionSecret)).toBe(false);
+		const explicit = loadConfig(await testEnv({ IDEMPOTENCY_SECRET: b64(32, 8) }));
+		expect(explicit.idempotencySecret.equals(Buffer.alloc(32, 8))).toBe(true);
+		expect(problemsOf(await testEnv({ IDEMPOTENCY_SECRET: 'short' }))).toEqual([
+			'IDEMPOTENCY_SECRET must be at least 32 bytes',
+		]);
+	});
+
+	it('exposes the outbound development allowlist except in production', async () => {
+		expect(loadConfig(await testEnv()).outbound.allowHosts).toEqual([]);
+		const dev = loadConfig(await testEnv({ OUTBOUND_DEV_ALLOW_HOSTS: ' Localhost, 127.0.0.1 ,[::1],, ' }));
+		expect(dev.outbound.allowHosts).toEqual(['localhost', '127.0.0.1', '[::1]']);
+		expect(
+			loadConfig(await testEnv({ OUTBOUND_DEV_ALLOW_HOSTS: 'localhost', PORTAL_ENV: 'production' })).outbound.allowHosts,
+		).toEqual([]);
+		expect(problemsOf(await testEnv({ OUTBOUND_DEV_ALLOW_HOSTS: 'http://x/y' }))).toEqual([
+			expect.stringContaining('OUTBOUND_DEV_ALLOW_HOSTS'),
+		]);
+	});
+
+	it('parses the platform SMTP URL and sender', async () => {
+		const config = loadConfig(
+			await testEnv({
+				PLATFORM_SMTP_URL: 'smtps://mailer%40x:p%40ss@smtp.example.com',
+				PLATFORM_MAIL_FROM: 'Portal <no-reply@example.com>',
+			}),
+		);
+		expect(config.mail).toEqual({
+			smtp: { host: 'smtp.example.com', port: 465, secure: true, user: 'mailer@x', pass: 'p@ss' },
+			from: 'Portal <no-reply@example.com>',
+		});
+		expect(loadConfig(await testEnv()).mail).toEqual({ smtp: null, from: null });
+		expect(parseSmtpUrl('smtp://smtp.example.com')).toEqual({
+			host: 'smtp.example.com',
+			port: 587,
+			secure: false,
+			user: null,
+			pass: null,
+		});
+		expect(parseSmtpUrl('smtp://[::1]:2525')).toMatchObject({ host: '::1', port: 2525 });
+		for (const bad of ['nope', 'http://smtp.example.com', 'smtp://h/path', 'smtp://h?x=1', 'smtp://u:%zz@h'])
+			expect(parseSmtpUrl(bad)).toBeNull();
+		expect(problemsOf(await testEnv({ PLATFORM_SMTP_URL: 'smtp://smtp.example.com' }))).toEqual([
+			'PLATFORM_MAIL_FROM is required with PLATFORM_SMTP_URL',
+		]);
+		expect(problemsOf(await testEnv({ PLATFORM_SMTP_URL: 'ftp://x', PLATFORM_MAIL_FROM: 'bad\r\nBcc: x@y.z' }))).toEqual([
+			expect.stringContaining('PLATFORM_SMTP_URL'),
+			expect.stringContaining('PLATFORM_MAIL_FROM'),
+		]);
+		expect(loadConfig(await testEnv({ PLATFORM_MAIL_FROM: 'ops@example.com' })).mail.from).toBe('ops@example.com');
 	});
 });
 

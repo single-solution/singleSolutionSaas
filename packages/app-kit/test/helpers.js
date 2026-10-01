@@ -107,6 +107,7 @@ export const setup = async ({ clock = createClock(), overrides = {}, portalOptio
 		now: clock.now,
 		randomBytes: seededRandom(),
 		logger,
+		outbound: { allowHosts: ['127.0.0.1'] }, // the in-memory MongoDB replica set listens on loopback
 		...overrides,
 	});
 	return { portal, product, clock, privateJwk, publicJwk, logs: entries };

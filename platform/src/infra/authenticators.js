@@ -5,18 +5,22 @@
  * | ------------ | -------------------------------------------- | -------------------------------------------------------- |
  * | `staff`      | `__Host-ss_staff` session cookie             | session store; MFA required unless the route says `mfa: false` |
  * | `merchant`   | `__Host-ss_merchant` session cookie          | session store                                            |
- * | `websiteKey` | `Authorization: Bearer pk_…/sk_…`            | `verifyWebsiteKey` (Portal JWKS) + revocation port; `originAllowed` for pk_ |
+ * | `websiteKey` | `Authorization: Bearer pk_…/sk_…`            | `verifyWebsiteKey` (website-key JWKS) + revocation port; `originAllowed` for pk_ |
  * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = PORTAL_URL) |
  * | `cron`       | `Authorization: Bearer <CRON_SECRET>`        | constant-time comparison                                 |
  *
  * Ports (provided by modules, see `modules/README.md`): `sessionActor(session) → Actor | null` (default: roles stored
  * in the session), `appKeys(appId) → KeyResolver | null` (default: none — every assertion is refused) and
- * `websiteKeyRevoked(claims) → boolean` (default: none — website keys fail closed with 503).
+ * `websiteKeyRevoked(claims, rawKey) → boolean` (default: none — website keys fail closed with 503). The raw key is
+ * passed so the provider can also check the stored HMAC of `sk_` keys.
+ *
+ * Website keys are verified by one implementation, {@link createWebsiteKeyVerifier}: the `websiteKey`
+ * authenticator and `ctx.verifyWebsiteKey` (modules that authenticate keys carried in a body) share it.
  * @module
  */
 import { isProtocolError, originAllowed, verifyAssertion, verifyWebsiteKey } from '@ss/protocol';
 import { actorFromSession, readCookie, sessionCookieName } from './auth.js';
-import { problem } from './http.js';
+import { isProblem, problem } from './http.js';
 import { safeEqual } from './util.js';
 
 /** @typedef {import('./http.js').Authenticator} Authenticator */
@@ -32,8 +36,20 @@ import { safeEqual } from './util.js';
  * @typedef {object} AuthPorts
  * @property {(session: Session) => Actor | null | Promise<Actor | null>} [sessionActor]
  * @property {(appId: string) => KeyResolver | null | undefined | Promise<KeyResolver | null | undefined>} [appKeys]
- * @property {(claims: WebsiteKeyClaims) => boolean | Promise<boolean>} [websiteKeyRevoked]
+ * @property {(claims: WebsiteKeyClaims, rawKey: string) => boolean | Promise<boolean>} [websiteKeyRevoked]
  */
+
+/**
+ * @typedef {object} WebsiteKeyCheck
+ * @property {string} key the presented `pk_…` / `sk_…` key
+ * @property {string | null} [origin] request `Origin` (authoritative for `pk_`)
+ * @property {string | null} [referer] request `Referer` (used only without `Origin`)
+ * @property {'pk' | 'sk'} [keyKind] restrict to one key kind
+ * @property {ReadonlyArray<string>} [scopes] scopes the key must grant
+ * @property {'live' | 'test'} [env] restrict to one key environment
+ */
+
+/** @typedef {(check: WebsiteKeyCheck) => Promise<WebsiteKeyClaims & { kid: string }>} WebsiteKeyVerifier */
 
 /**
  * `true` when `granted` (patterns such as `config.*`) cover `required`.
@@ -57,10 +73,60 @@ const bearerOf = (request) => {
 };
 
 /**
+ * The single website-key verification path: offline signature with the website-key resolver, the revocation port
+ * (with the raw key), `originAllowed` for `pk_`, kind / env / scope restrictions. Resolves to the claims or throws
+ * an infra problem (`invalid_credentials`, `forbidden`, `origin_not_allowed`, `scope_missing`, `unavailable`).
+ * @param {{ keyResolver: KeyResolver, revoked: () => AuthPorts['websiteKeyRevoked'] | undefined, now?: () => number }} options
+ * @returns {WebsiteKeyVerifier}
+ */
+export const createWebsiteKeyVerifier = ({ keyResolver, revoked, now = Date.now }) => {
+	return async ({ key, origin = null, referer = null, keyKind, scopes = [], env }) => {
+		if (typeof key !== 'string' || !/^(pk|sk)_/.test(key)) throw problem('invalid_credentials', 'The website key is invalid.');
+		const isRevoked = revoked();
+		if (!isRevoked) {
+			throw problem('unavailable', 'Website key verification is not available.', { headers: { 'retry-after': '30' } });
+		}
+		/** @type {WebsiteKeyClaims & { kid: string }} */
+		let claims;
+		try {
+			claims = await verifyWebsiteKey({
+				key,
+				keyResolver,
+				revocations: [],
+				now,
+				...(keyKind ? { expectedKind: keyKind } : {}),
+				...(env ? { expectedEnv: env } : {}),
+			});
+		} catch (error) {
+			if (isProtocolError(error) && error.code === 'wrong_type')
+				throw problem('forbidden', `This operation needs a ${keyKind}_ key.`);
+			// the prefix names another environment than required (a prefix/payload mismatch stays invalid)
+			if (isProtocolError(error) && error.code === 'env_mismatch' && env && key.split('_')[1] !== env)
+				throw problem('forbidden', `This operation needs a ${env} key.`);
+			throw problem('invalid_credentials', 'The website key is invalid.');
+		}
+		if (await isRevoked(claims, key)) throw problem('invalid_credentials', 'The website key is revoked.');
+		if (claims.kind === 'pk') {
+			const allowed = originAllowed({
+				origin,
+				referer,
+				domain: claims.domain,
+				allowSubdomains: claims.allowSubdomains,
+				env: claims.env,
+			});
+			if (!allowed) throw problem('origin_not_allowed', 'This key cannot be used from this origin.');
+		}
+		const missing = scopes.filter((scope) => !scopeGranted(claims.scopes, scope));
+		if (missing.length > 0) throw problem('scope_missing', `The key lacks ${missing.join(', ')}.`);
+		return claims;
+	};
+};
+
+/**
  * @param {{
  *   sessions: Sessions,
  *   cookieSecure: boolean,
- *   portalKeyResolver: KeyResolver,
+ *   verifyWebsiteKey: WebsiteKeyVerifier,
  *   portalUrl: string,
  *   replayStore: ReplayStore,
  *   cronSecret: string,
@@ -72,7 +138,7 @@ const bearerOf = (request) => {
 export const createAuthenticators = ({
 	sessions,
 	cookieSecure,
-	portalKeyResolver,
+	verifyWebsiteKey: verifyKey,
 	portalUrl,
 	replayStore,
 	cronSecret,
@@ -101,39 +167,21 @@ export const createAuthenticators = ({
 	const websiteKey = async (request, route) => {
 		const key = bearerOf(request);
 		if (key === null || !/^(pk|sk)_/.test(key)) return null;
-		if (!ports.websiteKeyRevoked) {
-			return problem('unavailable', 'Website key verification is not available.', { headers: { 'retry-after': '30' } });
-		}
-		const isRevoked = ports.websiteKeyRevoked;
+		const origin = request.headers.get('origin');
 		/** @type {WebsiteKeyClaims & { kid: string }} */
 		let claims;
 		try {
-			claims = await verifyWebsiteKey({
+			claims = await verifyKey({
 				key,
-				keyResolver: portalKeyResolver,
-				revocations: [],
-				now,
-				...(route.keyKind ? { expectedKind: route.keyKind } : {}),
-			});
-		} catch (error) {
-			if (isProtocolError(error) && error.code === 'wrong_type')
-				return problem('forbidden', `This operation needs a ${route.keyKind}_ key.`);
-			return problem('invalid_credentials', 'The website key is invalid.');
-		}
-		if (await isRevoked(claims)) return problem('invalid_credentials', 'The website key is revoked.');
-		const origin = request.headers.get('origin');
-		if (claims.kind === 'pk') {
-			const allowed = originAllowed({
 				origin,
 				referer: request.headers.get('referer'),
-				domain: claims.domain,
-				allowSubdomains: claims.allowSubdomains,
-				env: claims.env,
+				...(route.keyKind ? { keyKind: route.keyKind } : {}),
+				...(route.scopes ? { scopes: route.scopes } : {}),
 			});
-			if (!allowed) return problem('origin_not_allowed', 'This key cannot be used from this origin.');
+		} catch (error) {
+			if (isProblem(error)) return error;
+			throw error;
 		}
-		const missing = (route.scopes ?? []).filter((scope) => !scopeGranted(claims.scopes, scope));
-		if (missing.length > 0) return problem('scope_missing', `The key lacks ${missing.join(', ')}.`);
 		return {
 			ok: true,
 			mode: 'websiteKey',

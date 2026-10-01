@@ -5,14 +5,23 @@
  * Every entry records who (`actor`, including the staff member behind an impersonation), what (`action`, `target`),
  * the change (`before`/`after`, redacted with the logger rules so credentials never land in the log), and where
  * from (`requestId`, `ip`). `merchantId` is denormalised so merchant consoles can list their own history.
+ *
+ * **Hash chain.** Entries form one chain per scope — `global` for entries without a merchant (staff/platform
+ * actions) and `merchant:<merchantId>` for each merchant — so a merchant's history verifies on its own. Each entry
+ * carries `scope`, `seq` (1, 2, …), `prevHash` (the previous entry's `hash`, or the scope's genesis hash) and
+ * `hash = sha256(prevHash ‖ "\n" ‖ canonical JSON of the entry without hash)`. Appends run under a per-scope lease
+ * lock and the unique `{ scope, seq }` index keeps the chain linear even if a lease expired. `verifyChain(scope)`
+ * recomputes a scope (nightly cron `audit_verify`); an edited, deleted or reordered entry breaks it.
  * @module
  */
 import { createId } from '@ss/contracts';
 import { platformError } from './errors.js';
 import { redact } from './logger.js';
-import { defaultRandomBytes, isObject } from './util.js';
+import { defaultRandomBytes, isDuplicateKey, isObject, sha256Hex, stableJson } from './util.js';
 
 /** @typedef {import('./db.js').ReadOps} ReadOps */
+/** @typedef {import('./db.js').Locks} Locks */
+/** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('./rbac.js').Actor} Actor */
 
 export const AUDIT_ACTOR_TYPES = Object.freeze(['staff', 'merchant_user', 'product', 'system']);
@@ -48,10 +57,83 @@ const normaliseActor = (actor) => {
 	return { type: String(actor.type), id: actor.id, via };
 };
 
+/** Global (non-merchant) audit scope. */
+export const GLOBAL_SCOPE = 'global';
+
 /**
- * @param {{ repo: ReadOps, now?: () => number, randomBytes?: (n: number) => Uint8Array }} options
+ * Chain scope of an entry.
+ * @param {string | null | undefined} merchantId
  */
-export const createAudit = ({ repo, now = Date.now, randomBytes = defaultRandomBytes }) => {
+export const auditScopeOf = (merchantId) => (merchantId ? `merchant:${merchantId}` : GLOBAL_SCOPE);
+
+/** @param {string} scope */
+export const genesisHashOf = (scope) => sha256Hex(`ss-audit.v1|genesis|${scope}`);
+
+/**
+ * JSON-normalised value (what MongoDB stores and returns unchanged): `undefined` members dropped, Dates as ISO.
+ * @param {unknown} value
+ */
+const jsonValue = (value) => {
+	const text = JSON.stringify(value);
+	return text === undefined ? null : JSON.parse(text);
+};
+
+/**
+ * Hash of an entry as stored (any `hash` member is ignored; `at` is hashed as ISO-8601).
+ * @param {Record<string, any>} entry
+ * @returns {string}
+ */
+export const auditEntryHash = (entry) => {
+	const rest = { ...entry };
+	delete rest.hash;
+	const at = rest.at instanceof Date ? rest.at.toISOString() : rest.at;
+	return sha256Hex(`${rest.prevHash}\n${stableJson({ ...rest, at })}`);
+};
+
+/**
+ * @typedef {object} ChainReport
+ * @property {string} scope
+ * @property {boolean} ok
+ * @property {number} entries entries checked
+ * @property {number} seq last verified sequence number
+ * @property {string} headHash hash of the last verified entry (genesis when empty)
+ * @property {{ seq: number, id: string, reason: 'seq_gap' | 'prev_hash' | 'hash' } | null} broken first broken link
+ */
+
+/**
+ * @param {{ repo: ReadOps, locks: Locks, now?: () => number, randomBytes?: (n: number) => Uint8Array,
+ *   logger?: Logger, lockTtlMs?: number, lockWaitMs?: number, attempts?: number }} options
+ */
+export const createAudit = ({
+	repo,
+	locks,
+	now = Date.now,
+	randomBytes = defaultRandomBytes,
+	logger,
+	lockTtlMs = 10_000,
+	lockWaitMs = 10_000,
+	attempts = 4,
+}) => {
+	/**
+	 * Acquire the scope lock, waiting briefly for the current holder.
+	 * @param {string} scope
+	 */
+	const acquire = async (scope) => {
+		const until = Date.now() + lockWaitMs;
+		for (;;) {
+			const lock = await locks.acquire(`audit:${scope}`, { ttlMs: lockTtlMs, owner: 'audit' });
+			if (lock) return lock;
+			if (Date.now() > until) throw platformError('locked', `audit scope ${scope} is busy`);
+			await new Promise((resolve) => setTimeout(resolve, 2 + Math.floor(Math.random() * 10)));
+		}
+	};
+
+	/** @param {string} scope */
+	const headOf = async (scope) => {
+		const last = await repo.findOne({ scope }, { sort: { seq: -1 }, projection: { seq: 1, hash: 1 } });
+		return last ? { seq: Number(last.seq), hash: String(last.hash) } : { seq: 0, hash: genesisHashOf(scope) };
+	};
+
 	/**
 	 * @param {AuditInput} input
 	 * @returns {Promise<string>} the entry id
@@ -63,20 +145,95 @@ export const createAudit = ({ repo, now = Date.now, randomBytes = defaultRandomB
 			throw platformError('invalid_argument', 'audit target needs a type and an id');
 		}
 		const id = createId('aud', { randomBytes });
-		await repo.insertOne({
+		const merchantId = target.merchantId ?? null;
+		const scope = auditScopeOf(merchantId);
+		const body = {
 			_id: id,
 			at: new Date(now()),
 			actor: normaliseActor(actor),
 			action,
 			target: { type: target.type, id: target.id, websiteId: target.websiteId ?? null },
-			merchantId: target.merchantId ?? null,
-			...(before === undefined ? {} : { before: redact(before) }),
-			...(after === undefined ? {} : { after: redact(after) }),
+			merchantId,
+			...(before === undefined ? {} : { before: jsonValue(redact(before)) }),
+			...(after === undefined ? {} : { after: jsonValue(redact(after)) }),
 			requestId,
 			ip,
 			reason,
-		});
-		return id;
+		};
+		for (let attempt = 1; ; attempt += 1) {
+			const lock = await acquire(scope);
+			try {
+				const head = await headOf(scope);
+				const entry = { ...body, scope, seq: head.seq + 1, prevHash: head.hash };
+				await repo.insertOne({ ...entry, hash: auditEntryHash(entry) });
+				return id;
+			} catch (error) {
+				// a writer whose lease expired took this seq: re-read the head and chain after it
+				if (!isDuplicateKey(error) || attempt >= attempts) throw error;
+			} finally {
+				await lock.release();
+			}
+		}
+	};
+
+	/**
+	 * Recompute the chain of a scope from its genesis.
+	 * @param {string} scope
+	 * @param {{ signal?: AbortSignal }} [options]
+	 * @returns {Promise<ChainReport>}
+	 */
+	const verifyChain = async (scope, { signal } = {}) => {
+		let seq = 0;
+		let headHash = genesisHashOf(scope);
+		let entries = 0;
+		const cursor = repo.find({ scope }).sort({ seq: 1 });
+		try {
+			for await (const doc of cursor) {
+				if (signal?.aborted) throw platformError('aborted', 'audit verification was aborted');
+				/** @type {ChainReport['broken']} */
+				let broken = null;
+				if (doc.seq !== seq + 1) broken = { seq: seq + 1, id: String(doc._id), reason: 'seq_gap' };
+				else if (doc.prevHash !== headHash) broken = { seq: doc.seq, id: String(doc._id), reason: 'prev_hash' };
+				else if (auditEntryHash(doc) !== doc.hash) broken = { seq: doc.seq, id: String(doc._id), reason: 'hash' };
+				if (broken) return { scope, ok: false, entries, seq, headHash, broken };
+				entries += 1;
+				seq = doc.seq;
+				headHash = doc.hash;
+			}
+		} finally {
+			await cursor.close();
+		}
+		return { scope, ok: true, entries, seq, headHash, broken: null };
+	};
+
+	/**
+	 * Verify every scope (nightly). Broken chains are logged as errors; scopes not reached before the deadline are
+	 * reported as `skipped`.
+	 * @param {{ deadline?: number, signal?: AbortSignal }} [options]
+	 */
+	const verifyAll = async ({ deadline = Number.POSITIVE_INFINITY, signal } = {}) => {
+		const scopes = (await repo.aggregate([{ $group: { _id: '$scope' } }, { $sort: { _id: 1 } }]).toArray())
+			.map((row) => row._id)
+			.filter((scope) => typeof scope === 'string');
+		/** @type {ChainReport[]} */
+		const broken = [];
+		let verified = 0;
+		let entries = 0;
+		let skipped = 0;
+		for (const scope of scopes) {
+			if (now() >= deadline || signal?.aborted) {
+				skipped += 1;
+				continue;
+			}
+			const report = await verifyChain(scope, signal ? { signal } : {});
+			verified += 1;
+			entries += report.entries;
+			if (!report.ok) {
+				broken.push(report);
+				logger?.error('audit chain broken', { scope, broken: report.broken });
+			}
+		}
+		return { scopes: scopes.length, verified, skipped, entries, broken: broken.map((r) => ({ scope: r.scope, ...r.broken })) };
 	};
 
 	/**
@@ -98,6 +255,6 @@ export const createAudit = ({ repo, now = Date.now, randomBytes = defaultRandomB
 		return repo.find(filter).sort({ at: -1, _id: -1 }).limit(n).toArray();
 	};
 
-	return Object.freeze({ record, list });
+	return Object.freeze({ record, list, verifyChain, verifyAuditChain: verifyChain, verifyAll });
 };
 /** @typedef {ReturnType<typeof createAudit>} Audit */
