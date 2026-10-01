@@ -32,7 +32,7 @@ Each folder has its own `README.md` with its reference. `packages/app-kit/API.md
 
 ## Setup
 
-Needs Node 22+ and pnpm 11.
+Needs Node 22+ (`.nvmrc`) and pnpm 11. Each deployable has a `.env.example` listing its variables.
 
 ```bash
 pnpm install

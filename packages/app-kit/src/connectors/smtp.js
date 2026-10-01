@@ -84,7 +84,6 @@ const RESERVED_HEADERS = new Set([
 
 /** @type {CreateSmtpTransport} */
 const nodemailerTransport = (options) =>
-	// @ts-expect-error -- nodemailer ships no type declarations and @types/nodemailer is not a dependency
 	import('nodemailer').then((/** @type {any} */ mod) => (mod.default ?? mod).createTransport(options));
 
 /**

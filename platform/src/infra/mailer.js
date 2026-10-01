@@ -203,7 +203,6 @@ export const smtpTransportOptions = (smtp, { isProduction }) => ({
  * @type {TransportFactory}
  */
 const nodemailerTransport = (options) =>
-	// @ts-expect-error -- nodemailer has no bundled types and @types/nodemailer is not a dependency
 	import('nodemailer').then((/** @type {any} */ nodemailer) => (nodemailer.default ?? nodemailer).createTransport(options));
 
 /**

@@ -15,16 +15,49 @@ concurrency:
 jobs:
    check:
       runs-on: ubuntu-latest
-      timeout-minutes: 15
+      timeout-minutes: 20
       steps:
          - uses: actions/checkout@v4
          - uses: pnpm/action-setup@v4
          - uses: actions/setup-node@v4
            with:
-              node-version: 22
+              node-version-file: .nvmrc
               cache: pnpm
          - run: pnpm install --frozen-lockfile
          - run: pnpm format:check
          - run: pnpm lint
          - run: pnpm typecheck
+         - run: node platform/scripts/build-delivery-runtime.js --check
          - run: pnpm test -- --coverage
+         - run: pnpm audit --prod --audit-level high
+
+   build:
+      runs-on: ubuntu-latest
+      timeout-minutes: 20
+      strategy:
+         fail-fast: false
+         matrix:
+            app:
+               [
+                  platform,
+                  products/alerts,
+                  products/chatbot,
+                  products/coupons,
+                  products/deals,
+                  products/loyalty,
+                  products/reviews,
+                  products/signups,
+               ]
+      steps:
+         - uses: actions/checkout@v4
+         - uses: pnpm/action-setup@v4
+         - uses: actions/setup-node@v4
+           with:
+              node-version-file: .nvmrc
+              cache: pnpm
+         - run: pnpm install --frozen-lockfile
+         - run: pnpm exec next build
+           working-directory: ${{ matrix.app }}
+         - run: pnpm exec ss app validate .
+           if: matrix.app != 'platform'
+           working-directory: ${{ matrix.app }}
