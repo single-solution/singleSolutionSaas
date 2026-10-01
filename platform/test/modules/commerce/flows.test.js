@@ -563,6 +563,38 @@ describe('entitlement documents', () => {
 		});
 	});
 
+	it('carries the website identity issuer and bumps the version when it changes', async () => {
+		const clock = createClock(T0);
+		const h = await bootCommerce({ mongo, dbName: 'cm_identity', clock });
+		await h.credit(M1, 100_000);
+		const { subscriptionId } = await h.service.subscribe({
+			websiteId: W1,
+			appId: APP,
+			planCode: 'starter',
+			actor: MERCHANT_ACTOR,
+		});
+		const plain = await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }));
+		expect(plain).not.toHaveProperty('identity');
+		const identity = {
+			issuer: 'https://login.shop.example.com/',
+			jwks: [
+				{ kty: 'OKP', crv: 'Ed25519', x: '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo', kid: 'k1', alg: 'EdDSA', use: 'sig' },
+			],
+			claimMap: { subject: 'sub' },
+		};
+		h.world.identities.set(W1, identity);
+		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: 2 });
+		const doc = await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }));
+		expect(doc.identity).toEqual(identity);
+		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: 2 }); // unchanged
+		h.world.identities.set(W1, { ...identity, audience: 'shop' });
+		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: 3 });
+		const preview = await h.service.previewDocument({ subscriptionId, layers: {} });
+		expect(preview).toMatchObject({ version: 3, identity: { audience: 'shop' } });
+		h.world.identities.delete(W1);
+		expect(await h.service.invalidate(subscriptionId)).toEqual({ invalidated: true, version: 4 });
+	});
+
 	it('previews documents for configuration dry runs and invalidates every subscription of an app', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_preview', clock });

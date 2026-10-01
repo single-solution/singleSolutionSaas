@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { formatReport, nextCursorOf, problemShapeError, runCertification } from '../src/certify/index.js';
 import { initApp } from '../src/init.js';
@@ -95,6 +95,9 @@ describe('ss certify (service)', () => {
 
 	it.each([
 		[{ originCheck: true }, ['keys.pk-foreign-origin']],
+		[{ pkServerError: true }, ['keys.pk-resources']],
+		[{ pkFlaky: true }, ['keys.pk-resources']],
+		[{ pkRefused: true }, []],
 		[
 			{ problems: true },
 			['keys.missing', 'keys.pk-foreign-origin', 'errors.problem', 'gating.element-disabled', 'idempotency.required'],
@@ -119,6 +122,21 @@ describe('ss certify (service)', () => {
 		},
 		60_000,
 	);
+
+	it('requires sk_-only resources (x-ss-key-kind: sk) to refuse pk_ keys', async () => {
+		const file = path.join(dir, 'openapi.json');
+		const original = await readFile(file, 'utf8');
+		const spec = JSON.parse(original);
+		spec.paths['/v1/notes'].get['x-ss-key-kind'] = 'sk';
+		await writeFile(file, JSON.stringify(spec, null, '\t'));
+		try {
+			expect(failed(await certify())).toContain('keys.pk-resources');
+			const refused = await certify({ pkRefused: true });
+			expect(refused.checks.find((check) => check.id === 'keys.pk-resources')?.status).toBe('pass');
+		} finally {
+			await writeFile(file, original);
+		}
+	}, 120_000);
 
 	it('skips the live suite without --url and without a token', async () => {
 		const noUrl = await runCertification({ dir });

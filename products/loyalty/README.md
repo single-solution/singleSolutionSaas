@@ -27,8 +27,16 @@ a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — no
 Plans: **starter** = earn_rules, redeem, wallet (+ add-ons reversal, adjustments); **pro** = everything but referrals
 (+ add-on referrals). Trial 48 h.
 
-**Events.** Consumes `order.placed@1` (order snapshot: customer, lines, amounts), `order.completed@1`,
-`order.cancelled@1`, `order.refunded@1`, `customer.created@1`; custom events arrive through `POST /v1/activities`.
+**Events.** Consumes `order.placed@1` (order snapshot: customer, lines, amounts), `order.completed@1` (a completion
+that carries its own `customer`/`currency`/`lines`/`amounts` settles even without a placement), `order.cancelled@1`,
+`order.refunded@1`, `customer.created@1` and `custom.*` (from the Event Hub; same earn rules and idempotency key as
+`POST /v1/activities`; the customer is `data.customerId` or the customer actor). The customer of an order is
+`customerId`, else `customer.customerId`, else the federated `customer.subject`.
+
+**Customer identity.** Browser (`pk_`) routes take the customer from `SS-Identity`: when the website registered its own
+identity issuer in the Portal (Website → Identity), the site's login token is verified by app-kit (`identity:
+'optional'`, `ctx.identity.subject` = customer id); otherwise — or for wallet tokens — a Loyalty wallet token minted by
+the merchant's server with `POST /v1/wallet-tokens` (the fallback).
 Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `loyalty.expiring@1` (schemas in
 `schemas/events/`).
 
@@ -51,18 +59,18 @@ Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `l
 
 `openapi.json` documents every operation with examples. Highlights (`sk_` = server key, `pk_` = browser key):
 
-| Operation              | Route                                                                                                     |
-| ---------------------- | --------------------------------------------------------------------------------------------------------- |
-| Earn (manual / server) | `POST /v1/earnings` (sk, Idempotency-Key) · `GET /v1/earnings` (sk; pk only with a wallet token)          |
-| Members                | `GET /v1/members?q=` · `GET /v1/members/{customerId}` · `…/balance` · `…/history` (cursor)                |
-| Rules                  | `GET /v1/rules` (with diagnostics) · `POST /v1/rules:check`                                               |
-| Custom events          | `POST /v1/activities` `{ type: "custom.<name>@1", customerId, data }`                                     |
-| Checkout               | `POST /v1/redemptions:quote` · `POST /v1/redemptions` · `POST /v1/redemptions/{id}/release` · `…/confirm` |
-| Wallet                 | `POST /v1/wallet-tokens` (sk, for the signed-in customer) · `GET /v1/wallet` (pk + `SS-Identity`)         |
-| Tiers, expiry          | `GET /v1/tiers` · `POST /v1/expiry:run`                                                                   |
-| Referrals              | `POST /v1/referral-codes` · `POST /v1/referrals` · `GET /v1/referrals/{customerId}`                       |
-| Adjustments            | `POST /v1/adjustments` · `GET /v1/adjustments`                                                            |
-| Standard               | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export     | anonymize` |
+| Operation              | Route                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Earn (manual / server) | `POST /v1/earnings` (sk, Idempotency-Key) · `GET /v1/earnings` (sk; pk only with a wallet token)             |
+| Members                | `GET /v1/members?q=` · `GET /v1/members/{customerId}` · `…/balance` · `…/history` (cursor)                   |
+| Rules                  | `GET /v1/rules` (with diagnostics) · `POST /v1/rules:check`                                                  |
+| Custom events          | `POST /v1/activities` `{ type: "custom.<name>@1", customerId, data }`                                        |
+| Checkout               | `POST /v1/redemptions:quote` · `POST /v1/redemptions` · `POST /v1/redemptions/{id}/release` · `…/confirm`    |
+| Wallet                 | `POST /v1/wallet-tokens` (sk, fallback) · `GET /v1/wallet` (pk + `SS-Identity`: login token or wallet token) |
+| Tiers, expiry          | `GET /v1/tiers` · `POST /v1/expiry:run`                                                                      |
+| Referrals              | `POST /v1/referral-codes` · `POST /v1/referrals` · `GET /v1/referrals/{customerId}`                          |
+| Adjustments            | `POST /v1/adjustments` · `GET /v1/adjustments`                                                               |
+| Standard               | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export        | anonymize` |
 
 Errors are RFC 9457 problems with stable codes (`insufficient_points`, `below_minimum`, `above_maximum`,
 `offers_not_allowed`, `self_referral`, `identity_required`, …).
@@ -113,4 +121,6 @@ hourly settlement).
 
 ## Changelog
 
+- **1.1.0 (unreleased)** — bring-your-own identity via app-kit (wallet tokens as fallback), `custom.*` consumed from
+  the Event Hub, self-contained order completions.
 - **1.0.0** — first release: eight elements, wallet renderer and headless core, REST v1, dashboard, daily job.

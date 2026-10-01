@@ -2,7 +2,7 @@
  * Event envelopes for the injector (`ss dev emit`): sample data for common standard events, envelope construction.
  * @module
  */
-import { createId } from '@ss/contracts';
+import { STANDARD_EVENT_DATA, createId, eventGlobMatches, isEventGlob } from '@ss/contracts';
 
 /**
  * Sample `data` for standard events (overridable with `--data`).
@@ -61,4 +61,17 @@ export const buildEnvelope = ({ type, websiteId, env, data, id, now }) => {
 		data: data ?? sample,
 		context: { source: 'portal' },
 	});
+};
+
+/**
+ * A concrete event type for a consumed `events.consumes` entry: the entry itself when exact, else the first event with
+ * sample data matching the glob, the first standard event matching it, or `custom.ss_probe@1` for `custom.*` globs.
+ * `null` when no deliverable type matches (e.g. a glob over the product's own namespace).
+ * @param {string} entry
+ * @returns {string | null}
+ */
+export const concreteEventType = (entry) => {
+	if (!isEventGlob(entry)) return entry;
+	const candidates = [...Object.keys(SAMPLE_DATA), ...Object.keys(STANDARD_EVENT_DATA), 'custom.ss_probe@1'];
+	return candidates.find((type) => eventGlobMatches(entry, type)) ?? null;
 };

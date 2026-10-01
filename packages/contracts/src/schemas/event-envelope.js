@@ -118,6 +118,45 @@ const identity = {
  */
 const data = (properties, required) => ({ type: 'object', required, additionalProperties: false, properties });
 
+/**
+ * Who an order belongs to, as an identity reference (never a profile): the Graph customer id and/or the federated
+ * identity (`subject` from the website's own identity issuer, PLAN §5.3) with the identifiers the issuer asserted.
+ */
+const customerRef = {
+	type: 'object',
+	minProperties: 1,
+	additionalProperties: false,
+	properties: {
+		customerId: id,
+		subject: text(255),
+		email: { type: 'string', minLength: 3, maxLength: 320, pattern: '^[^\\s@]+@[^\\s@]+$' },
+		phone: { type: 'string', pattern: '^\\+[1-9][0-9]{6,14}$' },
+	},
+};
+
+/**
+ * Optional order context shared by the order lifecycle events after `order.placed@1` (additive within v1): who, what
+ * and how much. `lines` and `amounts` are integer minor units in `currency`, which is then required.
+ */
+const orderContext = {
+	number: text(64),
+	customerId: id,
+	customer: customerRef,
+	currency: ref('currency'),
+	lines: { type: 'array', minItems: 1, maxItems: 500, items: line },
+	amounts: orderAmounts,
+};
+
+/**
+ * Order event data with the optional {@link orderContext}.
+ * @param {Record<string, unknown>} properties
+ * @param {string[]} required
+ */
+const orderData = (properties, required) => ({
+	...data({ ...orderContext, ...properties }, required),
+	dependentRequired: { lines: ['currency'], amounts: ['currency'] },
+});
+
 /** Data schemas of standard events v1, keyed by `type@v`. */
 export const STANDARD_EVENT_DATA = deepFreeze({
 	'customer.created@1': data(
@@ -158,6 +197,7 @@ export const STANDARD_EVENT_DATA = deepFreeze({
 			orderId: id,
 			number: text(64),
 			customerId: id,
+			customer: customerRef,
 			currency: ref('currency'),
 			lines: { type: 'array', minItems: 1, maxItems: 500, items: line },
 			amounts: orderAmounts,
@@ -165,18 +205,43 @@ export const STANDARD_EVENT_DATA = deepFreeze({
 		['orderId', 'currency', 'lines', 'amounts'],
 	),
 	'order.paid@1': data({ orderId: id, amount: ref('money'), method: text(64), reference: text(200) }, ['orderId', 'amount']),
-	'order.completed@1': data({ orderId: id }, ['orderId']),
-	'order.cancelled@1': data({ orderId: id, reason: text(500) }, ['orderId']),
+	'order.completed@1': orderData({ orderId: id }, ['orderId']),
+	'order.cancelled@1': orderData({ orderId: id, reason: text(500) }, ['orderId']),
 	'order.refunded@1': data(
 		{
 			orderId: id,
 			amount: ref('money'),
 			reason: text(500),
+			number: text(64),
+			customerId: id,
+			customer: customerRef,
+			// refunded lines: what came back; amounts (when given) are in `amount.currency`
 			lines: {
 				type: 'array',
 				maxItems: 500,
-				items: data({ itemId: id, variantId: id, quantity: { type: 'integer', minimum: 1 } }, ['itemId', 'quantity']),
+				items: data(
+					{
+						itemId: id,
+						variantId: id,
+						sku: text(100),
+						title: text(300),
+						quantity: { type: 'integer', minimum: 1 },
+						unitAmount: ref('minorUnits'),
+						totalAmount: ref('minorUnits'),
+					},
+					['itemId', 'quantity'],
+				),
 			},
+			amounts: data(
+				{
+					subtotal: ref('minorUnits'),
+					discount: ref('minorUnits'),
+					shipping: ref('minorUnits'),
+					tax: ref('minorUnits'),
+					total: ref('minorUnits'),
+				},
+				['total'],
+			),
 		},
 		['orderId', 'amount'],
 	),
@@ -291,6 +356,7 @@ export const LOADER_EVENT_DATA = deepFreeze({
 			element: ref('elementKey'),
 			code: { type: 'string', minLength: 1, maxLength: 64, pattern: PATTERNS.elementKey },
 			message: text(500),
+			phase: { type: 'string', enum: ['bundle', 'load', 'placement', 'trigger', 'mount', 'render', 'hook', 'destroy'] },
 		},
 		['element', 'code', 'message'],
 	),
@@ -306,6 +372,40 @@ export const elementUiEventDataSchema = deepFreeze({
 	type: 'object',
 	maxProperties: 50,
 });
+
+/**
+ * Catalogued element UI events, keyed by verb: `<element>.shown@1` (the Loader mounted the element; data is empty or
+ * names the variant) and `<element>.action@1` (an element action ran, e.g. a service product's stub action,
+ * `ss-element-stub@1`). Other verbs use {@link elementUiEventDataSchema}.
+ */
+export const ELEMENT_EVENT_DATA = deepFreeze({
+	'shown@1': data({ variant: { type: 'string', minLength: 1, maxLength: 40, pattern: PATTERNS.elementKey } }, []),
+	'action@1': data(
+		{
+			action: { type: 'string', pattern: '^[a-z][a-z0-9_]{0,39}$' },
+			ok: { type: 'boolean' },
+		},
+		['action'],
+	),
+});
+
+/**
+ * Schema id of a catalogued element UI event verb (`shown@1` → `urn:ss:contracts:v1:event:element.shown@1`).
+ * @param {string} verbAtVersion
+ * @returns {string}
+ */
+export const elementEventDataSchemaId = (verbAtVersion) => eventDataSchemaId(`element.${verbAtVersion}`);
+
+/**
+ * Catalogued element UI event data schemas as standalone schemas with `$id`s.
+ * @returns {ReadonlyArray<Record<string, unknown>>}
+ */
+export const elementEventDataSchemas = () =>
+	Object.entries(ELEMENT_EVENT_DATA).map(([verb, schema]) => ({
+		$schema: 'https://json-schema.org/draft/2020-12/schema',
+		$id: elementEventDataSchemaId(verb),
+		...schema,
+	}));
 
 const SNAKE = '[a-z][a-z0-9]*(?:_[a-z0-9]+)*';
 const ELEMENT_UI_EVENT = new RegExp(`^(${SNAKE})\\.(${SNAKE})@1$`);

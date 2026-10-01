@@ -40,6 +40,8 @@ export const SOURCE_NAMES = Object.freeze(
  * @property {string} validUntil
  * @property {readonly { kind: string, ref: string, status: string }[]} resources
  * @property {{ prefix: string }} dataScope
+ * @property {import('@ss/contracts').IdentitySection | null} [identity] the website's own customer identity issuer
+ *   (bring-your-own identity, PLAN §5.3); omitted from the document when absent
  */
 
 /** @typedef {{ path: string, keyword: string, message: string }} Problem */
@@ -121,6 +123,7 @@ export const toDocument = (resolved, meta) => {
 		runtime: resolved.state === 'active' ? { state: 'active' } : { state: resolved.state, reason: resolved.state },
 		resources: meta.resources.map((r) => ({ kind: r.kind, ref: r.ref, status: r.status })),
 		dataScope: { prefix: meta.dataScope.prefix },
+		...(meta.identity ? { identity: meta.identity } : {}),
 		experiments: Object.values(resolved.experiments)
 			.map((e) => ({ element: e.element, variant: e.variant }))
 			.sort((a, b) => (a.element < b.element ? -1 : a.element > b.element ? 1 : 0)),

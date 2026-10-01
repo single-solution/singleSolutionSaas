@@ -13,6 +13,7 @@ export const DOCUMENT_RULES = Object.freeze({
 	unknownElement: 'unknownElement',
 	duplicateExperiment: 'duplicateExperiment',
 	duplicateResource: 'duplicateResource',
+	duplicateIdentityKey: 'duplicateIdentityKey',
 	timezone: 'timezone',
 	timeWindow: 'timeWindow',
 	scheduleRange: 'scheduleRange',
@@ -93,6 +94,13 @@ export const checkEntitlementDocument = (doc) => {
 		if (resourceKinds.has(id))
 			out.push(at(['resources', index], DOCUMENT_RULES.duplicateResource, `duplicate resource '${id}'`));
 		resourceKinds.add(id);
+	}
+	/** @type {Set<string>} */
+	const kids = new Set();
+	for (const [index, key] of (doc.identity?.jwks ?? []).entries()) {
+		if (kids.has(key.kid))
+			out.push(at(['identity', 'jwks', index, 'kid'], DOCUMENT_RULES.duplicateIdentityKey, `duplicate key id '${key.kid}'`));
+		kids.add(key.kid);
 	}
 	return out;
 };

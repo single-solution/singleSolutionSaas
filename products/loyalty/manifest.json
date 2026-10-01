@@ -25,10 +25,17 @@
 		],
 		"offlineGrace": "PT24H"
 	},
-	"scopes": ["events.subscribe:order.*", "events.subscribe:customer.created"],
+	"scopes": ["events.subscribe:order.*", "events.subscribe:customer.created", "events.subscribe:custom.*"],
 	"requires": { "resources": ["database"] },
 	"events": {
-		"consumes": ["order.completed@1", "order.placed@1", "order.cancelled@1", "order.refunded@1", "customer.created@1"],
+		"consumes": [
+			"order.completed@1",
+			"order.placed@1",
+			"order.cancelled@1",
+			"order.refunded@1",
+			"customer.created@1",
+			"custom.*"
+		],
 		"publishes": ["loyalty.earned@1", "loyalty.redeemed@1", "loyalty.tier_changed@1", "loyalty.expiring@1"]
 	},
 	"elements": [

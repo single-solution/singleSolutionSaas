@@ -235,7 +235,12 @@ export function WebsitesView(props) {
 				onClose={() => setDeleting(null)}
 				onConfirm={() => {
 					if (confirmText.trim() === deleting?.domain) void remove();
-					else setDeleteProblem({ title: 'Type the domain to confirm', detail: `Type ${deleting?.domain} to confirm.` });
+					else
+						setDeleteProblem({
+							title: 'Type the domain to confirm',
+							detail: `Type ${deleting?.domain} to confirm.`,
+							code: 'validation',
+						});
 				}}
 				danger
 				busy={busy}

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
 	CONTROL_EVENT_DATA,
+	ELEMENT_EVENT_DATA,
 	ELEMENT_UI_EVENT_MAX_BYTES,
+	elementEventDataSchemas,
 	EVENT_CATALOGUE,
 	LOADER_EVENT_DATA,
 	MANIFEST_RULES,
@@ -155,6 +157,42 @@ describe('element UI events', () => {
 		expectProblem(validateEvent(uiEvent({ blob: 'x'.repeat(ELEMENT_UI_EVENT_MAX_BYTES) })), '/data', 'maxSize');
 		const many = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`k${i}`, i]));
 		expectProblem(validateEvent(uiEvent(many)), '/data', 'maxProperties');
+	});
+
+	/** @param {string} verb @param {Record<string, unknown>} data */
+	const elementEvent = (verb, data) => {
+		const e = event(`notice_bar.${verb}@1`, data);
+		e.context = { source: 'loader', element: 'notice_bar' };
+		return e;
+	};
+
+	it('validates the catalogued element verbs shown@1 and action@1', () => {
+		expect(Object.keys(ELEMENT_EVENT_DATA)).toEqual(['shown@1', 'action@1']);
+		expect(elementEventDataSchemas().map((schema) => schema.$id)).toEqual([
+			'urn:ss:contracts:v1:event:element.shown@1',
+			'urn:ss:contracts:v1:event:element.action@1',
+		]);
+		expect(validateEvent(elementEvent('shown', {})).ok).toBe(true);
+		expect(validateEvent(elementEvent('shown', { variant: 'compact' })).ok).toBe(true);
+		expectProblem(validateEvent(elementEvent('shown', { extra: 1 })), '/data/extra', 'additionalProperties');
+		expect(validateEvent(elementEvent('action', { action: 'redeem', ok: true })).ok).toBe(true);
+		expectProblem(validateEvent(elementEvent('action', {})), '/data/action', 'required');
+		expectProblem(validateEvent(elementEvent('action', { action: 'Bad-Action' })), '/data/action', 'pattern');
+	});
+
+	it('accepts the Loader failure report with its phase', () => {
+		const failure = event('loader.element_failed@1', {
+			element: 'notice_bar',
+			phase: 'mount',
+			code: 'mount_failed',
+			message: 'element mount failed',
+		});
+		expect(validateEvent(failure).ok).toBe(true);
+		expectProblem(
+			validateEvent(event('loader.element_failed@1', { element: 'x', code: 'e', message: 'm', phase: 'boom' })),
+			'/data/phase',
+			'enum',
+		);
 	});
 
 	it('treats it as unknown without a matching context.element', () => {

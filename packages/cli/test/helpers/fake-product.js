@@ -47,6 +47,7 @@ export const createFakeProduct = ({ manifest, portalUrl, tokenHash, signingKey, 
 	const eventReplay = createMemoryReplayStore();
 	const portalCallReplay = createMemoryReplayStore();
 	let burned = false;
+	let pkReads = 0;
 	/** @type {string | null} */
 	let appId = null;
 	/** @type {Map<string, any>} */
@@ -270,6 +271,12 @@ export const createFakeProduct = ({ manifest, portalUrl, tokenHash, signingKey, 
 		if (route === 'POST /v1/events') return send(response, broken.siteEvents ? 422 : 202, { accepted: 1 });
 		if (url.pathname === '/v1/notes') {
 			if (doc.elements.notes?.enabled !== true && !broken.gating) return problem(response, 403, 'element_disabled');
+			if (method === 'GET' && website.kind === 'pk') {
+				pkReads += 1;
+				if (broken.pkServerError) return problem(response, 500, 'internal_error');
+				if (broken.pkFlaky && pkReads % 2 === 0) return problem(response, 403, 'forbidden');
+				if (broken.pkRefused) return problem(response, 403, 'key_kind_required');
+			}
 			if (method === 'GET') {
 				const limit = Number(url.searchParams.get('limit') ?? 20);
 				const cursor = url.searchParams.get('cursor');

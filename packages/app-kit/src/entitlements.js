@@ -104,6 +104,8 @@ export const createEntitlements = ({
 }) => {
 	/** @type {Map<string, { token: string, doc: EntitlementDocument, version: number, fetchedAt: number }>} */
 	const memory = new Map();
+	/** Websites whose next read must go to the Portal (`invalidate`), whatever the cache age. */
+	const forced = new Set();
 	const singleFlight = /** @type {(key: string, run: () => Promise<EntitlementResult>) => Promise<EntitlementResult>} */ (
 		createSingleFlight()
 	);
@@ -226,6 +228,10 @@ export const createEntitlements = ({
 	 */
 	const forWebsite = async (websiteId) => {
 		if (typeof websiteId !== 'string' || websiteId.length === 0) return { ok: false, reason: 'invalid' };
+		if (forced.has(websiteId)) {
+			forced.delete(websiteId);
+			return fetchFresh(websiteId);
+		}
 		const cached = memory.get(websiteId);
 		if (cached && now() - cached.fetchedAt < ttlMs) {
 			const known = await lastKnown(websiteId);
@@ -244,9 +250,12 @@ export const createEntitlements = ({
 		forWebsite,
 		/** Force a Portal fetch (e.g. on `entitlement.changed`). */
 		refresh: fetchFresh,
-		/** Drop the in-process copy (the shared store keeps the last verified document for the offline grace). */
+		/**
+		 * Force a Portal fetch on the next read of `websiteId`. The cached copy stays as the offline fallback (it is
+		 * still served, flagged stale, if the Portal is unreachable) and versions stay monotonic.
+		 */
 		invalidate: (/** @type {string} */ websiteId) => {
-			memory.delete(websiteId);
+			if (typeof websiteId === 'string' && websiteId.length > 0) forced.add(websiteId);
 		},
 		can,
 		feature,

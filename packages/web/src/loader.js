@@ -172,7 +172,17 @@ export const boot = (options) => {
 	const report = (entry) => {
 		attempt(() => options.onError?.(entry));
 		attempt(() => win?.dispatchEvent?.(new win.CustomEvent('ss:error', { detail: { key: entry.key, phase: entry.phase } })));
-		if (entry.key) attempt(() => client?.track('loader.element_failed@1', { element: entry.key, phase: entry.phase }));
+		// `loader.element_failed@1` (@ss/contracts): a stable code and a generic message — never the error text, which
+		// may carry page or customer data
+		if (entry.key) {
+			const data = {
+				element: entry.key,
+				phase: entry.phase,
+				code: `${entry.phase}_failed`,
+				message: `element ${entry.phase} failed`,
+			};
+			attempt(() => client?.track('loader.element_failed@1', data));
+		}
 	};
 
 	// ---- event bus: element events, merchant hooks (`SS.on`) and `event` triggers --------------------------------

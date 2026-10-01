@@ -36,6 +36,7 @@ const movable = (doc) => {
  *   loadMerchant: (merchantId: string) => Promise<Record<string, any>>,
  *   revokeWebsiteKeys: (input: { merchantId: string, websiteIds: string[], reason: string, actor: any, meta?: Meta }) => Promise<string[]>,
  *   isPublicSuffix?: (domain: string) => boolean,
+ *   forgetIssuers?: (input: { merchantId: string, websiteIds: string[] }) => Promise<unknown>,
  * }} hooks
  */
 export const createWebsites = (deps, hooks) => {
@@ -176,6 +177,7 @@ export const createWebsites = (deps, hooks) => {
 			const releaseAt = new Date(ctx.now() + DOMAIN_COOLDOWN_MS);
 			await repo.domains.updateOne({ _id: website.domain, websiteId: liveId }, { $set: { releaseAt } });
 			await hooks.revokeWebsiteKeys({ merchantId, websiteIds: ids, reason: 'website_deleted', actor, meta });
+			await hooks.forgetIssuers?.({ merchantId, websiteIds: ids });
 			await repo.memberships
 				.of(merchantId)
 				.updateMany({ merchantId, 'grants.websiteId': liveId }, { $pull: { grants: { websiteId: liveId } } });
@@ -214,6 +216,8 @@ export const createWebsites = (deps, hooks) => {
 				actor,
 				meta,
 			});
+			// the identity issuer is the old owner's login: the new owner registers its own
+			await hooks.forgetIssuers?.({ merchantId: fromMerchantId, websiteIds: ids });
 			// tenant records cannot change merchantId: move them (delete + insert) with the domain claim and the
 			// membership grants in one transaction, so a failure leaves the website exactly where it was
 			await ctx.withTransaction(async (session) => {

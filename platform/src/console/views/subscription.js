@@ -192,7 +192,10 @@ export function SubscriptionView(props) {
 		});
 		setPending(null);
 		if (result.ok && typeof result.data?.url === 'string') window.location.assign(result.data.url);
-		else if (!result.ok) setProblem(result.problem);
+		else
+			setProblem(
+				result.ok ? { detail: 'The product did not return a launch link.', code: 'launch_link_missing' } : result.problem,
+			);
 	};
 	/** @param {number} version */
 	const rollback = async (version) => {

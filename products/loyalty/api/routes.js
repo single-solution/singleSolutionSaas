@@ -29,7 +29,10 @@ import { settingsForDoc } from './settings.js';
 /** @typedef {import('../adapters/platform.js').LoyaltyApp} LoyaltyApp */
 /** @typedef {import('./service.js').Site} Site */
 
-/** Header carrying a customer wallet token on `pk_` requests. */
+/**
+ * Header carrying the customer on `pk_` requests: the website's own login token when the website registered an
+ * identity issuer in the Portal (bring-your-own identity, verified by app-kit), else a Loyalty wallet token.
+ */
 export const IDENTITY_HEADER = 'ss-identity';
 
 /**
@@ -102,19 +105,23 @@ export const buildRoutes = (loyalty) => {
 	/** @param {any} ctx */
 	const site = (ctx) => siteOf(ctx.websiteId, ctx.entitlement.doc);
 	/**
-	 * Customer of a request: `pk_` keys only through a valid wallet token, `sk_` keys may name one (`?customerId=`).
+	 * Customer of a request. `pk_` keys: the federated customer verified by app-kit (`ctx.identity.subject`, the
+	 * website's own identity issuer from the entitlement document), else a valid Loyalty wallet token (fallback for
+	 * websites without an issuer). `sk_` keys may name one (`?customerId=`).
 	 * @param {any} ctx
 	 * @returns {string | null}
 	 */
 	const customerOf = (ctx) => {
-		if (ctx.website?.kind === 'pk') return app.tokens.verify(ctx.headers.get(IDENTITY_HEADER), ctx.websiteId);
+		if (ctx.website?.kind === 'pk')
+			return ctx.identity?.subject ?? app.tokens.verify(ctx.headers.get(IDENTITY_HEADER), ctx.websiteId);
 		const id = ctx.query.customerId;
 		return typeof id === 'string' && id ? id : null;
 	};
 	const website = (/** @type {string} */ element, /** @type {'sk' | null} */ keyKind = 'sk') => ({
 		auth: /** @type {const} */ ('website'),
 		element,
-		...(keyKind ? { keyKind } : {}),
+		// browser routes read the customer from SS-Identity (app-kit identity; wallet tokens as fallback)
+		...(keyKind ? { keyKind } : { identity: /** @type {const} */ ('optional') }),
 	});
 	/**
 	 * A ledger page.
@@ -344,7 +351,10 @@ export const buildRoutes = (loyalty) => {
 				const customerId = customerOf(ctx);
 				if (!customerId)
 					return ctx.website.kind === 'pk'
-						? problem('identity_required', `Send a wallet token in the ${IDENTITY_HEADER} header.`)
+						? problem(
+								'identity_required',
+								`Send the customer's login token (or a wallet token) in the ${IDENTITY_HEADER} header.`,
+							)
 						: invalid([{ path: '/customerId', code: 'required' }]);
 				const s = await site(ctx);
 				const page = paginate(

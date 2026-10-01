@@ -24,6 +24,7 @@ import {
 	deliveryView,
 	dlqExpiry,
 	encodeCursor,
+	deliveryTarget,
 	eventsEndpoint,
 	MAX_RESPONSE_BYTES,
 	parseLimit,
@@ -112,6 +113,20 @@ export const createIntegrationService = (ctx, options = {}) => {
 		...(options.resolve ? { resolve: options.resolve } : {}),
 	});
 	const log = ctx.logger;
+
+	/**
+	 * The `env` of a sealed event body (`live` | `test`), or null.
+	 * @param {string} body
+	 * @returns {'live' | 'test' | null}
+	 */
+	const envOf = (body) => {
+		try {
+			const env = JSON.parse(body)?.env;
+			return env === 'live' || env === 'test' ? env : null;
+		} catch {
+			return null;
+		}
+	};
 
 	const unavailable = () =>
 		problem('unavailable', 'Event routing is temporarily unavailable.', { headers: { 'retry-after': '5' } });
@@ -517,9 +532,6 @@ export const createIntegrationService = (ctx, options = {}) => {
 			return { ok: false, code: 'catalog_unavailable', permanent: false };
 		}
 		if (!isDeliverableApp(app)) return { ok: false, code: 'app_unavailable', permanent: true };
-		const endpoint = eventsEndpoint(app.endpoints);
-		if (!endpoint) return { ok: false, code: 'no_endpoint', permanent: true };
-		if (!checkUrl(endpoint, policy).ok) return { ok: false, code: 'ssrf_blocked', permanent: true };
 		/** @type {string} */
 		let body;
 		try {
@@ -529,6 +541,12 @@ export const createIntegrationService = (ctx, options = {}) => {
 		} catch {
 			return { ok: false, code: 'payload_unavailable', permanent: true };
 		}
+		// the registered environment (production, or staging for test websites), never the manifest's `endpoints.base`
+		const target = deliveryTarget(app.environments, envOf(body));
+		const endpoint = target ? eventsEndpoint({ base: target.base, events: app.endpoints?.events }) : null;
+		if (!endpoint) return { ok: false, code: 'no_endpoint', permanent: true };
+		// https only, except for OUTBOUND_DEV_ALLOW_HOSTS outside production (the policy's allowlist is empty there)
+		if (!checkUrl(endpoint, policy).ok) return { ok: false, code: 'ssrf_blocked', permanent: true };
 		const signed = await signEvent({
 			signers: [...ctx.keys.signers].slice(0, 4),
 			body,

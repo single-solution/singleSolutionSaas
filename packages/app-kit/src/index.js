@@ -19,6 +19,7 @@ export { presignUrl, signHeaders } from './connectors/sigv4.js';
 export { createEvents, checkEvent, CONTROL_EVENTS } from './events.js';
 export { createAudit } from './audit.js';
 export { createHealth } from './health.js';
+export { createIdentity, verifyIdentityToken, identityTokenOf, IDENTITY_HEADER, IDENTITY_MAX_AGE_MS } from './identity.js';
 export { createPrivacy } from './privacy.js';
 export { createRequestHandler } from './http/handler.js';
 export { defineRoute } from './http/routes.js';
@@ -35,4 +36,5 @@ export { isKitError, collectionPrefix } from './util.js';
 /** @typedef {import('./data.js').IndexDefinition} IndexDefinition */
 /** @typedef {import('./data.js').MigrationStep} MigrationStep */
 /** @typedef {import('./logger.js').Logger} Logger */
+/** @typedef {import('./identity.js').CustomerIdentity} CustomerIdentity */
 /** @typedef {import('./product.js').ProductOptions} ProductOptions */

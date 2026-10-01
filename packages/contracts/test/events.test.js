@@ -98,6 +98,34 @@ describe('event envelope', () => {
 		expectProblem(validateEvent(event(type, payload)), path, keyword);
 	});
 
+	it('accepts the optional order context on completed, cancelled and refunded (additive v1)', () => {
+		const lines = [{ itemId: 'itm_1', quantity: 2, unitAmount: 500, totalAmount: 1000 }];
+		const amounts = { subtotal: 1000, total: 1000 };
+		const customer = { customerId: 'cus_1', subject: 'user-42', email: 'a@example.com', phone: '+96550000000' };
+		for (const type of ['order.completed@1', 'order.cancelled@1']) {
+			expect(validateEvent(event(type, { orderId: 'o', customer, currency: 'KWD', lines, amounts })).ok).toBe(true);
+			expectProblem(validateEvent(event(type, { orderId: 'o', lines })), '/data', 'dependentRequired');
+			expectProblem(validateEvent(event(type, { orderId: 'o', customer: {} })), '/data/customer', 'minProperties');
+		}
+		expect(
+			validateEvent(
+				event('order.refunded@1', {
+					orderId: 'o',
+					amount: { amount: 1000, currency: 'KWD' },
+					customer: { subject: 'user-42' },
+					lines,
+					amounts: { total: 1000 },
+				}),
+			).ok,
+		).toBe(true);
+		expect(validateEvent(event('order.placed@1', { orderId: 'o', customer, currency: 'KWD', lines, amounts })).ok).toBe(true);
+		expectProblem(
+			validateEvent(event('order.placed@1', { orderId: 'o', customer: { phone: '123' }, currency: 'KWD', lines, amounts })),
+			'/data/customer/phone',
+			'pattern',
+		);
+	});
+
 	it('rejects unknown non-custom event types and versions', () => {
 		expectProblem(validateEvent(event('coupons.redeemed@1', {})), '/type', 'eventType');
 		expectProblem(validateEvent(event('order.placed@2', {})), '/type', 'eventType');

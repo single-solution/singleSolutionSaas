@@ -73,7 +73,6 @@ export const PROBLEM_CODES = Object.freeze({
 	self_referral: { status: 422, title: 'Customers cannot refer themselves' },
 	already_referred: { status: 409, title: 'The customer was already referred' },
 	not_a_new_customer: { status: 422, title: 'Only new customers can be referred' },
-	identity_required: { status: 401, title: 'A wallet token is required' },
 });
 
 /**

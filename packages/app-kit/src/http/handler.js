@@ -36,6 +36,8 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {import('../launch.js').Session | null} session
  * @property {{ kid: string, timestamp: number } | null} portal
  * @property {string | null} websiteId website of the request (key binding, or the session's selected website)
+ * @property {import('../identity.js').CustomerIdentity | null} identity the verified customer (routes with `identity`)
+ * @property {import('../identity.js').IdentityFailure | null} identityProblem why `identity` is null (optional identity)
  * @property {any} product
  * @property {import('../logger.js').Logger} log
  */
@@ -72,7 +74,7 @@ const firstValues = (params) => {
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const CORS_HEADERS = 'authorization, content-type, idempotency-key, x-request-id, x-ss-website';
+const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-identity, x-request-id, x-ss-website';
 
 /**
  * Read at most `max` bytes of the request body.
@@ -257,6 +259,8 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				session: null,
 				portal: null,
 				websiteId: null,
+				identity: null,
+				identityProblem: null,
 				product,
 				log,
 			};
@@ -381,6 +385,24 @@ export const createRequestHandler = (product, routes, options = {}) => {
 					ctx.body = JSON.parse(ctx.rawBody);
 				} catch {
 					return fail(problem('bad_request', 'The body is not valid JSON.'));
+				}
+			}
+
+			// customer identity (bring-your-own identity: the website's issuer from the entitlement document)
+			if (r.identity) {
+				const verified = product.identity.verify(request, { doc: ctx.entitlement?.doc, body: ctx.body });
+				if (verified.ok) ctx.identity = verified.identity;
+				else {
+					ctx.identityProblem = verified.code;
+					if (r.identity === 'required') {
+						return fail(
+							verified.code === 'identity_missing'
+								? problem('identity_required', 'Send the customer token in the SS-Identity header.')
+								: verified.code === 'identity_not_configured'
+									? problem('identity_required', 'This website has no identity issuer configured.')
+									: problem('identity_invalid', `The customer token was refused (${verified.code}).`),
+						);
+					}
 				}
 			}
 

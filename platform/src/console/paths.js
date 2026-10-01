@@ -19,6 +19,7 @@ export const routes = Object.freeze({
 	keys: (/** @type {string} */ id) => `/websites/${e(id)}/keys`,
 	resources: (/** @type {string} */ id) => `/websites/${e(id)}/resources`,
 	deliveries: (/** @type {string} */ id) => `/websites/${e(id)}/deliveries`,
+	identity: (/** @type {string} */ id) => `/websites/${e(id)}/identity`,
 	credits: () => '/credits',
 	spendPolicies: () => '/spend-policies',
 	team: () => '/team',
@@ -33,6 +34,7 @@ export const WEBSITE_TABS = Object.freeze([
 	{ key: 'keys', label: 'Keys', href: routes.keys },
 	{ key: 'resources', label: 'Resources', href: routes.resources },
 	{ key: 'deliveries', label: 'Deliveries', href: routes.deliveries },
+	{ key: 'identity', label: 'Identity', href: routes.identity },
 ]);
 
 /**
@@ -55,6 +57,7 @@ export const api = Object.freeze({
 	key: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ k) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/keys/${e(k)}`,
 	resources: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/resources`,
+	identity: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/identity`,
 	deliveries: (
 		/** @type {string} */ m,
 		/** @type {string} */ w,

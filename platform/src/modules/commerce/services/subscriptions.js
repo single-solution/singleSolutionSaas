@@ -13,7 +13,7 @@ import { ceilHour, currentPriceBook, floorHour, periodBounds, resolveEntitlement
 import { signEntitlementDocument } from '@ss/protocol';
 import { problem } from '../../../infra/http.js';
 import { dataScopePrefix, firstHourCharge, quotaFeatures } from '../core/catalog.js';
-import { enabledElements, isFresh, nextVersion, quotaWatch, validityWindow } from '../core/documents.js';
+import { documentHash, enabledElements, isFresh, nextVersion, quotaWatch, validityWindow } from '../core/documents.js';
 import { overlaySwitches, resolverState, sameElements, statusOf, withHold } from '../core/subscription.js';
 
 /** @typedef {import('../../../infra/modules.js').ModuleContext} ModuleContext */
@@ -129,9 +129,10 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	 */
 	const resolve = async (sub, website, now, override = null) => {
 		const { product } = await deps.manifestOf(sub.appId, sub.manifestVersion);
-		const [config, resources] = await Promise.all([
+		const [config, resources, identity] = await Promise.all([
 			override ? Promise.resolve(splitLayers(override)) : deps.layersFor(sub),
 			deps.statusFor(sub.websiteId),
+			deps.identityFor(sub.websiteId),
 		]);
 		const usage = await quotaUsage(sub, product, website.timeZone ?? 'UTC', now);
 		const state = resolverState(sub);
@@ -158,7 +159,14 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 						subscription: { ...input.subscription, status: 'active' },
 						runtime: { ...input.runtime, spendCap: false },
 					});
-		return { resolved, billing: enabledElements(billable), product, resources };
+		return {
+			resolved,
+			billing: enabledElements(billable),
+			product,
+			resources,
+			identity,
+			contentHash: documentHash(resolved.contentHash, identity),
+		};
 	};
 
 	/**
@@ -200,10 +208,11 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	 * Map a resolution onto the canonical document (validated by `toDocument`).
 	 * @param {{ sub: Doc, website: Doc, resolved: ReturnType<typeof resolveEntitlement>, product: Product,
 	 *   resources: { kind: string, ref?: string, status: string }[], version: number,
-	 *   window: { issuedAt: string, validFrom: string, validUntil: string } }} input
+	 *   window: { issuedAt: string, validFrom: string, validUntil: string },
+	 *   identity?: import('@ss/contracts').IdentitySection | null }} input
 	 * @returns {Record<string, unknown>}
 	 */
-	const buildDocument = ({ sub, website, resolved, product, resources, version, window }) => {
+	const buildDocument = ({ sub, website, resolved, product, resources, version, window, identity = null }) => {
 		const mapped = toDocument(resolved, {
 			websiteId: sub.websiteId,
 			merchantId: sub.merchantId,
@@ -216,6 +225,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 				.filter((r) => typeof r.ref === 'string' && OPAQUE_REF.test(r.ref))
 				.map((r) => ({ kind: r.kind, ref: /** @type {string} */ (r.ref), status: r.status })),
 			dataScope: { prefix: dataScopePrefix(product.slug) },
+			identity,
 		});
 		if (!mapped.ok) {
 			ctx.logger.error('entitlement document invalid', { subscriptionId: sub._id, result: mapped });
@@ -236,20 +246,20 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		}
 		const website = await deps.getWebsite(sub.websiteId);
 		const now = ctx.now();
-		const { resolved, billing, product, resources } = await resolve(sub, website, now);
+		const { resolved, billing, product, resources, identity, contentHash } = await resolve(sub, website, now);
 		await recordTimeline(sub, billing, now);
 		for (let attempt = 0; attempt < 4; attempt += 1) {
 			const stored = await repo.documentOf(sub.merchantId, sub._id);
 			const { version, bumped } = nextVersion(
 				stored ? { version: stored.version, contentHash: stored.contentHash } : null,
-				resolved.contentHash,
+				contentHash,
 			);
 			const window = validityWindow(now);
-			const document = buildDocument({ sub, website, resolved, product, resources, version, window });
+			const document = buildDocument({ sub, website, resolved, product, resources, version, window, identity });
 			const jws = await signEntitlementDocument({ signer: ctx.keys.signer, payload: /** @type {any} */ (document) });
 			const written = await repo.writeDocument(sub.merchantId, sub._id, stored ? stored.version : null, {
 				version,
-				contentHash: resolved.contentHash,
+				contentHash,
 				jws,
 				issuedAt: new Date(window.issuedAt),
 				validUntil: new Date(window.validUntil),
@@ -626,13 +636,19 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		if (sub.cancelledAt) throw problem('gone', 'The subscription is cancelled.');
 		const website = await deps.getWebsite(sub.websiteId);
 		const now = ctx.now();
-		const { resolved, product, resources } = await resolve(sub, website, now, layers ?? {});
+		const { resolved, product, resources, identity, contentHash } = await resolve(sub, website, now, layers ?? {});
 		const stored = await repo.documentOf(sub.merchantId, sub._id);
-		const { version } = nextVersion(
-			stored ? { version: stored.version, contentHash: stored.contentHash } : null,
-			resolved.contentHash,
-		);
-		return buildDocument({ sub, website, resolved, product, resources, version, window: validityWindow(now) });
+		const { version } = nextVersion(stored ? { version: stored.version, contentHash: stored.contentHash } : null, contentHash);
+		return buildDocument({
+			sub,
+			website,
+			resolved,
+			product,
+			resources,
+			version,
+			window: validityWindow(now),
+			identity,
+		});
 	};
 
 	/**

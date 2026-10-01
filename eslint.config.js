@@ -7,7 +7,8 @@ export default [
 	js.configs.recommended,
 	{
 		files: ['**/*.js'],
-		languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: { ...globals.node } },
+		// ES2025: JSON modules are imported with import attributes (`with { type: 'json' }`)
+		languageOptions: { ecmaVersion: 2025, sourceType: 'module', globals: { ...globals.node } },
 		rules: {
 			'no-restricted-syntax': [
 				'error',
@@ -33,11 +34,6 @@ export default [
 		languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } }, globals: { ...globals.node, ...globals.browser } },
 		// core ESLint does not see JSX references: components (PascalCase) used only in JSX would read as unused
 		rules: { 'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z]', ignoreRestSiblings: true }] },
-	},
-	{
-		// products import their JSON feature schemas and string catalogs with import attributes (ES2025)
-		files: ['products/**/*.js'],
-		languageOptions: { ecmaVersion: 2025 },
 	},
 	{
 		files: ['**/test/**/*.js', '**/*.test.js'],

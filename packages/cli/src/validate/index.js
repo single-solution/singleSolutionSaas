@@ -49,12 +49,17 @@ const ROOT = '.';
 
 /**
  * Import-direction policy per layer: the layers a file may import from and the bare packages it may use
- * (`null` = any package). `core/` is pure (no I/O, no framework); `headless/` builds on `core/`; `ui/` only on `headless/`.
+ * (`null` = any package). An entry with a subpath (`@ss/web/element`) admits exactly that subpath, a bare name the whole
+ * package. `core/` is pure (no I/O, no framework); `headless/` builds on `core/` and may use the headless element runtime
+ * `@ss/web/element` (no DOM); `ui/` only on `headless/`.
  * @type {Readonly<Record<string, { layers: readonly string[], packages: readonly string[] | null }>>}
  */
 export const IMPORT_POLICY = Object.freeze({
 	core: { layers: ['core'], packages: ['@ss/rules', '@ss/contracts'] },
-	headless: { layers: ['headless', 'core', 'strings', 'schemas'], packages: ['@ss/rules', '@ss/contracts'] },
+	headless: {
+		layers: ['headless', 'core', 'strings', 'schemas'],
+		packages: ['@ss/rules', '@ss/contracts', '@ss/web/element'],
+	},
 	ui: { layers: ['ui', 'headless', 'strings'], packages: ['@ss/web', '@ss/ui'] },
 	api: { layers: ['api', 'core', 'adapters', 'strings', 'schemas'], packages: null },
 	adapters: { layers: ['adapters', 'core', 'schemas', 'strings', ROOT], packages: null },
@@ -199,7 +204,11 @@ export const checkImports = async (files) => {
 						}),
 					);
 				}
-			} else if (policy.packages !== null && !policy.packages.includes(packageOf(specifier))) {
+			} else if (
+				policy.packages !== null &&
+				!policy.packages.includes(packageOf(specifier)) &&
+				!policy.packages.includes(specifier)
+			) {
 				problems.push(
 					problemOf({
 						rule: 'imports.package',

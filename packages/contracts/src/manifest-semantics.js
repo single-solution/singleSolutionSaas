@@ -467,6 +467,13 @@ export const eventGlobMatches = (pattern, typeAtVersion) => {
 };
 
 /**
+ * True when a consumed event entry is a glob (`custom.*`, `order.*@1`) rather than one exact `type@v`.
+ * @param {string} entry
+ * @returns {boolean}
+ */
+export const isEventGlob = (entry) => entry.includes('*');
+
+/**
  * Event namespace owned by a product: its slug with `-` mapped to `_` (`notice-bar` → `notice_bar`).
  * @param {string} slug
  * @returns {string}
@@ -703,11 +710,19 @@ export const checkManifest = (manifest) => {
 		}
 	}
 
-	const eventPattern = new RegExp(PATTERNS.eventType);
+	const eventPatterns = { consumes: new RegExp(PATTERNS.eventTypeGlob), publishes: new RegExp(PATTERNS.eventType) };
 	for (const direction of /** @type {const} */ (['consumes', 'publishes'])) {
 		for (const [index, type] of (manifest.events?.[direction] ?? []).entries()) {
-			if (!eventPattern.test(type))
-				out.push(at(['events', direction, index], MANIFEST_RULES.eventType, `'${type}' is not a well-formed type@version`));
+			if (!eventPatterns[direction].test(type))
+				out.push(
+					at(
+						['events', direction, index],
+						MANIFEST_RULES.eventType,
+						direction === 'consumes'
+							? `'${type}' is not a well-formed type@version or event glob`
+							: `'${type}' is not a well-formed type@version`,
+					),
+				);
 		}
 	}
 
@@ -717,6 +732,8 @@ export const checkManifest = (manifest) => {
 	for (const [index, type] of (manifest.events?.consumes ?? []).entries()) {
 		// Control events are delivered by the Portal to every product; no subscribe scope is needed.
 		if (Object.hasOwn(CONTROL_EVENT_DATA, type)) continue;
+		// A consumed glob is covered when a scope glob matches it literally: scope literals never match `*`, so every
+		// `*` of the consumed glob falls inside a scope `*` and every type the glob matches is covered too.
 		if (!subscribe.some((pattern) => eventGlobMatches(pattern, type))) {
 			out.push(
 				at(

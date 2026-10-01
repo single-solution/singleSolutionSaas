@@ -22,6 +22,7 @@ import { createData } from './data.js';
 import { createEntitlements } from './entitlements.js';
 import { checkEvent, createEvents } from './events.js';
 import { createHealth } from './health.js';
+import { createIdentity } from './identity.js';
 import { createRequestHandler } from './http/handler.js';
 import { createWebsiteKeys } from './keys.js';
 import { createLaunch } from './launch.js';
@@ -470,6 +471,8 @@ export const createProduct = (options) => {
 		launch,
 		keys,
 		entitlements,
+		/** Bring-your-own customer identity: `verify(request, { doc, body })`, `verifyToken(token, section)`. */
+		identity: createIdentity({ now }),
 		usage,
 		portal: Object.freeze({ ...portal, publishEvent }),
 		data,

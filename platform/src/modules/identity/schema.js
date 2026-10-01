@@ -20,6 +20,7 @@ export const C = Object.freeze({
 	partners: 'identity_partners',
 	developers: 'identity_developers',
 	notes: 'identity_merchant_notes',
+	issuers: 'identity_issuers',
 });
 
 export const collections = Object.freeze([
@@ -118,5 +119,13 @@ export const collections = Object.freeze([
 		tenant: 'merchant',
 		appendOnly: true,
 		indexes: [{ keys: { merchantId: 1, createdAt: -1, _id: -1 } }],
+	}),
+	defineCollection({
+		module: 'identity',
+		name: C.issuers,
+		description:
+			'Bring-your-own customer identity issuers, one per website (`_id` = websiteId): issuer, JWKS URL or inline public keys (≤ 5, public material only), audience, claim map, key fetch status.',
+		tenant: 'merchant',
+		indexes: [{ keys: { merchantId: 1, _id: 1 } }],
 	}),
 ]);

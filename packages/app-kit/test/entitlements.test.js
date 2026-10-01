@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { can, config, feature, featuresOf } from '../src/index.js';
-import { MERCHANT, WEBSITE, WEBSITE_2, entitle, setup } from './helpers.js';
+import { generateSigningKey } from '@ss/protocol';
+import { can, config, createMemoryStores, createProduct, feature, featuresOf } from '../src/index.js';
+import { APP_ID, MERCHANT, PORTAL_URL, WEBSITE, WEBSITE_2, createClock, entitle, manifest, setup } from './helpers.js';
+
+const coldKey = await generateSigningKey({ kid: 'product-cold' });
+
+/**
+ * Options of a second (cold) product instance against the same fake Portal.
+ * @param {any} portal
+ * @param {{ now: () => number }} clock
+ */
+const coldOptions = (portal, clock) => {
+	portal.trustProductKey(coldKey.publicJwk);
+	return {
+		manifest: manifest(),
+		portalUrl: PORTAL_URL,
+		appId: APP_ID,
+		signingKey: coldKey.privateJwk,
+		fetch: portal.fetch,
+		now: clock.now,
+	};
+};
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -54,17 +74,37 @@ describe('entitlements.forWebsite', () => {
 	});
 
 	it('uses the shared store on a cold instance and during outages', async () => {
-		const { portal, product, clock } = await setup();
+		const clock = createClock();
+		const stores = createMemoryStores({ now: clock.now });
+		const { portal, product } = await setup({ clock, overrides: { stores } });
 		await entitle(portal);
 		await product.entitlements.forWebsite(WEBSITE);
-		product.entitlements.invalidate(WEBSITE);
-		const before = portal.calls.length;
-		expect(await product.entitlements.forWebsite(WEBSITE)).toMatchObject({ ok: true, stale: false });
-		expect(portal.calls.length).toBe(before); // read from store, still within TTL
-		product.entitlements.invalidate(WEBSITE);
+		const cold = createProduct({ ...coldOptions(portal, clock), stores });
+		const fetches = () => portal.calls.filter((c) => c.path === '/v1/product/entitlements').length;
+		const before = fetches();
+		expect(await cold.entitlements.forWebsite(WEBSITE)).toMatchObject({ ok: true, stale: false });
+		expect(fetches()).toBe(before); // read from the shared store, still within TTL
 		clock.advance(10 * MIN);
 		portal.setDown(true);
-		expect(await product.entitlements.forWebsite(WEBSITE)).toMatchObject({ ok: true, stale: true });
+		const other = createProduct({ ...coldOptions(portal, clock), stores });
+		expect(await other.entitlements.forWebsite(WEBSITE)).toMatchObject({ ok: true, stale: true });
+	});
+
+	it('invalidate forces a refetch on the next read and keeps the copy as the offline fallback', async () => {
+		const { portal, product } = await setup();
+		await entitle(portal);
+		await product.entitlements.forWebsite(WEBSITE);
+		await entitle(portal, { version: 2 });
+		product.entitlements.invalidate(WEBSITE);
+		product.entitlements.invalidate('');
+		const fetches = () => portal.calls.filter((c) => c.path === '/v1/product/entitlements').length;
+		expect(await product.entitlements.forWebsite(WEBSITE)).toMatchObject({ ok: true, version: 2 });
+		expect(fetches()).toBe(2);
+		expect(await product.entitlements.forWebsite(WEBSITE)).toMatchObject({ version: 2 });
+		expect(fetches()).toBe(2); // one forced read only
+		product.entitlements.invalidate(WEBSITE);
+		portal.setDown(true);
+		expect(await product.entitlements.forWebsite(WEBSITE)).toMatchObject({ ok: true, stale: true, version: 2 });
 	});
 
 	it('is unavailable when nothing was ever fetched and the Portal is down', async () => {

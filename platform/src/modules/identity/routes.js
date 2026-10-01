@@ -16,6 +16,7 @@
 import { readCookie } from '../../infra/auth.js';
 import { created, defineRoute, noContent, ok, paginate, problem } from '../../infra/http.js';
 import { inputs } from './core/inputs.js';
+import { parseIssuer } from './core/issuer.js';
 
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
 /** @typedef {import('../../infra/http.js').RouteDefinition} RouteDefinition */
@@ -70,7 +71,7 @@ const ownMerchant = (c) => {
  * @returns {RouteDefinition[]}
  */
 export const identityRoutes = (ctx, service) => {
-	const { accounts, teams, websites, keys, admin, impersonation } = service;
+	const { accounts, teams, websites, keys, issuers, admin, impersonation } = service;
 
 	/**
 	 * @param {RequestContext} c
@@ -586,6 +587,65 @@ export const identityRoutes = (ctx, service) => {
 						meta: metaOf(c),
 					}),
 				);
+			},
+		},
+
+		// ---------------------------------------------------------------------------------------------------------
+		// Bring-your-own customer identity (one issuer per website)
+		{
+			method: 'GET',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
+			auth: ['merchant', 'staff'],
+			handler: async (c) => {
+				const { merchantId, website } = await authorizedWebsite(c, 'websites.read');
+				return ok({ issuer: await issuers.getIssuer({ merchantId, websiteId: String(website._id) }) });
+			},
+		},
+		{
+			method: 'PUT',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
+			auth: ['merchant', 'staff'],
+			handler: async (c) => {
+				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				const input = valid(parseIssuer(c.body));
+				return ok({
+					issuer: await issuers.setIssuer({
+						merchantId,
+						websiteId: String(website._id),
+						input,
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				});
+			},
+		},
+		{
+			method: 'DELETE',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
+			auth: ['merchant', 'staff'],
+			handler: async (c) => {
+				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				return ok(
+					await issuers.removeIssuer({ merchantId, websiteId: String(website._id), actor: actorOf(c), meta: metaOf(c) }),
+				);
+			},
+		},
+		{
+			method: 'POST',
+			path: '/v1/merchants/:merchantId/websites/:websiteId/identity/refresh',
+			auth: ['merchant', 'staff'],
+			idempotent: 'optional',
+			rateLimit: { limit: 10, windowMs: 60_000 },
+			handler: async (c) => {
+				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				return ok({
+					issuer: await issuers.refreshKeys({
+						merchantId,
+						websiteId: String(website._id),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				});
 			},
 		},
 

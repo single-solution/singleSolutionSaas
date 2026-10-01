@@ -4,6 +4,8 @@
  * @module
  */
 
+import { sha256Hex, stableStringify } from '@ss/entitlements';
+
 /** Documents are valid for 10 minutes (F.8 emulator parity; entitlement freshness SLO ≤ 5 min with refresh). */
 export const DOCUMENT_TTL_MS = 10 * 60_000;
 /** A cached document is re-issued once it is within 2 minutes of `validUntil`. */
@@ -73,3 +75,13 @@ export const quotaWatch = (quotas, resolved) =>
  * @param {Readonly<Record<string, number>>} usedByKey period-to-date usage per quota key
  */
 export const quotaCrossed = (watch, usedByKey) => watch.some((q) => !q.blocked && (usedByKey[q.key] ?? 0) >= q.limit);
+
+/**
+ * Content hash of a document: the resolver's hash, extended with the website's identity section when there is one (a
+ * changed issuer or rotated issuer key bumps the version; documents without identity keep the resolver's hash).
+ * @param {string} resolvedHash `resolveEntitlement(...).contentHash`
+ * @param {unknown} identity the document's `identity` section, or null
+ * @returns {string}
+ */
+export const documentHash = (resolvedHash, identity) =>
+	identity ? sha256Hex(`${resolvedHash}\nidentity:${stableStringify(identity)}`) : resolvedHash;

@@ -59,8 +59,15 @@ import {
 	STOPPED_STATES,
 	ROLE_OF_KIND,
 	PAYMENTS_METHODS,
+	createIdentity,
+	verifyIdentityToken,
+	identityTokenOf,
+	IDENTITY_HEADER,
+	IDENTITY_MAX_AGE_MS,
 } from '@ss/app-kit';
-import { createFakePortal, entitlementPayload } from '@ss/app-kit/testing'; // tests / `ss dev` only
+import { createFakePortal, createTestIdentityIssuer, entitlementPayload } from '@ss/app-kit/testing'; // tests / `ss dev` only
+// createTestIdentityIssuer({ alg, kid, issuer, audience, claimMap }) → { section, sign(claims, header?) }:
+//   a website identity issuer for tests — pass `section` as `setEntitlement({ identity })`, send `sign(...)` in SS-Identity
 ```
 
 ### Bootstrapping
@@ -119,8 +126,17 @@ createProduct({
   },
   entitlements: {
     forWebsite(websiteId) → { ok: true, doc, stale, version, fetchedAt } | { ok: false, reason: not_subscribed|unavailable|invalid },
-    refresh(websiteId), invalidate(websiteId),
+    refresh(websiteId),            // fetch now
+    invalidate(websiteId),         // the next forWebsite(websiteId) fetches from the Portal (cached copy kept as offline fallback)
     can(doc, elementKey), feature(doc, 'element.feature'), config(doc, elementKey), featuresOf(doc, elementKey),
+  },
+  identity: {                                                          // bring-your-own customer identity (PLAN F.14)
+    verify(request, { doc, body? }) → { ok: true, identity: { subject, email?, phone?, issuer } } | { ok: false, code },
+      // reads SS-Identity (else body.identity, sendBeacon); verifies the JWT with doc.identity (issuer keys inline):
+      // EdDSA | ES256 | RS256 matched to the key type, kid (or the only compatible key), iss, aud (when configured),
+      // exp (required), nbf, iat (required, ≤ 24 h old), 60 s skew; codes: identity_missing | identity_not_configured |
+      // malformed | algorithm | unknown_key | signature | issuer | audience | expired | not_yet_valid | too_old | subject
+    verifyToken(token, identitySection) → same result,
   },
   usage: {
     record({ websiteId, subscriptionId?, unit, quantity, idempotencyKey, occurredAt? }) → { ok, duplicate },  // subscriptionId defaults from the entitlement
@@ -182,11 +198,13 @@ defineRoute({
   idempotent?: true|'optional'|false,                  // POST default true (428 without Idempotency-Key); replay of stored response
   rateLimit?: { limit, windowMs | windowSeconds, key?(ctx) },
   rawBody?, maxBodyBytes?, entitlement?: false, cors?,
+  identity?: 'required'|'optional',                    // website auth: ctx.identity from SS-Identity (401 identity_required |
+                                                       // identity_invalid when required; null + ctx.identityProblem when optional)
   handler(ctx) → ok()/created()/noContent()/problem() result | Response | plain value (→ 200 JSON) | undefined (→ 204)
 })
 ctx = { request, requestId, method, path, params, query /* { name: first value } */, searchParams, headers, body, rawBody,
         idempotencyKey, website, websiteId, entitlement: { doc, stale, version } | null, session | null, portal | null,
-        product, log }
+        identity: { subject, email?, phone?, issuer } | null, identityProblem: string | null, product, log }
 ```
 
 - `auth: 'portal'` verifies with `@ss/protocol` `verifyRequest({ method, path, audience: appId, headers, rawBody, keyResolver,

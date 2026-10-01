@@ -253,6 +253,27 @@ export const loadKeys = async (api, merchantId, websiteId) => {
 };
 
 /**
+ * Website settings → Identity: the website's own customer identity issuer (bring-your-own identity).
+ * @param {ConsoleApi} api
+ * @param {string} merchantId
+ * @param {string} websiteId
+ */
+export const loadIdentity = async (api, merchantId, websiteId) => {
+	const [website, identity] = await Promise.all([
+		api.get(paths.website(merchantId, websiteId)),
+		api.get(paths.identity(merchantId, websiteId)),
+	]);
+	const failed = firstFailure(website, identity);
+	if (failed) return failed;
+	return {
+		ok: /** @type {const} */ (true),
+		merchantId,
+		website: website.ok ? website.data : null,
+		issuer: /** @type {any} */ (identity.ok ? (identity.data?.issuer ?? null) : null),
+	};
+};
+
+/**
  * @param {ConsoleApi} api
  * @param {string} merchantId
  * @param {string} websiteId

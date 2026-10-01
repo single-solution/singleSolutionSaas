@@ -5,6 +5,7 @@ import {
 	checkManifest,
 	eventGlobMatches,
 	eventNamespace,
+	isEventGlob,
 	manifestSchema,
 	validateFeatureConfig,
 	validateManifest,
@@ -361,6 +362,36 @@ describe('manifest semantics', () => {
 			MANIFEST_RULES.eventNotSubscribed,
 			'/events/consumes/0',
 		);
+	});
+
+	it('accepts consumed globs covered by subscribe scopes', () => {
+		const globs = (/** @type {string[]} */ consumes, /** @type {string[]} */ scopes) =>
+			semantic((m) => {
+				m.events.consumes = consumes;
+				m.scopes = scopes;
+			});
+		expect(isEventGlob('custom.*')).toBe(true);
+		expect(isEventGlob('order.placed@1')).toBe(false);
+		expect(globs(['custom.*', 'order.*@1'], ['events.subscribe:custom.*', 'events.subscribe:order.*'])).toEqual([]);
+		expect(globs(['order.*@1'], ['events.subscribe:order.*@1'])).toEqual([]);
+		expect(globs(['order.*@1'], ['events.subscribe:*'])).toEqual([]);
+		// a scope narrower than the glob does not cover it
+		expectRule(globs(['order.*'], ['events.subscribe:order.*@1']), MANIFEST_RULES.eventNotSubscribed, '/events/consumes/0');
+		expectRule(globs(['order.*@1'], ['events.subscribe:order.placed']), MANIFEST_RULES.eventNotSubscribed);
+		expectRule(globs(['custom.*'], ['events.subscribe:custom.a*']), MANIFEST_RULES.eventNotSubscribed);
+		// malformed globs: a bare `*`, a glob without a namespace, a partial-segment glob, an exact type without a version
+		for (const bad of ['*', '*.placed@1', 'custom.a*', 'order.placed']) {
+			expectRule(globs([bad], ['events.subscribe:*']), MANIFEST_RULES.eventType, '/events/consumes/0');
+			const schema = validateManifest({ ...manifest(), events: { consumes: [bad] } });
+			expect(schema.ok).toBe(false);
+		}
+		expect(
+			validateManifest({
+				...manifest(),
+				scopes: [...manifest().scopes, 'events.subscribe:custom.*'],
+				events: { ...manifest().events, consumes: [...manifest().events.consumes, 'custom.*'] },
+			}).ok,
+		).toBe(true);
 	});
 
 	it('restricts published events to the product namespace or scoped standard events', () => {

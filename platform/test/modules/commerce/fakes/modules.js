@@ -17,6 +17,7 @@ import { defineModule } from '../../../../src/infra/modules.js';
  * @property {Map<string, unknown>} appJwks by appId
  * @property {{ layersFor: number, statusFor: number, lastHint?: unknown }} calls
  * @property {boolean} failEmit
+ * @property {Map<string, Record<string, any>>} identities identity-issuer document sections by websiteId
  */
 
 /** @returns {World} */
@@ -30,6 +31,7 @@ export const createWorld = () => ({
 	appJwks: new Map(),
 	calls: { layersFor: 0, statusFor: 0 },
 	failEmit: false,
+	identities: new Map(),
 });
 
 /**
@@ -46,6 +48,7 @@ export const fakeModules = (world, { withConfig = true, withConnectors = true, w
 				world.websites.get(id) ?? Promise.reject(problem('not_found', 'No such website.')),
 			listWebsites: async (/** @type {string} */ merchantId) =>
 				[...world.websites.values()].filter((w) => w.merchantId === merchantId),
+			identityFor: async (/** @type {string} */ websiteId) => structuredClone(world.identities.get(websiteId) ?? null),
 		}),
 	}),
 	defineModule({

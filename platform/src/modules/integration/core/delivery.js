@@ -67,7 +67,8 @@ export const classifyError = (error) => {
 };
 
 /**
- * The events endpoint of a product: `endpoints.base` + `endpoints.events` (both from the registered app).
+ * The events endpoint of a product: a base URL (the registered environment, {@link deliveryTarget}) + the manifest's
+ * `endpoints.events` path.
  * @param {{ base?: unknown, events?: unknown } | null | undefined} endpoints
  * @returns {string | null}
  */
@@ -75,6 +76,22 @@ export const eventsEndpoint = (endpoints) => {
 	if (!endpoints || typeof endpoints.base !== 'string' || typeof endpoints.events !== 'string') return null;
 	if (!endpoints.events.startsWith('/')) return null;
 	return `${endpoints.base.replace(/\/+$/, '')}${endpoints.events}`;
+};
+
+/**
+ * The registered environment base a delivery goes to (never the manifest's self-declared `endpoints.base`): events of
+ * a `test` website go to the app's staging environment when one is registered, everything else (live websites,
+ * platform-scoped events, apps without staging) to production. `null` when the app has no such environment.
+ * @param {{ production?: unknown, staging?: unknown } | null | undefined} environments catalog `environments` view
+ * @param {'live' | 'test' | null | undefined} env the event's environment
+ * @returns {{ base: string, environment: 'production' | 'staging' } | null}
+ */
+export const deliveryTarget = (environments, env) => {
+	if (env === 'test' && typeof environments?.staging === 'string' && environments.staging.length > 0)
+		return { base: environments.staging, environment: 'staging' };
+	if (typeof environments?.production === 'string' && environments.production.length > 0)
+		return { base: environments.production, environment: 'production' };
+	return null;
 };
 
 /**

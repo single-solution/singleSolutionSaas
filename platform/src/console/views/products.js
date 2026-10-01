@@ -159,7 +159,9 @@ export function ProductsView(props) {
 		}
 		setDemo({
 			appId: product.appId,
-			problem: result.ok ? { detail: 'The product did not return a launch link.' } : result.problem,
+			problem: result.ok
+				? { detail: 'The product did not return a launch link.', code: 'launch_link_missing' }
+				: result.problem,
 			busy: false,
 		});
 	};

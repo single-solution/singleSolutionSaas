@@ -149,7 +149,29 @@
  * @property {{ state: RuntimeState, reason?: string }} runtime
  * @property {Array<{ kind: ResourceKind, ref: string, status: 'connected' | 'missing' | 'failing' | 'revoked' }>} resources
  * @property {{ prefix: string }} dataScope
+ * @property {IdentitySection} [identity] the website's own customer identity issuer (bring-your-own identity)
  * @property {Array<{ element: string, variant: string }>} experiments
+ */
+
+/**
+ * @typedef {object} IdentityJwk public signature key of an identity issuer
+ * @property {'OKP' | 'EC' | 'RSA'} kty
+ * @property {string} kid
+ * @property {'EdDSA' | 'ES256' | 'RS256'} [alg]
+ * @property {'sig'} [use]
+ * @property {'Ed25519' | 'P-256'} [crv]
+ * @property {string} [x]
+ * @property {string} [y]
+ * @property {string} [n]
+ * @property {string} [e]
+ */
+
+/**
+ * @typedef {object} IdentitySection
+ * @property {string} issuer `iss` of customer tokens
+ * @property {IdentityJwk[]} jwks issuer public keys (≤ 5)
+ * @property {string} [audience] required `aud` when set
+ * @property {{ subject: string, email?: string, phone?: string }} claimMap claim names
  */
 
 /**

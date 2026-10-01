@@ -167,7 +167,7 @@ const boot = async (dbName, { options = {}, withoutIdentity = false } = {}) => {
 	const drain = () => portal.shared.jobs.runBatch({ handlers: portal.modules.jobs, deadlineMs: 20_000 });
 	/**
 	 * @param {'pk' | 'sk'} kind
-	 * @param {{ keyId?: string, websiteId?: string, merchantId?: string, domain?: string, signer?: any }} [over]
+	 * @param {{ keyId?: string, websiteId?: string, merchantId?: string, domain?: string, signer?: any, env?: 'live' | 'test' }} [over]
 	 */
 	const key = async (kind, over = {}) =>
 		(
@@ -177,7 +177,7 @@ const boot = async (dbName, { options = {}, withoutIdentity = false } = {}) => {
 				websiteId: over.websiteId ?? WEBSITE,
 				merchantId: over.merchantId ?? MERCHANT,
 				domain: over.domain ?? 'shop.example.com',
-				env: 'live',
+				env: over.env ?? 'live',
 				scopes: [],
 				keyId: over.keyId ?? `key_${kind}`,
 				now: clock.now,
@@ -682,6 +682,90 @@ describe('delivery pipeline', () => {
 		clock.advance(8 * 24 * 60 * 60_000);
 		await expect(svc().replay(String(dead?._id), { actor })).rejects.toMatchObject({ code: 'gone' });
 		await expect(svc().replay(String(dead?._id), { actor, websiteId: WEBSITE_2 })).rejects.toMatchObject({ code: 'not_found' });
+	});
+
+	it('delivers to the registered environment (staging for test websites), never the manifest base', async () => {
+		const { world, receiver, call, drain, key, db } = await boot('int_targets');
+		const TEST_SITE = 'web_2123456789abcdefghjkmnpq';
+		world.state.websites.set(TEST_SITE, {
+			websiteId: TEST_SITE,
+			merchantId: MERCHANT,
+			domain: 'test.example.com',
+			env: 'test',
+			status: 'active',
+		});
+		const events = '/.well-known/ss-events';
+		const common = { consumes: ['page.viewed@1'], scopes: ['events.subscribe:*'] };
+		// the manifest claims another host: deliveries must ignore it
+		world.addApp({
+			appId: 'app_staged',
+			slug: 'staged',
+			...common,
+			endpoints: { base: 'https://claimed.example.com', events },
+			environments: { production: `${receiver.base}/prod`, staging: `${receiver.base}/staging` },
+		});
+		world.addApp({
+			appId: 'app_prodonly',
+			slug: 'prodonly',
+			...common,
+			endpoints: { base: 'https://claimed.example.com', events },
+			environments: { production: `${receiver.base}/prodonly` },
+		});
+		world.addApp({
+			appId: 'app_noenv',
+			slug: 'noenv',
+			...common,
+			endpoints: { base: `${receiver.base}/manifest`, events },
+			environments: { production: null },
+		});
+		for (const site of [WEBSITE, TEST_SITE])
+			for (const appId of ['app_staged', 'app_prodonly', 'app_noenv']) world.subscribe(site, appId);
+		const live = await key('sk');
+		const test = await key('sk', { websiteId: TEST_SITE, domain: 'test.example.com', env: 'test', keyId: 'key_test' });
+		await call('POST', '/v1/events', { headers: { authorization: `Bearer ${live}` }, body: { events: [pageViewed()] } });
+		await call('POST', '/v1/events', {
+			headers: { authorization: `Bearer ${test}` },
+			body: {
+				events: [pageViewed({ websiteId: TEST_SITE, env: 'test', data: { url: 'https://test.example.com/', path: '/' } })],
+			},
+		});
+		await drain();
+		const paths = receiver.received.map((r) => `${r.event?.env}:${r.path}`).sort();
+		expect(paths).toEqual([
+			`live:/prod${events}`,
+			`live:/prodonly${events}`,
+			`test:/prodonly${events}`, // no staging registered: production
+			`test:/staging${events}`,
+		]);
+		const noenv = await db.collection('integration_deliveries').find({ appId: 'app_noenv' }).toArray();
+		expect(noenv.map((d) => [d.status, d.lastErrorCode])).toEqual([
+			['dead', 'no_endpoint'],
+			['dead', 'no_endpoint'],
+		]);
+	});
+
+	it('fans out consumed globs (custom.*, order.*@1) end to end', async () => {
+		const { world, receiver, call, drain, key } = await boot('int_globs');
+		world.addApp({
+			appId: 'app_loyalty',
+			slug: 'loyalty',
+			consumes: ['order.*@1', 'custom.*'],
+			scopes: ['events.subscribe:order.*', 'events.subscribe:custom.*'],
+			endpoints: { base: `${receiver.base}/loyalty`, events: '/.well-known/ss-events' },
+		});
+		world.subscribe(WEBSITE, 'app_loyalty');
+		const sk = await key('sk');
+		const custom = pageViewed({ type: 'custom.review_written@1', data: { stars: 5 } });
+		const completed = orderCompleted();
+		const paged = pageViewed();
+		const res = await call('POST', '/v1/events', {
+			headers: { authorization: `Bearer ${sk}` },
+			body: { events: [custom, completed, paged] },
+		});
+		expect(res.json.accepted).toBe(3);
+		await drain();
+		expect(receiver.received.map((r) => r.event?.type).sort()).toEqual(['custom.review_written@1', 'order.completed@1']);
+		expect(receiver.received.every((r) => r.verified)).toBe(true);
 	});
 
 	it('times out slow products and refuses unsafe endpoints (SSRF)', async () => {

@@ -13,6 +13,7 @@ import { pointsToValue, quote as quoteFor, redeemProblem } from '../core/redeem.
 import { attributionRefusal, codeFromBytes, codeFromSource, normaliseCode, rewardDecision } from '../core/referrals.js';
 import { collectible, refundedFraction, returnsRedeemed, reversalTarget, spendTarget } from '../core/reversal.js';
 import { multiplierOf } from '../core/tiers.js';
+import { hasOrderContext, orderSnapshot } from '../core/orders.js';
 import { DAY_MS, iso, recentMonthKeys, toMs } from '../core/time.js';
 import { memberView, transactionView } from '../core/views.js';
 
@@ -549,15 +550,7 @@ export const createLoyaltyService = ({
 		orderPlaced: async (site, event) => {
 			const data = event.data;
 			const at = toMs(event.occurredAt);
-			const snapshot = {
-				orderId: data.orderId,
-				...(typeof data.number === 'string' ? { number: data.number } : {}),
-				...(typeof data.customerId === 'string' ? { customerId: data.customerId } : {}),
-				currency: data.currency,
-				lines: data.lines ?? [],
-				amounts: data.amounts,
-				placedAt: event.occurredAt,
-			};
+			const snapshot = orderSnapshot(data, event.occurredAt);
 			const order = await site.repos.orders.recordPlaced(snapshot);
 			if (!snapshot.customerId) return { order, earned: null };
 			const placed = await earnFor(site, {
@@ -581,7 +574,10 @@ export const createLoyaltyService = ({
 		 * @param {{ id: string, occurredAt: string, data: { orderId: string } }} event
 		 */
 		orderCompleted: async (site, event) => {
-			const order = await site.repos.orders.mark(event.data.orderId, 'completedAt', event.occurredAt);
+			let order = await site.repos.orders.mark(event.data.orderId, 'completedAt', event.occurredAt);
+			// contracts v1 (additive): a completion may carry the order context itself (lines, amounts, customer)
+			if (!order?.snapshot && hasOrderContext(event.data))
+				order = await site.repos.orders.recordPlaced(orderSnapshot(event.data, event.occurredAt));
 			if (!order?.snapshot) return { pending: true };
 			return completeOrder(site, order, toMs(event.occurredAt), event.id);
 		},
@@ -615,6 +611,31 @@ export const createLoyaltyService = ({
 			);
 			const fraction = refundedFraction({ refunded, total: order.snapshot?.amounts?.total ?? 0 });
 			return reverseOrder(site, order, { fraction, at: toMs(event.occurredAt) });
+		},
+
+		/**
+		 * `custom.*` events delivered by the Event Hub (`events.consumes: custom.*`): the same earn rules as
+		 * `POST /v1/activities`, keyed by the event id (a delivery and an API call with that id earn once). The customer
+		 * is `data.customerId`, else the event's customer actor; events without one are ignored.
+		 * @param {Site} site
+		 * @param {{ id: string, type: string, actor?: { type: string, id?: string }, data: Record<string, any> }} event
+		 */
+		customEvent: async (site, event) => {
+			const customerId =
+				typeof event.data?.customerId === 'string'
+					? event.data.customerId
+					: event.actor?.type === 'customer' && typeof event.actor.id === 'string'
+						? event.actor.id
+						: null;
+			if (!customerId) return { ok: false, reason: 'skipped' };
+			return earnFor(site, {
+				customerId,
+				type: event.type,
+				data: event.data ?? {},
+				at: now(),
+				sourceKey: `earn:${event.type}:${event.id}`,
+				eventId: event.id,
+			});
 		},
 
 		/**

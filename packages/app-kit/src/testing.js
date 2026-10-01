@@ -22,6 +22,7 @@ import {
 	verifyAssertion,
 	verifyRegistrationResponse,
 } from '@ss/protocol';
+import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { isObject } from './util.js';
 
 /** @typedef {import('@ss/protocol').PublicJwk} PublicJwk */
@@ -289,4 +290,50 @@ export const createFakePortal = async ({
 			return result;
 		},
 	};
+};
+
+/**
+ * A website's own identity issuer for tests (bring-your-own identity): a fresh key pair, the entitlement-document
+ * `identity` section to pass to `setEntitlement({ identity })`, and `sign(claims, header?)` minting customer tokens.
+ * @param {{ alg?: 'EdDSA' | 'ES256' | 'RS256', kid?: string, issuer?: string, audience?: string,
+ *   claimMap?: { subject: string, email?: string, phone?: string } }} [options]
+ */
+export const createTestIdentityIssuer = ({
+	alg = 'EdDSA',
+	kid = 'site-key-1',
+	issuer = 'https://login.shop.example.com/',
+	audience,
+	claimMap = { subject: 'sub', email: 'email', phone: 'phone_number' },
+} = {}) => {
+	const pair =
+		alg === 'EdDSA'
+			? generateKeyPairSync('ed25519')
+			: alg === 'ES256'
+				? generateKeyPairSync('ec', { namedCurve: 'P-256' })
+				: generateKeyPairSync('rsa', { modulusLength: 2048 });
+	const jwk = /** @type {Record<string, string>} */ (pair.publicKey.export({ format: 'jwk' }));
+	const section = /** @type {import('@ss/contracts').IdentitySection} */ ({
+		issuer,
+		jwks: [{ ...jwk, kid, alg, use: 'sig' }],
+		...(audience ? { audience } : {}),
+		claimMap,
+	});
+	/** @param {unknown} value */
+	const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+	return Object.freeze({
+		section,
+		/**
+		 * @param {Record<string, unknown>} claims
+		 * @param {Record<string, unknown>} [header] extra/overriding JWS header members
+		 */
+		sign: (claims, header = {}) => {
+			const input = `${b64({ alg, kid, typ: 'JWT', ...header })}.${b64(claims)}`;
+			const signature = cryptoSign(
+				alg === 'EdDSA' ? null : 'sha256',
+				Buffer.from(input),
+				alg === 'ES256' ? { key: pair.privateKey, dsaEncoding: 'ieee-p1363' } : pair.privateKey,
+			);
+			return `${input}.${signature.toString('base64url')}`;
+		},
+	});
 };

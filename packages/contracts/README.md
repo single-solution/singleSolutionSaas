@@ -53,7 +53,8 @@ if (!result.ok) return errors.fromValidation(result.problems, { code: 'invalid_m
 - **Per-plan bounds** live only in feature schemas (`x-plan: { <plan>: { default, max } }`); `plans[]` list `elements` (included, on by default) and `addons` (allowed, off by default); anything else is unavailable on that plan.
 - **Feature metadata**: `x-kind` (flag|quota|limit|rate|config); quotas need `x-period` (hour|day|week|month) and may set
   `x-hardStop`, `x-unit`; rates need `x-per` (second|minute|hour) and may set `x-unit`.
-- **Events**: every consumed type needs an `events.subscribe:<glob>` scope; published types must be in the product namespace
+- **Events**: every consumed entry — an exact `type@v` or a glob such as `custom.*` / `order.*@1` (`isEventGlob`; a
+  version-less glob matches every version) — needs an `events.subscribe:<glob>` scope that covers it; published types must be in the product namespace
   (`<slug>.*`, `-` → `_`) or be standard events covered by an `events.publish:<glob>` scope.
 - **Event scopes**: the envelope has an optional `scope`, either `'website'` (the default) or `'platform'`.
   Website-scoped events require `websiteId`. Platform-scoped events concern a product or the platform as a whole and
@@ -61,6 +62,15 @@ if (!result.ok) return errors.fromValidation(result.problems, { code: 'invalid_m
   mismatch at `/scope` (rule `eventScope`). `PLATFORM_SCOPED_EVENTS` is currently `['manifest.accepted@1']`, so it is
   sent with `scope: 'platform'` and no `websiteId`. A sentinel website id is refused. JSDoc types:
   `EventEnvelope` (website), `PlatformEventEnvelope` and `AnyEventEnvelope`.
+- **Catalogue additions (v1, additive):** order lifecycle events accept an optional `customer` identity reference
+  `{ customerId?, subject?, email?, phone? }`; `order.completed@1` / `order.cancelled@1` also accept `number`,
+  `customerId`, `currency`, `lines`, `amounts` like `order.placed@1` (`lines`/`amounts` require `currency`), and
+  `order.refunded@1` richer lines and `amounts`. Element UI events `<element>.shown@1` and `<element>.action@1`
+  (`ELEMENT_EVENT_DATA`) and `loader.element_failed@1` (with `phase`) are catalogued. Problem codes `identity_required`
+  and `identity_invalid` are standard.
+- **Identity section** (bring-your-own identity): an entitlement document may carry `identity: { issuer, jwks (1–5
+public JWKs: OKP Ed25519, EC P-256, RSA ≥ 2048; no private members), audience?, claimMap: { subject, email?,
+phone? } }` (`identitySectionSchema`, rule `duplicateIdentityKey`).
 - **Element packs** have no endpoints or admin launch, only modes A/B, no `api.resources`, and only `graph.*` /
   `events.publish:*` scopes; their state goes through the Website Graph. Service products need `endpoints.base`,
   `register` and `events`.

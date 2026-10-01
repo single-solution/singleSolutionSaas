@@ -73,6 +73,15 @@ export const createDeps = (ctx) => {
 		 */
 		layersFor: async (sub) =>
 			splitLayers(await optional('config')?.layersFor(sub._id, { merchantId: sub.merchantId, appId: sub.appId })),
+		/**
+		 * Bring-your-own identity: the website's identity issuer as the document's `identity` section, or null.
+		 * @param {string} websiteId
+		 * @returns {Promise<import('@ss/contracts').IdentitySection | null>}
+		 */
+		identityFor: async (websiteId) => {
+			const identity = ctx.service('identity');
+			return typeof identity.identityFor === 'function' ? ((await identity.identityFor(websiteId)) ?? null) : null;
+		},
 		/** @param {string} websiteId @returns {Promise<{ kind: string, ref?: string, status: string }[]>} */
 		statusFor: async (websiteId) => (await optional('connectors')?.statusFor(websiteId)) ?? [],
 		/**

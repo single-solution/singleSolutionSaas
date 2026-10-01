@@ -22,6 +22,9 @@
  * @property {number} [maxBodyBytes]
  * @property {boolean} [entitlement] website auth: load the entitlement (default true)
  * @property {boolean} [cors] allow cross-origin browser calls (default: true for website auth)
+ * @property {'required' | 'optional'} [identity] website auth: verify the customer's `SS-Identity` token against the
+ *   website's identity issuer (entitlement document) into `ctx.identity`; `required` answers 401 without a valid one,
+ *   `optional` leaves `ctx.identity` null (and `ctx.identityProblem` set) when it is absent or invalid
  * @property {(ctx: any) => unknown} handler
  */
 
@@ -44,6 +47,12 @@ export const defineRoute = (definition) => {
 	if (typeof handler !== 'function') throw new TypeError(`route ${method} ${path} needs a handler`);
 	if (definition.element !== undefined && auth !== 'website' && auth !== 'launch') {
 		throw new TypeError(`element gating needs website or launch auth (${method} ${path})`);
+	}
+	if (definition.identity !== undefined) {
+		if (definition.identity !== 'required' && definition.identity !== 'optional')
+			throw new TypeError(`route identity must be 'required' or 'optional' (${method} ${path})`);
+		if (auth !== 'website' || definition.entitlement === false)
+			throw new TypeError(`route identity needs website auth with the entitlement (${method} ${path})`);
 	}
 	/** @type {RouteDefinition['rateLimit']} */
 	let rateLimit;

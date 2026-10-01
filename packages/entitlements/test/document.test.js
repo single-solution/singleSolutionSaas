@@ -64,6 +64,26 @@ describe('toDocument', () => {
 		expect(Object.keys(doc.features['codes.maxActive'] ?? {})).not.toContain('lockedBy');
 	});
 
+	it('carries the website identity issuer when given (and omits it otherwise)', () => {
+		const identity = {
+			issuer: 'https://login.shop.example.com/',
+			jwks: [
+				{
+					kty: /** @type {const} */ ('OKP'),
+					crv: /** @type {const} */ ('Ed25519'),
+					x: '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
+					kid: 'k1',
+				},
+			],
+			claimMap: { subject: 'sub' },
+		};
+		const doc = documentOf(toDocument(resolve(), { ...META, identity }));
+		expect(doc.identity).toEqual(identity);
+		expect(documentOf(toDocument(resolve(), { ...META, identity: null }))).not.toHaveProperty('identity');
+		const bad = toDocument(resolve(), { ...META, identity: { ...identity, jwks: [] } });
+		expect(bad.ok).toBe(false);
+	});
+
 	it.each(/** @type {const} */ (['active', 'paused', 'suspended', 'spend_cap']))('round-trips runtime state %s', (state) => {
 		const resolved = resolve({
 			subscription: { ...SUB, status: state === 'spend_cap' ? 'active' : state },

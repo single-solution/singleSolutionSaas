@@ -14,7 +14,7 @@ import {
 import { createPortal } from '../src/emulator/portal.js';
 import { normaliseFixture } from '../src/emulator/fixture.js';
 import { formatSettlement, simulateSettlement } from '../src/emulator/settle.js';
-import { buildEnvelope, withVersion } from '../src/emulator/events.js';
+import { buildEnvelope, concreteEventType, withVersion } from '../src/emulator/events.js';
 import { createDatabaseResolver, withDatabase } from '../src/emulator/mongo.js';
 import { loadManifest } from '../src/manifest.js';
 import { TEMPLATES_DIR, initApp } from '../src/init.js';
@@ -458,6 +458,37 @@ describe('settlement, fixture, events, database helpers', () => {
 		expect(() =>
 			normaliseFixture({ subscriptions: [{ id: 'sub_devsubscript01', websiteId: 'web_devwebsite01', status: 'odd' }] }),
 		).toThrow(/status/);
+	});
+
+	it('maps consumed globs to concrete event types and delivers events matching a consumed glob', async () => {
+		expect(concreteEventType('order.placed@1')).toBe('order.placed@1');
+		expect(concreteEventType('order.*@1')).toBe('order.placed@1');
+		expect(concreteEventType('inventory.*')).toBe('inventory.changed@1');
+		expect(concreteEventType('custom.*')).toBe('custom.ss_probe@1');
+		expect(concreteEventType('notes_app.*')).toBeNull();
+		/** @type {string[]} */
+		const delivered = [];
+		const fetch = /** @type {typeof globalThis.fetch} */ (
+			async (_url, init) => {
+				delivered.push(JSON.parse(String(init?.body)).type);
+				return new Response(null, { status: 204 });
+			}
+		);
+		const portal = await createPortal({ fixture: normaliseFixture({}), portalUrl: PORTAL, now: () => T0, fetch });
+		const manifest = await manifestPromise;
+		portal.adoptApp({
+			appId: 'app_globconsumer01',
+			baseUrl: 'http://product.test',
+			manifest: { ...manifest, events: { ...manifest.events, consumes: ['custom.*', 'order.*@1'] } },
+			keys: [],
+			thumbprint: 'x',
+			registeredAt: new Date(T0).toISOString(),
+		});
+		expect((await portal.emit({ type: 'custom.points_bonus', data: { a: 1 } })).status).toBe(204);
+		expect((await portal.emit({ type: 'order.completed' })).status).toBe(204);
+		await expect(portal.emit({ type: 'order.completed@2' })).rejects.toMatchObject({ code: 'not_subscribed' });
+		await expect(portal.emit({ type: 'cart.updated' })).rejects.toMatchObject({ code: 'not_subscribed' });
+		expect(delivered).toEqual(['custom.points_bonus@1', 'order.completed@1']);
 	});
 
 	it('builds envelopes and database URIs', async () => {

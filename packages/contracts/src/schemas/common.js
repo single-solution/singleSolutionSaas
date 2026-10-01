@@ -13,6 +13,10 @@ export const PATTERNS = Object.freeze({
 	elementKey: '^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$',
 	planCode: '^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$',
 	eventType: '^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+@[1-9][0-9]*$',
+	// a consumed event: an exact `type@v`, or a glob with at least one `*` segment after a literal namespace whose
+	// version is optional (`custom.*`, `order.*@1`; without `@v` every version matches)
+	eventTypeGlob:
+		'^(?:[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+@[1-9][0-9]*|[a-z][a-z0-9_]*(?:\\.(?:[a-z][a-z0-9_]*|\\*))*\\.\\*(?:\\.(?:[a-z][a-z0-9_]*|\\*))*(?:@[1-9][0-9]*)?)$',
 	elementEvent: '^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$',
 	semver:
 		'^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$',
@@ -81,6 +85,7 @@ export const commonSchema = deepFreeze({
 		elementKey: { type: 'string', minLength: 1, maxLength: 40, pattern: PATTERNS.elementKey },
 		planCode: { type: 'string', minLength: 1, maxLength: 40, pattern: PATTERNS.planCode },
 		eventType: { type: 'string', maxLength: 120, pattern: PATTERNS.eventType },
+		eventTypeGlob: { type: 'string', maxLength: 120, pattern: PATTERNS.eventTypeGlob },
 		semver: { type: 'string', maxLength: 64, pattern: PATTERNS.semver },
 		timestamp: { type: 'string', format: 'date-time', pattern: PATTERNS.utcTimestamp },
 		duration: { type: 'string', format: 'duration', maxLength: 64 },

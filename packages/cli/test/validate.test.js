@@ -51,6 +51,11 @@ describe('ss app validate', () => {
 		);
 		await edit(dir, 'ui/notes.js', (text) => `import { DEFAULT_CONFIG } from '../core/notes.js';\n${text}`);
 		await edit(dir, 'api/notes.js', (text) => `import { render } from '../ui/notes.js';\n${text}`);
+		await edit(
+			dir,
+			'headless/notes.js',
+			(text) => `import { createElementRuntime } from '@ss/web/element';\nimport { boot } from '@ss/web/loader';\n${text}`,
+		);
 		const report = await validateProject(dir);
 		expect(report.ok).toBe(false);
 		const found = report.problems.map((problem) => `${problem.file}:${problem.line}:${problem.rule}`);
@@ -62,8 +67,10 @@ describe('ss app validate', () => {
 				'core/notes.js:4:imports.outside',
 				'ui/notes.js:1:imports.direction',
 				'api/notes.js:1:imports.direction',
+				'headless/notes.js:2:imports.package',
 			]),
 		);
+		expect(found).not.toContain('headless/notes.js:1:imports.package'); // the headless runtime is allowed
 		expect(formatValidation(report)).toMatch(/error +core\/notes\.js:1 {2}imports\.direction/);
 	});
 

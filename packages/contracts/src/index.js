@@ -22,6 +22,7 @@ export {
 	EVENT_SUBSCRIBE_SCOPE,
 	EVENT_PUBLISH_SCOPE,
 	eventGlobMatches,
+	isEventGlob,
 	eventNamespace,
 	checkManifest,
 	checkFeatureSchema,
@@ -58,6 +59,8 @@ export { deepFreeze } from './util.js';
 /** @typedef {import('./types.js').FeatureSchema} FeatureSchema */
 /** @typedef {import('./types.js').FeatureNode} FeatureNode */
 /** @typedef {import('./types.js').EntitlementDocument} EntitlementDocument */
+/** @typedef {import('./types.js').IdentitySection} IdentitySection */
+/** @typedef {import('./types.js').IdentityJwk} IdentityJwk */
 /** @typedef {import('./types.js').EventEnvelope} EventEnvelope */
 /** @typedef {import('./types.js').PlatformEventEnvelope} PlatformEventEnvelope */
 /** @typedef {import('./types.js').AnyEventEnvelope} AnyEventEnvelope */

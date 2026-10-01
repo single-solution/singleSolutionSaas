@@ -19,6 +19,22 @@ Merchants, merchant users, staff users, partners, developers, sessions, websites
 - Implements ports `sessionActor(session)` and `websiteKeyRevoked(claims, rawKey)` → `true` when the key is revoked,
   unknown, or (for `sk_`) its HMAC does not match `rawKey`; infra calls it after the offline signature check.
 - Calls `integration.emitControl('key.revoked@1', …)` on revoke.
+- Staff building blocks (`service.admin`, `service.impersonation`): `admin.listMerchants({ after, limit, status?, q? })`
+  — `q` is a case/accent-insensitive prefix of the merchant name (`nameKey`), or of a member e-mail when it contains
+  `@`; `admin.listNotes({ merchantId, before?, limit })` / `admin.addNote({ merchantId, body ≤ 2000, actor })`
+  (append-only, audited without the body); `impersonation.start({ merchantId, userId, minutes ≤ 60, reason, actor })`
+  → one-time exchange token (only its HMAC stored, bound to the staff member, 60 s), `impersonation.exchange({ token,
+actor })` → merchant session with `via`, `impersonation.ended({ session })` (audited on both chains).
+- **Bring-your-own customer identity** (PLAN §5.3, F.14), one issuer per website (`identity_issuers`, `_id` =
+  websiteId): `setIdentityIssuer({ merchantId, websiteId, input: { issuer, jwksUrl | publicJwks[], audience?,
+claimMap: { subject = 'sub', email?, phone? } }, actor })` (public signature keys only — Ed25519, P-256, RSA ≥ 2048,
+  ≤ 5; a `jwksUrl` is fetched with `@ss/net` `safeFetch`, no redirects, 5 s, 64 KiB, and must yield a usable key),
+  `getIdentityIssuer`, `removeIdentityIssuer`, `refreshIdentityIssuer` (fetch now). Every change is audited
+  (`website.identity_*`) and calls `commerce.invalidateWebsite(websiteId)`. `identityFor(websiteId)` → the
+  entitlement-document `identity` section `{ issuer, jwks, audience?, claimMap }` or null; a JWKS URL is refetched at
+  most hourly when documents are rebuilt (failures keep the last good keys, retry after 5 min). Deleting or
+  transferring a website drops its issuer. Routes: `GET|PUT|DELETE /v1/merchants/:merchantId/websites/:websiteId/identity`
+  (`websites.read` / `websites.write`), `POST …/identity/refresh`.
 
 ## catalog (`modules/catalog`)
 
@@ -34,6 +50,10 @@ health, launches.
   (exclusive: only `permissions` may sit next to it). The staff route `POST /v1/admin/apps/:appId/launch` with
   `{ kind: 'admin', all: true }` needs `platform.launch.admin` **and** the `superadmin` or `admin` staff role (support
   staff may launch per merchant only).
+- Merchant "Try demo": `POST /v1/merchants/:merchantId/apps/:appId/demo` (`subscriptions.read`, listed apps only,
+  30/min) → `{ url, expiresAt }` of a `demo` launch with no merchant or website scope (the product shows its sandbox).
+- Environments: `setEnvironments({ appId, production?, staging? })` (registration records `endpoints.base` as
+  production). Integration delivers to these registered bases, never to the manifest's self-declared `endpoints.base`.
 - `refreshManifest({ appId })` imports `/.well-known/ss-app.json` only with a valid `SS-Manifest-Signature`
   (`@ss/protocol` `verifyManifest` over the app's registered, non-revoked keys, `expectedAppId = appId`, ≤ 24 h old).
   An unsigned or invalid refresh is stored as a `rejected` version with `review.reason`
@@ -67,7 +87,10 @@ credits, settlement, spend caps.
   `layers` (config dry runs; nothing stored or emitted)
 - Crons `settlement` (hourly), `reconciliation` (nightly).
 - Reads configuration layers from `config.layersFor(subscriptionId)`; resource status from
-  `connectors.statusFor(websiteId)`.
+  `connectors.statusFor(websiteId)`; the website's identity issuer from `identity.identityFor(websiteId)` (document
+  `identity` section; it extends the content hash, so an issuer change or key rotation bumps the version).
+- Calls `delivery.requestCompile(websiteId)` whenever a document version is bumped and when a subscription is
+  cancelled (failures are logged, never fail commerce).
 - Emits `entitlement.changed@1` and `subscription.*@1` via integration.
 - Hook: `onMerchantStatus({ merchantId, status })` (called by identity).
 
@@ -95,8 +118,13 @@ idempotencyKey)`; payloads are NOT persisted in Portal — only routing metadata
 - `emitControl(type, data, { appIds?, websiteId? })` (Portal-only control events). Website-scoped types need `websiteId`
   (targets: `appIds`, else every product subscribed on the website); **platform-scoped** types (`manifest.accepted@1`)
   carry no `websiteId` in the envelope and need `appIds`.
-- Fan-out: subscriptions derived from accepted manifests (`events.consumes`) × active subscriptions; deliveries are
-  jobs `integration.deliver` signed with `@ss/protocol` `signEvent`, retries with backoff, DLQ, replay.
+- Fan-out: subscriptions derived from accepted manifests (`events.consumes`, which may hold globs such as `custom.*` or
+  `order.*@1`, each covered by an `events.subscribe:` scope) × active subscriptions; deliveries are jobs
+  `integration.deliver` signed with `@ss/protocol` `signEvent`, retries with backoff, DLQ, replay.
+- **Delivery target:** the app's registered environment base (`catalog.getApp().environments`) + the manifest's
+  `endpoints.events` path: events of `test` websites go to `staging` when one is registered, everything else to
+  `production`; no environment → dead-lettered `no_endpoint`. https only; plain http and private addresses only for
+  `OUTBOUND_DEV_ALLOW_HOSTS` outside production (the allowlist is empty in production).
 - `deliveryLog({ websiteId | appId, cursor })`, `replay(deliveryId)`.
 - Because payloads are not stored, fan-out happens at ingest time (payload carried inside the job only, job deleted
   on success; DLQ keeps the payload sealed with `ctx.envelope` for at most 7 days).
@@ -153,6 +181,9 @@ strings?, placement? }] }, actor })` → `{ previewId, url, expiresAt, version, 
   `servePreview({ token, path, search })`.
 - Job `delivery.compile`. Problems `delivery_budget_exceeded`, `delivery_asset_mismatch`, `delivery_preview_refused`.
 
+- Commerce calls `requestCompile` (see commerce); the compile reads only public service functions, so delivery has no
+  write path into other modules except `identity.issueKey` / `revokeKey` for its one `pk_` key.
+
 **Element stub contract (`ss-element-stub@1`)** — how a service product's mode-A element runs inside the Loader with
 no product code in the bundle. The stub's headless core calls the product with the website's `pk_` key (`Authorization:
 Bearer pk_…`, `SS-Identity` when federated, `Idempotency-Key` on POST; Origin enforcement as for any `pk_` call):
@@ -160,7 +191,7 @@ Bearer pk_…`, `SS-Identity` when federated, `Idempotency-Key` on POST; Origin 
 (`action` matches `^[a-z][a-z0-9_]{0,39}$`, JSON body) → the next view model. View model (all optional, text only,
 never HTML): `{ title ≤ 200, body ≤ 2000, items: [{ text, href? }] ≤ 50, actions: [{ action, label ≤ 80 }] ≤ 10 }`.
 Errors are RFC 9457 problems. The stub renders with the Loader's safe `h()` (class names `ss-el`, `ss-el__title`,
-`ss-el__body`, `ss-el__items`, `ss-el__action`; design tokens via CSS variables), emits `<key>.action@1`, and exposes
+`ss-el__body`, `ss-el__items`, `ss-el__action`; design tokens via CSS variables), emits `<key>.action@1` (`{ action, ok? }`, catalogued in `@ss/contracts` `ELEMENT_EVENT_DATA` with `<key>.shown@1`), and exposes
 `actions.refresh()` / `actions.invoke(action, input)` on `SS.elements.get(key)`.
 
 ## Product API routes (`/v1/product/*`, `auth: 'product'`) — owned by the module named

@@ -42,6 +42,8 @@ export const PROBLEM_CODES = Object.freeze({
 	unsupported_version: Object.freeze({ status: 400, title: 'Unsupported contract version' }),
 	unauthorized: Object.freeze({ status: 401, title: 'Authentication required' }),
 	invalid_credentials: Object.freeze({ status: 401, title: 'Invalid or expired credentials' }),
+	identity_required: Object.freeze({ status: 401, title: 'Customer identity required' }),
+	identity_invalid: Object.freeze({ status: 401, title: 'Invalid or expired customer identity' }),
 	credits_exhausted: Object.freeze({ status: 402, title: 'Credits exhausted' }),
 	spend_cap_reached: Object.freeze({ status: 402, title: 'Spend cap reached' }),
 	forbidden: Object.freeze({ status: 403, title: 'Forbidden' }),

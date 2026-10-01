@@ -5,6 +5,7 @@ import { createClient } from '../src/client.js';
 import { defineElement } from '../src/element.js';
 import { boot } from '../src/loader.js';
 import { evaluateAudience } from '../src/audience.js';
+import { validateEvent } from '../../contracts/src/index.js';
 import { ENDPOINT, KEY, WEBSITE_ID, memoryStorage, scriptedFetch } from './helpers.js';
 
 /** @type {Array<{ destroy: () => void }>} */
@@ -453,6 +454,51 @@ describe('error isolation', () => {
 		expect(onError.mock.calls.filter(([report]) => report.phase === 'bundle').length).toBe(3);
 		expect(pageEvents).toHaveBeenCalled();
 		win.removeEventListener('ss:error', pageEvents);
+	});
+
+	it('reports element failures and mounts as catalogued events (loader.element_failed@1, <key>.shown@1)', async () => {
+		const { client } = makeClient();
+		const track = vi.fn(client.track);
+		const loader = start({
+			client: { ...client, track },
+			bundle: {
+				elements: [
+					{
+						key: 'crash_create',
+						headless: defineElement({
+							key: 'crash_create',
+							create: () => {
+								throw new Error('secret customer@example.com');
+							},
+						}),
+						renderer: counterRenderer,
+					},
+					element('healthy'),
+				],
+			},
+		});
+		await vi.advanceTimersByTimeAsync(0);
+		await loader.ready();
+		const failure = track.mock.calls.find(([type]) => type === 'loader.element_failed@1');
+		expect(failure?.[1]).toEqual({
+			element: 'crash_create',
+			phase: 'mount',
+			code: 'mount_failed',
+			message: 'element mount failed',
+		});
+		expect(JSON.stringify(track.mock.calls)).not.toContain('customer@example.com');
+		const failed = validateEvent({
+			id: 'evt_1',
+			type: 'loader.element_failed@1',
+			websiteId: WEBSITE_ID,
+			env: 'test',
+			occurredAt: '2026-10-01T00:00:00Z',
+			idempotencyKey: 'evt_1',
+			actor: { type: 'anonymous' },
+			data: failure?.[1],
+		});
+		expect(failed.ok).toBe(true);
+		expect(track.mock.calls.some(([type]) => type === 'healthy.shown')).toBe(true);
 	});
 
 	it('contains re-render failures, hook failures and a failing onError', async () => {

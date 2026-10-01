@@ -24,5 +24,9 @@ export const createEventHandlers = ({ service, siteFor }) => {
 		'order.cancelled@1': forSite(service.orderCancelled),
 		'order.refunded@1': forSite(service.orderRefunded),
 		'customer.created@1': forSite(service.customerCreated),
+		// `events.consumes: custom.*` — app-kit dispatches every type to `*`; only custom events earn here
+		'*': async (event) => {
+			if (typeof event.type === 'string' && event.type.startsWith('custom.')) await forSite(service.customEvent)(event);
+		},
 	};
 };

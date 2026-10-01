@@ -12,6 +12,8 @@ import { createJwks, createKeyResolver, createSigner, toPublicJwk } from '@ss/pr
 import { createAccounts } from './accounts.js';
 import { createAdmin } from './admin.js';
 import { createImpersonation } from './impersonation.js';
+import { createIssuers } from './issuers.js';
+import { C } from './schema.js';
 import { createAuditor, createRepo } from './repo.js';
 import { createTeams } from './teams.js';
 import { createWebsiteKeys } from './website-keys.js';
@@ -30,6 +32,7 @@ import { createWebsites } from './websites.js';
  * @property {import('../../infra/mailer.js').Mailer} [mailer] e-mail port (default: the platform mailer `ctx.mailer`)
  * @property {ReadonlyArray<PrivateJwk>} [websiteKeySigningKeys] dedicated website-key signing keys (first signs)
  * @property {(domain: string) => boolean} [isPublicSuffix] refuse public suffixes as website domains
+ * @property {import('./issuers.js').IssuerOptions} [issuers] outbound options of identity-issuer JWKS fetches (tests)
  */
 
 /**
@@ -75,10 +78,16 @@ export const createIdentityService = (ctx, options = {}) => {
 		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
 		activeMerchant: teams.activeMerchant,
 	});
+	const issuers = createIssuers(deps, {
+		loadWebsite: (websiteId, merchantId) => websites.loadWebsite(websiteId, merchantId),
+		collection: ctx.collection(C.issuers),
+		...(options.issuers ? { options: options.issuers } : {}),
+	});
 	const websites = createWebsites(deps, {
 		activeMerchant: teams.activeMerchant,
 		loadMerchant: teams.loadMerchant,
 		revokeWebsiteKeys: keys.revokeWebsiteKeys,
+		forgetIssuers: issuers.forget,
 		...(options.isPublicSuffix ? { isPublicSuffix: options.isPublicSuffix } : {}),
 	});
 	const admin = createAdmin(deps, {
@@ -142,6 +151,12 @@ export const createIdentityService = (ctx, options = {}) => {
 		websiteKeyJwks: () => signing.jwks(),
 		websiteKeyResolver: () => signing.keyResolver,
 		websiteKeySigningSource: () => signing.source,
+		/** Bring-your-own identity: the `identity` section of the website's entitlement documents (commerce), or null. */
+		identityFor: issuers.identityFor,
+		getIdentityIssuer: issuers.getIssuer,
+		setIdentityIssuer: issuers.setIssuer,
+		removeIdentityIssuer: issuers.removeIssuer,
+		refreshIdentityIssuer: issuers.refreshKeys,
 		// ports
 		sessionActor,
 		isKeyRevoked: keys.isRevoked,
@@ -152,6 +167,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		teams,
 		websites,
 		keys,
+		issuers,
 		admin,
 		impersonation,
 		mailer,

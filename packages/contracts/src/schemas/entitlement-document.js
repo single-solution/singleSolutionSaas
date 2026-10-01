@@ -15,6 +15,90 @@ export const RUNTIME_STATES = Object.freeze(
 
 const reason = { type: 'string', minLength: 1, maxLength: 200, pattern: '^[a-z][a-z0-9_.:-]*$' };
 
+/** JWS algorithms a website's own identity issuer may sign customer tokens with (PLAN §5.3). */
+export const IDENTITY_ALGORITHMS = Object.freeze(/** @type {const} */ (['EdDSA', 'ES256', 'RS256']));
+
+/** At most this many issuer public keys travel inline in a document. */
+export const IDENTITY_MAX_KEYS = 5;
+
+/** Claim names a claim map may point at (`sub`, `email`, `https://example.com/claims/phone`). */
+export const CLAIM_NAME_PATTERN = '^[A-Za-z_][A-Za-z0-9_.:/-]{0,199}$';
+
+const b64url = (/** @type {number} */ max) => ({ type: 'string', minLength: 1, maxLength: max, pattern: '^[A-Za-z0-9_-]+$' });
+const claimName = { type: 'string', pattern: CLAIM_NAME_PATTERN };
+
+/**
+ * A public signature key of an identity issuer (JWK, RFC 7517): Ed25519 (`OKP`), P-256 (`EC`) or RSA ≥ 2048 bits.
+ * Private members are never allowed (closed object).
+ */
+export const identityJwkSchema = deepFreeze({
+	type: 'object',
+	required: ['kty', 'kid'],
+	additionalProperties: false,
+	properties: {
+		kty: { type: 'string', enum: ['OKP', 'EC', 'RSA'] },
+		kid: { type: 'string', minLength: 1, maxLength: 128, pattern: '^[\\x21-\\x7e]+$' },
+		alg: { type: 'string', enum: [...IDENTITY_ALGORITHMS] },
+		use: { const: 'sig' },
+		crv: { type: 'string', enum: ['Ed25519', 'P-256'] },
+		x: b64url(64),
+		y: b64url(64),
+		n: b64url(1400),
+		e: b64url(12),
+	},
+	allOf: [
+		{
+			if: { properties: { kty: { const: 'OKP' } } },
+			then: {
+				required: ['crv', 'x'],
+				properties: { crv: { const: 'Ed25519' }, x: true, alg: { const: 'EdDSA' }, y: false, n: false, e: false },
+			},
+		},
+		{
+			if: { properties: { kty: { const: 'EC' } } },
+			then: {
+				required: ['crv', 'x', 'y'],
+				properties: { crv: { const: 'P-256' }, x: true, y: true, alg: { const: 'ES256' }, n: false, e: false },
+			},
+		},
+		{
+			if: { properties: { kty: { const: 'RSA' } } },
+			then: {
+				required: ['n', 'e'],
+				properties: {
+					alg: { const: 'RS256' },
+					n: { type: 'string', minLength: 342 },
+					e: true,
+					crv: false,
+					x: false,
+					y: false,
+				},
+			},
+		},
+	],
+});
+
+/**
+ * Bring-your-own customer identity (PLAN §5.3): the website's own issuer, its public keys inline, the expected
+ * audience and where the subject / e-mail / phone live in its tokens. Products verify `SS-Identity` tokens with it.
+ */
+export const identitySectionSchema = deepFreeze({
+	type: 'object',
+	required: ['issuer', 'jwks', 'claimMap'],
+	additionalProperties: false,
+	properties: {
+		issuer: { type: 'string', minLength: 1, maxLength: 255, pattern: '^[\\x21-\\x7e]+$' },
+		jwks: { type: 'array', minItems: 1, maxItems: IDENTITY_MAX_KEYS, items: identityJwkSchema },
+		audience: { type: 'string', minLength: 1, maxLength: 255, pattern: '^[\\x21-\\x7e]+$' },
+		claimMap: {
+			type: 'object',
+			required: ['subject'],
+			additionalProperties: false,
+			properties: { subject: claimName, email: claimName, phone: claimName },
+		},
+	},
+});
+
 /** The entitlement document schema. */
 export const entitlementDocumentSchema = deepFreeze({
 	$schema: 'https://json-schema.org/draft/2020-12/schema',
@@ -111,6 +195,7 @@ export const entitlementDocumentSchema = deepFreeze({
 			additionalProperties: false,
 			properties: { prefix: { type: 'string', minLength: 3, maxLength: 64, pattern: '^[a-z][a-z0-9_]*_$' } },
 		},
+		identity: identitySectionSchema,
 		experiments: {
 			type: 'array',
 			maxItems: 200,

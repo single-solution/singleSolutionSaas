@@ -85,9 +85,10 @@ export const createHarness = async (
 	let version = 0;
 	/**
 	 * Publish the entitlement of a website (all elements on by default); every call is a newer document version.
-	 * @param {{ websiteId?: string, config?: Record<string, any>, elements?: Record<string, boolean> }} [input]
+	 * @param {{ websiteId?: string, config?: Record<string, any>, elements?: Record<string, boolean>,
+	 *   identity?: import('@ss/contracts').IdentitySection }} [input] `identity`: the website's own identity issuer
 	 */
-	const entitle = async ({ websiteId = WEBSITE, config: overrides = {}, elements: switches = {} } = {}) => {
+	const entitle = async ({ websiteId = WEBSITE, config: overrides = {}, elements: switches = {}, identity } = {}) => {
 		const merged = { ...config, ...overrides };
 		const flags = { ...elements, ...switches };
 		await portal.setEntitlement({
@@ -104,6 +105,7 @@ export const createHarness = async (
 				]),
 			),
 			config: Object.fromEntries(ELEMENTS.map((key) => [key, merged[key] ?? {}])),
+			...(identity ? { identity } : {}),
 		});
 		await loyalty.product.entitlements.refresh(websiteId);
 	};
@@ -153,9 +155,13 @@ export const createHarness = async (
 	 * Deliver an event to the product as the Event Hub would (signed POST /.well-known/ss-events).
 	 * @param {string} type
 	 * @param {Record<string, unknown>} data
-	 * @param {{ id?: string, websiteId?: string, occurredAt?: number }} [options]
+	 * @param {{ id?: string, websiteId?: string, occurredAt?: number, actor?: { type: string, id?: string } }} [options]
 	 */
-	const deliver = async (type, data, { id = createId('evt'), websiteId = WEBSITE, occurredAt = clock.now() } = {}) => {
+	const deliver = async (
+		type,
+		data,
+		{ id = createId('evt'), websiteId = WEBSITE, occurredAt = clock.now(), actor = { type: 'system' } } = {},
+	) => {
 		const envelope = {
 			id,
 			type,
@@ -163,7 +169,7 @@ export const createHarness = async (
 			env: 'live',
 			occurredAt: new Date(occurredAt).toISOString(),
 			idempotencyKey: id,
-			actor: { type: 'system' },
+			actor,
 			data,
 			context: { source: 'portal' },
 		};

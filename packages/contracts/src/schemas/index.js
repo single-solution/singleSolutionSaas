@@ -11,6 +11,7 @@ import {
 	customEventDataSchema,
 	elementUiEventDataSchema,
 	catalogueEventDataSchemas,
+	elementEventDataSchemas,
 } from './event-envelope.js';
 import { placementSchema } from './placement.js';
 import { problemSchema } from './problem.js';
@@ -59,6 +60,7 @@ export const ALL_SCHEMAS = deepFreeze([
 	customEventDataSchema,
 	elementUiEventDataSchema,
 	...catalogueEventDataSchemas(),
+	...elementEventDataSchemas(),
 	placementSchema,
 	problemSchema,
 	customerSchema,

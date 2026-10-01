@@ -8,6 +8,7 @@ import {
 	deliveryView,
 	dlqExpiry,
 	encodeCursor,
+	deliveryTarget,
 	eventsEndpoint,
 	parseLimit,
 	DLQ_RETENTION_MS,
@@ -49,6 +50,13 @@ describe('events endpoint', () => {
 		expect(eventsEndpoint({ base: 'https://a.example.com' })).toBeNull();
 		expect(eventsEndpoint({ base: 'https://a.example.com', events: 'x' })).toBeNull();
 		expect(eventsEndpoint(null)).toBeNull();
+		const environments = { production: 'https://p.example.com', staging: 'https://s.example.com' };
+		expect(deliveryTarget(environments, 'test')).toEqual({ base: 'https://s.example.com', environment: 'staging' });
+		expect(deliveryTarget(environments, 'live')).toEqual({ base: 'https://p.example.com', environment: 'production' });
+		expect(deliveryTarget(environments, null)).toEqual({ base: 'https://p.example.com', environment: 'production' });
+		expect(deliveryTarget({ production: 'https://p.example.com', staging: null }, 'test')?.environment).toBe('production');
+		expect(deliveryTarget({ production: null, staging: 'https://s.example.com' }, 'live')).toBeNull();
+		expect(deliveryTarget(null, 'live')).toBeNull();
 	});
 });
 

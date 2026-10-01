@@ -7,7 +7,15 @@
  * handshake, `@ss/entitlements` for resolution and settlement, `@ss/contracts` for validation.
  * @module
  */
-import { createId, createProblemFactory, createValidator, RESOURCE_KINDS, validateEvent, validateManifest } from '@ss/contracts';
+import {
+	createId,
+	createProblemFactory,
+	createValidator,
+	eventGlobMatches,
+	RESOURCE_KINDS,
+	validateEvent,
+	validateManifest,
+} from '@ss/contracts';
 import { normaliseProduct, resolveEntitlement, toDocument } from '@ss/entitlements';
 import {
 	canonicalUrl,
@@ -823,7 +831,7 @@ export const createPortal = async ({
 		if (!website) throw portalError('unknown_website', `no website ${websiteId}`);
 		const typed = withVersion(type);
 		const consumes = app.manifest.events?.consumes ?? [];
-		if (!force && !consumes.includes(typed))
+		if (!force && !consumes.some((entry) => entry === typed || eventGlobMatches(entry, typed)))
 			throw portalError(
 				'not_subscribed',
 				`${app.manifest.product.slug} does not consume ${typed} (events.consumes: ${consumes.join(', ') || 'none'})`,

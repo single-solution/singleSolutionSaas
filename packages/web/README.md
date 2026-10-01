@@ -212,7 +212,7 @@ export const render = ({ state, actions, strings, h }) =>
 
 **Isolation**: every element is mounted inside its own error boundary. A failing import, `create`, render or re-render
 marks only that element `failed`, removes its container, calls `onError({ key, phase, error })`, dispatches
-`ss:error` on `window` and tracks `loader.element_failed@1`; merchant hooks and listeners are isolated too.
+`ss:error` on `window` and tracks `loader.element_failed@1` (`{ element, phase, code: <phase>_failed, message }`, never the error text); merchant hooks and listeners are isolated too.
 
 **Events**: elements' `emit(verb, data)` becomes `<key>.<verb>@1` tracked with `context.element`, delivered to
 `SS.on(type | '*', handler)` hooks and `event` triggers. The Loader emits `<key>.shown` on each mount.

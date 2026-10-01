@@ -31,5 +31,11 @@ pnpm vitest run packages/cli --coverage --coverage.include='packages/cli/src/**'
 `src/bin.js` (process wiring only) is excluded with a `/* v8 ignore start/stop */` block; everything else is tested
 through `main()` with injected io. `test/helpers/fake-product.js` is a minimal product built on `@ss/protocol`; the
 certification tests run the suite against it and against deliberately broken variants.
+
+Certification of website keys: every resource with a documented `GET /v1/<resource>` must answer a `pk_` key from
+the bound domain with 200 or a 401/403 problem, identically on a repeat; a `GET` marked `"x-ss-key-kind": "sk"` in
+`openapi.json` must refuse `pk_`. Consumed globs (`custom.*`, `order.*@1`) are certified with a concrete matching
+type. `ss app validate` lets `headless/` import `@ss/web/element` (the DOM-free element runtime) and nothing else from
+`@ss/web`.
 `test/product-e2e.test.js` generates a service product, links `@ss/*` to the workspace packages, serves it with the
 template's `serve.js` and requires every certification check to pass against the real `@ss/app-kit`.

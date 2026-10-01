@@ -117,3 +117,56 @@ describe('entitlement document', () => {
 		expectProblem(validateEntitlementDocument(doc), '/validUntil', DOCUMENT_RULES.validityWindow);
 	});
 });
+
+describe('entitlement document identity section (bring-your-own identity)', () => {
+	const ed = {
+		kty: 'OKP',
+		crv: 'Ed25519',
+		x: '11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo',
+		kid: 'site-1',
+		alg: 'EdDSA',
+		use: 'sig',
+	};
+	const ec = {
+		kty: 'EC',
+		crv: 'P-256',
+		x: 'f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU',
+		y: 'x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0',
+		kid: 'site-2',
+	};
+	const rsa = { kty: 'RSA', n: 'A'.repeat(342), e: 'AQAB', kid: 'site-3', alg: 'RS256' };
+	/** @param {Record<string, unknown>} identity */
+	const withIdentity = (identity) => ({ ...entitlement(), identity });
+	const section = {
+		issuer: 'https://login.shop.example.com/',
+		jwks: [ed, ec, rsa],
+		claimMap: { subject: 'sub', email: 'email' },
+	};
+
+	it('accepts an issuer with inline public keys, an optional audience and a claim map', () => {
+		expect(validateEntitlementDocument(withIdentity(section)).ok).toBe(true);
+		expect(validateEntitlementDocument(withIdentity({ ...section, audience: 'shop-web' })).ok).toBe(true);
+	});
+
+	/** @type {Array<[string, Record<string, unknown>, string, string]>} */
+	const invalid = [
+		['a private key member', { ...section, jwks: [{ ...ed, d: 'secret' }] }, '/identity/jwks/0/d', 'additionalProperties'],
+		['too many keys', { ...section, jwks: [ed, ec, rsa, ed, ec, rsa] }, '/identity/jwks', 'maxItems'],
+		['no keys', { ...section, jwks: [] }, '/identity/jwks', 'minItems'],
+		['a mismatched algorithm', { ...section, jwks: [{ ...ed, alg: 'RS256' }] }, '/identity/jwks/0/alg', 'const'],
+		['a short RSA modulus', { ...section, jwks: [{ ...rsa, n: 'AQAB' }] }, '/identity/jwks/0/n', 'minLength'],
+		['an EC key without y', { ...section, jwks: [{ ...ec, y: undefined }] }, '/identity/jwks/0/y', 'required'],
+		['a missing subject claim', { ...section, claimMap: {} }, '/identity/claimMap/subject', 'required'],
+		['a bad claim name', { ...section, claimMap: { subject: '1 sub' } }, '/identity/claimMap/subject', 'pattern'],
+		['a missing issuer', { jwks: [ed], claimMap: { subject: 'sub' } }, '/identity/issuer', 'required'],
+	];
+	it.each(invalid)('rejects %s', (_name, identity, path, keyword) => {
+		expectProblem(validateEntitlementDocument(withIdentity(JSON.parse(JSON.stringify(identity)))), path, keyword);
+	});
+
+	it('rejects duplicate key ids', () => {
+		const result = validateEntitlementDocument(withIdentity({ ...section, jwks: [ed, { ...ec, kid: 'site-1' }] }));
+		expect(result.ok).toBe(false);
+		expectRule(result.ok ? [] : result.problems, DOCUMENT_RULES.duplicateIdentityKey, '/identity/jwks/1/kid');
+	});
+});

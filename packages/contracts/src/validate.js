@@ -8,7 +8,14 @@ import addFormatsModule from 'ajv-formats';
 import { ALL_SCHEMAS, GRAPH_ENTITY_SCHEMAS } from './schemas/index.js';
 import { SCHEMA_IDS, eventDataSchemaId } from './schemas/schema-ids.js';
 import { FEATURE_EXTENSION_KEYWORDS } from './schemas/feature-schema.js';
-import { CUSTOM_EVENT_PREFIX, ELEMENT_UI_EVENT_MAX_BYTES, eventScopeOf, isElementUiEvent } from './schemas/event-envelope.js';
+import {
+	CUSTOM_EVENT_PREFIX,
+	ELEMENT_EVENT_DATA,
+	ELEMENT_UI_EVENT_MAX_BYTES,
+	elementEventDataSchemaId,
+	eventScopeOf,
+	isElementUiEvent,
+} from './schemas/event-envelope.js';
 import { PATTERNS } from './schemas/common.js';
 import { checkManifest } from './manifest-semantics.js';
 import { checkEntitlementDocument, checkPlacement } from './document-semantics.js';
@@ -221,7 +228,8 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 					},
 				]);
 			}
-			dataId = eventDataSchemaId('element-ui');
+			const verb = event.type.slice(event.type.indexOf('.') + 1);
+			dataId = Object.hasOwn(ELEMENT_EVENT_DATA, verb) ? elementEventDataSchemaId(verb) : eventDataSchemaId('element-ui');
 		}
 		if (!has(dataId))
 			return result(event, [{ path: '/type', keyword: 'eventType', message: `unknown event type '${event.type}'` }]);

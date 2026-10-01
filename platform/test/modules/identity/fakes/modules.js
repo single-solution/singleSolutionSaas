@@ -9,9 +9,17 @@ import { defineModule } from '../../../../src/infra/modules.js';
 export const fakeCommerce = (options = {}) => {
 	/** @type {Array<{ merchantId: string, status: string }>} */
 	const calls = [];
+	/** @type {string[]} websites whose documents were re-signed */
+	const invalidated = [];
 	const module = defineModule({
 		name: 'commerce',
 		service: () => ({
+			/** @param {string} websiteId */
+			invalidateWebsite: async (websiteId) => {
+				invalidated.push(websiteId);
+				if (options.fail) throw new Error('commerce is down');
+				return { invalidated: 1 };
+			},
 			/** @param {{ merchantId: string, status: string }} input */
 			onMerchantStatus: async (input) => {
 				calls.push(input);
@@ -19,7 +27,7 @@ export const fakeCommerce = (options = {}) => {
 			},
 		}),
 	});
-	return { module, calls };
+	return { module, calls, invalidated };
 };
 
 /** @param {{ fail?: boolean }} [options] */

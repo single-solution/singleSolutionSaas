@@ -24,6 +24,7 @@ import {
 import { validateProject } from '../validate/index.js';
 import { normaliseFixture } from '../emulator/fixture.js';
 import { createPortal } from '../emulator/portal.js';
+import { concreteEventType } from '../emulator/events.js';
 import { createEmulatorServer } from '../emulator/server.js';
 import { createDatabaseResolver } from '../emulator/mongo.js';
 import { isObject, readJson } from '../fsutil.js';
@@ -503,6 +504,18 @@ export const runCertification = async ({
 			(element) => element.modes.includes('C') && (element.api?.resources?.length ?? 0) > 0,
 		);
 		const resource = resourceElement?.api?.resources?.[0];
+		/** Every Mode C resource, in manifest order. */
+		const resources = [
+			...new Set(
+				manifest.elements.filter((element) => element.modes.includes('C')).flatMap((element) => element.api?.resources ?? []),
+			),
+		];
+		const openapi = await readJson(path.join(dir, 'openapi.json'));
+		const openapiPaths = openapi.ok && isObject(openapi.value) ? /** @type {any} */ (openapi.value.paths ?? {}) : {};
+		/** Resources with a collection read: documented `GET /v1/<resource>` (all of them when openapi.json is missing). */
+		const readable = resources.filter((name) => !openapi.ok || Boolean(openapiPaths[`/v1/${name}`]?.get));
+		/** Resources whose `GET /v1/<resource>` declares `x-ss-key-kind: "sk"` in openapi.json (pk_ must be refused). */
+		const skOnly = new Set(resources.filter((name) => openapiPaths[`/v1/${name}`]?.get?.['x-ss-key-kind'] === 'sk'));
 		if (!resource) {
 			skip('keys', 'website key checks', 'no Mode C resource in the manifest');
 		}
@@ -547,11 +560,32 @@ export const runCertification = async ({
 				expect(result.status === 401, `status ${result.status}`);
 				return '401';
 			});
-			await check('keys.pk-origin', 'pk_ key works from the bound domain', async () => {
-				const result = await call(resourcePath, { headers: { ...bearer(pk), origin: `https://${CERT_DOMAIN}` } });
-				expect(result.status === 200, `status ${result.status}`);
-				return '200';
-			});
+			await check(
+				'keys.pk-resources',
+				'pk_ key from the bound domain: every resource GET answers 200 or a 401/403 problem, consistently; sk_-only resources refuse pk_',
+				async () => {
+					/** @type {string[]} */
+					const outcomes = [];
+					for (const name of readable) {
+						const pathname = `/v1/${name}`;
+						const headers = { ...bearer(pk), origin: `https://${CERT_DOMAIN}` };
+						const first = await call(pathname, { headers });
+						const second = await call(pathname, { headers });
+						const allowed = first.status === 200 || first.status === 401 || first.status === 403;
+						expect(allowed, `GET ${pathname} answered ${first.status}`);
+						expect(second.status === first.status, `GET ${pathname} answered ${first.status}, then ${second.status}`);
+						if (first.status !== 200) {
+							const shape = problemShapeError(first);
+							expect(shape === null, `GET ${pathname}: ${String(shape)}`);
+						}
+						if (skOnly.has(name)) {
+							expect(first.status !== 200, `GET ${pathname} is sk_-only (x-ss-key-kind) but answered 200 to a pk_ key`);
+						}
+						outcomes.push(`${name} ${first.status}`);
+					}
+					return outcomes.length > 0 ? outcomes.join(', ') : 'no documented resource GET';
+				},
+			);
 			await check('keys.pk-foreign-origin', 'pk_ key is refused from another origin (403)', async () => {
 				const result = await call(resourcePath, { headers: { ...bearer(pk), origin: FOREIGN_ORIGIN } });
 				expect(result.status === 403, `status ${result.status}`);
@@ -575,12 +609,7 @@ export const runCertification = async ({
 			});
 
 			// Idempotency and pagination (request examples come from openapi.json)
-			const openapi = await readJson(path.join(dir, 'openapi.json'));
-			const example =
-				openapi.ok && isObject(openapi.value)
-					? /** @type {any} */ (openapi.value).paths?.[resourcePath]?.post?.requestBody?.content?.['application/json']
-							?.example
-					: undefined;
+			const example = openapiPaths[resourcePath]?.post?.requestBody?.content?.['application/json']?.example;
 			if (example === undefined) {
 				skip(
 					'idempotency.replay',
@@ -686,8 +715,8 @@ export const runCertification = async ({
 		});
 
 		// Events
-		const consumed = manifest.events?.consumes?.[0];
-		if (!consumed) skip('events', 'signed event delivery', 'the manifest consumes no events');
+		const consumed = (manifest.events?.consumes ?? []).map(concreteEventType).find((type) => type !== null);
+		if (!consumed) skip('events', 'signed event delivery', 'the manifest consumes no deliverable events');
 		else {
 			/** @type {Awaited<ReturnType<typeof portal.emit>> | null} */
 			let delivery = null;

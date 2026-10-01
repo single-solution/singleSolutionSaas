@@ -167,7 +167,7 @@ export const manifestSchema = deepFreeze({
 			type: 'object',
 			additionalProperties: false,
 			properties: {
-				consumes: { type: 'array', maxItems: 200, uniqueItems: true, items: ref('eventType') },
+				consumes: { type: 'array', maxItems: 200, uniqueItems: true, items: ref('eventTypeGlob') },
 				publishes: { type: 'array', maxItems: 200, uniqueItems: true, items: ref('eventType') },
 			},
 		},
