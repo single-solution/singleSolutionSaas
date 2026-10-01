@@ -22,6 +22,11 @@ export default [
 		},
 	},
 	{
+		// Next.js adapters (App Router components use JSX in .js files)
+		files: ['platform/app/**/*.js'],
+		languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
+	},
+	{
 		files: ['**/test/**/*.js', '**/*.test.js'],
 		languageOptions: { globals: { ...globals.node } },
 		rules: { 'no-param-reassign': 'off' },

@@ -17,5 +17,5 @@
 		"skipLibCheck": true,
 		"types": ["node"]
 	},
-	"include": ["packages/*/src/**/*.js", "packages/*/test/**/*.js"]
+	"include": ["packages/*/src/**/*.js", "packages/*/test/**/*.js", "platform/src/**/*.js", "platform/test/**/*.js"]
 }

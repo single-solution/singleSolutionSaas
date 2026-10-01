@@ -1,0 +1,27 @@
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { API_CSP, staticSecurityHeaders } from './src/infra/security-headers.js';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = resolve(here, '..'); // monorepo root (workspace packages are linked from there)
+
+/** @type {import('next').NextConfig} */
+const config = {
+	poweredByHeader: false,
+	reactStrictMode: true,
+	outputFileTracingRoot: root,
+	turbopack: { root },
+	serverExternalPackages: ['mongodb'],
+	// Wire formats are served at /v1/* (F.9); the handler lives in the /api catch-all.
+	rewrites: async () => [{ source: '/v1/:path*', destination: '/api/v1/:path*' }],
+	headers: async () => [
+		{ source: '/:path*', headers: staticSecurityHeaders() },
+		{ source: '/api/:path*', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
+		{ source: '/v1/:path*', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
+		{ source: '/.well-known/:path*', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
+		{ source: '/healthz', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
+		{ source: '/readyz', headers: [{ key: 'Content-Security-Policy', value: API_CSP }] },
+	],
+};
+
+export default config;
