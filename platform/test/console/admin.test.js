@@ -54,7 +54,7 @@ import { StaffView } from '../../src/console/admin/views/staff.js';
 import { ImpersonationBanner } from '../../src/console/admin/views/impersonation.js';
 import { layerChange, layerValues } from '../../src/console/admin/views/layer.js';
 import { parseSignedCredits, staffCan } from '../../src/console/admin/views/common.js';
-import { PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
+import { PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
 vi.setConfig({ testTimeout: 90_000, hookTimeout: 120_000 });
 
@@ -212,7 +212,10 @@ const setup = async (name) => {
 	const { logger } = createTestLogger();
 	const config = await testConfig();
 	const db = mongo.db(name);
-	const portal = createPortal({ config, db, modules, logger });
+	// the Portal runs on an injected clock (starting at the wall time, so signed artefacts stay valid): time only moves
+	// when a test advances it, and expiry assertions are exact
+	const clock = createClock(Date.now());
+	const portal = createPortal({ config, db, modules, logger, now: clock.now });
 	await portal.ensureIndexes();
 	/** @param {string} to @param {string} template */
 	const tokenOf = (to, template) => {
@@ -241,14 +244,14 @@ const setup = async (name) => {
 	expect(await admin.loadStaffSession(staff.api)).toMatchObject({ ok: false, status: 401, problem: { code: 'mfa_pending' } });
 	const enrol = await staff.api.post(adminApi.mfaEnrol());
 	const secret = enrol.ok ? enrol.data.secret : '';
-	const confirmed = await staff.api.post(adminApi.mfaConfirm(), { code: totpCode(secret, Date.now()) });
+	const confirmed = await staff.api.post(adminApi.mfaConfirm(), { code: totpCode(secret, clock.now()) });
 	expect(confirmed.ok && confirmed.data.recoveryCodes.length).toBe(10);
 	expect((await admin.loadStaffSession(staff.api)).ok).toBe(true);
 	// a second sign-in asks for the TOTP code (next 30 s step: codes are single use)
 	expect((await staff.api.post(adminApi.logout())).ok).toBe(true);
 	const again = await staff.api.post(adminApi.login(), { email: 'root@ss.test', password });
 	expect(again).toMatchObject({ ok: true, data: { status: 'mfa_required' } });
-	const verified = await staff.api.post(adminApi.mfaVerify(), { code: totpCode(secret, Date.now() + 30_000) });
+	const verified = await staff.api.post(adminApi.mfaVerify(), { code: totpCode(secret, clock.now() + 30_000) });
 	expect(verified.ok).toBe(true);
 	const session = await admin.loadStaffSession(staff.api);
 	if (!session.ok) throw new Error('no staff session');
@@ -274,7 +277,7 @@ const setup = async (name) => {
 	const merchantId = /** @type {string} */ (me.merchantId);
 	const added = await merchant.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
 	const websiteId = added.ok ? added.data.website.websiteId : '';
-	return { portal, config, db, mail, tokenOf, staff, staffMember: session.staff, merchant, me, merchantId, websiteId };
+	return { portal, clock, config, db, mail, tokenOf, staff, staffMember: session.staff, merchant, me, merchantId, websiteId };
 };
 
 describe('admin console smoke', () => {
@@ -501,7 +504,7 @@ describe('admin console smoke', () => {
 	});
 
 	it('limits navigation and pages to the staff role', async () => {
-		const { portal, staff, tokenOf } = await setup('admin_roles');
+		const { portal, clock, staff, tokenOf } = await setup('admin_roles');
 		await staff.api.post(adminApi.staffList(), { email: 'help@ss.test', roles: ['support'] });
 		const support = client(portal);
 		const password = 'support password 123!';
@@ -511,7 +514,7 @@ describe('admin console smoke', () => {
 		).toBe(true);
 		await support.api.post(adminApi.login(), { email: 'help@ss.test', password });
 		const enrol = await support.api.post(adminApi.mfaEnrol());
-		await support.api.post(adminApi.mfaConfirm(), { code: totpCode(enrol.ok ? enrol.data.secret : '', Date.now()) });
+		await support.api.post(adminApi.mfaConfirm(), { code: totpCode(enrol.ok ? enrol.data.secret : '', clock.now()) });
 		const session = await admin.loadStaffSession(support.api);
 		if (!session.ok) throw new Error('no support session');
 		const labels = adminSections(session.staff, '/admin/merchants').flatMap((s) => s.items.map((i) => i.label));
@@ -532,7 +535,7 @@ describe('admin console smoke', () => {
 	});
 
 	it('impersonation: a time-boxed merchant session with via shows the banner and is audited as the staff member', async () => {
-		const { portal, db, staff, staffMember, me, merchantId, merchant, websiteId } = await setup('admin_impersonation');
+		const { portal, clock, db, staff, staffMember, me, merchantId, merchant, websiteId } = await setup('admin_impersonation');
 		// an ordinary merchant session: no banner
 		expect(await admin.loadImpersonation(merchant.api)).toBeNull();
 		const plain = text(
@@ -552,7 +555,7 @@ describe('admin console smoke', () => {
 
 		// POST /v1/admin/merchants/:merchantId/impersonate mints a one-time token; the same staff browser exchanges it
 		// for a merchant session carrying `via`, time-boxed to the minutes asked for
-		const startedAt = Date.now();
+		const startedAt = clock.now();
 		const started = await staff.api.post(adminApi.impersonate(merchantId), {
 			userId: member.userId,
 			minutes: 15,
@@ -575,7 +578,8 @@ describe('admin console smoke', () => {
 		expect(state).toMatchObject({ staffId: staffMember.staffId, staffName: 'root@ss.test' });
 		const ends = Date.parse(String(state?.expiresAt));
 		expect(ends).toBeGreaterThan(startedAt);
-		expect(ends).toBeLessThanOrEqual(startedAt + 15 * 60_000 + 1000);
+		// time-boxed to exactly the 15 minutes asked for, from the moment of the exchange (injected clock)
+		expect(ends).toBe(startedAt + 15 * 60_000);
 
 		// the Merchant Console frame shows the banner on every page
 		const session = await loaders.loadSession(impersonated);
