@@ -1,0 +1,144 @@
+{
+	"type": "object",
+	"title": "Tiers",
+	"additionalProperties": false,
+	"properties": {
+		"tiers": {
+			"type": "array",
+			"title": "Tiers",
+			"description": "Your quality ladder, best first by `order`: condition grades, produce classes, room classes, service levels. The key is stable (used by the API, mappings and filters); everything else is display. Colour: a hex value or a design token name (e.g. --ss-color-success); the token wins when both are set.",
+			"default": [
+				{
+					"key": "new",
+					"label": "New",
+					"short_label": "",
+					"description": "Unused and complete, in its original state.",
+					"color": "",
+					"token": "--ss-color-success",
+					"icon": "sparkle",
+					"order": 1,
+					"applies_when": "",
+					"active": true
+				},
+				{
+					"key": "excellent",
+					"label": "Excellent",
+					"short_label": "",
+					"description": "Hardly any signs of use.",
+					"color": "",
+					"token": "--ss-color-primary",
+					"icon": "star",
+					"order": 2,
+					"applies_when": "",
+					"active": true
+				},
+				{
+					"key": "good",
+					"label": "Good",
+					"short_label": "",
+					"description": "Light, visible signs of use; works and looks as it should.",
+					"color": "",
+					"token": "--ss-color-warning",
+					"icon": "check",
+					"order": 3,
+					"applies_when": "",
+					"active": true
+				},
+				{
+					"key": "fair",
+					"label": "Fair",
+					"short_label": "",
+					"description": "Clear signs of use; fully usable.",
+					"color": "",
+					"token": "--ss-color-text-muted",
+					"icon": "circle",
+					"order": 4,
+					"applies_when": "",
+					"active": true
+				}
+			],
+			"minItems": 1,
+			"maxItems": 20,
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 6 }, "pro": { "max": 20 } },
+			"x-ui": { "widget": "list", "group": "Tiers", "order": 1 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "label"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 60 },
+					"short_label": { "type": "string", "title": "Short label (badges)", "maxLength": 16 },
+					"description": { "type": "string", "title": "Notes", "maxLength": 1200 },
+					"color": { "type": "string", "title": "Colour (hex)", "maxLength": 7, "pattern": "^(?:#[0-9A-Fa-f]{6})?$" },
+					"token": {
+						"type": "string",
+						"title": "Colour (design token)",
+						"maxLength": 64,
+						"pattern": "^(?:--[a-z][a-z0-9-]*)?$"
+					},
+					"icon": { "type": "string", "title": "Icon name", "maxLength": 40, "pattern": "^(?:[a-z][a-z0-9-]*)?$" },
+					"order": { "type": "integer", "title": "Order (lower = better)", "minimum": 0, "maximum": 1000 },
+					"applies_when": {
+						"type": "string",
+						"title": "Applies when (rules@1)",
+						"description": "Condition over item (title, brand, status, collections, attributes) from the catalog events. Empty = every item.",
+						"maxLength": 2000
+					},
+					"active": { "type": "boolean", "title": "Shown to shoppers" }
+				}
+			}
+		},
+		"default_tier": {
+			"type": "string",
+			"title": "Default tier",
+			"description": "Tier of items and variants without an assignment. Empty = none.",
+			"default": "",
+			"maxLength": 40,
+			"pattern": "^(?:[a-z][a-z0-9_]*)?$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Tiers", "order": 2 }
+		},
+		"badge_style": {
+			"type": "string",
+			"title": "Badge style",
+			"default": "soft",
+			"enum": ["soft", "solid", "outline"],
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "widget": "select", "group": "Appearance", "order": 3 }
+		},
+		"catalog_attribute": {
+			"type": "string",
+			"title": "Catalog attribute with the tier",
+			"description": "When item.created@1 / item.updated@1 carry this attribute on the item or a variant (a tier key or label), the tier is assigned automatically. Empty = off.",
+			"default": "tier",
+			"maxLength": 64,
+			"pattern": "^(?:[A-Za-z][A-Za-z0-9_]*)?$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Catalog", "order": 4 }
+		},
+		"max_units_per_item": {
+			"type": "integer",
+			"title": "Graded units per item",
+			"description": "Individually graded units (serials, lots, rooms) one item may hold.",
+			"default": 500,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 500, "max": 1000 }, "pro": { "default": 5000, "max": 100000 } },
+			"x-ui": { "widget": "number", "group": "Limits", "order": 5 }
+		},
+		"cache_seconds": {
+			"type": "integer",
+			"title": "Browser cache (seconds)",
+			"description": "How long browsers and CDNs may cache public tier reads.",
+			"default": 300,
+			"minimum": 0,
+			"maximum": 86400,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Performance", "order": 6 }
+		}
+	}
+}

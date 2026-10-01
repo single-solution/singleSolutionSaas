@@ -1,0 +1,75 @@
+{
+	"type": "object",
+	"title": "Filters",
+	"additionalProperties": false,
+	"properties": {
+		"param_name": {
+			"type": "string",
+			"title": "URL parameter",
+			"description": "Query parameter the filter writes and reads (e.g. ?tier=new,good).",
+			"default": "tier",
+			"minLength": 1,
+			"maxLength": 32,
+			"pattern": "^[a-z][a-z0-9_]*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Behaviour", "order": 1 }
+		},
+		"multi_select": {
+			"type": "boolean",
+			"title": "Several tiers at once",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Behaviour", "order": 2 }
+		},
+		"show_counts": {
+			"type": "boolean",
+			"title": "Show item counts",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Appearance", "order": 3 }
+		},
+		"hide_empty": {
+			"type": "boolean",
+			"title": "Hide tiers without items",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Visibility", "order": 4 }
+		},
+		"visible_when": {
+			"type": "string",
+			"title": "Show a tier option when (rules@1)",
+			"description": "Condition over tier (key, label, order, count) and collection. Empty = every option.",
+			"default": "",
+			"maxLength": 2000,
+			"x-kind": "config",
+			"x-ui": { "widget": "code", "group": "Visibility", "order": 5 }
+		},
+		"default_sort": {
+			"type": "string",
+			"title": "Default sort",
+			"description": "Order of items by tier: best first, worst first, or as given.",
+			"default": "tier_order",
+			"enum": ["tier_order", "tier_order_desc", "none"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Behaviour", "order": 6 }
+		},
+		"max_options": {
+			"type": "integer",
+			"title": "Most options shown",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 20,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Visibility", "order": 7 }
+		},
+		"cache_seconds": {
+			"type": "integer",
+			"title": "Browser cache (seconds)",
+			"default": 120,
+			"minimum": 0,
+			"maximum": 86400,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Performance", "order": 8 }
+		}
+	}
+}
