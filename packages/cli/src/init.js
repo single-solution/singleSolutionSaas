@@ -2,7 +2,8 @@
  * `ss app init <dir> --kind service|pack --slug <slug> --name <name>` — generates a project from the templates:
  * `templates/shared` (core, headless, ui, strings, schemas, unit tests) overlaid by `templates/<kind>`.
  * Files and paths may contain `{{slug}}`, `{{name}}`, `{{namespace}}` (slug with `-` → `_`) and `{{sdkVersion}}`.
- * `_gitignore` is written as `.gitignore`.
+ * `_gitignore` is written as `.gitignore`. Outside a pnpm workspace `templates/standalone` (the pnpm settings and
+ * `.nvmrc` a repository of its own needs) is added; inside one (e.g. `products/` of the monorepo) the workspace's apply.
  *
  * `--minimal` (service products): the `notes` sample ({@link NOTES_SAMPLE_FILES}) is left out and
  * `templates/minimal/service` is overlaid instead: one placeholder Mode C element `status` (`GET /v1/status`, marked
@@ -14,7 +15,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PATTERNS } from '@ss/contracts';
-import { walk } from './fsutil.js';
+import { exists, walk } from './fsutil.js';
 
 /** Root of the bundled templates. */
 export const TEMPLATES_DIR = fileURLToPath(new URL('../templates/', import.meta.url));
@@ -51,8 +52,10 @@ export const NOTES_SAMPLE_FILES = Object.freeze([
  * @property {'service' | 'pack'} kind
  * @property {string} slug product slug (SSPS slug pattern)
  * @property {string} name display name (1–80 chars)
- * @property {string} [sdkVersion] version range for `@ss/*` dependencies (default `workspace:*`)
+ * @property {string} [sdkVersion] version range for `@ss/*` dependencies (default `workspace:^`)
  * @property {boolean} [minimal] service only: leave out the `notes` sample (one placeholder element instead)
+ * @property {boolean} [standalone] add the files of a repository of its own (default: when `dir` is not inside a pnpm
+ *   workspace)
  * @property {string} [templatesDir]
  */
 
@@ -87,6 +90,18 @@ export const checkInitOptions = ({ dir, kind, slug, name, minimal }) => {
 };
 
 /**
+ * True when `dir` or one of its ancestors holds a `pnpm-workspace.yaml`.
+ * @param {string} dir
+ * @returns {Promise<boolean>}
+ */
+export const insideWorkspace = async (dir) => {
+	const current = path.resolve(dir);
+	if (await exists(path.join(current, 'pnpm-workspace.yaml'))) return true;
+	const parent = path.dirname(current);
+	return parent === current ? false : insideWorkspace(parent);
+};
+
+/**
  * Generate a project.
  * @param {InitOptions} options
  * @returns {Promise<{ dir: string, files: string[] }>} files written (relative)
@@ -96,8 +111,9 @@ export const initApp = async ({
 	kind,
 	slug,
 	name,
-	sdkVersion = 'workspace:*',
+	sdkVersion = 'workspace:^',
 	minimal = false,
+	standalone,
 	templatesDir = TEMPLATES_DIR,
 }) => {
 	const errors = checkInitOptions({ dir, kind, slug, name, minimal });
@@ -113,7 +129,9 @@ export const initApp = async ({
 	/** @type {Map<string, string>} destination → source */
 	const plan = new Map();
 	const skip = new Set(minimal ? NOTES_SAMPLE_FILES : []);
-	for (const layer of minimal ? ['shared', kind, `minimal/${kind}`] : ['shared', kind]) {
+	const own = standalone ?? !(await insideWorkspace(path.dirname(target)));
+	const layers = [...(minimal ? ['shared', kind, `minimal/${kind}`] : ['shared', kind]), ...(own ? ['standalone'] : [])];
+	for (const layer of layers) {
 		const root = path.join(templatesDir, layer);
 		for (const file of await walk(root, { ignore: new Set(['node_modules']) })) {
 			if (skip.has(file)) continue;

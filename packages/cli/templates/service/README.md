@@ -19,7 +19,7 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                         |
 | `schemas/`      | feature schemas and product event data schemas                                                                        |
 | `app/`          | Next.js App Router: `.well-known/ss-register`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
-| `tests/`        | unit tests (`node --test`)                                                                                            |
+| `tests/`        | unit tests (Vitest)                                                                                                   |
 
 ## Develop
 
@@ -37,7 +37,7 @@ ss dev settle --hours 3        # hourly ledger lines for the fake subscriptions
 ## Check
 
 ```sh
-pnpm test                      # unit tests
+pnpm check                     # format, lint, typecheck, unit tests with coverage (tooling from @ss/config)
 ss app validate                # manifest, anatomy, import direction, DOM-free cores, tokens, strings
 ss certify . --url http://localhost:3000 --token <fresh token>   # certification suite (restart the product first)
 ```
@@ -60,4 +60,4 @@ ss certify . --url http://localhost:3000 --token <fresh token>   # certification
 5. `adapters/privacy.js`: list your own personal-data collections; when you store none, pass `export` /
    `anonymize` handlers that answer empty results (as `--minimal` does) so the Portal's data requests succeed.
 6. `strings/en.json`: remove the `notes.*` keys (keep `dashboard.*`).
-7. Run `ss app validate` and `pnpm test`.
+7. Run `ss app validate` and `pnpm check`.

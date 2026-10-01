@@ -15,7 +15,7 @@ import {
 	validateEvent,
 } from '../src/index.js';
 import { EVENT_SCOPES, PLATFORM_SCOPED_EVENTS, eventScopeOf } from '../src/index.js';
-import { SUBSCRIPTION, WEBSITE, event, manifest } from './fixtures.js';
+import { SUBSCRIPTION, WEBSITE, event, manifest } from '../src/testing.js';
 import { expectProblem, expectRule } from './helpers.js';
 
 /**

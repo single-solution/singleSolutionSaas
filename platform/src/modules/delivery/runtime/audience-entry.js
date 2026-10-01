@@ -3,4 +3,4 @@
  * precompiled rules@1 programs only, so the parser stays out of website bundles (F.7).
  * @module
  */
-export { evaluateAudienceProgram } from '../../../../../packages/web/src/audience.js';
+export { evaluateAudienceProgram } from '@ss/web/audience';

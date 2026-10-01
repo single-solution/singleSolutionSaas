@@ -1,31 +1,22 @@
 // Build the browser runtime that the delivery compiler prepends to every website's loader.js:
 //   node platform/scripts/build-delivery-runtime.js          (rewrites src/modules/delivery/runtime/generated.js)
 //   node platform/scripts/build-delivery-runtime.js --check  (exit 1 when the committed file is out of date)
-// Development only: esbuild (reached through vitest → vite, no extra dependency) and prettier are dev tools; the
-// Portal itself only ever imports the generated string module, so production needs neither.
+// Development only: esbuild and prettier are dev dependencies of this package; the Portal itself only ever imports
+// the generated string module, so production needs neither. Run from anywhere (`pnpm runtime:build` in platform/).
 import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repo = resolve(here, '../..');
+/** Resolves this package's own (dev) dependencies. */
+const fromPlatform = createRequire(resolve(here, '../package.json'));
 export const ENTRY = resolve(here, '../src/modules/delivery/runtime/entry.js');
 export const AUDIENCE_ENTRY = resolve(here, '../src/modules/delivery/runtime/audience-entry.js');
 export const OUTPUT = resolve(here, '../src/modules/delivery/runtime/generated.js');
 
-/** esbuild from the dev toolchain (vitest → vite → esbuild). */
-const loadEsbuild = async () => {
-	const fromRoot = createRequire(resolve(repo, 'package.json'));
-	const vitest = createRequire(fromRoot.resolve('vitest/package.json'));
-	let path;
-	try {
-		path = vitest.resolve('esbuild');
-	} catch {
-		path = createRequire(vitest.resolve('vite/package.json')).resolve('esbuild');
-	}
-	return import(pathToFileURL(path).href);
-};
+/** @returns {Promise<any>} */
+const loadEsbuild = () => import(pathToFileURL(fromPlatform.resolve('esbuild')).href);
 
 /**
  * @param {any} esbuild
@@ -66,7 +57,7 @@ export const buildRuntimeSource = async () => {
 		`export const RUNTIME_AUDIENCE = ${JSON.stringify(audience)};`,
 		'',
 	].join('\n');
-	const loaded = await import(pathToFileURL(createRequire(resolve(repo, 'package.json')).resolve('prettier')).href);
+	const loaded = await import(pathToFileURL(fromPlatform.resolve('prettier')).href);
 	const prettier = loaded.default ?? loaded;
 	const options = (await prettier.resolveConfig(OUTPUT)) ?? {};
 	return prettier.format(source, { ...options, filepath: OUTPUT });

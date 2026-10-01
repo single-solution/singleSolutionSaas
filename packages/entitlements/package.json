@@ -4,14 +4,50 @@
 	"description": "Pure commerce core: entitlement resolution (precedence, locks, runtime state), quotas, hourly settlement math.",
 	"type": "module",
 	"license": "UNLICENSED",
-	"private": true,
 	"exports": {
-		".": "./src/index.js"
+		".": "./src/index.js",
+		"./package.json": "./package.json"
 	},
 	"files": [
-		"src"
+		"src",
+		"types"
 	],
+	"engines": {
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "restricted",
+		"exports": {
+			".": {
+				"types": "./types/src/index.d.ts",
+				"default": "./src/index.js"
+			},
+			"./package.json": "./package.json"
+		}
+	},
+	"prettier": "@ss/config/prettier.json",
+	"scripts": {
+		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+		"test": "vitest run --coverage",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"typecheck": "tsc -p tsconfig.json",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"build:types": "tsc -p tsconfig.types.json",
+		"prepack": "pnpm build:types"
+	},
 	"dependencies": {
-		"@ss/contracts": "workspace:*"
+		"@ss/contracts": "workspace:^"
+	},
+	"devDependencies": {
+		"@ss/config": "workspace:^",
+		"@types/node": "^22.20.4",
+		"@vitest/coverage-v8": "^3.2.7",
+		"eslint": "^9.39.5",
+		"fast-check": "^4.10.2",
+		"prettier": "^3.9.9",
+		"typescript": "~5.9.3",
+		"vitest": "^3.2.7"
 	}
 }

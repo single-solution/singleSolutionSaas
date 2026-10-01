@@ -4,7 +4,7 @@
  * @module
  */
 export { main, USAGE, VERSION, SESSION_FILE } from './cli.js';
-export { initApp, checkInitOptions, fill, TEMPLATES_DIR, INIT_KINDS } from './init.js';
+export { initApp, checkInitOptions, fill, insideWorkspace, TEMPLATES_DIR, INIT_KINDS } from './init.js';
 export {
 	validateProject,
 	formatValidation,
@@ -17,6 +17,8 @@ export {
 	checkStringKeys,
 	checkModules,
 	checkServiceContract,
+	checkPackageWiring,
+	PACKAGE_WIRING,
 	checkEventSchemas,
 	layerOf,
 	packageOf,
@@ -27,6 +29,7 @@ export {
 	findImports,
 	findDomGlobals,
 	findColours,
+	findCssReferences,
 	findStringKeys,
 	findExports,
 	colourLiterals,

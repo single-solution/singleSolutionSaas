@@ -26,7 +26,7 @@ import {
 import { ConsoleShell } from '../../src/console/views/shell.js';
 import { TeamView } from '../../src/console/views/team.js';
 import { OnboardingView, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
-import { act, byLabel, cleanup, render, type } from '../../../packages/ui/test/dom.js';
+import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
 	browserOf,

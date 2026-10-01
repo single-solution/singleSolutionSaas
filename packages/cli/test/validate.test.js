@@ -74,6 +74,49 @@ describe('ss app validate', () => {
 		expect(formatValidation(report)).toMatch(/error +core\/notes\.js:1 {2}imports\.direction/);
 	});
 
+	it('keeps every import inside the project: tests, app/, root files and stylesheets included', async () => {
+		const dir = await project();
+		await edit(dir, 'tests/api.test.js', (text) => `import { createPortal } from '../../../platform/src/portal.js';\n${text}`);
+		await edit(dir, 'serve.js', (text) => `export { x } from '../loyalty/serve.js';\n${text}`);
+		await edit(dir, 'app/page.js', (text) => `const other = await import('../../other/app/page.js');\n${text}`);
+		await mkdir(path.join(dir, 'app'), { recursive: true });
+		await writeFile(
+			path.join(dir, 'app/globals.css'),
+			"@import 'tailwindcss';\n/* @source '../../ignored'; */\n@source '../node_modules/@ss/ui/src';\n@source '../../../packages/ui/src';\n@import url('../../shared.css');\n",
+		);
+		const report = await validateProject(dir);
+		const found = report.problems.filter((problem) => problem.rule === 'imports.outside');
+		expect(found.map((problem) => `${problem.file}:${problem.line}`)).toEqual([
+			'app/globals.css:4',
+			'app/globals.css:5',
+			'app/page.js:1',
+			'serve.js:1',
+			'tests/api.test.js:1',
+		]);
+		expect(found[0]?.message).toMatch(/its own repository/);
+		// unlayered files only need to stay inside: unresolved or any package imports are theirs to decide
+		expect(report.problems.filter((problem) => problem.file === 'tests/api.test.js')).toHaveLength(1);
+	});
+
+	it('checks the package wiring of a pack: tooling dev dependencies and scripts', async () => {
+		const dir = await project('pack');
+		await edit(dir, 'package.json', (text) => {
+			const pkg = JSON.parse(text);
+			delete pkg.devDependencies['@ss/config'];
+			pkg.dependencies['@ss/cli'] = pkg.devDependencies['@ss/cli'];
+			delete pkg.devDependencies['@ss/cli'];
+			delete pkg.scripts.typecheck;
+			delete pkg.dependencies['@ss/contracts'];
+			return JSON.stringify(pkg);
+		});
+		const report = await validateProject(dir);
+		expect(report.problems.map((problem) => `${problem.severity}:${problem.rule}:${problem.message}`)).toEqual([
+			"error:package.dependency:dependencies must include '@ss/contracts'",
+			"warning:package.devDependency:devDependencies should include '@ss/config'",
+			'warning:package.script:scripts.typecheck is missing',
+		]);
+	});
+
 	it('reports DOM globals in headless/core and hard-coded colours in ui', async () => {
 		const dir = await project();
 		await edit(dir, 'headless/notes.js', (text) => `${text}\nexport const size = () => window.innerWidth;\n`);

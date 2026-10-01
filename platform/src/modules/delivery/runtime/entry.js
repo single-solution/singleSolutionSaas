@@ -27,9 +27,9 @@
  *   Website Graph API exists.
  * @module
  */
-import { err, problem } from '../../../../../packages/web/src/element.js';
-import { createClient } from '../../../../../packages/web/src/client.js';
-import { boot } from '../../../../../packages/web/src/loader.js';
+import { err, problem } from '@ss/web/element';
+import { createClient } from '@ss/web/client';
+import { boot } from '@ss/web/loader';
 
 export const STUB_PROTOCOL = 'ss-element-stub@2';
 /** Stub protocols this runtime runs (v2 is a superset of v1). */

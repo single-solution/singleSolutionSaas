@@ -216,6 +216,21 @@ export const findImports = ({ code }) => {
 	return [...found.entries()].sort(([a], [b]) => a - b).map(([, ref]) => ref);
 };
 
+const CSS_REFERENCE = /@(?:import|source)\s+(?:url\(\s*)?(['"])([^'"\n]+)\1/g;
+
+/**
+ * Files a stylesheet references by path: `@import` and Tailwind's `@source` (comments are ignored).
+ * @param {string} css
+ * @returns {ImportRef[]}
+ */
+export const findCssReferences = (css) => {
+	const code = css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '));
+	return [...code.matchAll(CSS_REFERENCE)].map((match) => {
+		const specifier = match[2] ?? '';
+		return { specifier, line: lineOf(code, (match.index ?? 0) + match[0].lastIndexOf(specifier)) };
+	});
+};
+
 /** Browser globals that must never appear in `core/` or `headless/`. */
 export const DOM_GLOBALS = Object.freeze([
 	'window',

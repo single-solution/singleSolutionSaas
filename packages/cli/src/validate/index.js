@@ -10,7 +10,16 @@ import path from 'node:path';
 import { validateManifest } from '@ss/contracts';
 import { isObject, parseJson, walk } from '../fsutil.js';
 import { loadManifest, problemOf } from '../manifest.js';
-import { colourLiterals, findColours, findDomGlobals, findExports, findImports, findStringKeys, lex } from './scan.js';
+import {
+	colourLiterals,
+	findColours,
+	findCssReferences,
+	findDomGlobals,
+	findExports,
+	findImports,
+	findStringKeys,
+	lex,
+} from './scan.js';
 
 /** @typedef {import('../manifest.js').Problem} Problem */
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
@@ -66,7 +75,8 @@ export const IMPORT_POLICY = Object.freeze({
 	jobs: { layers: ['jobs', 'core', 'adapters'], packages: null },
 });
 
-const CODE_FILE = /\.(?:m?js|jsx)$/;
+const CODE_FILE = /\.(?:m?js|cjs|jsx)$/;
+const CSS_FILE = /\.css$/;
 const UI_FILE = /\.(?:m?js|jsx|css|html)$/;
 const STRING_KEY = /^[A-Za-z][\w.-]*$/;
 const PLACEHOLDER = /\{([A-Za-z_]\w*)\}/g;
@@ -169,7 +179,23 @@ export const checkAnatomy = (files, kind) =>
 		);
 
 /**
- * Import direction, allowed packages and unresolved relative imports for every layered source file.
+ * @param {string} file
+ * @param {number} line
+ * @param {string} specifier
+ * @returns {Problem}
+ */
+const outside = (file, line, specifier) =>
+	problemOf({
+		rule: 'imports.outside',
+		file,
+		line,
+		message: `'${specifier}' points outside the project (a project is its own repository: use a package import)`,
+	});
+
+/**
+ * Imports of every source file and stylesheet stay inside the project (tests, app/ and root files included: the
+ * project must build on its own once split into its own repository). Layered files are also checked for import
+ * direction, allowed packages and unresolved relative imports.
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
@@ -177,18 +203,23 @@ export const checkImports = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	for (const file of files.list) {
+		if (CSS_FILE.test(file)) {
+			for (const { specifier, line } of findCssReferences(await files.read(file)))
+				if (specifier.startsWith('.') && !resolveImport(file, specifier, files.set).inside)
+					problems.push(outside(file, line, specifier));
+			continue;
+		}
+		if (!CODE_FILE.test(file)) continue;
 		const layer = layerOf(file);
 		const policy = Object.hasOwn(IMPORT_POLICY, layer) ? IMPORT_POLICY[layer] : undefined;
-		if (policy === undefined || !CODE_FILE.test(file)) continue;
 		for (const { specifier, line } of findImports(lex(await files.read(file)))) {
 			if (specifier.startsWith('.')) {
 				const { inside, target } = resolveImport(file, specifier, files.set);
 				if (!inside) {
-					problems.push(
-						problemOf({ rule: 'imports.outside', file, line, message: `'${specifier}' points outside the project` }),
-					);
+					problems.push(outside(file, line, specifier));
 					continue;
 				}
+				if (policy === undefined) continue;
 				if (target === null) {
 					problems.push(problemOf({ rule: 'imports.unresolved', file, line, message: `cannot resolve '${specifier}'` }));
 					continue;
@@ -205,6 +236,7 @@ export const checkImports = async (files) => {
 					);
 				}
 			} else if (
+				policy !== undefined &&
 				policy.packages !== null &&
 				!policy.packages.includes(packageOf(specifier)) &&
 				!policy.packages.includes(specifier)
@@ -476,7 +508,7 @@ export const checkModules = async (files, manifest) => {
 };
 
 /**
- * Service products: OpenAPI 3.1 document present and documents every Mode C resource; package.json wiring.
+ * Service products: OpenAPI 3.1 document present and documents every Mode C resource.
  * @param {ProjectFiles} files
  * @param {Manifest} manifest
  * @returns {Promise<Problem[]>}
@@ -513,30 +545,81 @@ export const checkServiceContract = async (files, manifest) => {
 			}
 		}
 	}
-	if (files.set.has('package.json')) {
-		const parsed = parseJson(await files.read('package.json'));
-		const pkg = parsed.ok && isObject(parsed.value) ? parsed.value : {};
-		const deps = isObject(pkg.dependencies) ? pkg.dependencies : {};
-		for (const name of ['@ss/app-kit', '@ss/contracts']) {
-			if (!Object.hasOwn(deps, name))
-				problems.push(
-					problemOf({ rule: 'package.dependency', file: 'package.json', message: `dependencies must include '${name}'` }),
-				);
-		}
-		const scripts = isObject(pkg.scripts) ? pkg.scripts : {};
-		for (const name of ['dev', 'test', 'validate', 'certify']) {
-			if (!Object.hasOwn(scripts, name))
-				problems.push(
-					problemOf({
-						severity: 'warning',
-						rule: 'package.script',
-						file: 'package.json',
-						message: `scripts.${name} is missing`,
-					}),
-				);
-		}
-	}
 	return problems;
+};
+
+/**
+ * package.json wiring every project needs to work on its own (in the monorepo and once split into its own repository):
+ * the kit it is built on, its tooling (`@ss/cli`, `@ss/config`) and its scripts.
+ */
+export const PACKAGE_WIRING = Object.freeze({
+	service: Object.freeze({
+		dependencies: Object.freeze(['@ss/app-kit', '@ss/contracts']),
+		devDependencies: Object.freeze(['@ss/cli', '@ss/config']),
+		scripts: Object.freeze([
+			'dev',
+			'build',
+			'start',
+			'portal',
+			'check',
+			'test',
+			'lint',
+			'typecheck',
+			'format:check',
+			'validate',
+			'certify',
+		]),
+	}),
+	pack: Object.freeze({
+		dependencies: Object.freeze(['@ss/contracts']),
+		devDependencies: Object.freeze(['@ss/cli', '@ss/config']),
+		scripts: Object.freeze(['dev', 'check', 'test', 'lint', 'typecheck', 'format:check', 'validate', 'certify']),
+	}),
+});
+
+/**
+ * package.json wiring: required dependencies (errors), tooling dev dependencies and scripts (warnings).
+ * @param {ProjectFiles} files
+ * @param {'service' | 'pack'} kind
+ * @returns {Promise<Problem[]>}
+ */
+export const checkPackageWiring = async (files, kind) => {
+	if (!files.set.has('package.json')) return [];
+	const parsed = parseJson(await files.read('package.json'));
+	const pkg = parsed.ok && isObject(parsed.value) ? parsed.value : {};
+	/** @param {unknown} value */
+	const keys = (value) => (isObject(value) ? value : {});
+	const wiring = PACKAGE_WIRING[kind];
+	const deps = keys(pkg.dependencies);
+	const devDeps = keys(pkg.devDependencies);
+	const scripts = keys(pkg.scripts);
+	return [
+		...wiring.dependencies
+			.filter((name) => !Object.hasOwn(deps, name))
+			.map((name) =>
+				problemOf({ rule: 'package.dependency', file: 'package.json', message: `dependencies must include '${name}'` }),
+			),
+		...wiring.devDependencies
+			.filter((name) => !Object.hasOwn(devDeps, name) && !Object.hasOwn(deps, name))
+			.map((name) =>
+				problemOf({
+					severity: 'warning',
+					rule: 'package.devDependency',
+					file: 'package.json',
+					message: `devDependencies should include '${name}'`,
+				}),
+			),
+		...wiring.scripts
+			.filter((name) => !Object.hasOwn(scripts, name))
+			.map((name) =>
+				problemOf({
+					severity: 'warning',
+					rule: 'package.script',
+					file: 'package.json',
+					message: `scripts.${name} is missing`,
+				}),
+			),
+	];
 };
 
 /**
@@ -616,6 +699,7 @@ export const validateProject = async (dir) => {
 	if (manifest !== null && Array.isArray(manifest.elements)) {
 		problems.push(...(await checkModules(files, manifest)), ...checkEventSchemas(files, manifest));
 		if (kind === 'service') problems.push(...(await checkServiceContract(files, manifest)));
+		if (kind !== null) problems.push(...(await checkPackageWiring(files, kind)));
 	}
 	problems.sort((a, b) => a.file.localeCompare(b.file) || (a.line ?? 0) - (b.line ?? 0) || a.rule.localeCompare(b.rule));
 	const errors = problems.filter((problem) => problem.severity === 'error').length;

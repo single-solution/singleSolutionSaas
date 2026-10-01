@@ -14,7 +14,7 @@ import { ProductsView } from '../../src/console/views/products.js';
 import { SubscriptionView } from '../../src/console/views/subscription.js';
 import { ConfigurePanel, diffLine } from '../../src/console/views/configure.js';
 import { UsageView } from '../../src/console/views/usage.js';
-import { act, byLabel, cleanup, render, type } from '../../../packages/ui/test/dom.js';
+import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
 	button,

@@ -2,7 +2,7 @@
  * Valid manifests for catalog tests (fresh deep copies).
  * @module
  */
-import { manifest as contractsManifest, packManifest as contractsPack } from '../../../../packages/contracts/test/fixtures.js';
+import { manifest as contractsManifest, packManifest as contractsPack } from '@ss/contracts/testing';
 
 export const SERVICE_BASE = 'https://coupons.example.dev';
 

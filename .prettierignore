@@ -1,5 +1,8 @@
+# every unit formats its own folder (`pnpm -r format:check`); the root checks only its own files
+packages
+platform
+products
+e2e
 node_modules
 pnpm-lock.yaml
 coverage
-.next
-dist

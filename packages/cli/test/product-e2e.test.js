@@ -1,20 +1,27 @@
 /**
- * End to end with the real kit: `ss app init` a service product, wire `@ss/*` to the workspace packages (no install),
+ * End to end with the real kit: `ss app init` a service product, wire `@ss/*` to the installed packages (no install),
  * start it as a plain node:http server through the template's `serve.js` (app-kit `createRequestHandler`), then run
  * `ss certify` against it with the emulator and a real MongoMemoryServer client database. Every check must pass
  * (the `--minimal` project skips only what it has nothing to exercise: POST replay, pagination, consumed events).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdir, symlink } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { formatReport, runCertification } from '../src/certify/index.js';
 import { createDatabaseResolver } from '../src/emulator/mongo.js';
 import { initApp } from '../src/init.js';
 import { freePort, removeDir, tempDir } from './helpers/util.js';
 
-const PACKAGES = fileURLToPath(new URL('../../', import.meta.url));
+const require = createRequire(import.meta.url);
+/**
+ * Folder of an `@ss/*` package as this package resolves it (its own dev dependencies: the workspace in the monorepo,
+ * the registry once split).
+ * @param {string} name
+ */
+const packageDir = (name) => path.dirname(require.resolve(`@ss/${name}/package.json`));
 const TOKEN = 'rt_product_e2e_token_0123456789abcdef';
 
 /** @type {string} */
@@ -31,7 +38,7 @@ const serveGenerated = async (slug, { minimal = false } = {}) => {
 	await initApp({ dir, kind: 'service', slug, name: slug, minimal });
 	await mkdir(path.join(dir, 'node_modules', '@ss'), { recursive: true });
 	for (const name of ['app-kit', 'contracts', 'protocol', 'entitlements', 'rules']) {
-		await symlink(path.join(PACKAGES, name), path.join(dir, 'node_modules', '@ss', name), 'dir');
+		await symlink(packageDir(name), path.join(dir, 'node_modules', '@ss', name), 'dir');
 	}
 	const portalUrl = `http://127.0.0.1:${await freePort()}`;
 	const { privateJwk } = await generateSigningKey({ kid: `${slug}-1` });

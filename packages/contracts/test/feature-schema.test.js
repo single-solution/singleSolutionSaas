@@ -9,7 +9,7 @@ import {
 	validateFeatureConfig,
 	jsonEqual,
 } from '../src/index.js';
-import { manifest } from './fixtures.js';
+import { manifest } from '../src/testing.js';
 import { expectProblem, expectRule } from './helpers.js';
 
 const features = () => manifest().elements[0].features;

@@ -1,9 +1,12 @@
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { API_CSP, staticSecurityHeaders } from './src/infra/security-headers.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = resolve(here, '..'); // monorepo root (workspace packages are linked from there)
+// inside the Single Solution monorepo the workspace packages are linked from its root; extracted, the project is the root
+const monorepo = resolve(here, '..');
+const root = existsSync(resolve(monorepo, 'pnpm-workspace.yaml')) ? monorepo : here;
 
 /** @type {import('next').NextConfig} */
 const config = {

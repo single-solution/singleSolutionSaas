@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { MAX_GREETING, statusOf } from '../core/status.js';
 import { sessionView } from '../api/session.js';

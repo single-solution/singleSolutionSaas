@@ -10,7 +10,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { loadIdentity } from '../../../src/console/loaders.js';
 import { WEBSITE_TABS, routes } from '../../../src/console/paths.js';
 import { IdentityView, formOf, issuerBody, keysError } from '../../../src/console/views/identity.js';
-import { act, byLabel, cleanup, render, type } from '../../../../packages/ui/test/dom.js';
+import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { PORTAL_URL, boot, setupMongo, teardownMongo } from './boot.js';
 
 vi.setConfig({ testTimeout: 60_000 });

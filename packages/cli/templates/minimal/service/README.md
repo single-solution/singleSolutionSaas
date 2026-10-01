@@ -23,7 +23,7 @@ A service product needs at least one element, so this project ships the placehol
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                         |
 | `schemas/`      | feature schemas and product event data schemas                                                                        |
 | `app/`          | Next.js App Router: `.well-known/ss-register`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
-| `tests/`        | unit tests (`node --test`)                                                                                            |
+| `tests/`        | unit tests (Vitest)                                                                                                   |
 
 ## Develop
 
@@ -39,7 +39,7 @@ ss dev launch --kind merchant  # prints a launch URL (GET /sso?launch=… → ss
 ## Check
 
 ```sh
-pnpm test                      # unit tests
+pnpm check                     # format, lint, typecheck, unit tests with coverage (tooling from @ss/config)
 ss app validate                # manifest, anatomy, import direction, DOM-free cores, tokens, strings
 ss certify . --url http://localhost:3000 --token <fresh token>   # certification suite (restart the product first)
 ```

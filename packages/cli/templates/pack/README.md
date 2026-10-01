@@ -11,10 +11,10 @@ Website Graph through the `client` the runtime passes in (`graph.session.*` scop
 | `headless/`            | `createNotes({ config, strings, client, emit })` → state, actions, subscribe, validate, strings, destroy |
 | `ui/`                  | `render({ state, actions, strings, theme, slots, dom })` — design tokens only                            |
 | `strings/`, `schemas/` | string catalog and feature schema                                                                        |
-| `tests/`               | unit tests (`node --test`)                                                                               |
+| `tests/`               | unit tests (Vitest)                                                                                      |
 
 ```sh
-pnpm test
+pnpm check        # format, lint, typecheck, unit tests with coverage (tooling from @ss/config)
 ss app validate
 ss certify .      # static certification for packs (validate + headless/renderer smoke test)
 ```

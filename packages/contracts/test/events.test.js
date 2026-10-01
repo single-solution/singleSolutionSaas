@@ -8,7 +8,7 @@ import {
 	createValidator,
 	validateEvent,
 } from '../src/index.js';
-import { event, standardEventData } from './fixtures.js';
+import { event, standardEventData } from '../src/testing.js';
 import { expectProblem } from './helpers.js';
 
 describe('event envelope', () => {

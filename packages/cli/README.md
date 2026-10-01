@@ -1,7 +1,7 @@
 # @ss/cli (`ss`)
 
 Developer tooling for SSPS v1 products (PLAN Part E §14, F.7). JavaScript ESM, functional, no dependencies beyond the
-`@ss/*` core packages (the emulator's in-memory client database uses the workspace dev dependency
+`@ss/*` core packages (the emulator's in-memory client database uses the optional peer dependency
 `mongodb-memory-server`, loaded lazily).
 
 | Command                                                                                                                       | What it does                                                                                                                                                                                                                  |
@@ -28,7 +28,7 @@ Portal → product calls are signed with `@ss/protocol` `signRequest`; admin cha
 ## Testing
 
 ```sh
-pnpm vitest run packages/cli --coverage --coverage.include='packages/cli/src/**'
+pnpm check   # in this folder: format, lint, typecheck, vitest with coverage (from the root: pnpm --filter @ss/cli check)
 ```
 
 `src/bin.js` (process wiring only) is excluded with a `/* v8 ignore start/stop */` block; everything else is tested
@@ -62,10 +62,20 @@ renderer, API handlers, event consumer, repository, purge job, feature/event sch
 `templates/minimal/service`: a product needs at least one element, so it ships one placeholder Mode C element
 `status` (`GET /v1/status`, a `greeting` config feature, `x-ss-certify`), no database requirement, no events, and
 `adapters/privacy.js` handlers that answer empty exports. The project passes `ss app validate`, its own
-`node --test` suite and `ss certify` (POST replay, pagination and event delivery are skipped: nothing to exercise).
-The full template's README explains how to remove the sample by hand. Every Next.js route file of the template
+Vitest suite (with the coverage thresholds) and `ss certify` (POST replay, pagination and event delivery are skipped: nothing to exercise).
+The full template's README explains how to remove the sample by hand.
+
+Every generated project is self-sufficient: its tooling config comes from `@ss/config` (`eslint.config.js`,
+`tsconfig.json` extending `@ss/config/tsconfig.base.json`, `vitest.config.js` with the coverage thresholds, the
+`prettier` key) and it has its own `check`, `test`, `lint`, `typecheck` and `format:check` scripts. `@ss/*` ranges
+default to `workspace:^` (`--sdk-version` for a project outside the monorepo). Outside a pnpm workspace,
+`templates/standalone` adds what a repository of its own needs (`pnpm-workspace.yaml` with the allowed build scripts,
+`.nvmrc`). `ss app validate` checks this wiring (`package.dependency`, `package.devDependency`, `package.script`) and
+that no import or stylesheet reference leaves the project (`imports.outside`, every file including `tests/` and
+`app/`). Every Next.js route file of the template
 exports `OPTIONS` (CORS preflight reaches app-kit) and `_lib/product.js` passes Next's `after` to `toNextRoute`.
 
-`test/product-e2e.test.js` generates a service product, links `@ss/*` to the workspace packages, serves it with the
+`test/product-e2e.test.js` generates a service product, links `@ss/*` to the packages this package resolves (its own
+dev dependencies), serves it with the
 template's `serve.js` and requires every certification check to pass against the real `@ss/app-kit` (and certifies a
 `--minimal` project the same way).

@@ -32,7 +32,7 @@ import { AuditView, ConnectorsAdminView } from '../../src/console/admin/views/op
 import { StaffView } from '../../src/console/admin/views/staff.js';
 import { ImpersonationBanner } from '../../src/console/admin/views/impersonation.js';
 import { IdChip } from '../../src/console/admin/views/common.js';
-import { act, byLabel, cleanup, render, type } from '../../../packages/ui/test/dom.js';
+import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });

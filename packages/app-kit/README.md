@@ -195,7 +195,7 @@ resource descriptors, records identity-issuer requests (`identityRequests`, `dec
 `fetch`. Test and development only.
 
 ```
-pnpm vitest run packages/app-kit --coverage --coverage.include='packages/app-kit/src/**'
+pnpm check   # in this folder: format, lint, typecheck, vitest with coverage
 ```
 
 The integration tests use `MongoMemoryReplSet` for the tenant guard, indexes, migrations (including concurrent runs and

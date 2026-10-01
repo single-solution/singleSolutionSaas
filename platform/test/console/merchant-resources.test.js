@@ -14,7 +14,7 @@ import { KeysView } from '../../src/console/views/keys.js';
 import { CheckReport, ConnectorsView, providerLabel } from '../../src/console/views/connectors.js';
 import { DeliveriesView } from '../../src/console/views/deliveries.js';
 import { CreditsView, SpendPoliciesView } from '../../src/console/views/credits.js';
-import { byLabel, cleanup, render, type } from '../../../packages/ui/test/dom.js';
+import { byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
 	button,

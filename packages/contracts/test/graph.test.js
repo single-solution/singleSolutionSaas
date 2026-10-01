@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GRAPH_ENTITY_SCHEMAS, validateGraphEntity } from '../src/index.js';
-import { graph } from './fixtures.js';
+import { graph } from '../src/testing.js';
 import { expectProblem } from './helpers.js';
 
 /** @typedef {import('../src/schemas/index.js').GraphEntityName} GraphEntityName */

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TypedConfirmDialog } from '../src/index.js';
-import { act, byLabel, cleanup, click, render, type } from './dom.js';
+import { act, byLabel, cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(() => cleanup());
 

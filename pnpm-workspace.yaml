@@ -2,6 +2,7 @@ packages:
    - 'packages/*'
    - 'platform'
    - 'products/*'
+   - 'e2e'
 allowBuilds:
    esbuild: true
    mongodb-memory-server: false

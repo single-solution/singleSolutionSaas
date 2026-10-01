@@ -329,7 +329,7 @@ the product key. Before registration, a product has no appId and serves the mani
 ## Testing
 
 ```
-pnpm vitest run packages/protocol --coverage
+pnpm check   # in this folder: format, lint, typecheck, vitest with coverage
 ```
 
 The tests cover happy paths and every rejection path: expiry, not-yet-valid, wrong `aud`/`iss`/`kid`/`typ`, tampered

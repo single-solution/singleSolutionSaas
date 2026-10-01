@@ -92,10 +92,10 @@ pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (p
 ss dev register --url http://localhost:3000 --token <token>
 ss app validate
 ss certify . --url http://localhost:3000 --token <fresh token>
-pnpm test                      # from the monorepo: core, headless, renderer, API on MongoDB, certify, Portal e2e
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
 ```
 
-`tests/certify.test.js` runs the full `ss certify` suite (every check must pass); `tests/portal-e2e.test.js` runs the
+`tests/certify.test.js` runs the full `ss certify` suite (every check must pass); the system test `e2e/tests/coupons-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
 real Portal in process: staff bootstrap → catalog handshake → activation → merchant signup → website → credits →
 subscription → database connector → single-use code created through the API → two concurrent reservations (exactly
 one wins) → `order.completed@1` through the Event Hub → redeemed in the merchant DB → usage → hourly settlement

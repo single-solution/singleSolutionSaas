@@ -56,7 +56,7 @@ export const createClock = (start = T0) => {
 /** MongoDB URI of a fresh database on the shared replica set. */
 export const mongoUri = (/** @type {any} */ name) => {
 	const base = process.env.SS_TEST_MONGO_URI;
-	if (!base) throw new Error('SS_TEST_MONGO_URI is not set (run through the root vitest config)');
+	if (!base) throw new Error('SS_TEST_MONGO_URI is not set (run through this product vitest config)');
 	const url = new URL(base);
 	url.pathname = `/${name}`;
 	return url.toString();

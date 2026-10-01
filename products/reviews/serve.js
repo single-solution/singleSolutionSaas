@@ -5,10 +5,16 @@
 import { createServer } from 'node:http';
 import { createServer as createTlsServer } from 'node:https';
 import { Readable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createReviews, wireEvents } from './api/routes.js';
 import { cronRoutes } from './jobs/requests.js';
+
+export { loadManifest } from './adapters/platform.js';
+
+/** This product's folder (manifest, schemas, strings): the `root` that system tests pass to `startServer`. */
+export const ROOT = fileURLToPath(new URL('.', import.meta.url));
 
 /**
  * @param {{ port?: number, host?: string, env?: Record<string, string | undefined>, root?: string,

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import { manifest } from '../../contracts/test/fixtures.js';
+import { manifest } from '@ss/contracts/testing';
 import { SchemaForm } from '../src/SchemaForm.js';
 import {
 	boundsOf,
@@ -16,7 +16,7 @@ import {
 	validateValues,
 	widgetOf,
 } from '../src/schema.js';
-import { allByRole, byLabel, byText, cleanup, click, render, type } from './dom.js';
+import { allByRole, byLabel, byText, cleanup, click, render, type } from '../src/testing.js';
 
 afterEach(cleanup);
 

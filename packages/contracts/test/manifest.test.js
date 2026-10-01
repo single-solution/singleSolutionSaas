@@ -10,7 +10,7 @@ import {
 	validateFeatureConfig,
 	validateManifest,
 } from '../src/index.js';
-import { manifest, packManifest } from './fixtures.js';
+import { manifest, packManifest } from '../src/testing.js';
 import { expectProblem, expectRule } from './helpers.js';
 
 describe('manifest schema', () => {

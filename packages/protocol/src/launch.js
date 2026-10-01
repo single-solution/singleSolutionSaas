@@ -8,8 +8,7 @@ import { createProtocolError } from './errors.js';
 import { defaultRandomBytes, randomId } from './encoding.js';
 import { checkTimeClaims, isObject, nowSeconds, requireString, signCompact, verifyCompact } from './jws.js';
 
-/** @typedef {import('./keys.js').Signer} Signer */
-/** @typedef {import('./keys.js').KeyResolver} KeyResolver */
+/** @import { KeyResolver, Signer } from './keys.js' */
 
 /** Launch kinds. */
 export const LAUNCH_KINDS = Object.freeze(

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DOCUMENT_RULES, checkPlacement, isTimeZone, validatePlacement } from '../src/index.js';
-import { placement } from './fixtures.js';
+import { placement } from '../src/testing.js';
 import { expectProblem, expectRule } from './helpers.js';
 
 describe('placement', () => {

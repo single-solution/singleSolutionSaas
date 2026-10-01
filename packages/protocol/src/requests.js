@@ -22,8 +22,7 @@ import { createProtocolError } from './errors.js';
 import { sha256Hex, utf8 } from './encoding.js';
 import { assertBody, checkSigningInputs, readTimestamp, signDetached, verifyDetached } from './detached.js';
 
-/** @typedef {import('./keys.js').Signer} Signer */
-/** @typedef {import('./keys.js').KeyResolver} KeyResolver */
+/** @import { KeyResolver, Signer } from './keys.js' */
 /** @typedef {import('./replay.js').ReplayStore} ReplayStore */
 /** @typedef {{ 'SS-Timestamp': string, 'SS-Signature': string, 'SS-Key-Id': string }} RequestHeaders */
 

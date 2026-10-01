@@ -7,9 +7,7 @@ import { createServer } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { noopLogger } from '@ss/app-kit';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
-import { formatReport, runCertification } from '../../../packages/cli/src/certify/index.js';
-import { createDatabaseResolver } from '../../../packages/cli/src/emulator/mongo.js';
-import { validateProject } from '../../../packages/cli/src/validate/index.js';
+import { createDatabaseResolver, formatReport, runCertification, validateProject } from '@ss/cli';
 import { startServer } from '../serve.js';
 import { ROOT } from './harness.js';
 

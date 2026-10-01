@@ -21,7 +21,7 @@ afterEach(async () => {
 
 /**
  * Databases of one test file on the run's shared replica set (`SS_TEST_MONGO_URI`, started once by
- * `global-setup.js`; a private one is started when the variable is absent, e.g. a run without the global setup).
+ * the `@ss/config` Mongo global setup; a private one is started when the variable is absent, e.g. a run without the global setup).
  *
  * Every name maps to a database of this file (`t_<random>_<n>`), so test files never share data, and `stop()`
  * drops them. Creating collections and indexes dominates test time, so a database first opened inside a test is
@@ -31,7 +31,7 @@ afterEach(async () => {
  */
 export const startMongo = async () => {
 	const shared = process.env.SS_TEST_MONGO_URI;
-	// TTL monitor off, as in global-setup.js: expiry follows the injected clock, never the wall clock
+	// TTL monitor off, as in the @ss/config Mongo setup: expiry follows the injected clock, never the wall clock
 	const replSet = shared
 		? null
 		: await MongoMemoryReplSet.create({

@@ -15,20 +15,7 @@ export {
 	parseIPv6,
 	parseLooseIPv4,
 } from './address.js';
-export {
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_REDIRECTS,
-	DEFAULT_PORTS,
-	DEFAULT_TIMEOUT_MS,
-	INTERNAL_SUFFIXES,
-	MAX_URL_LENGTH,
-	checkHost,
-	checkUrl,
-	createOutboundPolicy,
-	isAllowlisted,
-	normaliseHost,
-	sameOrigin,
-} from './policy.js';
+export * from './policy.js';
 export { guardedLookup, resolveVetted } from './lookup.js';
 export { jsonOf, safeFetch, textOf } from './fetch.js';
 export { SAFE_MONGO_OPTIONS, isSafeMongoUri, parseMongoUri } from './mongo.js';
@@ -38,12 +25,6 @@ export { ALGORITHM, MAX_PRESIGN_SECONDS, UNSIGNED_PAYLOAD, amzDates, objectUrl, 
 /** @typedef {import('./errors.js').NetErrorCode} NetErrorCode */
 /** @typedef {import('./address.js').AddressClass} AddressClass */
 /** @typedef {import('./address.js').AddressCategory} AddressCategory */
-/** @typedef {import('./policy.js').OutboundPolicy} OutboundPolicy */
-/** @typedef {import('./policy.js').OutboundPolicyOptions} OutboundPolicyOptions */
-/** @typedef {import('./policy.js').Resolver} Resolver */
-/** @typedef {import('./policy.js').ResolvedAddress} ResolvedAddress */
-/** @typedef {import('./policy.js').UrlCheck} UrlCheck */
-/** @typedef {import('./policy.js').HostCheck} HostCheck */
 /** @typedef {import('./lookup.js').LookupFunction} LookupFunction */
 /** @typedef {import('./fetch.js').SafeFetchInit} SafeFetchInit */
 /** @typedef {import('./fetch.js').SafeResponse} SafeResponse */

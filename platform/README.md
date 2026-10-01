@@ -45,7 +45,7 @@ src/
     README.md                how to write a module
     system/                  reference module: /v1/system/info, /v1/system/whoami, PUT /v1/system/notice
 scripts/                     db.js (indexes | migrate), dev-mongo.js, dev-env.js
-test/                        vitest; integration tests on one shared MongoMemoryReplSet (global-setup.js)
+test/                        vitest; integration tests on one shared MongoMemoryReplSet (the @ss/config Mongo setup)
 ```
 
 Request pipeline (`src/infra/http.js`): request id → route match (404/405, CORS preflight) → body cap (413) → auth →
@@ -248,7 +248,7 @@ chains (`*.impersonation_ended`). Product impersonation stays a separate `impers
 ## Local development
 
 ```bash
-pnpm install                                   # from the repo root
+pnpm install                                   # from the repo root (or this folder, once split)
 pnpm --filter @ss/platform db:memory           # terminal 1: docker-free MongoDB (in-memory replica set, port 27999)
 cd platform && node scripts/dev-env.js > .env.local   # fresh dev keys; edit MONGODB_URI for a local mongod
 pnpm --filter @ss/platform db:indexes          # create indexes
@@ -268,16 +268,20 @@ Crons in `vercel.json` call `/api/cron/<job>` with the `CRON_SECRET` bearer.
 
 ## Checks
 
-From the repository root:
+From this folder (from the root: `pnpm --filter @ss/platform <script>`):
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm prettier --check platform
-pnpm vitest run platform --coverage --coverage.include='platform/src/**'
-node platform/scripts/build-delivery-runtime.js --check   # the bundled browser runtime is up to date
-cd platform && npx next build
+pnpm check           # format:check, lint, typecheck, runtime:check, test (vitest with coverage, thresholds 90/90/85)
+pnpm runtime:check   # the bundled browser runtime is up to date (pnpm runtime:build rewrites it)
+pnpm build           # next build
 ```
 
-Tests: `platform/test/global-setup.js` (vitest `globalSetup`) starts **one** single-node `MongoMemoryReplSet` for
+The tooling config (`eslint.config.js`, `tsconfig.json`, `vitest.config.js`, the `prettier` key) comes from
+`@ss/config`. System tests that run products against this Portal live in the monorepo's `e2e/` workspace and use the
+public testing entry `@ss/platform/testing` (`createPortal`, the module list and factories, `loadConfig`, `totpCode`,
+`closeMongoClients`); nothing else of `src/` is imported from outside this folder.
+
+Tests: the `@ss/config` Mongo global setup (`defineUnitConfig({ mongo: true })`) starts **one** single-node `MongoMemoryReplSet` for
 the whole run and exposes it as `SS_TEST_MONGO_URI`; for speed it acknowledges majority writes without waiting for a
 journal flush (test-only), and its **TTL monitor is off**: tests run on an injected clock (`createClock`, fixed T0), so
 TTL indexes (tokens, sessions) must never delete by wall-clock time — expiry is asserted through `now()`. `startMongo()` (`test/helpers.js`) gives each test file its own databases

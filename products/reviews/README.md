@@ -110,11 +110,11 @@ ss dev register --url http://localhost:3000 --token <token>
 ss dev emit order.completed --website web_devwebsite01
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
 ss certify . --url http://localhost:3000 --token <fresh token>   # restart the product first (fresh token)
-pnpm test                      # from the monorepo: vitest (core, headless, renderer, API on MongoDB, certify, Portal e2e)
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
 ```
 
-The suite includes `tests/certify.test.js` (the full `ss certify` suite, every check must pass) and
-`tests/portal-e2e.test.js` (the real Portal in process: staff bootstrap → catalog handshake → activation → merchant
+The suite includes `tests/certify.test.js` (the full `ss certify` suite, every check must pass). The system test
+`e2e/tests/reviews-portal.test.js` (monorepo workspace `@ss/e2e`) runs the product against the real Portal in process (staff bootstrap → catalog handshake → activation → merchant
 signup → website + its identity issuer → credits → starter subscription → database connector → `order.completed@1`
 through the Event Hub → review request in the merchant DB → the verified customer reviews with the `pk_` key and their
 own login token → auto-approved by the default rule → summary and JSON-LD reflect it → `review` usage → hourly

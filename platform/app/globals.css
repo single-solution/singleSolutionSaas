@@ -2,4 +2,4 @@
 @import '@ss/ui/theme.css';
 
 /* the component library lives outside this package: scan its sources for classes */
-@source '../../packages/ui/src';
+@source '../node_modules/@ss/ui/src';

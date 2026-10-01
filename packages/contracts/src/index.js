@@ -3,7 +3,7 @@
  * Additive changes only within v1; breaking changes ship as v2 schema ids.
  * @module
  */
-import './types.js';
+export * from './types.js';
 
 export * from './schemas/index.js';
 export {
@@ -48,24 +48,6 @@ export {
 } from './ids.js';
 export { deepFreeze } from './util.js';
 
-/** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
-/**
- * @template T
- * @typedef {import('./types.js').ValidationResult<T>} ValidationResult
- */
-/** @typedef {import('./types.js').Manifest} Manifest */
-/** @typedef {import('./types.js').ManifestElement} ManifestElement */
-/** @typedef {import('./types.js').ManifestPlan} ManifestPlan */
-/** @typedef {import('./types.js').FeatureSchema} FeatureSchema */
-/** @typedef {import('./types.js').FeatureNode} FeatureNode */
-/** @typedef {import('./types.js').EntitlementDocument} EntitlementDocument */
-/** @typedef {import('./types.js').IdentitySection} IdentitySection */
-/** @typedef {import('./types.js').IdentityJwk} IdentityJwk */
-/** @typedef {import('./types.js').WebsiteSection} WebsiteSection */
-/** @typedef {import('./types.js').EventEnvelope} EventEnvelope */
-/** @typedef {import('./types.js').PlatformEventEnvelope} PlatformEventEnvelope */
-/** @typedef {import('./types.js').AnyEventEnvelope} AnyEventEnvelope */
-/** @typedef {import('./types.js').Placement} Placement */
 /** @typedef {import('./errors.js').Problem} Problem */
 /** @typedef {import('./errors.js').ProblemFactory} ProblemFactory */
 /** @typedef {import('./validate.js').Validator} Validator */

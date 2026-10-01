@@ -147,10 +147,10 @@ ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
 ss certify . --url http://localhost:3000 --token <fresh token>
-pnpm test                      # from the monorepo: core, headless, renderers, API on MongoDB, certify, Portal e2e
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB, certify
 ```
 
-`tests/certify.test.js` runs the full `ss certify` suite (every check must pass). `tests/portal-e2e.test.js` runs the
+`tests/certify.test.js` runs the full `ss certify` suite (every check must pass). The system test `e2e/tests/signups-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
 real Portal in process with Signups **and** Loyalty: staff bootstrap → both products registered and activated →
 merchant, website, credits, two subscriptions → database and messaging connectors (a fake gateway on loopback) →
 browser asks for a code → the gateway receives it → verify → JWT → issuer registered through the Portal API → Loyalty

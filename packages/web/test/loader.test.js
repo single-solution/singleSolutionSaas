@@ -5,7 +5,7 @@ import { createClient } from '../src/client.js';
 import { defineElement } from '../src/element.js';
 import { boot } from '../src/loader.js';
 import { evaluateAudience } from '../src/audience.js';
-import { validateEvent } from '../../contracts/src/index.js';
+import { validateEvent } from '@ss/contracts';
 import { ENDPOINT, KEY, WEBSITE_ID, memoryStorage, scriptedFetch } from './helpers.js';
 
 /** @type {Array<{ destroy: () => void }>} */

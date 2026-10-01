@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createValidator, validateEvent } from '../../contracts/src/index.js';
+import { createValidator, validateEvent } from '@ss/contracts';
 import { createClient } from '../src/client.js';
 import { ENDPOINT, KEY, WEBSITE_ID, brokenStorage, counterBytes, fakeWindow, memoryStorage, scriptedFetch } from './helpers.js';
 

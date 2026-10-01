@@ -1,0 +1,42 @@
+{
+	"name": "@ss/e2e",
+	"version": "0.1.0",
+	"description": "System tests: every product against the REAL Portal, in process (the Portal from @ss/platform/testing, each product from its ./serve entry), on one MongoMemoryReplSet.",
+	"type": "module",
+	"private": true,
+	"license": "UNLICENSED",
+	"engines": {
+		"node": ">=22"
+	},
+	"prettier": "@ss/config/prettier.json",
+	"scripts": {
+		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"typecheck": "tsc -p tsconfig.json",
+		"format": "prettier --write .",
+		"format:check": "prettier --check ."
+	},
+	"devDependencies": {
+		"@ss/app-kit": "workspace:^",
+		"@ss/config": "workspace:^",
+		"@ss/contracts": "workspace:^",
+		"@ss/platform": "workspace:^",
+		"@ss/product-alerts": "workspace:^",
+		"@ss/product-chatbot": "workspace:^",
+		"@ss/product-coupons": "workspace:^",
+		"@ss/product-deals": "workspace:^",
+		"@ss/product-loyalty": "workspace:^",
+		"@ss/product-reviews": "workspace:^",
+		"@ss/product-signups": "workspace:^",
+		"@ss/protocol": "workspace:^",
+		"@types/node": "^22.20.4",
+		"eslint": "^9.39.5",
+		"mongodb": "^6.21.0",
+		"mongodb-memory-server": "^10.4.3",
+		"prettier": "^3.9.9",
+		"typescript": "~5.9.3",
+		"vitest": "^3.2.7"
+	}
+}

@@ -45,7 +45,7 @@ import {
 	useFormState,
 	useToast,
 } from '../src/index.js';
-import { act, allByRole, byLabel, byText, cleanup, click, keydown, render, type } from './dom.js';
+import { act, allByRole, byLabel, byText, cleanup, click, keydown, render, type } from '../src/testing.js';
 
 afterEach(() => {
 	cleanup();
@@ -545,5 +545,97 @@ describe('AppShell', () => {
 		click(menu);
 		click(/** @type {HTMLElement} */ (container.querySelector('button[aria-label="Close navigation"]')));
 		expect(container.querySelector('[role="dialog"][aria-label="Navigation"]')).toBeNull();
+	});
+});
+
+describe('AppShell without the optional parts', () => {
+	it('uses the default brand, a router link component and closes the menu on navigation, backdrop and wide screens', () => {
+		/** @type {Array<(event: { matches: boolean }) => void>} */
+		const listeners = [];
+		const media = {
+			matches: false,
+			addEventListener: (/** @type {string} */ _type, /** @type {any} */ listener) => listeners.push(listener),
+			removeEventListener: vi.fn(),
+		};
+		Object.defineProperty(window, 'matchMedia', { value: () => media, configurable: true });
+		/** @param {{ href: string, children?: import('react').ReactNode, onClick?: () => void }} props */
+		function RouterLink({ href, children, onClick }) {
+			return (
+				<a
+					href={href}
+					data-router="yes"
+					onClick={(event) => {
+						event.preventDefault();
+						onClick?.();
+					}}>
+					{children}
+				</a>
+			);
+		}
+		const { container } = render(
+			<AppShell
+				sections={[{ items: [{ href: '/home', label: 'Home', badge: <b>3</b> }] }]}
+				linkAs={RouterLink}
+				mainId="content">
+				<p>Body</p>
+			</AppShell>,
+		);
+		expect(container.textContent).toContain('Single Solution');
+		expect(container.textContent).toContain('Console');
+		expect(container.querySelector('a[href="#content"]')).not.toBeNull();
+		expect(container.querySelector('a[data-router="yes"]')?.textContent).toBe('Home3');
+		expect(container.querySelector('header')?.children).toHaveLength(1);
+		const menu = /** @type {HTMLElement} */ (container.querySelector('button[aria-label="Open navigation"]'));
+		const panel = () => container.querySelector('[role="dialog"][aria-label="Navigation"]');
+		click(menu);
+		click(/** @type {HTMLElement} */ (panel()?.querySelector('a[data-router="yes"]')));
+		expect(panel()).toBeNull();
+		click(menu);
+		const backdrop = /** @type {HTMLElement} */ (panel()?.parentElement);
+		act(() => {
+			panel()?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+		});
+		expect(panel()).not.toBeNull();
+		act(() => {
+			backdrop.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+		});
+		expect(panel()).toBeNull();
+		click(menu);
+		act(() => listeners.at(-1)?.({ matches: false }));
+		expect(panel()).not.toBeNull();
+		media.matches = true;
+		act(() => listeners.at(-1)?.({ matches: true }));
+		expect(panel()).toBeNull();
+		expect(media.removeEventListener).toHaveBeenCalled();
+		Object.defineProperty(window, 'matchMedia', { value: undefined, configurable: true });
+		click(menu);
+		expect(panel()).not.toBeNull();
+	});
+});
+
+describe('CodeBlock when copying fails', () => {
+	it('announces the failure, without a label or wrapping', async () => {
+		Object.defineProperty(navigator, 'clipboard', {
+			value: {
+				writeText: async () => {
+					throw new Error('denied');
+				},
+			},
+			configurable: true,
+		});
+		/** @type {any} */ (document).execCommand = () => {
+			throw new Error('unsupported');
+		};
+		const { container } = render(<CodeBlock code="npm i" wrap={false} />);
+		expect(container.querySelector('pre')?.getAttribute('aria-label')).toBe('Code');
+		expect(container.querySelector('pre')?.className).toContain('overflow-x-auto');
+		expect(container.textContent).not.toContain('shown only once');
+		await act(async () => {
+			byText(container, 'Copy', 'button').click();
+		});
+		expect(container.textContent).toContain('Copy failed. Select the text and copy it manually.');
+		/** @type {any} */ (document).execCommand = undefined;
+		expect(await copyText('x')).toBe(false);
+		Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
 	});
 });

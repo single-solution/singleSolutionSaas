@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compile } from '@ss/rules';
-import { validatePlacement } from '../../contracts/src/index.js';
+import { validatePlacement } from '@ss/contracts';
 import { evaluateAudience, evaluateAudienceProgram } from '../src/audience.js';
 import { deviceOf, inSchedule, localTime, matchPath, matchPlacement, matchReferrer } from '../src/placement.js';
 

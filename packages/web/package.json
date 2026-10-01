@@ -4,7 +4,6 @@
 	"description": "Browser SDK: website events, identity federation, element runtime (headless cores) and the Loader client.",
 	"type": "module",
 	"license": "UNLICENSED",
-	"private": true,
 	"exports": {
 		".": "./src/index.js",
 		"./client": "./src/client.js",
@@ -12,15 +11,66 @@
 		"./renderer": "./src/renderer.js",
 		"./loader": "./src/loader.js",
 		"./audience": "./src/audience.js",
-		"./react": "./src/adapters/react.js"
+		"./react": "./src/adapters/react.js",
+		"./package.json": "./package.json"
 	},
 	"files": [
-		"src"
+		"src",
+		"types"
 	],
-	"dependencies": {
-		"@ss/rules": "workspace:*"
-	},
 	"sideEffects": false,
+	"engines": {
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "restricted",
+		"exports": {
+			".": {
+				"types": "./types/src/index.d.ts",
+				"default": "./src/index.js"
+			},
+			"./client": {
+				"types": "./types/src/client.d.ts",
+				"default": "./src/client.js"
+			},
+			"./element": {
+				"types": "./types/src/element.d.ts",
+				"default": "./src/element.js"
+			},
+			"./renderer": {
+				"types": "./types/src/renderer.d.ts",
+				"default": "./src/renderer.js"
+			},
+			"./loader": {
+				"types": "./types/src/loader.d.ts",
+				"default": "./src/loader.js"
+			},
+			"./audience": {
+				"types": "./types/src/audience.d.ts",
+				"default": "./src/audience.js"
+			},
+			"./react": {
+				"types": "./types/src/adapters/react.d.ts",
+				"default": "./src/adapters/react.js"
+			},
+			"./package.json": "./package.json"
+		}
+	},
+	"prettier": "@ss/config/prettier.json",
+	"scripts": {
+		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+		"test": "vitest run --coverage",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"typecheck": "tsc -p tsconfig.json",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"build:types": "tsc -p tsconfig.types.json",
+		"prepack": "pnpm build:types"
+	},
+	"dependencies": {
+		"@ss/rules": "workspace:^"
+	},
 	"peerDependencies": {
 		"react": ">=18"
 	},
@@ -28,5 +78,17 @@
 		"react": {
 			"optional": true
 		}
+	},
+	"devDependencies": {
+		"@ss/config": "workspace:^",
+		"@ss/contracts": "workspace:^",
+		"@types/node": "^22.20.4",
+		"@vitest/coverage-v8": "^3.2.7",
+		"eslint": "^9.39.5",
+		"jsdom": "^26.1.0",
+		"prettier": "^3.9.9",
+		"react": "^19.3.0",
+		"typescript": "~5.9.3",
+		"vitest": "^3.2.7"
 	}
 }

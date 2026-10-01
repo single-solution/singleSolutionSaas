@@ -1,14 +1,42 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { execFile } from 'node:child_process';
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, symlink } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { NOTES_SAMPLE_FILES, checkInitOptions, fill, initApp } from '../src/init.js';
+import { NOTES_SAMPLE_FILES, checkInitOptions, fill, initApp, insideWorkspace } from '../src/init.js';
 import { validateProject } from '../src/validate/index.js';
 import { exists } from '../src/fsutil.js';
 import { removeDir, tempDir } from './helpers/util.js';
 
 const run = promisify(execFile);
+const require = createRequire(import.meta.url);
+/** @param {string} name */
+const packageDir = (name) => path.dirname(require.resolve(`${name}/package.json`));
+const VITEST = path.join(packageDir('vitest'), 'vitest.mjs');
+/** The environment of this run without the outer Vitest's worker variables (and without colours). */
+const childEnv = {
+	...Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('VITEST') && name !== 'FORCE_COLOR')),
+	NO_COLOR: '1',
+};
+
+/**
+ * Run a generated project's own test suite (`vitest run --coverage` with its own vitest.config.js, thresholds
+ * included), with the tooling it needs (`@ss/config`, vitest, the coverage provider) linked from this package's own
+ * dev dependencies instead of installed.
+ * @param {string} dir
+ */
+const runOwnTests = async (dir) => {
+	await mkdir(path.join(dir, 'node_modules', '@ss'), { recursive: true });
+	await mkdir(path.join(dir, 'node_modules', '@vitest'), { recursive: true });
+	for (const name of ['@ss/config', 'vitest', '@vitest/coverage-v8'])
+		await symlink(packageDir(name), path.join(dir, 'node_modules', name), 'dir');
+	const { stdout } = await run(process.execPath, [VITEST, 'run', '--coverage', '--coverage.reporter=text-summary'], {
+		cwd: dir,
+		env: childEnv,
+	});
+	return stdout;
+};
 /** @type {string} */
 let root;
 beforeAll(async () => {
@@ -52,7 +80,24 @@ describe('ss app init → validate (integration)', () => {
 		expect(manifest.events.publishes).toEqual(['order_notes.note_created@1']);
 		const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8'));
 		expect(pkg.dependencies['@ss/app-kit']).toBe('^0.1.0');
-		expect(Object.keys(pkg.scripts)).toEqual(expect.arrayContaining(['dev', 'test', 'validate', 'certify']));
+		expect(Object.keys(pkg.scripts)).toEqual(
+			expect.arrayContaining(['dev', 'build', 'start', 'portal', 'check', 'test', 'lint', 'typecheck', 'format:check']),
+		);
+		expect(Object.keys(pkg.scripts)).toEqual(expect.arrayContaining(['validate', 'certify']));
+		expect(pkg).toMatchObject({ private: true, license: 'UNLICENSED', prettier: '@ss/config/prettier.json' });
+		expect(pkg.devDependencies).toMatchObject({ '@ss/cli': '^0.1.0', '@ss/config': '^0.1.0' });
+		// self-sufficient: its own tooling config from @ss/config, and the repository files of a standalone project
+		for (const file of [
+			'eslint.config.js',
+			'tsconfig.json',
+			'vitest.config.js',
+			'.prettierignore',
+			'pnpm-workspace.yaml',
+			'.nvmrc',
+		])
+			expect(files).toContain(file);
+		expect(await readFile(path.join(dir, 'vitest.config.js'), 'utf8')).toContain("from '@ss/config/vitest'");
+		expect(JSON.parse(await readFile(path.join(dir, 'tsconfig.json'), 'utf8')).extends).toBe('@ss/config/tsconfig.base.json');
 		expect(JSON.parse(await readFile(path.join(dir, 'vercel.json'), 'utf8')).crons).toEqual([]);
 		const env = await readFile(path.join(dir, '.env.example'), 'utf8');
 		for (const name of [
@@ -73,13 +118,10 @@ describe('ss app init → validate (integration)', () => {
 		const report = await validateProject(dir);
 		expect(report.problems).toEqual([]);
 
-		const { stdout } = await run(
-			process.execPath,
-			['--test', 'tests/core.test.js', 'tests/headless.test.js', 'tests/ui.test.js', 'tests/api.test.js'],
-			{ cwd: dir },
-		);
-		expect(stdout).toMatch(/fail 0/);
-	}, 30_000);
+		const stdout = await runOwnTests(dir);
+		for (const file of ['core', 'headless', 'ui', 'api', 'api-helpers']) expect(stdout).toContain(`tests/${file}.test.js`);
+		expect(stdout).toMatch(/Tests\s+\d+ passed/);
+	}, 60_000);
 
 	it('--minimal generates a service product without the notes sample that validates and passes its tests', async () => {
 		const dir = path.join(root, 'minimal');
@@ -99,9 +141,10 @@ describe('ss app init → validate (integration)', () => {
 
 		const report = await validateProject(dir);
 		expect(report.problems).toEqual([]);
-		const { stdout } = await run(process.execPath, ['--test', 'tests/status.test.js'], { cwd: dir });
-		expect(stdout).toMatch(/fail 0/);
-	}, 30_000);
+		const stdout = await runOwnTests(dir);
+		for (const file of ['status', 'api-helpers']) expect(stdout).toContain(`tests/${file}.test.js`);
+		expect(stdout).toMatch(/Tests\s+\d+ passed/);
+	}, 60_000);
 
 	it('generates an element pack that validates and whose own tests pass', async () => {
 		const dir = path.join(root, 'pack');
@@ -112,13 +155,33 @@ describe('ss app init → validate (integration)', () => {
 		expect(manifest.endpoints).toBeUndefined();
 		expect(manifest.elements[0].modes).toEqual(['A', 'B']);
 		expect((await validateProject(dir)).ok).toBe(true);
-		const { stdout } = await run(
-			process.execPath,
-			['--test', 'tests/core.test.js', 'tests/headless.test.js', 'tests/ui.test.js'],
-			{ cwd: dir },
-		);
-		expect(stdout).toMatch(/fail 0/);
-	}, 30_000);
+		const stdout = await runOwnTests(dir);
+		for (const file of ['core', 'headless', 'ui']) expect(stdout).toContain(`tests/${file}.test.js`);
+		expect(stdout).toMatch(/Tests\s+\d+ passed/);
+	}, 60_000);
+
+	it('inside a pnpm workspace leaves the repository files to the workspace and links @ss/* with workspace:^', async () => {
+		const workspace = path.join(root, 'monorepo');
+		await mkdir(path.join(workspace, 'products'), { recursive: true });
+		await writeFile(path.join(workspace, 'pnpm-workspace.yaml'), "packages:\n   - 'products/*'\n");
+		expect(await insideWorkspace(path.join(workspace, 'products'))).toBe(true);
+		expect(await insideWorkspace(root)).toBe(false);
+		const dir = path.join(workspace, 'products', 'inner');
+		const { files } = await initApp({ dir, kind: 'pack', slug: 'inner', name: 'Inner' });
+		expect(files).not.toContain('pnpm-workspace.yaml');
+		expect(files).not.toContain('.nvmrc');
+		expect(files).toContain('eslint.config.js');
+		const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8'));
+		expect(pkg.dependencies['@ss/contracts']).toBe('workspace:^');
+		const forced = await initApp({
+			dir: path.join(workspace, 'products', 'own'),
+			kind: 'pack',
+			slug: 'own',
+			name: 'Own',
+			standalone: true,
+		});
+		expect(forced.files).toContain('pnpm-workspace.yaml');
+	});
 
 	it('refuses bad options and non-empty targets', async () => {
 		expect(checkInitOptions({ dir: 'x', kind: 'service', slug: 'ok-slug', name: 'Fine' })).toEqual([]);

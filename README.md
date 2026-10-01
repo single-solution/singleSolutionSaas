@@ -8,11 +8,38 @@ This file covers how to build. `PLAN.md` covers what is built and why.
 
 ## Repository
 
-| Folder      | What it is                                                      | Deployed?                     |
-| ----------- | --------------------------------------------------------------- | ----------------------------- |
-| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API | Yes, one Vercel project       |
-| `products/` | The **products** we sell (`chatbot`, `coupons`, `loyalty`, …)   | Yes, one Vercel project each  |
-| `packages/` | **Shared code** used by the Portal and the products             | No, built into the apps above |
+| Folder      | What it is                                                               | Deployed?                     |
+| ----------- | ------------------------------------------------------------------------ | ----------------------------- |
+| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API          | Yes, one Vercel project       |
+| `products/` | The **products** we sell (`chatbot`, `coupons`, `loyalty`, …)            | Yes, one Vercel project each  |
+| `packages/` | **Shared code** used by the Portal and the products (published packages) | No, built into the apps above |
+| `e2e/`      | **System tests**: every product against the real Portal (`@ss/e2e`)      | No                            |
+
+### Each folder is its own repository
+
+Everything lives in one repository for now, but every **unit** — `platform/`, each `products/*`, each `packages/*`
+— is built as if it were a repository of its own, so it can be split out later with no code changes beyond swapping
+`workspace:^` ranges for published versions (`pnpm publish` does that for packages).
+
+- A unit never imports another unit by path. It depends on it as a package (`@ss/ui`, `@ss/cli`,
+  `@ss/platform/testing`, …) listed in its own `package.json` with a `workspace:^` range. Test helpers that other
+  units need are public exports (`@ss/contracts/testing`, `@ss/ui/testing`, the `@ss/cli` API).
+- A unit has its own tooling config built from `@ss/config` (`eslint.config.js`, `tsconfig.json`,
+  `vitest.config.js`, the `prettier` key), its own scripts (`check`, `test`, `lint`, `typecheck`, `format:check`;
+  `dev`/`build`/`start` for deployables), its own README, `.gitignore` and, for deployables, `.env.example` and
+  `vercel.json`. Its coverage thresholds are met by its own tests.
+- Tests that need two or more deployables (a product against the real Portal) live in `e2e/`, never in a unit.
+- `ss app validate` refuses a product import or stylesheet reference that leaves the product folder
+  (`imports.outside`), and checks the package wiring.
+- Packages are published as written (JavaScript with JSDoc). `pnpm pack` / `pnpm publish` first run `prepack`
+  (`build:types`: `tsc` writes `.d.ts` files from the JSDoc into `types/`), and `publishConfig.exports` adds the
+  `types` condition, so a consumer outside the monorepo type-checks against the published package. In the monorepo
+  the sources are read directly.
+- The root only orchestrates: workspace scripts, CI and the docs.
+
+To split a unit: copy its folder into a new repository, replace each `workspace:^` with the published version, add
+the repository files the root provides today (`.nvmrc`, a `pnpm-workspace.yaml` with the `allowBuilds` list, a CI
+workflow), then `pnpm install && pnpm check` (and `pnpm build` for a deployable).
 
 Shared packages:
 
@@ -27,6 +54,7 @@ Shared packages:
 | `@ss/rules`        | The small condition language (`rules@1`) used in settings                                      |
 | `@ss/protocol`     | Signing and verifying keys, requests, launches and events                                      |
 | `@ss/net`          | Safe outbound HTTP (blocks private networks, pins DNS)                                         |
+| `@ss/config`       | The shared tooling: ESLint, TypeScript, Prettier and Vitest presets, the test MongoDB setup    |
 
 Each folder has its own `README.md` with its reference. `packages/app-kit/API.md` is the binding product API.
 
@@ -42,8 +70,20 @@ pnpm install
 pnpm check
 ```
 
-`pnpm check` runs format, lint, typecheck and every test. It must pass before every commit, and CI runs it too.
-Tests start their own in-memory MongoDB, so they need no database.
+`pnpm check` checks the root files' format, then runs every unit's own `check` (format, lint, typecheck and tests with
+coverage) one after another. It must pass before every commit, and CI runs it per unit. Tests start their own
+in-memory MongoDB, so they need no database.
+
+| Command (from the root)                      | What it runs                                                         |
+| -------------------------------------------- | -------------------------------------------------------------------- |
+| `pnpm check`                                 | the root files' format check, then every unit's `check`              |
+| `pnpm --filter <unit> check`                 | one unit, e.g. `pnpm --filter @ss/product-loyalty check`             |
+| `pnpm test` / `pnpm lint` / `pnpm typecheck` | that step in every unit                                              |
+| `pnpm format` / `pnpm format:check`          | Prettier in every unit and on the root files                         |
+| `pnpm test:all`                              | every unit's tests in one Vitest run (projects), sharing one MongoDB |
+| `pnpm validate`                              | `ss app validate` in every product                                   |
+
+Inside a unit's folder the same scripts run that unit alone (`pnpm check`, `pnpm test`, …).
 
 Run the Portal locally (from `platform/`):
 
@@ -112,7 +152,8 @@ headless/        UI logic without the DOM, for merchants who build their own UI
 ui/              drop-in UI that renders headless/ with the website's theme
 app/             thin Next.js wiring only (routes call app-kit)
 jobs/            scheduled work (cleanup, retries)
-tests/           Vitest tests; every product includes certify and Portal end-to-end tests
+tests/           Vitest tests, including certify (the Portal end-to-end test lives in e2e/)
+eslint.config.js, tsconfig.json, vitest.config.js   tooling, built from @ss/config
 docs/guide.md    short guide for developers using the product
 ```
 
@@ -175,13 +216,19 @@ compile. Use `.js` files with JSDoc types; do not add `.ts` files.
 
 ## Testing
 
-- Vitest, with coverage targets of 90% lines and functions and 85% branches.
+- Vitest, with coverage targets of 90% lines and functions and 85% branches, met by each unit on its own
+  (`defineUnitConfig` in `@ss/config/vitest`).
 - Test `core/` with plain inputs and outputs. Test `api/` through the real HTTP handler with app-kit's fake Portal
-  (`@ss/app-kit/testing`) and the in-memory MongoDB.
-- Every product keeps its `certify.test.js` and `portal-e2e.test.js` (product against the real Portal) passing.
+  (`@ss/app-kit/testing`) and the in-memory MongoDB (`mongo: true` in the unit's `vitest.config.js`).
+- Every product keeps its `tests/certify.test.js` (through `@ss/cli`) passing, and has a system test against the real
+  Portal in `e2e/tests/<product>-portal.test.js` (it imports `@ss/platform/testing` and the product's `./serve`).
 
 ```bash
-pnpm vitest run products/my-app
+pnpm --filter @ss/product-my-app test
+```
+
+```bash
+pnpm --filter @ss/e2e test
 ```
 
 ## Deploying

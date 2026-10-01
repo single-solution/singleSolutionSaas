@@ -6,7 +6,7 @@ import {
 	isLanguageTag,
 	validateEntitlementDocument,
 } from '../src/index.js';
-import { entitlement } from './fixtures.js';
+import { entitlement } from '../src/testing.js';
 import { expectProblem, expectRule } from './helpers.js';
 
 describe('entitlement document', () => {

@@ -12,7 +12,7 @@ import { createIdentityModule } from '../../src/modules/identity/index.js';
 import { createConnectorsModule } from '../../src/modules/connectors/index.js';
 import { BUNDLE_FORMAT } from '../../src/modules/catalog/core/bundle.js';
 import { createConsoleApi } from '../../src/console/api.js';
-import { act, byLabel, type } from '../../../packages/ui/test/dom.js';
+import { act, byLabel, type } from '@ss/ui/testing';
 import { PORTAL_URL, createTestLogger, testConfig } from '../helpers.js';
 
 export const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));

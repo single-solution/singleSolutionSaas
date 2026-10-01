@@ -50,15 +50,17 @@ export const loadStrings = async (root) => {
  */
 export const createPlatform = async ({ env = process.env, root = process.cwd(), overrides = {} } = {}) => {
 	const config = configFromEnv(env);
-	const missing = [
-		['SS_PORTAL_URL', config.portalUrl],
-		['SS_APP_SIGNING_KEY', config.signingKey],
-		['SS_REGISTRATION_TOKEN_HASH', config.registrationTokenHash],
-	].filter(([, value]) => !value);
-	if (missing.length > 0)
+	const { portalUrl, signingKey, registrationTokenHash } = config;
+	if (!portalUrl || !signingKey || !registrationTokenHash) {
+		const missing = [
+			['SS_PORTAL_URL', portalUrl],
+			['SS_APP_SIGNING_KEY', signingKey],
+			['SS_REGISTRATION_TOKEN_HASH', registrationTokenHash],
+		].filter(([, value]) => !value);
 		throw new Error(`Missing environment variables: ${missing.map(([name]) => name).join(', ')} (run \`ss dev env\`)`);
+	}
 	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
-	/** @type {unknown} */
+	/** @type {ReturnType<typeof createMongoStores> | undefined} */
 	let stores;
 	if (config.productDbUri) {
 		const { MongoClient } = await import('mongodb');
@@ -70,10 +72,10 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	return createProduct({
 		manifest,
 		strings,
-		portalUrl: config.portalUrl,
+		portalUrl,
 		appId: config.appId,
-		signingKey: config.signingKey,
-		registrationTokenHash: config.registrationTokenHash,
+		signingKey,
+		registrationTokenHash,
 		logger: createLogger({ level: config.logLevel }),
 		privacy: PRIVACY,
 		devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
