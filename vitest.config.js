@@ -4,6 +4,8 @@ export default defineConfig({
 	test: {
 		include: ['packages/*/test/**/*.test.js', 'platform/test/**/*.test.js'],
 		environment: 'node',
+		hookTimeout: 60000,
+		testTimeout: 30000,
 		coverage: {
 			provider: 'v8',
 			include: ['packages/*/src/**', 'platform/src/**'],

@@ -1,0 +1,726 @@
+/**
+ * Public service of the `connectors` module: client-owned resources (PLAN §1a) — the merchant's own database,
+ * storage, AI, messaging, payments and analytics credentials.
+ *
+ * Custody rules (binding):
+ * - credentials are validated server-side (`core/schemas.js`), sealed with `ctx.envelope` under
+ *   `aad = { connector: merchantId + ':' + connectorId }` (a sealed value cannot be replayed into another merchant's
+ *   or another connector's record), and **never returned**: responses carry masked previews only;
+ * - they are opened only to run a connection check and at `resolve` time, for a product with an active subscription
+ *   on the website whose accepted manifest requires the kind; every resolve (granted or denied) is audited without
+ *   secrets;
+ * - rotation keeps the previous sealed version for 24 h (rollback); revocation deletes all sealed material and stops
+ *   resolution at once;
+ * - every outbound call of a check goes through the SSRF guard (`adapters/outbound.js`).
+ * @module
+ */
+import { createId, isId } from '@ss/contracts';
+import { problem } from '../../infra/http.js';
+import { decideResolve } from './core/access.js';
+import { DESCRIPTOR_TTL_MS, descriptorOf } from './core/descriptor.js';
+import { previewOf } from './core/mask.js';
+import { buildReport, statusFromReport } from './core/report.js';
+import { KINDS, validateCredentials, validateLabel, validateWebsiteIds } from './core/schemas.js';
+import { createConnectorsRepo } from './repo.js';
+import { ASSIGNMENTS, CONNECTORS } from './schema.js';
+
+/** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
+/** @typedef {import('../../infra/rbac.js').Actor} Actor */
+/** @typedef {import('./core/netguard.js').Allowlist} Allowlist */
+/** @typedef {import('./core/report.js').CheckReport} CheckReport */
+/** @typedef {import('./adapters/probes.js').Probes} Probes */
+/** @typedef {import('mongodb').Document} Document */
+/** @typedef {{ actor: Actor | { type: 'system', id: string }, requestId?: string | null, ip?: string | null }} Caller */
+
+export const ROLLBACK_WINDOW_MS = 24 * 60 * 60_000;
+export const HEALTH_INTERVAL_MS = 50 * 60_000;
+const SYSTEM = Object.freeze({ type: /** @type {const} */ ('system'), id: 'connectors.health_check' });
+
+/** @param {Date | null | undefined} value */
+const iso = (value) => (value instanceof Date ? value.toISOString() : null);
+
+/**
+ * @param {ModuleContext} ctx
+ * @param {{ allowlist: Allowlist, probes: Probes }} options
+ */
+export const createConnectorsService = (ctx, { allowlist, probes }) => {
+	const repo = createConnectorsRepo({ connectors: ctx.collection(CONNECTORS), assignments: ctx.collection(ASSIGNMENTS) });
+	const log = ctx.logger;
+
+	/**
+	 * @param {string} merchantId
+	 * @param {string} connectorId
+	 */
+	const aadOf = (merchantId, connectorId) => ({ connector: `${merchantId}:${connectorId}` });
+	/**
+	 * @param {string} merchantId
+	 * @param {string} connectorId
+	 * @param {Record<string, unknown>} credentials
+	 */
+	const seal = (merchantId, connectorId, credentials) =>
+		ctx.envelope.seal(JSON.stringify(credentials), { aad: aadOf(merchantId, connectorId) });
+	/**
+	 * @param {Document} doc
+	 * @returns {Record<string, any>}
+	 */
+	const open = (doc) => JSON.parse(ctx.envelope.openText(String(doc.sealed), { aad: aadOf(doc.merchantId, String(doc._id)) }));
+
+	/** @param {string} name */
+	const optional = (name) => (ctx.moduleNames().includes(name) ? ctx.service(name) : null);
+
+	/**
+	 * Merchant-facing presentation (masked preview, never sealed material).
+	 * @param {Document} doc
+	 */
+	const present = (doc) => {
+		const until =
+			doc.previous?.expiresAt instanceof Date && doc.previous.expiresAt.getTime() > ctx.now() ? doc.previous.expiresAt : null;
+		return {
+			connectorId: String(doc._id),
+			merchantId: doc.merchantId,
+			kind: doc.kind,
+			provider: doc.provider,
+			label: doc.label,
+			websiteIds: [...(doc.websiteIds ?? [])],
+			status: doc.status,
+			lastCheckAt: iso(doc.lastCheckAt),
+			lastCheckReport: doc.lastCheckReport ?? null,
+			preview: doc.status === 'revoked' ? null : (doc.preview ?? null),
+			rollbackAvailableUntil: iso(until),
+			createdAt: iso(doc.createdAt),
+			rotatedAt: iso(doc.rotatedAt),
+			revokedAt: iso(doc.revokedAt),
+		};
+	};
+	/**
+	 * Staff presentation: status only.
+	 * @param {Document} doc
+	 */
+	const presentStatus = (doc) => {
+		const { preview, rollbackAvailableUntil, ...rest } = present(doc);
+		void preview;
+		void rollbackAvailableUntil;
+		return rest;
+	};
+	/** @param {Document} doc */
+	const summary = (doc) => ({
+		kind: doc.kind,
+		provider: doc.provider,
+		label: doc.label,
+		websiteIds: [...(doc.websiteIds ?? [])],
+		status: doc.status,
+	});
+
+	/**
+	 * @param {Caller} caller
+	 * @param {string} action
+	 * @param {Document} doc
+	 * @param {{ before?: unknown, after?: unknown, reason?: string | null }} [extra]
+	 */
+	const audit = (caller, action, doc, extra = {}) =>
+		ctx.audit.record({
+			actor: /** @type {any} */ (caller.actor),
+			action,
+			target: { type: 'connector', id: String(doc._id), merchantId: doc.merchantId },
+			...(extra.before === undefined ? {} : { before: extra.before }),
+			...(extra.after === undefined ? {} : { after: extra.after }),
+			requestId: caller.requestId ?? null,
+			ip: caller.ip ?? null,
+			reason: extra.reason ?? null,
+		});
+
+	/**
+	 * Publish `resource.changed@1` for each change (when the integration module is present) and let commerce refresh
+	 * the affected entitlement documents. Failures are logged, never thrown.
+	 * @param {Array<{ websiteId: string, kind: string, status: string, ref: string }>} changes
+	 */
+	const notify = async (changes) => {
+		const integration = optional('integration');
+		const commerce = optional('commerce');
+		for (const change of changes) {
+			try {
+				if (integration) await integration.emitControl('resource.changed@1', change, { websiteId: change.websiteId });
+			} catch (error) {
+				log.warn('resource.changed emit failed', { websiteId: change.websiteId, kind: change.kind, error });
+			}
+			try {
+				if (commerce && typeof commerce.invalidate === 'function') {
+					for (const s of (await commerce.subscriptionsForWebsite(change.websiteId)) ?? [])
+						await commerce.invalidate(s.subscriptionId);
+				}
+			} catch (error) {
+				log.warn('entitlement invalidation failed', { websiteId: change.websiteId, error });
+			}
+		}
+	};
+	/**
+	 * @param {Document} doc
+	 * @param {string[]} websiteIds
+	 * @param {string} [status]
+	 */
+	const changesFor = (doc, websiteIds, status = doc.status) =>
+		websiteIds.map((websiteId) => ({ websiteId, kind: String(doc.kind), status: String(status), ref: String(doc._id) }));
+
+	/**
+	 * @param {string} detail
+	 * @param {Array<{ path: string, message: string }>} errors
+	 */
+	const invalid = (detail, errors) => problem('validation_failed', detail, { errors });
+
+	/**
+	 * Every website must exist and belong to the merchant (another merchant's website is reported as unknown).
+	 * @param {string} merchantId
+	 * @param {string[]} websiteIds
+	 */
+	const checkWebsites = async (merchantId, websiteIds) => {
+		const identity = ctx.service('identity');
+		const errors = [];
+		for (const [i, websiteId] of websiteIds.entries()) {
+			const website = await Promise.resolve(identity.getWebsite(websiteId)).catch(() => null);
+			if (!website || website.merchantId !== merchantId)
+				errors.push({ path: `/websiteIds/${i}`, message: 'is not a website of this merchant' });
+		}
+		if (errors.length > 0) throw invalid('Unknown websites.', errors);
+	};
+
+	/**
+	 * @param {string} merchantId
+	 * @param {unknown} connectorId
+	 * @param {{ live?: boolean }} [options] live = refuse revoked connectors
+	 */
+	const load = async (merchantId, connectorId, { live = false } = {}) => {
+		const doc = typeof connectorId === 'string' && isId(connectorId, 'con') ? await repo.get(merchantId, connectorId) : null;
+		if (!doc) throw problem('not_found', 'No such connector.');
+		if (live && doc.status === 'revoked') throw problem('conflict', 'The connector is revoked.');
+		return doc;
+	};
+
+	/**
+	 * Claim (website, kind) for a connector; on any refusal release what was claimed and throw 409.
+	 * @param {Document} doc
+	 * @param {string[]} websiteIds
+	 */
+	const claimAll = async (doc, websiteIds) => {
+		/** @type {string[]} */
+		const claimed = [];
+		for (const websiteId of websiteIds) {
+			if (await repo.claim(doc.merchantId, { websiteId, kind: String(doc.kind), connectorId: String(doc._id) }))
+				claimed.push(websiteId);
+			else {
+				await releaseAll(doc, claimed);
+				throw problem('conflict', `A website already has a ${doc.kind} connector; unassign it first.`);
+			}
+		}
+	};
+	/**
+	 * @param {Document} doc
+	 * @param {string[]} websiteIds
+	 */
+	const releaseAll = async (doc, websiteIds) => {
+		for (const websiteId of websiteIds)
+			await repo.release(doc.merchantId, { websiteId, kind: String(doc.kind), connectorId: String(doc._id) });
+	};
+
+	/**
+	 * Open, re-validate and check a connector; store the report and status (dropped when the credentials changed
+	 * meanwhile). Returns the report and whether the status changed.
+	 * @param {Document} doc
+	 * @param {{ silent?: boolean }} [options] silent = do not notify (the caller notifies)
+	 * @returns {Promise<{ report: CheckReport, doc: Document, changed: boolean }>}
+	 */
+	const check = async (doc, { silent = false } = {}) => {
+		const startedAt = ctx.now();
+		/** @type {CheckReport} */
+		let report;
+		try {
+			const credentials = open(doc);
+			const validated = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, allowlist);
+			report = validated.ok
+				? await probes.run(String(doc.kind), String(doc.provider), credentials)
+				: buildReport({
+						steps: [{ name: 'credentials', ok: false, code: 'invalid_credentials' }],
+						startedAt,
+						now: ctx.now(),
+					});
+		} catch (error) {
+			log.error('connector check failed', { connectorId: String(doc._id), error: { code: /** @type {any} */ (error)?.code } });
+			report = buildReport({ steps: [{ name: 'credentials', ok: false, code: 'check_failed' }], startedAt, now: ctx.now() });
+		}
+		const status = statusFromReport(report);
+		const updated = await repo.update(
+			doc.merchantId,
+			String(doc._id),
+			doc.version,
+			{ status, lastCheckAt: new Date(ctx.now()), lastCheckReport: report },
+			{ bump: false },
+		);
+		if (!updated) return { report, doc: (await repo.get(doc.merchantId, String(doc._id))) ?? doc, changed: false };
+		const changed = updated.status !== doc.status;
+		if (changed && !silent) await notify(changesFor(updated, updated.websiteIds ?? []));
+		return { report, doc: updated, changed };
+	};
+
+	/**
+	 * @param {unknown} input
+	 * @returns {{ merchantId: string, connectorId: string } | null}
+	 */
+	const refOf = (input) => {
+		if (typeof input === 'object' && input !== null) {
+			const { merchantId, connectorId } = /** @type {any} */ (input);
+			return typeof merchantId === 'string' && typeof connectorId === 'string' ? { merchantId, connectorId } : null;
+		}
+		return null;
+	};
+
+	/**
+	 * Create a connector, assign it to websites and run its first check.
+	 * @param {{ merchantId: string, kind: unknown, provider: unknown, label?: unknown, credentials: unknown, websiteIds?: unknown } & Caller} input
+	 */
+	const create = async ({ merchantId, kind, provider, label, credentials, websiteIds, ...caller }) => {
+		const checked = validateCredentials({ kind, provider, credentials }, allowlist);
+		if (!checked.ok) throw invalid('The connector is invalid.', checked.errors);
+		const websites = validateWebsiteIds(websiteIds);
+		if (!websites.ok) throw invalid('The connector is invalid.', websites.errors);
+		const name = validateLabel(label ?? `${checked.kind} (${checked.provider})`);
+		if (!name.ok) throw invalid('The connector is invalid.', name.errors);
+		await checkWebsites(merchantId, websites.value);
+		const connectorId = createId('con', { randomBytes: ctx.randomBytes });
+		const doc = {
+			_id: connectorId,
+			merchantId,
+			kind: checked.kind,
+			provider: checked.provider,
+			label: name.value,
+			websiteIds: [],
+			status: 'failing',
+			lastCheckAt: null,
+			lastCheckReport: null,
+			sealed: seal(merchantId, connectorId, checked.credentials),
+			preview: previewOf(checked.kind, checked.provider, checked.credentials),
+			previous: null,
+			version: 1,
+			rotatedAt: null,
+			revokedAt: null,
+			createdBy: caller.actor.id,
+		};
+		await repo.insert(merchantId, doc);
+		try {
+			await claimAll(doc, websites.value);
+		} catch (error) {
+			await repo.remove(merchantId, connectorId);
+			throw error;
+		}
+		const assigned = /** @type {Document} */ (
+			await repo.update(merchantId, connectorId, 1, { websiteIds: websites.value }, { bump: false })
+		);
+		await audit(caller, 'connectors.created', assigned, { after: summary(assigned) });
+		const result = await check(assigned, { silent: true });
+		await notify(changesFor(result.doc, result.doc.websiteIds ?? []));
+		return { connector: present(result.doc), report: result.report };
+	};
+
+	/**
+	 * Run a connection check now. Accepts `{ merchantId, connectorId }` (console) or a bare connector id (internal).
+	 * @param {string | ({ merchantId: string, connectorId: string } & Partial<Caller>)} input
+	 */
+	const test = async (input) => {
+		const ref = refOf(input);
+		const doc =
+			ref !== null
+				? await load(ref.merchantId, ref.connectorId, { live: true })
+				: typeof input === 'string' && isId(input, 'con')
+					? await repo.findAcross(input)
+					: null;
+		if (!doc) throw problem('not_found', 'No such connector.');
+		if (doc.status === 'revoked') throw problem('conflict', 'The connector is revoked.');
+		const result = await check(doc);
+		const caller = /** @type {Partial<Caller>} */ (typeof input === 'object' ? input : {});
+		if (caller.actor)
+			await audit(/** @type {Caller} */ (caller), 'connectors.tested', result.doc, {
+				after: { status: result.doc.status, ok: result.report.ok },
+			});
+		return { connector: present(result.doc), report: result.report };
+	};
+
+	/**
+	 * Replace the credentials (same kind and provider), keep the previous version for 24 h, re-test.
+	 * @param {{ merchantId: string, connectorId: string, credentials: unknown } & Caller} input
+	 */
+	const rotate = async ({ merchantId, connectorId, credentials, ...caller }) => {
+		const doc = await load(merchantId, connectorId, { live: true });
+		const checked = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, allowlist);
+		if (!checked.ok) throw invalid('The credentials are invalid.', checked.errors);
+		const at = new Date(ctx.now());
+		const updated = await repo.update(merchantId, connectorId, doc.version, {
+			sealed: seal(merchantId, connectorId, checked.credentials),
+			preview: previewOf(checked.kind, checked.provider, checked.credentials),
+			previous: {
+				sealed: doc.sealed,
+				preview: doc.preview,
+				rotatedAt: at,
+				expiresAt: new Date(at.getTime() + ROLLBACK_WINDOW_MS),
+			},
+			rotatedAt: at,
+		});
+		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
+		await audit(caller, 'connectors.rotated', updated, { after: summary(updated) });
+		const result = await check(updated);
+		return { connector: present(result.doc), report: result.report };
+	};
+
+	/**
+	 * Restore the credentials replaced by the last rotation (within 24 h), re-test.
+	 * @param {{ merchantId: string, connectorId: string } & Caller} input
+	 */
+	const rollback = async ({ merchantId, connectorId, ...caller }) => {
+		const doc = await load(merchantId, connectorId, { live: true });
+		const previous = doc.previous;
+		if (!previous?.sealed || !(previous.expiresAt instanceof Date) || previous.expiresAt.getTime() <= ctx.now())
+			throw problem('gone', 'No previous credentials to roll back to (they are kept for 24 hours).');
+		const updated = await repo.update(merchantId, connectorId, doc.version, {
+			sealed: previous.sealed,
+			preview: previous.preview,
+			previous: null,
+			rotatedAt: new Date(ctx.now()),
+		});
+		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
+		await audit(caller, 'connectors.rolled_back', updated, { after: summary(updated) });
+		const result = await check(updated);
+		return { connector: present(result.doc), report: result.report };
+	};
+
+	/**
+	 * Revoke: delete every sealed copy, release website assignments, stop resolution. Idempotent.
+	 * @param {{ merchantId: string, connectorId: string, reason?: string | null } & Caller} input
+	 */
+	const revoke = async ({ merchantId, connectorId, reason = null, ...caller }) => {
+		let doc = await load(merchantId, connectorId);
+		if (doc.status === 'revoked') return { connector: present(doc) };
+		/** @type {Document | null} */
+		let updated = null;
+		for (let attempt = 0; attempt < 3 && !updated; attempt += 1) {
+			updated = await repo.update(merchantId, connectorId, doc.version, {
+				status: 'revoked',
+				sealed: null,
+				previous: null,
+				revokedAt: new Date(ctx.now()),
+			});
+			if (!updated) doc = await load(merchantId, connectorId);
+		}
+		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
+		await repo.releaseAll(merchantId, connectorId);
+		await audit(caller, 'connectors.revoked', updated, { before: summary(doc), after: summary(updated), reason });
+		await notify(changesFor(updated, updated.websiteIds ?? [], 'revoked'));
+		return { connector: present(updated) };
+	};
+
+	/**
+	 * Delete a connector record (revoking it first).
+	 * @param {{ merchantId: string, connectorId: string } & Caller} input
+	 */
+	const remove = async ({ merchantId, connectorId, ...caller }) => {
+		const { connector } = await revoke({ merchantId, connectorId, ...caller });
+		await repo.remove(merchantId, connectorId);
+		await audit(
+			caller,
+			'connectors.deleted',
+			{ _id: connectorId, merchantId },
+			{ before: { kind: connector.kind, label: connector.label } },
+		);
+		await notify(
+			connector.websiteIds.map((websiteId) => ({ websiteId, kind: connector.kind, status: 'missing', ref: connectorId })),
+		);
+	};
+
+	/**
+	 * Replace the websites a connector serves (one connector per website and kind).
+	 * @param {{ merchantId: string, connectorId: string, websiteIds: unknown } & Caller} input
+	 */
+	const assign = async ({ merchantId, connectorId, websiteIds, ...caller }) => {
+		const doc = await load(merchantId, connectorId, { live: true });
+		const websites = validateWebsiteIds(websiteIds);
+		if (!websites.ok) throw invalid('The websites are invalid.', websites.errors);
+		await checkWebsites(merchantId, websites.value);
+		const before = new Set(doc.websiteIds ?? []);
+		const after = new Set(websites.value);
+		const added = websites.value.filter((id) => !before.has(id));
+		const removed = [...before].filter((id) => !after.has(id));
+		await claimAll(doc, added);
+		const updated = await repo.update(merchantId, connectorId, doc.version, { websiteIds: websites.value });
+		if (!updated) {
+			await releaseAll(doc, added);
+			throw problem('conflict', 'The connector changed meanwhile; retry.');
+		}
+		await releaseAll(doc, removed);
+		await audit(caller, 'connectors.assigned', updated, {
+			before: { websiteIds: [...before] },
+			after: { websiteIds: websites.value },
+		});
+		await notify([...changesFor(updated, added), ...changesFor(updated, removed, 'missing')]);
+		return { connector: present(updated) };
+	};
+
+	/**
+	 * Rename a connector.
+	 * @param {{ merchantId: string, connectorId: string, label: unknown } & Caller} input
+	 */
+	const update = async ({ merchantId, connectorId, label, ...caller }) => {
+		const doc = await load(merchantId, connectorId);
+		const name = validateLabel(label);
+		if (!name.ok) throw invalid('The connector is invalid.', name.errors);
+		const updated = await repo.update(merchantId, connectorId, doc.version, { label: name.value }, { bump: false });
+		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
+		await audit(caller, 'connectors.updated', updated, { before: { label: doc.label }, after: { label: name.value } });
+		return { connector: present(updated) };
+	};
+
+	/**
+	 * @param {{ merchantId: string, connectorId: string }} input
+	 */
+	const get = async ({ merchantId, connectorId }) => present(await load(merchantId, connectorId));
+
+	/**
+	 * @param {{ merchantId: string, kind?: string, status?: string, websiteId?: string, after?: unknown, limit: number }} input
+	 */
+	const list = async ({ merchantId, kind, status, websiteId, after, limit }) =>
+		(
+			await repo.list(merchantId, {
+				...(kind ? { kind } : {}),
+				...(status ? { status } : {}),
+				...(websiteId ? { websiteId } : {}),
+				after: keyOf(after),
+				limit,
+			})
+		).map(present);
+
+	/**
+	 * Staff listing (status only, never previews or secrets).
+	 * @param {{ merchantId?: string, kind?: string, status?: string, after?: unknown, limit: number }} input
+	 */
+	const adminList = async ({ merchantId, kind, status, after, limit }) =>
+		(
+			await repo.listAcross({
+				...(merchantId ? { merchantId } : {}),
+				...(kind ? { kind } : {}),
+				...(status ? { status } : {}),
+				after: keyOf(after),
+				limit,
+			})
+		).map(presentStatus);
+
+	/** @param {string} connectorId */
+	const adminGet = async (connectorId) => {
+		const doc = isId(connectorId, 'con') ? await repo.findAcross(connectorId) : null;
+		if (!doc) throw problem('not_found', 'No such connector.');
+		return presentStatus(doc);
+	};
+
+	/**
+	 * Resource status of a website (what exists; commerce computes `missing` for required kinds without one).
+	 * @param {string} websiteId
+	 * @returns {Promise<Array<{ kind: string, ref: string, status: string }>>}
+	 */
+	const statusFor = async (websiteId) => {
+		if (!isId(websiteId, 'web')) return [];
+		const website = await Promise.resolve(ctx.service('identity').getWebsite(websiteId)).catch(() => null);
+		if (!website?.merchantId) return [];
+		return statusOf(String(website.merchantId), websiteId);
+	};
+
+	/**
+	 * @param {string} merchantId
+	 * @param {string} websiteId
+	 */
+	const statusOf = async (merchantId, websiteId) => {
+		const docs = await repo.forWebsite(merchantId, websiteId);
+		/** @type {Map<string, Document>} */
+		const byKind = new Map();
+		for (const doc of docs) {
+			const current = byKind.get(doc.kind);
+			const better =
+				!current ||
+				(current.status === 'revoked' && doc.status !== 'revoked') ||
+				(current.status === 'revoked' &&
+					doc.status === 'revoked' &&
+					(doc.revokedAt?.getTime?.() ?? 0) > (current.revokedAt?.getTime?.() ?? 0));
+			if (better) byKind.set(doc.kind, doc);
+		}
+		return [...byKind.values()]
+			.map((doc) => ({ kind: String(doc.kind), ref: String(doc._id), status: String(doc.status) }))
+			.sort((a, b) => KINDS.indexOf(/** @type {any} */ (a.kind)) - KINDS.indexOf(/** @type {any} */ (b.kind)));
+	};
+
+	/**
+	 * Resource status of one of the merchant's websites (console); another merchant's website is not found.
+	 * @param {{ merchantId: string, websiteId: string }} input
+	 */
+	const websiteResources = async ({ merchantId, websiteId }) => {
+		const website = isId(websiteId, 'web')
+			? await Promise.resolve(ctx.service('identity').getWebsite(websiteId)).catch(() => null)
+			: null;
+		if (!website || website.merchantId !== merchantId) throw problem('not_found', 'No such website.');
+		return { websiteId, resources: await statusOf(merchantId, websiteId) };
+	};
+
+	/**
+	 * Hand a product the short-lived descriptor of a website's resource (F.9). Audited every time, granted or not.
+	 * @param {{ appId: string, websiteId: unknown, kind: unknown, requestId?: string | null, ip?: string | null }} input
+	 * @returns {Promise<{ kind: string, descriptor: Record<string, unknown>, expiresAt: string }>}
+	 */
+	const resolve = async ({ appId, websiteId, kind, requestId = null, ip = null }) => {
+		/** @type {import('../../infra/http.js').FieldError[]} */
+		const errors = [];
+		if (typeof websiteId !== 'string' || !isId(websiteId, 'web'))
+			errors.push({ path: '/websiteId', message: 'must be a website id' });
+		if (typeof kind !== 'string' || !KINDS.includes(/** @type {any} */ (kind)))
+			errors.push({ path: '/kind', message: `must be one of: ${KINDS.join(', ')}` });
+		if (errors.length > 0) throw invalid('The request is invalid.', errors);
+		const w = /** @type {string} */ (websiteId);
+		const k = /** @type {string} */ (kind);
+		const actor = { type: /** @type {const} */ ('product'), id: appId };
+		/**
+		 * @param {string} reason
+		 * @param {string | null} merchantId
+		 * @param {import('../../infra/http.js').ProblemResult} refusal
+		 */
+		const deny = async (reason, merchantId, refusal) => {
+			await ctx.audit.record({
+				actor,
+				action: 'connectors.resolve_denied',
+				target: { type: 'website', id: w, merchantId, websiteId: w },
+				after: { appId, websiteId: w, kind: k },
+				requestId,
+				ip,
+				reason,
+			});
+			return refusal;
+		};
+		const forbidden = problem('forbidden', 'This product may not resolve that resource for this website.');
+		const website = await Promise.resolve(ctx.service('identity').getWebsite(w)).catch(() => null);
+		if (!website?.merchantId) throw await deny('unknown_website', null, forbidden);
+		const merchantId = String(website.merchantId);
+		const [subscriptions, manifest] = await Promise.all([
+			Promise.resolve(ctx.service('commerce').subscriptionsForWebsite(w)).catch(() => []),
+			Promise.resolve(ctx.service('catalog').getManifest(appId)).catch(() => null),
+		]);
+		const decision = decideResolve({ appId, websiteId: w, kind: k, subscriptions, manifest });
+		if (!decision.ok) throw await deny(decision.reason, merchantId, forbidden);
+		const doc = await repo.assigned(merchantId, w, k);
+		if (!doc || doc.status === 'revoked' || !doc.sealed || !(doc.websiteIds ?? []).includes(w))
+			throw await deny(
+				'resource_missing',
+				merchantId,
+				problem('resource_missing', `No ${k} connector is connected for this website.`),
+			);
+		/** @type {Record<string, any>} */
+		let credentials;
+		try {
+			credentials = open(doc);
+		} catch {
+			log.error('connector credentials could not be opened', { connectorId: String(doc._id) });
+			throw await deny('unsealable', merchantId, problem('unavailable', 'The resource is temporarily unavailable.'));
+		}
+		const descriptor = descriptorOf(String(doc.kind), String(doc.provider), credentials);
+		const expiresAt = new Date(ctx.now() + DESCRIPTOR_TTL_MS).toISOString();
+		await ctx.audit.record({
+			actor,
+			action: 'connectors.resolved',
+			target: { type: 'connector', id: String(doc._id), merchantId, websiteId: w },
+			after: { appId, websiteId: w, connectorId: String(doc._id), kind: k, subscriptionId: decision.subscriptionId },
+			requestId,
+			ip,
+		});
+		return { kind: k, descriptor, expiresAt };
+	};
+
+	/**
+	 * Hourly health check: purge expired rollback copies, re-wrap sealed values under the active KEK, re-test every
+	 * live connector not checked within the interval (until the deadline).
+	 * @param {{ deadline?: number, signal?: AbortSignal, batchSize?: number }} [options]
+	 */
+	const healthCheck = async ({ deadline = Number.POSITIVE_INFINITY, signal, batchSize = 25 } = {}) => {
+		const purged = await repo.purgeExpiredPrevious(new Date(ctx.now()));
+		let checked = 0;
+		let changed = 0;
+		let rewrapped = 0;
+		/** @type {Set<string>} */
+		const seen = new Set();
+		const timeLeft = () => ctx.now() < deadline - 10_000 && !signal?.aborted;
+		for (;;) {
+			if (!timeLeft()) break;
+			const due = (await repo.dueForCheck(new Date(ctx.now() - HEALTH_INTERVAL_MS), batchSize)).filter(
+				(d) => !seen.has(String(d._id)),
+			);
+			if (due.length === 0) return { checked, changed, purged, rewrapped, remaining: false };
+			for (const ref of due) {
+				if (!timeLeft()) break;
+				seen.add(String(ref._id));
+				let doc = await repo.get(ref.merchantId, String(ref._id));
+				if (!doc || !doc.sealed) continue;
+				try {
+					const active = ctx.envelope.activeKekId;
+					if (
+						ctx.envelope.kekIdOf(String(doc.sealed)) !== active ||
+						(doc.previous?.sealed && ctx.envelope.kekIdOf(String(doc.previous.sealed)) !== active)
+					) {
+						const set = {
+							sealed: ctx.envelope.rewrap(String(doc.sealed)),
+							...(doc.previous?.sealed ? { 'previous.sealed': ctx.envelope.rewrap(String(doc.previous.sealed)) } : {}),
+						};
+						const updated = await repo.update(doc.merchantId, String(doc._id), doc.version, set, { bump: false });
+						if (updated) {
+							doc = updated;
+							rewrapped += 1;
+						}
+					}
+				} catch (error) {
+					log.warn('connector rewrap failed', {
+						connectorId: String(doc._id),
+						error: { code: /** @type {any} */ (error)?.code },
+					});
+				}
+				const result = await check(doc);
+				checked += 1;
+				if (result.changed) {
+					changed += 1;
+					await audit({ actor: SYSTEM }, 'connectors.status_changed', result.doc, {
+						before: { status: doc.status },
+						after: { status: result.doc.status },
+					});
+				}
+			}
+		}
+		return { checked, changed, purged, rewrapped, remaining: true };
+	};
+
+	return {
+		create,
+		test,
+		rotate,
+		rollback,
+		revoke,
+		remove,
+		assign,
+		update,
+		get,
+		list,
+		adminList,
+		adminGet,
+		statusFor,
+		websiteResources,
+		resolve,
+		healthCheck,
+	};
+};
+
+/**
+ * Pagination key `[createdAtMs, connectorId]` from a decoded cursor.
+ * @param {unknown} after
+ * @returns {[number, string] | null}
+ */
+const keyOf = (after) =>
+	Array.isArray(after) && after.length === 2 && typeof after[0] === 'number' && typeof after[1] === 'string'
+		? [after[0], after[1]]
+		: null;
+
+/** @typedef {ReturnType<typeof createConnectorsService>} ConnectorsService */
