@@ -1,0 +1,5 @@
+{
+	"faq.title": "Questions and answers",
+	"faq.title_item": "Questions about {title}",
+	"faq.invalid": "Check the item data: {field} is missing or invalid."
+}

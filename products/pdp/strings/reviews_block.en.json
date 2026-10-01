@@ -1,0 +1,4 @@
+{
+	"reviews_block.label": "Reviews",
+	"reviews_block.invalid": "The {field} must be an element key."
+}

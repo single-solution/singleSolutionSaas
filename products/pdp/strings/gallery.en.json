@@ -1,0 +1,16 @@
+{
+	"gallery.label": "Product images",
+	"gallery.carousel": "carousel",
+	"gallery.position": "Image {index} of {total}",
+	"gallery.prev": "Previous image",
+	"gallery.next": "Next image",
+	"gallery.zoom": "Zoom image {index} of {total}",
+	"gallery.count": "{index} / {total}",
+	"gallery.thumbnails": "Choose an image",
+	"gallery.show": "Show image {index} of {total}",
+	"gallery.close": "Close zoom",
+	"gallery.dialog": "Zoomed image",
+	"gallery.alt": "{title}, image {index} of {total}",
+	"gallery.alt_single": "{title}",
+	"gallery.invalid": "Check the item data: {field} is missing or invalid."
+}

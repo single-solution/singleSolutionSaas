@@ -53,6 +53,9 @@ importers:
       '@ss/product-loyalty':
         specifier: workspace:^
         version: link:../products/loyalty
+      '@ss/product-pdp':
+        specifier: workspace:^
+        version: link:../products/pdp
       '@ss/product-reviews':
         specifier: workspace:^
         version: link:../products/reviews
@@ -852,6 +855,46 @@ importers:
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
+      typescript:
+        specifier: ~5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.7
+        version: 3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0)
+
+  products/pdp:
+    dependencies:
+      '@ss/contracts':
+        specifier: workspace:^
+        version: link:../../packages/contracts
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+    devDependencies:
+      '@ss/cli':
+        specifier: workspace:^
+        version: link:../../packages/cli
+      '@ss/config':
+        specifier: workspace:^
+        version: link:../../packages/config
+      '@ss/web':
+        specifier: workspace:^
+        version: link:../../packages/web
+      '@types/node':
+        specifier: ^22.20.4
+        version: 22.20.4
+      '@vitest/coverage-v8':
+        specifier: ^3.2.7
+        version: 3.2.7(vitest@3.2.7(@types/node@22.20.4)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.32.0))
+      eslint:
+        specifier: ^9.39.5
+        version: 9.39.5(jiti@2.7.0)
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
+      prettier:
+        specifier: ^3.9.9
+        version: 3.9.9
       typescript:
         specifier: ~5.9.3
         version: 5.9.3
