@@ -1,0 +1,90 @@
+{
+	"type": "object",
+	"title": "Handoff",
+	"additionalProperties": false,
+	"properties": {
+		"allow_customer_request": {
+			"type": "boolean",
+			"title": "Customers can ask for a person",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "When", "order": 1 }
+		},
+		"escalation_phrases": {
+			"type": "array",
+			"title": "Phrases that ask for a person (any language)",
+			"default": [
+				"human",
+				"agent",
+				"real person",
+				"representative",
+				"speak to someone",
+				"talk to someone",
+				"customer service",
+				"operator"
+			],
+			"maxItems": 200,
+			"items": { "type": "string", "minLength": 2, "maxLength": 80 },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "When", "order": 2 }
+		},
+		"when": {
+			"type": "string",
+			"title": "Also hand off when (rules@1)",
+			"description": "Context: message.text, message.length, conversation.status, conversation.messages, conversation.tags, conversation.priority, customer.identified, ai.failures.",
+			"default": "",
+			"maxLength": 2000,
+			"x-kind": "config",
+			"x-ui": { "widget": "rule", "group": "When", "order": 3 }
+		},
+		"after_ai_failures": {
+			"type": "integer",
+			"title": "Hand off after this many failed AI answers in a row (0 = never)",
+			"default": 2,
+			"minimum": 0,
+			"maximum": 20,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "When", "order": 4 }
+		},
+		"team": {
+			"type": "string",
+			"title": "Team (empty = the inbox default team)",
+			"default": "",
+			"maxLength": 40,
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "To whom", "order": 5 }
+		},
+		"offline_fallback": {
+			"type": "string",
+			"title": "When nobody is available",
+			"default": "lead_form",
+			"enum": ["lead_form", "link", "message"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Offline", "order": 6 }
+		},
+		"offline_link": {
+			"type": "string",
+			"title": "Contact link (any https URL, mailto: or a messaging app link)",
+			"default": "",
+			"maxLength": 2048,
+			"x-kind": "config",
+			"x-ui": { "widget": "url", "group": "Offline", "order": 7 }
+		},
+		"ai_resume_after_minutes": {
+			"type": "integer",
+			"title": "Let the AI help again if no person replied within (minutes, 0 = never)",
+			"default": 3,
+			"minimum": 0,
+			"maximum": 1440,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "After handoff", "order": 8 }
+		},
+		"show_queue_position": {
+			"type": "boolean",
+			"title": "Tell the customer their place in the queue",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "After handoff", "order": 9 }
+		}
+	}
+}

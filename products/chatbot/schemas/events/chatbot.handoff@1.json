@@ -1,0 +1,19 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "chatbot.handoff@1",
+	"description": "A conversation was handed to a person (team, assignee when one was picked, offline when nobody was available).",
+	"type": "object",
+	"required": ["conversationId", "reason", "team", "offline"],
+	"additionalProperties": false,
+	"properties": {
+		"conversationId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"reason": { "type": "string", "minLength": 1, "maxLength": 120 },
+		"team": { "type": "string", "minLength": 1, "maxLength": 40 },
+		"offline": { "type": "boolean" },
+		"assignee": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 255 }
+	},
+	"examples": [
+		{ "conversationId": "cnv_0abc", "reason": "customer_request", "team": "support", "offline": false, "assignee": "agt_0xyz" }
+	]
+}

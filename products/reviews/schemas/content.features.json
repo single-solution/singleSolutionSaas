@@ -1,0 +1,93 @@
+{
+	"type": "object",
+	"title": "Content",
+	"additionalProperties": false,
+	"properties": {
+		"rating_scale": {
+			"type": "integer",
+			"title": "Rating scale (stars)",
+			"description": "Ratings are whole numbers from 1 to this value; structured data uses it as bestRating.",
+			"default": 5,
+			"minimum": 3,
+			"maximum": 10,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Rating", "order": 1 }
+		},
+		"title_max_length": {
+			"type": "integer",
+			"title": "Title length (0 = no titles)",
+			"default": 120,
+			"minimum": 0,
+			"maximum": 300,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Text", "order": 2 }
+		},
+		"title_required": {
+			"type": "boolean",
+			"title": "Title required",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Text", "order": 3 }
+		},
+		"body_required": {
+			"type": "boolean",
+			"title": "Review text required",
+			"description": "Off: rating-only reviews are accepted.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Text", "order": 4 }
+		},
+		"body_min_length": {
+			"type": "integer",
+			"title": "Minimum review text (characters)",
+			"default": 10,
+			"minimum": 0,
+			"maximum": 2000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Text", "order": 5 }
+		},
+		"body_max_length": {
+			"type": "integer",
+			"title": "Maximum review text (characters)",
+			"default": 2000,
+			"minimum": 50,
+			"maximum": 10000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Text", "order": 6 }
+		},
+		"author_name_max_length": {
+			"type": "integer",
+			"title": "Author name length",
+			"default": 60,
+			"minimum": 10,
+			"maximum": 120,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Text", "order": 7 }
+		},
+		"attributes": {
+			"type": "array",
+			"title": "Attribute ratings",
+			"description": "Extra ratings such as quality, value or fit. Each is a whole number from min to max with labels for both ends.",
+			"default": [],
+			"minItems": 0,
+			"maxItems": 10,
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 2 }, "pro": { "max": 10 } },
+			"x-ui": { "widget": "list", "group": "Attributes", "order": 8 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "label", "min", "max"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 60 },
+					"min": { "type": "integer", "title": "Lowest value", "minimum": -10, "maximum": 10 },
+					"max": { "type": "integer", "title": "Highest value", "minimum": -10, "maximum": 10 },
+					"low_label": { "type": "string", "title": "Label of the lowest value", "maxLength": 60 },
+					"high_label": { "type": "string", "title": "Label of the highest value", "maxLength": 60 },
+					"required": { "type": "boolean", "title": "Required" }
+				}
+			}
+		}
+	}
+}

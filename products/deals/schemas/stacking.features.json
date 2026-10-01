@@ -1,0 +1,139 @@
+{
+	"type": "object",
+	"title": "Stacking",
+	"additionalProperties": false,
+	"properties": {
+		"strategy": {
+			"type": "string",
+			"title": "Selection strategy",
+			"description": "best_for_customer: the compatible combination that saves the most; priority: higher-priority deals first.",
+			"default": "best_for_customer",
+			"enum": ["best_for_customer", "priority"],
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": {
+				"widget": "select",
+				"group": "Policy",
+				"order": 1
+			}
+		},
+		"classes": {
+			"type": "array",
+			"title": "Stacking classes",
+			"description": "Every deal has a class. Two deals on the same line combine when both classes list each other in combines_with (same class: stack_within).",
+			"default": [
+				{
+					"key": "item",
+					"stack_within": false,
+					"combines_with": ["cart"]
+				},
+				{
+					"key": "cart",
+					"stack_within": false,
+					"combines_with": ["item"]
+				},
+				{
+					"key": "exclusive",
+					"stack_within": false,
+					"combines_with": []
+				}
+			],
+			"minItems": 1,
+			"maxItems": 20,
+			"x-kind": "config",
+			"x-plan": {
+				"starter": {
+					"max": 5
+				},
+				"pro": {
+					"max": 20
+				}
+			},
+			"x-ui": {
+				"widget": "list",
+				"group": "Policy",
+				"order": 2
+			},
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "stack_within", "combines_with"],
+				"properties": {
+					"key": {
+						"type": "string",
+						"title": "Class key",
+						"minLength": 1,
+						"maxLength": 32,
+						"pattern": "^[a-z][a-z0-9_]{0,31}$"
+					},
+					"stack_within": {
+						"type": "boolean",
+						"title": "Deals of this class stack with each other"
+					},
+					"combines_with": {
+						"type": "array",
+						"title": "Combines with classes",
+						"maxItems": 20,
+						"uniqueItems": true,
+						"items": {
+							"type": "string",
+							"maxLength": 32,
+							"pattern": "^[a-z][a-z0-9_]{0,31}$"
+						}
+					}
+				}
+			}
+		},
+		"max_deals_per_line": {
+			"type": "integer",
+			"title": "Maximum deals stacked on one line",
+			"default": 2,
+			"minimum": 1,
+			"maximum": 5,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Policy",
+				"order": 3
+			}
+		},
+		"search_limit": {
+			"type": "integer",
+			"title": "Combinations searched (best_for_customer)",
+			"description": "Item deals per line and bundle/cart deals per cart compared exhaustively (2^n combinations).",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 6,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Policy",
+				"order": 4
+			}
+		},
+		"coupons_default": {
+			"type": "boolean",
+			"title": "New deals combine with coupons",
+			"description": "Default of a deal's combinesWithCoupons (reported as couponsAllowed on quotes).",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Other products",
+				"order": 5
+			}
+		},
+		"loyalty_default": {
+			"type": "boolean",
+			"title": "New deals combine with loyalty points",
+			"description": "Default of a deal's combinesWithLoyalty (reported as loyaltyAllowed on quotes).",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Other products",
+				"order": 6
+			}
+		}
+	}
+}

@@ -1,0 +1,2857 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Signups & Identity API",
+		"version": "1.0.0",
+		"description": "Mode C API of Signups & Identity (SSPS v1): passwordless sign-in (one-time codes, magic links), customer profiles, sessions issued by the website’s own identity issuer (EdDSA JWTs verified offline by any product; JWKS per website), account pages, risk checks, consent and data rights. All data lives in the merchant’s own database; messages go only through the merchant’s own messaging connector. Times are ISO-8601 UTC; phone numbers are E.164. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that send a message or create a record require `Idempotency-Key`; token-issuing POSTs are single-use by construction. Browser keys (pk_) identify the customer with the access token in `SS-Identity`."
+	},
+	"servers": [
+		{
+			"url": "https://signups.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"tags": [
+		{
+			"name": "profile"
+		},
+		{
+			"name": "sessions"
+		},
+		{
+			"name": "otp"
+		},
+		{
+			"name": "magic_link"
+		},
+		{
+			"name": "account_pages"
+		},
+		{
+			"name": "risk"
+		},
+		{
+			"name": "consent"
+		},
+		{
+			"name": "data_rights"
+		},
+		{
+			"name": "standard"
+		}
+	],
+	"paths": {
+		"/v1/customers": {
+			"get": {
+				"operationId": "listCustomers",
+				"tags": ["profile"],
+				"summary": "Customers, newest first (cursor pagination), optionally by exact e-mail or phone (any typed form). sk_ only.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"name": "email",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"maxLength": 254
+						}
+					},
+					{
+						"name": "phone",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"maxLength": 40
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["items", "nextCursor", "hasMore"],
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Customer"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+											"email": "ada@example.com",
+											"phone": "+442071838750",
+											"verified": {
+												"email": "verified",
+												"phone": "unverified"
+											},
+											"externalId": null,
+											"status": "active",
+											"profile": {
+												"given_name": "Ada"
+											},
+											"missingFields": [],
+											"addresses": [
+												{
+													"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+													"line1": "1 Example Street",
+													"city": "London",
+													"country": "GB",
+													"is_default": true
+												}
+											],
+											"custom": {},
+											"consents": {
+												"terms": {
+													"version": "2026-10",
+													"acceptedAt": "2026-10-01T09:00:00.000Z"
+												}
+											},
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"lastSignInAt": "2026-10-01T09:00:00.000Z",
+											"signInCount": 4
+										}
+									],
+									"nextCursor": "Y3VzXzBtZjJrM3gxcmFiY2RlZmdoamttbnBxcg",
+									"hasMore": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createCustomer",
+				"tags": ["profile"],
+				"summary": "Create (import) a customer from your server. Identifiers are optional and unique per website; `verified` marks identifiers you already verified. The answer carries no personal data (replayable POST answers are cached): GET /v1/customers/{id} for the record. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CustomerInput"
+							},
+							"example": {
+								"profile": {
+									"given_name": "Ada"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["id", "status", "createdAt"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"status": {
+											"type": "string"
+										},
+										"createdAt": {
+											"type": "string"
+										}
+									}
+								},
+								"example": {
+									"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "active",
+									"createdAt": "2026-10-01T09:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/customers/{id}": {
+			"get": {
+				"operationId": "getCustomer",
+				"tags": ["profile"],
+				"summary": "One customer. sk_ only.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Customer"
+								},
+								"example": {
+									"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+									"email": "ada@example.com",
+									"phone": "+442071838750",
+									"verified": {
+										"email": "verified",
+										"phone": "unverified"
+									},
+									"externalId": null,
+									"status": "active",
+									"profile": {
+										"given_name": "Ada"
+									},
+									"missingFields": [],
+									"addresses": [
+										{
+											"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+											"line1": "1 Example Street",
+											"city": "London",
+											"country": "GB",
+											"is_default": true
+										}
+									],
+									"custom": {},
+									"consents": {
+										"terms": {
+											"version": "2026-10",
+											"acceptedAt": "2026-10-01T09:00:00.000Z"
+										}
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"lastSignInAt": "2026-10-01T09:00:00.000Z",
+									"signInCount": 4
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"patch": {
+				"operationId": "updateCustomer",
+				"tags": ["profile"],
+				"summary": "Update profile fields (JSON Merge Patch), addresses (replaces the list), custom fields, `status` (active | blocked — blocking ends every session) and `externalId`. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CustomerPatch"
+							},
+							"example": {
+								"profile": {
+									"family_name": "Lovelace"
+								},
+								"status": "active"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Updated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Customer"
+								},
+								"example": {
+									"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+									"email": "ada@example.com",
+									"phone": "+442071838750",
+									"verified": {
+										"email": "verified",
+										"phone": "unverified"
+									},
+									"externalId": null,
+									"status": "active",
+									"profile": {
+										"given_name": "Ada"
+									},
+									"missingFields": [],
+									"addresses": [
+										{
+											"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+											"line1": "1 Example Street",
+											"city": "London",
+											"country": "GB",
+											"is_default": true
+										}
+									],
+									"custom": {},
+									"consents": {
+										"terms": {
+											"version": "2026-10",
+											"acceptedAt": "2026-10-01T09:00:00.000Z"
+										}
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"lastSignInAt": "2026-10-01T09:00:00.000Z",
+									"signInCount": 4
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteCustomer",
+				"tags": ["profile"],
+				"summary": "Delete a customer now: sessions ended, personal data anonymised (the id remains). sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Deleted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/profile": {
+			"get": {
+				"operationId": "getProfile",
+				"tags": ["profile"],
+				"summary": "The signed-in customer's profile (SS-Identity), or ?customerId= with an sk_ key.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					},
+					{
+						"$ref": "#/components/parameters/CustomerQuery"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Customer"
+								},
+								"example": {
+									"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+									"email": "ada@example.com",
+									"phone": "+442071838750",
+									"verified": {
+										"email": "verified",
+										"phone": "unverified"
+									},
+									"externalId": null,
+									"status": "active",
+									"profile": {
+										"given_name": "Ada"
+									},
+									"missingFields": [],
+									"addresses": [
+										{
+											"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+											"line1": "1 Example Street",
+											"city": "London",
+											"country": "GB",
+											"is_default": true
+										}
+									],
+									"custom": {},
+									"consents": {
+										"terms": {
+											"version": "2026-10",
+											"acceptedAt": "2026-10-01T09:00:00.000Z"
+										}
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"lastSignInAt": "2026-10-01T09:00:00.000Z",
+									"signInCount": 4
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"patch": {
+				"operationId": "updateProfile",
+				"tags": ["profile"],
+				"summary": "Update the signed-in profile against the field schema (profile.fields). E-mail and phone change only through a verified OTP / link with purpose \"link\".",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ProfilePatch"
+							},
+							"example": {
+								"profile": {
+									"given_name": "Ada"
+								},
+								"addresses": [
+									{
+										"line1": "1 Example Street",
+										"city": "London",
+										"country": "GB"
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Updated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Customer"
+								},
+								"example": {
+									"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+									"email": "ada@example.com",
+									"phone": "+442071838750",
+									"verified": {
+										"email": "verified",
+										"phone": "unverified"
+									},
+									"externalId": null,
+									"status": "active",
+									"profile": {
+										"given_name": "Ada"
+									},
+									"missingFields": [],
+									"addresses": [
+										{
+											"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+											"line1": "1 Example Street",
+											"city": "London",
+											"country": "GB",
+											"is_default": true
+										}
+									],
+									"custom": {},
+									"consents": {
+										"terms": {
+											"version": "2026-10",
+											"acceptedAt": "2026-10-01T09:00:00.000Z"
+										}
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"lastSignInAt": "2026-10-01T09:00:00.000Z",
+									"signInCount": 4
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/otp": {
+			"post": {
+				"operationId": "requestCode",
+				"tags": ["otp"],
+				"summary": "Send a one-time code through the merchant’s messaging connector. The answer is identical whether or not the identifier has an account. Limits: resend cooldown (429 too_soon), per identifier / IP / website per hour (429 send_limit), velocity (429 velocity_limit); Retry-After is set. purpose \"link\" adds the identifier to the signed-in customer (SS-Identity).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CodeRequest"
+							},
+							"example": {
+								"channel": "email",
+								"to": "ada@example.com",
+								"locale": "en",
+								"deviceId": "dev_8b1f2c3d4e5f"
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Accepted (sent unless the identifier cannot sign in)",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Challenge"
+								},
+								"example": {
+									"challengeId": "otp_0mf2k3x1rabcdefghjkmnpqr",
+									"channel": "email",
+									"destination": "a••@example.com",
+									"expiresAt": "2026-10-01T09:10:00.000Z",
+									"resendAfter": 60,
+									"codeLength": 6,
+									"codeAlphabet": "numeric"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/otp/{id}/verify": {
+			"post": {
+				"operationId": "verifyCode",
+				"tags": ["otp"],
+				"summary": "Verify a code: on success the customer is created if new and signed in (access + refresh tokens). Failures: code_invalid (errors[0] carries attempts_remaining), code_expired, attempts_exhausted, consent_required (errors list the documents; send the same code again with consents). Single-use by construction: no Idempotency-Key.",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CodeVerify"
+							},
+							"example": {
+								"code": "492817",
+								"deviceId": "dev_8b1f2c3d4e5f",
+								"consents": [
+									{
+										"key": "terms",
+										"version": "2026-10"
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Signed in",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SignInResult"
+								},
+								"example": {
+									"customer": {
+										"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+										"email": "ada@example.com",
+										"phone": "+442071838750",
+										"verified": {
+											"email": "verified",
+											"phone": "unverified"
+										},
+										"externalId": null,
+										"status": "active",
+										"profile": {
+											"given_name": "Ada"
+										},
+										"missingFields": [],
+										"addresses": [
+											{
+												"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+												"line1": "1 Example Street",
+												"city": "London",
+												"country": "GB",
+												"is_default": true
+											}
+										],
+										"custom": {},
+										"consents": {
+											"terms": {
+												"version": "2026-10",
+												"acceptedAt": "2026-10-01T09:00:00.000Z"
+											}
+										},
+										"createdAt": "2026-10-01T09:00:00.000Z",
+										"lastSignInAt": "2026-10-01T09:00:00.000Z",
+										"signInCount": 4
+									},
+									"created": false,
+									"tokens": {
+										"tokenType": "Bearer",
+										"accessToken": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6IjEyMzQ1Njc4LTEtYWJjZGVmIn0.eyJpc3MiOiJodHRwczovL3NpZ251cHMuZXhhbXBsZS5jb20vaS93ZWJfMDEyMyJ9.c2lnbmF0dXJl",
+										"expiresAt": "2026-10-01T09:15:00.000Z",
+										"refreshToken": "rt1.ses_0mf2k3x1rabcdefghjkmnpqr.Zk9xV2l0aFJhbmRvbUJ5dGVzQW5kTW9yZVJhbmRvbUJ5dGVz",
+										"refreshExpiresAt": "2026-10-15T09:00:00.000Z",
+										"sessionId": "ses_0mf2k3x1rabcdefghjkmnpqr"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/magic-links": {
+			"post": {
+				"operationId": "requestLink",
+				"tags": ["magic_link"],
+				"summary": "E-mail a single-use sign-in link back to the website’s own domain (https, allowed paths; the token is in the #ss_magic fragment). Same uniform answer and limits as codes.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LinkRequest"
+							},
+							"example": {
+								"email": "ada@example.com",
+								"redirect": "https://shop.example.com/account",
+								"locale": "en"
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Challenge"
+								},
+								"example": {
+									"challengeId": "mlk_0mf2k3x1rabcdefghjkmnpqr",
+									"channel": "email",
+									"destination": "a••@example.com",
+									"expiresAt": "2026-10-01T09:10:00.000Z",
+									"resendAfter": 60
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/magic-links:consume": {
+			"post": {
+				"operationId": "consumeLink",
+				"tags": ["magic_link"],
+				"summary": "Exchange the link token (from the URL fragment) for a session. link_invalid / link_expired / consent_required. Single-use by construction.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LinkConsume"
+							},
+							"example": {
+								"token": "ml1.mlk_0mf2k3x1rabcdefghjkmnpqr.Zk9xV2l0aFJhbmRvbUJ5dGVzQW5kTW9yZVJhbmRvbUJ5dGVz"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Signed in",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/SignInResult"
+								},
+								"example": {
+									"customer": {
+										"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+										"email": "ada@example.com",
+										"phone": "+442071838750",
+										"verified": {
+											"email": "verified",
+											"phone": "unverified"
+										},
+										"externalId": null,
+										"status": "active",
+										"profile": {
+											"given_name": "Ada"
+										},
+										"missingFields": [],
+										"addresses": [
+											{
+												"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+												"line1": "1 Example Street",
+												"city": "London",
+												"country": "GB",
+												"is_default": true
+											}
+										],
+										"custom": {},
+										"consents": {
+											"terms": {
+												"version": "2026-10",
+												"acceptedAt": "2026-10-01T09:00:00.000Z"
+											}
+										},
+										"createdAt": "2026-10-01T09:00:00.000Z",
+										"lastSignInAt": "2026-10-01T09:00:00.000Z",
+										"signInCount": 4
+									},
+									"created": false,
+									"tokens": {
+										"tokenType": "Bearer",
+										"accessToken": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6IjEyMzQ1Njc4LTEtYWJjZGVmIn0.eyJpc3MiOiJodHRwczovL3NpZ251cHMuZXhhbXBsZS5jb20vaS93ZWJfMDEyMyJ9.c2lnbmF0dXJl",
+										"expiresAt": "2026-10-01T09:15:00.000Z",
+										"refreshToken": "rt1.ses_0mf2k3x1rabcdefghjkmnpqr.Zk9xV2l0aFJhbmRvbUJ5dGVzQW5kTW9yZVJhbmRvbUJ5dGVz",
+										"refreshExpiresAt": "2026-10-15T09:00:00.000Z",
+										"sessionId": "ses_0mf2k3x1rabcdefghjkmnpqr"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/sessions": {
+			"get": {
+				"operationId": "listSessions",
+				"tags": ["sessions"],
+				"summary": "Active sessions (devices) of the signed-in customer (SS-Identity) or of ?customerId= (sk_).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					},
+					{
+						"$ref": "#/components/parameters/CustomerQuery"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Session"
+											}
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "ses_0mf2k3x1rabcdefghjkmnpqr",
+											"device": {
+												"label": "Firefox on Android",
+												"browser": "Firefox",
+												"os": "Android"
+											},
+											"method": "otp",
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"lastUsedAt": "2026-10-01T09:00:00.000Z",
+											"expiresAt": "2026-10-15T09:00:00.000Z",
+											"state": "active",
+											"current": true
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/sessions/{id}": {
+			"delete": {
+				"operationId": "revokeSession",
+				"tags": ["sessions"],
+				"summary": "End one session of the customer.",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					},
+					{
+						"$ref": "#/components/parameters/CustomerQuery"
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "Done"
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/sessions:refresh": {
+			"post": {
+				"operationId": "refreshSession",
+				"tags": ["sessions"],
+				"summary": "Rotate the refresh token and get a new access token. Replaying an already-rotated token ends the session (refresh_reused) unless it is within the concurrent-refresh grace (refresh_conflict). Single-use by construction.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RefreshInput"
+							},
+							"example": {
+								"refreshToken": "rt1.ses_0mf2k3x1rabcdefghjkmnpqr.Zk9xV2l0aFJhbmRvbUJ5dGVzQW5kTW9yZVJhbmRvbUJ5dGVz"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Refreshed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"customer": {
+											"$ref": "#/components/schemas/Customer"
+										},
+										"tokens": {
+											"$ref": "#/components/schemas/Tokens"
+										}
+									}
+								},
+								"example": {
+									"customer": {
+										"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+										"email": "ada@example.com",
+										"phone": "+442071838750",
+										"verified": {
+											"email": "verified",
+											"phone": "unverified"
+										},
+										"externalId": null,
+										"status": "active",
+										"profile": {
+											"given_name": "Ada"
+										},
+										"missingFields": [],
+										"addresses": [
+											{
+												"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+												"line1": "1 Example Street",
+												"city": "London",
+												"country": "GB",
+												"is_default": true
+											}
+										],
+										"custom": {},
+										"consents": {
+											"terms": {
+												"version": "2026-10",
+												"acceptedAt": "2026-10-01T09:00:00.000Z"
+											}
+										},
+										"createdAt": "2026-10-01T09:00:00.000Z",
+										"lastSignInAt": "2026-10-01T09:00:00.000Z",
+										"signInCount": 4
+									},
+									"tokens": {
+										"tokenType": "Bearer",
+										"accessToken": "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCIsImtpZCI6IjEyMzQ1Njc4LTEtYWJjZGVmIn0.eyJpc3MiOiJodHRwczovL3NpZ251cHMuZXhhbXBsZS5jb20vaS93ZWJfMDEyMyJ9.c2lnbmF0dXJl",
+										"expiresAt": "2026-10-01T09:15:00.000Z",
+										"refreshToken": "rt1.ses_0mf2k3x1rabcdefghjkmnpqr.Zk9xV2l0aFJhbmRvbUJ5dGVzQW5kTW9yZVJhbmRvbUJ5dGVz",
+										"refreshExpiresAt": "2026-10-15T09:00:00.000Z",
+										"sessionId": "ses_0mf2k3x1rabcdefghjkmnpqr"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/sessions:logout": {
+			"post": {
+				"operationId": "logout",
+				"tags": ["sessions"],
+				"summary": "Sign out of this device (always 204).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RefreshInput"
+							},
+							"example": {
+								"refreshToken": "rt1.ses_0mf2k3x1rabcdefghjkmnpqr.Zk9xV2l0aFJhbmRvbUJ5dGVzQW5kTW9yZVJhbmRvbUJ5dGVz"
+							}
+						}
+					}
+				},
+				"responses": {
+					"204": {
+						"description": "Done"
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/sessions:revoke-all": {
+			"post": {
+				"operationId": "revokeAllSessions",
+				"tags": ["sessions"],
+				"summary": "End every session of the customer and bump the session version (access tokens stop working here at once; other products refuse them when they expire).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"customerId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Revoked",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"customerId": {
+											"type": "string"
+										},
+										"revoked": {
+											"type": "integer"
+										},
+										"sessionVersion": {
+											"type": "integer"
+										}
+									}
+								},
+								"example": {
+									"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr",
+									"revoked": 3,
+									"sessionVersion": 2
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/issuer": {
+			"get": {
+				"operationId": "getIssuer",
+				"tags": ["sessions"],
+				"summary": "The website’s identity issuer: issuer, JWKS URL, audience, claim map, published keys, whether the Portal already carries it, and the exact Portal call that registers it (Website → Identity). sk_ only.",
+				"x-ss-key-kind": "sk",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Issuer"
+								},
+								"example": {
+									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+									"jwksUrl": "https://signups.example.com/.well-known/jwks/web_0123456789abcdefghjkmnpq.json",
+									"discoveryUrl": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq/.well-known/openid-configuration",
+									"audience": "web_0123456789abcdefghjkmnpq",
+									"claimMap": {
+										"subject": "sub",
+										"email": "email",
+										"phone": "phone_number"
+									},
+									"algorithm": "EdDSA",
+									"keys": [
+										{
+											"kid": "ghjkmnpq-1-AbCdEfGh",
+											"activatesAt": "2026-10-01T09:00:00.000Z",
+											"signing": true
+										}
+									],
+									"registered": false,
+									"portal": {
+										"method": "PUT",
+										"path": "/v1/merchants/mer_0123456789abcdefghjkmnpq/websites/web_0123456789abcdefghjkmnpq/identity",
+										"body": {
+											"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+											"jwksUrl": "https://signups.example.com/.well-known/jwks/web_0123456789abcdefghjkmnpq.json",
+											"audience": "web_0123456789abcdefghjkmnpq",
+											"claimMap": {
+												"subject": "sub",
+												"email": "email",
+												"phone": "phone_number"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/issuer:rotate": {
+			"post": {
+				"operationId": "rotateIssuerKey",
+				"tags": ["sessions"],
+				"summary": "Start a signing-key rotation now: the new key is published first and signs after sessions.key_prepublish_hours. sk_ only.",
+				"responses": {
+					"200": {
+						"description": "Rotation started",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Issuer"
+								},
+								"example": {
+									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+									"jwksUrl": "https://signups.example.com/.well-known/jwks/web_0123456789abcdefghjkmnpq.json",
+									"discoveryUrl": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq/.well-known/openid-configuration",
+									"audience": "web_0123456789abcdefghjkmnpq",
+									"claimMap": {
+										"subject": "sub",
+										"email": "email",
+										"phone": "phone_number"
+									},
+									"algorithm": "EdDSA",
+									"keys": [
+										{
+											"kid": "ghjkmnpq-1-AbCdEfGh",
+											"activatesAt": "2026-10-01T09:00:00.000Z",
+											"signing": true
+										}
+									],
+									"registered": false,
+									"portal": {
+										"method": "PUT",
+										"path": "/v1/merchants/mer_0123456789abcdefghjkmnpq/websites/web_0123456789abcdefghjkmnpq/identity",
+										"body": {
+											"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+											"jwksUrl": "https://signups.example.com/.well-known/jwks/web_0123456789abcdefghjkmnpq.json",
+											"audience": "web_0123456789abcdefghjkmnpq",
+											"claimMap": {
+												"subject": "sub",
+												"email": "email",
+												"phone": "phone_number"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/.well-known/jwks/{file}": {
+			"get": {
+				"operationId": "getJwks",
+				"tags": ["sessions"],
+				"summary": "Public keys of the website’s issuer (`<websiteId>.json`; Ed25519, alg EdDSA; pre-published and retiring keys included). Public, cacheable.",
+				"security": [],
+				"parameters": [
+					{
+						"name": "file",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"pattern": "^web_[0-9a-z]+\\.json$"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "JWKS",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Jwks"
+								},
+								"example": {
+									"keys": [
+										{
+											"kty": "OKP",
+											"crv": "Ed25519",
+											"x": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+											"kid": "ghjkmnpq-1-AbCdEfGh",
+											"alg": "EdDSA",
+											"use": "sig"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/i/{websiteId}/.well-known/openid-configuration": {
+			"get": {
+				"operationId": "getDiscovery",
+				"tags": ["sessions"],
+				"summary": "Discovery document of the website’s issuer (signing metadata). Public, cacheable.",
+				"security": [],
+				"parameters": [
+					{
+						"name": "websiteId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+									"jwks_uri": "https://signups.example.com/.well-known/jwks/web_0123456789abcdefghjkmnpq.json",
+									"id_token_signing_alg_values_supported": ["EdDSA"],
+									"subject_types_supported": ["public"],
+									"claims_supported": [
+										"sub",
+										"sid",
+										"sv",
+										"amr",
+										"email",
+										"email_verified",
+										"phone_number",
+										"phone_number_verified"
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/account": {
+			"get": {
+				"operationId": "getAccount",
+				"tags": ["account_pages"],
+				"summary": "Everything the account pages show for the signed-in customer (SS-Identity): profile, devices, orders, agreements, data requests — the sections the website enabled.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Account"
+								},
+								"example": {
+									"layout": "tabs",
+									"pages": ["profile", "sessions", "orders", "data"],
+									"customer": {
+										"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+										"email": "ada@example.com",
+										"phone": "+442071838750",
+										"verified": {
+											"email": "verified",
+											"phone": "unverified"
+										},
+										"externalId": null,
+										"status": "active",
+										"profile": {
+											"given_name": "Ada"
+										},
+										"missingFields": [],
+										"addresses": [
+											{
+												"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+												"line1": "1 Example Street",
+												"city": "London",
+												"country": "GB",
+												"is_default": true
+											}
+										],
+										"custom": {},
+										"consents": {
+											"terms": {
+												"version": "2026-10",
+												"acceptedAt": "2026-10-01T09:00:00.000Z"
+											}
+										},
+										"createdAt": "2026-10-01T09:00:00.000Z",
+										"lastSignInAt": "2026-10-01T09:00:00.000Z",
+										"signInCount": 4
+									},
+									"fields": [
+										{
+											"key": "given_name",
+											"label": "Given name",
+											"type": "text",
+											"required": false,
+											"max_length": 100
+										}
+									],
+									"sessions": [
+										{
+											"id": "ses_0mf2k3x1rabcdefghjkmnpqr",
+											"device": {
+												"label": "Firefox on Android",
+												"browser": "Firefox",
+												"os": "Android"
+											},
+											"method": "otp",
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"lastUsedAt": "2026-10-01T09:00:00.000Z",
+											"expiresAt": "2026-10-15T09:00:00.000Z",
+											"state": "active",
+											"current": true
+										}
+									],
+									"orders": [
+										{
+											"orderId": "ord_1001",
+											"number": "1001",
+											"status": "completed",
+											"totalAmount": 12500,
+											"currency": "EUR",
+											"placedAt": "2026-10-01T09:00:00.000Z",
+											"updatedAt": "2026-10-01T09:00:00.000Z"
+										}
+									],
+									"data": {
+										"export": true,
+										"delete": true,
+										"pendingDeletion": null
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/risk-events": {
+			"get": {
+				"operationId": "listRiskEvents",
+				"tags": ["risk"],
+				"summary": "Blocked attempts, velocity limits, refresh-token reuse and new-device sign-ins, newest first. sk_ only.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["items", "nextCursor", "hasMore"],
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/RiskEvent"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "rsk_0mf2k3x1rabcdefghjkmnpqr",
+											"type": "new_device",
+											"occurredAt": "2026-10-01T09:00:00.000Z",
+											"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr",
+											"sessionId": "ses_0mf2k3x1rabcdefghjkmnpqr"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/consents": {
+			"get": {
+				"operationId": "getConsents",
+				"tags": ["consent"],
+				"summary": "Documents with the customer’s acceptance and the acceptance history (SS-Identity, or ?customerId= with sk_).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					},
+					{
+						"$ref": "#/components/parameters/CustomerQuery"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Consents"
+								},
+								"example": {
+									"documents": [
+										{
+											"key": "terms",
+											"version": "2026-10",
+											"title": "Terms of service",
+											"url": "https://shop.example.com/terms",
+											"required": true,
+											"accepted": {
+												"version": "2026-10",
+												"acceptedAt": "2026-10-01T09:00:00.000Z",
+												"current": true
+											}
+										}
+									],
+									"history": [
+										{
+											"key": "terms",
+											"version": "2026-10",
+											"acceptedAt": "2026-10-01T09:00:00.000Z",
+											"method": "otp"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "acceptConsents",
+				"tags": ["consent"],
+				"summary": "Accept documents at their current versions.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["consents"],
+								"properties": {
+									"consents": {
+										"type": "array",
+										"items": {
+											"$ref": "#/components/schemas/Acceptance"
+										}
+									}
+								}
+							},
+							"example": {
+								"consents": [
+									{
+										"key": "terms",
+										"version": "2026-10"
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Consents"
+								},
+								"example": {
+									"documents": [
+										{
+											"key": "terms",
+											"version": "2026-10",
+											"title": "Terms of service",
+											"url": "https://shop.example.com/terms",
+											"required": true,
+											"accepted": {
+												"version": "2026-10",
+												"acceptedAt": "2026-10-01T09:00:00.000Z",
+												"current": true
+											}
+										}
+									],
+									"history": [
+										{
+											"key": "terms",
+											"version": "2026-10",
+											"acceptedAt": "2026-10-01T09:00:00.000Z",
+											"method": "otp"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data-requests": {
+			"get": {
+				"operationId": "listDataRequests",
+				"tags": ["data_rights"],
+				"summary": "The customer’s export and deletion requests.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					},
+					{
+						"$ref": "#/components/parameters/CustomerQuery"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/DataRequest"
+											}
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "dsr_0mf2k3x1rabcdefghjkmnpqr",
+											"type": "delete",
+											"status": "pending",
+											"effectiveAt": "2026-10-15T09:00:00.000Z",
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"completedAt": null
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createDataRequest",
+				"tags": ["data_rights"],
+				"summary": "export: completed at once; the data is downloaded with GET `download` within data_rights.export_link_minutes (POST answers are cached for replays, so they never carry the data). delete: scheduled after data_rights.cooling_off_days (cancellable; 0 = now). 409 data_request_pending when a deletion is already scheduled.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["type"],
+								"properties": {
+									"type": {
+										"type": "string",
+										"enum": ["export", "delete"]
+									}
+								}
+							},
+							"example": {
+								"type": "delete"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DataRequest"
+								},
+								"example": {
+									"id": "dsr_0mf2k3x1rabcdefghjkmnpqr",
+									"type": "export",
+									"status": "completed",
+									"effectiveAt": "2026-10-01T09:00:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"completedAt": "2026-10-01T09:00:00.000Z",
+									"download": "/v1/data-requests/dsr_0mf2k3x1rabcdefghjkmnpqr/export"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data-requests/{id}/export": {
+			"get": {
+				"operationId": "downloadExport",
+				"tags": ["data_rights"],
+				"summary": "The data of a completed export request (customer, devices, agreements, orders, requests) while its download window is open (410 gone afterwards).",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"exportedAt": "2026-10-01T09:00:00.000Z",
+									"customer": {
+										"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+										"email": "ada@example.com",
+										"phone": "+442071838750",
+										"verified": {
+											"email": "verified",
+											"phone": "unverified"
+										},
+										"externalId": null,
+										"status": "active",
+										"profile": {
+											"given_name": "Ada"
+										},
+										"missingFields": [],
+										"addresses": [
+											{
+												"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+												"line1": "1 Example Street",
+												"city": "London",
+												"country": "GB",
+												"is_default": true
+											}
+										],
+										"custom": {},
+										"consents": {
+											"terms": {
+												"version": "2026-10",
+												"acceptedAt": "2026-10-01T09:00:00.000Z"
+											}
+										},
+										"createdAt": "2026-10-01T09:00:00.000Z",
+										"lastSignInAt": "2026-10-01T09:00:00.000Z",
+										"signInCount": 4
+									},
+									"sessions": [
+										{
+											"id": "ses_0mf2k3x1rabcdefghjkmnpqr",
+											"device": {
+												"label": "Firefox on Android",
+												"browser": "Firefox",
+												"os": "Android"
+											},
+											"method": "otp",
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"lastUsedAt": "2026-10-01T09:00:00.000Z",
+											"expiresAt": "2026-10-15T09:00:00.000Z",
+											"state": "active",
+											"current": true
+										}
+									],
+									"consents": [
+										{
+											"key": "terms",
+											"version": "2026-10",
+											"acceptedAt": "2026-10-01T09:00:00.000Z"
+										}
+									],
+									"orders": [],
+									"dataRequests": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data-requests/{id}": {
+			"delete": {
+				"operationId": "cancelDataRequest",
+				"tags": ["data_rights"],
+				"summary": "Cancel a pending deletion.",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Cancelled",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DataRequest"
+								},
+								"example": {
+									"id": "dsr_0mf2k3x1rabcdefghjkmnpqr",
+									"type": "delete",
+									"status": "cancelled",
+									"effectiveAt": "2026-10-15T09:00:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"completedAt": "2026-10-01T09:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/entitlement": {
+			"get": {
+				"operationId": "getEntitlement",
+				"tags": ["standard"],
+				"summary": "What this website has enabled (from the signed document).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_0123456789abcdefghjkmnpq",
+									"version": 3,
+									"stale": false,
+									"elements": {
+										"otp": {
+											"enabled": true
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/config": {
+			"get": {
+				"operationId": "getConfig",
+				"tags": ["standard"],
+				"summary": "Effective configuration of elements (?element=widget,otp).",
+				"parameters": [
+					{
+						"name": "element",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"widget": {
+										"methods": ["otp"],
+										"default_channel": "email"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/strings": {
+			"get": {
+				"operationId": "getStrings",
+				"tags": ["standard"],
+				"summary": "String catalog for a language.",
+				"security": [],
+				"parameters": [
+					{
+						"name": "lang",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"lang": "en",
+									"strings": {
+										"signin.title": "Sign in"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/events": {
+			"post": {
+				"operationId": "postEvents",
+				"tags": ["standard"],
+				"summary": "Element / domain events the site pushes to this product.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"events": [
+									{
+										"id": "evt_0mf2k3x1rabcdefghjkmnpqr",
+										"type": "signups.widget_opened@1",
+										"occurredAt": "2026-10-01T09:00:00.000Z",
+										"idempotencyKey": "evt_0mf2k3x1rabcdefghjkmnpqr",
+										"actor": {
+											"type": "anonymous"
+										},
+										"data": {}
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"accepted": 1
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/healthz": {
+			"get": {
+				"operationId": "healthz",
+				"tags": ["standard"],
+				"summary": "Liveness.",
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/readyz": {
+			"get": {
+				"operationId": "readyz",
+				"tags": ["standard"],
+				"summary": "Readiness (own database; Portal reachability reported as degraded).",
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok",
+									"checks": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:export": {
+			"post": {
+				"operationId": "dataExport",
+				"tags": ["standard"],
+				"summary": "Portal-signed export of a customer (subject: customerId | email | phone) or of the website.",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"websiteId": "web_0123456789abcdefghjkmnpq",
+								"subject": {
+									"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr"
+								},
+								"requestId": "req_0abc"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_0123456789abcdefghjkmnpq",
+									"subject": {
+										"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr"
+									},
+									"exportedAt": "2026-10-01T09:00:00.000Z",
+									"data": {
+										"customer": {
+											"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
+											"email": "ada@example.com",
+											"phone": "+442071838750",
+											"verified": {
+												"email": "verified",
+												"phone": "unverified"
+											},
+											"externalId": null,
+											"status": "active",
+											"profile": {
+												"given_name": "Ada"
+											},
+											"missingFields": [],
+											"addresses": [
+												{
+													"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
+													"line1": "1 Example Street",
+													"city": "London",
+													"country": "GB",
+													"is_default": true
+												}
+											],
+											"custom": {},
+											"consents": {
+												"terms": {
+													"version": "2026-10",
+													"acceptedAt": "2026-10-01T09:00:00.000Z"
+												}
+											},
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"lastSignInAt": "2026-10-01T09:00:00.000Z",
+											"signInCount": 4
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:anonymize": {
+			"post": {
+				"operationId": "dataAnonymize",
+				"tags": ["standard"],
+				"summary": "Portal-signed anonymisation of a customer (as a deletion: sessions ended, personal data removed).",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"websiteId": "web_0123456789abcdefghjkmnpq",
+								"subject": {
+									"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr"
+								},
+								"requestId": "req_0abd"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_0123456789abcdefghjkmnpq",
+									"anonymized": {
+										"customers": 1
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked; customer data only with an SS-Identity access token) or sk_ (server) website key"
+			},
+			"portalSignature": {
+				"type": "apiKey",
+				"in": "header",
+				"name": "SS-Signature",
+				"description": "Portal-signed request (ss-request.v1)"
+			}
+		},
+		"parameters": {
+			"IdempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				}
+			},
+			"Cursor": {
+				"name": "cursor",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"Limit": {
+				"name": "limit",
+				"in": "query",
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 20
+				}
+			},
+			"Id": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"CustomerQuery": {
+				"name": "customerId",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "sk_ keys only (instead of SS-Identity)"
+			},
+			"Identity": {
+				"name": "SS-Identity",
+				"in": "header",
+				"schema": {
+					"type": "string"
+				},
+				"description": "the customer’s access token issued by this product"
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"$ref": "#/components/schemas/Problem"
+						},
+						"example": {
+							"type": "https://signups.example.com/problems/code_invalid",
+							"title": "The code is not valid",
+							"status": 422,
+							"instance": "/v1/otp/otp_0mf2k3x1rabcdefghjkmnpqr/verify",
+							"requestId": "req_0abc",
+							"errors": [
+								{
+									"path": "/code",
+									"code": "attempts_remaining",
+									"message": "4"
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		"schemas": {
+			"Problem": {
+				"type": "object",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string"
+					},
+					"requestId": {
+						"type": "string"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"path": {
+									"type": "string"
+								},
+								"code": {
+									"type": "string"
+								},
+								"message": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"Address": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"line1": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"line2": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"city": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"region": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"postal_code": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"country": {
+						"type": "string",
+						"pattern": "^[A-Z]{2}$"
+					},
+					"is_default": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Customer": {
+				"type": "object",
+				"required": ["id", "status", "verified"],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"email": {
+						"type": ["string", "null"]
+					},
+					"phone": {
+						"type": ["string", "null"],
+						"description": "E.164"
+					},
+					"verified": {
+						"type": "object",
+						"properties": {
+							"email": {
+								"type": "string",
+								"enum": ["verified", "unverified", "none"]
+							},
+							"phone": {
+								"type": "string",
+								"enum": ["verified", "unverified", "none"]
+							}
+						}
+					},
+					"externalId": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["active", "blocked", "deleted"]
+					},
+					"profile": {
+						"type": "object"
+					},
+					"missingFields": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"addresses": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Address"
+						}
+					},
+					"custom": {
+						"type": "object"
+					},
+					"consents": {
+						"type": "object"
+					},
+					"createdAt": {
+						"type": ["string", "null"]
+					},
+					"lastSignInAt": {
+						"type": ["string", "null"]
+					},
+					"signInCount": {
+						"type": "integer"
+					}
+				}
+			},
+			"ProfilePatch": {
+				"type": "object",
+				"properties": {
+					"profile": {
+						"type": "object"
+					},
+					"addresses": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Address"
+						}
+					},
+					"custom": {
+						"type": "object"
+					}
+				}
+			},
+			"CustomerInput": {
+				"type": "object",
+				"properties": {
+					"email": {
+						"type": "string",
+						"maxLength": 254
+					},
+					"phone": {
+						"type": "string",
+						"maxLength": 40
+					},
+					"externalId": {
+						"type": "string",
+						"maxLength": 128
+					},
+					"profile": {
+						"type": "object"
+					},
+					"addresses": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Address"
+						}
+					},
+					"custom": {
+						"type": "object"
+					},
+					"verified": {
+						"type": "object",
+						"properties": {
+							"email": {
+								"type": "boolean"
+							},
+							"phone": {
+								"type": "boolean"
+							}
+						}
+					}
+				}
+			},
+			"CustomerPatch": {
+				"type": "object",
+				"properties": {
+					"profile": {
+						"type": "object"
+					},
+					"addresses": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Address"
+						}
+					},
+					"custom": {
+						"type": "object"
+					},
+					"status": {
+						"type": "string",
+						"enum": ["active", "blocked"]
+					},
+					"externalId": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"CodeRequest": {
+				"type": "object",
+				"required": ["channel", "to"],
+				"properties": {
+					"channel": {
+						"type": "string",
+						"enum": ["email", "sms", "whatsapp"]
+					},
+					"to": {
+						"type": "string",
+						"description": "E-mail address, or a phone number in international form (or national with otp.default_calling_code)"
+					},
+					"purpose": {
+						"type": "string",
+						"enum": ["sign_in", "link"]
+					},
+					"locale": {
+						"type": "string",
+						"maxLength": 35
+					},
+					"deviceId": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_-]{8,64}$"
+					}
+				}
+			},
+			"CodeVerify": {
+				"type": "object",
+				"required": ["code"],
+				"properties": {
+					"code": {
+						"type": "string",
+						"maxLength": 64
+					},
+					"deviceId": {
+						"type": "string"
+					},
+					"consents": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Acceptance"
+						}
+					}
+				}
+			},
+			"LinkRequest": {
+				"type": "object",
+				"required": ["email"],
+				"properties": {
+					"email": {
+						"type": "string",
+						"maxLength": 254
+					},
+					"redirect": {
+						"type": "string",
+						"format": "uri"
+					},
+					"purpose": {
+						"type": "string",
+						"enum": ["sign_in", "link"]
+					},
+					"locale": {
+						"type": "string",
+						"maxLength": 35
+					},
+					"deviceId": {
+						"type": "string"
+					}
+				}
+			},
+			"LinkConsume": {
+				"type": "object",
+				"required": ["token"],
+				"properties": {
+					"token": {
+						"type": "string",
+						"maxLength": 512
+					},
+					"deviceId": {
+						"type": "string"
+					},
+					"consents": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Acceptance"
+						}
+					}
+				}
+			},
+			"RefreshInput": {
+				"type": "object",
+				"required": ["refreshToken"],
+				"properties": {
+					"refreshToken": {
+						"type": "string",
+						"maxLength": 512
+					}
+				}
+			},
+			"Acceptance": {
+				"type": "object",
+				"required": ["key", "version"],
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"version": {
+						"type": "string"
+					}
+				}
+			},
+			"Challenge": {
+				"type": "object",
+				"required": ["challengeId", "channel", "destination", "expiresAt", "resendAfter"],
+				"properties": {
+					"challengeId": {
+						"type": "string"
+					},
+					"channel": {
+						"type": "string"
+					},
+					"destination": {
+						"type": "string"
+					},
+					"expiresAt": {
+						"type": "string"
+					},
+					"resendAfter": {
+						"type": "integer"
+					},
+					"codeLength": {
+						"type": "integer"
+					},
+					"codeAlphabet": {
+						"type": "string"
+					}
+				}
+			},
+			"Tokens": {
+				"type": "object",
+				"properties": {
+					"tokenType": {
+						"type": "string"
+					},
+					"accessToken": {
+						"type": "string",
+						"description": "EdDSA JWT: iss, sub (customer id), aud, iat, exp, jti, sid, sv, amr, email?, email_verified?, phone_number?, phone_number_verified?"
+					},
+					"expiresAt": {
+						"type": "string"
+					},
+					"refreshToken": {
+						"type": "string"
+					},
+					"refreshExpiresAt": {
+						"type": "string"
+					},
+					"sessionId": {
+						"type": "string"
+					}
+				}
+			},
+			"SignInResult": {
+				"type": "object",
+				"properties": {
+					"customer": {
+						"$ref": "#/components/schemas/Customer"
+					},
+					"created": {
+						"type": "boolean"
+					},
+					"tokens": {
+						"$ref": "#/components/schemas/Tokens"
+					}
+				}
+			},
+			"Session": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"device": {
+						"type": "object"
+					},
+					"method": {
+						"type": "string"
+					},
+					"createdAt": {
+						"type": "string"
+					},
+					"lastUsedAt": {
+						"type": "string"
+					},
+					"expiresAt": {
+						"type": "string"
+					},
+					"state": {
+						"type": "string"
+					},
+					"current": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Issuer": {
+				"type": "object",
+				"properties": {
+					"issuer": {
+						"type": "string"
+					},
+					"jwksUrl": {
+						"type": "string"
+					},
+					"discoveryUrl": {
+						"type": "string"
+					},
+					"audience": {
+						"type": "string"
+					},
+					"claimMap": {
+						"type": "object"
+					},
+					"algorithm": {
+						"type": "string"
+					},
+					"keys": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"registered": {
+						"type": "boolean"
+					},
+					"portal": {
+						"type": "object"
+					}
+				}
+			},
+			"Jwks": {
+				"type": "object",
+				"required": ["keys"],
+				"properties": {
+					"keys": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
+				}
+			},
+			"Account": {
+				"type": "object",
+				"properties": {
+					"layout": {
+						"type": "string"
+					},
+					"pages": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"customer": {
+						"$ref": "#/components/schemas/Customer"
+					},
+					"fields": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"sessions": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Session"
+						}
+					},
+					"orders": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"consents": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"data": {
+						"type": "object"
+					}
+				}
+			},
+			"RiskEvent": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": ["identifier_blocked", "velocity_limit", "refresh_reuse", "new_device"]
+					},
+					"occurredAt": {
+						"type": "string"
+					},
+					"customerId": {
+						"type": "string"
+					},
+					"sessionId": {
+						"type": "string"
+					}
+				}
+			},
+			"Consents": {
+				"type": "object",
+				"properties": {
+					"documents": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"history": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
+				}
+			},
+			"DataRequest": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": ["export", "delete"]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["pending", "completed", "cancelled"]
+					},
+					"effectiveAt": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string"
+					},
+					"completedAt": {
+						"type": ["string", "null"]
+					},
+					"download": {
+						"type": "string",
+						"description": "export requests: where to GET the data"
+					}
+				}
+			}
+		}
+	}
+}

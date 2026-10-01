@@ -1,0 +1,37 @@
+{
+	"name": "@ss/product-signups",
+	"version": "1.0.0",
+	"private": true,
+	"type": "module",
+	"description": "Signups & Identity — SSPS v1 service product (passwordless OTP / magic links, profiles, sessions as the website identity issuer, account pages, risk, consent, data rights).",
+	"scripts": {
+		"dev": "next dev --port 3000",
+		"build": "next build",
+		"start": "next start --port 3000",
+		"serve": "node serve.js 3000",
+		"portal": "ss dev",
+		"test": "vitest run --root ../.. products/signups",
+		"validate": "ss app validate .",
+		"certify": "ss certify . --url http://localhost:3000"
+	},
+	"dependencies": {
+		"@ss/app-kit": "workspace:*",
+		"@ss/contracts": "workspace:*",
+		"@ss/rules": "workspace:*",
+		"@ss/ui": "workspace:*",
+		"mongodb": "^6.21.0",
+		"next": "^16.3.7",
+		"react": "^19.3.0",
+		"react-dom": "^19.3.0"
+	},
+	"devDependencies": {
+		"@ss/cli": "workspace:*",
+		"@ss/protocol": "workspace:*",
+		"@ss/web": "workspace:*",
+		"@tailwindcss/postcss": "^4.3.3",
+		"tailwindcss": "^4.3.3"
+	},
+	"engines": {
+		"node": ">=22"
+	}
+}

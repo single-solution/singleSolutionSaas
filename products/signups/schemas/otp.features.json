@@ -1,0 +1,161 @@
+{
+	"type": "object",
+	"title": "One-time codes",
+	"additionalProperties": false,
+	"properties": {
+		"channels": {
+			"type": "array",
+			"title": "Channels",
+			"description": "Codes are delivered only through the messaging connector you connected in the Portal; your gateway routes each message by its channel.",
+			"default": ["email", "sms"],
+			"minItems": 1,
+			"maxItems": 3,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["email", "sms", "whatsapp"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "multiselect", "group": "Delivery", "order": 1 }
+		},
+		"code_length": {
+			"type": "integer",
+			"title": "Code length",
+			"default": 6,
+			"minimum": 4,
+			"maximum": 10,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Code", "order": 2 }
+		},
+		"code_alphabet": {
+			"type": "string",
+			"title": "Code characters",
+			"description": "numeric: 0–9. alphanumeric: digits and upper-case letters without look-alikes.",
+			"default": "numeric",
+			"enum": ["numeric", "alphanumeric"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Code", "order": 3 }
+		},
+		"expiry_minutes": {
+			"type": "integer",
+			"title": "Code expiry (minutes)",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 60,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Code", "order": 4 }
+		},
+		"max_attempts": {
+			"type": "integer",
+			"title": "Verification attempts per code",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 10,
+			"x-kind": "limit",
+			"x-lock": true,
+			"x-ui": { "widget": "number", "group": "Limits", "order": 5 }
+		},
+		"resend_cooldown_seconds": {
+			"type": "integer",
+			"title": "Resend cooldown (seconds)",
+			"default": 60,
+			"minimum": 0,
+			"maximum": 3600,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 6 }
+		},
+		"max_sends_per_identity_hour": {
+			"type": "integer",
+			"title": "Codes per e-mail / phone per hour",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 50,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 7 }
+		},
+		"max_sends_per_ip_hour": {
+			"type": "integer",
+			"title": "Codes per IP address per hour",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 8 }
+		},
+		"global_sends_per_hour": {
+			"type": "integer",
+			"title": "Codes per hour for the whole website",
+			"description": "Caps gateway spend under SMS / WhatsApp pumping even when numbers and IPs rotate.",
+			"default": 500,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 500, "max": 2000 }, "pro": { "default": 2000, "max": 100000 } },
+			"x-ui": { "widget": "number", "group": "Limits", "order": 9 }
+		},
+		"allow_signup": {
+			"type": "boolean",
+			"title": "Create accounts for new e-mails / phones",
+			"description": "Off: only existing customers can sign in. Responses stay identical either way, so nobody can probe who has an account.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Accounts", "order": 10 }
+		},
+		"default_calling_code": {
+			"type": "string",
+			"title": "Default calling code for national numbers",
+			"description": "e.g. +44. Empty: numbers must be international (+… or 00…).",
+			"default": "",
+			"maxLength": 4,
+			"pattern": "^(\\+[1-9][0-9]{0,2})?$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Phone numbers", "order": 11 }
+		},
+		"trunk_prefix": {
+			"type": "string",
+			"title": "National trunk prefix",
+			"description": "Dropped from national numbers before the calling code is added (e.g. 0). Empty for none.",
+			"default": "0",
+			"maxLength": 2,
+			"pattern": "^[0-9]{0,2}$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Phone numbers", "order": 12 }
+		},
+		"brand": {
+			"type": "string",
+			"title": "Brand name in messages",
+			"description": "Empty = the website's domain.",
+			"default": "",
+			"maxLength": 60,
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Messages", "order": 13 }
+		},
+		"default_language": {
+			"type": "string",
+			"title": "Default message language",
+			"default": "en",
+			"maxLength": 35,
+			"pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Messages", "order": 14 }
+		},
+		"templates": {
+			"type": "array",
+			"title": "Message templates",
+			"description": "Per channel and language; placeholders {code}, {minutes}, {brand}. Without a match the built-in text of the language is used.",
+			"default": [],
+			"maxItems": 60,
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 6 }, "pro": { "max": 60 } },
+			"x-ui": { "widget": "list", "group": "Messages", "order": 15 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["channel", "lang", "body"],
+				"properties": {
+					"channel": { "type": "string", "title": "Channel", "enum": ["email", "sms", "whatsapp"] },
+					"lang": { "type": "string", "title": "Language", "maxLength": 35, "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$" },
+					"subject": { "type": "string", "title": "Subject (e-mail)", "maxLength": 200 },
+					"body": { "type": "string", "title": "Text", "minLength": 1, "maxLength": 2000 }
+				}
+			}
+		}
+	}
+}

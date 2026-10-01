@@ -1,0 +1,65 @@
+{
+	"type": "object",
+	"title": "Questions & answers",
+	"additionalProperties": false,
+	"properties": {
+		"who_can_ask": {
+			"type": "string",
+			"title": "Who may ask",
+			"default": "identified",
+			"enum": ["identified", "anyone"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Questions", "order": 1 }
+		},
+		"who_can_answer": {
+			"type": "string",
+			"title": "Who may answer",
+			"description": "The merchant (sk_ key or dashboard) can always answer.",
+			"default": "merchant",
+			"enum": ["merchant", "verified_buyers", "identified"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Answers", "order": 2 }
+		},
+		"moderate_questions": {
+			"type": "boolean",
+			"title": "Questions wait for approval",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Questions", "order": 3 }
+		},
+		"moderate_answers": {
+			"type": "boolean",
+			"title": "Customer answers wait for approval",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Answers", "order": 4 }
+		},
+		"question_max_length": {
+			"type": "integer",
+			"title": "Question length (characters)",
+			"default": 500,
+			"minimum": 20,
+			"maximum": 2000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Questions", "order": 5 }
+		},
+		"answer_max_length": {
+			"type": "integer",
+			"title": "Answer length (characters)",
+			"default": 1000,
+			"minimum": 20,
+			"maximum": 5000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Answers", "order": 6 }
+		},
+		"max_questions_per_customer_per_day": {
+			"type": "integer",
+			"title": "Questions per customer per day",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 500,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Questions", "order": 7 }
+		}
+	}
+}

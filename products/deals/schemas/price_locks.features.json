@@ -1,0 +1,128 @@
+{
+	"type": "object",
+	"title": "Price locks",
+	"additionalProperties": false,
+	"properties": {
+		"ttl_minutes": {
+			"type": "integer",
+			"title": "Lock lifetime (minutes)",
+			"description": "How long the shown price is honoured.",
+			"default": 15,
+			"minimum": 1,
+			"maximum": 1440,
+			"x-kind": "limit",
+			"x-plan": {
+				"starter": {
+					"max": 60
+				},
+				"pro": {
+					"max": 1440
+				}
+			},
+			"x-ui": {
+				"widget": "number",
+				"group": "Locks",
+				"order": 1
+			}
+		},
+		"on_expired": {
+			"type": "string",
+			"title": "Expired lock",
+			"description": "reprice: the line is priced with today's deals (the quote lists it as stale); reject: the quote fails with price_lock_expired.",
+			"default": "reprice",
+			"enum": ["reprice", "reject"],
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "select",
+				"group": "Stale behaviour",
+				"order": 2
+			}
+		},
+		"on_base_price_change": {
+			"type": "string",
+			"title": "Base price changed since the lock",
+			"description": "honor: keep the locked price (never above the new list price); reprice: drop the lock.",
+			"default": "honor",
+			"enum": ["honor", "reprice"],
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "select",
+				"group": "Stale behaviour",
+				"order": 3
+			}
+		},
+		"prefer_better_live_price": {
+			"type": "boolean",
+			"title": "A better live price beats the lock",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Stale behaviour",
+				"order": 4
+			}
+		},
+		"grace_seconds": {
+			"type": "integer",
+			"title": "Grace after expiry (seconds)",
+			"description": "Tolerated delay between the shopper's last step and the quote.",
+			"default": 30,
+			"minimum": 0,
+			"maximum": 600,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Stale behaviour",
+				"order": 5
+			}
+		},
+		"issue_on_quote": {
+			"type": "boolean",
+			"title": "Issue locks with cart quotes",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Issuing",
+				"order": 6
+			}
+		},
+		"issue_on_offers": {
+			"type": "boolean",
+			"title": "Issue locks with item offers",
+			"description": "Product pages get a lock with every offer (for 'add to cart').",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Issuing",
+				"order": 7
+			}
+		},
+		"bind_to_customer": {
+			"type": "boolean",
+			"title": "Bind locks to the identified customer",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Issuing",
+				"order": 8
+			}
+		},
+		"max_units": {
+			"type": "integer",
+			"title": "Units a lock covers (offers)",
+			"description": "Cart quotes lock the quoted quantity.",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Issuing",
+				"order": 9
+			}
+		}
+	}
+}

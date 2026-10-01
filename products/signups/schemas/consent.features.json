@@ -1,0 +1,35 @@
+{
+	"type": "object",
+	"title": "Consent",
+	"additionalProperties": false,
+	"properties": {
+		"documents": {
+			"type": "array",
+			"title": "Documents",
+			"description": "Terms, privacy policy and any other document customers accept, with the current version. Changing a version asks customers again when re-acceptance is on.",
+			"default": [],
+			"maxItems": 10,
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Documents", "order": 1 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "version"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"version": { "type": "string", "title": "Version", "minLength": 1, "maxLength": 40 },
+					"title": { "type": "string", "title": "Title", "maxLength": 120 },
+					"url": { "type": "string", "title": "Link", "maxLength": 2048 },
+					"required": { "type": "boolean", "title": "Required to sign in" }
+				}
+			}
+		},
+		"require_reacceptance": {
+			"type": "boolean",
+			"title": "Ask again when a required document changes",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Documents", "order": 2 }
+		}
+	}
+}

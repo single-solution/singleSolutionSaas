@@ -1,0 +1,3693 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Coupons API",
+		"version": "1.0.0",
+		"description": "Mode C API of Coupons (SSPS v1). All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code: code_not_found, exhausted, not_eligible, customer_limit_reached, velocity_limited, …). POSTs that move state require `Idempotency-Key`; replays return the original response. Browser keys (pk_) may call validations, quotes and the apply box view; everything else needs a server key (sk_)."
+	},
+	"servers": [
+		{
+			"url": "https://coupons.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"tags": [
+		{
+			"name": "codes"
+		},
+		{
+			"name": "eligibility"
+		},
+		{
+			"name": "limits"
+		},
+		{
+			"name": "api"
+		},
+		{
+			"name": "apply_box"
+		},
+		{
+			"name": "distribution"
+		},
+		{
+			"name": "reporting"
+		},
+		{
+			"name": "standard"
+		}
+	],
+	"paths": {
+		"/v1/coupons": {
+			"get": {
+				"operationId": "listCoupons",
+				"tags": ["codes"],
+				"summary": "Coupons by id (cursor pagination), optionally ?status=active|paused|archived.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"enum": ["active", "paused", "archived"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "A page of coupons. `Link: <…>; rel=\"next\"` when more exist.",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CouponPage"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"name": "Autumn 10 %",
+											"description": "",
+											"status": "active",
+											"mode": "shared",
+											"currency": null,
+											"action": {
+												"type": "percent",
+												"percent": 10,
+												"target": "order"
+											},
+											"eligibility": {
+												"when": "cart.subtotal >= 2000",
+												"conditions": [
+													{
+														"type": "collections",
+														"operator": "not_in",
+														"value": ["gift-cards"]
+													}
+												]
+											},
+											"limits": {
+												"total": 500,
+												"per_customer": 1,
+												"per_device": null,
+												"per_code": null
+											},
+											"stacking": {
+												"class": "order",
+												"exclusive": false,
+												"priority": 0,
+												"with_loyalty": true,
+												"with_deals": true
+											},
+											"validity": {
+												"starts_at": "2026-10-01T00:00:00.000Z",
+												"ends_at": "2026-11-30T23:59:59.000Z",
+												"time_zone": "Europe/Berlin",
+												"windows": []
+											},
+											"listed": false,
+											"custom": {},
+											"codes": 1,
+											"usage": {
+												"taken": 12,
+												"redeemed": 10
+											},
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"updatedAt": "2026-10-01T09:00:00.000Z",
+											"archivedAt": null
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createCoupon",
+				"tags": ["codes"],
+				"summary": "Create a coupon with one shared code (`code`, or one generated from `pattern`) or `count` unique codes.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponInput"
+							},
+							"example": {
+								"name": "Certification coupon",
+								"pattern": "CERT-????-????",
+								"action": {
+									"type": "percent",
+									"percent": 10,
+									"target": "order"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"allOf": [
+										{
+											"$ref": "#/components/schemas/Coupon"
+										},
+										{
+											"type": "object",
+											"properties": {
+												"generated": {
+													"type": "object",
+													"properties": {
+														"count": {
+															"type": "integer"
+														},
+														"codes": {
+															"type": "array",
+															"items": {
+																"type": "string"
+															}
+														}
+													}
+												}
+											}
+										}
+									]
+								},
+								"example": {
+									"id": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"name": "Certification coupon",
+									"description": "",
+									"status": "active",
+									"mode": "shared",
+									"currency": null,
+									"action": {
+										"type": "percent",
+										"percent": 10,
+										"target": "order"
+									},
+									"eligibility": {
+										"when": "cart.subtotal >= 2000",
+										"conditions": [
+											{
+												"type": "collections",
+												"operator": "not_in",
+												"value": ["gift-cards"]
+											}
+										]
+									},
+									"limits": {
+										"total": 500,
+										"per_customer": 1,
+										"per_device": null,
+										"per_code": null
+									},
+									"stacking": {
+										"class": "order",
+										"exclusive": false,
+										"priority": 0,
+										"with_loyalty": true,
+										"with_deals": true
+									},
+									"validity": {
+										"starts_at": "2026-10-01T00:00:00.000Z",
+										"ends_at": "2026-11-30T23:59:59.000Z",
+										"time_zone": "Europe/Berlin",
+										"windows": []
+									},
+									"listed": false,
+									"custom": {},
+									"codes": 1,
+									"usage": {
+										"taken": 12,
+										"redeemed": 10
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"updatedAt": "2026-10-01T09:00:00.000Z",
+									"archivedAt": null,
+									"generated": {
+										"count": 1,
+										"codes": ["CERT-K7QM-X2PA"]
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/coupons/{id}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/CouponId"
+				}
+			],
+			"get": {
+				"operationId": "getCoupon",
+				"tags": ["codes"],
+				"summary": "A coupon with its usage counters.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								},
+								"example": {
+									"id": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"name": "Autumn 10 %",
+									"description": "",
+									"status": "active",
+									"mode": "shared",
+									"currency": null,
+									"action": {
+										"type": "percent",
+										"percent": 10,
+										"target": "order"
+									},
+									"eligibility": {
+										"when": "cart.subtotal >= 2000",
+										"conditions": [
+											{
+												"type": "collections",
+												"operator": "not_in",
+												"value": ["gift-cards"]
+											}
+										]
+									},
+									"limits": {
+										"total": 500,
+										"per_customer": 1,
+										"per_device": null,
+										"per_code": null
+									},
+									"stacking": {
+										"class": "order",
+										"exclusive": false,
+										"priority": 0,
+										"with_loyalty": true,
+										"with_deals": true
+									},
+									"validity": {
+										"starts_at": "2026-10-01T00:00:00.000Z",
+										"ends_at": "2026-11-30T23:59:59.000Z",
+										"time_zone": "Europe/Berlin",
+										"windows": []
+									},
+									"listed": false,
+									"custom": {},
+									"codes": 1,
+									"usage": {
+										"taken": 12,
+										"redeemed": 10
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"updatedAt": "2026-10-01T09:00:00.000Z",
+									"archivedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"patch": {
+				"operationId": "updateCoupon",
+				"tags": ["codes"],
+				"summary": "JSON Merge Patch of the editable fields (not the codes).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/merge-patch+json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponFields"
+							},
+							"example": {
+								"status": "paused"
+							}
+						},
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CouponFields"
+							},
+							"example": {
+								"limits": {
+									"total": 1000
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Updated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								},
+								"example": {
+									"id": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"name": "Autumn 10 %",
+									"description": "",
+									"status": "paused",
+									"mode": "shared",
+									"currency": null,
+									"action": {
+										"type": "percent",
+										"percent": 10,
+										"target": "order"
+									},
+									"eligibility": {
+										"when": "cart.subtotal >= 2000",
+										"conditions": [
+											{
+												"type": "collections",
+												"operator": "not_in",
+												"value": ["gift-cards"]
+											}
+										]
+									},
+									"limits": {
+										"total": 500,
+										"per_customer": 1,
+										"per_device": null,
+										"per_code": null
+									},
+									"stacking": {
+										"class": "order",
+										"exclusive": false,
+										"priority": 0,
+										"with_loyalty": true,
+										"with_deals": true
+									},
+									"validity": {
+										"starts_at": "2026-10-01T00:00:00.000Z",
+										"ends_at": "2026-11-30T23:59:59.000Z",
+										"time_zone": "Europe/Berlin",
+										"windows": []
+									},
+									"listed": false,
+									"custom": {},
+									"codes": 1,
+									"usage": {
+										"taken": 12,
+										"redeemed": 10
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"updatedAt": "2026-10-01T09:00:00.000Z",
+									"archivedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "archiveCoupon",
+				"tags": ["codes"],
+				"summary": "Archive (soft delete): its codes stop working.",
+				"responses": {
+					"200": {
+						"description": "Archived",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Coupon"
+								},
+								"example": {
+									"id": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"name": "Autumn 10 %",
+									"description": "",
+									"status": "archived",
+									"mode": "shared",
+									"currency": null,
+									"action": {
+										"type": "percent",
+										"percent": 10,
+										"target": "order"
+									},
+									"eligibility": {
+										"when": "cart.subtotal >= 2000",
+										"conditions": [
+											{
+												"type": "collections",
+												"operator": "not_in",
+												"value": ["gift-cards"]
+											}
+										]
+									},
+									"limits": {
+										"total": 500,
+										"per_customer": 1,
+										"per_device": null,
+										"per_code": null
+									},
+									"stacking": {
+										"class": "order",
+										"exclusive": false,
+										"priority": 0,
+										"with_loyalty": true,
+										"with_deals": true
+									},
+									"validity": {
+										"starts_at": "2026-10-01T00:00:00.000Z",
+										"ends_at": "2026-11-30T23:59:59.000Z",
+										"time_zone": "Europe/Berlin",
+										"windows": []
+									},
+									"listed": false,
+									"custom": {},
+									"codes": 1,
+									"usage": {
+										"taken": 12,
+										"redeemed": 10
+									},
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"updatedAt": "2026-10-01T09:00:00.000Z",
+									"archivedAt": "2026-12-01T00:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/coupons/{id}/codes": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/CouponId"
+				}
+			],
+			"get": {
+				"operationId": "listCodes",
+				"tags": ["codes"],
+				"summary": "Codes of a coupon (ascending, cursor).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CodePage"
+								},
+								"example": {
+									"items": [
+										{
+											"code": "AUTUMN10",
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"status": "active",
+											"maxUses": null,
+											"taken": 12,
+											"redeemed": 10,
+											"remaining": null,
+											"batchId": null,
+											"createdAt": "2026-10-01T09:00:00.000Z"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/coupons/{id}/codes:generate": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/CouponId"
+				}
+			],
+			"post": {
+				"operationId": "generateCodes",
+				"tags": ["codes"],
+				"summary": "Bulk-generate unique codes (cryptographically random; ≤ codes.max_codes_per_batch).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["count"],
+								"properties": {
+									"count": {
+										"type": "integer",
+										"minimum": 1
+									},
+									"pattern": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"count": 500,
+								"pattern": "VIP-????-????"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Generated",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"couponId": {
+											"type": "string"
+										},
+										"batchId": {
+											"type": "string"
+										},
+										"count": {
+											"type": "integer"
+										},
+										"codes": {
+											"type": "array",
+											"items": {
+												"type": "string"
+											}
+										}
+									}
+								},
+								"example": {
+									"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"batchId": "bat_0abc",
+									"count": 500,
+									"codes": ["VIP-K7QM-X2PA", "VIP-9WZT-4HCB"]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/codes/{code}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/Code"
+				}
+			],
+			"get": {
+				"operationId": "getCode",
+				"tags": ["codes"],
+				"summary": "A code and its uses.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Code"
+								},
+								"example": {
+									"code": "AUTUMN10",
+									"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "active",
+									"maxUses": null,
+									"taken": 12,
+									"redeemed": 10,
+									"remaining": null,
+									"batchId": null,
+									"createdAt": "2026-10-01T09:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"patch": {
+				"operationId": "updateCode",
+				"tags": ["codes"],
+				"summary": "Disable or re-enable one code.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["status"],
+								"properties": {
+									"status": {
+										"type": "string",
+										"enum": ["active", "disabled"]
+									}
+								}
+							},
+							"example": {
+								"status": "disabled"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Code"
+								},
+								"example": {
+									"code": "AUTUMN10",
+									"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "disabled",
+									"maxUses": null,
+									"taken": 12,
+									"redeemed": 10,
+									"remaining": null,
+									"batchId": null,
+									"createdAt": "2026-10-01T09:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/eligibility:check": {
+			"post": {
+				"operationId": "checkEligibility",
+				"tags": ["eligibility"],
+				"summary": "Diagnose a rules@1 condition and structured conditions; with a cart, evaluate them.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"when": {
+										"type": "string"
+									},
+									"conditions": {
+										"type": "array",
+										"items": {
+											"$ref": "#/components/schemas/Condition"
+										}
+									},
+									"cart": {
+										"$ref": "#/components/schemas/Cart"
+									}
+								}
+							},
+							"example": {
+								"when": "cart.subtotal >= 5000 and not inSegment('wholesale')",
+								"conditions": [
+									{
+										"type": "collections",
+										"operator": "in",
+										"value": ["socks"]
+									}
+								],
+								"cart": {
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "l1",
+											"itemId": "itm_socks",
+											"quantity": 3,
+											"unitAmount": 1200,
+											"collections": ["socks"],
+											"attributes": {
+												"size": "M"
+											}
+										},
+										{
+											"lineId": "l2",
+											"itemId": "itm_shoes",
+											"variantId": "var_42",
+											"quantity": 1,
+											"unitAmount": 8900
+										}
+									],
+									"shipping": 495,
+									"customer": {
+										"id": "cus_123",
+										"orderCount": 0,
+										"segments": ["newsletter"]
+									},
+									"paymentMethod": "card",
+									"deliveryMethod": "courier",
+									"context": {
+										"country": "DE",
+										"device": "mobile",
+										"deviceId": "dev_9f2"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"rule": {
+										"ok": true,
+										"errors": [],
+										"warnings": [],
+										"paths": ["cart.subtotal"],
+										"functions": ["inSegment"]
+									},
+									"evaluation": {
+										"eligible": true,
+										"matchedLines": ["l1"],
+										"rule": true,
+										"ruleError": null
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/blocks": {
+			"get": {
+				"operationId": "listBlocks",
+				"tags": ["limits"],
+				"summary": "Blocklist entries.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/BlockPage"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "blk_0abc",
+											"kind": "email",
+											"value": "abuse@example.com",
+											"note": "chargebacks"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "addBlock",
+				"tags": ["limits"],
+				"summary": "Block a customer, e-mail, device or code from coupons.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["kind", "value"],
+								"properties": {
+									"kind": {
+										"type": "string",
+										"enum": ["customer", "email", "device", "code"]
+									},
+									"value": {
+										"type": "string"
+									},
+									"note": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"kind": "email",
+								"value": "abuse@example.com",
+								"note": "chargebacks"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Block"
+								},
+								"example": {
+									"id": "blk_0abc",
+									"kind": "email",
+									"value": "abuse@example.com",
+									"note": "chargebacks"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/blocks/{id}": {
+			"parameters": [
+				{
+					"name": "id",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"delete": {
+				"operationId": "removeBlock",
+				"tags": ["limits"],
+				"summary": "Remove a blocklist entry (soft).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"id": "blk_0abc",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/validations": {
+			"post": {
+				"operationId": "validateCode",
+				"tags": ["api"],
+				"summary": "Is one code valid for this cart, and what would it take off? Browser-safe (pk_ + SS-Identity); no state changes beyond velocity counters.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["code", "cart"],
+								"properties": {
+									"code": {
+										"type": "string"
+									},
+									"cart": {
+										"$ref": "#/components/schemas/Cart"
+									}
+								}
+							},
+							"example": {
+								"code": "autumn10",
+								"cart": {
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "l1",
+											"itemId": "itm_socks",
+											"quantity": 3,
+											"unitAmount": 1200,
+											"collections": ["socks"],
+											"attributes": {
+												"size": "M"
+											}
+										},
+										{
+											"lineId": "l2",
+											"itemId": "itm_shoes",
+											"variantId": "var_42",
+											"quantity": 1,
+											"unitAmount": 8900
+										}
+									],
+									"shipping": 495,
+									"customer": {
+										"id": "cus_123",
+										"orderCount": 0,
+										"segments": ["newsletter"]
+									},
+									"paymentMethod": "card",
+									"deliveryMethod": "courier",
+									"context": {
+										"country": "DE",
+										"device": "mobile",
+										"deviceId": "dev_9f2"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK (valid or not)",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"code": {
+											"type": "string"
+										},
+										"valid": {
+											"type": "boolean"
+										},
+										"reason": {
+											"type": ["string", "null"]
+										},
+										"quote": {
+											"$ref": "#/components/schemas/Quote"
+										}
+									}
+								},
+								"example": {
+									"code": "AUTUMN10",
+									"valid": true,
+									"reason": null,
+									"quote": {
+										"currency": "EUR",
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745,
+										"freeShipping": false,
+										"gifts": [],
+										"lines": [
+											{
+												"lineId": "l1",
+												"discount": 360
+											},
+											{
+												"lineId": "l2",
+												"discount": 890
+											}
+										],
+										"applied": [
+											{
+												"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+												"code": "AUTUMN10",
+												"name": "Autumn 10 %",
+												"class": "order",
+												"discount": 1250,
+												"shippingDiscount": 0,
+												"freeShipping": false,
+												"gifts": [],
+												"lines": [
+													{
+														"lineId": "l1",
+														"amount": 360
+													},
+													{
+														"lineId": "l2",
+														"amount": 890
+													}
+												]
+											}
+										],
+										"rejected": [],
+										"loyaltyAllowed": true,
+										"dealsAllowed": true
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/quotes": {
+			"post": {
+				"operationId": "quoteCodes",
+				"tags": ["api"],
+				"summary": "Several codes with the stacking policy applied (browser-safe).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["codes", "cart"],
+								"properties": {
+									"codes": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"cart": {
+										"$ref": "#/components/schemas/Cart"
+									}
+								}
+							},
+							"example": {
+								"codes": ["AUTUMN10", "SHIPFREE"],
+								"cart": {
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "l1",
+											"itemId": "itm_socks",
+											"quantity": 3,
+											"unitAmount": 1200,
+											"collections": ["socks"],
+											"attributes": {
+												"size": "M"
+											}
+										},
+										{
+											"lineId": "l2",
+											"itemId": "itm_shoes",
+											"variantId": "var_42",
+											"quantity": 1,
+											"unitAmount": 8900
+										}
+									],
+									"shipping": 495,
+									"customer": {
+										"id": "cus_123",
+										"orderCount": 0,
+										"segments": ["newsletter"]
+									},
+									"paymentMethod": "card",
+									"deliveryMethod": "courier",
+									"context": {
+										"country": "DE",
+										"device": "mobile",
+										"deviceId": "dev_9f2"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								},
+								"example": {
+									"currency": "EUR",
+									"subtotal": 12500,
+									"discount": 1250,
+									"shipping": 495,
+									"shippingDiscount": 0,
+									"total": 11745,
+									"freeShipping": false,
+									"gifts": [],
+									"lines": [
+										{
+											"lineId": "l1",
+											"discount": 360
+										},
+										{
+											"lineId": "l2",
+											"discount": 890
+										}
+									],
+									"applied": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"name": "Autumn 10 %",
+											"class": "order",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"rejected": [],
+									"loyaltyAllowed": true,
+									"dealsAllowed": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reservations": {
+			"post": {
+				"operationId": "reserveCodes",
+				"tags": ["api"],
+				"summary": "Reserve the codes of a checkout for api.reservation_ttl_minutes (atomic: a limited code is never over-reserved). Idempotent on `reference`, else on the Idempotency-Key. Every code must apply, else a problem lists each refusal.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["codes", "cart"],
+								"properties": {
+									"codes": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"cart": {
+										"$ref": "#/components/schemas/Cart"
+									},
+									"orderId": {
+										"type": "string"
+									},
+									"reference": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"codes": ["AUTUMN10"],
+								"cart": {
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "l1",
+											"itemId": "itm_socks",
+											"quantity": 3,
+											"unitAmount": 1200,
+											"collections": ["socks"],
+											"attributes": {
+												"size": "M"
+											}
+										},
+										{
+											"lineId": "l2",
+											"itemId": "itm_shoes",
+											"variantId": "var_42",
+											"quantity": 1,
+											"unitAmount": 8900
+										}
+									],
+									"shipping": 495,
+									"customer": {
+										"id": "cus_123",
+										"orderCount": 0,
+										"segments": ["newsletter"]
+									},
+									"paymentMethod": "card",
+									"deliveryMethod": "courier",
+									"context": {
+										"country": "DE",
+										"device": "mobile",
+										"deviceId": "dev_9f2"
+									}
+								},
+								"reference": "cart_42"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Reserved",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "reserved",
+									"reference": "cart_42",
+									"orderId": null,
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": null,
+									"releasedAt": null,
+									"releaseReason": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reservations/{id}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/ReservationId"
+				}
+			],
+			"get": {
+				"operationId": "getReservation",
+				"tags": ["api"],
+				"summary": "A reservation.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "reserved",
+									"reference": "cart_42",
+									"orderId": null,
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": null,
+									"releasedAt": null,
+									"releaseReason": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reservations/{id}/redeem": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/ReservationId"
+				}
+			],
+			"post": {
+				"operationId": "redeemReservation",
+				"tags": ["api"],
+				"summary": "Confirm the reservation (order paid). Idempotent; `order.completed@1` does the same for reservations bound to the order.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"orderId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"orderId": "ord_1001"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Redeemed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "redeemed",
+									"reference": "cart_42",
+									"orderId": "ord_1001",
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": "2026-10-01T09:05:00.000Z",
+									"releasedAt": null,
+									"releaseReason": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reservations/{id}/release": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/ReservationId"
+				}
+			],
+			"post": {
+				"operationId": "releaseReservation",
+				"tags": ["api"],
+				"summary": "Give the uses back (abandoned checkout). Idempotent.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"reason": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"reason": "cart abandoned"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Released",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "released",
+									"reference": "cart_42",
+									"orderId": null,
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": null,
+									"releasedAt": "2026-10-01T09:20:00.000Z",
+									"releaseReason": "released"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reservations/{id}/attach": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/ReservationId"
+				}
+			],
+			"post": {
+				"operationId": "attachOrder",
+				"tags": ["api"],
+				"summary": "Bind the order created for a reservation so order.completed / cancelled / refunded events find it.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["orderId"],
+								"properties": {
+									"orderId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"orderId": "ord_1001"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "reserved",
+									"reference": "cart_42",
+									"orderId": "ord_1001",
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": null,
+									"releasedAt": null,
+									"releaseReason": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/redemptions": {
+			"get": {
+				"operationId": "listRedemptions",
+				"tags": ["api"],
+				"summary": "Redemptions, newest first (?status=redeemed|released|all).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"enum": ["redeemed", "released", "all"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RedemptionPage"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+											"status": "redeemed",
+											"reference": "cart_42",
+											"orderId": "ord_1001",
+											"customerId": "cus_123",
+											"codes": ["AUTUMN10"],
+											"coupons": [
+												{
+													"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+													"code": "AUTUMN10",
+													"discount": 1250,
+													"shippingDiscount": 0,
+													"freeShipping": false,
+													"gifts": [],
+													"lines": [
+														{
+															"lineId": "l1",
+															"amount": 360
+														},
+														{
+															"lineId": "l2",
+															"amount": 890
+														}
+													]
+												}
+											],
+											"currency": "EUR",
+											"totals": {
+												"subtotal": 12500,
+												"discount": 1250,
+												"shipping": 495,
+												"shippingDiscount": 0,
+												"total": 11745
+											},
+											"loyaltyAllowed": true,
+											"dealsAllowed": true,
+											"expiresAt": "2026-10-01T09:30:00.000Z",
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"redeemedAt": "2026-10-01T09:05:00.000Z",
+											"releasedAt": null,
+											"releaseReason": null
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "redeemCodes",
+				"tags": ["api"],
+				"summary": "Reserve and redeem in one step (idempotent on `reference` or the Idempotency-Key).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["codes", "cart"],
+								"properties": {
+									"codes": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									},
+									"cart": {
+										"$ref": "#/components/schemas/Cart"
+									},
+									"orderId": {
+										"type": "string"
+									},
+									"reference": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"codes": ["AUTUMN10"],
+								"cart": {
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "l1",
+											"itemId": "itm_socks",
+											"quantity": 3,
+											"unitAmount": 1200,
+											"collections": ["socks"],
+											"attributes": {
+												"size": "M"
+											}
+										},
+										{
+											"lineId": "l2",
+											"itemId": "itm_shoes",
+											"variantId": "var_42",
+											"quantity": 1,
+											"unitAmount": 8900
+										}
+									],
+									"shipping": 495,
+									"customer": {
+										"id": "cus_123",
+										"orderCount": 0,
+										"segments": ["newsletter"]
+									},
+									"paymentMethod": "card",
+									"deliveryMethod": "courier",
+									"context": {
+										"country": "DE",
+										"device": "mobile",
+										"deviceId": "dev_9f2"
+									}
+								},
+								"orderId": "ord_1001"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Redeemed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "redeemed",
+									"reference": "cart_42",
+									"orderId": "ord_1001",
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": "2026-10-01T09:05:00.000Z",
+									"releasedAt": null,
+									"releaseReason": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/redemptions/{id}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/ReservationId"
+				}
+			],
+			"get": {
+				"operationId": "getRedemption",
+				"tags": ["api"],
+				"summary": "A redemption.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "redeemed",
+									"reference": "cart_42",
+									"orderId": "ord_1001",
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": "2026-10-01T09:05:00.000Z",
+									"releasedAt": null,
+									"releaseReason": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/redemptions/{id}/release": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/ReservationId"
+				}
+			],
+			"post": {
+				"operationId": "releaseRedemption",
+				"tags": ["api"],
+				"summary": "Undo a redemption (refund handled by the merchant): the uses go back.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"reason": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"reason": "refunded"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Released",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "rsv_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "released",
+									"reference": "cart_42",
+									"orderId": "ord_1001",
+									"customerId": "cus_123",
+									"codes": ["AUTUMN10"],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"discount": 1250,
+											"shippingDiscount": 0,
+											"freeShipping": false,
+											"gifts": [],
+											"lines": [
+												{
+													"lineId": "l1",
+													"amount": 360
+												},
+												{
+													"lineId": "l2",
+													"amount": 890
+												}
+											]
+										}
+									],
+									"currency": "EUR",
+									"totals": {
+										"subtotal": 12500,
+										"discount": 1250,
+										"shipping": 495,
+										"shippingDiscount": 0,
+										"total": 11745
+									},
+									"loyaltyAllowed": true,
+									"dealsAllowed": true,
+									"expiresAt": "2026-10-01T09:30:00.000Z",
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"redeemedAt": "2026-10-01T09:05:00.000Z",
+									"releasedAt": "2026-10-03T12:00:00.000Z",
+									"releaseReason": "released"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/share-links": {
+			"post": {
+				"operationId": "createShareLink",
+				"tags": ["distribution"],
+				"summary": "A link to the website that auto-applies the code (and its QR code URL).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["code"],
+								"properties": {
+									"code": {
+										"type": "string"
+									},
+									"path": {
+										"type": "string"
+									},
+									"campaign": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"code": "AUTUMN10",
+								"path": "/collections/autumn",
+								"campaign": "newsletter-42"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShareLink"
+								},
+								"example": {
+									"code": "AUTUMN10",
+									"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"url": "https://shop.example.com/collections/autumn?coupon=AUTUMN10&utm_campaign=newsletter-42",
+									"qr": "/v1/share-links/AUTUMN10/qr"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/share-links/{code}": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/Code"
+				}
+			],
+			"get": {
+				"operationId": "getShareLink",
+				"tags": ["distribution"],
+				"summary": "The share link of a code.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ShareLink"
+								},
+								"example": {
+									"code": "AUTUMN10",
+									"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+									"url": "https://shop.example.com/?coupon=AUTUMN10",
+									"qr": "/v1/share-links/AUTUMN10/qr"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/share-links/{code}/qr": {
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/Code"
+				}
+			],
+			"get": {
+				"operationId": "getShareLinkQr",
+				"tags": ["distribution"],
+				"summary": "QR code of the share link as SVG (generated by the product).",
+				"responses": {
+					"200": {
+						"description": "SVG",
+						"content": {
+							"image/svg+xml": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 37 37\">…</svg>"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/exports/{couponId}": {
+			"parameters": [
+				{
+					"name": "couponId",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string"
+					}
+				}
+			],
+			"get": {
+				"operationId": "exportCodes",
+				"tags": ["distribution"],
+				"summary": "CSV of a coupon’s codes (code, status, max_uses, taken, redeemed, link); formula injection neutralised.",
+				"responses": {
+					"200": {
+						"description": "CSV",
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "code,status,max_uses,taken,redeemed,link\r\nVIP-K7QM-X2PA,active,1,0,0,https://shop.example.com/?coupon=VIP-K7QM-X2PA\r\n"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reports": {
+			"get": {
+				"operationId": "getReport",
+				"tags": ["reporting"],
+				"summary": "Redemptions, discount, revenue and average order per currency, top codes and coupons (?from=&to= ISO, default the last reporting.default_window_days).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Report"
+								},
+								"example": {
+									"from": "2026-09-01T00:00:00.000Z",
+									"to": "2026-10-01T00:00:00.000Z",
+									"redemptions": 359,
+									"orders": 352,
+									"released": 4,
+									"currencies": [
+										{
+											"currency": "EUR",
+											"orders": 352,
+											"discount": 412350,
+											"revenue": 3987400,
+											"averageOrder": 11328,
+											"discountRate": 9.37
+										}
+									],
+									"topCodes": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"code": "AUTUMN10",
+											"currency": "EUR",
+											"redemptions": 120,
+											"discount": 132000
+										}
+									],
+									"coupons": [
+										{
+											"couponId": "cpn_0mf2k3x1rabcdefghjkmnpqr",
+											"redemptions": 120,
+											"codes": 1
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/apply_box/view": {
+			"get": {
+				"operationId": "applyBoxView",
+				"tags": ["apply_box"],
+				"summary": "View model of the apply box for the Loader element stub (ss-element-stub@1).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					},
+					{
+						"name": "lang",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ElementView"
+								},
+								"example": {
+									"title": "Coupon code",
+									"body": "Enter your code at checkout to see your savings.",
+									"items": [],
+									"actions": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/apply_box/actions/{action}": {
+			"parameters": [
+				{
+					"name": "action",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string",
+						"enum": ["apply"]
+					}
+				}
+			],
+			"post": {
+				"operationId": "applyBoxAction",
+				"tags": ["apply_box"],
+				"summary": "Element stub action `apply` { code, cart } → the next view model.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["code", "cart"],
+								"properties": {
+									"code": {
+										"type": "string"
+									},
+									"cart": {
+										"$ref": "#/components/schemas/Cart"
+									}
+								}
+							},
+							"example": {
+								"code": "AUTUMN10",
+								"cart": {
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "l1",
+											"itemId": "itm_socks",
+											"quantity": 3,
+											"unitAmount": 1200,
+											"collections": ["socks"],
+											"attributes": {
+												"size": "M"
+											}
+										},
+										{
+											"lineId": "l2",
+											"itemId": "itm_shoes",
+											"variantId": "var_42",
+											"quantity": 1,
+											"unitAmount": 8900
+										}
+									],
+									"shipping": 495,
+									"customer": {
+										"id": "cus_123",
+										"orderCount": 0,
+										"segments": ["newsletter"]
+									},
+									"paymentMethod": "card",
+									"deliveryMethod": "courier",
+									"context": {
+										"country": "DE",
+										"device": "mobile",
+										"deviceId": "dev_9f2"
+									}
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ElementView"
+								},
+								"example": {
+									"title": "Coupon code",
+									"body": "AUTUMN10 applied — you save €12.50.",
+									"items": [],
+									"actions": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/entitlement": {
+			"get": {
+				"operationId": "getEntitlement",
+				"tags": ["standard"],
+				"summary": "What this website has enabled (from the cached signed document).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"version": 3,
+									"stale": false,
+									"elements": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/config": {
+			"get": {
+				"operationId": "getConfig",
+				"tags": ["standard"],
+				"summary": "Effective configuration of the requested elements (?element=a,b).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"version": 3,
+									"stale": false,
+									"elements": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/strings": {
+			"get": {
+				"operationId": "getStrings",
+				"tags": ["standard"],
+				"summary": "String catalog for ?lang= (no auth).",
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"apply_box.title": "Coupon code"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/events": {
+			"post": {
+				"operationId": "pushEvents",
+				"tags": ["standard"],
+				"summary": "Push events of the product namespace or consumed types (dispatched like Event Hub deliveries).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"events": {
+										"type": "array",
+										"items": {
+											"type": "object"
+										}
+									}
+								}
+							},
+							"example": {
+								"events": [
+									{
+										"id": "evt_0abc",
+										"type": "order.completed@1",
+										"occurredAt": "2026-10-01T09:00:00.000Z",
+										"idempotencyKey": "evt_0abc",
+										"actor": {
+											"type": "system"
+										},
+										"data": {
+											"orderId": "ord_1001"
+										}
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"accepted": {
+											"type": "integer"
+										},
+										"duplicates": {
+											"type": "integer"
+										}
+									}
+								},
+								"example": {
+									"accepted": 1,
+									"duplicates": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/healthz": {
+			"get": {
+				"operationId": "healthz",
+				"tags": ["standard"],
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/readyz": {
+			"get": {
+				"operationId": "readyz",
+				"tags": ["standard"],
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:export": {
+			"post": {
+				"operationId": "data_export",
+				"tags": ["standard"],
+				"summary": "Portal-signed personal data export.",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["websiteId"],
+								"properties": {
+									"websiteId": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "object"
+									},
+									"requestId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"websiteId": "web_1",
+								"subject": {
+									"customerId": "cus_123"
+								},
+								"requestId": "req_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:anonymize": {
+			"post": {
+				"operationId": "data_anonymize",
+				"tags": ["standard"],
+				"summary": "Portal-signed personal data anonymize.",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["websiteId"],
+								"properties": {
+									"websiteId": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "object"
+									},
+									"requestId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"websiteId": "web_1",
+								"subject": {
+									"customerId": "cus_123"
+								},
+								"requestId": "req_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked; customer from SS-Identity) or sk_ (server) website key"
+			},
+			"portalSignature": {
+				"type": "apiKey",
+				"in": "header",
+				"name": "SS-Signature",
+				"description": "Portal-signed request (ss-request.v1)"
+			}
+		},
+		"parameters": {
+			"IdempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				}
+			},
+			"Cursor": {
+				"name": "cursor",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"Limit": {
+				"name": "limit",
+				"in": "query",
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 20
+				}
+			},
+			"CouponId": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"ReservationId": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"Code": {
+				"name": "code",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 64
+				}
+			},
+			"Identity": {
+				"name": "SS-Identity",
+				"in": "header",
+				"schema": {
+					"type": "string"
+				},
+				"description": "The customer's login token (the website's own identity issuer, pk_ keys)"
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"$ref": "#/components/schemas/Problem"
+						},
+						"example": {
+							"type": "https://coupons.example.com/problems/exhausted",
+							"title": "The code has no uses left",
+							"status": 409,
+							"detail": "exhausted",
+							"instance": "/v1/reservations",
+							"requestId": "req_0abc",
+							"errors": [
+								{
+									"path": "/codes",
+									"code": "exhausted",
+									"message": "VIP-K7QM-X2PA: exhausted"
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		"schemas": {
+			"Problem": {
+				"type": "object",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string"
+					},
+					"requestId": {
+						"type": "string"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"path": {
+									"type": "string"
+								},
+								"code": {
+									"type": "string"
+								},
+								"message": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"CartLine": {
+				"type": "object",
+				"required": ["itemId", "quantity", "unitAmount"],
+				"additionalProperties": false,
+				"properties": {
+					"lineId": {
+						"type": "string",
+						"description": "Default: the 1-based position."
+					},
+					"itemId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 1000000
+					},
+					"unitAmount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Minor units of the cart currency."
+					},
+					"attributes": {
+						"type": "object",
+						"additionalProperties": {
+							"oneOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								}
+							]
+						}
+					},
+					"collections": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"maxItems": 50
+					}
+				}
+			},
+			"Cart": {
+				"type": "object",
+				"required": ["currency", "lines"],
+				"additionalProperties": false,
+				"description": "A generic cart: no store assumptions. Money in integer minor units of one ISO-4217 currency.",
+				"properties": {
+					"currency": {
+						"type": "string",
+						"pattern": "^[A-Z]{3}$"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/CartLine"
+						},
+						"description": "At most api.max_lines_per_cart."
+					},
+					"shipping": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"customer": {
+						"type": "object",
+						"additionalProperties": false,
+						"description": "Server keys only; browser keys take the customer from SS-Identity.",
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"orderCount": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "Completed orders before this one (first_order conditions)."
+							},
+							"segments": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"email": {
+								"type": "string"
+							},
+							"country": {
+								"type": "string",
+								"pattern": "^[A-Z]{2}$"
+							}
+						}
+					},
+					"paymentMethod": {
+						"type": "string"
+					},
+					"deliveryMethod": {
+						"type": "string"
+					},
+					"context": {
+						"type": "object",
+						"additionalProperties": false,
+						"properties": {
+							"country": {
+								"type": "string",
+								"pattern": "^[A-Z]{2}$"
+							},
+							"device": {
+								"type": "string"
+							},
+							"source": {
+								"type": "string"
+							},
+							"deviceId": {
+								"type": "string",
+								"description": "Per-device limits and velocity."
+							}
+						}
+					}
+				}
+			},
+			"Condition": {
+				"type": "object",
+				"required": ["type", "operator", "value"],
+				"description": "items | variants | collections | attributes ({ key, values }) | unit_price | line_quantity (line conditions); subtotal | cart_quantity | payment_method | delivery_method | country | segments | first_order | device | source (cart conditions); group (and/or of conditions, depth ≤ 3). Operators: in / not_in, gte / lte / between [min, max], eq (first_order).",
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"operator": {
+						"type": "string",
+						"enum": ["in", "not_in", "gte", "lte", "between", "eq", "and", "or"]
+					},
+					"value": {}
+				}
+			},
+			"Action": {
+				"type": "object",
+				"required": ["type"],
+				"description": "percent { percent 0<p≤max_percent, target matched|order, max_discount? } · fixed { amount, target, per_unit? } · free_shipping { max_amount? } · bxgy { buy, get, percent?, max_applications? } · tiered { basis quantity|subtotal, tiers [{ min, percent | amount }], target } · gift { item_id, variant_id?, quantity?, discount_in_cart? }",
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": ["percent", "fixed", "free_shipping", "bxgy", "tiered", "gift"]
+					},
+					"percent": {
+						"type": "number"
+					},
+					"amount": {
+						"type": "integer"
+					},
+					"target": {
+						"type": "string",
+						"enum": ["matched", "order"]
+					},
+					"max_discount": {
+						"type": "integer"
+					},
+					"per_unit": {
+						"type": "boolean"
+					},
+					"max_amount": {
+						"type": "integer"
+					},
+					"buy": {
+						"type": "integer"
+					},
+					"get": {
+						"type": "integer"
+					},
+					"max_applications": {
+						"type": "integer"
+					},
+					"basis": {
+						"type": "string",
+						"enum": ["quantity", "subtotal"]
+					},
+					"tiers": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"min": {
+									"type": "integer"
+								},
+								"percent": {
+									"type": "number"
+								},
+								"amount": {
+									"type": "integer"
+								}
+							}
+						}
+					},
+					"item_id": {
+						"type": "string"
+					},
+					"variant_id": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "integer"
+					},
+					"discount_in_cart": {
+						"type": "boolean"
+					}
+				}
+			},
+			"CouponFields": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string",
+						"maxLength": 120
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 500
+					},
+					"status": {
+						"type": "string",
+						"enum": ["active", "paused", "archived"]
+					},
+					"currency": {
+						"type": ["string", "null"],
+						"pattern": "^[A-Z]{3}$",
+						"description": "Required when the action or a condition uses money."
+					},
+					"action": {
+						"$ref": "#/components/schemas/Action"
+					},
+					"eligibility": {
+						"type": "object",
+						"properties": {
+							"when": {
+								"type": "string",
+								"description": "rules@1 condition (roots: cart, customer, paymentMethod, deliveryMethod, context, coupon, now)."
+							},
+							"conditions": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/Condition"
+								}
+							}
+						}
+					},
+					"limits": {
+						"type": "object",
+						"properties": {
+							"total": {
+								"type": ["integer", "null"]
+							},
+							"per_customer": {
+								"type": ["integer", "null"]
+							},
+							"per_device": {
+								"type": ["integer", "null"]
+							},
+							"per_code": {
+								"type": ["integer", "null"],
+								"description": "1 = single-use codes."
+							}
+						}
+					},
+					"stacking": {
+						"type": "object",
+						"properties": {
+							"class": {
+								"type": "string"
+							},
+							"exclusive": {
+								"type": "boolean"
+							},
+							"priority": {
+								"type": "integer"
+							},
+							"with_loyalty": {
+								"type": "boolean"
+							},
+							"with_deals": {
+								"type": "boolean"
+							}
+						}
+					},
+					"validity": {
+						"type": "object",
+						"properties": {
+							"starts_at": {
+								"type": ["string", "null"],
+								"format": "date-time"
+							},
+							"ends_at": {
+								"type": ["string", "null"],
+								"format": "date-time"
+							},
+							"time_zone": {
+								"type": ["string", "null"]
+							},
+							"windows": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"properties": {
+										"days": {
+											"type": "array",
+											"items": {
+												"type": "string",
+												"enum": ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+											}
+										},
+										"start": {
+											"type": "string",
+											"pattern": "^\\d{2}:\\d{2}$"
+										},
+										"end": {
+											"type": "string",
+											"pattern": "^\\d{2}:\\d{2}$"
+										}
+									}
+								},
+								"description": "Local time-of-day windows; start > end crosses midnight and belongs to the start day."
+							}
+						}
+					},
+					"listed": {
+						"type": "boolean"
+					},
+					"custom": {
+						"type": "object"
+					}
+				}
+			},
+			"CouponInput": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/CouponFields"
+					},
+					{
+						"type": "object",
+						"required": ["name", "action"],
+						"properties": {
+							"code": {
+								"type": "string",
+								"description": "One shared code (multi-use unless limits.per_code)."
+							},
+							"pattern": {
+								"type": "string",
+								"description": "? = alphabet character, # = digit; default codes.default_pattern."
+							},
+							"count": {
+								"type": "integer",
+								"minimum": 1,
+								"description": "Generate this many unique codes (single-use by default)."
+							}
+						}
+					}
+				]
+			},
+			"Coupon": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/CouponFields"
+					},
+					{
+						"type": "object",
+						"properties": {
+							"id": {
+								"type": "string"
+							},
+							"mode": {
+								"type": "string",
+								"enum": ["shared", "unique"]
+							},
+							"codes": {
+								"type": "integer"
+							},
+							"usage": {
+								"type": "object",
+								"properties": {
+									"taken": {
+										"type": "integer"
+									},
+									"redeemed": {
+										"type": "integer"
+									}
+								}
+							},
+							"createdAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"updatedAt": {
+								"type": "string",
+								"format": "date-time"
+							},
+							"archivedAt": {
+								"type": ["string", "null"],
+								"format": "date-time"
+							}
+						}
+					}
+				]
+			},
+			"CouponPage": {
+				"type": "object",
+				"required": ["items", "nextCursor", "hasMore"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Coupon"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Code": {
+				"type": "object",
+				"properties": {
+					"code": {
+						"type": "string"
+					},
+					"couponId": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string",
+						"enum": ["active", "disabled"]
+					},
+					"maxUses": {
+						"type": ["integer", "null"]
+					},
+					"taken": {
+						"type": "integer",
+						"description": "Reserved + redeemed uses."
+					},
+					"redeemed": {
+						"type": "integer"
+					},
+					"remaining": {
+						"type": ["integer", "null"]
+					},
+					"batchId": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"CodePage": {
+				"type": "object",
+				"required": ["items", "nextCursor", "hasMore"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Code"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Quote": {
+				"type": "object",
+				"properties": {
+					"currency": {
+						"type": "string"
+					},
+					"subtotal": {
+						"type": "integer"
+					},
+					"discount": {
+						"type": "integer"
+					},
+					"shipping": {
+						"type": "integer"
+					},
+					"shippingDiscount": {
+						"type": "integer"
+					},
+					"total": {
+						"type": "integer"
+					},
+					"freeShipping": {
+						"type": "boolean"
+					},
+					"gifts": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"lineId": {
+									"type": "string"
+								},
+								"discount": {
+									"type": "integer"
+								}
+							}
+						}
+					},
+					"applied": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"rejected": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"code": {
+									"type": "string"
+								},
+								"reason": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"loyaltyAllowed": {
+						"type": "boolean"
+					},
+					"dealsAllowed": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Reservation": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string",
+						"enum": ["pending", "reserved", "redeemed", "released", "expired", "failed"]
+					},
+					"reference": {
+						"type": ["string", "null"]
+					},
+					"orderId": {
+						"type": ["string", "null"]
+					},
+					"customerId": {
+						"type": ["string", "null"]
+					},
+					"codes": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"coupons": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"currency": {
+						"type": "string"
+					},
+					"totals": {
+						"type": "object"
+					},
+					"loyaltyAllowed": {
+						"type": "boolean"
+					},
+					"dealsAllowed": {
+						"type": "boolean"
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"redeemedAt": {
+						"type": ["string", "null"]
+					},
+					"releasedAt": {
+						"type": ["string", "null"]
+					},
+					"releaseReason": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"RedemptionPage": {
+				"type": "object",
+				"required": ["items", "nextCursor", "hasMore"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Reservation"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Block": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"enum": ["customer", "email", "device", "code"]
+					},
+					"value": {
+						"type": "string"
+					},
+					"note": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"BlockPage": {
+				"type": "object",
+				"required": ["items", "nextCursor", "hasMore"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Block"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"ShareLink": {
+				"type": "object",
+				"properties": {
+					"code": {
+						"type": "string"
+					},
+					"couponId": {
+						"type": "string"
+					},
+					"url": {
+						"type": "string",
+						"format": "uri"
+					},
+					"qr": {
+						"type": "string"
+					}
+				}
+			},
+			"Report": {
+				"type": "object"
+			},
+			"ElementView": {
+				"type": "object",
+				"description": "ss-element-stub@1 view model (text only).",
+				"properties": {
+					"title": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"body": {
+						"type": "string",
+						"maxLength": 2000
+					},
+					"items": {
+						"type": "array",
+						"maxItems": 50,
+						"items": {
+							"type": "object",
+							"properties": {
+								"text": {
+									"type": "string"
+								},
+								"href": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"actions": {
+						"type": "array",
+						"maxItems": 10,
+						"items": {
+							"type": "object",
+							"properties": {
+								"action": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

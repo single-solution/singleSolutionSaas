@@ -1,0 +1,28 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "alerts.subscribed@1",
+	"description": "A shopper subscribed to an alert (or confirmed a double opt-in). Carries no contact address.",
+	"type": "object",
+	"required": ["subscriptionId", "type", "channel", "status"],
+	"additionalProperties": false,
+	"properties": {
+		"subscriptionId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"type": { "type": "string", "minLength": 1, "maxLength": 50 },
+		"itemId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"variantId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"channel": { "type": "string", "enum": ["email", "sms", "whatsapp"] },
+		"status": { "type": "string", "enum": ["unconfirmed", "pending"] },
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"source": { "type": "string", "enum": ["widget", "api", "import"] }
+	},
+	"examples": [
+		{
+			"subscriptionId": "als_0abc",
+			"type": "back_in_stock",
+			"itemId": "itm_42",
+			"channel": "email",
+			"status": "pending",
+			"source": "widget"
+		}
+	]
+}

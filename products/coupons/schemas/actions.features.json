@@ -1,0 +1,57 @@
+{
+	"type": "object",
+	"title": "Actions",
+	"additionalProperties": false,
+	"properties": {
+		"allowed_types": {
+			"type": "array",
+			"title": "Allowed action types",
+			"description": "percent, fixed, free_shipping, bxgy (buy X get Y), tiered (by quantity or subtotal), gift (gift item).",
+			"default": ["percent", "fixed", "free_shipping", "bxgy", "tiered", "gift"],
+			"minItems": 1,
+			"maxItems": 6,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["percent", "fixed", "free_shipping", "bxgy", "tiered", "gift"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "multiselect", "group": "Actions", "order": 1 }
+		},
+		"max_percent": {
+			"type": "integer",
+			"title": "Maximum percentage off",
+			"description": "Upper bound of percent, BXGY and tiered percentages (0 < p ≤ this ≤ 100).",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Bounds", "order": 2 }
+		},
+		"max_fixed_amount": {
+			"type": "integer",
+			"title": "Maximum fixed amount (minor units, 0 = no cap)",
+			"description": "Upper bound of fixed and tiered amounts, in minor units of the coupon's currency.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000000000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Bounds", "order": 3 }
+		},
+		"rounding": {
+			"type": "string",
+			"title": "Rounding of percentage discounts",
+			"description": "Applied once per discount, in minor units.",
+			"default": "round",
+			"enum": ["floor", "round", "ceil"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Bounds", "order": 4 }
+		},
+		"max_tiers": {
+			"type": "integer",
+			"title": "Maximum tiers of a tiered action",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 50,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Bounds", "order": 5 }
+		}
+	}
+}

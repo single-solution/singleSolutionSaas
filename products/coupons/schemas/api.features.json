@@ -1,0 +1,50 @@
+{
+	"type": "object",
+	"title": "Redemption API",
+	"additionalProperties": false,
+	"properties": {
+		"reservation_ttl_minutes": {
+			"type": "integer",
+			"title": "Reservation lifetime (minutes)",
+			"description": "A reserved code is held for this long; unconfirmed reservations then expire and give their uses back.",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 1440,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Reservations", "order": 1 }
+		},
+		"confirm_expired": {
+			"type": "boolean",
+			"title": "Confirm a late order if the use is still available",
+			"description": "An order completed after its reservation expired is redeemed when the code can still be claimed.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Reservations", "order": 2 }
+		},
+		"release_on_cancel": {
+			"type": "boolean",
+			"title": "Give uses back when an order is cancelled",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Orders", "order": 3 }
+		},
+		"release_on_refund": {
+			"type": "string",
+			"title": "Give uses back on refunds",
+			"description": "never, full (once the refunds reach the order total) or any refund.",
+			"default": "full",
+			"enum": ["never", "full", "any"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Orders", "order": 4 }
+		},
+		"max_lines_per_cart": {
+			"type": "integer",
+			"title": "Maximum cart lines",
+			"default": 200,
+			"minimum": 1,
+			"maximum": 500,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Carts", "order": 5 }
+		}
+	}
+}

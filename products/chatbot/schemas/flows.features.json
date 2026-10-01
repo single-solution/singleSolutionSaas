@@ -1,0 +1,184 @@
+{
+	"type": "object",
+	"title": "Conversation flows",
+	"additionalProperties": false,
+	"properties": {
+		"flows": {
+			"type": "array",
+			"title": "Flows",
+			"description": "Each flow is a graph of nodes (the visual builder edits this JSON). Conditions use rules@1 with the context vars, conversation, customer, message and page.",
+			"default": [],
+			"maxItems": 50,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["id", "start", "nodes"],
+				"properties": {
+					"id": { "type": "string", "title": "Flow id", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"name": { "type": "string", "title": "Name", "maxLength": 120 },
+					"enabled": { "type": "boolean", "title": "Enabled" },
+					"priority": { "type": "integer", "title": "Priority (higher first)", "minimum": 0, "maximum": 100 },
+					"trigger": {
+						"type": "object",
+						"title": "Entry trigger",
+						"additionalProperties": false,
+						"required": ["type"],
+						"properties": {
+							"type": {
+								"type": "string",
+								"title": "Type",
+								"enum": ["conversation_start", "keyword", "page", "event", "manual"]
+							},
+							"keywords": {
+								"type": "array",
+								"title": "Keywords (any word or phrase)",
+								"maxItems": 50,
+								"items": { "type": "string", "minLength": 1, "maxLength": 80 }
+							},
+							"path": { "type": "string", "title": "Page path glob", "maxLength": 300 },
+							"event": { "type": "string", "title": "Event type (type@v)", "maxLength": 120 },
+							"when": { "type": "string", "title": "Extra condition (rules@1)", "maxLength": 2000 }
+						}
+					},
+					"start": { "type": "string", "title": "Start node", "minLength": 1, "maxLength": 40 },
+					"nodes": {
+						"type": "array",
+						"title": "Nodes",
+						"minItems": 1,
+						"maxItems": 200,
+						"items": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["id", "type"],
+							"properties": {
+								"id": {
+									"type": "string",
+									"title": "Node id",
+									"minLength": 1,
+									"maxLength": 40,
+									"pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+								},
+								"type": {
+									"type": "string",
+									"title": "Type",
+									"enum": ["message", "question", "buttons", "form", "condition", "action", "ai_step", "handoff", "end"]
+								},
+								"text": { "type": "string", "title": "Text ({vars.name} placeholders)", "maxLength": 4000 },
+								"variable": {
+									"type": "string",
+									"title": "Store the answer in",
+									"maxLength": 40,
+									"pattern": "^[a-z][a-z0-9_]*$"
+								},
+								"validate": {
+									"type": "string",
+									"title": "Answer type",
+									"enum": ["text", "email", "phone", "number", "date"]
+								},
+								"buttons": {
+									"type": "array",
+									"title": "Buttons",
+									"maxItems": 10,
+									"items": {
+										"type": "object",
+										"additionalProperties": false,
+										"required": ["label"],
+										"properties": {
+											"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 80 },
+											"value": { "type": "string", "title": "Value", "maxLength": 200 },
+											"next": { "type": "string", "title": "Next node", "maxLength": 40 },
+											"url": { "type": "string", "title": "Link (https or path)", "maxLength": 2048 }
+										}
+									}
+								},
+								"fields": {
+									"type": "array",
+									"title": "Form fields",
+									"maxItems": 15,
+									"items": {
+										"type": "object",
+										"additionalProperties": false,
+										"required": ["name", "type"],
+										"properties": {
+											"name": {
+												"type": "string",
+												"title": "Name",
+												"minLength": 1,
+												"maxLength": 40,
+												"pattern": "^[a-z][a-z0-9_]*$"
+											},
+											"label": { "type": "string", "title": "Label", "maxLength": 120 },
+											"type": {
+												"type": "string",
+												"title": "Type",
+												"enum": ["text", "email", "phone", "number", "textarea", "select", "checkbox", "date"]
+											},
+											"required": { "type": "boolean", "title": "Required" },
+											"options": {
+												"type": "array",
+												"title": "Options",
+												"maxItems": 50,
+												"items": { "type": "string", "maxLength": 120 }
+											}
+										}
+									}
+								},
+								"condition": { "type": "string", "title": "Condition (rules@1)", "maxLength": 2000 },
+								"then": { "type": "string", "title": "When true", "maxLength": 40 },
+								"else": { "type": "string", "title": "When false", "maxLength": 40 },
+								"action": {
+									"type": "object",
+									"title": "Action",
+									"additionalProperties": false,
+									"required": ["kind"],
+									"properties": {
+										"kind": {
+											"type": "string",
+											"title": "Kind",
+											"enum": ["set_variable", "add_tag", "set_priority", "call_tool", "capture_lead", "close"]
+										},
+										"name": { "type": "string", "title": "Variable / tag / priority / tool name", "maxLength": 120 },
+										"value": { "type": "string", "title": "Value ({vars.name} placeholders)", "maxLength": 2000 }
+									}
+								},
+								"prompt": { "type": "string", "title": "AI step instruction", "maxLength": 4000 },
+								"team": { "type": "string", "title": "Handoff team", "maxLength": 40 },
+								"next": { "type": "string", "title": "Next node", "maxLength": 40 }
+							}
+						}
+					}
+				}
+			},
+			"x-kind": "config",
+			"x-plan": { "pro": { "max": 50 } },
+			"x-experiment": true,
+			"x-ui": { "widget": "flow-builder", "group": "Flows", "order": 1 }
+		},
+		"max_steps_per_turn": {
+			"type": "integer",
+			"title": "Maximum nodes run per customer message",
+			"default": 25,
+			"minimum": 1,
+			"maximum": 200,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Execution", "order": 2 }
+		},
+		"unmatched_input": {
+			"type": "string",
+			"title": "When a button question receives free text",
+			"default": "repeat",
+			"enum": ["repeat", "ai", "exit"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Execution", "order": 3 }
+		},
+		"exit_keywords": {
+			"type": "array",
+			"title": "Words that leave a flow",
+			"default": ["stop", "cancel", "exit"],
+			"maxItems": 30,
+			"items": { "type": "string", "minLength": 1, "maxLength": 40 },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Execution", "order": 4 }
+		}
+	}
+}

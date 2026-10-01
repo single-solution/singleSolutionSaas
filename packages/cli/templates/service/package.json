@@ -16,10 +16,10 @@
 	"dependencies": {
 		"@ss/app-kit": "{{sdkVersion}}",
 		"@ss/contracts": "{{sdkVersion}}",
-		"mongodb": "^6.20.0",
-		"next": "^15.5.0",
-		"react": "^19.1.0",
-		"react-dom": "^19.1.0"
+		"mongodb": "^6.21.0",
+		"next": "^16.3.7",
+		"react": "^19.3.0",
+		"react-dom": "^19.3.0"
 	},
 	"devDependencies": {
 		"@ss/cli": "{{sdkVersion}}"

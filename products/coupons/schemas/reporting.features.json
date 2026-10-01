@@ -1,0 +1,35 @@
+{
+	"type": "object",
+	"title": "Reporting",
+	"additionalProperties": false,
+	"properties": {
+		"default_window_days": {
+			"type": "integer",
+			"title": "Default report window (days)",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 366,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Reports", "order": 1 }
+		},
+		"max_window_days": {
+			"type": "integer",
+			"title": "Longest report window (days)",
+			"default": 366,
+			"minimum": 1,
+			"maximum": 1100,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 93, "max": 93 }, "pro": { "default": 366, "max": 1100 } },
+			"x-ui": { "widget": "number", "group": "Reports", "order": 2 }
+		},
+		"top_codes": {
+			"type": "integer",
+			"title": "Top codes listed",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Reports", "order": 3 }
+		}
+	}
+}

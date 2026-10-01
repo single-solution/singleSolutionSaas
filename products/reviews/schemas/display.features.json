@@ -1,0 +1,101 @@
+{
+	"type": "object",
+	"title": "Display",
+	"additionalProperties": false,
+	"properties": {
+		"page_size": {
+			"type": "integer",
+			"title": "Reviews per page",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 50,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "List", "order": 1 }
+		},
+		"default_sort": {
+			"type": "string",
+			"title": "Default order",
+			"default": "newest",
+			"enum": ["newest", "oldest", "rating_high", "rating_low"],
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "widget": "select", "group": "List", "order": 2 }
+		},
+		"sorts": {
+			"type": "array",
+			"title": "Orders offered to shoppers",
+			"default": ["newest", "oldest", "rating_high", "rating_low"],
+			"minItems": 1,
+			"maxItems": 4,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["newest", "oldest", "rating_high", "rating_low"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "tags", "group": "List", "order": 3 }
+		},
+		"filters": {
+			"type": "array",
+			"title": "Filters offered to shoppers",
+			"default": ["rating", "verified", "photos"],
+			"minItems": 0,
+			"maxItems": 3,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["rating", "verified", "photos"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "tags", "group": "List", "order": 4 }
+		},
+		"show_distribution": {
+			"type": "boolean",
+			"title": "Show the rating distribution",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Summary", "order": 5 }
+		},
+		"show_attributes": {
+			"type": "boolean",
+			"title": "Show attribute ratings",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Summary", "order": 6 }
+		},
+		"show_replies": {
+			"type": "boolean",
+			"title": "Show merchant replies",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "List", "order": 7 }
+		},
+		"show_verified_badge": {
+			"type": "boolean",
+			"title": "Show the verified buyer badge",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "List", "order": 8 }
+		},
+		"allow_submit": {
+			"type": "boolean",
+			"title": "Offer the write-a-review form",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Form", "order": 9 }
+		},
+		"min_reviews_for_summary": {
+			"type": "integer",
+			"title": "Show the summary from (reviews)",
+			"default": 1,
+			"minimum": 0,
+			"maximum": 100,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Summary", "order": 10 }
+		},
+		"cache_seconds": {
+			"type": "integer",
+			"title": "Public cache lifetime (seconds)",
+			"description": "Cache-Control max-age of public (pk_) review and rating reads.",
+			"default": 60,
+			"minimum": 0,
+			"maximum": 3600,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Performance", "order": 11 }
+		}
+	}
+}

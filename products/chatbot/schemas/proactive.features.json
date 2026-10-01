@@ -1,0 +1,68 @@
+{
+	"type": "object",
+	"title": "Proactive messages",
+	"additionalProperties": false,
+	"properties": {
+		"rules": {
+			"type": "array",
+			"title": "Messages",
+			"description": "The first matching rule (by priority) shows its message. Context: page.path, page.url, page.referrer, page.type, visitor.returning, visitor.visits, visitor.identified, visitor.secondsOnPage, cart.value, cart.items, cart.currency, now.",
+			"default": [],
+			"maxItems": 50,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["id", "message"],
+				"properties": {
+					"id": { "type": "string", "title": "Id", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"name": { "type": "string", "title": "Name", "maxLength": 120 },
+					"enabled": { "type": "boolean", "title": "Enabled" },
+					"priority": { "type": "integer", "title": "Priority (higher first)", "minimum": 0, "maximum": 100 },
+					"when": { "type": "string", "title": "Condition (rules@1)", "maxLength": 2000 },
+					"message": { "type": "string", "title": "Message", "minLength": 1, "maxLength": 500 },
+					"delay_seconds": { "type": "integer", "title": "Show after (seconds)", "minimum": 0, "maximum": 3600 },
+					"open_window": { "type": "boolean", "title": "Open the chat window" },
+					"max_per_session": {
+						"type": "integer",
+						"title": "At most per session (0 = no cap)",
+						"minimum": 0,
+						"maximum": 100
+					},
+					"max_per_day": {
+						"type": "integer",
+						"title": "At most per visitor per day (0 = no cap)",
+						"minimum": 0,
+						"maximum": 100
+					},
+					"cooldown_minutes": {
+						"type": "integer",
+						"title": "Minutes between two showings",
+						"minimum": 0,
+						"maximum": 525600
+					},
+					"dismiss_days": { "type": "integer", "title": "Days hidden after dismissal", "minimum": 0, "maximum": 365 }
+				}
+			},
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 3 }, "pro": { "max": 50 } },
+			"x-experiment": true,
+			"x-ui": { "widget": "list", "group": "Messages", "order": 1 }
+		},
+		"max_per_day": {
+			"type": "integer",
+			"title": "Proactive messages per visitor per day (all rules)",
+			"default": 3,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Frequency", "order": 2 }
+		},
+		"skip_when_conversation_open": {
+			"type": "boolean",
+			"title": "Not while the visitor has an open conversation",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Frequency", "order": 3 }
+		}
+	}
+}

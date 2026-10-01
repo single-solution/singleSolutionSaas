@@ -1,0 +1,4745 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Reviews & Ratings API",
+		"version": "1.0.0",
+		"description": "Mode C API of Reviews & Ratings (SSPS v1). All data lives in the merchant's own database and photos in the merchant's own bucket. Times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`; replays return the original response. `pk_` keys (browsers, domain-locked) read public data and identify the customer with SS-Identity (the website's own login token) or a review link token; `sk_` keys are for the merchant's server."
+	},
+	"servers": [
+		{
+			"url": "https://reviews.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"tags": [
+		{
+			"name": "collection"
+		},
+		{
+			"name": "request_flow"
+		},
+		{
+			"name": "moderation"
+		},
+		{
+			"name": "content"
+		},
+		{
+			"name": "photos"
+		},
+		{
+			"name": "display"
+		},
+		{
+			"name": "structured_data"
+		},
+		{
+			"name": "qna"
+		},
+		{
+			"name": "import"
+		},
+		{
+			"name": "analytics"
+		},
+		{
+			"name": "dashboard"
+		},
+		{
+			"name": "standard"
+		}
+	],
+	"paths": {
+		"/v1/reviews": {
+			"get": {
+				"operationId": "listReviews",
+				"tags": ["collection"],
+				"summary": "Reviews: pk_ → approved reviews (public view; needs the display element); sk_ → every review (owner view, filter[status]=pending,approved,rejected|all).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterItem"
+					},
+					{
+						"$ref": "#/components/parameters/FilterRating"
+					},
+					{
+						"$ref": "#/components/parameters/FilterVerified"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPhotos"
+					},
+					{
+						"$ref": "#/components/parameters/FilterCustomer"
+					},
+					{
+						"$ref": "#/components/parameters/FilterStatus"
+					},
+					{
+						"$ref": "#/components/parameters/Sort"
+					},
+					{
+						"$ref": "#/components/parameters/Include"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/PublicReview"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										},
+										"sort": {
+											"type": "string"
+										},
+										"summary": {
+											"$ref": "#/components/schemas/Summary"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+											"itemId": "itm_123",
+											"variantId": null,
+											"rating": 5,
+											"scale": 5,
+											"title": "Exactly as described",
+											"body": "Arrived quickly and works perfectly. Would buy again.",
+											"removed": false,
+											"author": "Ayesha K.",
+											"verifiedPurchase": true,
+											"attributes": {
+												"quality": 5
+											},
+											"photos": [
+												{
+													"id": "rph_0mf2k3x1rabcdefghjkmnpqr",
+													"url": "https://bucket.example.com/reviews/web_1/photos/rph_0mf2k3x1rabcdefghjkmnpqr?X-Amz-Signature=abc",
+													"contentType": "image/jpeg"
+												}
+											],
+											"reply": {
+												"body": "Thank you for your review!",
+												"at": "2026-10-02T09:00:00.000Z"
+											},
+											"submittedAt": "2026-10-01T10:00:00.000Z",
+											"locale": "en"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false,
+									"sort": "newest"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "submitReview",
+				"tags": ["collection"],
+				"summary": "Submit a review. pk_: the customer from SS-Identity, a review link token, or a guest (collection.who = anyone); sk_: the merchant's server (may name customerId and orderId). Verified when an open review request covers the item; moderated; metered (unit review).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReviewInput"
+							},
+							"example": {
+								"itemId": "itm_123",
+								"rating": 5,
+								"title": "Exactly as described",
+								"body": "Arrived quickly and works perfectly. Would buy again.",
+								"author": {
+									"name": "Ayesha Khan"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": null,
+									"requestId": null,
+									"customerId": null,
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "pending",
+									"verifiedPurchase": false,
+									"source": "api",
+									"moderation": {
+										"by": "unverified",
+										"ruleId": "verified_clean",
+										"reason": "unverified",
+										"flags": [],
+										"terms": [],
+										"note": null,
+										"decidedAt": null,
+										"actor": null
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": null,
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reviews/{id}": {
+			"get": {
+				"operationId": "getReview",
+				"tags": ["collection"],
+				"summary": "A review (pk_: approved only, public view).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "approved",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "rule",
+										"ruleId": "verified_clean",
+										"reason": null,
+										"flags": [],
+										"terms": [],
+										"note": null,
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": null
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteReview",
+				"tags": ["collection"],
+				"summary": "Soft-delete a review (it leaves the rating rollup). sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-requests": {
+			"get": {
+				"operationId": "listReviewRequests",
+				"tags": ["collection"],
+				"summary": "Review requests. pk_ + SS-Identity: the signed-in customer's open requests (what they can review); sk_: all (filter[status], filter[customerId]).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					},
+					{
+						"$ref": "#/components/parameters/FilterStatus"
+					},
+					{
+						"$ref": "#/components/parameters/FilterCustomer"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/CustomerRequest"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+											"orderId": "ord_1001",
+											"number": "1001",
+											"status": "open",
+											"open": true,
+											"completedAt": "2026-10-01T10:00:00.000Z",
+											"expiresAt": "2027-10-01T10:00:00.000Z",
+											"items": [
+												{
+													"itemId": "itm_123",
+													"variantId": null,
+													"title": "Phone case",
+													"sku": "CASE-1",
+													"reviewed": false
+												}
+											]
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createReviewRequest",
+				"tags": ["collection"],
+				"summary": "Open a review request for an order completed outside the Event Hub (one per order). sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RequestInput"
+							},
+							"example": {
+								"orderId": "ord_1001",
+								"customerId": "cus_123",
+								"number": "1001",
+								"contact": {
+									"name": "Ayesha Khan",
+									"email": "ayesha@example.com"
+								},
+								"items": [
+									{
+										"itemId": "itm_123",
+										"title": "Phone case",
+										"sku": "CASE-1"
+									}
+								],
+								"completedAt": "2026-10-01T10:00:00.000Z"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewRequest"
+								},
+								"example": {
+									"id": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"orderId": "ord_1001",
+									"number": "1001",
+									"status": "open",
+									"open": true,
+									"completedAt": "2026-10-01T10:00:00.000Z",
+									"expiresAt": "2027-10-01T10:00:00.000Z",
+									"items": [
+										{
+											"itemId": "itm_123",
+											"variantId": null,
+											"title": "Phone case",
+											"sku": "CASE-1",
+											"reviewed": false,
+											"reviewId": null
+										}
+									],
+									"customerId": "cus_123",
+									"source": "event",
+									"dueAt": "2026-10-08T10:00:00.000Z",
+									"delivery": {
+										"state": "scheduled",
+										"sends": 0,
+										"attempts": 0,
+										"nextAt": "2026-10-08T10:00:00.000Z",
+										"lastSentAt": null,
+										"lastError": null,
+										"channel": null
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-requests:open": {
+			"post": {
+				"operationId": "openReviewRequest",
+				"tags": ["collection"],
+				"summary": "Resolve a review link token (from a request message) to its order and items. pk_ or sk_.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"token": {
+										"type": "string"
+									}
+								},
+								"required": ["token"]
+							},
+							"example": {
+								"token": "rl1.eyJ3Ijoid2ViXzEiLCJyIjoicnJxXzEiLCJlIjoxNzk5OTk5OTk5fQ.c2lnbmF0dXJl"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CustomerRequest"
+								},
+								"example": {
+									"id": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"orderId": "ord_1001",
+									"number": "1001",
+									"status": "open",
+									"open": true,
+									"completedAt": "2026-10-01T10:00:00.000Z",
+									"expiresAt": "2027-10-01T10:00:00.000Z",
+									"items": [
+										{
+											"itemId": "itm_123",
+											"variantId": null,
+											"title": "Phone case",
+											"sku": "CASE-1",
+											"reviewed": false
+										}
+									],
+									"contactName": "Ayesha Khan"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-requests/{id}": {
+			"get": {
+				"operationId": "getReviewRequest",
+				"tags": ["collection"],
+				"summary": "A review request with its delivery state. sk_ only.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewRequest"
+								},
+								"example": {
+									"id": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"orderId": "ord_1001",
+									"number": "1001",
+									"status": "open",
+									"open": true,
+									"completedAt": "2026-10-01T10:00:00.000Z",
+									"expiresAt": "2027-10-01T10:00:00.000Z",
+									"items": [
+										{
+											"itemId": "itm_123",
+											"variantId": null,
+											"title": "Phone case",
+											"sku": "CASE-1",
+											"reviewed": false,
+											"reviewId": null
+										}
+									],
+									"customerId": "cus_123",
+									"source": "event",
+									"dueAt": "2026-10-08T10:00:00.000Z",
+									"delivery": {
+										"state": "scheduled",
+										"sends": 0,
+										"attempts": 0,
+										"nextAt": "2026-10-08T10:00:00.000Z",
+										"lastSentAt": null,
+										"lastError": null,
+										"channel": null
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-requests/{id}/link": {
+			"post": {
+				"operationId": "reviewRequestLink",
+				"tags": ["collection"],
+				"summary": "A signed review link (token, and the URL when request_flow.review_url is set) for sending your own message. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/RequestLink"
+								},
+								"example": {
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"token": "rl1.eyJ3Ijoid2ViXzEiLCJyIjoicnJxXzEiLCJlIjoxNzk5OTk5OTk5fQ.c2lnbmF0dXJl",
+									"expiresAt": "2026-10-31T10:00:00.000Z",
+									"url": "https://shop.example.com/review?t=rl1.eyJ3Ijoid2ViXzEiLCJyIjoicnJxXzEiLCJlIjoxNzk5OTk5OTk5fQ.c2lnbmF0dXJl"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-requests/{id}/cancel": {
+			"post": {
+				"operationId": "cancelReviewRequest",
+				"tags": ["collection"],
+				"summary": "Close an open request (no more messages; it no longer verifies reviews). sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewRequest"
+								},
+								"example": {
+									"id": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"orderId": "ord_1001",
+									"number": "1001",
+									"status": "cancelled",
+									"open": false,
+									"completedAt": "2026-10-01T10:00:00.000Z",
+									"expiresAt": "2027-10-01T10:00:00.000Z",
+									"items": [
+										{
+											"itemId": "itm_123",
+											"variantId": null,
+											"title": "Phone case",
+											"sku": "CASE-1",
+											"reviewed": false,
+											"reviewId": null
+										}
+									],
+									"customerId": "cus_123",
+									"source": "event",
+									"dueAt": "2026-10-08T10:00:00.000Z",
+									"delivery": {
+										"state": "done",
+										"sends": 0,
+										"attempts": 0,
+										"nextAt": null,
+										"lastSentAt": null,
+										"lastError": null,
+										"channel": null
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/request-flow": {
+			"get": {
+				"operationId": "requestFlowStatus",
+				"tags": ["request_flow"],
+				"summary": "Requests by status and delivery state, and the next due instant. sk_ only.",
+				"x-ss-key-kind": "sk",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FlowStatus"
+								},
+								"example": {
+									"enabled": true,
+									"reviewUrlConfigured": true,
+									"requests": {
+										"open": 41,
+										"completed": 120,
+										"expired": 3
+									},
+									"delivery": {
+										"scheduled": 30,
+										"sent": 11
+									},
+									"nextDueAt": "2026-10-01T11:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/request-flow:run": {
+			"post": {
+				"operationId": "runRequestFlow",
+				"tags": ["request_flow"],
+				"summary": "Send due requests and reminders now through your messaging connector (the hourly job does the same). sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FlowRun"
+								},
+								"example": {
+									"due": 3,
+									"sent": 2,
+									"reminded": 1,
+									"failed": 0,
+									"expired": 0,
+									"skipped": 0,
+									"quiet": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/moderation": {
+			"get": {
+				"operationId": "moderationQueue",
+				"tags": ["moderation"],
+				"summary": "The moderation queue (filter[status], default pending) with counts per status. sk_ only.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterStatus"
+					},
+					{
+						"$ref": "#/components/parameters/FilterItem"
+					},
+					{
+						"$ref": "#/components/parameters/Sort"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/OwnerReview"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										},
+										"sort": {
+											"type": "string"
+										},
+										"counts": {
+											"type": "object",
+											"properties": {
+												"pending": {
+													"type": "integer"
+												},
+												"approved": {
+													"type": "integer"
+												},
+												"rejected": {
+													"type": "integer"
+												}
+											}
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+											"itemId": "itm_123",
+											"variantId": null,
+											"orderId": "ord_1001",
+											"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+											"customerId": "cus_123",
+											"author": {
+												"name": "Ayesha Khan",
+												"email": null
+											},
+											"rating": 5,
+											"scale": 5,
+											"title": "Exactly as described",
+											"body": "Arrived quickly and works perfectly. Would buy again.",
+											"attributes": {
+												"quality": 5
+											},
+											"photos": [],
+											"status": "pending",
+											"verifiedPurchase": true,
+											"source": "storefront",
+											"moderation": {
+												"by": "check",
+												"ruleId": null,
+												"reason": "links",
+												"flags": ["links"],
+												"terms": [],
+												"note": null,
+												"decidedAt": null,
+												"actor": null
+											},
+											"reply": null,
+											"locale": "en",
+											"externalId": null,
+											"custom": {},
+											"submittedAt": "2026-10-01T10:00:00.000Z",
+											"publishedAt": null,
+											"deletedAt": null
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false,
+									"sort": "newest",
+									"counts": {
+										"pending": 1,
+										"approved": 12,
+										"rejected": 2
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/moderation/{id}/approve": {
+			"post": {
+				"operationId": "approveReview",
+				"tags": ["moderation"],
+				"summary": "Publish a pending (or rejected) review; recomputes the rating and publishes reviews.approved@1. sk_ only; audited.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ApproveInput"
+							},
+							"example": {
+								"note": "checked the order"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "approved",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "person",
+										"ruleId": null,
+										"reason": null,
+										"flags": [],
+										"terms": [],
+										"note": "checked the order",
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": "key_1"
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/moderation/{id}/reject": {
+			"post": {
+				"operationId": "rejectReview",
+				"tags": ["moderation"],
+				"summary": "Reject a pending (or published) review with a reason code. sk_ only; audited.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RejectInput"
+							},
+							"example": {
+								"reason": "spam",
+								"note": "link to another shop"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "rejected",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "person",
+										"ruleId": "verified_clean",
+										"reason": "spam",
+										"flags": [],
+										"terms": [],
+										"note": "link to another shop",
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": "key_1"
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/moderation/{id}/reply": {
+			"post": {
+				"operationId": "replyToReview",
+				"tags": ["moderation"],
+				"summary": "Set the public merchant reply. sk_ only; audited.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReplyInput"
+							},
+							"example": {
+								"body": "Thank you for your review!"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "approved",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "rule",
+										"ruleId": "verified_clean",
+										"reason": null,
+										"flags": [],
+										"terms": [],
+										"note": null,
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": null
+									},
+									"reply": {
+										"body": "Thank you for your review!",
+										"at": "2026-10-01T10:00:00.000Z",
+										"by": "key_1"
+									},
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "removeReply",
+				"tags": ["moderation"],
+				"summary": "Remove the public reply. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "approved",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "rule",
+										"ruleId": "verified_clean",
+										"reason": null,
+										"flags": [],
+										"terms": [],
+										"note": null,
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": null
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/moderation:check": {
+			"post": {
+				"operationId": "checkModeration",
+				"tags": ["moderation"],
+				"summary": "Check a rules@1 condition and/or run a sample review through moderation (nothing stored). sk_ only.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ModerationCheckInput"
+							},
+							"example": {
+								"source": "review.verified and review.rating >= 4",
+								"review": {
+									"rating": 5,
+									"body": "Great, see www.example.com",
+									"verified": true
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ModerationCheck"
+								},
+								"example": {
+									"condition": {
+										"ok": true,
+										"errors": [],
+										"warnings": [],
+										"paths": ["review.rating", "review.verified"],
+										"functions": []
+									},
+									"decision": {
+										"status": "pending",
+										"by": "check",
+										"ruleId": null,
+										"reason": "links",
+										"flags": ["links"],
+										"terms": []
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-form": {
+			"get": {
+				"operationId": "reviewForm",
+				"tags": ["content"],
+				"summary": "The review form definition (rating scale, text limits, attribute ratings, photo limits) for custom forms. pk_ or sk_.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ReviewForm"
+								},
+								"example": {
+									"ratingScale": 5,
+									"title": {
+										"enabled": true,
+										"required": false,
+										"maxLength": 120
+									},
+									"body": {
+										"required": true,
+										"minLength": 10,
+										"maxLength": 2000
+									},
+									"authorName": {
+										"maxLength": 60
+									},
+									"attributes": [
+										{
+											"key": "quality",
+											"label": "Quality",
+											"min": 1,
+											"max": 5,
+											"lowLabel": "Poor",
+											"highLabel": "Excellent",
+											"required": false
+										}
+									],
+									"photos": {
+										"enabled": true,
+										"max": 3,
+										"maxBytes": 5000000,
+										"types": ["image/jpeg", "image/png", "image/webp"]
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-photos": {
+			"post": {
+				"operationId": "createPhotoUpload",
+				"tags": ["photos"],
+				"summary": "A presigned upload to the merchant's own bucket: PUT the bytes with the returned headers, then pass the id in photoIds. Type and size are checked again (HEAD) when the review is submitted. pk_ (SS-Identity or token) or sk_.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PhotoUploadInput"
+							},
+							"example": {
+								"contentType": "image/jpeg",
+								"size": 482113
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PhotoUpload"
+								},
+								"example": {
+									"id": "rph_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "pending",
+									"upload": {
+										"method": "PUT",
+										"url": "https://bucket.example.com/reviews/web_1/photos/rph_0mf2k3x1rabcdefghjkmnpqr?X-Amz-Signature=abc",
+										"headers": {
+											"content-type": "image/jpeg"
+										}
+									},
+									"expiresAt": "2026-10-01T10:10:00.000Z",
+									"maxBytes": 5000000
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/review-photos/{id}": {
+			"get": {
+				"operationId": "getPhoto",
+				"tags": ["photos"],
+				"summary": "A photo slot (pending or attached). sk_ only.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Photo"
+								},
+								"example": {
+									"id": "rph_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "attached",
+									"reviewId": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"contentType": "image/jpeg",
+									"size": 482113
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/ratings": {
+			"get": {
+				"operationId": "listRatings",
+				"tags": ["display"],
+				"summary": "Stars for product lists: ?itemIds=a,b,c (at most 100), or every rated item (cursor pagination). pk_ or sk_; cacheable.",
+				"parameters": [
+					{
+						"name": "itemIds",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						},
+						"description": "comma-separated item ids"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Stars"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"itemId": "itm_123",
+											"count": 12,
+											"average": 4.6,
+											"scale": 5
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/ratings/{itemId}": {
+			"get": {
+				"operationId": "itemRating",
+				"tags": ["display"],
+				"summary": "An item's summary from approved reviews (average, count, distribution, attribute averages) with the display settings. pk_ or sk_; cacheable.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/ItemId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Summary"
+								},
+								"example": {
+									"itemId": "itm_123",
+									"title": "Phone case",
+									"count": 12,
+									"average": 4.6,
+									"scale": 5,
+									"distribution": [
+										{
+											"rating": 5,
+											"count": 8,
+											"percent": 67
+										},
+										{
+											"rating": 4,
+											"count": 3,
+											"percent": 25
+										},
+										{
+											"rating": 3,
+											"count": 1,
+											"percent": 8
+										},
+										{
+											"rating": 2,
+											"count": 0,
+											"percent": 0
+										},
+										{
+											"rating": 1,
+											"count": 0,
+											"percent": 0
+										}
+									],
+									"attributes": [
+										{
+											"key": "quality",
+											"label": "Quality",
+											"min": 1,
+											"max": 5,
+											"lowLabel": "Poor",
+											"highLabel": "Excellent",
+											"count": 10,
+											"average": 4.7
+										}
+									],
+									"withPhotos": 3,
+									"verified": 11,
+									"lastReviewAt": "2026-10-01T10:00:00.000Z",
+									"display": {
+										"showSummary": true,
+										"showDistribution": true,
+										"showAttributes": true,
+										"allowSubmit": true,
+										"sorts": ["newest", "oldest", "rating_high", "rating_low"],
+										"defaultSort": "newest",
+										"filters": ["rating", "verified", "photos"],
+										"pageSize": 10
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/display/view": {
+			"get": {
+				"operationId": "displayStubView",
+				"tags": ["display"],
+				"summary": "View model for the Loader element stub (ss-element-stub@1), text only. Optional ?itemId= (the stub sends none: store-wide).",
+				"parameters": [
+					{
+						"name": "itemId",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StubView"
+								},
+								"example": {
+									"title": "4.6 / 5 · 12 reviews",
+									"body": "",
+									"items": [
+										{
+											"text": "★★★★★ Exactly as described Arrived quickly and works perfectly. — Ayesha K."
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/structured-data/{itemId}": {
+			"get": {
+				"operationId": "itemJsonLd",
+				"tags": ["structured_data"],
+				"summary": "schema.org Product JSON-LD with AggregateRating and Review nodes from approved reviews only (application/ld+json). ?name= when the item has no stored title; ?url=, ?image=, ?sku= optional. pk_ or sk_; cacheable.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/ItemId"
+					},
+					{
+						"name": "name",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "url",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "uri"
+						}
+					},
+					{
+						"name": "image",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "uri"
+						}
+					},
+					{
+						"name": "sku",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/ld+json": {
+								"schema": {
+									"type": "object",
+									"properties": {}
+								},
+								"example": {
+									"@context": "https://schema.org",
+									"@type": "Product",
+									"@id": "https://shop.example.com/p/case#product",
+									"name": "Phone case",
+									"sku": "CASE-1",
+									"url": "https://shop.example.com/p/case",
+									"aggregateRating": {
+										"@type": "AggregateRating",
+										"ratingValue": 4.6,
+										"reviewCount": 12,
+										"ratingCount": 12,
+										"bestRating": 5,
+										"worstRating": 1
+									},
+									"review": [
+										{
+											"@type": "Review",
+											"reviewRating": {
+												"@type": "Rating",
+												"ratingValue": 5,
+												"bestRating": 5,
+												"worstRating": 1
+											},
+											"author": {
+												"@type": "Person",
+												"name": "Ayesha K."
+											},
+											"datePublished": "2026-10-01",
+											"name": "Exactly as described",
+											"reviewBody": "Arrived quickly and works perfectly. Would buy again."
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/questions": {
+			"get": {
+				"operationId": "listQuestions",
+				"tags": ["qna"],
+				"summary": "Questions: pk_ → published with published answers (filter[itemId]); sk_ → every status (filter[status]).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterItem"
+					},
+					{
+						"$ref": "#/components/parameters/FilterStatus"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Question"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+											"itemId": "itm_123",
+											"body": "Does it fit the 2025 model?",
+											"author": "Sam R.",
+											"askedAt": "2026-10-01T10:00:00.000Z",
+											"answeredAt": "2026-10-01T12:00:00.000Z",
+											"locale": "en",
+											"answers": [
+												{
+													"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+													"body": "Yes, it fits every 2025 model.",
+													"author": null,
+													"by": "merchant",
+													"verifiedBuyer": false,
+													"answeredAt": "2026-10-01T12:00:00.000Z"
+												}
+											]
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "askQuestion",
+				"tags": ["qna"],
+				"summary": "Ask a question about an item (pk_: SS-Identity unless qna.who_can_ask = anyone; sk_ for the merchant).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/QuestionInput"
+							},
+							"example": {
+								"itemId": "itm_123",
+								"body": "Does it fit the 2025 model?",
+								"author": {
+									"name": "Sam Rivera"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": {
+										"name": "Sam Rivera",
+										"email": null
+									},
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": null,
+									"locale": "en",
+									"answers": [],
+									"status": "published"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/questions/{id}": {
+			"get": {
+				"operationId": "getQuestion",
+				"tags": ["qna"],
+				"summary": "A question (pk_: published only).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/questions/{id}/answers": {
+			"post": {
+				"operationId": "answerQuestion",
+				"tags": ["qna"],
+				"summary": "Answer: sk_ = the merchant (published at once); pk_ + SS-Identity = a customer per qna.who_can_answer (pending while moderated).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AnswerInput"
+							},
+							"example": {
+								"body": "Yes, it fits every 2025 model."
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/questions/{id}/publish": {
+			"post": {
+				"operationId": "publishQuestion",
+				"tags": ["qna"],
+				"summary": "Publish a pending question. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									],
+									"status": "published"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/questions/{id}/reject": {
+			"post": {
+				"operationId": "rejectQuestion",
+				"tags": ["qna"],
+				"summary": "Reject a question. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									],
+									"status": "rejected"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/questions/{id}/answers/{answerId}/publish": {
+			"post": {
+				"operationId": "publishAnswer",
+				"tags": ["qna"],
+				"summary": "Publish a pending customer answer. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/AnswerId"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/questions/{id}/answers/{answerId}/reject": {
+			"post": {
+				"operationId": "rejectAnswer",
+				"tags": ["qna"],
+				"summary": "Reject a pending customer answer. sk_ only.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/AnswerId"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/imports": {
+			"post": {
+				"operationId": "importReviews",
+				"tags": ["import"],
+				"summary": "Import reviews from CSV (RFC 4180, header row, columns per import.columns). Invalid rows are reported and skipped, duplicates by external_id are skipped, dryRun only validates. sk_ only; up to 8 MiB.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ImportInput"
+							},
+							"example": {
+								"csv": "item_id,rating,title,body,author,submitted_at,verified,external_id\nitm_123,5,Great,Works perfectly,Ayesha Khan,2025-06-01T10:00:00Z,true,old-1\n",
+								"dryRun": false
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ImportReport"
+								},
+								"example": {
+									"dryRun": false,
+									"rows": 1,
+									"valid": 1,
+									"imported": 1,
+									"duplicates": 0,
+									"invalid": 0,
+									"errors": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/analytics": {
+			"get": {
+				"operationId": "reviewAnalytics",
+				"tags": ["analytics"],
+				"summary": "Volume, average rating over time, request conversion, moderation and reply times, top items (website time zone). sk_ only.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "bucket",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"enum": ["day", "week", "month"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Analytics"
+								},
+								"example": {
+									"from": "2026-09-01T00:00:00.000Z",
+									"to": "2026-10-01T00:00:00.000Z",
+									"bucket": "week",
+									"timeZone": "UTC",
+									"scale": 5,
+									"totals": {
+										"submitted": 40,
+										"approved": 34,
+										"pending": 2,
+										"rejected": 4,
+										"averageRating": 4.5,
+										"verifiedShare": 0.9,
+										"photoShare": 0.2,
+										"replyRate": 0.5,
+										"approvalRate": 0.895
+									},
+									"series": [
+										{
+											"key": "2026-09-28",
+											"submitted": 9,
+											"approved": 8,
+											"averageRating": 4.6
+										}
+									],
+									"requests": {
+										"created": 60,
+										"converted": 31,
+										"conversion": 0.517
+									},
+									"timing": {
+										"decisionHours": 5.5,
+										"replyHours": 20.1
+									},
+									"topItems": [
+										{
+											"itemId": "itm_123",
+											"count": 12,
+											"averageRating": 4.6
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/session": {
+			"get": {
+				"operationId": "session",
+				"tags": ["dashboard"],
+				"summary": "Who is signed in to the dashboard (SSO session).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Session"
+								},
+								"example": {
+									"kind": "merchant",
+									"role": "merchant",
+									"scope": {
+										"merchantId": "mer_1",
+										"websiteId": "web_1"
+									},
+									"user": "usr_1",
+									"actor": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/overview": {
+			"get": {
+				"operationId": "dashboardOverview",
+				"tags": ["dashboard"],
+				"summary": "Dashboard KPIs (SSO session).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Overview"
+								},
+								"example": {
+									"reviews": {
+										"pending": 2,
+										"approved": 34,
+										"rejected": 4
+									},
+									"questions": {
+										"pending": 1,
+										"unanswered": 3
+									},
+									"requests": {
+										"open": 41
+									},
+									"delivery": {
+										"scheduled": 30
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/moderation/{id}/approve": {
+			"post": {
+				"operationId": "dashboard_approve",
+				"tags": ["dashboard"],
+				"summary": "Dashboard approve (SSO session, write roles; audited with the staff or merchant actor).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ApproveInput"
+							},
+							"example": {}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "approved",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "rule",
+										"ruleId": "verified_clean",
+										"reason": null,
+										"flags": [],
+										"terms": [],
+										"note": null,
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": null
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/moderation/{id}/reject": {
+			"post": {
+				"operationId": "dashboard_reject",
+				"tags": ["dashboard"],
+				"summary": "Dashboard reject (SSO session, write roles; audited with the staff or merchant actor).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RejectInput"
+							},
+							"example": {
+								"reason": "spam"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "approved",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "rule",
+										"ruleId": "verified_clean",
+										"reason": null,
+										"flags": [],
+										"terms": [],
+										"note": null,
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": null
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/moderation/{id}/reply": {
+			"post": {
+				"operationId": "dashboard_reply",
+				"tags": ["dashboard"],
+				"summary": "Dashboard reply (SSO session, write roles; audited with the staff or merchant actor).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ReplyInput"
+							},
+							"example": {
+								"body": "Thanks!"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerReview"
+								},
+								"example": {
+									"id": "rev_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"variantId": null,
+									"orderId": "ord_1001",
+									"requestId": "rrq_0mf2k3x1rabcdefghjkmnpqr",
+									"customerId": "cus_123",
+									"author": {
+										"name": "Ayesha Khan",
+										"email": null
+									},
+									"rating": 5,
+									"scale": 5,
+									"title": "Exactly as described",
+									"body": "Arrived quickly and works perfectly. Would buy again.",
+									"attributes": {
+										"quality": 5
+									},
+									"photos": [],
+									"status": "approved",
+									"verifiedPurchase": true,
+									"source": "storefront",
+									"moderation": {
+										"by": "rule",
+										"ruleId": "verified_clean",
+										"reason": null,
+										"flags": [],
+										"terms": [],
+										"note": null,
+										"decidedAt": "2026-10-01T10:00:00.000Z",
+										"actor": null
+									},
+									"reply": null,
+									"locale": "en",
+									"externalId": null,
+									"custom": {},
+									"submittedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/questions/{id}/answers": {
+			"post": {
+				"operationId": "dashboard_answer",
+				"tags": ["dashboard"],
+				"summary": "Answer a question as the merchant (SSO session).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AnswerInput"
+							},
+							"example": {
+								"body": "Yes."
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/questions/{id}/publish": {
+			"post": {
+				"operationId": "dashboard_question_publish",
+				"tags": ["dashboard"],
+				"summary": "Dashboard: publish a question (SSO session).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/questions/{id}/reject": {
+			"post": {
+				"operationId": "dashboard_question_reject",
+				"tags": ["dashboard"],
+				"summary": "Dashboard: reject a question (SSO session).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Question"
+								},
+								"example": {
+									"id": "rqn_0mf2k3x1rabcdefghjkmnpqr",
+									"itemId": "itm_123",
+									"body": "Does it fit the 2025 model?",
+									"author": "Sam R.",
+									"askedAt": "2026-10-01T10:00:00.000Z",
+									"answeredAt": "2026-10-01T12:00:00.000Z",
+									"locale": "en",
+									"answers": [
+										{
+											"id": "ran_0mf2k3x1rabcdefghjkmnpqr",
+											"body": "Yes, it fits every 2025 model.",
+											"author": null,
+											"by": "merchant",
+											"verifiedBuyer": false,
+											"answeredAt": "2026-10-01T12:00:00.000Z"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/moderation:check": {
+			"post": {
+				"operationId": "dashboard_check",
+				"tags": ["dashboard"],
+				"summary": "Check a rules@1 condition (SSO session).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"source": {
+										"type": "string"
+									}
+								},
+								"required": ["source"]
+							},
+							"example": {
+								"source": "review.rating >= 4"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {}
+								},
+								"example": {
+									"ok": true,
+									"errors": [],
+									"warnings": [],
+									"paths": ["review.rating"],
+									"functions": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/cron/requests": {
+			"get": {
+				"operationId": "cronRequests",
+				"tags": ["request_flow"],
+				"summary": "Hourly job (Vercel cron, Authorization: Bearer $CRON_SECRET): the request flow of every website.",
+				"security": [
+					{
+						"cron": []
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"websites": {
+											"type": "integer"
+										},
+										"results": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {}
+											}
+										}
+									}
+								},
+								"example": {
+									"websites": 1,
+									"results": [
+										{
+											"websiteId": "web_1",
+											"due": 2,
+											"sent": 2,
+											"reminded": 0,
+											"failed": 0,
+											"expired": 0,
+											"skipped": 0,
+											"quiet": false
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/entitlement": {
+			"get": {
+				"operationId": "getEntitlement",
+				"tags": ["standard"],
+				"summary": "What this website has enabled (from the cached signed document).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"version": 3,
+									"stale": false,
+									"elements": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/config": {
+			"get": {
+				"operationId": "getConfig",
+				"tags": ["standard"],
+				"summary": "Effective configuration of the requested elements (?element=a,b).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"version": 3,
+									"stale": false,
+									"elements": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/strings": {
+			"get": {
+				"operationId": "getStrings",
+				"tags": ["standard"],
+				"summary": "String catalog for ?lang= (no auth).",
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"wallet.title": "Your rewards"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/events": {
+			"post": {
+				"operationId": "pushEvents",
+				"tags": ["standard"],
+				"summary": "Push events of the product namespace or consumed types (dispatched like Event Hub deliveries).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"events": {
+										"type": "array",
+										"items": {
+											"type": "object"
+										}
+									}
+								}
+							},
+							"example": {
+								"events": [
+									{
+										"id": "evt_0abc",
+										"type": "order.completed@1",
+										"occurredAt": "2026-10-01T09:00:00.000Z",
+										"idempotencyKey": "evt_0abc",
+										"actor": {
+											"type": "system"
+										},
+										"data": {
+											"orderId": "ord_1001"
+										}
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"accepted": {
+											"type": "integer"
+										},
+										"duplicates": {
+											"type": "integer"
+										}
+									}
+								},
+								"example": {
+									"accepted": 1,
+									"duplicates": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/healthz": {
+			"get": {
+				"operationId": "healthz",
+				"tags": ["standard"],
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/readyz": {
+			"get": {
+				"operationId": "readyz",
+				"tags": ["standard"],
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:export": {
+			"post": {
+				"operationId": "data_export",
+				"tags": ["standard"],
+				"summary": "Portal-signed personal data export.",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["websiteId"],
+								"properties": {
+									"websiteId": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "object"
+									},
+									"requestId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"websiteId": "web_1",
+								"subject": {
+									"customerId": "cus_123"
+								},
+								"requestId": "req_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:anonymize": {
+			"post": {
+				"operationId": "data_anonymize",
+				"tags": ["standard"],
+				"summary": "Portal-signed personal data anonymize.",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["websiteId"],
+								"properties": {
+									"websiteId": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "object"
+									},
+									"requestId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"websiteId": "web_1",
+								"subject": {
+									"customerId": "cus_123"
+								},
+								"requestId": "req_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			},
+			"portalSignature": {
+				"type": "apiKey",
+				"in": "header",
+				"name": "SS-Signature",
+				"description": "Portal-signed request (ss-request.v1)"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
+			},
+			"cron": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "CRON_SECRET"
+			}
+		},
+		"parameters": {
+			"IdempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				}
+			},
+			"IdempotencyKeyOptional": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				}
+			},
+			"Cursor": {
+				"name": "cursor",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"Limit": {
+				"name": "limit",
+				"in": "query",
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 20
+				}
+			},
+			"Identity": {
+				"name": "SS-Identity",
+				"in": "header",
+				"schema": {
+					"type": "string"
+				},
+				"description": "the website's own customer login token (pk_ keys)"
+			},
+			"Id": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"AnswerId": {
+				"name": "answerId",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"ItemId": {
+				"name": "itemId",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9_.:@-]{1,128}$"
+				}
+			},
+			"FilterItem": {
+				"name": "filter[itemId]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterStatus": {
+				"name": "filter[status]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "comma-separated statuses or all (sk_ only)"
+			},
+			"FilterRating": {
+				"name": "filter[rating]",
+				"in": "query",
+				"schema": {
+					"type": "integer"
+				}
+			},
+			"FilterVerified": {
+				"name": "filter[verified]",
+				"in": "query",
+				"schema": {
+					"type": "string",
+					"enum": ["true", "false"]
+				}
+			},
+			"FilterPhotos": {
+				"name": "filter[photos]",
+				"in": "query",
+				"schema": {
+					"type": "string",
+					"enum": ["true", "false"]
+				}
+			},
+			"FilterCustomer": {
+				"name": "filter[customerId]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "sk_ only"
+			},
+			"Sort": {
+				"name": "sort",
+				"in": "query",
+				"schema": {
+					"type": "string",
+					"enum": ["newest", "oldest", "rating_high", "rating_low"]
+				},
+				"description": "pk_: one of display.sorts"
+			},
+			"Include": {
+				"name": "include",
+				"in": "query",
+				"schema": {
+					"type": "string",
+					"enum": ["summary"]
+				},
+				"description": "summary: add the item summary (with filter[itemId])"
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"$ref": "#/components/schemas/Problem"
+						},
+						"example": {
+							"type": "https://reviews.example.com/problems/not_verified",
+							"title": "Only verified buyers can review this item",
+							"status": 403,
+							"detail": "not verified",
+							"instance": "/v1/reviews",
+							"requestId": "req_0abc"
+						}
+					}
+				}
+			}
+		},
+		"schemas": {
+			"Problem": {
+				"type": "object",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string"
+					},
+					"requestId": {
+						"type": "string"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"path": {
+									"type": "string"
+								},
+								"code": {
+									"type": "string"
+								},
+								"message": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"PublicReview": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"itemId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": ["string", "null"]
+					},
+					"rating": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 10
+					},
+					"scale": {
+						"type": "integer",
+						"minimum": 3,
+						"maximum": 10
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"body": {
+						"type": ["string", "null"]
+					},
+					"removed": {
+						"type": "boolean"
+					},
+					"author": {
+						"type": ["string", "null"],
+						"description": "public attribution (collection.reviewer_name); null when anonymous"
+					},
+					"verifiedPurchase": {
+						"type": ["boolean", "null"]
+					},
+					"attributes": {
+						"type": "object",
+						"properties": {},
+						"additionalProperties": {
+							"type": "integer"
+						}
+					},
+					"photos": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"url": {
+									"type": "string",
+									"format": "uri"
+								},
+								"contentType": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"reply": {
+						"type": ["object", "null"],
+						"properties": {
+							"body": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string",
+								"format": "date-time"
+							}
+						}
+					},
+					"submittedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"locale": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["pending", "approved", "rejected"],
+						"description": "only in the response to the submitter"
+					}
+				},
+				"required": ["id", "itemId", "rating", "scale", "submittedAt"]
+			},
+			"OwnerReview": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"itemId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": ["string", "null"]
+					},
+					"orderId": {
+						"type": ["string", "null"]
+					},
+					"requestId": {
+						"type": ["string", "null"]
+					},
+					"customerId": {
+						"type": ["string", "null"]
+					},
+					"author": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": ["string", "null"]
+							},
+							"email": {
+								"type": ["string", "null"]
+							}
+						}
+					},
+					"rating": {
+						"type": "integer"
+					},
+					"scale": {
+						"type": "integer"
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"body": {
+						"type": ["string", "null"]
+					},
+					"attributes": {
+						"type": "object",
+						"properties": {},
+						"additionalProperties": {
+							"type": "integer"
+						}
+					},
+					"photos": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"url": {
+									"type": "string",
+									"format": "uri"
+								},
+								"contentType": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"status": {
+						"type": "string",
+						"enum": ["pending", "approved", "rejected"]
+					},
+					"verifiedPurchase": {
+						"type": "boolean"
+					},
+					"source": {
+						"type": "string",
+						"enum": ["storefront", "request_link", "api", "import"]
+					},
+					"moderation": {
+						"type": "object",
+						"properties": {
+							"by": {
+								"type": "string",
+								"enum": ["check", "rule", "default", "unverified", "off", "person"]
+							},
+							"ruleId": {
+								"type": ["string", "null"]
+							},
+							"reason": {
+								"type": ["string", "null"]
+							},
+							"flags": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"terms": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"note": {
+								"type": ["string", "null"]
+							},
+							"decidedAt": {
+								"type": ["string", "null"]
+							},
+							"actor": {
+								"type": ["string", "null"]
+							}
+						}
+					},
+					"reply": {
+						"type": ["object", "null"],
+						"properties": {
+							"body": {
+								"type": "string"
+							},
+							"at": {
+								"type": "string"
+							},
+							"by": {
+								"type": ["string", "null"]
+							}
+						}
+					},
+					"locale": {
+						"type": ["string", "null"]
+					},
+					"externalId": {
+						"type": ["string", "null"]
+					},
+					"custom": {
+						"type": "object",
+						"properties": {}
+					},
+					"submittedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"publishedAt": {
+						"type": ["string", "null"]
+					},
+					"deletedAt": {
+						"type": ["string", "null"]
+					}
+				},
+				"required": ["id", "itemId", "rating", "status"]
+			},
+			"ReviewInput": {
+				"type": "object",
+				"properties": {
+					"itemId": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9_.:@-]{1,128}$"
+					},
+					"variantId": {
+						"type": "string"
+					},
+					"rating": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "1 … content.rating_scale"
+					},
+					"title": {
+						"type": "string",
+						"description": "at most content.title_max_length (0 = not allowed)"
+					},
+					"body": {
+						"type": "string",
+						"description": "content.body_min_length … body_max_length characters"
+					},
+					"attributes": {
+						"type": "object",
+						"properties": {},
+						"additionalProperties": {
+							"type": "integer"
+						},
+						"description": "content.attributes keys → a value in min … max"
+					},
+					"photoIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "ids from POST /v1/review-photos (photos element)"
+					},
+					"author": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"email": {
+								"type": "string",
+								"format": "email"
+							}
+						}
+					},
+					"orderId": {
+						"type": "string"
+					},
+					"locale": {
+						"type": "string"
+					},
+					"custom": {
+						"type": "object",
+						"properties": {}
+					},
+					"token": {
+						"type": "string",
+						"description": "pk_: a review link token (verified purchase without sign-in)"
+					},
+					"customerId": {
+						"type": "string",
+						"description": "sk_ only"
+					},
+					"externalId": {
+						"type": "string",
+						"description": "sk_ only, unique"
+					}
+				},
+				"required": ["itemId", "rating"]
+			},
+			"CustomerRequest": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"orderId": {
+						"type": "string"
+					},
+					"number": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["open", "completed", "expired", "cancelled"]
+					},
+					"open": {
+						"type": "boolean"
+					},
+					"completedAt": {
+						"type": "string"
+					},
+					"expiresAt": {
+						"type": "string"
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"itemId": {
+									"type": "string"
+								},
+								"variantId": {
+									"type": ["string", "null"]
+								},
+								"title": {
+									"type": ["string", "null"]
+								},
+								"sku": {
+									"type": ["string", "null"]
+								},
+								"reviewed": {
+									"type": "boolean"
+								}
+							}
+						}
+					},
+					"contactName": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"ReviewRequest": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"orderId": {
+						"type": "string"
+					},
+					"number": {
+						"type": ["string", "null"]
+					},
+					"customerId": {
+						"type": "string"
+					},
+					"source": {
+						"type": "string",
+						"enum": ["event", "api"]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["open", "completed", "expired", "cancelled"]
+					},
+					"open": {
+						"type": "boolean"
+					},
+					"completedAt": {
+						"type": "string"
+					},
+					"dueAt": {
+						"type": "string"
+					},
+					"expiresAt": {
+						"type": "string"
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"itemId": {
+									"type": "string"
+								},
+								"variantId": {
+									"type": ["string", "null"]
+								},
+								"title": {
+									"type": ["string", "null"]
+								},
+								"sku": {
+									"type": ["string", "null"]
+								},
+								"reviewId": {
+									"type": ["string", "null"]
+								},
+								"reviewed": {
+									"type": "boolean"
+								}
+							}
+						}
+					},
+					"delivery": {
+						"type": "object",
+						"properties": {
+							"state": {
+								"type": "string",
+								"enum": ["scheduled", "sent", "done", "failed", "off"]
+							},
+							"sends": {
+								"type": "integer"
+							},
+							"attempts": {
+								"type": "integer"
+							},
+							"nextAt": {
+								"type": ["string", "null"]
+							},
+							"lastSentAt": {
+								"type": ["string", "null"]
+							},
+							"lastError": {
+								"type": ["string", "null"]
+							},
+							"channel": {
+								"type": ["string", "null"]
+							}
+						}
+					}
+				}
+			},
+			"RequestInput": {
+				"type": "object",
+				"properties": {
+					"orderId": {
+						"type": "string"
+					},
+					"customerId": {
+						"type": "string"
+					},
+					"number": {
+						"type": "string"
+					},
+					"contact": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"email": {
+								"type": "string",
+								"format": "email"
+							},
+							"phone": {
+								"type": "string",
+								"pattern": "^\\+[1-9][0-9]{6,14}$"
+							}
+						}
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"itemId": {
+									"type": "string"
+								},
+								"variantId": {
+									"type": "string"
+								},
+								"sku": {
+									"type": "string"
+								},
+								"title": {
+									"type": "string"
+								}
+							},
+							"required": ["itemId"]
+						},
+						"minItems": 1,
+						"maxItems": 100
+					},
+					"completedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"locale": {
+						"type": "string"
+					}
+				},
+				"required": ["orderId", "customerId", "items"]
+			},
+			"RequestLink": {
+				"type": "object",
+				"properties": {
+					"requestId": {
+						"type": "string"
+					},
+					"token": {
+						"type": "string"
+					},
+					"expiresAt": {
+						"type": "string"
+					},
+					"url": {
+						"type": ["string", "null"],
+						"description": "request_flow.review_url filled in; null without one"
+					}
+				}
+			},
+			"FlowStatus": {
+				"type": "object",
+				"properties": {
+					"enabled": {
+						"type": "boolean"
+					},
+					"reviewUrlConfigured": {
+						"type": "boolean"
+					},
+					"requests": {
+						"type": "object",
+						"properties": {},
+						"additionalProperties": {
+							"type": "integer"
+						}
+					},
+					"delivery": {
+						"type": "object",
+						"properties": {},
+						"additionalProperties": {
+							"type": "integer"
+						}
+					},
+					"nextDueAt": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"FlowRun": {
+				"type": "object",
+				"properties": {
+					"due": {
+						"type": "integer"
+					},
+					"sent": {
+						"type": "integer"
+					},
+					"reminded": {
+						"type": "integer"
+					},
+					"failed": {
+						"type": "integer"
+					},
+					"expired": {
+						"type": "integer"
+					},
+					"skipped": {
+						"type": "integer"
+					},
+					"quiet": {
+						"type": "boolean"
+					}
+				}
+			},
+			"ApproveInput": {
+				"type": "object",
+				"properties": {
+					"note": {
+						"type": "string",
+						"maxLength": 500
+					}
+				}
+			},
+			"RejectInput": {
+				"type": "object",
+				"properties": {
+					"reason": {
+						"type": "string",
+						"description": "one of moderation.rejection_reasons"
+					},
+					"note": {
+						"type": "string",
+						"maxLength": 500
+					}
+				},
+				"required": ["reason"]
+			},
+			"ReplyInput": {
+				"type": "object",
+				"properties": {
+					"body": {
+						"type": "string",
+						"description": "at most moderation.reply_max_length characters"
+					}
+				},
+				"required": ["body"]
+			},
+			"ModerationCheckInput": {
+				"type": "object",
+				"properties": {
+					"source": {
+						"type": "string",
+						"description": "a rules@1 condition to check"
+					},
+					"review": {
+						"type": "object",
+						"properties": {
+							"rating": {
+								"type": "integer"
+							},
+							"title": {
+								"type": "string"
+							},
+							"body": {
+								"type": "string"
+							},
+							"verified": {
+								"type": "boolean"
+							},
+							"photos": {
+								"type": "integer"
+							}
+						}
+					}
+				}
+			},
+			"ModerationCheck": {
+				"type": "object",
+				"properties": {
+					"condition": {
+						"type": ["object", "null"],
+						"properties": {}
+					},
+					"decision": {
+						"type": ["object", "null"],
+						"properties": {}
+					}
+				}
+			},
+			"ReviewForm": {
+				"type": "object",
+				"properties": {
+					"ratingScale": {
+						"type": "integer"
+					},
+					"title": {
+						"type": "object",
+						"properties": {
+							"enabled": {
+								"type": "boolean"
+							},
+							"required": {
+								"type": "boolean"
+							},
+							"maxLength": {
+								"type": "integer"
+							}
+						}
+					},
+					"body": {
+						"type": "object",
+						"properties": {
+							"required": {
+								"type": "boolean"
+							},
+							"minLength": {
+								"type": "integer"
+							},
+							"maxLength": {
+								"type": "integer"
+							}
+						}
+					},
+					"authorName": {
+						"type": "object",
+						"properties": {
+							"maxLength": {
+								"type": "integer"
+							}
+						}
+					},
+					"attributes": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								},
+								"min": {
+									"type": "integer"
+								},
+								"max": {
+									"type": "integer"
+								},
+								"lowLabel": {
+									"type": ["string", "null"]
+								},
+								"highLabel": {
+									"type": ["string", "null"]
+								},
+								"required": {
+									"type": "boolean"
+								}
+							}
+						}
+					},
+					"photos": {
+						"type": "object",
+						"properties": {
+							"enabled": {
+								"type": "boolean"
+							},
+							"max": {
+								"type": "integer"
+							},
+							"maxBytes": {
+								"type": "integer"
+							},
+							"types": {
+								"type": "array",
+								"items": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"PhotoUploadInput": {
+				"type": "object",
+				"properties": {
+					"contentType": {
+						"type": "string",
+						"enum": ["image/jpeg", "image/png", "image/webp"]
+					},
+					"size": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"token": {
+						"type": "string"
+					},
+					"customerId": {
+						"type": "string",
+						"description": "sk_ only"
+					}
+				},
+				"required": ["contentType", "size"]
+			},
+			"PhotoUpload": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string",
+						"enum": ["pending", "attached"]
+					},
+					"upload": {
+						"type": "object",
+						"properties": {
+							"method": {
+								"type": "string",
+								"const": "PUT"
+							},
+							"url": {
+								"type": "string"
+							},
+							"headers": {
+								"type": "object",
+								"properties": {},
+								"additionalProperties": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"expiresAt": {
+						"type": "string"
+					},
+					"maxBytes": {
+						"type": "integer"
+					}
+				}
+			},
+			"Photo": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"reviewId": {
+						"type": ["string", "null"]
+					},
+					"contentType": {
+						"type": "string"
+					},
+					"size": {
+						"type": "integer"
+					}
+				}
+			},
+			"Stars": {
+				"type": "object",
+				"properties": {
+					"itemId": {
+						"type": "string"
+					},
+					"count": {
+						"type": "integer"
+					},
+					"average": {
+						"type": "number"
+					},
+					"scale": {
+						"type": "integer"
+					}
+				}
+			},
+			"Summary": {
+				"type": "object",
+				"properties": {
+					"itemId": {
+						"type": "string"
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"count": {
+						"type": "integer"
+					},
+					"average": {
+						"type": "number"
+					},
+					"scale": {
+						"type": "integer"
+					},
+					"distribution": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"rating": {
+									"type": "integer"
+								},
+								"count": {
+									"type": "integer"
+								},
+								"percent": {
+									"type": "integer"
+								}
+							}
+						}
+					},
+					"attributes": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"label": {
+									"type": "string"
+								},
+								"min": {
+									"type": "integer"
+								},
+								"max": {
+									"type": "integer"
+								},
+								"lowLabel": {
+									"type": ["string", "null"]
+								},
+								"highLabel": {
+									"type": ["string", "null"]
+								},
+								"count": {
+									"type": "integer"
+								},
+								"average": {
+									"type": ["number", "null"]
+								}
+							}
+						}
+					},
+					"withPhotos": {
+						"type": "integer"
+					},
+					"verified": {
+						"type": "integer"
+					},
+					"lastReviewAt": {
+						"type": ["string", "null"]
+					},
+					"display": {
+						"type": "object",
+						"properties": {}
+					}
+				}
+			},
+			"StubView": {
+				"type": "object",
+				"properties": {
+					"title": {
+						"type": "string"
+					},
+					"body": {
+						"type": "string"
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"text": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"Question": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"itemId": {
+						"type": "string"
+					},
+					"body": {
+						"type": ["string", "null"]
+					},
+					"author": {
+						"description": "pk_: the public name (string or null); sk_: { name, email }"
+					},
+					"askedAt": {
+						"type": "string"
+					},
+					"answeredAt": {
+						"type": ["string", "null"]
+					},
+					"locale": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": "string",
+						"enum": ["pending", "published", "rejected"]
+					},
+					"answers": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"body": {
+									"type": ["string", "null"]
+								},
+								"author": {
+									"type": ["string", "null"]
+								},
+								"by": {
+									"type": "string",
+									"enum": ["merchant", "customer"]
+								},
+								"verifiedBuyer": {
+									"type": "boolean"
+								},
+								"answeredAt": {
+									"type": "string"
+								},
+								"status": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"QuestionInput": {
+				"type": "object",
+				"properties": {
+					"itemId": {
+						"type": "string"
+					},
+					"body": {
+						"type": "string"
+					},
+					"author": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							},
+							"email": {
+								"type": "string"
+							}
+						}
+					},
+					"locale": {
+						"type": "string"
+					},
+					"customerId": {
+						"type": "string",
+						"description": "sk_ only"
+					}
+				},
+				"required": ["itemId", "body"]
+			},
+			"AnswerInput": {
+				"type": "object",
+				"properties": {
+					"body": {
+						"type": "string"
+					},
+					"author": {
+						"type": "object",
+						"properties": {
+							"name": {
+								"type": "string"
+							}
+						}
+					}
+				},
+				"required": ["body"]
+			},
+			"ImportInput": {
+				"type": "object",
+				"properties": {
+					"csv": {
+						"type": "string",
+						"description": "CSV text, header first; columns from import.columns"
+					},
+					"dryRun": {
+						"type": "boolean"
+					}
+				},
+				"required": ["csv"]
+			},
+			"ImportReport": {
+				"type": "object",
+				"properties": {
+					"dryRun": {
+						"type": "boolean"
+					},
+					"rows": {
+						"type": "integer"
+					},
+					"valid": {
+						"type": "integer"
+					},
+					"imported": {
+						"type": "integer"
+					},
+					"duplicates": {
+						"type": "integer"
+					},
+					"invalid": {
+						"type": "integer"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"row": {
+									"type": "integer"
+								},
+								"path": {
+									"type": "string"
+								},
+								"code": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"Analytics": {
+				"type": "object",
+				"properties": {
+					"from": {
+						"type": "string"
+					},
+					"to": {
+						"type": "string"
+					},
+					"bucket": {
+						"type": "string",
+						"enum": ["day", "week", "month"]
+					},
+					"timeZone": {
+						"type": "string"
+					},
+					"scale": {
+						"type": "integer"
+					},
+					"totals": {
+						"type": "object",
+						"properties": {}
+					},
+					"series": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"key": {
+									"type": "string"
+								},
+								"submitted": {
+									"type": "integer"
+								},
+								"approved": {
+									"type": "integer"
+								},
+								"averageRating": {
+									"type": ["number", "null"]
+								}
+							}
+						}
+					},
+					"requests": {
+						"type": ["object", "null"],
+						"properties": {
+							"created": {
+								"type": "integer"
+							},
+							"converted": {
+								"type": "integer"
+							},
+							"conversion": {
+								"type": "number"
+							}
+						}
+					},
+					"timing": {
+						"type": "object",
+						"properties": {
+							"decisionHours": {
+								"type": ["number", "null"]
+							},
+							"replyHours": {
+								"type": ["number", "null"]
+							}
+						}
+					},
+					"topItems": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"itemId": {
+									"type": "string"
+								},
+								"count": {
+									"type": "integer"
+								},
+								"averageRating": {
+									"type": ["number", "null"]
+								}
+							}
+						}
+					}
+				}
+			},
+			"Session": {
+				"type": "object",
+				"properties": {
+					"kind": {
+						"type": "string"
+					},
+					"role": {
+						"type": "string"
+					},
+					"scope": {
+						"type": "object",
+						"properties": {}
+					},
+					"user": {
+						"type": ["string", "null"]
+					},
+					"actor": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"Overview": {
+				"type": "object",
+				"properties": {
+					"reviews": {
+						"type": "object",
+						"properties": {}
+					},
+					"questions": {
+						"type": "object",
+						"properties": {}
+					},
+					"requests": {
+						"type": "object",
+						"properties": {}
+					},
+					"delivery": {
+						"type": "object",
+						"properties": {}
+					}
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,44 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "deals.applied@1",
+	"description": "An order was committed with the deals of its quote (uses and stock were counted).",
+	"type": "object",
+	"required": ["quoteId", "orderId", "currency", "subtotal", "discountTotal", "deals"],
+	"additionalProperties": false,
+	"properties": {
+		"quoteId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"orderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+		"subtotal": { "type": "integer", "minimum": 0, "description": "Minor units of currency, before discounts." },
+		"discountTotal": { "type": "integer", "minimum": 0 },
+		"freeShipping": { "type": "boolean" },
+		"deals": {
+			"type": "array",
+			"maxItems": 100,
+			"items": {
+				"type": "object",
+				"required": ["dealId", "kind", "amount", "units"],
+				"additionalProperties": false,
+				"properties": {
+					"dealId": { "type": "string", "minLength": 1, "maxLength": 64 },
+					"kind": { "type": "string", "enum": ["item", "cart", "flash", "bundle"] },
+					"amount": { "type": "integer", "minimum": 0 },
+					"units": { "type": "integer", "minimum": 0 }
+				}
+			}
+		}
+	},
+	"examples": [
+		{
+			"quoteId": "qte_0abc",
+			"orderId": "ord_1001",
+			"customerId": "cus_123",
+			"currency": "EUR",
+			"subtotal": 12000,
+			"discountTotal": 2400,
+			"freeShipping": false,
+			"deals": [{ "dealId": "dl_0abc", "kind": "item", "amount": 2400, "units": 2 }]
+		}
+	]
+}

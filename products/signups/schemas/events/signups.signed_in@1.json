@@ -1,0 +1,24 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "signups.signed_in@1",
+	"description": "A customer signed in (the standard customer.signed_in@1 is published too). newDevice: the device was not among the customer's known devices.",
+	"type": "object",
+	"required": ["customerId", "method", "channel", "sessionId", "newDevice"],
+	"additionalProperties": false,
+	"properties": {
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"method": { "type": "string", "enum": ["otp", "magic_link"] },
+		"channel": { "type": "string", "enum": ["email", "sms", "whatsapp"] },
+		"sessionId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"newDevice": { "type": "boolean" }
+	},
+	"examples": [
+		{
+			"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr",
+			"method": "otp",
+			"channel": "sms",
+			"sessionId": "ses_0mf2k3x1rabcdefghjkmnpqr",
+			"newDevice": false
+		}
+	]
+}
