@@ -1,0 +1,382 @@
+{
+	"type": "object",
+	"title": "Hero features",
+	"additionalProperties": false,
+	"properties": {
+		"layout": {
+			"type": "string",
+			"title": "Layout",
+			"description": "Text over the media, beside it (split) or centred.",
+			"default": "overlay",
+			"enum": ["overlay", "split", "centered"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Layout",
+				"order": 1,
+				"widget": "select"
+			}
+		},
+		"height": {
+			"type": "string",
+			"title": "Height",
+			"description": "Reserved height (no layout shift while media loads).",
+			"default": "md",
+			"enum": ["sm", "md", "lg"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Layout",
+				"order": 2,
+				"widget": "select"
+			}
+		},
+		"cta_href": {
+			"type": "string",
+			"title": "Main button link",
+			"description": "Where the main button goes (its text is the hero.cta string, per language). Empty: no button.",
+			"default": "",
+			"maxLength": 2048,
+			"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 3,
+				"widget": "text"
+			}
+		},
+		"secondary_href": {
+			"type": "string",
+			"title": "Second button link",
+			"description": "Where the second button goes (hero.secondary string). Empty: no button.",
+			"default": "",
+			"maxLength": 2048,
+			"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 4,
+				"widget": "text"
+			}
+		},
+		"image": {
+			"type": "object",
+			"title": "Image",
+			"description": "The hero image (the page’s likely LCP image): desktop and an optional mobile source, loaded eagerly with high priority unless switched off.",
+			"default": {
+				"src": "",
+				"mobile_src": "",
+				"priority": true
+			},
+			"properties": {
+				"src": {
+					"type": "string",
+					"maxLength": 2048,
+					"pattern": "^(|https://\\S+|/\\S*)$"
+				},
+				"mobile_src": {
+					"type": "string",
+					"maxLength": 2048,
+					"pattern": "^(|https://\\S+|/\\S*)$"
+				},
+				"priority": {
+					"type": "boolean"
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Media",
+				"order": 5,
+				"widget": "group"
+			}
+		},
+		"video": {
+			"type": "object",
+			"title": "Background video",
+			"description": "Optional muted background video. Never downloaded on Save-Data, on the listed slow connections, with reduced motion or below the minimum viewport width: the poster shows instead.",
+			"default": {
+				"src": "",
+				"poster": "",
+				"autoplay": true,
+				"respect_save_data": true,
+				"skip_connections": ["slow-2g", "2g", "3g"],
+				"min_viewport_width": 0
+			},
+			"properties": {
+				"src": {
+					"type": "string",
+					"maxLength": 2048,
+					"pattern": "^(|https://\\S+|/\\S*)$"
+				},
+				"poster": {
+					"type": "string",
+					"maxLength": 2048,
+					"pattern": "^(|https://\\S+|/\\S*)$"
+				},
+				"autoplay": {
+					"type": "boolean"
+				},
+				"respect_save_data": {
+					"type": "boolean"
+				},
+				"skip_connections": {
+					"type": "array",
+					"maxItems": 4,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"enum": ["slow-2g", "2g", "3g", "4g"]
+					}
+				},
+				"min_viewport_width": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 4000
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Media",
+				"order": 6,
+				"widget": "group"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders (the shared placement v1: paths, selectors, page types, devices, schedule, consent, triggers, frequency incl. dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "[data-ss-slot=\"hero\"]",
+						"position": "append"
+					}
+				]
+			},
+			"properties": {
+				"paths": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 500,
+								"pattern": "^/\\S*$"
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"selectors": {
+					"type": "array",
+					"maxItems": 20,
+					"items": {
+						"type": "object",
+						"properties": {
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"position": {
+								"type": "string",
+								"enum": ["before", "after", "prepend", "append", "replace"]
+							}
+						},
+						"required": ["selector"],
+						"additionalProperties": false
+					}
+				},
+				"pageTypes": {
+					"type": "array",
+					"maxItems": 50,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64,
+						"pattern": "^[a-z0-9]+(?:[-_][a-z0-9]+)*$"
+					}
+				},
+				"devices": {
+					"type": "array",
+					"maxItems": 3,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"enum": ["mobile", "tablet", "desktop"]
+					}
+				},
+				"referrers": {
+					"type": "object",
+					"properties": {
+						"include": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						},
+						"exclude": {
+							"type": "array",
+							"maxItems": 100,
+							"uniqueItems": true,
+							"items": {
+								"type": "string",
+								"maxLength": 253
+							}
+						}
+					},
+					"additionalProperties": false
+				},
+				"schedule": {
+					"type": "object",
+					"properties": {
+						"timezone": {
+							"type": "string",
+							"maxLength": 64
+						},
+						"from": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"until": {
+							"type": "string",
+							"format": "date-time"
+						},
+						"windows": {
+							"type": "array",
+							"maxItems": 50,
+							"items": {
+								"type": "object",
+								"properties": {
+									"days": {
+										"type": "array",
+										"maxItems": 7,
+										"uniqueItems": true,
+										"items": {
+											"type": "string",
+											"enum": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+										}
+									},
+									"start": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									},
+									"end": {
+										"type": "string",
+										"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+									}
+								},
+								"required": ["start", "end"],
+								"additionalProperties": false
+							}
+						}
+					},
+					"required": ["timezone"],
+					"additionalProperties": false
+				},
+				"consent": {
+					"type": "array",
+					"maxItems": 20,
+					"uniqueItems": true,
+					"items": {
+						"type": "string",
+						"maxLength": 64
+					}
+				},
+				"triggers": {
+					"type": "array",
+					"maxItems": 10,
+					"items": {
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": ["load", "idle", "scroll", "exit", "selector-click", "event"]
+							},
+							"delayMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"afterMs": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 3600000
+							},
+							"percent": {
+								"type": "integer",
+								"minimum": 0,
+								"maximum": 100
+							},
+							"selector": {
+								"type": "string",
+								"maxLength": 500
+							},
+							"event": {
+								"type": "string",
+								"maxLength": 120
+							}
+						},
+						"required": ["type"],
+						"additionalProperties": false
+					}
+				},
+				"frequency": {
+					"type": "object",
+					"properties": {
+						"maxPerSession": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerDay": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"maxPerVisitor": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 10000
+						},
+						"cooldown": {
+							"type": "string",
+							"format": "duration"
+						},
+						"dismissMemory": {
+							"type": "string",
+							"format": "duration"
+						}
+					},
+					"additionalProperties": false
+				},
+				"audience": {
+					"type": "string",
+					"maxLength": 4000
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Placement",
+				"order": 7,
+				"widget": "placement"
+			}
+		}
+	}
+}

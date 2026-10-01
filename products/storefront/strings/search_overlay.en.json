@@ -1,0 +1,13 @@
+{
+	"storefront.error": "This could not be loaded. Please try again.",
+	"search_overlay.label": "Search",
+	"search_overlay.open": "Open search",
+	"search_overlay.input": "Search",
+	"search_overlay.placeholder": "Search…",
+	"search_overlay.submit": "Search",
+	"search_overlay.close": "Close",
+	"search_overlay.results": "Suggestions",
+	"search_overlay.loading": "Searching…",
+	"search_overlay.count": "Suggestions: {count}",
+	"search_overlay.too_long": "Please use a shorter search."
+}
