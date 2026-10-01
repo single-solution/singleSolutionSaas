@@ -25,6 +25,7 @@
 		"@ss/platform": "workspace:^",
 		"@ss/product-alerts": "workspace:^",
 		"@ss/product-chatbot": "workspace:^",
+		"@ss/product-configurator": "workspace:^",
 		"@ss/product-coupons": "workspace:^",
 		"@ss/product-deals": "workspace:^",
 		"@ss/product-grades": "workspace:^",
