@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { netError } from '@ss/net';
 import {
 	attemptsForWindow,
 	classifyError,
@@ -7,6 +8,7 @@ import {
 	deliveryView,
 	dlqExpiry,
 	encodeCursor,
+	eventsEndpoint,
 	parseLimit,
 	DLQ_RETENTION_MS,
 } from '../../../src/modules/integration/core/delivery.js';
@@ -23,13 +25,6 @@ import {
 	parseIngestRequest,
 	routeOf,
 } from '../../../src/modules/integration/core/events.js';
-import {
-	checkOutboundUrl,
-	eventsEndpoint,
-	expandIpv6,
-	isPrivateAddress,
-} from '../../../src/modules/integration/core/outbound.js';
-
 const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 const KEY = /** @type {const} */ ({ websiteId: WEBSITE, env: 'live', kind: 'pk' });
 
@@ -46,84 +41,7 @@ const event = (over = {}) => ({
 	...over,
 });
 
-describe('outbound guard', () => {
-	it.each([
-		['10.1.2.3', true],
-		['127.0.0.1', true],
-		['169.254.169.254', true],
-		['172.16.0.1', true],
-		['172.32.0.1', false],
-		['192.168.1.1', true],
-		['100.64.0.1', true],
-		['0.0.0.0', true],
-		['224.0.0.1', true],
-		['255.255.255.255', true],
-		['8.8.8.8', false],
-		['93.184.216.34', false],
-		['::', true],
-		['::1', true],
-		['::ffff:127.0.0.1', true],
-		['::ffff:7f00:1', true],
-		['::ffff:8.8.8.8', false],
-		['64:ff9b::a00:1', true],
-		['2002:0a00:0001::1', true],
-		['2002:0808:0808::1', false],
-		['fc00::1', true],
-		['fd12:3456::1', true],
-		['fe80::1', true],
-		['fec0::1', true],
-		['ff02::1', true],
-		['2001:db8::1', true],
-		['2001:0::1', true],
-		['100::1', true],
-		['2606:4700:4700::1111', false],
-		['[::1]', true],
-		['fe80::1%eth0', true],
-		['not-an-ip', true],
-	])('isPrivateAddress(%s) = %s', (ip, expected) => {
-		expect(isPrivateAddress(ip)).toBe(expected);
-	});
-
-	it('expands IPv6 forms', () => {
-		expect(expandIpv6('::1')).toEqual([0, 0, 0, 0, 0, 0, 0, 1]);
-		expect(expandIpv6('1:2:3:4:5:6:7:8')).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-		expect(expandIpv6('::ffff:1.2.3.4')).toEqual([0, 0, 0, 0, 0, 0xffff, 0x102, 0x304]);
-		expect(expandIpv6('1::')).toEqual([1, 0, 0, 0, 0, 0, 0, 0]);
-	});
-
-	it('checks delivery URLs', () => {
-		expect(checkOutboundUrl('https://app.example.com/.well-known/ss-events')).toMatchObject({ ok: true, allowPrivate: false });
-		expect(checkOutboundUrl('https://8.8.8.8/x')).toMatchObject({ ok: true, allowPrivate: false });
-		expect(checkOutboundUrl('https://[2606:4700:4700::1111]/x')).toMatchObject({ ok: true });
-		/** @type {Array<[string, string]>} */
-		const refused = [
-			['http://app.example.com/x', 'scheme'],
-			['ftp://app.example.com/x', 'scheme'],
-			['https://user:pw@app.example.com/x', 'userinfo'],
-			['https://127.0.0.1/x', 'private_address'],
-			['https://[::1]/x', 'private_address'],
-			['https://169.254.169.254/latest', 'private_address'],
-			['https://localhost/x', 'private_name'],
-			['https://api.localhost/x', 'private_name'],
-			['https://printer.local/x', 'private_name'],
-			['https://db.internal/x', 'private_name'],
-			['https://intranet/x', 'single_label'],
-			['not a url', 'invalid_url'],
-			['https://app.example.com./x', 'ok'],
-		];
-		for (const [url, reason] of refused) {
-			const result = checkOutboundUrl(url);
-			if (reason === 'ok') expect(result.ok).toBe(true);
-			else expect(result).toEqual({ ok: false, code: 'ssrf_blocked', reason });
-		}
-		expect(checkOutboundUrl('http://127.0.0.1:4000/x', { allowHosts: ['127.0.0.1'] })).toMatchObject({
-			ok: true,
-			allowPrivate: true,
-		});
-		expect(checkOutboundUrl('http://[::1]:4000/x', { allowHosts: ['::1'] })).toMatchObject({ ok: true, allowPrivate: true });
-		expect(checkOutboundUrl('http://localhost:4000/x', { allowHosts: ['LOCALHOST'] })).toMatchObject({ ok: true });
-	});
-
+describe('events endpoint', () => {
 	it('joins the events endpoint', () => {
 		expect(eventsEndpoint({ base: 'https://a.example.com/app/', events: '/.well-known/ss-events' })).toBe(
 			'https://a.example.com/app/.well-known/ss-events',
@@ -367,12 +285,17 @@ describe('delivery rules', () => {
 		expect(classifyStatus(301)).toMatchObject({ ok: false, code: 'http_301' });
 		/** @type {Array<[unknown, string, boolean]>} */
 		const cases = [
-			[{ code: 'ssrf_blocked' }, 'ssrf_blocked', true],
-			[{ code: 'timeout' }, 'timeout', false],
-			[{ code: 'ENOTFOUND' }, 'dns_failed', false],
-			[{ code: 'ECONNREFUSED' }, 'connection_refused', false],
-			[{ code: 'ECONNRESET' }, 'connection_reset', false],
-			[{ code: 'CERT_HAS_EXPIRED' }, 'tls_failed', false],
+			[netError('ssrf_blocked', 'private_address', 'x'), 'ssrf_blocked', true],
+			[netError('bad_url', 'userinfo', 'x'), 'ssrf_blocked', true],
+			[netError('timeout', 'deadline', 'x'), 'timeout', false],
+			[netError('aborted', 'signal', 'x'), 'aborted', false],
+			[netError('too_large', 'body_length', 'x'), 'response_too_large', false],
+			[netError('network', 'dns_failed', 'x', 'ENOTFOUND'), 'dns_failed', false],
+			[netError('network', 'request_failed', 'x', 'ECONNREFUSED'), 'connection_refused', false],
+			[netError('network', 'request_failed', 'x', 'ECONNRESET'), 'connection_reset', false],
+			[netError('network', 'request_failed', 'x', 'EPIPE'), 'connection_reset', false],
+			[netError('network', 'tls_failed', 'x', 'CERT_HAS_EXPIRED'), 'tls_failed', false],
+			[netError('network', 'request_failed', 'x', 'EHOSTUNREACH'), 'network_error', false],
 			[new Error('x'), 'network_error', false],
 			['string', 'network_error', false],
 		];

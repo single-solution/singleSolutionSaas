@@ -156,15 +156,17 @@ export const parseConsume = (body) => {
 };
 
 /**
- * Staff launch body (`POST /v1/admin/apps/:appId/launch`).
+ * Staff launch body (`POST /v1/admin/apps/:appId/launch`). `all: true` asks for an app-wide admin launch
+ * (`scope: { all: true }`), exclusive with merchant/website/partner/developer ids.
  * @param {unknown} body
- * @returns {Parsed<{ kind: string, merchantId: string | null, websiteId: string | null, partnerId: string | null,
+ * @returns {Parsed<{ kind: string, all: boolean, merchantId: string | null, websiteId: string | null, partnerId: string | null,
  *   developerId: string | null, subject: string | null, impersonationSeconds: number | undefined,
  *   environment: 'production' | 'staging' }>}
  */
 export const parseStaffLaunch = (body) => {
 	const { input, errors } = open(body, [
 		'kind',
+		'all',
 		'merchantId',
 		'websiteId',
 		'partnerId',
@@ -184,8 +186,12 @@ export const parseStaffLaunch = (body) => {
 	const environment = input.environment ?? 'production';
 	if (environment !== 'production' && environment !== 'staging')
 		errors.push({ path: '/environment', message: 'environment must be production or staging' });
+	if (input.all !== undefined && input.all !== true) errors.push({ path: '/all', message: 'all must be true when given' });
+	if (input.all === true && (kind !== 'admin' || merchantId || websiteId || partnerId || developerId))
+		errors.push({ path: '/all', message: 'all is only for admin launches without merchantId or websiteId' });
 	return done(errors, {
 		kind: kind ?? '',
+		all: input.all === true,
 		merchantId: merchantId ?? null,
 		websiteId: websiteId ?? null,
 		partnerId: partnerId ?? null,

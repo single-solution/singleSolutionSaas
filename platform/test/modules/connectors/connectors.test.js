@@ -92,7 +92,7 @@ const boot = async (dbName, { env = {} } = {}) => {
 	const portal = createPortal({
 		config,
 		db: mongo.db(dbName),
-		modules: [...fakeModules(state), createConnectorsModule({ allowlist: ['127.0.0.1'] })],
+		modules: [...fakeModules(state), createConnectorsModule({ allowHosts: ['127.0.0.1'] })],
 		logger,
 		now: clock.now,
 	});

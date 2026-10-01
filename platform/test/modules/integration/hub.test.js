@@ -65,7 +65,7 @@ const startReceiver = async ({ jwks, now }) => {
 	};
 	/** @type {Array<{ path: string, event?: any, verified: boolean, error?: string, headers: Record<string, any> }>} */
 	const received = [];
-	/** @type {(path: string) => number | 'hang'} */
+	/** @type {(path: string) => number | 'hang' | { status: number, location: string }} */
 	let responder = () => 200;
 	const server = createServer((req, res) => {
 		/** @type {Buffer[]} */
@@ -90,7 +90,8 @@ const startReceiver = async ({ jwks, now }) => {
 			}
 			const status = responder(path);
 			if (status === 'hang') return;
-			res.writeHead(status).end('ok');
+			if (typeof status === 'object') res.writeHead(status.status, { location: status.location }).end();
+			else res.writeHead(status).end('ok');
 		});
 	});
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(undefined)));
@@ -104,7 +105,7 @@ const startReceiver = async ({ jwks, now }) => {
 	return {
 		base: `http://127.0.0.1:${address.port}`,
 		received,
-		/** @param {(path: string) => number | 'hang'} fn */
+		/** @param {(path: string) => number | 'hang' | { status: number, location: string }} fn */
 		respond: (fn) => {
 			responder = fn;
 		},
@@ -684,16 +685,24 @@ describe('delivery pipeline', () => {
 	});
 
 	it('times out slow products and refuses unsafe endpoints (SSRF)', async () => {
-		const resolveHost = async (/** @type {string} */ host) =>
+		const resolve = async (/** @type {string} */ host) =>
 			host === 'rebind.example.com'
-				? [{ address: '10.0.0.7', family: 4 }]
-				: host === 'empty.example.com'
-					? []
-					: [{ address: '93.184.216.34', family: 4 }];
+				? [
+						{ address: '93.184.216.34', family: 4 },
+						{ address: '10.0.0.7', family: 4 },
+					]
+				: host === 'meta.example.com'
+					? [{ address: '169.254.169.254', family: 4 }]
+					: host === 'empty.example.com'
+						? []
+						: [{ address: '93.184.216.34', family: 4 }];
 		const { world, receiver, call, drain, key, db } = await boot('int_ssrf', {
-			options: { timeoutMs: 200, resolveHost, maxAttempts: 2 },
+			options: { timeoutMs: 200, resolve, maxAttempts: 2 },
 		});
-		receiver.respond(() => 'hang');
+		// redirects are never followed (here: towards the cloud metadata endpoint)
+		receiver.respond((path) =>
+			path.startsWith('/redirect') ? { status: 307, location: 'https://169.254.169.254/latest/meta-data' } : 'hang',
+		);
 		/** @type {Array<[string, Record<string, string> | null]>} */
 		const apps = [
 			['app_slow', { base: `${receiver.base}/slow`, events: '/events' }],
@@ -702,6 +711,9 @@ describe('delivery pipeline', () => {
 			['app_http', { base: 'http://plain.example.com', events: '/events' }],
 			['app_localhost', { base: 'https://localhost:8443', events: '/events' }],
 			['app_rebind', { base: 'https://rebind.example.com', events: '/events' }],
+			['app_dnsmeta', { base: 'https://meta.example.com', events: '/latest' }],
+			['app_redirect', { base: `${receiver.base}/redirect`, events: '/events' }],
+			['app_userinfo', { base: 'https://user:pw@app.example.com', events: '/events' }],
 			['app_nodns', { base: 'https://empty.example.com', events: '/events' }],
 			['app_noendpoint', null],
 		];
@@ -728,6 +740,9 @@ describe('delivery pipeline', () => {
 			app_http: ['dead', 'ssrf_blocked'],
 			app_localhost: ['dead', 'ssrf_blocked'],
 			app_rebind: ['dead', 'ssrf_blocked'],
+			app_dnsmeta: ['dead', 'ssrf_blocked'],
+			app_redirect: ['retrying', 'http_307'],
+			app_userinfo: ['dead', 'ssrf_blocked'],
 			app_nodns: ['retrying', 'dns_failed'],
 			app_noendpoint: ['dead', 'no_endpoint'],
 		});

@@ -15,7 +15,7 @@ import { C } from './schema.js';
 /** @typedef {import('../../infra/db.js').TenantRepository} TenantRepository */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
 /** @typedef {import('./core/tokens.js').TokenPurpose} TokenPurpose */
-/** @typedef {import('./mailer.js').Mailer} Mailer */
+/** @typedef {import('../../infra/mailer.js').Mailer} Mailer */
 
 /**
  * Request metadata carried into audit entries and sessions.
@@ -236,7 +236,7 @@ export const checkSecondFactor = async (ctx, collection, account, input) => {
 /**
  * Send a mail; failures are logged, never thrown (flows that must not reveal account existence).
  * @param {Deps} deps
- * @param {import('./mailer.js').MailMessage} message
+ * @param {import('../../infra/mailer.js').MailMessage} message
  */
 export const sendQuietly = async ({ ctx, mailer }, message) => {
 	try {

@@ -6,7 +6,7 @@
  * | kind          | app status                  | manifest needs                         | input needs                          |
  * | ------------- | --------------------------- | -------------------------------------- | ------------------------------------ |
  * | `merchant`    | active, deprecated          | —                                      | `scope.merchantId`                   |
- * | `admin`       | pending, active, deprecated | `capabilities.adminLaunch`             | staff `actor`, `scope.merchantId`    |
+ * | `admin`       | pending, active, deprecated | `capabilities.adminLaunch`             | staff `actor`, `scope.merchantId` or `scope.all: true` alone |
  * | `impersonate` | active, deprecated          | —                                      | staff `actor` ≠ subject, merchantId  |
  * | `demo`        | pending, active, deprecated | `capabilities.sandbox` or `endpoints.demo` | no `scope.merchantId`            |
  * | `partner`     | active, deprecated          | —                                      | `scope.partnerId`                    |
@@ -22,8 +22,8 @@ import { launchKindsFor } from './lifecycle.js';
 /** @typedef {import('@ss/protocol').LaunchKind} LaunchKind */
 /** @typedef {{ id: string, email?: string, name?: string, roles?: string[] }} LaunchUser */
 /**
- * @typedef {{ merchantId?: string, websiteId?: string, websiteIds?: string[], partnerId?: string, developerId?: string,
- *   permissions?: string[] }} LaunchScope
+ * @typedef {{ all?: true, merchantId?: string, websiteId?: string, websiteIds?: string[], partnerId?: string,
+ *   developerId?: string, permissions?: string[] }} LaunchScope
  */
 
 /**
@@ -63,7 +63,13 @@ export const launchRefusal = ({ input, app, manifest }) => {
 		case 'admin':
 			if (manifest.capabilities?.adminLaunch !== true) return 'the product does not support admin launches';
 			if (!text(actor)) return 'admin launches need the staff actor';
-			return text(merchantId) ? null : 'admin launches need scope.merchantId';
+			if (scope.all !== undefined) {
+				if (scope.all !== true) return 'scope.all must be true';
+				const others = Object.keys(scope).filter((key) => key !== 'all' && key !== 'permissions');
+				if (others.length > 0 || subscriptions !== undefined) return 'scope.all excludes merchant, website and subscriptions';
+				return null;
+			}
+			return text(merchantId) ? null : 'admin launches need scope.merchantId or scope.all';
 		case 'impersonate':
 			if (!text(actor)) return 'impersonation needs the staff actor';
 			if (actor === subject) return 'the staff actor cannot impersonate themselves';

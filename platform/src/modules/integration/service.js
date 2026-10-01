@@ -11,6 +11,7 @@
  */
 import { createHash } from 'node:crypto';
 import { createId, eventScopeOf } from '@ss/contracts';
+import { checkUrl, createOutboundPolicy, safeFetch } from '@ss/net';
 import { signEvent } from '@ss/protocol';
 import { isProblem, problem } from '../../infra/http.js';
 import {
@@ -23,6 +24,8 @@ import {
 	deliveryView,
 	dlqExpiry,
 	encodeCursor,
+	eventsEndpoint,
+	MAX_RESPONSE_BYTES,
 	parseLimit,
 } from './core/delivery.js';
 import {
@@ -38,10 +41,8 @@ import {
 	parseIngestRequest,
 	routeOf,
 } from './core/events.js';
-import { checkOutboundUrl, eventsEndpoint } from './core/outbound.js';
 import { createIntegrationRepo } from './repo.js';
 import { DEAD_LETTERS, DELIVERIES, EVENTS } from './schema.js';
-import { createTransport } from './transport.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
@@ -51,7 +52,6 @@ import { createTransport } from './transport.js';
 /** @typedef {import('./core/events.js').EventResult} EventResult */
 /** @typedef {import('./core/events.js').Route} Route */
 /** @typedef {import('./repo.js').EventRecord} EventRecord */
-/** @typedef {import('./transport.js').ResolveHost} ResolveHost */
 
 /**
  * Label of platform-scoped events (no website) in internal keys: the sealed-payload AAD and delivery job keys.
@@ -64,8 +64,9 @@ export const DELIVER_JOB = 'integration.deliver';
 
 /**
  * @typedef {object} IntegrationOptions
- * @property {ReadonlyArray<string>} [allowHosts] outbound hosts that may be private / plain http (development only)
- * @property {ResolveHost} [resolveHost] DNS resolver (tests)
+ * @property {ReadonlyArray<string>} [allowHosts] development allowlist (hosts/IPs that may be private or plain http);
+ *   default `ctx.config.outbound.allowHosts`; always empty in production
+ * @property {import('@ss/net').Resolver} [resolve] DNS resolver of the outbound policy (tests)
  * @property {number} [timeoutMs] per-attempt delivery timeout (default 10 s)
  * @property {number} [maxAttempts] job attempts before the DLQ (default: spans 24 h of the queue's backoff)
  * @property {number} [routingCacheMs] how long a website's routing table is reused (default 10 s; 0 = never)
@@ -99,11 +100,16 @@ export const createIntegrationService = (ctx, options = {}) => {
 		now: ctx.now,
 	});
 	const maxAttempts = options.maxAttempts ?? attemptsForWindow();
-	const allowHosts = options.allowHosts ?? [];
 	const routingCacheMs = options.routingCacheMs ?? 10_000;
-	const transport = createTransport({
+	// one SSRF policy (`@ss/net`) for every delivery: https only, public addresses vetted at connect time (DNS
+	// rebinding safe), redirects never followed, deadline and response cap per attempt
+	const policy = createOutboundPolicy({
+		allowHosts: ctx.config.isProduction ? [] : [...(options.allowHosts ?? ctx.config.outbound.allowHosts)],
+		maxRedirects: 0,
 		timeoutMs: options.timeoutMs ?? DELIVERY_TIMEOUT_MS,
-		...(options.resolveHost ? { resolveHost: options.resolveHost } : {}),
+		maxBytes: MAX_RESPONSE_BYTES,
+		userAgent: 'ss-portal-events/1',
+		...(options.resolve ? { resolve: options.resolve } : {}),
 	});
 	const log = ctx.logger;
 
@@ -513,8 +519,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		if (!isDeliverableApp(app)) return { ok: false, code: 'app_unavailable', permanent: true };
 		const endpoint = eventsEndpoint(app.endpoints);
 		if (!endpoint) return { ok: false, code: 'no_endpoint', permanent: true };
-		const guard = checkOutboundUrl(endpoint, { allowHosts });
-		if (!guard.ok) return { ok: false, code: guard.code, permanent: true };
+		if (!checkUrl(endpoint, policy).ok) return { ok: false, code: 'ssrf_blocked', permanent: true };
 		/** @type {string} */
 		let body;
 		try {
@@ -530,18 +535,17 @@ export const createIntegrationService = (ctx, options = {}) => {
 			timestamp: Math.floor(ctx.now() / 1000),
 		});
 		try {
-			const { status } = await transport.post({
-				url: guard.url,
-				headers: {
-					'content-type': 'application/json',
-					'user-agent': 'ss-portal-events/1',
-					'ss-delivery-id': String(delivery._id),
-					...signed,
+			const { status } = await safeFetch(
+				endpoint,
+				{
+					method: 'POST',
+					headers: { 'content-type': 'application/json', 'ss-delivery-id': String(delivery._id), ...signed },
+					body,
+					redirect: 'manual',
+					...(signal ? { signal } : {}),
 				},
-				body,
-				allowPrivate: guard.allowPrivate,
-				...(signal ? { signal } : {}),
-			});
+				policy,
+			);
 			return classifyStatus(status);
 		} catch (error) {
 			return classifyError(error);

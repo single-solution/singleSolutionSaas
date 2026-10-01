@@ -34,8 +34,6 @@ import {
 	unknownGrantWebsites,
 } from '../../../src/modules/identity/core/team.js';
 import { hashToken, newToken, TOKEN_TTL_MS } from '../../../src/modules/identity/core/tokens.js';
-import { createLogMailer, createUnavailableMailer } from '../../../src/modules/identity/mailer.js';
-import { createTestLogger } from '../../helpers.js';
 
 const WEB = 'web_0123456789abcdefghjkmnpq';
 
@@ -395,17 +393,5 @@ describe('presentation', () => {
 			partnerId: 'prt_1',
 			grants: [],
 		});
-	});
-});
-
-describe('mailers', () => {
-	it('logs in development and refuses in production', async () => {
-		const { logger, entries } = createTestLogger();
-		const dev = createLogMailer(logger);
-		await dev.send({ to: 'a@b.co', template: 'invite', data: { link: 'https://p/x#token=t' } });
-		expect(entries[0]).toMatchObject({ msg: 'mail (development mailer)', fields: { to: 'a@b.co', template: 'invite' } });
-		const prod = createUnavailableMailer();
-		expect(prod.available).toBe(false);
-		await expect(prod.send({ to: 'a', template: 'invite', data: {} })).rejects.toMatchObject({ code: 'unavailable' });
 	});
 });

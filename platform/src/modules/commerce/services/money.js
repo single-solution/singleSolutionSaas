@@ -1,5 +1,6 @@
 /**
- * Credits (staff only), balance, statements, the live meter and spend policies.
+ * Credits (staff only), balance, statements, the live meter and spend policies. Balance and meter reads settle the
+ * merchant's due hours first (lazy settlement), so a read never lags the ledger by more than the current hour.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -16,6 +17,9 @@ import { runsNextHour } from '../core/subscription.js';
 /** @typedef {import('./settlement.js').Settlement} Settlement */
 /** @typedef {import('./subscriptions.js').Caller} Caller */
 /** @typedef {Record<string, any>} Doc */
+
+/** Time budget of the lazy settlement that runs before balance and meter reads. */
+export const LAZY_SETTLEMENT_BUDGET_MS = 2_000;
 
 /**
  * Public view of a ledger entry.
@@ -55,6 +59,20 @@ const policyView = (p) => ({
  * @param {{ ctx: ModuleContext, repo: CommerceRepo, deps: Deps, ledger: Ledger, settlement: Settlement }} input
  */
 export const createMoney = ({ ctx, repo, deps, ledger, settlement }) => {
+	/**
+	 * Lazy settlement before a read: settle this merchant's complete hours up to now (the cron's target, idempotent per
+	 * `periodKey`), bounded by {@link LAZY_SETTLEMENT_BUDGET_MS} and `MAX_HOURS_PER_PASS` per subscription. A failure
+	 * never fails the read; the hourly cron catches up.
+	 * @param {string} merchantId
+	 */
+	const settleDue = async (merchantId) => {
+		try {
+			await settlement.runSettlement({ merchantId, deadline: ctx.now() + LAZY_SETTLEMENT_BUDGET_MS, marginMs: 0 });
+		} catch (error) {
+			ctx.logger.warn('lazy settlement failed', { merchantId, error });
+		}
+	};
+
 	/** @param {Caller} caller */
 	const assertStaff = (caller) => {
 		const actor = /** @type {any} */ (caller.actor);
@@ -123,6 +141,7 @@ export const createMoney = ({ ctx, repo, deps, ledger, settlement }) => {
 	 * @param {string} merchantId
 	 */
 	const meter = async (merchantId) => {
+		await settleDue(merchantId);
 		const now = ctx.now();
 		const balance = await ledger.balance(merchantId);
 		const subs = await repo.subscriptionsOfMerchant(merchantId, { live: true });
@@ -277,11 +296,10 @@ export const createMoney = ({ ctx, repo, deps, ledger, settlement }) => {
 		/** @param {Parameters<typeof staffEntry>[1]} input */
 		refund: (input) => staffEntry('refund', input),
 		/** @param {string} merchantId */
-		balance: async (merchantId) => ({
-			merchantId,
-			balanceMillicredits: await ledger.balance(merchantId),
-			at: new Date(ctx.now()).toISOString(),
-		}),
+		balance: async (merchantId) => {
+			await settleDue(merchantId);
+			return { merchantId, balanceMillicredits: await ledger.balance(merchantId), at: new Date(ctx.now()).toISOString() };
+		},
 		statement,
 		meter,
 		/** @param {string} merchantId */

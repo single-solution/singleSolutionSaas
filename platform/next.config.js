@@ -12,6 +12,8 @@ const config = {
 	outputFileTracingRoot: root,
 	turbopack: { root },
 	serverExternalPackages: ['mongodb'],
+	// the UI library ships untranspiled JSX in .js files
+	transpilePackages: ['@ss/ui'],
 	// Wire formats are served at /v1/* (F.9); the handler lives in the /api catch-all.
 	rewrites: async () => [{ source: '/v1/:path*', destination: '/api/v1/:path*' }],
 	headers: async () => [

@@ -208,6 +208,46 @@ describe('websites', () => {
 			env: 'test',
 		});
 	});
+
+	it('rolls a failed website transfer back completely', async () => {
+		const h = await boot();
+		const root = await h.staffUser('root@example.com');
+		const a = await h.signupOwner('a@example.com');
+		const b = await h.signupOwner('b@example.com');
+		const site = await a.client.post(`/v1/merchants/${a.merchantId}/websites`, { domain: 'stuck.example.com' });
+		const { websiteId } = site.json.website;
+		const twinId = site.json.twin.websiteId;
+		// the domain claim update (the third write inside the transaction) fails: a validator refuses B as owner
+		await h.db.command({
+			collMod: 'identity_domains',
+			validator: { merchantId: { $ne: b.merchantId } },
+			validationAction: 'error',
+		});
+		const failed = await root.client.post(`/v1/admin/websites/${websiteId}/transfer`, {
+			toMerchantId: b.merchantId,
+			reason: 'should not happen',
+		});
+		expect(failed.status).toBe(500);
+		await h.db.command({ collMod: 'identity_domains', validator: {} });
+		// nothing moved: both websites, the domain claim and the listings are exactly where they were
+		expect((await h.service.getWebsite(websiteId)).merchantId).toBe(a.merchantId);
+		expect((await h.service.getWebsite(twinId)).merchantId).toBe(a.merchantId);
+		expect((await a.client.get(`/v1/merchants/${a.merchantId}/websites`)).json.items).toHaveLength(2);
+		expect((await b.client.get(`/v1/merchants/${b.merchantId}/websites`)).json.items).toEqual([]);
+		expect(await h.db.collection('identity_domains').findOne({ _id: /** @type {any} */ ('stuck.example.com') })).toMatchObject({
+			merchantId: a.merchantId,
+		});
+		expect(await h.db.collection('identity_websites').countDocuments({ _id: { $in: [websiteId, twinId] } })).toBe(2);
+		const entries = await h.portal.shared.audit.list({ merchantId: a.merchantId, targetId: websiteId });
+		expect(entries.find((e) => e.action === 'website.transferred')).toBeUndefined();
+		// the transfer succeeds once the cause is gone
+		const moved = await root.client.post(`/v1/admin/websites/${websiteId}/transfer`, {
+			toMerchantId: b.merchantId,
+			reason: 'retry',
+		});
+		expect(moved.status).toBe(200);
+		expect((await h.service.getWebsite(twinId)).merchantId).toBe(b.merchantId);
+	});
 });
 
 describe('merchants (staff)', () => {

@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createSigner, generateSigningKey } from '@ss/protocol';
-import {
-	BUNDLE_FORMAT,
-	bundleSigningInput,
-	checkBundleAssets,
-	parseBundleUpload,
-} from '../../../src/modules/catalog/core/bundle.js';
+import { bundleSigningInput, createSigner, generateSigningKey, signBundle, verifyBundle } from '@ss/protocol';
+import { BUNDLE_FORMAT, checkBundleAssets, parseBundleUpload } from '../../../src/modules/catalog/core/bundle.js';
 import { healthView, parseHeartbeat } from '../../../src/modules/catalog/core/health.js';
 import * as input from '../../../src/modules/catalog/core/input.js';
 import { launchRefusal, launchUrl } from '../../../src/modules/catalog/core/launch.js';
@@ -17,7 +12,6 @@ import {
 	reviewRefusal,
 } from '../../../src/modules/catalog/core/lifecycle.js';
 import { catalogEntry, planEntries, priceSummary } from '../../../src/modules/catalog/core/summary.js';
-import { signBundle, verifyBundle } from '../../../src/modules/catalog/signatures.js';
 import { packAssets, packManifest, serviceManifest } from './fixtures.js';
 
 const NOW = Date.parse('2026-10-01T10:00:00Z');
@@ -200,6 +194,8 @@ describe('launch rules', () => {
 		expect(refusal({ kind: 'partner', scope: { partnerId: 'par_1' } })).toBeNull();
 		expect(refusal({ kind: 'developer', scope: { developerId: 'dev_1' } })).toBeNull();
 		expect(refusal({ kind: 'admin', actor: 'stf_1', scope: { merchantId: 'mer_1' } }, { status: 'pending' })).toBeNull();
+		expect(refusal({ kind: 'admin', actor: 'stf_1', scope: { all: true } })).toBeNull();
+		expect(refusal({ kind: 'admin', actor: 'stf_1', scope: { all: true, permissions: ['x'] } })).toBeNull();
 	});
 
 	/** @type {Array<[any, any, ((m: any) => void) | undefined, RegExp]>} */
@@ -220,6 +216,9 @@ describe('launch rules', () => {
 		],
 		[{ kind: 'admin', scope: { merchantId: 'm' } }, {}, undefined, /staff actor/],
 		[{ kind: 'admin', actor: 'stf_1' }, {}, undefined, /merchantId/],
+		[{ kind: 'admin', actor: 'stf_1', scope: { all: false } }, {}, undefined, /all must be true/],
+		[{ kind: 'admin', actor: 'stf_1', scope: { all: true, merchantId: 'm' } }, {}, undefined, /excludes/],
+		[{ kind: 'admin', actor: 'stf_1', scope: { all: true }, subscriptions: [] }, {}, undefined, /excludes/],
 		[{ kind: 'impersonate', scope: { merchantId: 'm' } }, {}, undefined, /staff actor/],
 		[{ kind: 'impersonate', actor: 'usr_1', scope: { merchantId: 'm' } }, {}, undefined, /themselves/],
 		[{ kind: 'impersonate', actor: 'stf_1' }, {}, undefined, /merchantId/],
@@ -318,7 +317,7 @@ describe('bundle descriptors', () => {
 		const { privateJwk, publicJwk } = await generateSigningKey({ kid: 'dev-1' });
 		const { publicJwk: other } = await generateSigningKey({ kid: 'dev-2' });
 		const d = /** @type {any} */ (descriptor());
-		const sig = await signBundle(createSigner(privateJwk), d);
+		const sig = await signBundle({ signer: createSigner(privateJwk), descriptor: d });
 		expect(bundleSigningInput(d)).toMatch(/^ss-pack-bundle\.v1\.[0-9a-f]{64}$/);
 		expect(await verifyBundle({ descriptor: d, signature: sig, keys: [other, publicJwk] })).toBe(true);
 		expect(await verifyBundle({ descriptor: { ...d, assets: [] }, signature: sig, keys: [publicJwk] })).toBe(false);
@@ -389,6 +388,7 @@ describe('route inputs', () => {
 			ok: true,
 			value: {
 				kind: 'admin',
+				all: false,
 				merchantId: 'mer_1',
 				websiteId: null,
 				partnerId: null,
@@ -403,6 +403,10 @@ describe('route inputs', () => {
 			'/impersonationSeconds',
 			'/environment',
 		]);
+		expect(input.parseStaffLaunch({ kind: 'admin', all: true })).toMatchObject({ ok: true, value: { all: true } });
+		expect(errs(input.parseStaffLaunch({ kind: 'admin', all: 'yes' }))).toEqual(['/all']);
+		expect(errs(input.parseStaffLaunch({ kind: 'admin', all: true, merchantId: 'mer_1' }))).toEqual(['/all']);
+		expect(errs(input.parseStaffLaunch({ kind: 'impersonate', all: true }))).toEqual(['/all']);
 		expect(input.parseMerchantLaunch(undefined)).toEqual({ ok: true, value: { websiteId: null } });
 		expect(errs(input.parseMerchantLaunch({ websiteId: 1 }))).toEqual(['/websiteId']);
 	});

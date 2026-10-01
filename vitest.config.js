@@ -1,6 +1,13 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+	// JSX in .js files: the UI library, the console and their tests (everything else is plain JS)
+	esbuild: {
+		include: /(?:packages\/ui|platform\/src\/console|platform\/test\/console)\/.*\.js$/,
+		exclude: [],
+		loader: 'jsx',
+		jsx: 'automatic',
+	},
 	test: {
 		include: ['packages/*/test/**/*.test.js', 'platform/test/**/*.test.js'],
 		environment: 'node',

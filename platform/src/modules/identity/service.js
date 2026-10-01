@@ -26,7 +26,7 @@ import { createWebsites } from './websites.js';
 
 /**
  * @typedef {object} IdentityOptions
- * @property {import('./mailer.js').Mailer} [mailer] e-mail port (default: the platform mailer `ctx.mailer`)
+ * @property {import('../../infra/mailer.js').Mailer} [mailer] e-mail port (default: the platform mailer `ctx.mailer`)
  * @property {ReadonlyArray<PrivateJwk>} [websiteKeySigningKeys] dedicated website-key signing keys (first signs)
  * @property {(domain: string) => boolean} [isPublicSuffix] refuse public suffixes as website domains
  */

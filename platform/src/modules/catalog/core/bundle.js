@@ -15,13 +15,11 @@
  * ```
  *
  * The signature covers `ss-pack-bundle.v1.<sha256hex(canonicalJson(descriptor))>` (domain-separated from every other
- * signed object; see `../signatures.js`).
+ * signed object); it is made and checked with `@ss/protocol` `signBundle` / `verifyBundle`.
  * @module
  */
-import { hashManifest } from '@ss/protocol';
 
 export const BUNDLE_FORMAT = 'ss-pack-bundle@1';
-export const BUNDLE_SIGNING_PREFIX = 'ss-pack-bundle.v1.';
 export const MAX_ASSETS = 500;
 export const MAX_ASSET_BYTES = 5 * 1024 * 1024;
 
@@ -134,10 +132,3 @@ export const checkBundleAssets = (manifest, assets) => {
 	});
 	return errors;
 };
-
-/**
- * Bytes the developer signs: `ss-pack-bundle.v1.` + SHA-256 (hex) of the canonical JSON descriptor.
- * @param {Descriptor} descriptor
- * @returns {string}
- */
-export const bundleSigningInput = (descriptor) => `${BUNDLE_SIGNING_PREFIX}${hashManifest(descriptor)}`;

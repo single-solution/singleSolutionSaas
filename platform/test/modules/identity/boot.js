@@ -196,6 +196,7 @@ export const boot = async (options = {}) => {
 
 	return {
 		portal,
+		db,
 		service,
 		call,
 		client,

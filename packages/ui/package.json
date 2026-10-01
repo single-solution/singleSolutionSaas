@@ -1,0 +1,25 @@
+{
+	"name": "@ss/ui",
+	"version": "0.1.0",
+	"description": "Console component library: design tokens (light + dark), form controls, data display, overlays, AppShell and SchemaForm.",
+	"type": "module",
+	"license": "UNLICENSED",
+	"private": true,
+	"exports": {
+		".": "./src/index.js",
+		"./schema": "./src/schema.js",
+		"./format": "./src/format.js",
+		"./problems": "./src/problems.js",
+		"./theme.css": "./src/theme.css"
+	},
+	"files": [
+		"src"
+	],
+	"sideEffects": [
+		"*.css"
+	],
+	"peerDependencies": {
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	}
+}

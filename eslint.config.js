@@ -25,6 +25,14 @@ export default [
 		// Next.js adapters (App Router components use JSX in .js files)
 		files: ['platform/app/**/*.js'],
 		languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
+		rules: { 'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z]', ignoreRestSiblings: true }] },
+	},
+	{
+		// React components (JSX in .js): the UI library, the console and their tests; they run in browsers too
+		files: ['packages/ui/**/*.js', 'platform/src/console/**/*.js', 'platform/test/console/**/*.js'],
+		languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } }, globals: { ...globals.node, ...globals.browser } },
+		// core ESLint does not see JSX references: components (PascalCase) used only in JSX would read as unused
+		rules: { 'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z]', ignoreRestSiblings: true }] },
 	},
 	{
 		files: ['**/test/**/*.js', '**/*.test.js'],

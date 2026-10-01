@@ -373,7 +373,15 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		const now = ctx.now();
 		const first = firstHourCharge(product, planCode, now);
 		if (!first) throw problem('conflict', 'The product has no effective price book.');
-		const balance = await ledger.balance(website.merchantId);
+		// manifest trialHours: granted once per website × app (unique entryKey) as an adjustment at the first subscribe,
+		// worth trialHours × the first hour's charge; it counts towards the one-hour minimum
+		const trialHours = Number.isInteger(manifest.trialHours) ? /** @type {number} */ (manifest.trialHours) : 0;
+		const trialKey = `trial:${websiteId}:${appId}`;
+		const trialAmount =
+			trialHours > 0 && first.amount > 0 && !(await ledger.byKey(website.merchantId, trialKey))
+				? trialHours * first.amount
+				: 0;
+		const balance = (await ledger.balance(website.merchantId)) + trialAmount;
 		if (balance <= 0 || balance < first.amount)
 			throw problem('credits_exhausted', `At least one hour of credits (${first.amount} millicredits) is required.`);
 		const at = new Date(now);
@@ -410,6 +418,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		}
 		await repo.appendTimeline(sub, at, billing);
 		await audit(caller, 'subscription.created', sub, { after: subscriptionView(sub) });
+		if (trialAmount > 0) await grantTrial(sub, { entryKey: trialKey, amount: trialAmount, hours: trialHours }, caller);
 		await deps.emit(
 			'subscription.activated@1',
 			{ subscriptionId: sub._id, websiteId, reason: 'subscribed' },
@@ -417,6 +426,38 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		);
 		await refreshQuietly(sub);
 		return subscriptionView(sub);
+	};
+
+	/**
+	 * Append the trial adjustment of a first subscription (idempotent through its unique `entryKey`) and audit it.
+	 * @param {Doc} sub
+	 * @param {{ entryKey: string, amount: number, hours: number }} trial
+	 * @param {Caller} caller
+	 */
+	const grantTrial = async (sub, { entryKey, amount, hours }, caller) => {
+		const { appended } = await ledger.append(sub.merchantId, [
+			{
+				type: 'adjustment',
+				amount,
+				entryKey,
+				reference: entryKey,
+				note: `trial: ${hours} h of ${sub.productSlug}`,
+				subscriptionId: sub._id,
+				websiteId: sub.websiteId,
+				appId: sub.appId,
+				actor: SYSTEM_ACTOR,
+			},
+		]);
+		if (appended.length === 0) return;
+		await ctx.audit.record({
+			actor: /** @type {any} */ (SYSTEM_ACTOR),
+			action: 'credits.trial_granted',
+			target: { type: 'merchant', id: sub.merchantId, merchantId: sub.merchantId, websiteId: sub.websiteId },
+			after: { amountMillicredits: amount, hours, entryKey, subscriptionId: sub._id },
+			requestId: caller.requestId ?? null,
+			ip: caller.ip ?? null,
+			reason: 'trial',
+		});
 	};
 
 	/**

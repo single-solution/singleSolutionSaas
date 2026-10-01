@@ -3,7 +3,9 @@
  *
  * - Service registration (Portal side of the one-time-token handshake, `@ss/protocol`), with SSRF-safe outbound calls.
  * - Element-pack bundle uploads (signed descriptor: manifest + asset hashes).
- * - Manifest versions: refresh (staff or the daily job), diff, staff approval / rejection, `manifest.accepted@1`.
+ * - Manifest versions: refresh (staff or the daily job; the served manifest must carry a valid
+ *   `SS-Manifest-Signature` made with a registered app key, otherwise it is stored as `rejected` and alerted), diff,
+ *   staff approval / rejection, `manifest.accepted@1`.
  * - Lifecycle (pending → active → deprecated → retired), environments, app keys (rotation overlap, revocation).
  * - Product calls: heartbeat, key rotation, online launch consumption.
  * - Launch issuance (`@ss/protocol` `issueLaunch` with the Portal signer) and the `appKeys` port.
@@ -13,7 +15,9 @@
  * @module
  */
 import { createId, validateManifest } from '@ss/contracts';
+import { checkUrl, createOutboundPolicy, isNetError, safeFetch as netFetch, textOf } from '@ss/net';
 import {
+	MANIFEST_SIGNATURE_HEADER,
 	canonicalJson,
 	canonicalUrl,
 	createJwks,
@@ -24,6 +28,8 @@ import {
 	issueLaunch as protocolIssueLaunch,
 	thumbprint,
 	toPublicJwk,
+	verifyBundle,
+	verifyManifest,
 	verifyRegistrationResponse,
 } from '@ss/protocol';
 import { problem } from '../../infra/http.js';
@@ -32,12 +38,9 @@ import { diffManifests } from './core/diff.js';
 import { STALE_AFTER_MS, healthView, parseHeartbeat } from './core/health.js';
 import { launchRefusal, launchUrl } from './core/launch.js';
 import { applyLifecycle, dueForRetirement, reviewRefusal } from './core/lifecycle.js';
-import { checkTarget, hostOf, normaliseAllowlist } from './core/net.js';
 import { catalogEntry } from './core/summary.js';
-import { createSafeFetch, isFetchError } from './fetcher.js';
 import { createCatalogRepo, keyId, versionId } from './repo.js';
 import { APPS, KEYS, LAUNCHES, VERSIONS } from './schema.js';
-import { verifyBundle } from './signatures.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
@@ -46,7 +49,12 @@ import { verifyBundle } from './signatures.js';
 /** @typedef {import('./repo.js').AppDoc} AppDoc */
 /** @typedef {import('./repo.js').VersionDoc} VersionDoc */
 /** @typedef {import('./repo.js').KeyDoc} KeyDoc */
-/** @typedef {import('./fetcher.js').SafeFetch} SafeFetch */
+/** @typedef {import('@ss/net').OutboundPolicy} OutboundPolicy */
+/**
+ * Outbound HTTP client (the `@ss/net` `safeFetch` signature).
+ * @typedef {(url: string, init: import('@ss/net').SafeFetchInit, policy: OutboundPolicy) =>
+ *   Promise<import('@ss/net').SafeResponse>} SafeFetch
+ */
 /** @typedef {import('./core/launch.js').LaunchInput} LaunchInput */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Audited */
 
@@ -63,10 +71,10 @@ const SYSTEM = /** @type {Actor} */ ({ type: 'system', id: 'catalog' });
 
 /**
  * @typedef {object} CatalogOptions
- * @property {ReadonlyArray<string>} [devAllowlist] hosts that may be reached over plain http and on private addresses
- *   (development and tests only — ignored in production)
- * @property {import('./fetcher.js').ResolveHost} [resolveHost] DNS resolver (tests)
- * @property {SafeFetch} [fetch] outbound HTTP client (default: SSRF-safe client over node:http/https)
+ * @property {ReadonlyArray<string>} [allowHosts] development allowlist (hosts/IPs that may be private or plain http);
+ *   default `ctx.config.outbound.allowHosts`; always empty in production
+ * @property {import('@ss/net').Resolver} [resolve] DNS resolver of the outbound policy (tests)
+ * @property {SafeFetch} [fetch] outbound HTTP client (default: `@ss/net` `safeFetch`)
  * @property {number} [staleAfterMs]
  */
 
@@ -131,13 +139,14 @@ export const createCatalogService = (ctx, options = {}) => {
 		keys: ctx.collection(KEYS),
 		launches: ctx.collection(LAUNCHES),
 	});
-	const allowlistEntries = ctx.config.isProduction ? [] : [...(options.devAllowlist ?? [])];
-	if (ctx.config.isProduction && (options.devAllowlist ?? []).length > 0)
-		ctx.logger.warn('catalog dev allowlist ignored in production');
-	const allowlist = normaliseAllowlist(allowlistEntries);
-	const safeFetch =
-		options.fetch ??
-		createSafeFetch({ allowlist: allowlistEntries, ...(options.resolveHost ? { resolveHost: options.resolveHost } : {}) });
+	/** @type {OutboundPolicy} */
+	const policy = createOutboundPolicy({
+		allowHosts: ctx.config.isProduction ? [] : [...(options.allowHosts ?? ctx.config.outbound.allowHosts)],
+		userAgent: 'ss-portal-catalog/1',
+		...(options.resolve ? { resolve: options.resolve } : {}),
+	});
+	/** @type {SafeFetch} */
+	const safeFetch = options.fetch ?? netFetch;
 	const staleAfterMs = options.staleAfterMs ?? STALE_AFTER_MS;
 	const portalUrl = ctx.config.portalUrl;
 
@@ -159,49 +168,60 @@ export const createCatalogService = (ctx, options = {}) => {
 				errors: [{ path, message: 'must be a plain http(s) URL' }],
 			});
 		}
-		const checked = checkTarget(canonical, { allowlist });
-		if (!checked.ok) fail('catalog_target_refused', `${path}: ${checked.reason}`);
+		const checked = checkUrl(canonical, policy);
+		if (!checked.ok) fail('catalog_target_refused', `${path}: destination refused (${checked.reason}).`);
 		return canonical;
 	};
 
 	/** @param {string} url */
-	const allowlisted = (url) => allowlist.has(hostOf(new URL(url)));
+	const allowlisted = (url) => {
+		const checked = checkUrl(url, policy);
+		return checked.ok && checked.allowlisted;
+	};
 
 	/**
-	 * Outbound call with fetch errors mapped to problems.
+	 * Outbound call (`@ss/net`: URL policy, DNS-pinned guarded lookup, same-origin redirects, deadline, size cap) with
+	 * network errors mapped to problems.
 	 * @param {string} url
-	 * @param {Parameters<SafeFetch>[1]} init
+	 * @param {import('@ss/net').SafeFetchInit} init
 	 */
 	const outbound = async (url, init) => {
 		try {
-			return await safeFetch(url, init);
+			const res = await safeFetch(url, init, policy);
+			return { status: res.status, headers: res.headers, text: textOf(res) };
 		} catch (error) {
-			if (!isFetchError(error)) throw error;
+			if (!isNetError(error)) throw error;
 			switch (error.code) {
-				case 'target_refused':
+				case 'bad_url':
+				case 'ssrf_blocked':
 				case 'redirect_refused':
-					return fail('catalog_target_refused', error.message);
+					return fail('catalog_target_refused', `The product address was refused (${error.reason}).`);
 				case 'timeout':
 					return fail('timeout', 'The product did not answer in time.');
 				case 'too_large':
-					return fail('upstream_error', `The product response is too large (${error.message}).`);
+					return fail('upstream_error', 'The product response is too large.');
 				default:
-					return fail('upstream_error', `The product could not be reached (${error.message}).`);
+					return fail('upstream_error', `The product could not be reached (${error.reason}).`);
 			}
 		}
 	};
 
 	/**
-	 * `GET <base>/.well-known/ss-app.json` (the manifest the product advertises).
+	 * `GET <base>/.well-known/ss-app.json` (the manifest the product advertises) and its `SS-Manifest-Signature`.
 	 * @param {string} base
-	 * @returns {Promise<Record<string, any>>}
+	 * @returns {Promise<{ json: Record<string, any>, signature: string | null }>}
 	 */
 	const fetchAdvertised = async (base) => {
-		const res = await outbound(`${base}${WELL_KNOWN_APP}`, { method: 'GET', maxBytes: MANIFEST_MAX_BYTES });
+		const res = await outbound(`${base}${WELL_KNOWN_APP}`, {
+			method: 'GET',
+			headers: { accept: 'application/json' },
+			maxBytes: MANIFEST_MAX_BYTES,
+		});
 		if (res.status !== 200) fail('upstream_error', `${WELL_KNOWN_APP} answered ${res.status}.`);
 		const json = parseJson(res.text);
 		if (!isObject(json)) return fail('invalid_manifest', `${WELL_KNOWN_APP} is not a JSON object.`);
-		return json;
+		const signature = res.headers[MANIFEST_SIGNATURE_HEADER.toLowerCase()];
+		return { json, signature: typeof signature === 'string' && signature !== '' ? signature : null };
 	};
 
 	/** @param {VersionDoc} doc @returns {Manifest} */
@@ -383,7 +403,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		const base = baseUrlOf(baseUrl, '/baseUrl');
 		const staging = stagingBaseUrl ? baseUrlOf(stagingBaseUrl, '/stagingBaseUrl') : null;
 
-		const advertised = await fetchAdvertised(base);
+		const { json: advertised } = await fetchAdvertised(base);
 		const advertisedBase = advertised.endpoints?.base;
 		if (advertised.product?.kind !== 'service' || typeof advertisedBase !== 'string')
 			fail('invalid_manifest', `${WELL_KNOWN_APP} must describe a service product with endpoints.base.`);
@@ -415,7 +435,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		});
 		const res = await outbound(`${base}${registerPath}`, {
 			method: 'POST',
-			headers: request.headers,
+			headers: { accept: 'application/json', ...request.headers },
 			body: request.body,
 			maxBytes: REGISTRATION_MAX_BYTES,
 		});
@@ -633,7 +653,73 @@ export const createCatalogService = (ctx, options = {}) => {
 	// manifest versions
 
 	/**
-	 * Fetch the product's advertised manifest and store it as a pending version when it changed.
+	 * Why a refreshed manifest's `SS-Manifest-Signature` is not acceptable (`null` when it verifies under one of the
+	 * app's registered keys, for this appId, over exactly this manifest, and is at most 24 h old).
+	 * @param {AppDoc} app
+	 * @param {Manifest} manifest
+	 * @param {string | null} signature
+	 * @returns {Promise<string | null>}
+	 */
+	const signatureRefusal = async (app, manifest, signature) => {
+		if (signature === null) return 'manifest_signature_missing';
+		const keyResolver = await appKeys(app._id);
+		if (!keyResolver) return 'manifest_signature_no_keys';
+		try {
+			await verifyManifest({ manifest, jws: signature, keyResolver, expectedAppId: app._id, now: ctx.now });
+			return null;
+		} catch (error) {
+			return `manifest_signature_${isProtocolError(error) ? error.code : 'invalid'}`;
+		}
+	};
+
+	/**
+	 * Store a refreshed manifest whose signature failed as a `rejected` version (once per hash and reason), audit it
+	 * and raise an alert. Nothing about the app changes.
+	 * @param {{ app: AppDoc, manifest: Manifest, reason: string, actor: Actor | { type: string, id: string },
+	 *   requestId: string | null, ip: string | null }} input
+	 */
+	const rejectRefresh = async ({ app, manifest, reason, actor, requestId, ip }) => {
+		const hash = hashManifest(manifest);
+		const latest = await repo.version(app._id, app.latestVersion);
+		if (latest && latest.status === 'rejected' && latest.manifestHash === hash && latest.review?.reason === reason)
+			return { changed: false, rejected: true, reason, version: versionView(latest) };
+		const diff = diffManifests(await currentManifest(app), manifest);
+		const version = /** @type {number} */ (await repo.nextVersion(app._id));
+		/** @type {VersionDoc} */
+		const doc = {
+			_id: versionId(app._id, version),
+			appId: app._id,
+			version,
+			manifestJson: canonicalJson(manifest),
+			manifestHash: hash,
+			productVersion: manifest.product.version,
+			status: 'rejected',
+			source: 'refresh',
+			diff,
+			breaking: diff.isBreaking,
+			assets: null,
+			signature: null,
+			submittedBy: actor.id,
+			review: { by: SYSTEM.id, at: new Date(ctx.now()), reason },
+		};
+		await repo.insertVersion(doc);
+		await audit({
+			actor,
+			action: 'catalog.manifest_signature_rejected',
+			app: app._id,
+			after: { version, manifestHash: hash },
+			reason,
+			requestId,
+			ip,
+		});
+		ctx.logger.error('catalog alert: refreshed manifest refused', { appId: app._id, version, reason });
+		return { changed: false, rejected: true, reason, version: versionView(doc) };
+	};
+
+	/**
+	 * Fetch the product's advertised manifest and store it as a pending version when it changed. The manifest must
+	 * carry a valid `SS-Manifest-Signature` (`@ss/protocol` `verifyManifest` with the app's registered keys); an
+	 * unsigned or invalid one is stored as `rejected` with the reason and alerted (`rejectRefresh`).
 	 * @param {{ appId: string } & Partial<Audited>} input
 	 */
 	const refreshManifest = async ({ appId, actor = SYSTEM, requestId = null, ip = null }) => {
@@ -642,9 +728,12 @@ export const createCatalogService = (ctx, options = {}) => {
 		if (app.status === 'retired') fail('conflict', 'The app is retired.');
 		const base = app.environments.production?.baseUrl ?? fail('conflict', 'The app has no production environment.');
 		baseUrlOf(base, '/environments/production');
-		const manifest = checkedManifest(await fetchAdvertised(base), 'service');
+		const advertised = await fetchAdvertised(base);
+		const manifest = checkedManifest(advertised.json, 'service');
 		if (manifest.product.slug !== app.slug)
 			fail('invalid_manifest', `The manifest slug changed from ${app.slug} to ${manifest.product.slug}.`);
+		const refusal = await signatureRefusal(app, manifest, advertised.signature);
+		if (refusal) return rejectRefresh({ app, manifest, reason: refusal, actor, requestId, ip });
 		const known = await sameAsKnown(app, hashManifest(manifest));
 		if (known) return { changed: false, version: versionView(known) };
 		const stored = await storePending({ app, manifest, source: 'refresh', submittedBy: actor.id });
@@ -910,6 +999,7 @@ export const createCatalogService = (ctx, options = {}) => {
 					subject: claims.sub,
 					jti: claims.jti,
 					environment,
+					...(claims.scope.all === true ? { scope: 'all' } : {}),
 					...(claims.impExp ? { impExp: claims.impExp } : {}),
 				},
 				requestId: input.requestId ?? null,
@@ -1041,7 +1131,7 @@ export const createCatalogService = (ctx, options = {}) => {
 	 * @param {{ deadline?: number, signal?: AbortSignal }} [options]
 	 */
 	const refreshAll = async ({ deadline = Infinity, signal } = {}) => {
-		const stats = { checked: 0, changed: 0, unchanged: 0, failed: 0, retired: 0, skipped: 0 };
+		const stats = { checked: 0, changed: 0, unchanged: 0, rejected: 0, failed: 0, retired: 0, skipped: 0 };
 		let after = null;
 		for (;;) {
 			const page = await repo.listApps({ status: ['pending', 'active', 'deprecated'], after, limit: 100 });
@@ -1070,6 +1160,7 @@ export const createCatalogService = (ctx, options = {}) => {
 				try {
 					const result = await refreshManifest({ appId: app._id });
 					if (result.changed) stats.changed += 1;
+					else if ('rejected' in result) stats.rejected += 1;
 					else stats.unchanged += 1;
 				} catch (error) {
 					stats.failed += 1;

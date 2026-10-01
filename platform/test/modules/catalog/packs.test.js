@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createSigner, generateSigningKey } from '@ss/protocol';
+import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { BUNDLE_FORMAT } from '../../../src/modules/catalog/core/bundle.js';
-import { signBundle } from '../../../src/modules/catalog/signatures.js';
 import { PORTAL_URL, startMongo } from '../../helpers.js';
 import { bootPortal, problemOf } from './boot.js';
 import { startFakeProduct } from './fakes/product.js';
@@ -32,7 +31,7 @@ const boot = () => bootPortal({ db: mongo.db('cat_packs') });
  */
 const bundle = async (signer, { manifest = packManifest(), assets = packAssets(), publicJwk } = {}) => {
 	const descriptor = /** @type {any} */ ({ format: BUNDLE_FORMAT, manifest, assets });
-	return { descriptor, signature: await signBundle(signer, descriptor), ...(publicJwk ? { publicJwk } : {}) };
+	return { descriptor, signature: await signBundle({ signer, descriptor }), ...(publicJwk ? { publicJwk } : {}) };
 };
 
 describe('element packs', () => {

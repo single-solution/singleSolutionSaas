@@ -15,7 +15,15 @@
 		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,
 		"skipLibCheck": true,
-		"types": ["node"]
+		"types": ["node"],
+		"jsx": "react-jsx"
 	},
-	"include": ["packages/*/src/**/*.js", "packages/*/test/**/*.js", "platform/src/**/*.js", "platform/test/**/*.js"]
+	"include": [
+		"packages/*/src/**/*.js",
+		"packages/*/test/**/*.js",
+		"platform/src/**/*.js",
+		"platform/test/**/*.js",
+		"packages/ui/src/**/*.js",
+		"platform/src/console/**/*.js"
+	]
 }

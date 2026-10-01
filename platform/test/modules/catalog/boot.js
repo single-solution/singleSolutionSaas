@@ -19,13 +19,13 @@ const indexed = new Set();
 export const config = () => (sharedConfig ??= testConfig());
 
 /**
- * @param {{ db: import('mongodb').Db, allowlist?: string[], resolveHost?: any, fetch?: any, modules?: any[],
+ * @param {{ db: import('mongodb').Db, allowlist?: string[], resolve?: any, fetch?: any, modules?: any[],
  *   clock?: ReturnType<typeof createClock>, integration?: ReturnType<typeof fakeIntegration> | null }} options
  */
 export const bootPortal = async ({
 	db,
 	allowlist = ['127.0.0.1', 'localhost'],
-	resolveHost,
+	resolve,
 	fetch,
 	modules = [],
 	clock = createClock(Date.now()),
@@ -36,7 +36,7 @@ export const bootPortal = async ({
 		config: await config(),
 		db,
 		modules: [
-			createCatalogModule({ devAllowlist: allowlist, ...(resolveHost ? { resolveHost } : {}), ...(fetch ? { fetch } : {}) }),
+			createCatalogModule({ allowHosts: allowlist, ...(resolve ? { resolve } : {}), ...(fetch ? { fetch } : {}) }),
 			...(integration ? [integration.module] : []),
 			...modules,
 		],

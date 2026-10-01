@@ -629,3 +629,70 @@ describe('entitlement documents', () => {
 		expect(sub.status).toBe('active');
 	});
 });
+
+describe('lazy settlement and trials', () => {
+	it('settles due hours on balance and meter reads, idempotently with the cron', async () => {
+		const clock = createClock(T0 + 30 * MIN); // 10:30
+		const h = await bootCommerce({ mongo, dbName: 'cm_lazy', clock });
+		await h.credit(M1, 100_000);
+		await h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
+		// the current hour is not complete: nothing to settle yet
+		expect((await h.service.balance(M1)).balanceMillicredits).toBe(100_000);
+		clock.set(T0 + 2 * HOUR + 5 * MIN); // 12:05 → hours 10 and 11 are due
+		expect((await h.service.balance(M1)).balanceMillicredits).toBe(97_000);
+		expect((await h.service.meter(M1)).balanceMillicredits).toBe(97_000);
+		expect(await h.service.runSettlement()).toMatchObject({ entries: 0 });
+		clock.set(T0 + 3 * HOUR + 5 * MIN);
+		expect((await h.service.meter(M1)).balanceMillicredits).toBe(95_500);
+		expect((await h.service.balance(M1)).balanceMillicredits).toBe(95_500);
+		expect(keysOf(await ledgerRows(h, M1, 'settlement'))).toEqual([
+			'2026-10-01T10:00:00Z=-1500',
+			'2026-10-01T11:00:00Z=-1500',
+			'2026-10-01T12:00:00Z=-1500',
+		]);
+		// another merchant's read settles only its own subscriptions
+		expect((await h.service.balance(M2)).balanceMillicredits).toBe(0);
+		expect((await h.service.verifyChain(M1)).ok).toBe(true);
+	});
+
+	it('survives a failing lazy settlement (the read still answers)', async () => {
+		const clock = createClock(T0 + 30 * MIN);
+		const h = await bootCommerce({ mongo, dbName: 'cm_lazy_fail', clock });
+		await h.credit(M1, 100_000);
+		const sub = await h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
+		// a subscription whose manifest version vanished cannot be planned: settlement logs, the read answers
+		await h.db.collection('commerce_subscriptions').updateOne({ _id: sub.subscriptionId }, { $set: { pins: 'broken' } });
+		clock.set(T0 + 2 * HOUR + 5 * MIN);
+		expect((await h.service.balance(M1)).balanceMillicredits).toBe(100_000);
+	});
+
+	it('grants manifest trialHours once per website × app as an adjustment at the first subscribe', async () => {
+		const clock = createClock(T0);
+		const h = await bootCommerce({ mongo, dbName: 'cm_trial', clock });
+		const manifest = /** @type {any} */ (couponsManifest());
+		manifest.trialHours = 24;
+		/** @type {any} */ (h.world.apps.get(APP)).versions.set(1, manifest);
+		// no credits at all: the trial (24 h × 1500) covers the first hour
+		const sub = await h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
+		expect(await ledgerRows(h, M1, 'adjustment')).toMatchObject([
+			{ entryKey: `trial:${W1}:${APP}`, amount: 36_000, subscriptionId: sub.subscriptionId, websiteId: W1, appId: APP },
+		]);
+		expect((await h.service.balance(M1)).balanceMillicredits).toBe(36_000);
+		// cancel and subscribe again: no second trial for the same website × app
+		await h.service.cancel({ subscriptionId: sub.subscriptionId, actor: MERCHANT_ACTOR });
+		await h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
+		expect(await ledgerRows(h, M1, 'adjustment')).toHaveLength(1);
+		// another website of the merchant gets its own trial
+		await h.service.subscribe({ websiteId: W2, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
+		expect((await ledgerRows(h, M1, 'adjustment')).map((/** @type {any} */ r) => r.entryKey)).toEqual([
+			`trial:${W1}:${APP}`,
+			`trial:${W2}:${APP}`,
+		]);
+		const audits = await h.portal.shared.audit.list({ merchantId: M1 });
+		expect(audits.filter((/** @type {any} */ a) => a.action === 'credits.trial_granted')).toHaveLength(2);
+		// another merchant's website: its own trial in its own ledger
+		await h.service.subscribe({ websiteId: W3, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
+		expect(await ledgerRows(h, M2, 'adjustment')).toMatchObject([{ entryKey: `trial:${W3}:${APP}`, amount: 36_000 }]);
+		expect((await h.service.verifyChain(M1)).ok).toBe(true);
+	});
+});

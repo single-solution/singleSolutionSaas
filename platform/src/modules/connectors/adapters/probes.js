@@ -1,10 +1,12 @@
 /**
- * Connection checks against client-owned resources (I/O). Every network path goes through the SSRF guard
- * (`outbound.js`); results are reports of stable codes (`core/report.js`) — nothing from the remote side or from
- * the credentials is copied into a report.
+ * Connection checks against client-owned resources (I/O). Every network path goes through the `@ss/net` SSRF guard:
+ * HTTP(S) through `safeFetch` (URL policy, DNS answers vetted at connect time, no redirects, deadline, size cap), the
+ * MongoDB driver and SMTP sockets through `guardedLookup` after a `checkHost`. Results are reports of stable codes
+ * (`core/report.js`) — nothing from the remote side or from the credentials is copied into a report.
  *
- * - database: connect with short timeouts, `ping`, `connectionStatus` (roles, least privilege), create and drop a
- *   probe collection with an index in the target database;
+ * - database: connect with short timeouts, `ping`, `connectionStatus` (least privilege: privileges outside the
+ *   target database or at cluster level fail the check with `over_privileged`; dbAdmin/dbOwner/userAdmin on the
+ *   target is a `db_admin` warning), create and drop a probe collection with an index in the target database;
  * - storage: SigV4-signed PUT / GET / DELETE of a probe object under the configured prefix;
  * - ai / messaging (HTTP): one cheap authenticated GET (AI: the models list);
  * - messaging (SMTP): TCP (+ TLS when `secure`) reachability and the server greeting; authentication is not tried;
@@ -13,18 +15,20 @@
  */
 import { connect as netConnect } from 'node:net';
 import { connect as tlsConnect } from 'node:tls';
+import { checkHost, guardedLookup, isNetError, objectUrl, safeFetch, signV4 } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { aiEndpoint } from '../core/descriptor.js';
 import { checkDatabaseCredentials } from '../core/mongo-uri.js';
-import { checkHost } from '../core/netguard.js';
 import { analysePrivileges, buildReport } from '../core/report.js';
-import { objectUrl, signHeaders } from '../core/sigv4.js';
-import { createGuardedLookup, createOutbound } from './outbound.js';
+import { urlRefusalCode } from '../core/schemas.js';
 
-/** @typedef {import('../core/netguard.js').Allowlist} Allowlist */
+/** @typedef {import('@ss/net').OutboundPolicy} OutboundPolicy */
 /** @typedef {import('../core/report.js').CheckReport} CheckReport */
 /** @typedef {import('../core/report.js').CheckStep} CheckStep */
-/** @typedef {import('./outbound.js').LookupFunction} LookupFunction */
+/**
+ * @typedef {{ ok: true, status: number, headers: Record<string, string>, body: Buffer }
+ *   | { ok: false, code: string }} OutboundResult
+ */
 /** @typedef {(uri: string, options: import('mongodb').MongoClientOptions) => MongoClient} ConnectMongo */
 
 export const DB_TIMEOUTS = Object.freeze({ serverSelectionTimeoutMS: 5_000, connectTimeoutMS: 5_000, socketTimeoutMS: 10_000 });
@@ -65,19 +69,72 @@ const storageFailure = (status, s3Code) => {
 };
 
 /**
- * @param {{ allowlist: Allowlist, now: () => number, randomBytes: (n: number) => Uint8Array, lookup?: LookupFunction,
- *   connectMongo?: ConnectMongo, httpTimeoutMs?: number }} options
+ * Stable report code of an outbound failure.
+ * @param {unknown} error
+ * @returns {string}
+ */
+export const outboundCode = (error) => {
+	if (!isNetError(error)) return 'unreachable';
+	switch (error.code) {
+		case 'bad_url':
+		case 'ssrf_blocked':
+			return urlRefusalCode(error);
+		case 'timeout':
+			return 'timeout';
+		case 'too_large':
+			return 'response_too_large';
+		default:
+			return error.reason === 'tls_failed' ? 'tls_error' : 'unreachable';
+	}
+};
+
+/**
+ * @param {{ policy: OutboundPolicy, now: () => number, randomBytes: (n: number) => Uint8Array,
+ *   connectMongo?: ConnectMongo, httpTimeoutMs?: number }} options `policy` is the `@ss/net` outbound policy (its
+ *   `resolve` is the DNS resolver every check uses)
  */
 export const createProbes = ({
-	allowlist,
+	policy,
 	now,
 	randomBytes,
-	lookup,
 	connectMongo = (uri, options) => new MongoClient(uri, options),
 	httpTimeoutMs = 8_000,
 }) => {
-	const outbound = createOutbound({ allowlist, ...(lookup ? { lookup } : {}), defaultTimeoutMs: httpTimeoutMs });
 	const hex = (/** @type {number} */ n) => Buffer.from(randomBytes(n)).toString('hex');
+
+	/**
+	 * One guarded HTTP(S) request: redirects are returned as they are (never followed); failures become codes.
+	 * @param {{ method: string, url: string, headers?: Record<string, string>, body?: string }} input
+	 * @returns {Promise<OutboundResult>}
+	 */
+	const request = async ({ method, url, headers = {}, body }) => {
+		try {
+			const res = await safeFetch(
+				url,
+				{ method, headers, ...(body === undefined ? {} : { body }), redirect: 'manual', timeoutMs: httpTimeoutMs },
+				policy,
+			);
+			return { ok: true, status: res.status, headers: res.headers, body: res.body };
+		} catch (error) {
+			return { ok: false, code: outboundCode(error) };
+		}
+	};
+
+	/**
+	 * A `lookup` for sockets and the MongoDB driver that records refusals.
+	 * @returns {{ lookup: import('@ss/net').LookupFunction, refused: () => boolean }}
+	 */
+	const lookupWithFlag = () => {
+		let refused = false;
+		return {
+			lookup: guardedLookup(policy, {
+				onRefused: () => {
+					refused = true;
+				},
+			}),
+			refused: () => refused,
+		};
+	};
 
 	/**
 	 * @param {Record<string, any>} credentials
@@ -85,17 +142,10 @@ export const createProbes = ({
 	 */
 	const database = async (credentials) => {
 		const startedAt = now();
-		const { errors, dbName } = checkDatabaseCredentials(/** @type {any} */ (credentials), allowlist);
+		const { errors, dbName } = checkDatabaseCredentials(/** @type {any} */ (credentials), policy);
 		if (errors.length > 0 || dbName === null)
 			return buildReport({ steps: [{ name: 'credentials', ok: false, code: 'invalid_credentials' }], startedAt, now: now() });
-		let refused = false;
-		const guarded = createGuardedLookup({
-			allowlist,
-			...(lookup ? { lookup } : {}),
-			onRefused: () => {
-				refused = true;
-			},
-		});
+		const guarded = lookupWithFlag();
 		/** @type {CheckStep[]} */
 		const steps = [];
 		/** @type {string[]} */
@@ -109,7 +159,7 @@ export const createProbes = ({
 			retryWrites: false,
 			retryReads: false,
 			appName: 'ss-portal-connection-check',
-			lookup: /** @type {any} */ (guarded),
+			lookup: /** @type {any} */ (guarded.lookup),
 		});
 		/** @type {ReturnType<typeof setTimeout> | undefined} */
 		let timer;
@@ -117,7 +167,7 @@ export const createProbes = ({
 			try {
 				await client.connect();
 			} catch (error) {
-				if (refused) steps.push({ name: 'reachability', ok: false, code: 'address_refused' });
+				if (guarded.refused()) steps.push({ name: 'reachability', ok: false, code: 'address_refused' });
 				else if (isAuthError(error)) {
 					steps.push({ name: 'reachability', ok: true }, { name: 'auth', ok: false, code: 'auth_failed' });
 				} else steps.push({ name: 'reachability', ok: false, code: 'unreachable' });
@@ -137,7 +187,14 @@ export const createProbes = ({
 				info.roles = privileges.roles;
 				info.authenticated = privileges.authenticated;
 				if (!privileges.authenticated) warnings.push('unauthenticated');
-				if (privileges.overPrivileged) warnings.push('over_privileged');
+				warnings.push(...privileges.warnings);
+				if (privileges.overPrivileged) {
+					// a product connection must not reach other databases or the cluster: refuse, never write with it
+					info.privilegeIssues = privileges.reasons;
+					steps.push({ name: 'least_privilege', ok: false, code: 'over_privileged' });
+					return;
+				}
+				steps.push({ name: 'least_privilege', ok: true });
 			} catch (error) {
 				steps.push({ name: 'auth', ok: false, code: mongoCode(error) });
 				return;
@@ -189,7 +246,6 @@ export const createProbes = ({
 	 */
 	const storage = async (c) => {
 		const startedAt = now();
-		const credentials = { accessKeyId: c.accessKeyId, secretAccessKey: c.secretAccessKey };
 		const key = `${c.prefix ?? ''}ss_probe/${hex(8)}.txt`;
 		const url = objectUrl({ endpoint: c.endpoint, region: c.region, bucket: c.bucket, forcePathStyle: c.forcePathStyle }, key);
 		const content = `ss-probe ${hex(4)}`;
@@ -201,16 +257,17 @@ export const createProbes = ({
 		 */
 		const call = async (method, name) => {
 			const body = method === 'PUT' ? content : '';
-			const headers = signHeaders({
+			const headers = signV4({
 				method,
 				url,
-				credentials,
+				accessKeyId: c.accessKeyId,
+				secretAccessKey: c.secretAccessKey,
 				region: c.region,
 				now: now(),
 				headers: method === 'PUT' ? { 'content-type': 'text/plain' } : {},
 				body,
 			});
-			const res = await outbound.request({ method, url, headers, ...(method === 'PUT' ? { body } : {}) });
+			const res = await request({ method, url, headers, ...(method === 'PUT' ? { body } : {}) });
 			if (!res.ok) {
 				if (steps.length === 0) steps.push({ name: 'reachability', ok: false, code: res.code });
 				else steps.push({ name, ok: false, code: res.code });
@@ -245,7 +302,7 @@ export const createProbes = ({
 	 */
 	const httpGet = async (url, headers) => {
 		const startedAt = now();
-		const res = await outbound.request({ method: 'GET', url, headers: { accept: 'application/json', ...headers } });
+		const res = await request({ method: 'GET', url, headers: { accept: 'application/json', ...headers } });
 		/** @type {CheckStep[]} */
 		const steps = [];
 		if (!res.ok) steps.push({ name: 'reachability', ok: false, code: res.code });
@@ -270,21 +327,15 @@ export const createProbes = ({
 	const smtp = (c) =>
 		new Promise((resolve) => {
 			const startedAt = now();
-			const host = checkHost(String(c.host), allowlist);
+			const host = checkHost(String(c.host), policy);
 			if (!host.ok) {
-				resolve(buildReport({ steps: [{ name: 'reachability', ok: false, code: host.code }], startedAt, now: now() }));
+				const code = host.code === 'ssrf_blocked' ? 'address_refused' : 'invalid_host';
+				resolve(buildReport({ steps: [{ name: 'reachability', ok: false, code }], startedAt, now: now() }));
 				return;
 			}
 			const secure = c.secure ?? true;
 			const port = c.port ?? (secure ? 465 : 587);
-			let refused = false;
-			const guarded = createGuardedLookup({
-				allowlist,
-				...(lookup ? { lookup } : {}),
-				onRefused: () => {
-					refused = true;
-				},
-			});
+			const guarded = lookupWithFlag();
 			let settled = false;
 			/** @param {CheckStep[]} steps */
 			const finish = (steps) => {
@@ -294,7 +345,7 @@ export const createProbes = ({
 				socket.destroy();
 				resolve(buildReport({ steps, warnings: ['auth_not_checked'], startedAt, now: now() }));
 			};
-			const options = { host: host.host, port, lookup: /** @type {any} */ (guarded) };
+			const options = { host: host.host, port, lookup: /** @type {any} */ (guarded.lookup) };
 			const socket = secure ? tlsConnect({ ...options, servername: host.ip ? undefined : host.host }) : netConnect(options);
 			const timer = setTimeout(() => finish([{ name: 'reachability', ok: false, code: 'timeout' }]), httpTimeoutMs);
 			socket.once('data', (chunk) => {
@@ -310,7 +361,7 @@ export const createProbes = ({
 					{
 						name: 'reachability',
 						ok: false,
-						code: refused
+						code: guarded.refused()
 							? 'address_refused'
 							: /CERT|SSL|TLS|SELF_SIGNED|HOSTNAME|ALTNAME/.test(code)
 								? 'tls_error'
@@ -357,6 +408,6 @@ export const createProbes = ({
 		}
 	};
 
-	return Object.freeze({ run, database, storage, httpGet, smtp });
+	return Object.freeze({ run, database, storage, httpGet, smtp, request });
 };
 /** @typedef {ReturnType<typeof createProbes>} Probes */

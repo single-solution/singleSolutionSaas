@@ -3,7 +3,7 @@
  * only hosts, names, and the last four characters of long keys (`…abcd`, never for values shorter than 16).
  * @module
  */
-import { parseMongoUri } from './mongo-uri.js';
+import { parseMongoUri } from '@ss/net';
 import { AI_PROVIDERS } from './schemas.js';
 
 /**

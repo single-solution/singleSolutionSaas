@@ -240,12 +240,20 @@ export const createSettlement = ({ ctx, repo, deps, ledger, subscriptions }) => 
 
 	/**
 	 * The `settlement` cron: settle due subscriptions in (merchant, id) order until done or the deadline approaches.
-	 * @param {{ deadline?: number, signal?: AbortSignal, merchantId?: string | null, logger?: import('../../../infra/logger.js').Logger }} [options]
+	 * Also run lazily for one merchant (`merchantId`) before balance and meter reads, with a short deadline and no
+	 * margin. Idempotent: every hour is appended under its unique `periodKey`.
+	 * @param {{ deadline?: number, signal?: AbortSignal, merchantId?: string | null, marginMs?: number,
+	 *   logger?: import('../../../infra/logger.js').Logger }} [options] `marginMs` = stop this long before `deadline`
 	 */
-	const runSettlement = async ({ deadline = Number.POSITIVE_INFINITY, signal, merchantId = null } = {}) => {
+	const runSettlement = async ({
+		deadline = Number.POSITIVE_INFINITY,
+		signal,
+		merchantId = null,
+		marginMs = DEADLINE_MARGIN_MS,
+	} = {}) => {
 		const target = floorHour(ctx.now() - SETTLEMENT_LAG_MS);
 		const stats = { subscriptions: 0, entries: 0, duplicates: 0, failures: 0, merchants: 0, complete: true };
-		const timeUp = () => signal?.aborted === true || ctx.now() > deadline - DEADLINE_MARGIN_MS;
+		const timeUp = () => signal?.aborted === true || ctx.now() > deadline - marginMs;
 		/** @type {{ merchantId: string, id: string } | null} */
 		let after = null;
 		/** @type {string | null} */

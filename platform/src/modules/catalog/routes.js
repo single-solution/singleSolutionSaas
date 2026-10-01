@@ -291,6 +291,9 @@ export const catalogRoutes = (service, deps) => [
 			const actor = /** @type {Actor} */ (ctx.actor);
 			if (input.kind === 'impersonate') ctx.authorize('platform.impersonate');
 			if (input.kind === 'merchant') return problem('forbidden', 'Staff open products as admin or by impersonation.');
+			// app-wide admin launches (scope.all) need platform.launch.admin AND the superadmin or admin staff role
+			if (input.all && !(actor.roles ?? []).some((role) => role === 'superadmin' || role === 'admin'))
+				return problem('forbidden', 'App-wide admin launches need the superadmin or admin role.');
 			const user = { id: actor.id, roles: [...(actor.roles ?? [])] };
 			const impersonated = input.kind === 'impersonate';
 			if (impersonated && !input.subject) return problem('validation_failed', 'subject (the impersonated user) is required.');
@@ -300,6 +303,7 @@ export const catalogRoutes = (service, deps) => [
 				subject: impersonated ? /** @type {string} */ (input.subject) : actor.id,
 				user: impersonated ? { id: /** @type {string} */ (input.subject) } : user,
 				scope: {
+					...(input.all ? { all: /** @type {const} */ (true) } : {}),
 					...(input.merchantId ? { merchantId: input.merchantId } : {}),
 					...(input.websiteId ? { websiteId: input.websiteId } : {}),
 					...(input.partnerId ? { partnerId: input.partnerId } : {}),

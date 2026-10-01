@@ -16,7 +16,8 @@ Merchants, merchant users, staff users, partners, developers, sessions, websites
 - Website keys: `issueKey({ websiteId, kind: 'pk'|'sk', scopes, expiresAt? })` → `{ keyId, key }` (shown once),
   `revokeKey({ keyId, reason })`, `revocationsSince(cursor)` → `{ keyIds, cursor }`.
 - Website keys are signed with a **dedicated website-key signing key** (`WEBSITE_KEY_SIGNING_KEYS`), not the launch key.
-- Implements ports `sessionActor`, `websiteKeyRevoked`.
+- Implements ports `sessionActor(session)` and `websiteKeyRevoked(claims, rawKey)` → `true` when the key is revoked,
+  unknown, or (for `sk_`) its HMAC does not match `rawKey`; infra calls it after the offline signature check.
 - Calls `integration.emitControl('key.revoked@1', …)` on revoke.
 
 ## catalog (`modules/catalog`)
@@ -29,23 +30,41 @@ health, launches.
 - `getManifest(appId, version?)` → validated manifest (features inline)
 - `activeProducts()` → catalog list for consoles
 - `issueLaunch({ kind, appId, subject, user, scope, subscriptions, actor?, impersonationSeconds? })` → `{ url, token }`
-  (`url` = `<product>/sso?launch=<token>`)
+  (`url` = `<product>/sso?launch=<token>`). Admin launches carry `scope.merchantId` or the app-wide `scope: { all: true }`
+  (exclusive: only `permissions` may sit next to it). The staff route `POST /v1/admin/apps/:appId/launch` with
+  `{ kind: 'admin', all: true }` needs `platform.launch.admin` **and** the `superadmin` or `admin` staff role (support
+  staff may launch per merchant only).
+- `refreshManifest({ appId })` imports `/.well-known/ss-app.json` only with a valid `SS-Manifest-Signature`
+  (`@ss/protocol` `verifyManifest` over the app's registered, non-revoked keys, `expectedAppId = appId`, ≤ 24 h old).
+  An unsigned or invalid refresh is stored as a `rejected` version with `review.reason`
+  (`manifest_signature_missing | _no_keys | _malformed | _signature | _issuer | _expired | _unknown_kid | …`), audited
+  as `catalog.manifest_signature_rejected` and alerted (error log `catalog alert: …`); identical repeats are not
+  stored again. Returns `{ changed, version, rejected?, reason? }`.
 - Implements port `appKeys(appId)` → KeyResolver of registered (non-revoked) app keys.
-- Emits `manifest.accepted@1` via integration on approval.
+- Emits `manifest.accepted@1` (platform-scoped, `appIds: [appId]`) via integration on approval.
 
 ## commerce (`modules/commerce`)
 
 Subscriptions, element switches, entitlement documents, usage, quotas, ledger (append-only, hash-chained),
 credits, settlement, spend caps.
 
-- `subscribe({ websiteId, appId, planCode? })` → subscription (requires ≥ 1 hour of credits; pins price book)
+- `subscribe({ websiteId, appId, planCode? })` → subscription (requires ≥ 1 hour of credits; pins price book). A manifest
+  `trialHours` is granted once per website × app at the first subscribe as an `adjustment` ledger entry
+  (`entryKey trial:<websiteId>:<appId>`, worth `trialHours ×` the first hour's charge; it counts towards the one-hour
+  minimum; audited `credits.trial_granted`).
 - `getSubscription(subscriptionId)`, `subscriptionsForWebsite(websiteId)`
 - `setElement({ subscriptionId, elementKey, enabled, actor })`
 - `pause / resume / cancel({ subscriptionId, reason, actor })`
 - `documentFor({ websiteId, appId })` → compact JWS (signed by Portal signer, cached until content hash changes)
 - `recordUsage({ appId, records })` → `{ results }` (F.9)
 - `addCredits({ merchantId, amountMillicredits, reference, note, actor })`, `adjust`, `refund`
-- `balance(merchantId)`, `statement(merchantId, { from, to, websiteId? })`
+- `balance(merchantId)`, `meter(merchantId)` — both settle the merchant's due complete hours first (lazy settlement:
+  `runSettlement({ merchantId })`, 2 s budget, idempotent per `periodKey`; a failure never fails the read)
+- `statement(merchantId, { from, to, websiteId? })`
+- `invalidate(subscriptionId)`, `invalidateWebsite(websiteId)`, `invalidateApp(appId)` (re-resolve and re-sign the
+  documents of every live subscription of an app, e.g. after a manifest is accepted) → `{ invalidated }`
+- `previewDocument({ subscriptionId, layers })` → the canonical, unsigned document the subscription would get with
+  `layers` (config dry runs; nothing stored or emitted)
 - Crons `settlement` (hourly), `reconciliation` (nightly).
 - Reads configuration layers from `config.layersFor(subscriptionId)`; resource status from
   `connectors.statusFor(websiteId)`.
@@ -73,7 +92,9 @@ Event Hub and control-event delivery.
 idempotencyKey)`; payloads are NOT persisted in Portal — only routing metadata: id, type, websiteId, receivedAt,
   delivery status) → `{ results }`
 - `publishFromProduct({ appId, events })` (scope + namespace rules from the manifest)
-- `emitControl(type, data, { appIds?, websiteId? })` (Portal-only control events)
+- `emitControl(type, data, { appIds?, websiteId? })` (Portal-only control events). Website-scoped types need `websiteId`
+  (targets: `appIds`, else every product subscribed on the website); **platform-scoped** types (`manifest.accepted@1`)
+  carry no `websiteId` in the envelope and need `appIds`.
 - Fan-out: subscriptions derived from accepted manifests (`events.consumes`) × active subscriptions; deliveries are
   jobs `integration.deliver` signed with `@ss/protocol` `signEvent`, retries with backoff, DLQ, replay.
 - `deliveryLog({ websiteId | appId, cursor })`, `replay(deliveryId)`.
@@ -86,8 +107,12 @@ Client-owned resources (§1a): database, storage, ai, messaging, payments, analy
 
 - `create({ merchantId, kind, provider, credentials, websiteIds })` (credentials sealed with `ctx.envelope`, aad =
   merchantId + connectorId; never returned)
-- `test(connectorId)` → check report (database: reachability, auth, role can create indexes in its own db, no
-  `admin`/cluster privileges required; storage: put/get/delete probe object; ai/messaging: a cheap authenticated call)
+- `test(connectorId)` → check report (database: reachability, auth, least privilege, role can create indexes in its own
+  db; storage: put/get/delete probe object; ai/messaging: a cheap authenticated call). Least privilege: any role or
+  privilege on another database (including `admin`), cluster-level roles (`root`, `clusterAdmin`, …), any
+  `*AnyDatabase` role or cluster / any-resource privilege fails the check (`least_privilege` step, code
+  `over_privileged`, status `failing`); `dbAdmin` / `dbOwner` / `userAdmin` on the target database is a `db_admin`
+  warning only. Every destination passes the `@ss/net` outbound policy.
 - `rotate`, `revoke`, `assign({ connectorId, websiteIds })`
 - `statusFor(websiteId)` → `[{ kind, ref, status: connected|missing|failing|revoked }]`
 - `resolve({ appId, websiteId, kind })` → `{ kind, descriptor, expiresAt }` (F.9) — only for products whose manifest

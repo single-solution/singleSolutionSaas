@@ -1,5 +1,5 @@
 @import 'tailwindcss';
+@import '@ss/ui/theme.css';
 
-@theme {
-	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-}
+/* the component library lives outside this package: scan its sources for classes */
+@source '../../packages/ui/src';

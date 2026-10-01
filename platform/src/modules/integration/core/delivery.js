@@ -41,22 +41,40 @@ export const attemptsForWindow = ({ windowMs = RETRY_WINDOW_MS, baseMs = 5_000, 
 export const classifyStatus = (status) =>
 	status >= 200 && status < 300 ? { ok: true, status } : { ok: false, code: `http_${status}`, permanent: false, status };
 
+/** Responses of a delivery are read up to this size (the body is discarded). */
+export const MAX_RESPONSE_BYTES = 64 * 1024;
+
 /**
- * Classify a transport error into a stable code. SSRF refusals are permanent (straight to the DLQ).
+ * Classify a transport error (`@ss/net` `NetError`) into a stable code. SSRF refusals and refused URLs are permanent
+ * (straight to the DLQ); everything else retries.
  * @param {unknown} error
  * @returns {AttemptOutcome}
  */
 export const classifyError = (error) => {
-	const code = typeof error === 'object' && error !== null ? /** @type {Record<string, unknown>} */ (error).code : undefined;
-	if (code === 'ssrf_blocked') return { ok: false, code: 'ssrf_blocked', permanent: true };
+	const e = typeof error === 'object' && error !== null ? /** @type {Record<string, unknown>} */ (error) : {};
+	const { code, reason, detail } = e;
+	if (code === 'ssrf_blocked' || code === 'bad_url') return { ok: false, code: 'ssrf_blocked', permanent: true };
 	if (code === 'timeout') return { ok: false, code: 'timeout', permanent: false };
-	if (code === 'ENOTFOUND' || code === 'EAI_AGAIN' || code === 'ENODATA')
-		return { ok: false, code: 'dns_failed', permanent: false };
-	if (code === 'ECONNREFUSED') return { ok: false, code: 'connection_refused', permanent: false };
-	if (code === 'ECONNRESET' || code === 'EPIPE') return { ok: false, code: 'connection_reset', permanent: false };
-	if (typeof code === 'string' && /^(ERR_TLS|CERT_|UNABLE_TO|DEPTH_ZERO|SELF_SIGNED)/.test(code))
-		return { ok: false, code: 'tls_failed', permanent: false };
+	if (code === 'aborted') return { ok: false, code: 'aborted', permanent: false };
+	if (code === 'too_large') return { ok: false, code: 'response_too_large', permanent: false };
+	if (code === 'network') {
+		if (reason === 'dns_failed') return { ok: false, code: 'dns_failed', permanent: false };
+		if (reason === 'tls_failed') return { ok: false, code: 'tls_failed', permanent: false };
+		if (detail === 'ECONNREFUSED') return { ok: false, code: 'connection_refused', permanent: false };
+		if (detail === 'ECONNRESET' || detail === 'EPIPE') return { ok: false, code: 'connection_reset', permanent: false };
+	}
 	return { ok: false, code: 'network_error', permanent: false };
+};
+
+/**
+ * The events endpoint of a product: `endpoints.base` + `endpoints.events` (both from the registered app).
+ * @param {{ base?: unknown, events?: unknown } | null | undefined} endpoints
+ * @returns {string | null}
+ */
+export const eventsEndpoint = (endpoints) => {
+	if (!endpoints || typeof endpoints.base !== 'string' || typeof endpoints.events !== 'string') return null;
+	if (!endpoints.events.startsWith('/')) return null;
+	return `${endpoints.base.replace(/\/+$/, '')}${endpoints.events}`;
 };
 
 /**

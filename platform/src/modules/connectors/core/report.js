@@ -52,31 +52,43 @@ export const buildReport = ({ steps, warnings = [], info, startedAt, now, skippe
 	...(info ? { info } : {}),
 });
 
-/** Built-in MongoDB roles that reach beyond one database (more than a product connection needs). */
-const BROAD_ROLES = new Set([
+/** Built-in MongoDB roles that reach beyond one database or into the cluster: always refused. */
+const CLUSTER_ROLES = new Set([
 	'root',
 	'__system',
+	'__queryableBackup',
 	'clusterAdmin',
 	'clusterManager',
 	'clusterMonitor',
 	'hostManager',
 	'backup',
 	'restore',
-	'readAnyDatabase',
-	'readWriteAnyDatabase',
-	'userAdminAnyDatabase',
-	'dbAdminAnyDatabase',
 	'atlasAdmin',
 	'enableSharding',
+	'searchCoordinator',
+	'directShardOperations',
 ]);
+/** Administrative roles tolerated on the target database only (reported as a warning). */
+const ADMIN_ROLES = new Set(['dbAdmin', 'dbOwner', 'userAdmin']);
 
 /**
- * Summarise `connectionStatus` (`showPrivileges: true`) for the report: role names (`role@db`), whether the user is
- * authenticated, and whether it holds more than least privilege (cluster/any-resource privileges, broad built-in
- * roles, or privileges on `admin` / other databases).
+ * @typedef {object} PrivilegeAnalysis
+ * @property {boolean} authenticated
+ * @property {string[]} roles `role@db`, sorted
+ * @property {boolean} overPrivileged the connection must be refused (`over_privileged`)
+ * @property {string[]} reasons why: `cluster_role`, `any_database_role`, `other_database`, `cluster_privilege`
+ * @property {string[]} warnings `db_admin` when dbAdmin / dbOwner / userAdmin is held on the target database
+ */
+
+/**
+ * Least-privilege analysis of `connectionStatus` (`showPrivileges: true`). A product connection may hold privileges on
+ * the target database only. Refused (`overPrivileged`): cluster-level roles (`root`, `clusterAdmin`, …), any
+ * `*AnyDatabase` role, any role or privilege on another database (including `admin` and the every-database resource
+ * `db: ''`), and cluster / any-resource privileges. `dbAdmin`, `dbOwner` and `userAdmin` on the target database are a
+ * warning only.
  * @param {unknown} status raw command result
  * @param {string} dbName target database
- * @returns {{ authenticated: boolean, roles: string[], overPrivileged: boolean }}
+ * @returns {PrivilegeAnalysis}
  */
 export const analysePrivileges = (status, dbName) => {
 	const authInfo = /** @type {any} */ (status)?.authInfo ?? {};
@@ -86,15 +98,26 @@ export const analysePrivileges = (status, dbName) => {
 		.filter((/** @type {any} */ r) => typeof r?.role === 'string' && typeof r?.db === 'string')
 		.map((/** @type {any} */ r) => ({ role: String(r.role), db: String(r.db) }));
 	const privileges = Array.isArray(authInfo.authenticatedUserPrivileges) ? authInfo.authenticatedUserPrivileges : [];
-	const broadRole = roles.some((r) => BROAD_ROLES.has(r.role) || (r.db === 'admin' && r.role !== 'read'));
-	const broadPrivilege = privileges.some((/** @type {any} */ p) => {
-		const resource = p?.resource ?? {};
-		if (resource.cluster === true || resource.anyResource === true) return true;
-		return typeof resource.db === 'string' && resource.db !== dbName; // '' = every database
-	});
+	/** @type {Set<string>} */
+	const reasons = new Set();
+	/** @type {Set<string>} */
+	const warnings = new Set();
+	for (const { role, db } of roles) {
+		if (CLUSTER_ROLES.has(role)) reasons.add('cluster_role');
+		else if (role.endsWith('AnyDatabase')) reasons.add('any_database_role');
+		else if (db !== dbName) reasons.add('other_database');
+		else if (ADMIN_ROLES.has(role)) warnings.add('db_admin');
+	}
+	for (const privilege of privileges) {
+		const resource = /** @type {any} */ (privilege)?.resource ?? {};
+		if (resource.cluster === true || resource.anyResource === true) reasons.add('cluster_privilege');
+		else if (typeof resource.db === 'string' && resource.db !== dbName) reasons.add('other_database'); // '' = every db
+	}
 	return {
 		authenticated: users.length > 0,
 		roles: roles.map((r) => `${r.role}@${r.db}`).sort(),
-		overPrivileged: broadRole || broadPrivilege,
+		overPrivileged: reasons.size > 0,
+		reasons: [...reasons].sort(),
+		warnings: [...warnings],
 	};
 };

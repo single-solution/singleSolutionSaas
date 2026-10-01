@@ -38,22 +38,27 @@ export const exampleModule = defineModule({
 
 Every factory receives a `ModuleContext`:
 
-| member                                                         | what                                                                                   |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `collection(name)`                                             | repository of **one of this module's** collections (foreign collections throw)         |
-| `service(name)`                                                | another module's (or this module's) public service                                     |
-| `moduleNames()`                                                | registered module names                                                                |
-| `config`, `logger` (child with `module`), `now`, `randomBytes` | configuration and injected I/O                                                         |
-| `problems`                                                     | RFC 9457 factory (`@ss/contracts`) including every module's codes                      |
-| `keys`                                                         | Portal signer(s), JWKS, resolver over our own keys (`@ss/protocol` primitives)         |
-| `envelope`                                                     | `seal(plaintext, { aad })` / `open` / `rewrap` for client credentials                  |
-| `secretHasher`                                                 | `hash` / `verify` website secret keys (HMAC with `WEBSITE_KEY_PEPPER`)                 |
-| `audit`                                                        | `record({ actor, action, target, before, after, requestId, ip, reason })`, `list(...)` |
-| `jobs`                                                         | `enqueue({ name, payload, key, runAt, maxAttempts })`, dead letters, replay            |
-| `locks`                                                        | lease locks                                                                            |
-| `sessions`, `loginThrottle`, `cookies`                         | console session primitives (identity module)                                           |
-| `replayStore`                                                  | shared atomic replay store for `@ss/protocol` verifiers (launch `consume`, nonces)     |
-| `rbac`                                                         | `can(actor, permission, resource)`, `websitesVisible(actor, permission)`               |
+| member                                                                                                | what                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `collection(name)`                                                                                    | repository of **one of this module's** collections (foreign collections throw)                                                              |
+| `service(name)`                                                                                       | another module's (or this module's) public service                                                                                          |
+| `moduleNames()`                                                                                       | registered module names                                                                                                                     |
+| `config`, `logger` (child with `module`), `now`, `randomBytes`                                        | configuration and injected I/O                                                                                                              |
+| `config.outbound.allowHosts`                                                                          | development outbound allowlist (`OUTBOUND_DEV_ALLOW_HOSTS`; always empty in production) — build the `@ss/net` policy from it                |
+| `problems`                                                                                            | RFC 9457 factory (`@ss/contracts`) including every module's codes                                                                           |
+| `keys`                                                                                                | Portal signer(s) (`signer`, `signers`), `jwks()`, `keyResolver` over our own keys (`@ss/protocol` primitives)                               |
+| `keys.websiteKeySigner`, `keys.websiteKeySigners`, `keys.websiteKeyResolver`, `keys.websiteKeyJwks()` | dedicated website-key (`pk_`/`sk_`) signing keys (`WEBSITE_KEY_SIGNING_KEYS`) — never the launch key; `keys.publishedJwks()` = both sets    |
+| `envelope`                                                                                            | `seal(plaintext, { aad })` / `open` / `rewrap` for client credentials                                                                       |
+| `secretHasher`                                                                                        | `hash` / `verify` website secret keys (HMAC with `WEBSITE_KEY_PEPPER`)                                                                      |
+| `verifyWebsiteKey({ key, origin, referer, keyKind?, scopes?, env? })`                                 | the `websiteKey` authenticator's verification for keys carried outside `Authorization` (e.g. `sendBeacon` body auth); throws infra problems |
+| `withTransaction(fn)`                                                                                 | run `fn(session)` in a retried multi-document transaction; pass `{ session }` to every repository call inside it                            |
+| `mailer`                                                                                              | platform mailer `send({ to, template, data })` (verify e-mail, password reset, invite, staff setup); `available` false → 503                |
+| `audit`                                                                                               | `record({ actor, action, target, before, after, requestId, ip, reason })`, `list(...)`                                                      |
+| `jobs`                                                                                                | `enqueue({ name, payload, key, runAt, maxAttempts })`, dead letters, replay                                                                 |
+| `locks`                                                                                               | lease locks                                                                                                                                 |
+| `sessions`, `loginThrottle`, `cookies`                                                                | console session primitives (identity module)                                                                                                |
+| `replayStore`                                                                                         | shared atomic replay store for `@ss/protocol` verifiers (launch `consume`, nonces)                                                          |
+| `rbac`                                                                                                | `can(actor, permission, resource)`, `websitesVisible(actor, permission)`                                                                    |
 
 ## Rules
 
@@ -62,6 +67,11 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
   `tenant: 'merchant'` and are reached with `repo.forMerchant(merchantId)` (every filter pins `merchantId`);
   staff/system code that must cross merchants uses `repo.acrossMerchants()` explicitly. Ledgers, audit-like and
   event-like records use `appendOnly: true` (the repository has no update or delete).
+- **Outbound calls** to merchant- or developer-supplied destinations (product registration and manifest refresh,
+  event deliveries, connector checks, client databases) go through `@ss/net` only: one `createOutboundPolicy` per
+  module built from `ctx.config.outbound.allowHosts` (forced empty when `ctx.config.isProduction`), `safeFetch` for
+  HTTP(S), `checkHost` + `guardedLookup` for sockets and the MongoDB driver, `isSafeMongoUri` for connection strings,
+  `signV4` for object stores. No module keeps its own SSRF rules.
 - **No client data** in Portal collections (PLAN §1a): ids, hashes, sealed credentials, control-plane facts only.
 - **Routes** are `/v1/...` with an `auth` mode (`staff`, `merchant`, `websiteKey`, `product`, `cron`, `public`, or a
   list tried in order) and, for console routes, a `permission` checked against `resource(ctx)` (default
@@ -76,7 +86,7 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
   `drain` cron runs queued jobs. Unknown cron names answer 404.
 - **Ports** are infra extension points with a single provider each: `sessionActor(session)` (identity: live roles,
   deactivated users → null), `appKeys(appId)` (catalog: registered app keys as a `KeyResolver`),
-  `websiteKeyRevoked(claims)` (keys: revocation + hash check). Without a provider, product assertions are refused and
+  `websiteKeyRevoked(claims, rawKey)` (identity: revocation + `sk_` hash check). Without a provider, product assertions are refused and
   website keys fail closed (503).
 - **Migrations** are `YYYYMMDDHHMM-<module>-<slug>`, run in id order across modules under a lock, recorded once, and
   must be safe to re-run after a crash. Provide `plan()` for the dry run. They receive the raw `Db` and must never

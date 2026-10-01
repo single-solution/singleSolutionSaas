@@ -135,6 +135,60 @@ describe('manifest versions: refresh, diff, review', () => {
 		]);
 	});
 
+	it('requires a valid SS-Manifest-Signature on refreshes (rejected + alerted otherwise)', async () => {
+		const { t, p, appId } = await setup();
+		const v2 = serviceManifest();
+		v2.product.version = '1.1.0';
+		v2.trialHours = 48;
+		p.setManifest(v2);
+		/** @type {Array<[any, string]>} */
+		const cases = [
+			['omit', 'manifest_signature_missing'],
+			['garbage', 'manifest_signature_malformed'],
+			['other_app', 'manifest_signature_issuer'],
+			['stale', 'manifest_signature_expired'],
+			['other_manifest', 'manifest_signature_signature'],
+			['foreign_key', 'manifest_signature_unknown_kid'],
+		];
+		let version = 1;
+		for (const [tamper, reason] of cases) {
+			p.tamper.signature = tamper;
+			const res = await t.staff('POST', `/v1/admin/apps/${appId}/refresh`);
+			version += 1;
+			expect(res.json, tamper).toMatchObject({
+				changed: false,
+				rejected: true,
+				reason,
+				version: { version, status: 'rejected', source: 'refresh', review: { by: 'catalog', reason } },
+			});
+		}
+		// the same refusal again is not stored twice
+		const again = await t.staff('POST', `/v1/admin/apps/${appId}/refresh`);
+		expect(again.json).toMatchObject({ rejected: true, version: { version } });
+		expect(await t.service().getApp(appId)).toMatchObject({ currentVersion: 1, pendingVersion: null });
+		expect(t.entries.filter((e) => e.msg === 'catalog alert: refreshed manifest refused')).toHaveLength(cases.length);
+		expect((await t.audit(appId)).filter((a) => a.action === 'catalog.manifest_signature_rejected')).toHaveLength(cases.length);
+		expect(await t.service().refreshAll()).toMatchObject({ checked: 1, rejected: 1 });
+		// revoked app keys cannot sign either
+		p.tamper.signature = undefined;
+		await t.staff('POST', `/v1/admin/apps/${appId}/keys/product-k1/revoke`, { body: { reason: 'leaked' } });
+		expect((await t.staff('POST', `/v1/admin/apps/${appId}/refresh`)).json).toMatchObject({
+			rejected: true,
+			reason: 'manifest_signature_no_keys',
+		});
+	});
+
+	it('accepts a correctly signed refresh', async () => {
+		const { t, p, appId } = await setup();
+		const v2 = serviceManifest();
+		v2.product.version = '1.1.0';
+		p.setManifest(v2);
+		expect((await t.staff('POST', `/v1/admin/apps/${appId}/refresh`)).json).toMatchObject({
+			changed: true,
+			version: { version: 2, status: 'pending' },
+		});
+	});
+
 	it('refuses refreshes that change identity or reach invalid manifests, and survives integration failures', async () => {
 		const { t, p, appId } = await setup();
 		const renamed = serviceManifest();
@@ -438,6 +492,12 @@ describe('launches', () => {
 		expect(await t.verify(tokenOf(await staffLaunch({ kind: 'developer', developerId: 'dev_1' })), appId)).toMatchObject({
 			kind: 'developer',
 		});
+		// app-wide admin launch: platform.launch.admin plus the superadmin/admin role
+		const wide = await t.verify(tokenOf(await staffLaunch({ kind: 'admin', all: true })), appId);
+		expect(wide).toMatchObject({ kind: 'admin', sub: 'stf_alice', scope: { all: true } });
+		expect(wide.scope).not.toHaveProperty('merchantId');
+		problemOf(await staffLaunch({ kind: 'admin', all: true }, ['support']), 403, 'forbidden');
+		problemOf(await staffLaunch({ kind: 'admin', all: true, merchantId: MERCHANT }), 422, 'validation_failed');
 
 		// kind rules and permissions
 		problemOf(await staffLaunch({ kind: 'impersonate', merchantId: MERCHANT, subject: 'usr_owner' }, ['support']), 403);
@@ -475,8 +535,10 @@ describe('launches', () => {
 			'developer',
 			'admin',
 			'admin',
+			'admin',
 		]);
 		expect(launches[0]).toMatchObject({ actor: { id: 'stf_bob' }, merchantId: MERCHANT });
+		expect(launches[6]).toMatchObject({ merchantId: null, after: { kind: 'admin', scope: 'all' } });
 	});
 
 	it('includes the website subscriptions from commerce in merchant launches', async () => {

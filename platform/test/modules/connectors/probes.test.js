@@ -1,130 +1,98 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { createGuardedLookup, createOutbound, REFUSED_CODE } from '../../../src/modules/connectors/adapters/outbound.js';
-import { DB_TIMEOUTS, createProbes } from '../../../src/modules/connectors/adapters/probes.js';
-import { EMPTY_ALLOWLIST, allowlistFor } from '../../../src/modules/connectors/core/netguard.js';
+import { createOutboundPolicy } from '@ss/net';
+import { DB_TIMEOUTS, createProbes, outboundCode } from '../../../src/modules/connectors/adapters/probes.js';
 import { startFakeApi, startFakeS3, startFakeSmtp } from './fakes/servers.js';
 
-const DEV = allowlistFor('test', ['127.0.0.1']);
+/** @param {ReadonlyArray<string>} [allowHosts] @param {import('@ss/net').Resolver} [resolve] */
+const policyOf = (allowHosts = [], resolve) =>
+	createOutboundPolicy({ allowHosts, maxRedirects: 0, maxBytes: 64 * 1024, ...(resolve ? { resolve } : {}) });
+const DEV = policyOf(['127.0.0.1']);
+const STRICT = policyOf();
 const KEY = 'sk-live-abcdefghijklmnopqrstuvwxyz012345';
 let n = 0;
 const randomBytes = (/** @type {number} */ size) => new Uint8Array(size).fill((n += 1) % 256);
 
 /**
- * Fake DNS: maps names to addresses.
+ * Fake DNS for the outbound policy: maps names to addresses (unknown names fail with ENOTFOUND).
  * @param {Record<string, string[]>} table
+ * @returns {import('@ss/net').Resolver}
  */
-const fakeDns = (table) =>
-	/** @type {any} */ (
-		(/** @type {string} */ hostname, /** @type {any} */ _options, /** @type {Function} */ cb) => {
-			const addresses = table[hostname];
-			if (!addresses) return cb(Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' }));
-			return cb(
-				null,
-				addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 })),
-			);
-		}
-	);
+const fakeDns = (table) => async (hostname) => {
+	const addresses = table[hostname];
+	if (!addresses) throw Object.assign(new Error('ENOTFOUND'), { code: 'ENOTFOUND' });
+	return addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }));
+};
 
-describe('guarded lookup', () => {
-	/** @param {any} lookup @param {string} host @param {any} options */
-	const run = (lookup, host, options) =>
-		new Promise((resolve) => {
-			lookup(host, options, (/** @type {any} */ error, /** @type {any} */ address, /** @type {any} */ family) =>
-				resolve({ error: error?.code ?? null, address, family }),
-			);
-		});
-
-	it('refuses private, loopback and metadata addresses after resolution', async () => {
-		let refusals = 0;
-		const dns = fakeDns({
-			'rebind.example.com': ['93.184.216.34', '10.0.0.7'],
-			'meta.example.com': ['169.254.169.254'],
-			'v6.example.com': ['fd00:ec2::254'],
-			'ok.example.com': ['93.184.216.34'],
-			'empty.example.com': [],
-			'dev.example.com': ['127.0.0.1'],
-		});
-		const lookup = createGuardedLookup({ allowlist: EMPTY_ALLOWLIST, lookup: dns, onRefused: () => (refusals += 1) });
-		expect(await run(lookup, 'rebind.example.com', { all: true })).toMatchObject({ error: REFUSED_CODE });
-		expect(await run(lookup, 'meta.example.com', {})).toMatchObject({ error: REFUSED_CODE });
-		expect(await run(lookup, 'v6.example.com', 6)).toMatchObject({ error: REFUSED_CODE });
-		expect(await run(lookup, 'empty.example.com', {})).toMatchObject({ error: REFUSED_CODE });
-		expect(refusals).toBe(4);
-		expect(await run(lookup, 'missing.example.com', {})).toMatchObject({ error: 'ENOTFOUND' });
-		expect(await run(lookup, 'ok.example.com', {})).toEqual({ error: null, address: '93.184.216.34', family: 4 });
-		expect(await run(lookup, 'ok.example.com', { all: true })).toEqual({
-			error: null,
-			address: [{ address: '93.184.216.34', family: 4 }],
-			family: undefined,
-		});
-		const viaCallback = await new Promise((resolve) =>
-			/** @type {any} */ (lookup)('ok.example.com', (/** @type {any} */ e, /** @type {any} */ a) => resolve(a)),
-		);
-		expect(viaCallback).toBe('93.184.216.34');
-		const allowHost = createGuardedLookup({ allowlist: allowlistFor('test', ['dev.example.com']), lookup: dns });
-		expect(await run(allowHost, 'dev.example.com', {})).toMatchObject({ error: null, address: '127.0.0.1' });
-		const allowIp = createGuardedLookup({ allowlist: DEV, lookup: dns });
-		expect(await run(allowIp, 'dev.example.com', null)).toMatchObject({ error: null, address: '127.0.0.1' });
-		// the default resolver is the system one
-		const system = createGuardedLookup({ allowlist: EMPTY_ALLOWLIST });
-		expect(await run(system, 'localhost', {})).toMatchObject({ error: REFUSED_CODE });
-	});
-});
-
-describe('outbound requests', () => {
+describe('outbound requests (@ss/net policy, end to end)', () => {
 	/** @type {Awaited<ReturnType<typeof startFakeApi>>} */
 	let api;
 	beforeAll(async () => {
 		api = await startFakeApi({ header: 'authorization', value: `Bearer ${KEY}` });
 	});
 	afterAll(async () => api.close());
+	const now = () => Date.now();
 
-	it('enforces https and public destinations', async () => {
-		const strict = createOutbound({ allowlist: EMPTY_ALLOWLIST });
-		expect(await strict.request({ method: 'GET', url: `${api.baseUrl}/models` })).toEqual({
-			ok: false,
-			code: 'address_refused',
+	it('enforces https, allowed ports and public destinations before connecting', async () => {
+		const strict = createProbes({ policy: STRICT, now, randomBytes });
+		/** @param {string} url */
+		const code = async (url) => {
+			const res = await strict.request({ method: 'GET', url });
+			return res.ok ? res.status : res.code;
+		};
+		expect(await code(`${api.baseUrl}/models`)).toBe('address_refused');
+		expect(await code('http://api.example.com/models')).toBe('https_required');
+		expect(await code('https://169.254.169.254/latest/meta-data/')).toBe('address_refused');
+		expect(await code('https://[fd00:ec2::254]/')).toBe('address_refused');
+		expect(await code('https://[::ffff:a9fe:a9fe]/')).toBe('address_refused');
+		expect(await code('https://0x7f.1/')).toBe('address_refused');
+		expect(await code('https://10.0.0.1/')).toBe('address_refused');
+		expect(await code('https://api.example.com:9200/')).toBe('port_refused');
+		expect(await code('gopher://x.example.com')).toBe('https_required');
+		expect(await code('https://user:pw@api.example.com/')).toBe('invalid_url');
+		expect(await code('::')).toBe('invalid_url');
+		expect(api.requests).toHaveLength(0);
+	});
+
+	it('vets every DNS answer at connect time (rebinding, metadata, private)', async () => {
+		const dns = fakeDns({
+			'rebind.example.com': ['93.184.216.34', '10.0.0.7'],
+			'meta.example.com': ['169.254.169.254'],
+			'v6.example.com': ['fd00:ec2::254'],
+			'api.attacker.example': ['127.0.0.1'],
+			'empty.example.com': [],
 		});
-		expect(await strict.request({ method: 'GET', url: 'http://api.example.com/models' })).toEqual({
-			ok: false,
-			code: 'https_required',
-		});
-		expect(await strict.request({ method: 'GET', url: 'https://169.254.169.254/latest/meta-data/' })).toEqual({
-			ok: false,
-			code: 'address_refused',
-		});
-		expect(await strict.request({ method: 'GET', url: 'https://[fd00:ec2::254]/' })).toEqual({
-			ok: false,
-			code: 'address_refused',
-		});
-		expect(await strict.request({ method: 'GET', url: 'https://10.0.0.1/' })).toEqual({ ok: false, code: 'address_refused' });
-		expect(await strict.request({ method: 'GET', url: 'gopher://x.example.com' })).toEqual({
-			ok: false,
-			code: 'https_required',
-		});
-		expect(await strict.request({ method: 'GET', url: '::' })).toEqual({ ok: false, code: 'invalid_url' });
-		// a public-looking name that resolves to a private address never gets a connection
-		const rebinding = createOutbound({
-			allowlist: EMPTY_ALLOWLIST,
-			lookup: fakeDns({ 'api.attacker.example': ['127.0.0.1'] }),
-		});
-		const before = api.requests.length;
-		expect(await rebinding.request({ method: 'GET', url: 'https://api.attacker.example/models' })).toEqual({
-			ok: false,
-			code: 'address_refused',
-		});
-		expect(api.requests.length).toBe(before);
-		const unknown = createOutbound({ allowlist: EMPTY_ALLOWLIST, lookup: fakeDns({}) });
-		expect(await unknown.request({ method: 'GET', url: 'https://nowhere.example/' })).toEqual({
+		const probes = createProbes({ policy: policyOf([], dns), now, randomBytes });
+		for (const host of ['rebind.example.com', 'meta.example.com', 'v6.example.com', 'api.attacker.example'])
+			expect(await probes.request({ method: 'GET', url: `https://${host}/models` }), host).toEqual({
+				ok: false,
+				code: 'address_refused',
+			});
+		expect(await probes.request({ method: 'GET', url: 'https://empty.example.com/' })).toEqual({
 			ok: false,
 			code: 'unreachable',
 		});
+		expect(await probes.request({ method: 'GET', url: 'https://nowhere.example/' })).toEqual({
+			ok: false,
+			code: 'unreachable',
+		});
+		expect(api.requests).toHaveLength(0);
+		// an allowlisted development name may resolve to loopback
+		const port = new URL(api.baseUrl).port;
+		const dev = createProbes({
+			policy: policyOf(['dev.example.com'], fakeDns({ 'dev.example.com': ['127.0.0.1'] })),
+			now,
+			randomBytes,
+		});
+		expect(await dev.request({ method: 'GET', url: `http://dev.example.com:${port}/models` })).toMatchObject({
+			ok: true,
+			status: 401,
+		});
 	});
 
-	it('performs allowlisted requests with caps and deadlines', async () => {
-		const dev = createOutbound({ allowlist: DEV });
+	it('performs allowlisted requests with caps, deadlines and no redirects', async () => {
+		const dev = createProbes({ policy: DEV, now, randomBytes, httpTimeoutMs: 2_000 });
 		const ok = await dev.request({
 			method: 'POST',
 			url: `${api.baseUrl}/models`,
@@ -133,31 +101,28 @@ describe('outbound requests', () => {
 		});
 		expect(ok).toMatchObject({ ok: true, status: 200 });
 		expect(ok.ok && ok.body.toString()).toBe('{"data":[]}');
-		const buf = await dev.request({ method: 'POST', url: `${api.baseUrl}/x`, body: Buffer.from('a') });
-		expect(buf).toMatchObject({ ok: true, status: 401 });
 		const slow = await startFakeApi({ header: 'x', value: 'y', delayMs: 500 });
-		expect(await dev.request({ method: 'GET', url: `${slow.baseUrl}/`, timeoutMs: 50 })).toEqual({
-			ok: false,
-			code: 'timeout',
-		});
+		const impatient = createProbes({ policy: DEV, now, randomBytes, httpTimeoutMs: 50 });
+		expect(await impatient.request({ method: 'GET', url: `${slow.baseUrl}/` })).toEqual({ ok: false, code: 'timeout' });
 		await slow.close();
 		const big = await startFakeApi({ header: 'x', value: 'y', bigBody: true });
-		expect(await dev.request({ method: 'GET', url: `${big.baseUrl}/`, maxBytes: 1024 })).toEqual({
-			ok: false,
-			code: 'response_too_large',
-		});
+		expect(await dev.request({ method: 'GET', url: `${big.baseUrl}/` })).toEqual({ ok: false, code: 'response_too_large' });
 		await big.close();
+		const moved = await startFakeApi({ header: 'x', value: 'y', redirectTo: 'https://169.254.169.254/latest' });
+		expect(await dev.request({ method: 'GET', url: `${moved.baseUrl}/` })).toMatchObject({ ok: true, status: 302 });
+		expect(moved.requests).toHaveLength(1);
+		await moved.close();
 		expect(await dev.request({ method: 'GET', url: 'http://127.0.0.1:1/' })).toEqual({ ok: false, code: 'unreachable' });
-		const tls = createOutbound({ allowlist: DEV });
-		expect(await tls.request({ method: 'GET', url: `${api.baseUrl.replace('http:', 'https:')}/` })).toMatchObject({
+		expect(await dev.request({ method: 'GET', url: `${api.baseUrl.replace('http:', 'https:')}/` })).toMatchObject({
 			ok: false,
 		});
+		expect(outboundCode(new Error('x'))).toBe('unreachable');
 	});
 });
 
 describe('probes: storage, http, smtp, skipped kinds', () => {
 	const now = () => Date.parse('2026-10-01T10:00:00Z');
-	const probes = createProbes({ allowlist: DEV, now, randomBytes, httpTimeoutMs: 2_000 });
+	const probes = createProbes({ policy: DEV, now, randomBytes, httpTimeoutMs: 2_000 });
 	const creds = (/** @type {string} */ endpoint) => ({
 		endpoint,
 		region: 'auto',
@@ -208,7 +173,7 @@ describe('probes: storage, http, smtp, skipped kinds', () => {
 		expect((await probes.storage(creds('http://127.0.0.1:1'))).checks).toEqual([
 			{ name: 'reachability', ok: false, code: 'unreachable' },
 		]);
-		const strict = createProbes({ allowlist: EMPTY_ALLOWLIST, now, randomBytes });
+		const strict = createProbes({ policy: STRICT, now, randomBytes });
 		expect((await strict.storage({ ...creds('https://10.1.1.1'), endpoint: 'https://10.1.1.1' })).checks[0]).toMatchObject({
 			code: 'address_refused',
 		});
@@ -258,7 +223,7 @@ describe('probes: storage, http, smtp, skipped kinds', () => {
 		).toBe(false);
 		expect((await probes.run('messaging', 'generic-http', { baseUrl: msg.baseUrl, apiKey: KEY })).ok).toBe(false);
 		await msg.close();
-		const strict = createProbes({ allowlist: EMPTY_ALLOWLIST, now, randomBytes });
+		const strict = createProbes({ policy: STRICT, now, randomBytes });
 		expect((await strict.run('ai', 'openai', { apiKey: KEY, baseUrl: 'https://169.254.169.254/v1' })).checks).toEqual([
 			{ name: 'reachability', ok: false, code: 'address_refused' },
 		]);
@@ -286,7 +251,7 @@ describe('probes: storage, http, smtp, skipped kinds', () => {
 		const tls = await probes.smtp({ host: '127.0.0.1', port: plain.port, secure: true });
 		expect(tls.checks[0]).toMatchObject({ name: 'reachability', ok: false });
 		await plain.close();
-		const silent = createProbes({ allowlist: DEV, now, randomBytes, httpTimeoutMs: 100 });
+		const silent = createProbes({ policy: DEV, now, randomBytes, httpTimeoutMs: 100 });
 		const quiet = await startFakeSmtp({ greeting: '' });
 		expect((await silent.smtp({ host: '127.0.0.1', port: quiet.port, secure: false })).checks[0]).toMatchObject({
 			code: 'timeout',
@@ -294,10 +259,9 @@ describe('probes: storage, http, smtp, skipped kinds', () => {
 		await quiet.close();
 		expect((await probes.smtp({ host: '127.0.0.1', port: 1, secure: false })).checks[0]).toMatchObject({ code: 'unreachable' });
 		const strict = createProbes({
-			allowlist: EMPTY_ALLOWLIST,
+			policy: policyOf([], fakeDns({ 'smtp.attacker.example': ['10.9.9.9'] })),
 			now,
 			randomBytes,
-			lookup: fakeDns({ 'smtp.attacker.example': ['10.9.9.9'] }),
 		});
 		expect((await strict.smtp({ host: '192.168.1.1' })).checks[0]).toMatchObject({ code: 'address_refused' });
 		expect((await strict.smtp({ host: 'smtp.attacker.example', port: 587, secure: false })).checks[0]).toMatchObject({
@@ -333,6 +297,25 @@ describe('probes: database (MongoMemoryReplSet, development allowlist)', () => {
 					extraUsers: [
 						{ createUser: 'app', pwd: 'app-password-456', roles: [{ role: 'readWrite', db: 'shop' }], database: 'shop' },
 						{ createUser: 'reader', pwd: 'reader-password-789', roles: [{ role: 'read', db: 'shop' }], database: 'shop' },
+						{ createUser: 'owner', pwd: 'owner-password-012', roles: [{ role: 'dbOwner', db: 'shop' }], database: 'shop' },
+						{
+							createUser: 'wide',
+							pwd: 'wide-password-345',
+							roles: [
+								{ role: 'readWrite', db: 'shop' },
+								{ role: 'read', db: 'other' },
+							],
+							database: 'shop',
+						},
+						{
+							createUser: 'useradmin',
+							pwd: 'useradmin-password-678',
+							roles: [
+								{ role: 'readWrite', db: 'shop' },
+								{ role: 'userAdminAnyDatabase', db: 'admin' },
+							],
+							database: 'admin',
+						},
 					],
 				},
 			},
@@ -345,7 +328,7 @@ describe('probes: database (MongoMemoryReplSet, development allowlist)', () => {
 	/** @type {Array<import('mongodb').MongoClientOptions>} */
 	const seen = [];
 	const probes = createProbes({
-		allowlist: DEV,
+		policy: DEV,
 		now,
 		randomBytes,
 		connectMongo: (uri, options) => {
@@ -362,6 +345,7 @@ describe('probes: database (MongoMemoryReplSet, development allowlist)', () => {
 		expect(report.checks.map((c) => `${c.name}:${c.ok}`)).toEqual([
 			'reachability:true',
 			'auth:true',
+			'least_privilege:true',
 			'create_collection:true',
 			'create_index:true',
 			'drop_collection:true',
@@ -375,9 +359,18 @@ describe('probes: database (MongoMemoryReplSet, development allowlist)', () => {
 		expect(JSON.stringify(report)).not.toContain('app-password');
 	}, 60_000);
 
-	it('flags over-privileged users and missing rights', async () => {
+	it('refuses over-privileged users, warns about db owners and flags missing rights', async () => {
 		const root = await probes.database({ uri: uri('root', 'root-password-123', 'shop', 'admin') });
-		expect(root).toMatchObject({ ok: true, warnings: ['over_privileged'] });
+		expect(root).toMatchObject({ ok: false, info: { privilegeIssues: expect.arrayContaining(['cluster_role']) } });
+		expect(root.checks.at(-1)).toEqual({ name: 'least_privilege', ok: false, code: 'over_privileged' });
+		expect(root.checks.map((c) => c.name)).not.toContain('create_collection');
+		const wide = await probes.database({ uri: uri('wide', 'wide-password-345') });
+		expect(wide).toMatchObject({ ok: false, info: { privilegeIssues: ['other_database'] } });
+		const userAdmin = await probes.database({ uri: uri('useradmin', 'useradmin-password-678', 'shop', 'admin') });
+		expect(userAdmin.ok).toBe(false);
+		expect(userAdmin.info?.privilegeIssues).toContain('any_database_role');
+		const owner = await probes.database({ uri: uri('owner', 'owner-password-012') });
+		expect(owner).toMatchObject({ ok: true, warnings: ['db_admin'], info: { roles: ['dbOwner@shop'] } });
 		const reader = await probes.database({ uri: uri('reader', 'reader-password-789') });
 		expect(reader.ok).toBe(false);
 		expect(reader.checks).toContainEqual({ name: 'create_collection', ok: false, code: 'permission_denied' });
@@ -391,7 +384,7 @@ describe('probes: database (MongoMemoryReplSet, development allowlist)', () => {
 		]);
 		expect(JSON.stringify(wrong)).not.toContain('not-the-password');
 		const fast = createProbes({
-			allowlist: DEV,
+			policy: DEV,
 			now,
 			randomBytes,
 			connectMongo: (u, o) => new MongoClient(u, { ...o, serverSelectionTimeoutMS: 300 }),
@@ -400,13 +393,15 @@ describe('probes: database (MongoMemoryReplSet, development allowlist)', () => {
 			{ name: 'reachability', ok: false, code: 'unreachable' },
 		]);
 		const rebind = createProbes({
-			allowlist: EMPTY_ALLOWLIST,
+			policy: policyOf([], fakeDns({ 'db.attacker.example': ['127.0.0.1'], 'db.meta.example': ['169.254.169.254'] })),
 			now,
 			randomBytes,
-			lookup: fakeDns({ 'db.attacker.example': ['127.0.0.1'] }),
 			connectMongo: (u, o) => new MongoClient(u, { ...o, serverSelectionTimeoutMS: 1_000 }),
 		});
 		expect((await rebind.database({ uri: 'mongodb://u:p@db.attacker.example:27017/shop?tls=true' })).checks).toEqual([
+			{ name: 'reachability', ok: false, code: 'address_refused' },
+		]);
+		expect((await rebind.database({ uri: 'mongodb://u:p@db.meta.example:27017/shop?tls=true' })).checks).toEqual([
 			{ name: 'reachability', ok: false, code: 'address_refused' },
 		]);
 		expect((await rebind.database({ uri: 'mongodb://u:p@10.0.0.1/shop?tls=true' })).checks).toEqual([

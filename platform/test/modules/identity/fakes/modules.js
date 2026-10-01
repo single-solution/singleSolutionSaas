@@ -58,7 +58,7 @@ export const fakeCatalog = async (appId = 'app_test') => {
 
 /** Mailer capturing messages; `tokenFrom(message)` extracts the fragment token of its link. */
 export const memoryMailer = () => {
-	/** @type {import('../../../../src/modules/identity/mailer.js').MailMessage[]} */
+	/** @type {import('../../../../src/infra/mailer.js').MailMessage[]} */
 	const sent = [];
 	let available = true;
 	let failing = false;

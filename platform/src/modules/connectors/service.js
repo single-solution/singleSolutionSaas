@@ -11,7 +11,7 @@
  *   secrets;
  * - rotation keeps the previous sealed version for 24 h (rollback); revocation deletes all sealed material and stops
  *   resolution at once;
- * - every outbound call of a check goes through the SSRF guard (`adapters/outbound.js`).
+ * - every outbound call of a check goes through the `@ss/net` SSRF guard (URL policy + guarded DNS lookup).
  * @module
  */
 import { createId, isId } from '@ss/contracts';
@@ -26,7 +26,7 @@ import { ASSIGNMENTS, CONNECTORS } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
-/** @typedef {import('./core/netguard.js').Allowlist} Allowlist */
+/** @typedef {import('@ss/net').OutboundPolicy} OutboundPolicy */
 /** @typedef {import('./core/report.js').CheckReport} CheckReport */
 /** @typedef {import('./adapters/probes.js').Probes} Probes */
 /** @typedef {import('mongodb').Document} Document */
@@ -41,9 +41,9 @@ const iso = (value) => (value instanceof Date ? value.toISOString() : null);
 
 /**
  * @param {ModuleContext} ctx
- * @param {{ allowlist: Allowlist, probes: Probes }} options
+ * @param {{ policy: OutboundPolicy, probes: Probes }} options outbound policy (`@ss/net`) and connection checks
  */
-export const createConnectorsService = (ctx, { allowlist, probes }) => {
+export const createConnectorsService = (ctx, { policy, probes }) => {
 	const repo = createConnectorsRepo({ connectors: ctx.collection(CONNECTORS), assignments: ctx.collection(ASSIGNMENTS) });
 	const log = ctx.logger;
 
@@ -234,7 +234,7 @@ export const createConnectorsService = (ctx, { allowlist, probes }) => {
 		let report;
 		try {
 			const credentials = open(doc);
-			const validated = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, allowlist);
+			const validated = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, policy);
 			report = validated.ok
 				? await probes.run(String(doc.kind), String(doc.provider), credentials)
 				: buildReport({
@@ -277,7 +277,7 @@ export const createConnectorsService = (ctx, { allowlist, probes }) => {
 	 * @param {{ merchantId: string, kind: unknown, provider: unknown, label?: unknown, credentials: unknown, websiteIds?: unknown } & Caller} input
 	 */
 	const create = async ({ merchantId, kind, provider, label, credentials, websiteIds, ...caller }) => {
-		const checked = validateCredentials({ kind, provider, credentials }, allowlist);
+		const checked = validateCredentials({ kind, provider, credentials }, policy);
 		if (!checked.ok) throw invalid('The connector is invalid.', checked.errors);
 		const websites = validateWebsiteIds(websiteIds);
 		if (!websites.ok) throw invalid('The connector is invalid.', websites.errors);
@@ -348,7 +348,7 @@ export const createConnectorsService = (ctx, { allowlist, probes }) => {
 	 */
 	const rotate = async ({ merchantId, connectorId, credentials, ...caller }) => {
 		const doc = await load(merchantId, connectorId, { live: true });
-		const checked = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, allowlist);
+		const checked = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, policy);
 		if (!checked.ok) throw invalid('The credentials are invalid.', checked.errors);
 		const at = new Date(ctx.now());
 		const updated = await repo.update(merchantId, connectorId, doc.version, {

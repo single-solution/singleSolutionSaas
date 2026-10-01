@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { netError } from '@ss/net';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { PORTAL_URL, startMongo } from '../../helpers.js';
 import { bootPortal, problemOf } from './boot.js';
@@ -230,7 +231,7 @@ describe('registration handshake (Portal side)', () => {
 				422,
 				'catalog_target_refused',
 			);
-			expect(res.detail).toMatch(/https/);
+			expect(res.detail).toMatch(/loopback_address/);
 			problemOf(
 				await t.staff('POST', '/v1/admin/apps/register', {
 					body: { baseUrl: p.url.replace('http:', 'https:'), token: p.token },
@@ -243,7 +244,7 @@ describe('registration handshake (Portal side)', () => {
 		it('refuses cloud metadata, private ranges and names resolving to them', async () => {
 			const t = await boot({
 				allowlist: [],
-				resolveHost: async (/** @type {string} */ host) =>
+				resolve: async (/** @type {string} */ host) =>
 					host === 'internal.example.com' ? [{ address: '10.0.0.12', family: 4 }] : [{ address: '172.20.0.1', family: 4 }],
 			});
 			for (const baseUrl of [
@@ -265,7 +266,8 @@ describe('registration handshake (Portal side)', () => {
 				422,
 				'catalog_target_refused',
 			);
-			expect(res.detail).toMatch(/10\.0\.0\.0\/8/);
+			// DNS answer vetted at connect time (rebinding-safe): the name resolves to 10.0.0.12
+			expect(res.detail).toMatch(/private_address/);
 			problemOf(
 				await t.staff('POST', '/v1/admin/apps/register', {
 					body: { baseUrl: 'https://intranet.example.com', token: 't'.repeat(20) },
@@ -287,7 +289,7 @@ describe('registration handshake (Portal side)', () => {
 				422,
 				'catalog_target_refused',
 			);
-			expect(res.detail).toMatch(/another host/);
+			expect(res.detail).toMatch(/cross_origin/);
 		});
 
 		it('refuses an oversized manifest response', async () => {
@@ -301,7 +303,7 @@ describe('registration handshake (Portal side)', () => {
 		it('maps unreachable products, timeouts and error statuses', async () => {
 			const timeouts = await boot({
 				fetch: async () => {
-					throw Object.assign(new Error('slow'), { name: 'PlatformError', code: 'timeout' });
+					throw netError('timeout', 'deadline', 'slow');
 				},
 			});
 			problemOf(
@@ -322,7 +324,7 @@ describe('registration handshake (Portal side)', () => {
 				}),
 				500,
 			);
-			const missing = await boot({ fetch: async () => ({ status: 404, headers: {}, text: '', url: '' }) });
+			const missing = await boot({ fetch: async () => ({ status: 404, headers: {}, body: Buffer.alloc(0), url: '' }) });
 			problemOf(
 				await missing.staff('POST', '/v1/admin/apps/register', {
 					body: { baseUrl: 'https://x.example.com', token: 't'.repeat(20) },
@@ -342,7 +344,7 @@ describe('registration handshake (Portal side)', () => {
 		const viaProduct = async (/** @type {string} */ url, /** @type {any} */ init = {}) => {
 			const target = url.replace(/^https:\/\/[^/]+/, p.url);
 			const res = await fetch(target, { method: init.method ?? 'GET', headers: init.headers, body: init.body });
-			return { status: res.status, headers: {}, text: await res.text(), url };
+			return { status: res.status, headers: {}, body: Buffer.from(await res.text()), url };
 		};
 		const t = await boot({ allowlist: [], fetch: viaProduct, clock: t0.clock });
 		const mismatch = problemOf(

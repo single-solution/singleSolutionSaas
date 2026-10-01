@@ -1,14 +1,14 @@
 /**
  * Credential schemas of client-owned resources (PLAN §1a), per kind and provider (pure). Structural validation uses
- * closed JSON Schemas through `@ss/contracts` `createValidator`; semantic checks (public hosts, https, safe
- * MongoDB options, TLS) follow. Error messages never echo submitted values.
+ * closed JSON Schemas through `@ss/contracts` `createValidator`; semantic checks (public hosts, https, allowed ports,
+ * safe MongoDB options, TLS — the `@ss/net` outbound policy) follow. Error messages never echo submitted values.
  * @module
  */
 import { RESOURCE_KINDS, createValidator } from '@ss/contracts';
+import { checkHost, checkUrl } from '@ss/net';
 import { checkDatabaseCredentials } from './mongo-uri.js';
-import { checkHost, checkUrl } from './netguard.js';
 
-/** @typedef {import('./netguard.js').Allowlist} Allowlist */
+/** @typedef {import('@ss/net').OutboundPolicy} OutboundPolicy */
 /** @typedef {{ path: string, message: string, keyword?: string, code?: string }} FieldError */
 /** @typedef {typeof RESOURCE_KINDS[number]} ResourceKind */
 
@@ -181,31 +181,47 @@ const plainUrl = (target, path) => {
 /**
  * @param {unknown} raw
  * @param {string} path
- * @param {Allowlist} allowlist
+ * @param {OutboundPolicy} policy
  * @returns {FieldError[]}
  */
-const checkUrlField = (raw, path, allowlist) => {
+const checkUrlField = (raw, path, policy) => {
 	if (raw === undefined) return [];
-	const checked = checkUrl(String(raw), allowlist);
+	const text = String(raw);
+	if (text.includes('#')) return [{ path, message: 'is not a valid URL', code: 'invalid_url' }];
+	const checked = checkUrl(text, policy);
 	if (!checked.ok) {
+		const code = urlRefusalCode(checked);
 		const message =
-			checked.code === 'https_required'
+			code === 'https_required'
 				? 'must use https'
-				: checked.code === 'address_refused'
-					? 'must point at a public address'
-					: 'is not a valid URL';
-		return [{ path, message, code: checked.code }];
+				: code === 'port_refused'
+					? 'must use port 443 or 8443'
+					: code === 'address_refused'
+						? 'must point at a public address'
+						: 'is not a valid URL';
+		return [{ path, message, code }];
 	}
 	return plainUrl(checked.url, path);
 };
 
 /**
+ * Stable connector code of an `@ss/net` URL refusal (`checkUrl` / `safeFetch`).
+ * @param {{ code: string, reason: string }} refusal
+ * @returns {'https_required' | 'port_refused' | 'address_refused' | 'invalid_url'}
+ */
+export const urlRefusalCode = ({ code, reason }) => {
+	if (reason === 'https_required' || reason === 'unsupported_scheme') return 'https_required';
+	if (reason === 'port') return 'port_refused';
+	return code === 'ssrf_blocked' ? 'address_refused' : 'invalid_url';
+};
+
+/**
  * Validate a connector's credentials for its kind and provider.
  * @param {{ kind: unknown, provider: unknown, credentials: unknown }} input
- * @param {Allowlist} allowlist
+ * @param {OutboundPolicy} policy outbound policy (`@ss/net`) the credentials' destinations must pass
  * @returns {{ ok: true, kind: ResourceKind, provider: string, credentials: Record<string, any> } | { ok: false, errors: FieldError[] }}
  */
-export const validateCredentials = ({ kind, provider, credentials }, allowlist) => {
+export const validateCredentials = ({ kind, provider, credentials }, policy) => {
 	if (typeof kind !== 'string' || !KINDS.includes(/** @type {ResourceKind} */ (kind)))
 		return { ok: false, errors: [{ path: '/kind', message: `must be one of: ${KINDS.join(', ')}` }] };
 	const k = /** @type {ResourceKind} */ (kind);
@@ -225,15 +241,15 @@ export const validateCredentials = ({ kind, provider, credentials }, allowlist) 
 	const c = /** @type {Record<string, any>} */ (credentials);
 	/** @type {FieldError[]} */
 	const errors = [];
-	if (k === 'database') errors.push(...checkDatabaseCredentials(/** @type {any} */ (c), allowlist).errors);
-	if (k === 'storage') errors.push(...checkUrlField(c.endpoint, '/credentials/endpoint', allowlist));
+	if (k === 'database') errors.push(...checkDatabaseCredentials(/** @type {any} */ (c), policy).errors);
+	if (k === 'storage') errors.push(...checkUrlField(c.endpoint, '/credentials/endpoint', policy));
 	if (k === 'ai') {
 		if (provider === 'generic' && c.baseUrl === undefined)
 			errors.push({ path: '/credentials/baseUrl', message: 'is required for the generic provider' });
-		errors.push(...checkUrlField(c.baseUrl, '/credentials/baseUrl', allowlist));
+		errors.push(...checkUrlField(c.baseUrl, '/credentials/baseUrl', policy));
 	}
 	if (k === 'messaging' && provider === 'generic-http') {
-		errors.push(...checkUrlField(c.baseUrl, '/credentials/baseUrl', allowlist));
+		errors.push(...checkUrlField(c.baseUrl, '/credentials/baseUrl', policy));
 		if (c.authHeader !== undefined && FORBIDDEN_HEADERS.has(String(c.authHeader).toLowerCase()))
 			errors.push({ path: '/credentials/authHeader', message: 'is a reserved header' });
 		for (const name of Object.keys(c.headers ?? {}))
@@ -246,13 +262,13 @@ export const validateCredentials = ({ kind, provider, credentials }, allowlist) 
 			errors.push({ path: '/credentials/testPath', message: 'must be a relative path' });
 	}
 	if (k === 'messaging' && provider === 'smtp') {
-		const host = checkHost(String(c.host), allowlist);
+		const host = checkHost(String(c.host), policy);
 		if (!host.ok)
-			errors.push({
-				path: '/credentials/host',
-				message: host.code === 'address_refused' ? 'must be a public host' : 'is not a valid host',
-				code: host.code,
-			});
+			errors.push(
+				host.code === 'ssrf_blocked'
+					? { path: '/credentials/host', message: 'must be a public host', code: 'address_refused' }
+					: { path: '/credentials/host', message: 'is not a valid host', code: 'invalid_host' },
+			);
 	}
 	return errors.length > 0 ? { ok: false, errors } : { ok: true, kind: k, provider, credentials: c };
 };

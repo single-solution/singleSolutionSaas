@@ -70,7 +70,7 @@ export const startFakeS3 = async (options) => {
 
 /**
  * JSON API answering 200 to an exact credential header, 401 otherwise.
- * @param {{ header: string, value: string, status?: number, delayMs?: number, bigBody?: boolean }} options
+ * @param {{ header: string, value: string, status?: number, delayMs?: number, bigBody?: boolean, redirectTo?: string }} options
  */
 export const startFakeApi = async (options) => {
 	/** @type {Array<{ method: string, url: string, headers: import('node:http').IncomingHttpHeaders }>} */
@@ -78,6 +78,10 @@ export const startFakeApi = async (options) => {
 	const server = createServer((req, res) => {
 		requests.push({ method: String(req.method), url: String(req.url), headers: req.headers });
 		const respond = () => {
+			if (options.redirectTo) {
+				res.writeHead(302, { location: options.redirectTo });
+				return res.end();
+			}
 			if (options.bigBody) {
 				res.writeHead(200, { 'content-type': 'application/json' });
 				return res.end(`{"data":"${'x'.repeat(200_000)}"}`);

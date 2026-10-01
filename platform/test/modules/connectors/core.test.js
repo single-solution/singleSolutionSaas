@@ -1,158 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { signHeaders as kitSignHeaders } from '../../../../packages/app-kit/src/connectors/sigv4.js';
+import { createOutboundPolicy } from '@ss/net';
 import { decideResolve, requiredKinds } from '../../../src/modules/connectors/core/access.js';
 import { DESCRIPTOR_TTL_MS, aiEndpoint, descriptorOf } from '../../../src/modules/connectors/core/descriptor.js';
 import { maskSecret, previewOf } from '../../../src/modules/connectors/core/mask.js';
-import { checkDatabaseCredentials, parseMongoUri } from '../../../src/modules/connectors/core/mongo-uri.js';
-import {
-	EMPTY_ALLOWLIST,
-	allowlistFor,
-	checkHost,
-	checkUrl,
-	isAllowlisted,
-	isBlockedAddress,
-	normaliseHost,
-} from '../../../src/modules/connectors/core/netguard.js';
+import { checkDatabaseCredentials } from '../../../src/modules/connectors/core/mongo-uri.js';
 import { analysePrivileges, buildReport, statusFromReport } from '../../../src/modules/connectors/core/report.js';
 import {
 	providersFor,
+	urlRefusalCode,
 	validateCredentials,
 	validateLabel,
 	validateWebsiteIds,
 } from '../../../src/modules/connectors/core/schemas.js';
-import { objectUrl, signHeaders, uriEncode } from '../../../src/modules/connectors/core/sigv4.js';
 
-const DEV = allowlistFor('test', ['127.0.0.1', 'localhost', 'minio.dev']);
+const DEV = createOutboundPolicy({ allowHosts: ['127.0.0.1', 'localhost', 'minio.dev'] });
+const EMPTY_ALLOWLIST = createOutboundPolicy();
 const WEB = 'web_0123456789abcdefghjkmnpq';
 
-describe('netguard', () => {
-	it.each([
-		'127.0.0.1',
-		'127.255.0.9',
-		'10.1.2.3',
-		'172.16.0.1',
-		'172.31.255.255',
-		'192.168.1.1',
-		'169.254.169.254',
-		'100.100.100.200',
-		'0.0.0.0',
-		'224.0.0.1',
-		'255.255.255.255',
-		'198.18.0.1',
-		'::1',
-		'::',
-		'fe80::1',
-		'fd00:ec2::254',
-		'fc00::1',
-		'::ffff:127.0.0.1',
-		'::ffff:8.8.8.8',
-		'0:0:0:0:0:ffff:7f00:1',
-		'64:ff9b::a00:1',
-		'2002:7f00:1::',
-		'2001:db8::1',
-		'ff02::1',
-		'[::1]',
-		'fe80::1%eth0',
-		'not-an-ip',
-	])('blocks %s', (ip) => expect(isBlockedAddress(ip)).toBe(true));
-
-	it.each(['8.8.8.8', '1.1.1.1', '172.32.0.1', '100.128.0.1', '2606:4700:4700::1111', '[2a00:1450:4009:81f::200e]'])(
-		'allows public %s',
-		(ip) => expect(isBlockedAddress(ip)).toBe(false),
-	);
-
-	it('checks host names', () => {
-		expect(checkHost('api.openai.com', EMPTY_ALLOWLIST)).toEqual({
-			ok: true,
-			host: 'api.openai.com',
-			ip: false,
-			allowlisted: false,
-		});
-		expect(checkHost('API.Example.COM.', EMPTY_ALLOWLIST)).toMatchObject({ ok: true, host: 'api.example.com' });
-		for (const host of [
-			'localhost',
-			'db.localhost',
-			'printer.local',
-			'metadata.google.internal',
-			'x.home.arpa',
-			'2130706433.1',
-			'0x7f.0.0.1',
-		])
-			expect(checkHost(host, EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'address_refused' });
-		for (const host of ['', 'single', 'bad_host.com', '-x.com', 'a..b'])
-			expect(checkHost(host, EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'invalid_host' });
-		expect(checkHost(/** @type {any} */ (5), EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'invalid_host' });
-		expect(checkHost('127.0.0.1', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'address_refused' });
-		expect(checkHost('8.8.8.8', EMPTY_ALLOWLIST)).toEqual({ ok: true, host: '8.8.8.8', ip: true, allowlisted: false });
-		expect(checkHost('127.0.0.1', DEV)).toEqual({ ok: true, host: '127.0.0.1', ip: true, allowlisted: true });
-		expect(checkHost('LOCALHOST', DEV)).toMatchObject({ ok: true, allowlisted: true });
-		expect(normaliseHost('[::1]')).toBe('::1');
-	});
-
-	it('honours the allowlist only in development and test', () => {
-		expect(isAllowlisted(allowlistFor('production', ['127.0.0.1']), '127.0.0.1')).toBe(false);
-		expect(isAllowlisted(allowlistFor('preview', ['127.0.0.1']), '127.0.0.1')).toBe(false);
-		expect(isAllowlisted(allowlistFor('development', ['127.0.0.1']), '127.0.0.1')).toBe(true);
-	});
-
-	it('checks URLs', () => {
-		expect(checkUrl('https://api.example.com/v1', EMPTY_ALLOWLIST)).toMatchObject({ ok: true, allowlisted: false });
-		expect(checkUrl('http://api.example.com', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'https_required' });
-		expect(checkUrl('ftp://api.example.com', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'https_required' });
-		expect(checkUrl('https://169.254.169.254/latest/meta-data', EMPTY_ALLOWLIST)).toEqual({
-			ok: false,
-			code: 'address_refused',
-		});
-		expect(checkUrl('https://[::ffff:a9fe:a9fe]/', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'address_refused' });
-		expect(checkUrl('https://0x7f.1/', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'address_refused' });
-		expect(checkUrl('https://2130706433/', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'address_refused' });
-		expect(checkUrl('https://user:pw@api.example.com', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'invalid_url' });
-		expect(checkUrl('https://api.example.com/#x', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'invalid_url' });
-		expect(checkUrl('not a url', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'invalid_url' });
-		expect(checkUrl('http://127.0.0.1:9000', DEV)).toMatchObject({ ok: true, allowlisted: true });
-		expect(checkUrl('http://localhost:9000', EMPTY_ALLOWLIST)).toEqual({ ok: false, code: 'address_refused' });
-	});
-});
-
 describe('mongo URIs', () => {
-	it('parses standard and SRV strings', () => {
-		const parsed = parseMongoUri(
-			'mongodb://app%40x:p%40ss@a.example.com:27017,[2606:4700::1]:27018/shop?tls=true&replicaSet=rs0',
-		);
-		expect(parsed).toMatchObject({
-			ok: true,
-			value: {
-				scheme: 'mongodb',
-				username: 'app@x',
-				hasPassword: true,
-				hosts: [
-					{ host: 'a.example.com', port: 27017 },
-					{ host: '[2606:4700::1]', port: 27018 },
-				],
-				dbName: 'shop',
-			},
-		});
-		expect(parseMongoUri('mongodb+srv://cluster0.example.net/')).toMatchObject({
-			ok: true,
-			value: { scheme: 'mongodb+srv', username: null, dbName: null },
-		});
-		for (const bad of [
-			'postgres://x',
-			'mongodb://',
-			'mongodb://u:p@',
-			'mongodb://:p@h.example.com/db',
-			'mongodb://u:p/x@h.example.com/db',
-			'mongodb://u%zz:p@h.example.com/db',
-			'mongodb://h.example.com:0/db',
-			'mongodb://h.example.com:99999/db',
-			'mongodb://h.example.com:abc/db',
-			'mongodb+srv://a.example.com,b.example.com/db',
-			'mongodb+srv://a.example.com:27017/db',
-			'mongodb://h.example.com/%zz',
-		])
-			expect(parseMongoUri(bad).ok, bad).toBe(false);
-	});
-
 	it('requires public hosts, TLS, credentials, safe options and a usable database', () => {
 		const ok = (/** @type {string} */ uri, /** @type {string | undefined} */ dbName = undefined, allowlist = EMPTY_ALLOWLIST) =>
 			checkDatabaseCredentials({ uri, ...(dbName ? { dbName } : {}) }, allowlist).errors;
@@ -170,7 +35,12 @@ describe('mongo URIs', () => {
 		expect(ok('mongodb://u:p@10.0.0.5/shop?tls=true')[0]).toMatchObject({ code: 'address_refused' });
 		expect(ok('mongodb://u:p@169.254.169.254/shop?tls=true')[0]).toMatchObject({ code: 'address_refused' });
 		expect(ok('mongodb://u:p@[::1]:27017/shop?tls=true')[0]).toMatchObject({ code: 'address_refused' });
-		expect(ok('mongodb://u:p@bad_host/shop?tls=true')[0]).toMatchObject({ code: 'invalid_host' });
+		expect(ok('mongodb://u:p@bad host.example.com/shop?tls=true')[0]).toMatchObject({ code: 'invalid_host' });
+		expect(ok('mongodb://u:p@bad_host/shop?tls=true')[0]).toMatchObject({ code: 'address_refused' });
+		// a name answering with the metadata IP is refused at connect time (guardedLookup), see probes.test.js
+		expect(ok('mongodb+srv://u:p@c.example.net/shop?tlsInsecure=true')[0]).toMatchObject({
+			message: 'option tlsinsecure is not allowed',
+		});
 		for (const opt of [
 			'tlsCAFile=/etc/passwd',
 			'tlsCertificateKeyFile=/x',
@@ -197,6 +67,7 @@ describe('mongo URIs', () => {
 			expect.objectContaining({ message: 'the database name is invalid' }),
 		]);
 		expect(ok('nope')).toEqual([expect.objectContaining({ path: '/credentials/uri' })]);
+		expect(ok('mongodb://u:p@h.example.com:99999/db')).toEqual([expect.objectContaining({ path: '/credentials/uri' })]);
 		// development allowlist: loopback without TLS or credentials
 		expect(ok('mongodb://127.0.0.1:27017/shop', undefined, DEV)).toEqual([]);
 	});
@@ -260,6 +131,21 @@ describe('credential schemas', () => {
 			errors: [{ message: 'is not a valid URL' }],
 		});
 		expect(v('storage', 'minio', { ...base, endpoint: 'http://minio.dev:9000' }, DEV).ok).toBe(true);
+		expect(v('storage', 'minio', { ...base, endpoint: 'https://minio.example.com:9000' })).toMatchObject({
+			ok: false,
+			errors: [{ code: 'port_refused', message: 'must use port 443 or 8443' }],
+		});
+		expect(v('storage', 'minio', { ...base, endpoint: 'https://minio.example.com/#x' })).toMatchObject({
+			ok: false,
+			errors: [{ code: 'invalid_url' }],
+		});
+		expect(v('storage', 'minio', { ...base, endpoint: 'https://169.254.169.254' })).toMatchObject({
+			ok: false,
+			errors: [{ code: 'address_refused' }],
+		});
+		expect(urlRefusalCode({ code: 'bad_url', reason: 'unsupported_scheme' })).toBe('https_required');
+		expect(urlRefusalCode({ code: 'bad_url', reason: 'invalid_url' })).toBe('invalid_url');
+		expect(urlRefusalCode({ code: 'ssrf_blocked', reason: 'metadata_address' })).toBe('address_refused');
 		expect(v('storage', 's3', { ...base, prefix: '/abs/' }).ok).toBe(false);
 		expect(v('storage', 's3', { ...base, bucket: 'A' }).ok).toBe(false);
 	});
@@ -537,7 +423,25 @@ describe('reports', () => {
 			authenticated: true,
 			roles: ['dbAdmin@shop', 'readWrite@shop'],
 			overPrivileged: false,
+			reasons: [],
+			warnings: ['db_admin'],
 		});
+		/** @param {Array<{ role: string, db: string }>} roles */
+		const withRoles = (roles) => analysePrivileges({ authInfo: { authenticatedUserRoles: roles } }, 'shop');
+		expect(withRoles([{ role: 'dbOwner', db: 'shop' }])).toMatchObject({ overPrivileged: false, warnings: ['db_admin'] });
+		expect(withRoles([{ role: 'userAdmin', db: 'shop' }])).toMatchObject({ overPrivileged: false, warnings: ['db_admin'] });
+		expect(withRoles([{ role: 'root', db: 'admin' }])).toMatchObject({ overPrivileged: true, reasons: ['cluster_role'] });
+		expect(withRoles([{ role: 'clusterAdmin', db: 'admin' }]).reasons).toEqual(['cluster_role']);
+		for (const role of ['readAnyDatabase', 'readWriteAnyDatabase', 'userAdminAnyDatabase', 'dbAdminAnyDatabase'])
+			expect(withRoles([{ role, db: 'admin' }]).reasons, role).toEqual(['any_database_role']);
+		expect(withRoles([{ role: 'userAdmin', db: 'admin' }]).reasons).toEqual(['other_database']);
+		expect(withRoles([{ role: 'read', db: 'admin' }]).reasons).toEqual(['other_database']);
+		expect(
+			withRoles([
+				{ role: 'readWrite', db: 'shop' },
+				{ role: 'read', db: 'other' },
+			]),
+		).toMatchObject({ overPrivileged: true, reasons: ['other_database'] });
 		expect(
 			analysePrivileges(
 				{ authInfo: { authenticatedUsers: [{}], authenticatedUserRoles: [{ role: 'atlasAdmin', db: 'admin' }] } },
@@ -560,7 +464,19 @@ describe('reports', () => {
 				.overPrivileged,
 		).toBe(true);
 		expect(analysePrivileges({ authInfo: { authenticatedUserPrivileges: [{}] } }, 'shop').overPrivileged).toBe(false);
-		expect(analysePrivileges(null, 'shop')).toEqual({ authenticated: false, roles: [], overPrivileged: false });
+		expect(
+			analysePrivileges(
+				{ authInfo: { authenticatedUserPrivileges: [{ resource: { db: 'other', collection: 'x' } }] } },
+				'shop',
+			).reasons,
+		).toEqual(['other_database']);
+		expect(analysePrivileges(null, 'shop')).toEqual({
+			authenticated: false,
+			roles: [],
+			overPrivileged: false,
+			reasons: [],
+			warnings: [],
+		});
 	});
 });
 
@@ -605,37 +521,5 @@ describe('resolve authorisation (pure)', () => {
 				manifest,
 			}),
 		).toEqual({ ok: false, reason: 'no_subscription' });
-	});
-});
-
-describe('SigV4', () => {
-	it('matches the app-kit implementation', () => {
-		const params = {
-			method: 'PUT',
-			url: 'https://bucket.s3.eu-west-1.amazonaws.com/media/a%20b.txt?x-id=PutObject',
-			credentials: { accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY' },
-			region: 'eu-west-1',
-			now: Date.parse('2026-10-01T10:00:00Z'),
-			headers: { 'content-type': 'text/plain' },
-			body: 'hello',
-		};
-		expect(signHeaders(params)).toEqual(kitSignHeaders(params));
-		const withToken = { ...params, credentials: { ...params.credentials, sessionToken: 'tok' } };
-		expect(signHeaders(withToken)).toEqual(kitSignHeaders(withToken));
-		expect(signHeaders(withToken)['x-amz-security-token']).toBe('tok');
-	});
-
-	it('builds object URLs', () => {
-		expect(uriEncode("a b/c!'()*", true)).toBe('a%20b/c%21%27%28%29%2A');
-		expect(objectUrl({ region: 'eu-west-1', bucket: 'b' }, 'p/k.txt')).toBe('https://b.s3.eu-west-1.amazonaws.com/p/k.txt');
-		expect(objectUrl({ region: 'eu-west-1', bucket: 'b', forcePathStyle: true }, 'k')).toBe(
-			'https://s3.eu-west-1.amazonaws.com/b/k',
-		);
-		expect(objectUrl({ endpoint: 'https://acc.r2.example.com', region: 'auto', bucket: 'b' }, 'k')).toBe(
-			'https://acc.r2.example.com/b/k',
-		);
-		expect(objectUrl({ endpoint: 'https://minio.example.com', region: 'auto', bucket: 'b', forcePathStyle: false }, 'k')).toBe(
-			'https://b.minio.example.com/k',
-		);
 	});
 });
