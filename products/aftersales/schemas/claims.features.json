@@ -1,0 +1,253 @@
+{
+	"type": "object",
+	"title": "Claims",
+	"additionalProperties": false,
+	"properties": {
+		"types": {
+			"type": "array",
+			"title": "Claim types",
+			"description": "What a customer can ask for. The window (days from delivery) is the type's default unless a grade, an order-line snapshot or a window rule gives another; 0 days = only when a grade, snapshot or rule opens it.",
+			"default": [
+				{
+					"key": "return",
+					"label": "Return for a refund",
+					"window_days": 14,
+					"use_grade_windows": false,
+					"use_snapshot_days": false,
+					"refundable": true,
+					"returns_item": true,
+					"min_photos": 0,
+					"require_serial": false,
+					"details_min_length": 0,
+					"enabled": true
+				},
+				{
+					"key": "exchange",
+					"label": "Exchange",
+					"window_days": 14,
+					"use_grade_windows": false,
+					"use_snapshot_days": false,
+					"refundable": false,
+					"returns_item": true,
+					"min_photos": 0,
+					"require_serial": false,
+					"details_min_length": 0,
+					"enabled": true
+				},
+				{
+					"key": "warranty",
+					"label": "Warranty claim",
+					"window_days": 0,
+					"use_grade_windows": true,
+					"use_snapshot_days": true,
+					"refundable": true,
+					"returns_item": true,
+					"min_photos": 0,
+					"require_serial": false,
+					"details_min_length": 10,
+					"enabled": true
+				}
+			],
+			"minItems": 1,
+			"maxItems": 12,
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 4 }, "pro": { "max": 12 } },
+			"x-ui": { "widget": "list", "group": "Types", "order": 1 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "label", "window_days"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 80 },
+					"window_days": { "type": "integer", "title": "Window (days from delivery)", "minimum": 0, "maximum": 3650 },
+					"use_grade_windows": {
+						"type": "boolean",
+						"title": "Use grade windows",
+						"description": "The item's grade (Grades events or the purchase snapshot) picks the window from Grade windows."
+					},
+					"use_snapshot_days": {
+						"type": "boolean",
+						"title": "Use the order line's own days",
+						"description": "A purchase line's warrantyDays snapshot (sent with the purchase) wins over the defaults."
+					},
+					"refundable": { "type": "boolean", "title": "May end in a refund" },
+					"returns_item": { "type": "boolean", "title": "The item comes back (restock possible)" },
+					"min_photos": { "type": "integer", "title": "Photos required", "minimum": 0, "maximum": 10 },
+					"require_serial": { "type": "boolean", "title": "Serial number required" },
+					"details_min_length": {
+						"type": "integer",
+						"title": "Description required (characters)",
+						"minimum": 0,
+						"maximum": 2000
+					},
+					"enabled": { "type": "boolean", "title": "Enabled" }
+				}
+			}
+		},
+		"reasons": {
+			"type": "array",
+			"title": "Reasons",
+			"description": "Reasons a customer picks from; empty types = every type.",
+			"default": [
+				{ "key": "defective", "label": "It is faulty", "types": [], "details_required": false },
+				{ "key": "not_as_described", "label": "Not as described", "types": [], "details_required": false },
+				{ "key": "wrong_item", "label": "Wrong item received", "types": ["return", "exchange"], "details_required": false },
+				{ "key": "damaged_in_transit", "label": "Damaged in delivery", "types": [], "details_required": false },
+				{ "key": "changed_mind", "label": "Changed my mind", "types": ["return", "exchange"], "details_required": false },
+				{ "key": "other", "label": "Something else", "types": [], "details_required": true }
+			],
+			"minItems": 1,
+			"maxItems": 30,
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Reasons", "order": 2 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "label"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 80 },
+					"types": {
+						"type": "array",
+						"title": "Claim types (empty = all)",
+						"maxItems": 12,
+						"items": { "type": "string", "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" }
+					},
+					"details_required": { "type": "boolean", "title": "Description required" }
+				}
+			}
+		},
+		"grade_windows": {
+			"type": "array",
+			"title": "Grade windows",
+			"description": "Days of cover per grade (Grades tiers) and claim type, for types with Use grade windows on.",
+			"default": [],
+			"maxItems": 100,
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Windows", "order": 3 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["grade", "type", "days"],
+				"properties": {
+					"grade": { "type": "string", "title": "Grade (tier key)", "minLength": 1, "maxLength": 40 },
+					"type": {
+						"type": "string",
+						"title": "Claim type",
+						"minLength": 1,
+						"maxLength": 40,
+						"pattern": "^[a-z][a-z0-9_]*$"
+					},
+					"days": { "type": "integer", "title": "Days", "minimum": 0, "maximum": 3650 }
+				}
+			}
+		},
+		"window_rules": {
+			"type": "array",
+			"title": "Window rules",
+			"description": "rules@1 conditions over line (itemType, grade, sku, itemId, unitAmount, quantity), purchase (currency, total, source) and customer; the first enabled rule of a claim type that matches sets its window (0 days = not claimable).",
+			"default": [],
+			"maxItems": 50,
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 5 }, "pro": { "max": 50 } },
+			"x-ui": { "widget": "list", "group": "Windows", "order": 4, "help": "line.itemType == 'rental'" },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["id", "type", "days"],
+				"properties": {
+					"id": { "type": "string", "title": "Rule id", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"type": {
+						"type": "string",
+						"title": "Claim type",
+						"minLength": 1,
+						"maxLength": 40,
+						"pattern": "^[a-z][a-z0-9_]*$"
+					},
+					"when": { "type": "string", "title": "Condition (rules@1)", "description": "Empty = always.", "maxLength": 2000 },
+					"days": { "type": "integer", "title": "Days", "minimum": 0, "maximum": 3650 },
+					"enabled": { "type": "boolean", "title": "Enabled" }
+				}
+			}
+		},
+		"default_item_type": {
+			"type": "string",
+			"title": "Item type when a purchase line has none",
+			"description": "For example goods, rental, service or subscription; window rules can read line.itemType.",
+			"default": "goods",
+			"minLength": 1,
+			"maxLength": 40,
+			"pattern": "^[a-z][a-z0-9_]*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Windows", "order": 5 }
+		},
+		"window_start_events": {
+			"type": "array",
+			"title": "Events that start the window",
+			"description": "The first of these events for an order is its delivery time (when the window opens). order.placed@1 opens it at once (services, subscriptions).",
+			"default": ["order.delivered@1", "order.completed@1"],
+			"minItems": 1,
+			"maxItems": 10,
+			"uniqueItems": true,
+			"items": { "type": "string", "maxLength": 100, "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z0-9_]+)+@[1-9][0-9]*$" },
+			"x-kind": "config",
+			"x-ui": { "widget": "tags", "group": "Orders", "order": 6 }
+		},
+		"guest_access": {
+			"type": "boolean",
+			"title": "Guests may claim with their order number and contact",
+			"description": "Off: only customers signed in with your website's login (SS-Identity) can claim.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Access", "order": 7 }
+		},
+		"guest_token_days": {
+			"type": "integer",
+			"title": "Guest claim link lifetime (days)",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 365,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Access", "order": 8 }
+		},
+		"max_lines_per_claim": {
+			"type": "integer",
+			"title": "Lines per claim",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 9 }
+		},
+		"max_open_claims_per_customer": {
+			"type": "integer",
+			"title": "Open claims per customer",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "max": 10 }, "pro": { "max": 100 } },
+			"x-ui": { "widget": "number", "group": "Limits", "order": 10 }
+		},
+		"details_max_length": {
+			"type": "integer",
+			"title": "Description length",
+			"default": 2000,
+			"minimum": 100,
+			"maximum": 10000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 11 }
+		},
+		"create_rate_per_minute": {
+			"type": "integer",
+			"title": "New claims per minute (per key)",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 1000,
+			"x-kind": "rate",
+			"x-per": "minute",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 12 }
+		}
+	}
+}

@@ -1,0 +1,83 @@
+{
+	"type": "object",
+	"title": "Refunds",
+	"additionalProperties": false,
+	"properties": {
+		"methods": {
+			"type": "array",
+			"title": "Refund methods",
+			"default": [
+				{ "key": "original_payment", "label": "Original payment method" },
+				{ "key": "bank_transfer", "label": "Bank transfer" },
+				{ "key": "cash", "label": "Cash" },
+				{ "key": "store_credit", "label": "Store credit" }
+			],
+			"minItems": 1,
+			"maxItems": 20,
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Methods", "order": 1 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "label"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 80 },
+					"reference_required": { "type": "boolean", "title": "Reference required" }
+				}
+			}
+		},
+		"allowed_statuses": {
+			"type": "array",
+			"title": "Claim statuses that allow a refund",
+			"default": ["approved", "received"],
+			"minItems": 1,
+			"maxItems": 30,
+			"uniqueItems": true,
+			"items": { "type": "string", "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+			"x-kind": "config",
+			"x-ui": { "widget": "tags", "group": "Rules", "order": 2 }
+		},
+		"allow_partial": {
+			"type": "boolean",
+			"title": "Partial refunds",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Rules", "order": 3 }
+		},
+		"cap": {
+			"type": "string",
+			"title": "Refund cap",
+			"description": "claimed_lines: at most the claimed lines' amounts (unit amount × quantity) less earlier refunds; purchase: at most the purchase total; none: no cap (amounts unknown).",
+			"default": "claimed_lines",
+			"enum": ["claimed_lines", "purchase", "none"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Rules", "order": 4 }
+		},
+		"status_after": {
+			"type": "string",
+			"title": "Status after a full refund (empty = stay)",
+			"default": "refunded",
+			"maxLength": 40,
+			"pattern": "^(?:[a-z][a-z0-9_]*)?$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Rules", "order": 5 }
+		},
+		"publish_event": {
+			"type": "boolean",
+			"title": "Publish order.refunded@1 (Orders ledger)",
+			"description": "The Orders product records the refund in its ledger from this event. Off: refunds are only recorded here.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Ledger", "order": 6 }
+		},
+		"include_lines": {
+			"type": "boolean",
+			"title": "Send the claimed lines with the event",
+			"description": "Keep Catalog's give-back-on-refund off when Restock handles stock, or stock comes back twice.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Ledger", "order": 7 }
+		}
+	}
+}
