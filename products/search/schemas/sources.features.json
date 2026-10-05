@@ -1,0 +1,131 @@
+{
+	"type": "object",
+	"title": "Sources",
+	"additionalProperties": false,
+	"properties": {
+		"catalog_events": {
+			"type": "boolean",
+			"title": "Index Catalog items automatically",
+			"description": "item.created@1, item.updated@1 and item.deleted@1 from the Catalog product keep the index in step (active items only; private cost is never indexed).",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "Catalog", "order": 1, "widget": "switch" }
+		},
+		"catalog_type": {
+			"type": "string",
+			"title": "Document type of Catalog items",
+			"default": "item",
+			"minLength": 1,
+			"maxLength": 40,
+			"pattern": "^[a-z][a-z0-9_]{0,39}$",
+			"x-kind": "config",
+			"x-ui": { "group": "Catalog", "order": 2 }
+		},
+		"catalog_url_template": {
+			"type": "string",
+			"title": "Item page URL",
+			"description": "Where a Catalog item's page lives: a path or https URL with {itemId} (empty = results without links).",
+			"default": "",
+			"maxLength": 300,
+			"x-kind": "config",
+			"x-ui": { "group": "Catalog", "order": 3, "placeholder": "/items/{itemId}" }
+		},
+		"api_upserts": {
+			"type": "boolean",
+			"title": "Allow document writes with sk_ keys",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "API", "order": 4, "widget": "switch" }
+		},
+		"crawl_sources": {
+			"type": "array",
+			"title": "Crawled sources",
+			"description": "The website's own public JSON feed or sitemap, fetched on a schedule. Only https URLs on the website's domain (or a subdomain) are fetched; JSON records are mapped with field paths (`a.b|c`), sitemap pages give title, description, headings and text.",
+			"default": [],
+			"maxItems": 20,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "kind", "url", "type"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+					"kind": { "type": "string", "title": "Kind", "enum": ["json", "sitemap"] },
+					"url": { "type": "string", "title": "URL", "maxLength": 2000, "format": "uri" },
+					"type": { "type": "string", "title": "Document type", "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+					"every_hours": { "type": "integer", "title": "Crawl every (hours)", "minimum": 1, "maximum": 720 },
+					"records_path": { "type": "string", "title": "Records path (JSON)", "maxLength": 200 },
+					"fields": {
+						"type": "array",
+						"title": "Field paths (JSON)",
+						"maxItems": 40,
+						"items": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["field", "path"],
+							"properties": {
+								"field": {
+									"type": "string",
+									"title": "Field",
+									"minLength": 1,
+									"maxLength": 40,
+									"pattern": "^[a-z][a-z0-9_]{0,39}$"
+								},
+								"path": { "type": "string", "title": "Path", "minLength": 1, "maxLength": 200 }
+							}
+						}
+					}
+				}
+			},
+			"x-kind": "config",
+			"x-ui": { "group": "Crawls", "order": 5, "widget": "list" }
+		},
+		"max_crawl_sources": {
+			"type": "integer",
+			"title": "Crawled sources (maximum)",
+			"default": 3,
+			"minimum": 0,
+			"maximum": 20,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 3, "max": 3 }, "pro": { "default": 10, "max": 20 } },
+			"x-ui": { "group": "Crawls", "order": 6, "widget": "number" }
+		},
+		"max_pages": {
+			"type": "integer",
+			"title": "Pages or records per crawl",
+			"default": 1000,
+			"minimum": 1,
+			"maximum": 20000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 1000, "max": 2000 }, "pro": { "default": 10000, "max": 20000 } },
+			"x-ui": { "group": "Crawls", "order": 7, "widget": "number" }
+		},
+		"pages_per_run": {
+			"type": "integer",
+			"title": "Pages fetched per scheduled run",
+			"description": "A sitemap crawl continues over several runs of the scheduler.",
+			"default": 40,
+			"minimum": 1,
+			"maximum": 200,
+			"x-kind": "limit",
+			"x-ui": { "group": "Crawls", "order": 8, "widget": "number", "advanced": true }
+		},
+		"max_fetch_kb": {
+			"type": "integer",
+			"title": "Largest response fetched (KB)",
+			"default": 2048,
+			"minimum": 16,
+			"maximum": 10240,
+			"x-kind": "limit",
+			"x-ui": { "group": "Crawls", "order": 9, "widget": "number", "advanced": true }
+		},
+		"fetch_timeout_seconds": {
+			"type": "integer",
+			"title": "Fetch timeout (seconds)",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 30,
+			"x-kind": "config",
+			"x-ui": { "group": "Crawls", "order": 10, "widget": "number", "advanced": true }
+		}
+	}
+}

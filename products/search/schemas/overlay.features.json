@@ -1,0 +1,90 @@
+{
+	"type": "object",
+	"title": "Search overlay",
+	"additionalProperties": false,
+	"properties": {
+		"hotkey": {
+			"type": "string",
+			"title": "Keyboard shortcut",
+			"description": "Opens the search outside text fields.",
+			"default": "/",
+			"enum": ["/", "mod+k", "none"],
+			"x-kind": "config",
+			"x-ui": { "group": "Behaviour", "order": 1, "widget": "select" }
+		},
+		"debounce_ms": {
+			"type": "integer",
+			"title": "Wait after typing (ms)",
+			"default": 250,
+			"minimum": 50,
+			"maximum": 1500,
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "group": "Behaviour", "order": 2, "widget": "number" }
+		},
+		"min_chars": {
+			"type": "integer",
+			"title": "Characters before searching",
+			"default": 2,
+			"minimum": 1,
+			"maximum": 10,
+			"x-kind": "config",
+			"x-ui": { "group": "Behaviour", "order": 3, "widget": "number" }
+		},
+		"max_results": {
+			"type": "integer",
+			"title": "Instant results shown",
+			"default": 8,
+			"minimum": 1,
+			"maximum": 20,
+			"x-kind": "limit",
+			"x-ui": { "group": "Results", "order": 4, "widget": "number" }
+		},
+		"types": {
+			"type": "array",
+			"title": "Document types shown",
+			"description": "Empty = every type.",
+			"default": [],
+			"maxItems": 20,
+			"uniqueItems": true,
+			"items": { "type": "string", "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+			"x-kind": "config",
+			"x-ui": { "group": "Results", "order": 5 }
+		},
+		"results_path": {
+			"type": "string",
+			"title": "Results page",
+			"description": "The website's own results page; Enter without a highlighted result goes there with the query.",
+			"default": "/search",
+			"minLength": 1,
+			"maxLength": 200,
+			"pattern": "^/[^\\s]*$",
+			"x-kind": "config",
+			"x-ui": { "group": "Results", "order": 6 }
+		},
+		"query_param": {
+			"type": "string",
+			"title": "Query parameter of the results page",
+			"default": "q",
+			"minLength": 1,
+			"maxLength": 16,
+			"pattern": "^[a-z][a-z0-9_]{0,15}$",
+			"x-kind": "config",
+			"x-ui": { "group": "Results", "order": 7, "advanced": true }
+		},
+		"show_images": {
+			"type": "boolean",
+			"title": "Show images",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "Results", "order": 8, "widget": "switch" }
+		},
+		"show_suggestions": {
+			"type": "boolean",
+			"title": "Show suggestions while empty",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "Results", "order": 9, "widget": "switch" }
+		}
+	}
+}

@@ -33,6 +33,7 @@
 		"@ss/product-loyalty": "workspace:^",
 		"@ss/product-pdp": "workspace:^",
 		"@ss/product-reviews": "workspace:^",
+		"@ss/product-search": "workspace:^",
 		"@ss/product-signups": "workspace:^",
 		"@ss/product-storefront": "workspace:^",
 		"@ss/protocol": "workspace:^",

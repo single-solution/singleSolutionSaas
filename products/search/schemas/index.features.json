@@ -1,0 +1,199 @@
+{
+	"type": "object",
+	"title": "Search index",
+	"additionalProperties": false,
+	"properties": {
+		"engine": {
+			"type": "string",
+			"title": "Search engine",
+			"description": "auto: MongoDB Atlas Search when the merchant database is on Atlas and the product's search index is ready, else the portable engine. atlas: prefer Atlas (the portable engine still answers while the Atlas index is missing or building). portable: never use Atlas.",
+			"default": "auto",
+			"enum": ["auto", "atlas", "portable"],
+			"x-kind": "config",
+			"x-ui": { "group": "Engine", "order": 1, "widget": "select" }
+		},
+		"document_types": {
+			"type": "array",
+			"title": "Document types",
+			"description": "What the index holds (products, articles, docs, listings, pages, …): per type its fields, which are searchable, which match as you type (prefix), which are returned to browsers (display) and which are private (never matched or returned with a pk_ key).",
+			"default": [
+				{
+					"key": "item",
+					"label": "Item",
+					"title_field": "title",
+					"description_field": "description",
+					"fields": [
+						{ "key": "title", "searchable": true, "prefix": true, "display": true, "private": false },
+						{ "key": "description", "searchable": true, "prefix": false, "display": true, "private": false },
+						{ "key": "brand", "searchable": true, "prefix": true, "display": true, "private": false },
+						{ "key": "tags", "searchable": true, "prefix": false, "display": true, "private": false },
+						{ "key": "skus", "searchable": true, "prefix": true, "display": false, "private": false },
+						{ "key": "attributes", "searchable": true, "prefix": false, "display": false, "private": false }
+					]
+				},
+				{
+					"key": "page",
+					"label": "Page",
+					"title_field": "title",
+					"description_field": "description",
+					"fields": [
+						{ "key": "title", "searchable": true, "prefix": true, "display": true, "private": false },
+						{ "key": "description", "searchable": true, "prefix": false, "display": true, "private": false },
+						{ "key": "headings", "searchable": true, "prefix": false, "display": false, "private": false },
+						{ "key": "body", "searchable": true, "prefix": false, "display": false, "private": false }
+					]
+				}
+			],
+			"minItems": 1,
+			"maxItems": 20,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "label", "fields"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+					"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 80 },
+					"title_field": { "type": "string", "title": "Title field", "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+					"description_field": {
+						"type": "string",
+						"title": "Description field",
+						"maxLength": 40,
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"fields": {
+						"type": "array",
+						"title": "Fields",
+						"minItems": 1,
+						"maxItems": 30,
+						"items": {
+							"type": "object",
+							"additionalProperties": false,
+							"required": ["key"],
+							"properties": {
+								"key": {
+									"type": "string",
+									"title": "Key",
+									"minLength": 1,
+									"maxLength": 40,
+									"pattern": "^[a-z][a-z0-9_]{0,39}$"
+								},
+								"searchable": { "type": "boolean", "title": "Searchable" },
+								"prefix": { "type": "boolean", "title": "Match as you type" },
+								"display": { "type": "boolean", "title": "Returned to browsers" },
+								"private": { "type": "boolean", "title": "Private (server keys only)" }
+							}
+						}
+					}
+				}
+			},
+			"x-kind": "config",
+			"x-ui": { "group": "Documents", "order": 2, "widget": "list" }
+		},
+		"max_documents": {
+			"type": "integer",
+			"title": "Maximum documents",
+			"description": "Documents held in the index (every type, every source).",
+			"default": 10000,
+			"minimum": 1,
+			"maximum": 5000000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 10000, "max": 10000 }, "pro": { "default": 200000, "max": 1000000 } },
+			"x-ui": { "group": "Limits", "order": 3, "widget": "number" }
+		},
+		"upserts_per_day": {
+			"type": "integer",
+			"title": "Documents indexed per day",
+			"description": "Creates and updates from every source (API, crawls, catalog events) per day in the website's time zone; further writes are refused until the next day.",
+			"default": 20000,
+			"minimum": 1,
+			"maximum": 10000000,
+			"x-kind": "quota",
+			"x-period": "day",
+			"x-hardStop": true,
+			"x-plan": { "starter": { "default": 20000, "max": 50000 }, "pro": { "default": 500000, "max": 10000000 } },
+			"x-ui": { "group": "Limits", "order": 4, "widget": "number" }
+		},
+		"max_field_chars": {
+			"type": "integer",
+			"title": "Characters indexed per field",
+			"description": "Longer field text is cut before indexing.",
+			"default": 10000,
+			"minimum": 100,
+			"maximum": 100000,
+			"x-kind": "limit",
+			"x-ui": { "group": "Limits", "order": 5, "widget": "number", "advanced": true }
+		},
+		"max_page_size": {
+			"type": "integer",
+			"title": "Results per page (maximum)",
+			"default": 50,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "group": "Results", "order": 6, "widget": "number" }
+		},
+		"max_results": {
+			"type": "integer",
+			"title": "Deepest result reachable by paging",
+			"default": 200,
+			"minimum": 10,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-ui": { "group": "Results", "order": 7, "widget": "number", "advanced": true }
+		},
+		"min_query_chars": {
+			"type": "integer",
+			"title": "Shortest query searched",
+			"description": "Shorter queries answer an empty result (no query is metered).",
+			"default": 1,
+			"minimum": 1,
+			"maximum": 10,
+			"x-kind": "config",
+			"x-ui": { "group": "Results", "order": 8, "widget": "number" }
+		},
+		"max_query_chars": {
+			"type": "integer",
+			"title": "Longest query",
+			"default": 100,
+			"minimum": 10,
+			"maximum": 500,
+			"x-kind": "limit",
+			"x-ui": { "group": "Results", "order": 9, "widget": "number", "advanced": true }
+		},
+		"cache_seconds": {
+			"type": "integer",
+			"title": "Browser cache of public results (seconds)",
+			"default": 60,
+			"minimum": 0,
+			"maximum": 3600,
+			"x-kind": "config",
+			"x-ui": { "group": "Results", "order": 10, "widget": "number" }
+		},
+		"search_rate_per_minute": {
+			"type": "integer",
+			"title": "Browser searches per minute (per website)",
+			"description": "Searches and suggestions with pk_ keys share this window.",
+			"default": 600,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "rate",
+			"x-per": "minute",
+			"x-unit": "request",
+			"x-plan": { "starter": { "default": 600, "max": 1200 }, "pro": { "default": 3000, "max": 100000 } },
+			"x-ui": { "group": "Rates", "order": 11, "widget": "number" }
+		},
+		"api_rate_per_minute": {
+			"type": "integer",
+			"title": "Server requests per minute",
+			"description": "Every sk_ request (searches, document writes, reads).",
+			"default": 600,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "rate",
+			"x-per": "minute",
+			"x-unit": "request",
+			"x-plan": { "starter": { "default": 600, "max": 1200 }, "pro": { "default": 3000, "max": 100000 } },
+			"x-ui": { "group": "Rates", "order": 12, "widget": "number" }
+		}
+	}
+}
