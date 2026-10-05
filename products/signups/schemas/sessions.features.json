@@ -1,0 +1,124 @@
+{
+	"type": "object",
+	"title": "Sessions",
+	"additionalProperties": false,
+	"properties": {
+		"access_ttl_minutes": {
+			"type": "integer",
+			"title": "Access token lifetime (minutes)",
+			"description": "Other products verify access tokens offline, so revocation reaches them when the token expires: keep it short.",
+			"default": 15,
+			"minimum": 1,
+			"maximum": 60,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Tokens", "order": 1 }
+		},
+		"refresh_ttl_days": {
+			"type": "integer",
+			"title": "Session lifetime (days)",
+			"description": "Absolute lifetime of a session; the customer signs in again afterwards.",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 365,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "max": 90 }, "pro": { "max": 365 } },
+			"x-ui": { "widget": "number", "group": "Sessions", "order": 2 }
+		},
+		"idle_timeout_days": {
+			"type": "integer",
+			"title": "Idle timeout (days, 0 = none)",
+			"default": 14,
+			"minimum": 0,
+			"maximum": 365,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Sessions", "order": 3 }
+		},
+		"sliding_renewal": {
+			"type": "boolean",
+			"title": "Renew the idle window on every refresh",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Sessions", "order": 4 }
+		},
+		"max_sessions_per_customer": {
+			"type": "integer",
+			"title": "Sessions (devices) per customer",
+			"description": "Signing in on one more device ends the least recently used session.",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Sessions", "order": 5 }
+		},
+		"reuse_detection": {
+			"type": "boolean",
+			"title": "Revoke a session when an old refresh token is replayed",
+			"default": true,
+			"x-kind": "flag",
+			"x-lock": true,
+			"x-ui": { "widget": "switch", "group": "Security", "order": 6 }
+		},
+		"reuse_grace_seconds": {
+			"type": "integer",
+			"title": "Concurrent refresh grace (seconds)",
+			"description": "Two tabs refreshing at once within this window get refresh_conflict instead of a revoked session.",
+			"default": 10,
+			"minimum": 0,
+			"maximum": 60,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Security", "order": 7 }
+		},
+		"audience": {
+			"type": "string",
+			"title": "Token audience (aud)",
+			"description": "Empty = the website id. Set the same value as the audience of the issuer in the Portal (Website → Identity).",
+			"default": "",
+			"maxLength": 255,
+			"pattern": "^[\\x21-\\x7e]*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Tokens", "order": 8 }
+		},
+		"include_email_claim": {
+			"type": "boolean",
+			"title": "Put the e-mail address in access tokens",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Tokens", "order": 9 }
+		},
+		"include_phone_claim": {
+			"type": "boolean",
+			"title": "Put the phone number in access tokens",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Tokens", "order": 10 }
+		},
+		"key_rotation_days": {
+			"type": "integer",
+			"title": "Signing key rotation (days, 0 = manual)",
+			"default": 90,
+			"minimum": 0,
+			"maximum": 730,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Keys", "order": 11 }
+		},
+		"key_prepublish_hours": {
+			"type": "integer",
+			"title": "Publish the next key ahead of use (hours)",
+			"description": "The Portal refreshes the issuer's JWKS at most hourly: a new key is published this long before it signs.",
+			"default": 2,
+			"minimum": 1,
+			"maximum": 72,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Keys", "order": 12 }
+		},
+		"browser_storage": {
+			"type": "string",
+			"title": "Where the drop-in widget keeps the session",
+			"description": "local: survives restarts; session: until the tab closes; memory: until reload.",
+			"default": "local",
+			"enum": ["local", "session", "memory"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Browser", "order": 13 }
+		}
+	}
+}

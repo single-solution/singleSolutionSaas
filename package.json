@@ -1,31 +1,27 @@
 {
-	"name": "single-solution-saas",
+	"name": "single-solution",
 	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@11.5.2",
+	"engines": {
+		"node": ">=22"
+	},
+	"prettier": "@ss/config/prettier.json",
 	"scripts": {
-		"dev": "pnpm --parallel -r dev",
-		"dev:portal": "pnpm --filter portal dev",
-		"build": "pnpm -r build",
-		"build:portal": "pnpm --filter portal build",
-		"test": "vitest run",
-		"test:watch": "vitest",
-		"lint": "eslint .",
-		"lint:fix": "eslint . --fix",
-		"format": "prettier --write .",
-		"format:check": "prettier --check .",
-		"fix": "eslint . --fix && prettier --write .",
-		"check": "pnpm lint && pnpm format:check && pnpm test && pnpm -r build"
+		"check": "prettier --check . && pnpm -r --workspace-concurrency=1 check",
+		"test": "pnpm -r --workspace-concurrency=1 test",
+		"test:all": "vitest run",
+		"lint": "pnpm -r lint",
+		"typecheck": "pnpm -r typecheck",
+		"format": "prettier --write . && pnpm -r format",
+		"format:check": "prettier --check . && pnpm -r format:check",
+		"validate": "pnpm --filter \"./products/*\" validate"
 	},
 	"devDependencies": {
-		"@eslint/js": "^10.0.1",
-		"autoprefixer": "^10.5.4",
-		"eslint": "^9.39.5",
-		"eslint-config-prettier": "^10.1.8",
-		"eslint-plugin-react": "^7.37.5",
-		"eslint-plugin-react-hooks": "^4.6.2",
-		"globals": "^17.11.0",
-		"next": "14.2.25",
-		"prettier": "^3.0.3",
-		"tailwindcss": "^3.4.17",
-		"vitest": "^2.1.9"
+		"@ss/cli": "workspace:^",
+		"@ss/config": "workspace:^",
+		"@vitest/coverage-v8": "^3.2.7",
+		"prettier": "^3.9.9",
+		"vitest": "^3.2.7"
 	}
 }

@@ -1,0 +1,49 @@
+{
+	"type": "object",
+	"title": "Sign-in widget",
+	"additionalProperties": false,
+	"properties": {
+		"methods": {
+			"type": "array",
+			"title": "Sign-in methods",
+			"description": "Codes need the otp element, links the magic_link element.",
+			"default": ["otp"],
+			"minItems": 1,
+			"maxItems": 2,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["otp", "magic_link"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "multiselect", "group": "Steps", "order": 1 }
+		},
+		"default_channel": {
+			"type": "string",
+			"title": "Channel selected first",
+			"default": "email",
+			"enum": ["email", "sms", "whatsapp"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Steps", "order": 2 }
+		},
+		"autofill": {
+			"type": "boolean",
+			"title": "Offer one-time-code autofill",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Steps", "order": 3 }
+		},
+		"remember_device": {
+			"type": "boolean",
+			"title": "Remember this device",
+			"description": "Keeps a random device id in the browser for the device list and new-device notices.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Steps", "order": 4 }
+		},
+		"show_consent": {
+			"type": "boolean",
+			"title": "Show the terms acceptance step",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Steps", "order": 5 }
+		}
+	}
+}

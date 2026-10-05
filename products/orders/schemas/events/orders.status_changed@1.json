@@ -1,0 +1,36 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "orders.status_changed@1",
+	"description": "An order moved from one lifecycle status to another (every move, including the ones that also publish a catalogued order.* event). Carries identity references only, never contact details.",
+	"type": "object",
+	"required": ["orderId", "from", "to", "actor"],
+	"additionalProperties": false,
+	"properties": {
+		"orderId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"number": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"from": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+		"to": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+		"actor": { "type": "string", "enum": ["staff", "api", "customer", "system"] },
+		"reason": { "type": "string", "minLength": 1, "maxLength": 40 },
+		"revenue": { "type": "boolean", "description": "The new status counts as revenue." },
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"subject": { "type": "string", "minLength": 1, "maxLength": 255 },
+		"carrier": { "type": "string", "minLength": 1, "maxLength": 80 },
+		"trackingNumber": { "type": "string", "minLength": 1, "maxLength": 80 },
+		"trackingUrl": { "type": "string", "format": "uri", "maxLength": 2048 }
+	},
+	"examples": [
+		{
+			"orderId": "ord_0123456789abcdefghjkmnpq",
+			"number": "000123",
+			"from": "packed",
+			"to": "dispatched",
+			"actor": "staff",
+			"revenue": true,
+			"customerId": "cus_123",
+			"carrier": "Parcel Co",
+			"trackingNumber": "PC123456",
+			"trackingUrl": "https://track.example.com/PC123456"
+		}
+	]
+}

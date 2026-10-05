@@ -1,0 +1,119 @@
+{
+	"type": "object",
+	"title": "Risk",
+	"additionalProperties": false,
+	"properties": {
+		"open_order_cap": {
+			"type": "integer",
+			"title": "Open orders per customer (0 = no cap)",
+			"description": "Orders in an `open` status of the lifecycle count; pay-on-delivery orders waiting for confirmation count too.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000,
+			"x-kind": "config"
+		},
+		"cap_action": {
+			"type": "string",
+			"title": "Over the cap",
+			"description": "review (accept and queue for manual review) or reject (refuse the order at intake).",
+			"default": "review",
+			"enum": ["review", "reject"],
+			"x-kind": "config"
+		},
+		"blocked_action": {
+			"type": "string",
+			"title": "Blocked customers",
+			"default": "reject",
+			"enum": ["review", "reject"],
+			"x-kind": "config"
+		},
+		"cod_max_total": {
+			"type": "array",
+			"title": "Largest pay-on-delivery total, per currency (minor units)",
+			"default": [],
+			"maxItems": 50,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["currency", "amount"],
+				"properties": {
+					"currency": { "type": "string", "title": "Currency", "pattern": "^[A-Z]{3}$" },
+					"amount": { "type": "integer", "title": "Amount", "minimum": 0, "maximum": 9007199254740991 }
+				}
+			},
+			"x-kind": "config"
+		},
+		"cod_over_cap_action": {
+			"type": "string",
+			"title": "Pay-on-delivery over the cap",
+			"default": "review",
+			"enum": ["review", "reject"],
+			"x-kind": "config"
+		},
+		"cod_advance_percent": {
+			"type": "integer",
+			"title": "Pay-on-delivery advance (% of the total)",
+			"description": "Collected before the order is confirmed; a flat amount below wins when set for the order's currency.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100,
+			"x-kind": "config"
+		},
+		"cod_advance_amount": {
+			"type": "array",
+			"title": "Pay-on-delivery advance, flat, per currency (minor units)",
+			"default": [],
+			"maxItems": 50,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["currency", "amount"],
+				"properties": {
+					"currency": { "type": "string", "title": "Currency", "pattern": "^[A-Z]{3}$" },
+					"amount": { "type": "integer", "title": "Amount", "minimum": 0, "maximum": 9007199254740991 }
+				}
+			},
+			"x-kind": "config"
+		},
+		"rto_reasons": {
+			"type": "array",
+			"title": "Return reasons that count as return-to-origin",
+			"default": ["rto"],
+			"uniqueItems": true,
+			"maxItems": 20,
+			"items": { "type": "string", "title": "Reason", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+			"x-kind": "config"
+		},
+		"rto_warning_threshold": {
+			"type": "integer",
+			"title": "Flag customers with this many returns to origin (0 = off)",
+			"default": 2,
+			"minimum": 0,
+			"maximum": 100,
+			"x-kind": "config"
+		},
+		"rto_require_advance": {
+			"type": "boolean",
+			"title": "Flagged customers pay the advance on pay-on-delivery orders",
+			"description": "With no advance configured, their pay-on-delivery orders go to review instead.",
+			"default": false,
+			"x-kind": "flag"
+		},
+		"phone_match_digits": {
+			"type": "integer",
+			"title": "Match phone numbers on their last N digits (0 = the whole number)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 15,
+			"x-kind": "config"
+		},
+		"max_blocklist": {
+			"type": "integer",
+			"title": "Blocklist entries",
+			"default": 5000,
+			"minimum": 0,
+			"maximum": 100000,
+			"x-kind": "limit"
+		}
+	}
+}

@@ -1,0 +1,272 @@
+{
+	"ssps": "1",
+	"product": {
+		"slug": "alerts",
+		"name": "Alerts & Waitlists",
+		"kind": "service",
+		"version": "1.0.0",
+		"category": "engagement",
+		"description": "Back-in-stock, price-drop, availability and custom alerts with waitlists: a drop-in or headless \"Notify me\" form, triggers from inventory, price and custom events, delivery through the merchant's own messaging provider with caps, quiet hours and batching — all data in the merchant's own database."
+	},
+	"endpoints": {
+		"base": "https://alerts.example.com",
+		"dashboard": "/dashboard",
+		"demo": "/dashboard",
+		"events": "/.well-known/ss-events",
+		"register": "/.well-known/ss-register"
+	},
+	"capabilities": {
+		"adminLaunch": true,
+		"sandbox": true,
+		"localEnforcement": [
+			"limit:capture.max_active_subscriptions",
+			"limit:capture.max_active_per_contact",
+			"rate:capture.max_per_ip_per_hour",
+			"limit:dispatch.max_per_contact_per_day"
+		],
+		"offlineGrace": "PT24H"
+	},
+	"scopes": ["events.subscribe:inventory.changed@1", "events.subscribe:price.changed@1", "events.subscribe:custom.*"],
+	"requires": {
+		"resources": ["database"]
+	},
+	"events": {
+		"consumes": ["custom.*", "inventory.changed@1", "price.changed@1"],
+		"publishes": ["alerts.subscribed@1", "alerts.sent@1"]
+	},
+	"budget": {
+		"shared": 1
+	},
+	"elements": [
+		{
+			"key": "triggers",
+			"name": "Triggers",
+			"description": "What fires alerts: inventory.changed@1, price.changed@1 and custom.* events from the Event Hub, POST /v1/triggers, batches and CSV imports. Tracks each target's stock (per location) and price, trusts stock and price only from the merchant's servers, and claims waiters exactly once per change.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["types"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/triggers.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["triggers"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "types",
+			"name": "Alert types",
+			"description": "Back-in-stock, price-drop (minimum drop in percent / amount, shopper target price), availability / slot waitlists notified by free capacity, and merchant-defined custom types fired by custom.* events with rules@1 conditions; expiry and retention.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 200
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": [],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/types.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"rules": ["custom_type_when"],
+			"customFields": [],
+			"api": {
+				"resources": ["alert-types"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "capture",
+			"name": "Notify-me capture",
+			"description": "The \"Notify me\" form — drop-in, headless or API: the signed-in customer's own address (bring-your-own identity) or a typed e-mail / E.164 phone, consent text, double opt-in, per-IP and per-contact limits.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 200
+			},
+			"budget": {
+				"js": 5
+			},
+			"dependsOn": ["types"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/capture.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"experiments": true,
+			"api": {
+				"resources": ["subscriptions"]
+			},
+			"headless": "headless/notifyMe.js#createNotifyMe",
+			"renderer": "ui/notifyMe.js#render",
+			"variants": ["inline", "button"],
+			"slots": ["before", "after"],
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "dispatch",
+			"name": "Dispatch",
+			"description": "Delivery through the merchant's own messaging connector: templates per type, channel and language, frequency caps per contact, quiet hours in the website's time zone, batching into digests, retries with backoff, and claim-before-send so no message is sent twice across instances.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 300,
+				"metered": [
+					{
+						"unit": "alert_send",
+						"perUnit": 1,
+						"per": 1,
+						"included": {
+							"pro": 2000
+						}
+					}
+				]
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["types", "unsubscribe"],
+			"requires": {
+				"resources": ["database", "messaging"]
+			},
+			"features": {
+				"$ref": "schemas/dispatch.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["messages"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "waitlist_priority",
+			"name": "Waitlist priority",
+			"description": "Waitlist order — first come first told, or by a tier claim of the customer's own login token — with positions for shoppers and an ordered waitlist for the merchant.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["capture"],
+			"features": {
+				"$ref": "schemas/waitlist_priority.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["waitlist"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "unsubscribe",
+			"name": "Unsubscribe",
+			"description": "Signed unsubscribe links in every message, a hosted confirm page (link previews and scanners never unsubscribe), RFC 8058 one-click for e-mail, per-alert or per-contact scope and a suppression list.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["types"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/unsubscribe.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["unsubscribe"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "analytics",
+			"name": "Analytics",
+			"description": "Subscriptions by type and status, messages by channel and status, notified / unsubscribe / delivery rates and a daily series.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["types"],
+			"features": {
+				"$ref": "schemas/analytics.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["analytics"]
+			},
+			"headless": null,
+			"renderer": null
+		}
+	],
+	"plans": [
+		{
+			"code": "starter",
+			"name": "Starter",
+			"description": "Back-in-stock and price-drop alerts with the Notify-me form, event / API / CSV triggers, delivery and unsubscribe; analytics as an add-on.",
+			"elements": ["types", "triggers", "capture", "dispatch", "unsubscribe"],
+			"addons": ["analytics"]
+		},
+		{
+			"code": "pro",
+			"name": "Pro",
+			"description": "Everything, including waitlist priority by customer tier and analytics; 2 000 sends per hour included.",
+			"elements": ["types", "triggers", "capture", "dispatch", "unsubscribe", "waitlist_priority", "analytics"]
+		}
+	],
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
+	"trialHours": 48,
+	"retention": {
+		"subscriptions": "P90D",
+		"messages": "P90D",
+		"triggers": "P30D",
+		"counters": "P8D"
+	}
+}

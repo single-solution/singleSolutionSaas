@@ -1,0 +1,3103 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Configurator Builder API",
+		"version": "1.0.0",
+		"description": "Mode C API of Configurator Builder (SSPS v1): configurators, the closest-match resolver, price deltas, URL sync and the widget bootstrap. Money is integer minor units."
+	},
+	"servers": [
+		{
+			"url": "https://configurator.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"paths": {
+		"/v1/configurators": {
+			"x-ss-certify": true,
+			"get": {
+				"operationId": "listConfigurators",
+				"summary": "List configurators (server key)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100
+						}
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"enum": ["draft", "published", "archived"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "cfg_0123456789abcdefghjkmnpq",
+											"key": "classic-tee",
+											"name": "Classic tee",
+											"status": "published",
+											"version": 3,
+											"groups": ["color", "size"],
+											"source": {
+												"type": "standalone"
+											},
+											"updatedAt": "2026-10-01T10:00:00.000Z"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createConfigurator",
+				"summary": "Create a configurator (server key; Idempotency-Key required)",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConfiguratorInput"
+							},
+							"example": {
+								"name": "Classic tee",
+								"groups": [
+									{
+										"key": "color",
+										"label": "Colour",
+										"display": "swatches",
+										"default": "navy",
+										"options": [
+											{
+												"key": "navy",
+												"label": "Navy",
+												"swatch": "#1f2a44"
+											},
+											{
+												"key": "sand",
+												"label": "Sand",
+												"swatch": "#d8c8a8"
+											}
+										]
+									},
+									{
+										"key": "size",
+										"label": "Size",
+										"options": [
+											{
+												"key": "S"
+											},
+											{
+												"key": "M"
+											},
+											{
+												"key": "XL",
+												"priceDelta": 200
+											}
+										]
+									}
+								],
+								"rules": [
+									{
+										"id": "no-sand-xl",
+										"when": "selection.color == 'sand' and selection.size == 'XL'",
+										"message": "Sand is not made in XL."
+									}
+								],
+								"combinations": [
+									{
+										"id": "tee-navy-s",
+										"sku": "TEE-NV-S",
+										"options": {
+											"color": "navy",
+											"size": "S"
+										},
+										"stock": 4
+									},
+									{
+										"id": "tee-navy-m",
+										"sku": "TEE-NV-M",
+										"options": {
+											"color": "navy",
+											"size": "M"
+										},
+										"stock": 0
+									},
+									{
+										"id": "tee-sand-m",
+										"sku": "TEE-SD-M",
+										"options": {
+											"color": "sand",
+											"size": "M"
+										},
+										"stock": 3
+									}
+								],
+								"pricing": {
+									"base": 1900
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Configurator"
+								},
+								"example": {
+									"id": "cfg_0123456789abcdefghjkmnpq",
+									"key": null,
+									"name": "Classic tee",
+									"status": "draft",
+									"version": 1,
+									"createdAt": "2026-10-01T10:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": null,
+									"schema": {
+										"name": "Classic tee",
+										"groups": [
+											{
+												"key": "color",
+												"label": "Colour",
+												"display": "swatches",
+												"default": "navy",
+												"options": [
+													{
+														"key": "navy",
+														"label": "Navy",
+														"swatch": "#1f2a44"
+													},
+													{
+														"key": "sand",
+														"label": "Sand",
+														"swatch": "#d8c8a8"
+													}
+												]
+											},
+											{
+												"key": "size",
+												"label": "Size",
+												"options": [
+													{
+														"key": "S"
+													},
+													{
+														"key": "M"
+													},
+													{
+														"key": "XL",
+														"priceDelta": 200
+													}
+												]
+											}
+										],
+										"rules": [
+											{
+												"id": "no-sand-xl",
+												"when": "selection.color == 'sand' and selection.size == 'XL'",
+												"message": "Sand is not made in XL."
+											}
+										],
+										"combinations": [
+											{
+												"id": "tee-navy-s",
+												"sku": "TEE-NV-S",
+												"options": {
+													"color": "navy",
+													"size": "S"
+												},
+												"stock": 4
+											},
+											{
+												"id": "tee-navy-m",
+												"sku": "TEE-NV-M",
+												"options": {
+													"color": "navy",
+													"size": "M"
+												},
+												"stock": 0
+											},
+											{
+												"id": "tee-sand-m",
+												"sku": "TEE-SD-M",
+												"options": {
+													"color": "sand",
+													"size": "M"
+												},
+												"stock": 3
+											}
+										],
+										"pricing": {
+											"base": 1900
+										},
+										"key": null,
+										"description": null,
+										"source": {
+											"type": "standalone"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/configurators:check": {
+			"post": {
+				"operationId": "checkConfigurator",
+				"summary": "Validate a schema without saving (rules@1 errors with positions)",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConfiguratorInput"
+							},
+							"example": {
+								"name": "Classic tee",
+								"groups": [
+									{
+										"key": "color",
+										"label": "Colour",
+										"display": "swatches",
+										"default": "navy",
+										"options": [
+											{
+												"key": "navy",
+												"label": "Navy",
+												"swatch": "#1f2a44"
+											},
+											{
+												"key": "sand",
+												"label": "Sand",
+												"swatch": "#d8c8a8"
+											}
+										]
+									},
+									{
+										"key": "size",
+										"label": "Size",
+										"options": [
+											{
+												"key": "S"
+											},
+											{
+												"key": "M"
+											},
+											{
+												"key": "XL",
+												"priceDelta": 200
+											}
+										]
+									}
+								],
+								"rules": [
+									{
+										"id": "no-sand-xl",
+										"when": "selection.color == 'sand' and selection.size == 'XL'",
+										"message": "Sand is not made in XL."
+									}
+								],
+								"combinations": [
+									{
+										"id": "tee-navy-s",
+										"sku": "TEE-NV-S",
+										"options": {
+											"color": "navy",
+											"size": "S"
+										},
+										"stock": 4
+									},
+									{
+										"id": "tee-navy-m",
+										"sku": "TEE-NV-M",
+										"options": {
+											"color": "navy",
+											"size": "M"
+										},
+										"stock": 0
+									},
+									{
+										"id": "tee-sand-m",
+										"sku": "TEE-SD-M",
+										"options": {
+											"color": "sand",
+											"size": "M"
+										},
+										"stock": 3
+									}
+								],
+								"pricing": {
+									"base": 1900
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Check"
+								},
+								"example": {
+									"valid": true,
+									"problems": [],
+									"summary": {
+										"groups": 2,
+										"options": 5,
+										"rules": 1,
+										"combinations": 3,
+										"priced": true
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/configurators/{id}": {
+			"parameters": [
+				{
+					"name": "id",
+					"in": "path",
+					"required": true,
+					"description": "Configurator id (cfg_…) or key",
+					"schema": {
+						"type": "string",
+						"maxLength": 128
+					}
+				}
+			],
+			"get": {
+				"operationId": "getConfigurator",
+				"summary": "A configurator: the definition (server key) or the published, catalog-linked public view (browser key, or ?view=public)",
+				"parameters": [
+					{
+						"name": "view",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"enum": ["public"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/Configurator"
+										},
+										{
+											"$ref": "#/components/schemas/PublicConfigurator"
+										}
+									]
+								},
+								"example": {
+									"id": "cfg_0123456789abcdefghjkmnpq",
+									"key": null,
+									"name": "Classic tee",
+									"status": "draft",
+									"version": 1,
+									"createdAt": "2026-10-01T10:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": null,
+									"schema": {
+										"name": "Classic tee",
+										"groups": [
+											{
+												"key": "color",
+												"label": "Colour",
+												"display": "swatches",
+												"default": "navy",
+												"options": [
+													{
+														"key": "navy",
+														"label": "Navy",
+														"swatch": "#1f2a44"
+													},
+													{
+														"key": "sand",
+														"label": "Sand",
+														"swatch": "#d8c8a8"
+													}
+												]
+											},
+											{
+												"key": "size",
+												"label": "Size",
+												"options": [
+													{
+														"key": "S"
+													},
+													{
+														"key": "M"
+													},
+													{
+														"key": "XL",
+														"priceDelta": 200
+													}
+												]
+											}
+										],
+										"rules": [
+											{
+												"id": "no-sand-xl",
+												"when": "selection.color == 'sand' and selection.size == 'XL'",
+												"message": "Sand is not made in XL."
+											}
+										],
+										"combinations": [
+											{
+												"id": "tee-navy-s",
+												"sku": "TEE-NV-S",
+												"options": {
+													"color": "navy",
+													"size": "S"
+												},
+												"stock": 4
+											},
+											{
+												"id": "tee-navy-m",
+												"sku": "TEE-NV-M",
+												"options": {
+													"color": "navy",
+													"size": "M"
+												},
+												"stock": 0
+											},
+											{
+												"id": "tee-sand-m",
+												"sku": "TEE-SD-M",
+												"options": {
+													"color": "sand",
+													"size": "M"
+												},
+												"stock": 3
+											}
+										],
+										"pricing": {
+											"base": 1900
+										},
+										"key": null,
+										"description": null,
+										"source": {
+											"type": "standalone"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"patch": {
+				"operationId": "updateConfigurator",
+				"summary": "Replace top-level schema fields and / or the status (version required)",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConfiguratorPatch"
+							},
+							"example": {
+								"version": 1,
+								"status": "published"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Configurator"
+								},
+								"example": {
+									"id": "cfg_0123456789abcdefghjkmnpq",
+									"key": null,
+									"name": "Classic tee",
+									"status": "published",
+									"version": 2,
+									"createdAt": "2026-10-01T10:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": null,
+									"schema": {
+										"name": "Classic tee",
+										"groups": [
+											{
+												"key": "color",
+												"label": "Colour",
+												"display": "swatches",
+												"default": "navy",
+												"options": [
+													{
+														"key": "navy",
+														"label": "Navy",
+														"swatch": "#1f2a44"
+													},
+													{
+														"key": "sand",
+														"label": "Sand",
+														"swatch": "#d8c8a8"
+													}
+												]
+											},
+											{
+												"key": "size",
+												"label": "Size",
+												"options": [
+													{
+														"key": "S"
+													},
+													{
+														"key": "M"
+													},
+													{
+														"key": "XL",
+														"priceDelta": 200
+													}
+												]
+											}
+										],
+										"rules": [
+											{
+												"id": "no-sand-xl",
+												"when": "selection.color == 'sand' and selection.size == 'XL'",
+												"message": "Sand is not made in XL."
+											}
+										],
+										"combinations": [
+											{
+												"id": "tee-navy-s",
+												"sku": "TEE-NV-S",
+												"options": {
+													"color": "navy",
+													"size": "S"
+												},
+												"stock": 4
+											},
+											{
+												"id": "tee-navy-m",
+												"sku": "TEE-NV-M",
+												"options": {
+													"color": "navy",
+													"size": "M"
+												},
+												"stock": 0
+											},
+											{
+												"id": "tee-sand-m",
+												"sku": "TEE-SD-M",
+												"options": {
+													"color": "sand",
+													"size": "M"
+												},
+												"stock": 3
+											}
+										],
+										"pricing": {
+											"base": 1900
+										},
+										"key": null,
+										"description": null,
+										"source": {
+											"type": "standalone"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "archiveConfigurator",
+				"summary": "Archive (soft delete) a configurator",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Configurator"
+								},
+								"example": {
+									"id": "cfg_0123456789abcdefghjkmnpq",
+									"key": null,
+									"name": "Classic tee",
+									"status": "archived",
+									"version": 2,
+									"createdAt": "2026-10-01T10:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": null,
+									"schema": {
+										"name": "Classic tee",
+										"groups": [
+											{
+												"key": "color",
+												"label": "Colour",
+												"display": "swatches",
+												"default": "navy",
+												"options": [
+													{
+														"key": "navy",
+														"label": "Navy",
+														"swatch": "#1f2a44"
+													},
+													{
+														"key": "sand",
+														"label": "Sand",
+														"swatch": "#d8c8a8"
+													}
+												]
+											},
+											{
+												"key": "size",
+												"label": "Size",
+												"options": [
+													{
+														"key": "S"
+													},
+													{
+														"key": "M"
+													},
+													{
+														"key": "XL",
+														"priceDelta": 200
+													}
+												]
+											}
+										],
+										"rules": [
+											{
+												"id": "no-sand-xl",
+												"when": "selection.color == 'sand' and selection.size == 'XL'",
+												"message": "Sand is not made in XL."
+											}
+										],
+										"combinations": [
+											{
+												"id": "tee-navy-s",
+												"sku": "TEE-NV-S",
+												"options": {
+													"color": "navy",
+													"size": "S"
+												},
+												"stock": 4
+											},
+											{
+												"id": "tee-navy-m",
+												"sku": "TEE-NV-M",
+												"options": {
+													"color": "navy",
+													"size": "M"
+												},
+												"stock": 0
+											},
+											{
+												"id": "tee-sand-m",
+												"sku": "TEE-SD-M",
+												"options": {
+													"color": "sand",
+													"size": "M"
+												},
+												"stock": 3
+											}
+										],
+										"pricing": {
+											"base": 1900
+										},
+										"key": null,
+										"description": null,
+										"source": {
+											"type": "standalone"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/catalog-items": {
+			"get": {
+				"operationId": "listCatalogItems",
+				"summary": "Catalog items stored from item.* / inventory.changed events",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"schema": {
+							"type": "integer",
+							"minimum": 1,
+							"maximum": 100
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/catalog-items/{itemId}": {
+			"parameters": [
+				{
+					"name": "itemId",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string",
+						"maxLength": 128
+					}
+				}
+			],
+			"get": {
+				"operationId": "getCatalogItem",
+				"summary": "One stored catalog item with the effective stock per variant",
+				"x-ss-key-kind": "sk",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/CatalogItem"
+								},
+								"example": {
+									"itemId": "itm_1",
+									"title": "Linen shirt",
+									"status": "active",
+									"currency": "EUR",
+									"deleted": false,
+									"snapshotAt": "2026-10-01T10:00:00.000Z",
+									"variants": [
+										{
+											"variantId": "v1",
+											"sku": "LS-S",
+											"title": "S",
+											"attributes": {
+												"size": "S"
+											},
+											"price": 4900,
+											"stock": 12
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/evaluations": {
+			"post": {
+				"operationId": "evaluate",
+				"summary": "Resolve a partial selection to the closest valid combination, price it and build its URL (metered per evaluation)",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/EvaluationInput"
+							},
+							"example": {
+								"configurator": "classic-tee",
+								"selection": {
+									"color": "sand",
+									"size": "XL"
+								},
+								"changed": "color",
+								"search": "?utm_source=mail"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Evaluation"
+								},
+								"example": {
+									"configurator": {
+										"id": "cfg_0123456789abcdefghjkmnpq",
+										"key": "classic-tee",
+										"version": 3
+									},
+									"selection": {
+										"color": "sand",
+										"size": "M"
+									},
+									"exact": false,
+									"complete": true,
+									"missing": [],
+									"adjusted": [
+										{
+											"group": "size",
+											"from": "XL",
+											"to": "M",
+											"reason": "conflict"
+										}
+									],
+									"filled": [],
+									"ignored": [],
+									"applicable": ["color", "size"],
+									"combination": {
+										"id": "tee-sand-m",
+										"sku": "TEE-SD-M",
+										"inStock": true
+									},
+									"inStock": true,
+									"quantity": 1,
+									"optimal": true,
+									"steps": 9,
+									"states": [
+										{
+											"key": "color",
+											"applicable": true,
+											"options": [
+												{
+													"key": "navy",
+													"state": "available"
+												},
+												{
+													"key": "sand",
+													"state": "selected"
+												}
+											]
+										},
+										{
+											"key": "size",
+											"applicable": true,
+											"options": [
+												{
+													"key": "S",
+													"state": "conflict"
+												},
+												{
+													"key": "M",
+													"state": "selected"
+												},
+												{
+													"key": "XL",
+													"state": "conflict"
+												}
+											]
+										}
+									],
+									"price": {
+										"currency": "EUR",
+										"quantity": 1,
+										"base": 1900,
+										"deltas": [],
+										"subtotal": 1900,
+										"unit": 1900,
+										"total": 1900,
+										"rounding": {
+											"mode": "none",
+											"increment": 1,
+											"ending": 0
+										}
+									},
+									"url": {
+										"search": "?color=sand&size=M",
+										"canonical": "",
+										"params": [
+											["color", "sand"],
+											["size", "M"]
+										],
+										"history": "replace"
+									},
+									"notify": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/quotes": {
+			"post": {
+				"operationId": "quote",
+				"summary": "Price a selection exactly as given (422 selection_invalid / selection_incomplete otherwise)",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/QuoteInput"
+							},
+							"example": {
+								"configurator": "classic-tee",
+								"selection": {
+									"color": "navy",
+									"size": "S"
+								},
+								"quantity": 2
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								},
+								"example": {
+									"configurator": {
+										"id": "cfg_0123456789abcdefghjkmnpq",
+										"key": "classic-tee",
+										"version": 3
+									},
+									"selection": {
+										"color": "navy",
+										"size": "S"
+									},
+									"combination": {
+										"id": "tee-navy-s",
+										"sku": "TEE-NV-S",
+										"inStock": true
+									},
+									"inStock": true,
+									"quantity": 2,
+									"price": {
+										"currency": "EUR",
+										"quantity": 2,
+										"base": 1900,
+										"deltas": [],
+										"subtotal": 1900,
+										"unit": 1900,
+										"total": 3800,
+										"rounding": {
+											"mode": "none",
+											"increment": 1,
+											"ending": 0
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/url-params:build": {
+			"post": {
+				"operationId": "buildUrlParams",
+				"summary": "Selection → query string (other parameters of `search` kept) and the canonical query",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UrlInput"
+							},
+							"example": {
+								"configurator": "classic-tee",
+								"selection": {
+									"color": "sand",
+									"size": "M"
+								},
+								"search": "?ref=home"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/UrlParams"
+								},
+								"example": {
+									"search": "?ref=home&color=sand&size=M",
+									"canonical": "",
+									"params": [
+										["color", "sand"],
+										["size", "M"]
+									],
+									"history": "replace"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/url-params:parse": {
+			"post": {
+				"operationId": "parseUrlParams",
+				"summary": "Query string → selection (raw; evaluate it to validate)",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/UrlInput"
+							},
+							"example": {
+								"configurator": "classic-tee",
+								"search": "?color=sand&size=M"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["selection"],
+									"properties": {
+										"selection": {
+											"type": "object"
+										}
+									}
+								},
+								"example": {
+									"selection": {
+										"color": "sand",
+										"size": "M"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/widgets/{configurator}": {
+			"parameters": [
+				{
+					"name": "configurator",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string",
+						"maxLength": 128
+					}
+				},
+				{
+					"name": "search",
+					"in": "query",
+					"description": "The page's query string (URL sync)",
+					"schema": {
+						"type": "string",
+						"maxLength": 4096
+					}
+				}
+			],
+			"get": {
+				"operationId": "getWidget",
+				"summary": "Widget bootstrap: the public configurator, widget settings and the evaluation of the page URL (metered)",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Widget"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/widget/view": {
+			"get": {
+				"operationId": "widgetStubView",
+				"summary": "Text view for the Loader element stub (ss-element-stub@2)",
+				"parameters": [
+					{
+						"name": "configurator",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "ctx",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "lang",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"title": "Classic tee",
+									"body": "2 groups of options to choose from.",
+									"items": [
+										{
+											"text": "Colour: Navy, Sand"
+										}
+									],
+									"actions": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/session": {
+			"get": {
+				"operationId": "getSession",
+				"summary": "Dashboard session (SSO launch)",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/overview": {
+			"get": {
+				"operationId": "dashboardOverview",
+				"summary": "Configurators per status and stored catalog items",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"configurators": {
+										"published": 2,
+										"draft": 1
+									},
+									"catalogItems": 4
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/configurators": {
+			"post": {
+				"operationId": "dashboardCreate",
+				"summary": "Create a configurator (dashboard, audited)",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConfiguratorInput"
+							},
+							"example": {
+								"name": "Classic tee",
+								"groups": [
+									{
+										"key": "color",
+										"label": "Colour",
+										"display": "swatches",
+										"default": "navy",
+										"options": [
+											{
+												"key": "navy",
+												"label": "Navy",
+												"swatch": "#1f2a44"
+											},
+											{
+												"key": "sand",
+												"label": "Sand",
+												"swatch": "#d8c8a8"
+											}
+										]
+									},
+									{
+										"key": "size",
+										"label": "Size",
+										"options": [
+											{
+												"key": "S"
+											},
+											{
+												"key": "M"
+											},
+											{
+												"key": "XL",
+												"priceDelta": 200
+											}
+										]
+									}
+								],
+								"rules": [
+									{
+										"id": "no-sand-xl",
+										"when": "selection.color == 'sand' and selection.size == 'XL'",
+										"message": "Sand is not made in XL."
+									}
+								],
+								"combinations": [
+									{
+										"id": "tee-navy-s",
+										"sku": "TEE-NV-S",
+										"options": {
+											"color": "navy",
+											"size": "S"
+										},
+										"stock": 4
+									},
+									{
+										"id": "tee-navy-m",
+										"sku": "TEE-NV-M",
+										"options": {
+											"color": "navy",
+											"size": "M"
+										},
+										"stock": 0
+									},
+									{
+										"id": "tee-sand-m",
+										"sku": "TEE-SD-M",
+										"options": {
+											"color": "sand",
+											"size": "M"
+										},
+										"stock": 3
+									}
+								],
+								"pricing": {
+									"base": 1900
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Configurator"
+								},
+								"example": {
+									"id": "cfg_0123456789abcdefghjkmnpq",
+									"key": null,
+									"name": "Classic tee",
+									"status": "draft",
+									"version": 1,
+									"createdAt": "2026-10-01T10:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z",
+									"publishedAt": null,
+									"schema": {
+										"name": "Classic tee",
+										"groups": [
+											{
+												"key": "color",
+												"label": "Colour",
+												"display": "swatches",
+												"default": "navy",
+												"options": [
+													{
+														"key": "navy",
+														"label": "Navy",
+														"swatch": "#1f2a44"
+													},
+													{
+														"key": "sand",
+														"label": "Sand",
+														"swatch": "#d8c8a8"
+													}
+												]
+											},
+											{
+												"key": "size",
+												"label": "Size",
+												"options": [
+													{
+														"key": "S"
+													},
+													{
+														"key": "M"
+													},
+													{
+														"key": "XL",
+														"priceDelta": 200
+													}
+												]
+											}
+										],
+										"rules": [
+											{
+												"id": "no-sand-xl",
+												"when": "selection.color == 'sand' and selection.size == 'XL'",
+												"message": "Sand is not made in XL."
+											}
+										],
+										"combinations": [
+											{
+												"id": "tee-navy-s",
+												"sku": "TEE-NV-S",
+												"options": {
+													"color": "navy",
+													"size": "S"
+												},
+												"stock": 4
+											},
+											{
+												"id": "tee-navy-m",
+												"sku": "TEE-NV-M",
+												"options": {
+													"color": "navy",
+													"size": "M"
+												},
+												"stock": 0
+											},
+											{
+												"id": "tee-sand-m",
+												"sku": "TEE-SD-M",
+												"options": {
+													"color": "sand",
+													"size": "M"
+												},
+												"stock": 3
+											}
+										],
+										"pricing": {
+											"base": 1900
+										},
+										"key": null,
+										"description": null,
+										"source": {
+											"type": "standalone"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/configurators/{id}": {
+			"parameters": [
+				{
+					"name": "id",
+					"in": "path",
+					"required": true,
+					"description": "Configurator id (cfg_…) or key",
+					"schema": {
+						"type": "string",
+						"maxLength": 128
+					}
+				}
+			],
+			"patch": {
+				"operationId": "dashboardUpdate",
+				"summary": "Update a configurator (dashboard, audited)",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConfiguratorPatch"
+							},
+							"example": {
+								"version": 1,
+								"status": "published"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Configurator"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/configurators:check": {
+			"post": {
+				"operationId": "dashboardCheck",
+				"summary": "Validate a schema (dashboard editor)",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ConfiguratorInput"
+							},
+							"example": {
+								"name": "Classic tee",
+								"groups": [
+									{
+										"key": "color",
+										"label": "Colour",
+										"display": "swatches",
+										"default": "navy",
+										"options": [
+											{
+												"key": "navy",
+												"label": "Navy",
+												"swatch": "#1f2a44"
+											},
+											{
+												"key": "sand",
+												"label": "Sand",
+												"swatch": "#d8c8a8"
+											}
+										]
+									},
+									{
+										"key": "size",
+										"label": "Size",
+										"options": [
+											{
+												"key": "S"
+											},
+											{
+												"key": "M"
+											},
+											{
+												"key": "XL",
+												"priceDelta": 200
+											}
+										]
+									}
+								],
+								"rules": [
+									{
+										"id": "no-sand-xl",
+										"when": "selection.color == 'sand' and selection.size == 'XL'",
+										"message": "Sand is not made in XL."
+									}
+								],
+								"combinations": [
+									{
+										"id": "tee-navy-s",
+										"sku": "TEE-NV-S",
+										"options": {
+											"color": "navy",
+											"size": "S"
+										},
+										"stock": 4
+									},
+									{
+										"id": "tee-navy-m",
+										"sku": "TEE-NV-M",
+										"options": {
+											"color": "navy",
+											"size": "M"
+										},
+										"stock": 0
+									},
+									{
+										"id": "tee-sand-m",
+										"sku": "TEE-SD-M",
+										"options": {
+											"color": "sand",
+											"size": "M"
+										},
+										"stock": 3
+									}
+								],
+								"pricing": {
+									"base": 1900
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Check"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/evaluations": {
+			"post": {
+				"operationId": "dashboardEvaluate",
+				"summary": "Evaluate a draft or published configurator (not metered)",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/EvaluationInput"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Evaluation"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/dashboard/rules:check": {
+			"post": {
+				"operationId": "dashboardRuleCheck",
+				"summary": "rules@1 diagnostics of a condition",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["source"],
+								"properties": {
+									"source": {
+										"type": "string",
+										"maxLength": 2000
+									}
+								}
+							},
+							"example": {
+								"source": "selection.size == 'XL'"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "Dashboard session from GET /sso?launch="
+			}
+		},
+		"parameters": {
+			"IdempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				}
+			}
+		},
+		"schemas": {
+			"ConfiguratorInput": {
+				"type": "object",
+				"required": ["name", "groups"],
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+					},
+					"name": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 1000
+					},
+					"source": {
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": ["standalone", "catalog"]
+							},
+							"itemId": {
+								"type": "string"
+							}
+						}
+					},
+					"groups": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 30,
+						"items": {
+							"type": "object",
+							"required": ["key"],
+							"properties": {
+								"key": {
+									"type": "string",
+									"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+								},
+								"label": {
+									"type": "string",
+									"maxLength": 200
+								},
+								"description": {
+									"type": "string",
+									"maxLength": 1000
+								},
+								"type": {
+									"type": "string",
+									"enum": ["single", "multi", "range", "text"],
+									"default": "single"
+								},
+								"display": {
+									"type": "string",
+									"enum": ["pills", "dropdown", "swatches"]
+								},
+								"required": {
+									"type": "boolean"
+								},
+								"default": {},
+								"when": {
+									"type": "string",
+									"description": "rules@1: the group applies only when true"
+								},
+								"attribute": {
+									"type": "string",
+									"description": "catalog variant attribute (catalog-linked configurators)"
+								},
+								"min": {
+									"type": "integer"
+								},
+								"max": {
+									"type": "integer"
+								},
+								"step": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"unitPrice": {
+									"type": "integer"
+								},
+								"minSelect": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"maxSelect": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"maxLength": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"options": {
+									"type": "array",
+									"maxItems": 200,
+									"items": {
+										"type": "object",
+										"required": ["key"],
+										"properties": {
+											"key": {
+												"type": "string",
+												"maxLength": 100
+											},
+											"label": {
+												"type": "string"
+											},
+											"description": {
+												"type": "string"
+											},
+											"swatch": {
+												"type": "string",
+												"pattern": "^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+											},
+											"image": {
+												"type": "string",
+												"format": "uri"
+											},
+											"hidden": {
+												"type": "boolean"
+											},
+											"when": {
+												"type": "string",
+												"description": "rules@1: the option is available only when true"
+											},
+											"priceDelta": {
+												"type": "integer",
+												"description": "integer minor units"
+											},
+											"stock": {
+												"type": ["integer", "null"]
+											},
+											"popularity": {
+												"type": "integer",
+												"minimum": 0
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"rules": {
+						"type": "array",
+						"maxItems": 200,
+						"items": {
+							"type": "object",
+							"required": ["id", "when"],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"when": {
+									"type": "string",
+									"description": "rules@1: the combination is excluded when true"
+								},
+								"message": {
+									"type": "string",
+									"maxLength": 300
+								}
+							}
+						}
+					},
+					"combinations": {
+						"type": "array",
+						"maxItems": 10000,
+						"items": {
+							"type": "object",
+							"required": ["id", "options"],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"sku": {
+									"type": "string"
+								},
+								"options": {
+									"type": "object",
+									"additionalProperties": {
+										"oneOf": [
+											{
+												"type": "string"
+											},
+											{
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											}
+										]
+									}
+								},
+								"stock": {
+									"type": ["integer", "null"]
+								},
+								"price": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"available": {
+									"type": "boolean"
+								}
+							}
+						}
+					},
+					"pricing": {
+						"type": "object",
+						"properties": {
+							"base": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"currency": {
+								"type": "string",
+								"pattern": "^[A-Z]{3}$"
+							},
+							"rules": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": ["id"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"when": {
+											"type": "string"
+										},
+										"amount": {
+											"type": "integer"
+										},
+										"percent": {
+											"type": "integer",
+											"description": "basis points (1 % = 100)"
+										}
+									}
+								}
+							},
+							"rounding": {
+								"type": "object",
+								"properties": {
+									"mode": {
+										"type": "string",
+										"enum": ["none", "nearest", "up", "down"]
+									},
+									"increment": {
+										"type": "integer",
+										"minimum": 1
+									},
+									"ending": {
+										"type": "integer",
+										"minimum": 0
+									}
+								}
+							}
+						}
+					},
+					"status": {
+						"type": "string",
+						"enum": ["draft", "published"]
+					}
+				}
+			},
+			"ConfiguratorPatch": {
+				"type": "object",
+				"required": ["version"],
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+					},
+					"name": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 1000
+					},
+					"source": {
+						"type": "object",
+						"properties": {
+							"type": {
+								"type": "string",
+								"enum": ["standalone", "catalog"]
+							},
+							"itemId": {
+								"type": "string"
+							}
+						}
+					},
+					"groups": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 30,
+						"items": {
+							"type": "object",
+							"required": ["key"],
+							"properties": {
+								"key": {
+									"type": "string",
+									"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+								},
+								"label": {
+									"type": "string",
+									"maxLength": 200
+								},
+								"description": {
+									"type": "string",
+									"maxLength": 1000
+								},
+								"type": {
+									"type": "string",
+									"enum": ["single", "multi", "range", "text"],
+									"default": "single"
+								},
+								"display": {
+									"type": "string",
+									"enum": ["pills", "dropdown", "swatches"]
+								},
+								"required": {
+									"type": "boolean"
+								},
+								"default": {},
+								"when": {
+									"type": "string",
+									"description": "rules@1: the group applies only when true"
+								},
+								"attribute": {
+									"type": "string",
+									"description": "catalog variant attribute (catalog-linked configurators)"
+								},
+								"min": {
+									"type": "integer"
+								},
+								"max": {
+									"type": "integer"
+								},
+								"step": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"unitPrice": {
+									"type": "integer"
+								},
+								"minSelect": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"maxSelect": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"maxLength": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"options": {
+									"type": "array",
+									"maxItems": 200,
+									"items": {
+										"type": "object",
+										"required": ["key"],
+										"properties": {
+											"key": {
+												"type": "string",
+												"maxLength": 100
+											},
+											"label": {
+												"type": "string"
+											},
+											"description": {
+												"type": "string"
+											},
+											"swatch": {
+												"type": "string",
+												"pattern": "^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+											},
+											"image": {
+												"type": "string",
+												"format": "uri"
+											},
+											"hidden": {
+												"type": "boolean"
+											},
+											"when": {
+												"type": "string",
+												"description": "rules@1: the option is available only when true"
+											},
+											"priceDelta": {
+												"type": "integer",
+												"description": "integer minor units"
+											},
+											"stock": {
+												"type": ["integer", "null"]
+											},
+											"popularity": {
+												"type": "integer",
+												"minimum": 0
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"rules": {
+						"type": "array",
+						"maxItems": 200,
+						"items": {
+							"type": "object",
+							"required": ["id", "when"],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"when": {
+									"type": "string",
+									"description": "rules@1: the combination is excluded when true"
+								},
+								"message": {
+									"type": "string",
+									"maxLength": 300
+								}
+							}
+						}
+					},
+					"combinations": {
+						"type": "array",
+						"maxItems": 10000,
+						"items": {
+							"type": "object",
+							"required": ["id", "options"],
+							"properties": {
+								"id": {
+									"type": "string"
+								},
+								"sku": {
+									"type": "string"
+								},
+								"options": {
+									"type": "object",
+									"additionalProperties": {
+										"oneOf": [
+											{
+												"type": "string"
+											},
+											{
+												"type": "array",
+												"items": {
+													"type": "string"
+												}
+											}
+										]
+									}
+								},
+								"stock": {
+									"type": ["integer", "null"]
+								},
+								"price": {
+									"type": "integer",
+									"minimum": 0
+								},
+								"available": {
+									"type": "boolean"
+								}
+							}
+						}
+					},
+					"pricing": {
+						"type": "object",
+						"properties": {
+							"base": {
+								"type": "integer",
+								"minimum": 0
+							},
+							"currency": {
+								"type": "string",
+								"pattern": "^[A-Z]{3}$"
+							},
+							"rules": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": ["id"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"when": {
+											"type": "string"
+										},
+										"amount": {
+											"type": "integer"
+										},
+										"percent": {
+											"type": "integer",
+											"description": "basis points (1 % = 100)"
+										}
+									}
+								}
+							},
+							"rounding": {
+								"type": "object",
+								"properties": {
+									"mode": {
+										"type": "string",
+										"enum": ["none", "nearest", "up", "down"]
+									},
+									"increment": {
+										"type": "integer",
+										"minimum": 1
+									},
+									"ending": {
+										"type": "integer",
+										"minimum": 0
+									}
+								}
+							}
+						}
+					},
+					"status": {
+						"type": "string",
+						"enum": ["draft", "published"]
+					},
+					"version": {
+						"type": "integer",
+						"minimum": 1
+					}
+				}
+			},
+			"Configurator": {
+				"type": "object",
+				"required": ["id", "name", "status", "version", "schema"],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"key": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string",
+						"enum": ["draft", "published", "archived"]
+					},
+					"version": {
+						"type": "integer"
+					},
+					"createdAt": {
+						"type": ["string", "null"]
+					},
+					"updatedAt": {
+						"type": ["string", "null"]
+					},
+					"publishedAt": {
+						"type": ["string", "null"]
+					},
+					"schema": {
+						"type": "object",
+						"properties": {
+							"key": {
+								"type": "string",
+								"pattern": "^[a-z0-9][a-z0-9_-]{0,63}$"
+							},
+							"name": {
+								"type": "string",
+								"maxLength": 200
+							},
+							"description": {
+								"type": "string",
+								"maxLength": 1000
+							},
+							"source": {
+								"type": "object",
+								"properties": {
+									"type": {
+										"type": "string",
+										"enum": ["standalone", "catalog"]
+									},
+									"itemId": {
+										"type": "string"
+									}
+								}
+							},
+							"groups": {
+								"type": "array",
+								"minItems": 1,
+								"maxItems": 30,
+								"items": {
+									"type": "object",
+									"required": ["key"],
+									"properties": {
+										"key": {
+											"type": "string",
+											"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+										},
+										"label": {
+											"type": "string",
+											"maxLength": 200
+										},
+										"description": {
+											"type": "string",
+											"maxLength": 1000
+										},
+										"type": {
+											"type": "string",
+											"enum": ["single", "multi", "range", "text"],
+											"default": "single"
+										},
+										"display": {
+											"type": "string",
+											"enum": ["pills", "dropdown", "swatches"]
+										},
+										"required": {
+											"type": "boolean"
+										},
+										"default": {},
+										"when": {
+											"type": "string",
+											"description": "rules@1: the group applies only when true"
+										},
+										"attribute": {
+											"type": "string",
+											"description": "catalog variant attribute (catalog-linked configurators)"
+										},
+										"min": {
+											"type": "integer"
+										},
+										"max": {
+											"type": "integer"
+										},
+										"step": {
+											"type": "integer",
+											"minimum": 1
+										},
+										"unitPrice": {
+											"type": "integer"
+										},
+										"minSelect": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"maxSelect": {
+											"type": "integer",
+											"minimum": 1
+										},
+										"maxLength": {
+											"type": "integer",
+											"minimum": 1
+										},
+										"options": {
+											"type": "array",
+											"maxItems": 200,
+											"items": {
+												"type": "object",
+												"required": ["key"],
+												"properties": {
+													"key": {
+														"type": "string",
+														"maxLength": 100
+													},
+													"label": {
+														"type": "string"
+													},
+													"description": {
+														"type": "string"
+													},
+													"swatch": {
+														"type": "string",
+														"pattern": "^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$"
+													},
+													"image": {
+														"type": "string",
+														"format": "uri"
+													},
+													"hidden": {
+														"type": "boolean"
+													},
+													"when": {
+														"type": "string",
+														"description": "rules@1: the option is available only when true"
+													},
+													"priceDelta": {
+														"type": "integer",
+														"description": "integer minor units"
+													},
+													"stock": {
+														"type": ["integer", "null"]
+													},
+													"popularity": {
+														"type": "integer",
+														"minimum": 0
+													}
+												}
+											}
+										}
+									}
+								}
+							},
+							"rules": {
+								"type": "array",
+								"maxItems": 200,
+								"items": {
+									"type": "object",
+									"required": ["id", "when"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"when": {
+											"type": "string",
+											"description": "rules@1: the combination is excluded when true"
+										},
+										"message": {
+											"type": "string",
+											"maxLength": 300
+										}
+									}
+								}
+							},
+							"combinations": {
+								"type": "array",
+								"maxItems": 10000,
+								"items": {
+									"type": "object",
+									"required": ["id", "options"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"sku": {
+											"type": "string"
+										},
+										"options": {
+											"type": "object",
+											"additionalProperties": {
+												"oneOf": [
+													{
+														"type": "string"
+													},
+													{
+														"type": "array",
+														"items": {
+															"type": "string"
+														}
+													}
+												]
+											}
+										},
+										"stock": {
+											"type": ["integer", "null"]
+										},
+										"price": {
+											"type": "integer",
+											"minimum": 0
+										},
+										"available": {
+											"type": "boolean"
+										}
+									}
+								}
+							},
+							"pricing": {
+								"type": "object",
+								"properties": {
+									"base": {
+										"type": "integer",
+										"minimum": 0
+									},
+									"currency": {
+										"type": "string",
+										"pattern": "^[A-Z]{3}$"
+									},
+									"rules": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"required": ["id"],
+											"properties": {
+												"id": {
+													"type": "string"
+												},
+												"when": {
+													"type": "string"
+												},
+												"amount": {
+													"type": "integer"
+												},
+												"percent": {
+													"type": "integer",
+													"description": "basis points (1 % = 100)"
+												}
+											}
+										}
+									},
+									"rounding": {
+										"type": "object",
+										"properties": {
+											"mode": {
+												"type": "string",
+												"enum": ["none", "nearest", "up", "down"]
+											},
+											"increment": {
+												"type": "integer",
+												"minimum": 1
+											},
+											"ending": {
+												"type": "integer",
+												"minimum": 0
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"PublicConfigurator": {
+				"type": "object",
+				"required": ["id", "name", "version", "schema"],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"key": {
+						"type": ["string", "null"]
+					},
+					"name": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer"
+					},
+					"itemId": {
+						"type": ["string", "null"]
+					},
+					"schema": {
+						"type": "object",
+						"description": "concrete schema (stock as 1 / 0 / null), parseable by the headless resolver"
+					}
+				}
+			},
+			"Check": {
+				"type": "object",
+				"required": ["valid", "problems"],
+				"properties": {
+					"valid": {
+						"type": "boolean"
+					},
+					"problems": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"summary": {
+						"type": "object"
+					}
+				}
+			},
+			"EvaluationInput": {
+				"type": "object",
+				"required": ["configurator"],
+				"properties": {
+					"configurator": {
+						"type": "string",
+						"description": "id or key"
+					},
+					"selection": {
+						"type": "object"
+					},
+					"changed": {
+						"type": ["string", "null"],
+						"description": "the group just changed: its pick wins"
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"search": {
+						"type": "string",
+						"maxLength": 4096,
+						"description": "the page's query string (selection from URL sync; other parameters kept in url.search)"
+					}
+				}
+			},
+			"Evaluation": {
+				"type": "object",
+				"required": ["configurator", "selection", "exact", "complete", "adjusted", "combination", "inStock", "states"],
+				"properties": {
+					"configurator": {
+						"type": "object"
+					},
+					"selection": {
+						"type": "object"
+					},
+					"exact": {
+						"type": "boolean"
+					},
+					"complete": {
+						"type": "boolean"
+					},
+					"missing": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"adjusted": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"group": {
+									"type": "string"
+								},
+								"from": {},
+								"to": {},
+								"reason": {
+									"type": "string",
+									"enum": [
+										"conflict",
+										"out_of_stock",
+										"not_applicable",
+										"unknown_option",
+										"too_many",
+										"clamped",
+										"truncated",
+										"invalid_number",
+										"invalid_text"
+									]
+								}
+							}
+						}
+					},
+					"filled": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"ignored": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"applicable": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"combination": {
+						"type": ["object", "null"]
+					},
+					"inStock": {
+						"type": "boolean"
+					},
+					"quantity": {
+						"type": "integer"
+					},
+					"optimal": {
+						"type": "boolean"
+					},
+					"steps": {
+						"type": "integer"
+					},
+					"states": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"price": {
+						"type": ["object", "null"],
+						"required": ["currency", "quantity", "base", "deltas", "subtotal", "unit", "total", "rounding"],
+						"properties": {
+							"currency": {
+								"type": ["string", "null"]
+							},
+							"quantity": {
+								"type": "integer"
+							},
+							"base": {
+								"type": "integer"
+							},
+							"deltas": {
+								"type": "array",
+								"items": {
+									"type": "object"
+								}
+							},
+							"subtotal": {
+								"type": "integer"
+							},
+							"unit": {
+								"type": "integer"
+							},
+							"total": {
+								"type": "integer"
+							},
+							"rounding": {
+								"type": "object"
+							}
+						}
+					},
+					"url": {
+						"type": ["object", "null"]
+					},
+					"notify": {
+						"type": ["object", "null"]
+					}
+				}
+			},
+			"QuoteInput": {
+				"type": "object",
+				"required": ["configurator", "selection"],
+				"properties": {
+					"configurator": {
+						"type": "string"
+					},
+					"selection": {
+						"type": "object"
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1
+					}
+				}
+			},
+			"Quote": {
+				"type": "object",
+				"required": ["configurator", "selection", "price"],
+				"properties": {
+					"configurator": {
+						"type": "object"
+					},
+					"selection": {
+						"type": "object"
+					},
+					"combination": {
+						"type": ["object", "null"]
+					},
+					"inStock": {
+						"type": "boolean"
+					},
+					"quantity": {
+						"type": "integer"
+					},
+					"price": {
+						"type": ["object", "null"],
+						"required": ["currency", "quantity", "base", "deltas", "subtotal", "unit", "total", "rounding"],
+						"properties": {
+							"currency": {
+								"type": ["string", "null"]
+							},
+							"quantity": {
+								"type": "integer"
+							},
+							"base": {
+								"type": "integer"
+							},
+							"deltas": {
+								"type": "array",
+								"items": {
+									"type": "object"
+								}
+							},
+							"subtotal": {
+								"type": "integer"
+							},
+							"unit": {
+								"type": "integer"
+							},
+							"total": {
+								"type": "integer"
+							},
+							"rounding": {
+								"type": "object"
+							}
+						}
+					}
+				}
+			},
+			"UrlInput": {
+				"type": "object",
+				"required": ["configurator"],
+				"properties": {
+					"configurator": {
+						"type": "string"
+					},
+					"selection": {
+						"type": "object"
+					},
+					"search": {
+						"type": "string",
+						"maxLength": 4096
+					}
+				}
+			},
+			"UrlParams": {
+				"type": "object",
+				"required": ["search", "canonical", "params"],
+				"properties": {
+					"search": {
+						"type": "string"
+					},
+					"canonical": {
+						"type": "string"
+					},
+					"params": {
+						"type": "array",
+						"items": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"history": {
+						"type": "string",
+						"enum": ["replace", "push"]
+					}
+				}
+			},
+			"Widget": {
+				"type": "object",
+				"required": ["configurator", "settings"],
+				"properties": {
+					"configurator": {
+						"$ref": "#/components/schemas/PublicConfigurator"
+					},
+					"settings": {
+						"type": "object"
+					},
+					"evaluation": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Evaluation"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"problem": {
+						"type": ["object", "null"]
+					}
+				}
+			},
+			"CatalogItem": {
+				"type": "object",
+				"required": ["itemId", "variants"],
+				"properties": {
+					"itemId": {
+						"type": "string"
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"status": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": ["string", "null"]
+					},
+					"deleted": {
+						"type": "boolean"
+					},
+					"snapshotAt": {
+						"type": ["string", "null"]
+					},
+					"variants": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
+				}
+			},
+			"Page": {
+				"type": "object",
+				"required": ["items", "nextCursor", "hasMore"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Problem": {
+				"type": "object",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string"
+					},
+					"requestId": {
+						"type": "string"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"exhaustive": {
+						"type": "boolean",
+						"description": "no_valid_combination: true when every combination was checked"
+					},
+					"suggestion": {
+						"type": "object",
+						"description": "selection_invalid: the closest valid selection"
+					},
+					"adjusted": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"violations": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"missing": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem details",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"$ref": "#/components/schemas/Problem"
+						}
+					}
+				}
+			}
+		}
+	}
+}

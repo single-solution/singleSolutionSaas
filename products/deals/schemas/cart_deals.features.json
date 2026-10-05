@@ -1,0 +1,126 @@
+{
+	"type": "object",
+	"title": "Cart deals",
+	"additionalProperties": false,
+	"properties": {
+		"max_active": {
+			"type": "integer",
+			"title": "Maximum deals of this kind (not archived)",
+			"description": "Upper bound on deals of this kind that are active or paused.",
+			"default": 20,
+			"minimum": 0,
+			"maximum": 10000,
+			"x-kind": "limit",
+			"x-plan": {
+				"starter": {
+					"max": 10
+				},
+				"pro": {
+					"max": 200
+				}
+			},
+			"x-ui": {
+				"widget": "number",
+				"group": "Limits",
+				"order": 1
+			}
+		},
+		"max_percent": {
+			"type": "integer",
+			"title": "Maximum percent off",
+			"description": "No deal of this kind may take more than this percentage off.",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Limits",
+				"order": 2
+			}
+		},
+		"max_windows": {
+			"type": "integer",
+			"title": "Maximum weekly windows per deal",
+			"description": "Weekday/time windows a deal may declare (overnight windows count once).",
+			"default": 7,
+			"minimum": 0,
+			"maximum": 28,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Schedules",
+				"order": 3
+			}
+		},
+		"default_class": {
+			"type": "string",
+			"title": "Default stacking class",
+			"description": "Class given to new deals of this kind (one of stacking.classes).",
+			"default": "cart",
+			"minLength": 1,
+			"maxLength": 32,
+			"pattern": "^[a-z][a-z0-9_]{0,31}$",
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "text",
+				"group": "Stacking",
+				"order": 4
+			}
+		},
+		"default_priority": {
+			"type": "integer",
+			"title": "Default priority",
+			"description": "Priority of new deals of this kind (higher first).",
+			"default": 0,
+			"minimum": -1000,
+			"maximum": 1000,
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "number",
+				"group": "Stacking",
+				"order": 5
+			}
+		},
+		"max_tiers": {
+			"type": "integer",
+			"title": "Maximum tiers per tiered deal",
+			"default": 5,
+			"minimum": 1,
+			"maximum": 10,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Limits",
+				"order": 6
+			}
+		},
+		"threshold_basis": {
+			"type": "string",
+			"title": "Thresholds measured",
+			"description": "Minimum spend and tiers count the cart after item and bundle discounts, or before any discount.",
+			"default": "after_item_discounts",
+			"enum": ["after_item_discounts", "before_discounts"],
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "select",
+				"group": "Thresholds",
+				"order": 7
+			}
+		},
+		"max_hints": {
+			"type": "integer",
+			"title": "Upsell hints per quote",
+			"description": "\"Spend 12.00 more for free shipping\" hints returned with a quote.",
+			"default": 3,
+			"minimum": 0,
+			"maximum": 10,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Display",
+				"order": 8
+			}
+		}
+	}
+}

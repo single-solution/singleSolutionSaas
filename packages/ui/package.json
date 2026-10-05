@@ -1,0 +1,84 @@
+{
+	"name": "@ss/ui",
+	"version": "0.1.0",
+	"description": "Console component library: design tokens (light + dark), form controls, data display, overlays, AppShell and SchemaForm.",
+	"type": "module",
+	"license": "UNLICENSED",
+	"exports": {
+		".": "./src/index.js",
+		"./schema": "./src/schema.js",
+		"./format": "./src/format.js",
+		"./problems": "./src/problems.js",
+		"./theme.css": "./src/theme.css",
+		"./testing": "./src/testing.js",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"src",
+		"types"
+	],
+	"sideEffects": [
+		"*.css"
+	],
+	"engines": {
+		"node": ">=22"
+	},
+	"publishConfig": {
+		"access": "restricted",
+		"exports": {
+			".": {
+				"types": "./types/src/index.d.ts",
+				"default": "./src/index.js"
+			},
+			"./schema": {
+				"types": "./types/src/schema.d.ts",
+				"default": "./src/schema.js"
+			},
+			"./format": {
+				"types": "./types/src/format.d.ts",
+				"default": "./src/format.js"
+			},
+			"./problems": {
+				"types": "./types/src/problems.d.ts",
+				"default": "./src/problems.js"
+			},
+			"./theme.css": "./src/theme.css",
+			"./testing": {
+				"types": "./types/src/testing.d.ts",
+				"default": "./src/testing.js"
+			},
+			"./package.json": "./package.json"
+		}
+	},
+	"prettier": "@ss/config/prettier.json",
+	"scripts": {
+		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+		"test": "vitest run --coverage",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"typecheck": "tsc -p tsconfig.json",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"build:types": "tsc -p tsconfig.types.json",
+		"prepack": "pnpm build:types"
+	},
+	"peerDependencies": {
+		"react": "^19.0.0",
+		"react-dom": "^19.0.0"
+	},
+	"devDependencies": {
+		"@ss/config": "workspace:^",
+		"@ss/contracts": "workspace:^",
+		"@types/node": "^22.20.4",
+		"@types/react": "^19.3.0",
+		"@types/react-dom": "^19.3.0",
+		"@vitest/coverage-v8": "^3.2.7",
+		"eslint": "^9.39.5",
+		"jsdom": "^26.1.0",
+		"prettier": "^3.9.9",
+		"react": "^19.3.0",
+		"react-dom": "^19.3.0",
+		"typescript": "~5.9.3",
+		"vitest": "^3.2.7"
+	}
+}

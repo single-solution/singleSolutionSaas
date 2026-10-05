@@ -1,0 +1,20 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "chatbot.message@1",
+	"description": "A message was added to a conversation (internal notes excluded). The text stays in the merchant database; the event carries metadata only.",
+	"type": "object",
+	"required": ["conversationId", "messageId", "author", "kind", "length"],
+	"additionalProperties": false,
+	"properties": {
+		"conversationId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"messageId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"author": { "type": "string", "enum": ["customer", "bot", "agent", "system"] },
+		"kind": { "type": "string", "enum": ["text", "buttons", "form", "csat", "event"] },
+		"length": { "type": "integer", "minimum": 0 },
+		"language": { "type": "string", "minLength": 2, "maxLength": 35 },
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 255 }
+	},
+	"examples": [
+		{ "conversationId": "cnv_0abc", "messageId": "msg_0def", "author": "bot", "kind": "text", "length": 84, "language": "en" }
+	]
+}

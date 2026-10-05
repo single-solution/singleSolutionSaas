@@ -1,0 +1,76 @@
+{
+	"type": "object",
+	"title": "Import",
+	"additionalProperties": false,
+	"properties": {
+		"max_rows": {
+			"type": "integer",
+			"title": "Rows per import",
+			"default": 1000,
+			"minimum": 1,
+			"maximum": 20000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 1000, "max": 2000 }, "pro": { "default": 5000, "max": 20000 } },
+			"x-ui": { "widget": "number", "group": "Limits", "order": 1 }
+		},
+		"delimiter": {
+			"type": "string",
+			"title": "Column delimiter",
+			"default": ",",
+			"enum": [",", ";", "\t", "|"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Format", "order": 2 }
+		},
+		"columns": {
+			"type": "object",
+			"title": "Column names",
+			"description": "Header name of each field in your file (exports of other platforms differ).",
+			"default": {
+				"item_id": "item_id",
+				"rating": "rating",
+				"title": "title",
+				"body": "body",
+				"author": "author",
+				"submitted_at": "submitted_at",
+				"verified": "verified",
+				"external_id": "external_id",
+				"reply": "reply",
+				"order_id": "order_id",
+				"customer_id": "customer_id"
+			},
+			"additionalProperties": false,
+			"properties": {
+				"item_id": { "type": "string", "title": "Item id", "minLength": 1, "maxLength": 60 },
+				"rating": { "type": "string", "title": "Rating", "minLength": 1, "maxLength": 60 },
+				"title": { "type": "string", "title": "Title", "minLength": 1, "maxLength": 60 },
+				"body": { "type": "string", "title": "Text", "minLength": 1, "maxLength": 60 },
+				"author": { "type": "string", "title": "Author name", "minLength": 1, "maxLength": 60 },
+				"submitted_at": { "type": "string", "title": "Date", "minLength": 1, "maxLength": 60 },
+				"verified": { "type": "string", "title": "Verified buyer", "minLength": 1, "maxLength": 60 },
+				"external_id": { "type": "string", "title": "Original review id", "minLength": 1, "maxLength": 60 },
+				"reply": { "type": "string", "title": "Merchant reply", "minLength": 1, "maxLength": 60 },
+				"order_id": { "type": "string", "title": "Order id", "minLength": 1, "maxLength": 60 },
+				"customer_id": { "type": "string", "title": "Customer id", "minLength": 1, "maxLength": 60 }
+			},
+			"x-kind": "config",
+			"x-ui": { "widget": "group", "group": "Format", "order": 3 }
+		},
+		"imported_status": {
+			"type": "string",
+			"title": "Status of imported reviews",
+			"description": "approved: they were moderated on the old platform; moderate: they go through your moderation rules.",
+			"default": "approved",
+			"enum": ["approved", "moderate"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Behaviour", "order": 4 }
+		},
+		"trust_verified_column": {
+			"type": "boolean",
+			"title": "Trust the verified-buyer column",
+			"description": "Off: imported reviews are never marked verified.",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Behaviour", "order": 5 }
+		}
+	}
+}

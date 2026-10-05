@@ -1,0 +1,34 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "coupons.redeemed@1",
+	"description": "A reserved coupon code was confirmed (order completed or redeemed through the API). One event per code.",
+	"type": "object",
+	"required": ["reservationId", "couponId", "code", "currency", "discountAmount", "shippingDiscountAmount"],
+	"additionalProperties": false,
+	"properties": {
+		"reservationId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"couponId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"code": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"orderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+		"discountAmount": { "type": "integer", "minimum": 0, "description": "Line discounts in minor units." },
+		"shippingDiscountAmount": { "type": "integer", "minimum": 0 },
+		"freeShipping": { "type": "boolean" },
+		"loyaltyAllowed": { "type": "boolean" }
+	},
+	"examples": [
+		{
+			"reservationId": "rsv_0abc",
+			"couponId": "cpn_0abc",
+			"code": "FALL-K7QM",
+			"orderId": "ord_1001",
+			"customerId": "cus_123",
+			"currency": "EUR",
+			"discountAmount": 1000,
+			"shippingDiscountAmount": 0,
+			"freeShipping": false,
+			"loyaltyAllowed": true
+		}
+	]
+}

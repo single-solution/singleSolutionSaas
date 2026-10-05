@@ -1,0 +1,5254 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Catalog & PIM API",
+		"version": "1.0.0",
+		"description": "Mode C API of Catalog & PIM (SSPS v1). All data lives in the merchant's own database. Prices are integer minor units in the catalog's (or the item's) currency. Times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`. `pk_` keys (browsers, domain-locked) read public data only — never cost — with public cache headers; `sk_` keys (servers) need the `api` element: every resource, writes (api.allow_writes), private cost (api.expose_cost), metered per request (unit `request`). Standard events published: item.created@1, item.updated@1, item.deleted@1, inventory.changed@1, price.changed@1."
+	},
+	"servers": [
+		{
+			"url": "https://catalog.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"tags": [
+		{
+			"name": "items"
+		},
+		{
+			"name": "variants"
+		},
+		{
+			"name": "attributes"
+		},
+		{
+			"name": "collections"
+		},
+		{
+			"name": "brands"
+		},
+		{
+			"name": "media"
+		},
+		{
+			"name": "import_export"
+		},
+		{
+			"name": "feeds"
+		},
+		{
+			"name": "api"
+		},
+		{
+			"name": "dashboard"
+		},
+		{
+			"name": "jobs"
+		},
+		{
+			"name": "standard"
+		}
+	],
+	"paths": {
+		"/v1/items": {
+			"get": {
+				"operationId": "listItems",
+				"tags": ["items"],
+				"summary": "Items. pk_: public items (visible status, inside the publication window) as PublicItem; sk_: every item as OwnerItem (needs the api element; metered).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterStatus"
+					},
+					{
+						"$ref": "#/components/parameters/FilterType"
+					},
+					{
+						"$ref": "#/components/parameters/FilterCollection"
+					},
+					{
+						"$ref": "#/components/parameters/FilterBrand"
+					},
+					{
+						"$ref": "#/components/parameters/FilterTag"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSlug"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSku"
+					},
+					{
+						"$ref": "#/components/parameters/FilterExternal"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMin"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMax"
+					},
+					{
+						"$ref": "#/components/parameters/FilterInStock"
+					},
+					{
+						"$ref": "#/components/parameters/FilterDeleted"
+					},
+					{
+						"$ref": "#/components/parameters/FilterAttr"
+					},
+					{
+						"$ref": "#/components/parameters/FilterBrandSlug"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMinAlias"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMaxAlias"
+					},
+					{
+						"$ref": "#/components/parameters/Q"
+					},
+					{
+						"$ref": "#/components/parameters/Sort"
+					},
+					{
+						"$ref": "#/components/parameters/Lang"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"$ref": "#/components/parameters/Page"
+					},
+					{
+						"$ref": "#/components/parameters/Include"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										},
+										"sort": {
+											"type": "string"
+										},
+										"page": {
+											"type": "integer"
+										},
+										"next": {
+											"type": ["integer", "null"]
+										},
+										"total": {
+											"type": "integer"
+										},
+										"facets": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"label": {
+														"type": "string"
+													},
+													"type": {
+														"type": "string"
+													},
+													"values": {
+														"type": "array",
+														"items": {
+															"type": "object",
+															"properties": {
+																"value": {
+																	"type": "string"
+																},
+																"label": {
+																	"type": "string"
+																},
+																"count": {
+																	"type": "integer"
+																}
+															}
+														}
+													},
+													"range": {
+														"type": "object",
+														"properties": {
+															"min": {
+																"type": "integer"
+															},
+															"max": {
+																"type": "integer"
+															}
+														}
+													}
+												}
+											}
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"slug": "linen-shirt",
+											"url": "https://shop.example.com/items/linen-shirt",
+											"type": "item",
+											"kind": "physical",
+											"requiresShipping": true,
+											"title": "Linen shirt",
+											"summary": "Breathable summer shirt.",
+											"description": "100% linen.",
+											"seo": {
+												"title": null,
+												"description": null
+											},
+											"lang": null,
+											"brand": {
+												"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+												"slug": "acme",
+												"name": "Acme"
+											},
+											"collectionIds": ["col_0mf2k3x1rabcdefghjkmnpqr"],
+											"attributes": {
+												"material": "linen"
+											},
+											"custom": {},
+											"tags": ["summer"],
+											"currency": "EUR",
+											"priceMin": 4900,
+											"priceMax": 4900,
+											"price": 4900,
+											"compareAtPrice": 5900,
+											"image": "https://cdn.example.com/items/linen-shirt.jpg",
+											"inStock": true,
+											"options": [
+												{
+													"key": "size",
+													"label": "Size",
+													"values": [
+														{
+															"value": "m",
+															"label": "M"
+														}
+													]
+												},
+												{
+													"key": "color",
+													"label": "Color",
+													"values": [
+														{
+															"value": "navy",
+															"label": "Navy"
+														}
+													]
+												}
+											],
+											"variants": [
+												{
+													"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+													"sku": "LS-M-NAVY",
+													"title": null,
+													"options": {
+														"size": "m",
+														"color": "navy"
+													},
+													"price": 4900,
+													"compareAtPrice": 5900,
+													"availability": "in_stock",
+													"purchasable": true,
+													"mediaIds": []
+												}
+											],
+											"media": [
+												{
+													"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+													"kind": "image",
+													"url": "https://cdn.example.com/items/linen-shirt.jpg",
+													"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+													"alt": "Linen shirt",
+													"role": "main",
+													"width": 1200,
+													"height": 1200,
+													"variantIds": [],
+													"position": 0
+												}
+											],
+											"createdAt": "2026-10-01T09:00:00.000Z",
+											"updatedAt": "2026-10-01T10:00:00.000Z"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false,
+									"sort": "newest",
+									"total": 1,
+									"facets": [
+										{
+											"key": "size",
+											"label": "Size",
+											"type": "select",
+											"unit": null,
+											"visibility": {
+												"type": "always"
+											},
+											"values": [
+												{
+													"value": "m",
+													"label": "M",
+													"count": 1
+												}
+											]
+										},
+										{
+											"key": "price",
+											"label": "price",
+											"type": "range",
+											"unit": null,
+											"visibility": {
+												"type": "always"
+											},
+											"values": [],
+											"range": {
+												"min": 4900,
+												"max": 4900
+											}
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createItem",
+				"tags": ["items"],
+				"summary": "Create an item of any type, with variants (or the single-variant shorthand price/sku/quantity) and media. The id derives from the Idempotency-Key. Publishes item.created@1.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ItemInput"
+							},
+							"example": {
+								"title": "Linen shirt",
+								"price": 4900,
+								"quantity": 12
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerItem"
+								},
+								"example": {
+									"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "linen-shirt",
+									"previousSlugs": [],
+									"externalId": null,
+									"url": "https://shop.example.com/items/linen-shirt",
+									"type": "item",
+									"status": "active",
+									"baseStatus": "active",
+									"title": "Linen shirt",
+									"summary": "Breathable summer shirt.",
+									"description": "100% linen.",
+									"brandId": "brd_0mf2k3x1rabcdefghjkmnpqr",
+									"collectionIds": ["col_0mf2k3x1rabcdefghjkmnpqr"],
+									"attributes": {
+										"material": "linen"
+									},
+									"custom": {},
+									"tags": ["summer"],
+									"currency": "EUR",
+									"itemCurrency": null,
+									"options": ["size", "color"],
+									"optionPool": {},
+									"variants": [
+										{
+											"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+											"sku": "LS-M-NAVY",
+											"title": null,
+											"options": {
+												"size": "m",
+												"color": "navy"
+											},
+											"price": 4900,
+											"compareAtPrice": 5900,
+											"mediaIds": [],
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"barcode": "4006381333931",
+											"cost": 2100,
+											"quantity": 12,
+											"trackInventory": null,
+											"backorder": null,
+											"forceOutOfStock": false,
+											"status": "active",
+											"position": 0,
+											"restockedAt": null,
+											"availability": "in_stock",
+											"purchasable": true,
+											"lowStock": false
+										}
+									],
+									"media": [
+										{
+											"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "image",
+											"url": "https://cdn.example.com/items/linen-shirt.jpg",
+											"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+											"alt": "Linen shirt",
+											"role": "main",
+											"width": 1200,
+											"height": 1200,
+											"variantIds": [],
+											"position": 0,
+											"storageKey": null
+										}
+									],
+									"seo": {
+										"title": null,
+										"description": null
+									},
+									"translations": {},
+									"publishAt": null,
+									"unpublishAt": null,
+									"priceMin": 4900,
+									"priceMax": 4900,
+									"available": 12,
+									"inStock": true,
+									"version": 3,
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-certify": true
+			}
+		},
+		"/v1/items/{ref}": {
+			"get": {
+				"operationId": "getItem",
+				"tags": ["items"],
+				"summary": "One item by id or slug (pk_: public items only).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ref"
+					},
+					{
+						"$ref": "#/components/parameters/Lang"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"oneOf": [
+										{
+											"$ref": "#/components/schemas/PublicItem"
+										},
+										{
+											"$ref": "#/components/schemas/OwnerItem"
+										}
+									]
+								},
+								"example": {
+									"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "linen-shirt",
+									"url": "https://shop.example.com/items/linen-shirt",
+									"type": "item",
+									"kind": "physical",
+									"requiresShipping": true,
+									"title": "Linen shirt",
+									"summary": "Breathable summer shirt.",
+									"description": "100% linen.",
+									"seo": {
+										"title": null,
+										"description": null
+									},
+									"lang": null,
+									"brand": {
+										"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+										"slug": "acme",
+										"name": "Acme"
+									},
+									"collectionIds": ["col_0mf2k3x1rabcdefghjkmnpqr"],
+									"attributes": {
+										"material": "linen"
+									},
+									"custom": {},
+									"tags": ["summer"],
+									"currency": "EUR",
+									"priceMin": 4900,
+									"priceMax": 4900,
+									"price": 4900,
+									"compareAtPrice": 5900,
+									"image": "https://cdn.example.com/items/linen-shirt.jpg",
+									"inStock": true,
+									"options": [
+										{
+											"key": "size",
+											"label": "Size",
+											"values": [
+												{
+													"value": "m",
+													"label": "M"
+												}
+											]
+										},
+										{
+											"key": "color",
+											"label": "Color",
+											"values": [
+												{
+													"value": "navy",
+													"label": "Navy"
+												}
+											]
+										}
+									],
+									"variants": [
+										{
+											"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+											"sku": "LS-M-NAVY",
+											"title": null,
+											"options": {
+												"size": "m",
+												"color": "navy"
+											},
+											"price": 4900,
+											"compareAtPrice": 5900,
+											"availability": "in_stock",
+											"purchasable": true,
+											"mediaIds": []
+										}
+									],
+									"media": [
+										{
+											"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "image",
+											"url": "https://cdn.example.com/items/linen-shirt.jpg",
+											"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+											"alt": "Linen shirt",
+											"role": "main",
+											"width": 1200,
+											"height": 1200,
+											"variantIds": [],
+											"position": 0
+										}
+									],
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z"
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/items/{id}": {
+			"patch": {
+				"operationId": "updateItem",
+				"tags": ["items"],
+				"summary": "JSON Merge Patch of the item-level fields (variants and media have their own resources). Publishes item.updated@1 with the changed fields.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IfMatch"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/ItemInput"
+							},
+							"example": {
+								"status": "active",
+								"tags": ["summer", "linen"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerItem"
+								},
+								"example": {
+									"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "linen-shirt",
+									"previousSlugs": [],
+									"externalId": null,
+									"url": "https://shop.example.com/items/linen-shirt",
+									"type": "item",
+									"status": "active",
+									"baseStatus": "active",
+									"title": "Linen shirt",
+									"summary": "Breathable summer shirt.",
+									"description": "100% linen.",
+									"brandId": "brd_0mf2k3x1rabcdefghjkmnpqr",
+									"collectionIds": ["col_0mf2k3x1rabcdefghjkmnpqr"],
+									"attributes": {
+										"material": "linen"
+									},
+									"custom": {},
+									"tags": ["summer"],
+									"currency": "EUR",
+									"itemCurrency": null,
+									"options": ["size", "color"],
+									"optionPool": {},
+									"variants": [
+										{
+											"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+											"sku": "LS-M-NAVY",
+											"title": null,
+											"options": {
+												"size": "m",
+												"color": "navy"
+											},
+											"price": 4900,
+											"compareAtPrice": 5900,
+											"mediaIds": [],
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"barcode": "4006381333931",
+											"cost": 2100,
+											"quantity": 12,
+											"trackInventory": null,
+											"backorder": null,
+											"forceOutOfStock": false,
+											"status": "active",
+											"position": 0,
+											"restockedAt": null,
+											"availability": "in_stock",
+											"purchasable": true,
+											"lowStock": false
+										}
+									],
+									"media": [
+										{
+											"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "image",
+											"url": "https://cdn.example.com/items/linen-shirt.jpg",
+											"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+											"alt": "Linen shirt",
+											"role": "main",
+											"width": 1200,
+											"height": 1200,
+											"variantIds": [],
+											"position": 0,
+											"storageKey": null
+										}
+									],
+									"seo": {
+										"title": null,
+										"description": null
+									},
+									"translations": {},
+									"publishAt": null,
+									"unpublishAt": null,
+									"priceMin": 4900,
+									"priceMax": 4900,
+									"available": 12,
+									"inStock": true,
+									"version": 3,
+									"createdAt": "2026-10-01T09:00:00.000Z",
+									"updatedAt": "2026-10-01T10:00:00.000Z",
+									"deletedAt": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteItem",
+				"tags": ["items"],
+				"summary": "Soft delete. Publishes item.deleted@1.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									},
+									"required": ["id", "deleted"]
+								},
+								"example": {
+									"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/item-schema": {
+			"get": {
+				"operationId": "getItemSchema",
+				"tags": ["items"],
+				"summary": "The website's item model: types, statuses, custom fields (public ones for pk_), currency, languages, sorts.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"types": [
+										{
+											"key": "item",
+											"label": "Item",
+											"kind": "physical",
+											"requiresShipping": true
+										}
+									],
+									"statuses": [
+										{
+											"key": "active",
+											"label": "Active"
+										}
+									],
+									"customFields": [],
+									"currency": "EUR",
+									"languages": [],
+									"sorts": ["newest"],
+									"defaultSort": "newest",
+									"pageSize": 24
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/variants": {
+			"get": {
+				"operationId": "listVariants",
+				"tags": ["variants"],
+				"summary": "Variants of one item (filter[itemId]) or by SKU (filter[sku]); without a filter, the variants of a page of items.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterItem"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSku"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"oneOf": [
+													{
+														"$ref": "#/components/schemas/PublicVariant"
+													},
+													{
+														"$ref": "#/components/schemas/OwnerVariant"
+													}
+												]
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+											"sku": "LS-M-NAVY",
+											"title": null,
+											"options": {
+												"size": "m",
+												"color": "navy"
+											},
+											"price": 4900,
+											"compareAtPrice": 5900,
+											"availability": "in_stock",
+											"purchasable": true,
+											"mediaIds": [],
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createVariant",
+				"tags": ["variants"],
+				"summary": "Add a variant to an item (checks dimensions, option pool, uniqueness and SKUs). Publishes item.updated@1 and inventory.changed@1.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"allOf": [
+									{
+										"type": "object",
+										"properties": {
+											"itemId": {
+												"type": "string"
+											}
+										},
+										"required": ["itemId"]
+									},
+									{
+										"$ref": "#/components/schemas/VariantInput"
+									}
+								]
+							},
+							"example": {
+								"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+								"sku": "LS-L-NAVY",
+								"options": {
+									"size": "l",
+									"color": "navy"
+								},
+								"price": 4900,
+								"quantity": 5
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerVariant"
+								},
+								"example": {
+									"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+									"sku": "LS-M-NAVY",
+									"title": null,
+									"options": {
+										"size": "m",
+										"color": "navy"
+									},
+									"price": 4900,
+									"compareAtPrice": 5900,
+									"mediaIds": [],
+									"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"barcode": "4006381333931",
+									"cost": 2100,
+									"quantity": 12,
+									"trackInventory": null,
+									"backorder": null,
+									"forceOutOfStock": false,
+									"status": "active",
+									"position": 0,
+									"restockedAt": null,
+									"availability": "in_stock",
+									"purchasable": true,
+									"lowStock": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/variants/{id}": {
+			"patch": {
+				"operationId": "updateVariant",
+				"tags": ["variants"],
+				"summary": "JSON Merge Patch of a variant. Publishes price.changed@1 and inventory.changed@1 when they change.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/VariantInput"
+							},
+							"example": {
+								"price": 4500,
+								"compareAtPrice": 4900
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerVariant"
+								},
+								"example": {
+									"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+									"sku": "LS-M-NAVY",
+									"title": null,
+									"options": {
+										"size": "m",
+										"color": "navy"
+									},
+									"price": 4900,
+									"compareAtPrice": 5900,
+									"mediaIds": [],
+									"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"barcode": "4006381333931",
+									"cost": 2100,
+									"quantity": 12,
+									"trackInventory": null,
+									"backorder": null,
+									"forceOutOfStock": false,
+									"status": "active",
+									"position": 0,
+									"restockedAt": null,
+									"availability": "in_stock",
+									"purchasable": true,
+									"lowStock": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteVariant",
+				"tags": ["variants"],
+				"summary": "Remove a variant.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									},
+									"required": ["id", "deleted"]
+								},
+								"example": {
+									"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/variants/{id}/stock": {
+			"post": {
+				"operationId": "adjustStock",
+				"tags": ["variants"],
+				"summary": "Adjust (delta) or set (quantity) stock, optionally guarded by expectedQuantity. Publishes inventory.changed@1.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"delta": {
+										"type": "integer"
+									},
+									"quantity": {
+										"type": "integer"
+									},
+									"expectedQuantity": {
+										"type": "integer"
+									},
+									"reason": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"delta": -1,
+								"reason": "damaged"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OwnerVariant"
+								},
+								"example": {
+									"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+									"sku": "LS-M-NAVY",
+									"title": null,
+									"options": {
+										"size": "m",
+										"color": "navy"
+									},
+									"price": 4900,
+									"compareAtPrice": 5900,
+									"mediaIds": [],
+									"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"barcode": "4006381333931",
+									"cost": 2100,
+									"quantity": 12,
+									"trackInventory": null,
+									"backorder": null,
+									"forceOutOfStock": false,
+									"status": "active",
+									"position": 0,
+									"restockedAt": null,
+									"availability": "in_stock",
+									"purchasable": true,
+									"lowStock": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/stock-reservations": {
+			"post": {
+				"operationId": "reserveStock",
+				"tags": ["variants"],
+				"summary": "Reserve stock atomically for a checkout: every line is taken or none (insufficient_stock). An order.placed@1 with the same orderId converts it; otherwise it is released after variants.reservation_ttl_minutes.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"lines": {
+										"type": "array",
+										"items": {
+											"type": "object",
+											"properties": {
+												"variantId": {
+													"type": "string"
+												},
+												"sku": {
+													"type": "string"
+												},
+												"quantity": {
+													"type": "integer",
+													"minimum": 1
+												}
+											},
+											"required": ["quantity"]
+										}
+									},
+									"orderId": {
+										"type": "string"
+									}
+								},
+								"required": ["lines"]
+							},
+							"example": {
+								"lines": [
+									{
+										"variantId": "var_0mf2k3x1rabcdefghjkmnpqr",
+										"quantity": 1
+									}
+								],
+								"orderId": "ord_1001"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "res_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "reservation",
+									"status": "held",
+									"orderId": "ord_1001",
+									"lines": [
+										{
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"variantId": "var_0mf2k3x1rabcdefghjkmnpqr",
+											"quantity": 1
+										}
+									],
+									"expiresAt": "2026-10-01T10:30:00.000Z",
+									"createdAt": "2026-10-01T10:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/stock-reservations/{id}": {
+			"get": {
+				"operationId": "getReservation",
+				"tags": ["variants"],
+				"summary": "A stock reservation.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "res_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "reservation",
+									"status": "held",
+									"orderId": "ord_1001",
+									"lines": [
+										{
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"variantId": "var_0mf2k3x1rabcdefghjkmnpqr",
+											"quantity": 1
+										}
+									],
+									"expiresAt": "2026-10-01T10:30:00.000Z",
+									"createdAt": "2026-10-01T10:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			},
+			"delete": {
+				"operationId": "releaseReservation",
+				"tags": ["variants"],
+				"summary": "Release a held reservation (stock goes back).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Reservation"
+								},
+								"example": {
+									"id": "res_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "reservation",
+									"status": "released",
+									"orderId": "ord_1001",
+									"lines": [
+										{
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"variantId": "var_0mf2k3x1rabcdefghjkmnpqr",
+											"quantity": 1
+										}
+									],
+									"expiresAt": "2026-10-01T10:30:00.000Z",
+									"createdAt": "2026-10-01T10:00:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/attributes": {
+			"get": {
+				"operationId": "listAttributes",
+				"tags": ["attributes"],
+				"summary": "Attribute definitions.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Attribute"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "att_0mf2k3x1rabcdefghjkmnpqr",
+											"key": "size",
+											"label": "Size",
+											"type": "select",
+											"unit": null,
+											"options": [
+												{
+													"value": "s",
+													"label": "S",
+													"display": "S"
+												},
+												{
+													"value": "m",
+													"label": "M",
+													"display": "M"
+												}
+											],
+											"filterable": true,
+											"variantOption": true,
+											"cardPosition": "title_chips",
+											"collectionIds": [],
+											"visibility": {
+												"type": "always"
+											},
+											"position": 0,
+											"required": false
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createAttribute",
+				"tags": ["attributes"],
+				"summary": "Define an attribute (option values derive from label + unit when not given).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AttributeInput"
+							},
+							"example": {
+								"key": "size",
+								"label": "Size",
+								"type": "select",
+								"options": ["S", "M", "L"],
+								"variantOption": true
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Attribute"
+								},
+								"example": {
+									"id": "att_0mf2k3x1rabcdefghjkmnpqr",
+									"key": "size",
+									"label": "Size",
+									"type": "select",
+									"unit": null,
+									"options": [
+										{
+											"value": "s",
+											"label": "S",
+											"display": "S"
+										},
+										{
+											"value": "m",
+											"label": "M",
+											"display": "M"
+										}
+									],
+									"filterable": true,
+									"variantOption": true,
+									"cardPosition": "title_chips",
+									"collectionIds": [],
+									"visibility": {
+										"type": "always"
+									},
+									"position": 0,
+									"required": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/attributes:facets": {
+			"get": {
+				"operationId": "listFacets",
+				"tags": ["attributes"],
+				"summary": "Facet counts of the public items matching the same filters as GET /v1/items (filterable attributes that apply to the collection), plus the price range.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterStatus"
+					},
+					{
+						"$ref": "#/components/parameters/FilterType"
+					},
+					{
+						"$ref": "#/components/parameters/FilterCollection"
+					},
+					{
+						"$ref": "#/components/parameters/FilterBrand"
+					},
+					{
+						"$ref": "#/components/parameters/FilterTag"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSlug"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSku"
+					},
+					{
+						"$ref": "#/components/parameters/FilterExternal"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMin"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMax"
+					},
+					{
+						"$ref": "#/components/parameters/FilterInStock"
+					},
+					{
+						"$ref": "#/components/parameters/FilterDeleted"
+					},
+					{
+						"$ref": "#/components/parameters/FilterAttr"
+					},
+					{
+						"$ref": "#/components/parameters/FilterBrandSlug"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMinAlias"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMaxAlias"
+					},
+					{
+						"$ref": "#/components/parameters/Q"
+					},
+					{
+						"$ref": "#/components/parameters/Sort"
+					},
+					{
+						"$ref": "#/components/parameters/Lang"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object"
+											}
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"key": "size",
+											"label": "Size",
+											"type": "select",
+											"unit": null,
+											"visibility": {
+												"type": "always"
+											},
+											"values": [
+												{
+													"value": "m",
+													"label": "M",
+													"count": 12
+												}
+											]
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/attributes/{id}": {
+			"patch": {
+				"operationId": "updateAttribute",
+				"tags": ["attributes"],
+				"summary": "Update an attribute (options still used by items cannot be removed: in_use).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/AttributeInput"
+							},
+							"example": {
+								"label": "Size (EU)"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Attribute"
+								},
+								"example": {
+									"id": "att_0mf2k3x1rabcdefghjkmnpqr",
+									"key": "size",
+									"label": "Size",
+									"type": "select",
+									"unit": null,
+									"options": [
+										{
+											"value": "s",
+											"label": "S",
+											"display": "S"
+										},
+										{
+											"value": "m",
+											"label": "M",
+											"display": "M"
+										}
+									],
+									"filterable": true,
+									"variantOption": true,
+									"cardPosition": "title_chips",
+									"collectionIds": [],
+									"visibility": {
+										"type": "always"
+									},
+									"position": 0,
+									"required": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteAttribute",
+				"tags": ["attributes"],
+				"summary": "Delete an unused attribute.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									},
+									"required": ["id", "deleted"]
+								},
+								"example": {
+									"id": "att_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/collections": {
+			"get": {
+				"operationId": "listCollections",
+				"tags": ["collections"],
+				"summary": "Collections (pk_: the visible cascade only), flat or as a tree.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Tree"
+					},
+					{
+						"$ref": "#/components/parameters/FilterParent"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Collection"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "col_0mf2k3x1rabcdefghjkmnpqr",
+											"slug": "shirts",
+											"title": "Shirts",
+											"heading": "Summer shirts",
+											"description": "Light shirts for warm days.",
+											"parentId": null,
+											"ancestors": [],
+											"depth": 1,
+											"position": 0,
+											"seo": {
+												"title": null,
+												"description": null
+											},
+											"image": null
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createCollection",
+				"tags": ["collections"],
+				"summary": "Create a collection (depth limited by collections.max_depth).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CollectionInput"
+							},
+							"example": {
+								"title": "Shirts",
+								"heading": "Summer shirts"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Collection"
+								},
+								"example": {
+									"id": "col_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "shirts",
+									"title": "Shirts",
+									"heading": "Summer shirts",
+									"description": "Light shirts for warm days.",
+									"parentId": null,
+									"ancestors": [],
+									"depth": 1,
+									"position": 0,
+									"seo": {
+										"title": null,
+										"description": null
+									},
+									"image": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/collections/{ref}": {
+			"get": {
+				"operationId": "getCollection",
+				"tags": ["collections"],
+				"summary": "One collection by id or slug, with breadcrumbs.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ref"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Collection"
+								},
+								"example": {
+									"id": "col_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "shirts",
+									"title": "Shirts",
+									"heading": "Summer shirts",
+									"description": "Light shirts for warm days.",
+									"parentId": null,
+									"ancestors": [],
+									"depth": 1,
+									"position": 0,
+									"seo": {
+										"title": null,
+										"description": null
+									},
+									"image": null,
+									"breadcrumbs": []
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/collections/{id}": {
+			"patch": {
+				"operationId": "updateCollection",
+				"tags": ["collections"],
+				"summary": "Update or move a collection (its sub-tree moves along; cycles and too deep trees are refused).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CollectionInput"
+							},
+							"example": {
+								"parentId": null,
+								"position": 2
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Collection"
+								},
+								"example": {
+									"id": "col_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "shirts",
+									"title": "Shirts",
+									"heading": "Summer shirts",
+									"description": "Light shirts for warm days.",
+									"parentId": null,
+									"ancestors": [],
+									"depth": 1,
+									"position": 0,
+									"seo": {
+										"title": null,
+										"description": null
+									},
+									"image": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteCollection",
+				"tags": ["collections"],
+				"summary": "Delete an empty collection (no sub-collections, no items).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									},
+									"required": ["id", "deleted"]
+								},
+								"example": {
+									"id": "col_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/brands": {
+			"get": {
+				"operationId": "listBrands",
+				"tags": ["brands"],
+				"summary": "Brands (pk_: visible only).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Brand"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+											"slug": "acme",
+											"name": "Acme",
+											"description": null,
+											"logo": {
+												"url": "https://cdn.example.com/brands/acme.svg",
+												"alt": "Acme"
+											},
+											"collectionIds": [],
+											"position": 0
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createBrand",
+				"tags": ["brands"],
+				"summary": "Create a brand.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BrandInput"
+							},
+							"example": {
+								"name": "Acme",
+								"logo": {
+									"url": "https://cdn.example.com/brands/acme.svg"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Brand"
+								},
+								"example": {
+									"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "acme",
+									"name": "Acme",
+									"description": null,
+									"logo": {
+										"url": "https://cdn.example.com/brands/acme.svg",
+										"alt": "Acme"
+									},
+									"collectionIds": [],
+									"position": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/brands/{ref}": {
+			"get": {
+				"operationId": "getBrand",
+				"tags": ["brands"],
+				"summary": "One brand by id or slug.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ref"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Brand"
+								},
+								"example": {
+									"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "acme",
+									"name": "Acme",
+									"description": null,
+									"logo": {
+										"url": "https://cdn.example.com/brands/acme.svg",
+										"alt": "Acme"
+									},
+									"collectionIds": [],
+									"position": 0
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/brands/{id}": {
+			"patch": {
+				"operationId": "updateBrand",
+				"tags": ["brands"],
+				"summary": "Update a brand.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BrandInput"
+							},
+							"example": {
+								"collectionIds": ["col_0mf2k3x1rabcdefghjkmnpqr"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Brand"
+								},
+								"example": {
+									"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+									"slug": "acme",
+									"name": "Acme",
+									"description": null,
+									"logo": {
+										"url": "https://cdn.example.com/brands/acme.svg",
+										"alt": "Acme"
+									},
+									"collectionIds": [],
+									"position": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteBrand",
+				"tags": ["brands"],
+				"summary": "Delete an unused brand.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									},
+									"required": ["id", "deleted"]
+								},
+								"example": {
+									"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/media": {
+			"get": {
+				"operationId": "listMedia",
+				"tags": ["media"],
+				"summary": "Media of an item (filter[itemId]) or of a page of items, with srcset and alt text.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterItem"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Media"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "image",
+											"url": "https://cdn.example.com/items/linen-shirt.jpg",
+											"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+											"alt": "Linen shirt",
+											"role": "main",
+											"width": 1200,
+											"height": 1200,
+											"variantIds": [],
+											"position": 0,
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "addMedia",
+				"tags": ["media"],
+				"summary": "Attach media to an item by URL or storage key (with the storage connector connected, the key must exist in your bucket).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"allOf": [
+									{
+										"type": "object",
+										"properties": {
+											"itemId": {
+												"type": "string"
+											}
+										},
+										"required": ["itemId"]
+									},
+									{
+										"$ref": "#/components/schemas/MediaInput"
+									}
+								]
+							},
+							"example": {
+								"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+								"url": "https://cdn.example.com/items/linen-shirt.jpg",
+								"alt": "Linen shirt"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Media"
+								},
+								"example": {
+									"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "image",
+									"url": "https://cdn.example.com/items/linen-shirt.jpg",
+									"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+									"alt": "Linen shirt",
+									"role": "main",
+									"width": 1200,
+									"height": 1200,
+									"variantIds": [],
+									"position": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/media:reorder": {
+			"post": {
+				"operationId": "reorderMedia",
+				"tags": ["media"],
+				"summary": "Reorder an item's media.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"itemId": {
+										"type": "string"
+									},
+									"ids": {
+										"type": "array",
+										"items": {
+											"type": "string"
+										}
+									}
+								},
+								"required": ["itemId", "ids"]
+							},
+							"example": {
+								"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+								"ids": ["med_0mf2k3x1rabcdefghjkmnpqr"]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Media"
+											}
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "image",
+											"url": "https://cdn.example.com/items/linen-shirt.jpg",
+											"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+											"alt": "Linen shirt",
+											"role": "main",
+											"width": 1200,
+											"height": 1200,
+											"variantIds": [],
+											"position": 0
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/media/{id}": {
+			"patch": {
+				"operationId": "updateMedia",
+				"tags": ["media"],
+				"summary": "Update a media reference.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/MediaInput"
+							},
+							"example": {
+								"alt": "Linen shirt, navy"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Media"
+								},
+								"example": {
+									"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "image",
+									"url": "https://cdn.example.com/items/linen-shirt.jpg",
+									"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+									"alt": "Linen shirt",
+									"role": "main",
+									"width": 1200,
+									"height": 1200,
+									"variantIds": [],
+									"position": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteMedia",
+				"tags": ["media"],
+				"summary": "Detach media (the file stays where it is).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									},
+									"required": ["id", "deleted"]
+								},
+								"example": {
+									"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/media-uploads": {
+			"post": {
+				"operationId": "presignUpload",
+				"tags": ["media"],
+				"summary": "A presigned PUT into the merchant's own bucket (content-type and content-length are signed). Then POST /v1/media with the returned key.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"contentType": {
+										"type": "string"
+									},
+									"contentLength": {
+										"type": "integer"
+									},
+									"itemId": {
+										"type": "string"
+									}
+								},
+								"required": ["contentType", "contentLength"]
+							},
+							"example": {
+								"contentType": "image/jpeg",
+								"contentLength": 20480,
+								"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"key": {
+											"type": "string"
+										},
+										"method": {
+											"type": "string"
+										},
+										"url": {
+											"type": "string"
+										},
+										"headers": {
+											"type": "object"
+										},
+										"expiresAt": {
+											"type": "string"
+										}
+									}
+								},
+								"example": {
+									"key": "catalog/itm_0mf2k3x1rabcdefghjkmnpqr/upl_0mf2k3x1rabcdefghjkmnpqr.jpg",
+									"method": "PUT",
+									"url": "https://bucket.s3.example.com/...",
+									"headers": {
+										"content-type": "image/jpeg",
+										"content-length": "20480"
+									},
+									"expiresAt": "2026-10-01T10:05:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/imports": {
+			"post": {
+				"operationId": "importCsv",
+				"tags": ["import_export"],
+				"summary": "CSV import: dryRun (default true) returns the diff and row errors; apply with dryRun false and the dry run's versions as expectedVersions (conflictPolicy skip, overwrite or fail). Prices in major units.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"csv": {
+										"type": "string"
+									},
+									"dryRun": {
+										"type": "boolean"
+									},
+									"mapping": {
+										"type": "object",
+										"additionalProperties": {
+											"type": "string"
+										}
+									},
+									"conflictPolicy": {
+										"type": "string",
+										"enum": ["skip", "overwrite", "fail"]
+									},
+									"expectedVersions": {
+										"type": "object",
+										"additionalProperties": {
+											"type": "integer"
+										}
+									}
+								},
+								"required": ["csv"]
+							},
+							"example": {
+								"csv": "item_slug,sku,price\r\nlinen-shirt,LS-M-NAVY,45.00\r\n",
+								"dryRun": true
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"dryRun": true,
+									"columns": ["item_slug", "title", "sku", "price", "quantity"],
+									"ignoredColumns": [],
+									"summary": {
+										"items": 1,
+										"create": 0,
+										"update": 1,
+										"unchanged": 0,
+										"errors": 0
+									},
+									"rowErrors": [],
+									"items": [
+										{
+											"key": "slug:linen-shirt",
+											"lines": [2],
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"slug": "linen-shirt",
+											"action": "update",
+											"version": 3,
+											"changes": [
+												{
+													"field": "variant.price",
+													"from": 4900,
+													"to": 4500,
+													"variantId": "var_0mf2k3x1rabcdefghjkmnpqr"
+												}
+											],
+											"errors": []
+										}
+									],
+									"versions": {
+										"itm_0mf2k3x1rabcdefghjkmnpqr": 3
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/exports": {
+			"get": {
+				"operationId": "exportCsv",
+				"tags": ["import_export"],
+				"summary": "CSV export (one row per variant; columns from import_export.columns; cost only when allowed).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/FilterStatus"
+					},
+					{
+						"$ref": "#/components/parameters/FilterType"
+					},
+					{
+						"$ref": "#/components/parameters/FilterCollection"
+					},
+					{
+						"$ref": "#/components/parameters/FilterBrand"
+					},
+					{
+						"$ref": "#/components/parameters/FilterTag"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSlug"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSku"
+					},
+					{
+						"$ref": "#/components/parameters/FilterExternal"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMin"
+					},
+					{
+						"$ref": "#/components/parameters/FilterPriceMax"
+					},
+					{
+						"$ref": "#/components/parameters/FilterInStock"
+					},
+					{
+						"$ref": "#/components/parameters/FilterDeleted"
+					},
+					{
+						"$ref": "#/components/parameters/FilterAttr"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "item_id,item_slug,title,sku,price\r\nitm_…,linen-shirt,Linen shirt,LS-M-NAVY,49.00\r\n"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/exports:template": {
+			"get": {
+				"operationId": "exportTemplate",
+				"tags": ["import_export"],
+				"summary": "An empty CSV with the import columns.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "item_slug,title,sku,price,quantity\r\n"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/feeds": {
+			"get": {
+				"operationId": "listFeeds",
+				"tags": ["feeds"],
+				"summary": "The feeds of the settings with their tokened public URLs (keep them secret; raise feeds.token_version to revoke).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									},
+									"required": ["items", "nextCursor", "hasMore"]
+								},
+								"example": {
+									"items": [
+										{
+											"key": "shopping",
+											"name": "Shopping feed",
+											"format": "google_xml",
+											"url": "https://catalog.example.com/feeds/fd1.eyJ3Ijoid2ViXzEifQ.abc",
+											"mapping": [
+												{
+													"target": "g:id",
+													"source": "id"
+												}
+											],
+											"invalidSources": [],
+											"collectionIds": [],
+											"brandIds": [],
+											"includeOutOfStock": true
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/feeds/{key}/preview": {
+			"get": {
+				"operationId": "previewFeed",
+				"tags": ["feeds"],
+				"summary": "The generated feed body (first 200 kB).",
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/xml": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "<?xml version=\"1.0\"?><rss version=\"2.0\">…</rss>"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/feeds/{token}": {
+			"get": {
+				"operationId": "getFeed",
+				"tags": ["feeds"],
+				"summary": "Public feed (no key: the token names the website and the feed). Cacheable: Cache-Control public for feeds.cache_seconds, ETag / If-None-Match (304).",
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Feed",
+						"headers": {
+							"ETag": {
+								"schema": {
+									"type": "string"
+								}
+							},
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								}
+							}
+						},
+						"content": {
+							"application/xml": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><rss version=\"2.0\" xmlns:g=\"http://base.google.com/ns/1.0\">…</rss>"
+							},
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								}
+							},
+							"text/tab-separated-values": {
+								"schema": {
+									"type": "string"
+								}
+							},
+							"application/json": {
+								"schema": {
+									"type": "object"
+								}
+							}
+						}
+					},
+					"304": {
+						"description": "Not modified"
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/v1/catalog-stats": {
+			"get": {
+				"operationId": "getStats",
+				"tags": ["api"],
+				"summary": "Catalog counts (items per status, stock, taxonomy, events waiting).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"items": {
+										"total": 120,
+										"limit": 1000,
+										"byStatus": {
+											"draft": 4,
+											"active": 110,
+											"archived": 6
+										},
+										"deleted": 2,
+										"outOfStock": 7,
+										"lowStock": 9
+									},
+									"attributes": 6,
+									"collections": 14,
+									"brands": 9,
+									"pendingEvents": 0,
+									"currency": "EUR"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/elements/items/view": {
+			"get": {
+				"operationId": "view_items",
+				"tags": ["items"],
+				"summary": "Text-only view model of the items element for the Loader's element stub (Mode A without a UI bundle).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"href": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"title": "Items",
+									"items": [
+										{
+											"text": "Linen shirt — €49.00",
+											"href": "https://shop.example.com/items/linen-shirt"
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/variants/view": {
+			"get": {
+				"operationId": "view_variants",
+				"tags": ["variants"],
+				"summary": "Text-only view model of the variants element for the Loader's element stub (Mode A without a UI bundle).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"href": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"title": "Items",
+									"items": [
+										{
+											"text": "Linen shirt — €49.00",
+											"href": "https://shop.example.com/items/linen-shirt"
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/attributes/view": {
+			"get": {
+				"operationId": "view_attributes",
+				"tags": ["attributes"],
+				"summary": "Text-only view model of the attributes element for the Loader's element stub (Mode A without a UI bundle).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"href": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"title": "Items",
+									"items": [
+										{
+											"text": "Linen shirt — €49.00",
+											"href": "https://shop.example.com/items/linen-shirt"
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/collections/view": {
+			"get": {
+				"operationId": "view_collections",
+				"tags": ["collections"],
+				"summary": "Text-only view model of the collections element for the Loader's element stub (Mode A without a UI bundle).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"href": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"title": "Items",
+									"items": [
+										{
+											"text": "Linen shirt — €49.00",
+											"href": "https://shop.example.com/items/linen-shirt"
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/brands/view": {
+			"get": {
+				"operationId": "view_brands",
+				"tags": ["brands"],
+				"summary": "Text-only view model of the brands element for the Loader's element stub (Mode A without a UI bundle).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"href": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"title": "Items",
+									"items": [
+										{
+											"text": "Linen shirt — €49.00",
+											"href": "https://shop.example.com/items/linen-shirt"
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/media/view": {
+			"get": {
+				"operationId": "view_media",
+				"tags": ["media"],
+				"summary": "Text-only view model of the media element for the Loader's element stub (Mode A without a UI bundle).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													},
+													"href": {
+														"type": "string"
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"title": "Items",
+									"items": [
+										{
+											"text": "Linen shirt — €49.00",
+											"href": "https://shop.example.com/items/linen-shirt"
+										}
+									]
+								}
+							}
+						},
+						"headers": {
+							"Cache-Control": {
+								"schema": {
+									"type": "string"
+								},
+								"description": "public, max-age=items.cache_seconds for pk_; no-store for sk_."
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/session": {
+			"get": {
+				"operationId": "getSession",
+				"tags": ["dashboard"],
+				"summary": "The dashboard session.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"kind": "merchant",
+									"role": "merchant",
+									"scope": {
+										"websiteId": "web_1"
+									},
+									"user": "usr_1",
+									"actor": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/overview": {
+			"get": {
+				"operationId": "dashboardOverview",
+				"tags": ["dashboard"],
+				"summary": "Catalog counts for the dashboard.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"items": {
+										"total": 120,
+										"limit": 1000,
+										"byStatus": {
+											"draft": 4,
+											"active": 110,
+											"archived": 6
+										},
+										"deleted": 2,
+										"outOfStock": 7,
+										"lowStock": 9
+									},
+									"attributes": 6,
+									"collections": 14,
+									"brands": 9,
+									"pendingEvents": 0,
+									"currency": "EUR"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/variants/{id}/stock": {
+			"post": {
+				"operationId": "dashboardStock",
+				"tags": ["dashboard"],
+				"summary": "Set or adjust stock from the dashboard (writers only; audited).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"quantity": 11,
+								"expectedQuantity": 12
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+									"quantity": 11
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/items/{id}/status": {
+			"post": {
+				"operationId": "dashboardStatus",
+				"tags": ["dashboard"],
+				"summary": "Change an item's status from the dashboard (writers only; audited).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"status": "active"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "active"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/imports": {
+			"post": {
+				"operationId": "dashboardImport",
+				"tags": ["dashboard"],
+				"summary": "CSV import from the dashboard (same as POST /v1/imports; audited).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"csv": "item_slug,price\r\nlinen-shirt,45.00\r\n",
+								"dryRun": true
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"dryRun": true,
+									"columns": ["item_slug", "title", "sku", "price", "quantity"],
+									"ignoredColumns": [],
+									"summary": {
+										"items": 1,
+										"create": 0,
+										"update": 1,
+										"unchanged": 0,
+										"errors": 0
+									},
+									"rowErrors": [],
+									"items": [
+										{
+											"key": "slug:linen-shirt",
+											"lines": [2],
+											"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"slug": "linen-shirt",
+											"action": "update",
+											"version": 3,
+											"changes": [
+												{
+													"field": "variant.price",
+													"from": 4900,
+													"to": 4500,
+													"variantId": "var_0mf2k3x1rabcdefghjkmnpqr"
+												}
+											],
+											"errors": []
+										}
+									],
+									"versions": {
+										"itm_0mf2k3x1rabcdefghjkmnpqr": 3
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/exports": {
+			"get": {
+				"operationId": "dashboardExport",
+				"tags": ["dashboard"],
+				"summary": "CSV export from the dashboard (session; the website from X-SS-Website). Prefer the signed link of POST /v1/dashboard/exports:link.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "item_id,…\r\n"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/exports:link": {
+			"post": {
+				"operationId": "dashboardExportLink",
+				"tags": ["dashboard"],
+				"summary": "A signed CSV download link for the dashboard, valid for five minutes, bound to the website, the export kind and its filters.",
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 255
+						}
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"params": {
+										"type": "object",
+										"maxProperties": 20,
+										"description": "Item filters as for GET /v1/items: q and filter[…] keys, string values ≤ 200 characters",
+										"additionalProperties": {
+											"type": "string",
+											"maxLength": 200
+										}
+									}
+								}
+							},
+							"example": {
+								"params": {
+									"filter[status]": "active"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Download link",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["url", "expiresAt"],
+									"properties": {
+										"url": {
+											"type": "string",
+											"format": "uri"
+										},
+										"expiresAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								},
+								"example": {
+									"url": "https://catalog.example.com/v1/dashboard/exports/ex1.eyJ3Ijoi….sig",
+									"expiresAt": "2026-10-01T10:05:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/exports/{token}": {
+			"get": {
+				"operationId": "dashboardExportDownload",
+				"tags": ["dashboard"],
+				"summary": "Download the CSV of a signed export link (no session or header). 401 when the link is tampered or expired, 403 when import_export is off.",
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"description": "Signed export token (ex1.…)",
+						"schema": {
+							"type": "string",
+							"maxLength": 2048
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "CSV attachment (cache-control: no-store)",
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "item_id,…\r\n"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/cron/sweep": {
+			"get": {
+				"operationId": "sweep",
+				"tags": ["jobs"],
+				"summary": "Scheduled publishing events, reservation expiry, event outbox retries (Authorization: Bearer CRON_SECRET).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websites": 1,
+									"results": [
+										{
+											"websiteId": "web_1",
+											"transitions": 0,
+											"expiredReservations": 0,
+											"republished": 0
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"cron": []
+					}
+				]
+			}
+		},
+		"/v1/entitlement": {
+			"get": {
+				"operationId": "getEntitlement",
+				"tags": ["standard"],
+				"summary": "The website's entitlement (from cache).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/config": {
+			"get": {
+				"operationId": "getConfig",
+				"tags": ["standard"],
+				"summary": "Effective configuration of elements (?element=a,b).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/strings": {
+			"get": {
+				"operationId": "getStrings",
+				"tags": ["standard"],
+				"summary": "String catalog (?lang=).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/healthz": {
+			"get": {
+				"operationId": "healthz",
+				"tags": ["standard"],
+				"summary": "Liveness.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/readyz": {
+			"get": {
+				"operationId": "readyz",
+				"tags": ["standard"],
+				"summary": "Readiness.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/v1/events": {
+			"post": {
+				"operationId": "postEvents",
+				"tags": ["standard"],
+				"summary": "Site events in the product namespace.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"events": []
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Accepted",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"results": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:export": {
+			"post": {
+				"operationId": "dataExport",
+				"tags": ["standard"],
+				"summary": "Portal-signed personal data export (the catalog stores none).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"websiteId": "web_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1",
+									"collections": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"portalSignature": []
+					}
+				]
+			}
+		},
+		"/v1/data:anonymize": {
+			"post": {
+				"operationId": "dataAnonymize",
+				"tags": ["standard"],
+				"summary": "Portal-signed anonymisation (the catalog stores no personal data).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"websiteId": "web_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1",
+									"anonymized": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"portalSignature": []
+					}
+				]
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			},
+			"portalSignature": {
+				"type": "apiKey",
+				"in": "header",
+				"name": "SS-Signature",
+				"description": "Portal-signed request (ss-request.v1)"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
+			},
+			"cron": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "CRON_SECRET"
+			}
+		},
+		"parameters": {
+			"IdempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				},
+				"description": "Required on POSTs that create or move state; a replay returns the original response."
+			},
+			"Cursor": {
+				"name": "cursor",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"Limit": {
+				"name": "limit",
+				"in": "query",
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100
+				}
+			},
+			"Sort": {
+				"name": "sort",
+				"in": "query",
+				"schema": {
+					"type": "string",
+					"enum": ["newest", "oldest", "title", "price_asc", "price_desc", "updated"]
+				},
+				"description": "pk_: only items.sorts."
+			},
+			"Lang": {
+				"name": "lang",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "A language of items.languages (translations)."
+			},
+			"FilterStatus": {
+				"name": "filter[status]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "sk_ only: comma-separated status keys."
+			},
+			"FilterType": {
+				"name": "filter[type]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterCollection": {
+				"name": "filter[collectionId]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "With collections.include_descendants, sub-collections too."
+			},
+			"FilterBrand": {
+				"name": "filter[brandId]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterTag": {
+				"name": "filter[tag]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterSlug": {
+				"name": "filter[slug]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterSku": {
+				"name": "filter[sku]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterExternal": {
+				"name": "filter[externalId]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterPriceMin": {
+				"name": "filter[priceMin]",
+				"in": "query",
+				"schema": {
+					"type": "integer"
+				},
+				"description": "Minor units."
+			},
+			"FilterPriceMax": {
+				"name": "filter[priceMax]",
+				"in": "query",
+				"schema": {
+					"type": "integer"
+				}
+			},
+			"FilterInStock": {
+				"name": "filter[inStock]",
+				"in": "query",
+				"schema": {
+					"type": "boolean"
+				}
+			},
+			"FilterDeleted": {
+				"name": "filter[deleted]",
+				"in": "query",
+				"schema": {
+					"type": "boolean"
+				},
+				"description": "sk_ only."
+			},
+			"FilterAttr": {
+				"name": "filter[attr.<key>]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "Facet filter: comma-separated option values (OR within a key, AND across keys). `filter[<key>]` works too for any attribute key that is not a reserved filter name."
+			},
+			"FilterBrandSlug": {
+				"name": "filter[brand]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "Comma-separated brand slugs."
+			},
+			"FilterPriceMinAlias": {
+				"name": "filter[price_min]",
+				"in": "query",
+				"schema": {
+					"type": "integer"
+				},
+				"description": "Alias of filter[priceMin]."
+			},
+			"FilterPriceMaxAlias": {
+				"name": "filter[price_max]",
+				"in": "query",
+				"schema": {
+					"type": "integer"
+				},
+				"description": "Alias of filter[priceMax]."
+			},
+			"Q": {
+				"name": "q",
+				"in": "query",
+				"schema": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"description": "Words (up to 5); each must start a word of the item's title, SKUs or tags (accents and case ignored). Full-text search belongs to Site Search."
+			},
+			"Page": {
+				"name": "page",
+				"in": "query",
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000
+				},
+				"description": "Offset pages instead of the cursor: the response has page, next (the next page number or null) and total."
+			},
+			"Include": {
+				"name": "include",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "Comma-separated: facets (attribute facet counts and the price range of the listed items), total."
+			},
+			"FilterItem": {
+				"name": "filter[itemId]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"FilterParent": {
+				"name": "filter[parentId]",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "A collection id, or root."
+			},
+			"Tree": {
+				"name": "tree",
+				"in": "query",
+				"schema": {
+					"type": "boolean"
+				}
+			},
+			"Id": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"Ref": {
+				"name": "ref",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Id or slug (old slugs resolve and answer redirectFrom)."
+			},
+			"IfMatch": {
+				"name": "If-Match",
+				"in": "header",
+				"schema": {
+					"type": "string"
+				},
+				"description": "The item version you read; a different current version answers 412 version_mismatch."
+			},
+			"Ctx": {
+				"name": "ctx",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				},
+				"description": "Page context of the Loader's element stub (JSON: path, itemId, pageType)."
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"type": "object",
+							"properties": {
+								"type": {
+									"type": "string"
+								},
+								"title": {
+									"type": "string"
+								},
+								"status": {
+									"type": "integer"
+								},
+								"detail": {
+									"type": "string"
+								},
+								"instance": {
+									"type": "string"
+								},
+								"requestId": {
+									"type": "string"
+								},
+								"errors": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"path": {
+												"type": "string"
+											},
+											"code": {
+												"type": "string"
+											},
+											"message": {
+												"type": "string"
+											}
+										}
+									}
+								}
+							}
+						},
+						"example": {
+							"type": "https://catalog.example.com/problems/validation_failed",
+							"title": "Validation failed",
+							"status": 422,
+							"detail": "The request is not valid.",
+							"instance": "/v1/items",
+							"requestId": "req_1",
+							"errors": [
+								{
+									"path": "/title",
+									"code": "required",
+									"message": "required"
+								}
+							]
+						}
+					}
+				}
+			}
+		},
+		"schemas": {
+			"PublicItem": {
+				"type": "object",
+				"description": "An item as shoppers see it (pk_): public items only, public custom fields, stock as a state; never cost.",
+				"properties": {
+					"id": {},
+					"slug": {},
+					"url": {},
+					"type": {},
+					"kind": {},
+					"requiresShipping": {},
+					"title": {},
+					"summary": {},
+					"description": {},
+					"seo": {},
+					"lang": {},
+					"brand": {},
+					"collectionIds": {},
+					"attributes": {},
+					"custom": {},
+					"tags": {},
+					"currency": {},
+					"priceMin": {},
+					"priceMax": {},
+					"price": {},
+					"compareAtPrice": {},
+					"image": {},
+					"inStock": {},
+					"options": {},
+					"variants": {},
+					"media": {},
+					"createdAt": {},
+					"updatedAt": {}
+				},
+				"example": {
+					"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+					"slug": "linen-shirt",
+					"url": "https://shop.example.com/items/linen-shirt",
+					"type": "item",
+					"kind": "physical",
+					"requiresShipping": true,
+					"title": "Linen shirt",
+					"summary": "Breathable summer shirt.",
+					"description": "100% linen.",
+					"seo": {
+						"title": null,
+						"description": null
+					},
+					"lang": null,
+					"brand": {
+						"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+						"slug": "acme",
+						"name": "Acme"
+					},
+					"collectionIds": ["col_0mf2k3x1rabcdefghjkmnpqr"],
+					"attributes": {
+						"material": "linen"
+					},
+					"custom": {},
+					"tags": ["summer"],
+					"currency": "EUR",
+					"priceMin": 4900,
+					"priceMax": 4900,
+					"price": 4900,
+					"compareAtPrice": 5900,
+					"image": "https://cdn.example.com/items/linen-shirt.jpg",
+					"inStock": true,
+					"options": [
+						{
+							"key": "size",
+							"label": "Size",
+							"values": [
+								{
+									"value": "m",
+									"label": "M"
+								}
+							]
+						},
+						{
+							"key": "color",
+							"label": "Color",
+							"values": [
+								{
+									"value": "navy",
+									"label": "Navy"
+								}
+							]
+						}
+					],
+					"variants": [
+						{
+							"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+							"sku": "LS-M-NAVY",
+							"title": null,
+							"options": {
+								"size": "m",
+								"color": "navy"
+							},
+							"price": 4900,
+							"compareAtPrice": 5900,
+							"availability": "in_stock",
+							"purchasable": true,
+							"mediaIds": []
+						}
+					],
+					"media": [
+						{
+							"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+							"kind": "image",
+							"url": "https://cdn.example.com/items/linen-shirt.jpg",
+							"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+							"alt": "Linen shirt",
+							"role": "main",
+							"width": 1200,
+							"height": 1200,
+							"variantIds": [],
+							"position": 0
+						}
+					],
+					"createdAt": "2026-10-01T09:00:00.000Z",
+					"updatedAt": "2026-10-01T10:00:00.000Z"
+				}
+			},
+			"OwnerItem": {
+				"type": "object",
+				"description": "An item for the merchant (sk_): every field; variant cost only with api.expose_cost.",
+				"properties": {
+					"id": {},
+					"slug": {},
+					"previousSlugs": {},
+					"externalId": {},
+					"url": {},
+					"type": {},
+					"status": {},
+					"baseStatus": {},
+					"title": {},
+					"summary": {},
+					"description": {},
+					"brandId": {},
+					"collectionIds": {},
+					"attributes": {},
+					"custom": {},
+					"tags": {},
+					"currency": {},
+					"itemCurrency": {},
+					"options": {},
+					"optionPool": {},
+					"variants": {},
+					"media": {},
+					"seo": {},
+					"translations": {},
+					"publishAt": {},
+					"unpublishAt": {},
+					"priceMin": {},
+					"priceMax": {},
+					"available": {},
+					"inStock": {},
+					"version": {},
+					"createdAt": {},
+					"updatedAt": {},
+					"deletedAt": {}
+				},
+				"example": {
+					"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+					"slug": "linen-shirt",
+					"previousSlugs": [],
+					"externalId": null,
+					"url": "https://shop.example.com/items/linen-shirt",
+					"type": "item",
+					"status": "active",
+					"baseStatus": "active",
+					"title": "Linen shirt",
+					"summary": "Breathable summer shirt.",
+					"description": "100% linen.",
+					"brandId": "brd_0mf2k3x1rabcdefghjkmnpqr",
+					"collectionIds": ["col_0mf2k3x1rabcdefghjkmnpqr"],
+					"attributes": {
+						"material": "linen"
+					},
+					"custom": {},
+					"tags": ["summer"],
+					"currency": "EUR",
+					"itemCurrency": null,
+					"options": ["size", "color"],
+					"optionPool": {},
+					"variants": [
+						{
+							"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+							"sku": "LS-M-NAVY",
+							"title": null,
+							"options": {
+								"size": "m",
+								"color": "navy"
+							},
+							"price": 4900,
+							"compareAtPrice": 5900,
+							"mediaIds": [],
+							"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+							"barcode": "4006381333931",
+							"cost": 2100,
+							"quantity": 12,
+							"trackInventory": null,
+							"backorder": null,
+							"forceOutOfStock": false,
+							"status": "active",
+							"position": 0,
+							"restockedAt": null,
+							"availability": "in_stock",
+							"purchasable": true,
+							"lowStock": false
+						}
+					],
+					"media": [
+						{
+							"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+							"kind": "image",
+							"url": "https://cdn.example.com/items/linen-shirt.jpg",
+							"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+							"alt": "Linen shirt",
+							"role": "main",
+							"width": 1200,
+							"height": 1200,
+							"variantIds": [],
+							"position": 0,
+							"storageKey": null
+						}
+					],
+					"seo": {
+						"title": null,
+						"description": null
+					},
+					"translations": {},
+					"publishAt": null,
+					"unpublishAt": null,
+					"priceMin": 4900,
+					"priceMax": 4900,
+					"available": 12,
+					"inStock": true,
+					"version": 3,
+					"createdAt": "2026-10-01T09:00:00.000Z",
+					"updatedAt": "2026-10-01T10:00:00.000Z",
+					"deletedAt": null
+				}
+			},
+			"OwnerVariant": {
+				"type": "object",
+				"properties": {
+					"id": {},
+					"sku": {},
+					"title": {},
+					"options": {},
+					"price": {},
+					"compareAtPrice": {},
+					"mediaIds": {},
+					"itemId": {},
+					"barcode": {},
+					"cost": {},
+					"quantity": {},
+					"trackInventory": {},
+					"backorder": {},
+					"forceOutOfStock": {},
+					"status": {},
+					"position": {},
+					"restockedAt": {},
+					"availability": {},
+					"purchasable": {},
+					"lowStock": {}
+				},
+				"example": {
+					"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+					"sku": "LS-M-NAVY",
+					"title": null,
+					"options": {
+						"size": "m",
+						"color": "navy"
+					},
+					"price": 4900,
+					"compareAtPrice": 5900,
+					"mediaIds": [],
+					"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+					"barcode": "4006381333931",
+					"cost": 2100,
+					"quantity": 12,
+					"trackInventory": null,
+					"backorder": null,
+					"forceOutOfStock": false,
+					"status": "active",
+					"position": 0,
+					"restockedAt": null,
+					"availability": "in_stock",
+					"purchasable": true,
+					"lowStock": false
+				}
+			},
+			"PublicVariant": {
+				"type": "object",
+				"properties": {
+					"id": {},
+					"sku": {},
+					"title": {},
+					"options": {},
+					"price": {},
+					"compareAtPrice": {},
+					"availability": {},
+					"purchasable": {},
+					"mediaIds": {}
+				},
+				"example": {
+					"id": "var_0mf2k3x1rabcdefghjkmnpqr",
+					"sku": "LS-M-NAVY",
+					"title": null,
+					"options": {
+						"size": "m",
+						"color": "navy"
+					},
+					"price": 4900,
+					"compareAtPrice": 5900,
+					"availability": "in_stock",
+					"purchasable": true,
+					"mediaIds": []
+				}
+			},
+			"Media": {
+				"type": "object",
+				"properties": {
+					"id": {},
+					"kind": {},
+					"url": {},
+					"srcset": {},
+					"alt": {},
+					"role": {},
+					"width": {},
+					"height": {},
+					"variantIds": {},
+					"position": {}
+				},
+				"example": {
+					"id": "med_0mf2k3x1rabcdefghjkmnpqr",
+					"kind": "image",
+					"url": "https://cdn.example.com/items/linen-shirt.jpg",
+					"srcset": "https://cdn.example.com/items/linen-shirt.jpg?w=320 320w, https://cdn.example.com/items/linen-shirt.jpg?w=640 640w",
+					"alt": "Linen shirt",
+					"role": "main",
+					"width": 1200,
+					"height": 1200,
+					"variantIds": [],
+					"position": 0
+				}
+			},
+			"Attribute": {
+				"type": "object",
+				"properties": {
+					"id": {},
+					"key": {},
+					"label": {},
+					"type": {},
+					"unit": {},
+					"options": {},
+					"filterable": {},
+					"variantOption": {},
+					"cardPosition": {},
+					"collectionIds": {},
+					"visibility": {},
+					"position": {},
+					"required": {}
+				},
+				"example": {
+					"id": "att_0mf2k3x1rabcdefghjkmnpqr",
+					"key": "size",
+					"label": "Size",
+					"type": "select",
+					"unit": null,
+					"options": [
+						{
+							"value": "s",
+							"label": "S",
+							"display": "S"
+						},
+						{
+							"value": "m",
+							"label": "M",
+							"display": "M"
+						}
+					],
+					"filterable": true,
+					"variantOption": true,
+					"cardPosition": "title_chips",
+					"collectionIds": [],
+					"visibility": {
+						"type": "always"
+					},
+					"position": 0,
+					"required": false
+				}
+			},
+			"Collection": {
+				"type": "object",
+				"properties": {
+					"id": {},
+					"slug": {},
+					"title": {},
+					"heading": {},
+					"description": {},
+					"parentId": {},
+					"ancestors": {},
+					"depth": {},
+					"position": {},
+					"seo": {},
+					"image": {}
+				},
+				"example": {
+					"id": "col_0mf2k3x1rabcdefghjkmnpqr",
+					"slug": "shirts",
+					"title": "Shirts",
+					"heading": "Summer shirts",
+					"description": "Light shirts for warm days.",
+					"parentId": null,
+					"ancestors": [],
+					"depth": 1,
+					"position": 0,
+					"seo": {
+						"title": null,
+						"description": null
+					},
+					"image": null
+				}
+			},
+			"Brand": {
+				"type": "object",
+				"properties": {
+					"id": {},
+					"slug": {},
+					"name": {},
+					"description": {},
+					"logo": {},
+					"collectionIds": {},
+					"position": {}
+				},
+				"example": {
+					"id": "brd_0mf2k3x1rabcdefghjkmnpqr",
+					"slug": "acme",
+					"name": "Acme",
+					"description": null,
+					"logo": {
+						"url": "https://cdn.example.com/brands/acme.svg",
+						"alt": "Acme"
+					},
+					"collectionIds": [],
+					"position": 0
+				}
+			},
+			"Reservation": {
+				"type": "object",
+				"properties": {
+					"id": {},
+					"kind": {},
+					"status": {},
+					"orderId": {},
+					"lines": {},
+					"expiresAt": {},
+					"createdAt": {}
+				},
+				"example": {
+					"id": "res_0mf2k3x1rabcdefghjkmnpqr",
+					"kind": "reservation",
+					"status": "held",
+					"orderId": "ord_1001",
+					"lines": [
+						{
+							"itemId": "itm_0mf2k3x1rabcdefghjkmnpqr",
+							"variantId": "var_0mf2k3x1rabcdefghjkmnpqr",
+							"quantity": 1
+						}
+					],
+					"expiresAt": "2026-10-01T10:30:00.000Z",
+					"createdAt": "2026-10-01T10:00:00.000Z"
+				}
+			},
+			"VariantInput": {
+				"type": "object",
+				"properties": {
+					"sku": {
+						"type": ["string", "null"]
+					},
+					"barcode": {
+						"type": ["string", "null"]
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"options": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "string"
+						}
+					},
+					"price": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Minor units."
+					},
+					"compareAtPrice": {
+						"type": ["integer", "null"]
+					},
+					"cost": {
+						"type": ["integer", "null"],
+						"description": "Private: never returned to pk_ keys, never published."
+					},
+					"quantity": {
+						"type": "integer"
+					},
+					"trackInventory": {
+						"type": ["boolean", "null"]
+					},
+					"backorder": {
+						"type": ["string", "null"],
+						"enum": ["deny", "allow", null]
+					},
+					"forceOutOfStock": {
+						"type": "boolean"
+					},
+					"status": {
+						"type": "string",
+						"enum": ["active", "inactive"]
+					},
+					"mediaIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"position": {
+						"type": "integer"
+					}
+				}
+			},
+			"MediaInput": {
+				"type": "object",
+				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": ["image", "video"]
+					},
+					"url": {
+						"type": "string",
+						"format": "uri"
+					},
+					"key": {
+						"type": "string",
+						"description": "Object key in the merchant's storage."
+					},
+					"alt": {
+						"type": ["string", "null"]
+					},
+					"role": {
+						"type": ["string", "null"]
+					},
+					"width": {
+						"type": ["integer", "null"]
+					},
+					"height": {
+						"type": ["integer", "null"]
+					},
+					"variantIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"position": {
+						"type": "integer"
+					}
+				}
+			},
+			"ItemInput": {
+				"type": "object",
+				"properties": {
+					"title": {
+						"type": "string",
+						"maxLength": 300
+					},
+					"slug": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"description": "A key of items.item_types."
+					},
+					"status": {
+						"type": "string",
+						"description": "A key of items.statuses."
+					},
+					"summary": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"brandId": {
+						"type": ["string", "null"]
+					},
+					"collectionIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"attributes": {
+						"type": "object"
+					},
+					"custom": {
+						"type": "object",
+						"description": "Values of items.custom_fields."
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"currency": {
+						"type": ["string", "null"],
+						"description": "Only with items.item_currency."
+					},
+					"options": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						},
+						"description": "Variant dimensions (attribute keys of variantOption attributes)."
+					},
+					"optionPool": {
+						"type": "object",
+						"additionalProperties": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"seo": {
+						"type": "object"
+					},
+					"translations": {
+						"type": "object"
+					},
+					"publishAt": {
+						"type": ["string", "null"]
+					},
+					"unpublishAt": {
+						"type": ["string", "null"]
+					},
+					"externalId": {
+						"type": ["string", "null"]
+					},
+					"variants": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/VariantInput"
+						},
+						"description": "Create only."
+					},
+					"media": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/MediaInput"
+						},
+						"description": "Create only."
+					},
+					"price": {
+						"type": "integer",
+						"description": "Create only: shorthand for a single variant (with sku, barcode, quantity, compareAtPrice, cost)."
+					},
+					"quantity": {
+						"type": "integer"
+					},
+					"sku": {
+						"type": "string"
+					},
+					"compareAtPrice": {
+						"type": "integer"
+					},
+					"cost": {
+						"type": "integer"
+					}
+				}
+			},
+			"AttributeInput": {
+				"type": "object",
+				"properties": {
+					"key": {
+						"type": "string"
+					},
+					"label": {
+						"type": "string"
+					},
+					"type": {
+						"type": "string",
+						"enum": ["text", "number", "boolean", "select", "multi_select"]
+					},
+					"unit": {
+						"type": ["string", "null"]
+					},
+					"options": {
+						"type": "array",
+						"items": {
+							"type": ["object", "string"]
+						}
+					},
+					"filterable": {
+						"type": "boolean"
+					},
+					"variantOption": {
+						"type": "boolean"
+					},
+					"cardPosition": {
+						"type": "string"
+					},
+					"collectionIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"visibility": {
+						"type": "object"
+					},
+					"position": {
+						"type": "integer"
+					},
+					"required": {
+						"type": "boolean"
+					}
+				}
+			},
+			"CollectionInput": {
+				"type": "object",
+				"properties": {
+					"title": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"heading": {
+						"type": ["string", "null"]
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"parentId": {
+						"type": ["string", "null"]
+					},
+					"position": {
+						"type": "integer"
+					},
+					"visible": {
+						"type": "boolean"
+					},
+					"seo": {
+						"type": "object"
+					},
+					"image": {
+						"type": "object"
+					}
+				}
+			},
+			"BrandInput": {
+				"type": "object",
+				"properties": {
+					"name": {
+						"type": "string"
+					},
+					"slug": {
+						"type": "string"
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"logo": {
+						"type": "object"
+					},
+					"collectionIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"visible": {
+						"type": "boolean"
+					},
+					"position": {
+						"type": "integer"
+					}
+				}
+			}
+		}
+	}
+}

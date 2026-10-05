@@ -1,0 +1,94 @@
+{
+	"type": "object",
+	"title": "Price-drop and back-in-stock hook",
+	"additionalProperties": false,
+	"properties": {
+		"price_drops": {
+			"type": "boolean",
+			"title": "Publish price drops",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Signals", "order": 1 }
+		},
+		"back_in_stock": {
+			"type": "boolean",
+			"title": "Publish back-in-stock",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Signals", "order": 2 }
+		},
+		"min_drop_percent": {
+			"type": "integer",
+			"title": "Smallest price drop (percent)",
+			"description": "Against the price the customer saw when saving the item (or the last price they were told about).",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 95,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Price drops", "order": 3 }
+		},
+		"min_drop_amount": {
+			"type": "integer",
+			"title": "Smallest price drop (minor units)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 10000000000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Price drops", "order": 4 }
+		},
+		"cooldown_hours": {
+			"type": "integer",
+			"title": "Quiet time per saved item after a signal (hours)",
+			"default": 24,
+			"minimum": 0,
+			"maximum": 720,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Signals", "order": 5 }
+		},
+		"in_stock_threshold": {
+			"type": "integer",
+			"title": "Units that count as in stock",
+			"default": 1,
+			"minimum": 1,
+			"maximum": 1000000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Stock", "order": 6 }
+		},
+		"locations": {
+			"type": "array",
+			"title": "Stock locations that count",
+			"description": "Location ids of inventory.changed@1 to use; empty = every event (location or not).",
+			"default": [],
+			"maxItems": 50,
+			"uniqueItems": true,
+			"items": { "type": "string", "minLength": 1, "maxLength": 128 },
+			"x-kind": "config",
+			"x-ui": { "widget": "tags", "group": "Stock", "order": 7 }
+		},
+		"accept_customer_events": {
+			"type": "boolean",
+			"title": "Trust price and stock events from browsers",
+			"description": "Off: only events from the merchant's servers (sk_ keys, merchant/staff/system actors) or Catalog count.",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Security", "order": 8 }
+		},
+		"include_email": {
+			"type": "boolean",
+			"title": "Include the customer's e-mail in published events",
+			"description": "Off: events carry only the customer's subject (login id); on: also the e-mail from their login token, so a messaging product can reach them.",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Privacy", "order": 9 }
+		},
+		"max_lists_per_event": {
+			"type": "integer",
+			"title": "Opted-in lists checked per event",
+			"default": 1000,
+			"minimum": 1,
+			"maximum": 10000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 10 }
+		}
+	}
+}

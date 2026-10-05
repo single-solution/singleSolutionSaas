@@ -1,0 +1,354 @@
+{
+	"ssps": "1",
+	"product": {
+		"slug": "signups",
+		"name": "Signups & Identity",
+		"kind": "service",
+		"version": "1.0.0",
+		"category": "engagement",
+		"description": "Passwordless sign-in for any website (one-time codes by e-mail, SMS or WhatsApp through the merchant's own messaging, magic links), customer profiles, sessions as the website's own identity issuer (EdDSA JWTs + JWKS), account pages, risk checks, consent and self-service data rights — all data in the merchant's own database."
+	},
+	"endpoints": {
+		"base": "https://signups.example.com",
+		"dashboard": "/dashboard",
+		"demo": "/dashboard",
+		"events": "/.well-known/ss-events",
+		"register": "/.well-known/ss-register"
+	},
+	"capabilities": {
+		"adminLaunch": true,
+		"identityIssuer": true,
+		"sandbox": true,
+		"localEnforcement": [
+			"limit:otp.max_sends_per_identity_hour",
+			"limit:otp.max_sends_per_ip_hour",
+			"limit:otp.global_sends_per_hour",
+			"limit:otp.max_attempts",
+			"limit:magic_link.global_sends_per_hour",
+			"limit:sessions.max_sessions_per_customer"
+		],
+		"offlineGrace": "PT24H"
+	},
+	"scopes": ["events.subscribe:order.*", "events.publish:customer.*"],
+	"requires": {
+		"resources": ["database"]
+	},
+	"events": {
+		"consumes": ["order.placed@1", "order.completed@1", "order.cancelled@1", "order.refunded@1"],
+		"publishes": [
+			"signups.customer_created@1",
+			"signups.signed_in@1",
+			"customer.created@1",
+			"customer.signed_in@1",
+			"customer.updated@1"
+		]
+	},
+	"budget": {
+		"shared": 1
+	},
+	"elements": [
+		{
+			"key": "profile",
+			"name": "Customer profiles",
+			"description": "Customers and their profiles: the merchant's field schema, international addresses, custom fields and verification badges; server import and administration.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 200
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": [],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/profile.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"customFields": ["customer"],
+			"api": {
+				"resources": ["customers", "profile"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "sessions",
+			"name": "Sessions & identity issuer",
+			"description": "Signups becomes the website's identity issuer: EdDSA access tokens any product verifies offline, a per-website JWKS with rotating keys, rotating refresh tokens with reuse detection, device list, revoke one or all.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 300
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["profile"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/sessions.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["sessions", "issuer"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "otp",
+			"name": "One-time codes",
+			"description": "Sign in with a code sent by e-mail, SMS or WhatsApp through the merchant's own messaging connector: hashed codes, atomic attempt budgets, cooldowns, per-identity / IP / website caps, uniform anti-enumeration answers.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 300,
+				"metered": [
+					{
+						"unit": "otp_send",
+						"perUnit": 2,
+						"included": {
+							"starter": 500,
+							"pro": 5000
+						}
+					}
+				]
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["sessions"],
+			"requires": {
+				"resources": ["database", "messaging"]
+			},
+			"features": {
+				"$ref": "schemas/otp.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"experiments": true,
+			"api": {
+				"resources": ["otp"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "magic_link",
+			"name": "Magic links",
+			"description": "Sign in from a single-use e-mail link back to the website's own domain (hashed tokens, redirect allow-list, optional same-device binding).",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 200,
+				"metered": [
+					{
+						"unit": "magic_link_send",
+						"perUnit": 2,
+						"included": {
+							"starter": 200,
+							"pro": 2000
+						}
+					}
+				]
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["sessions"],
+			"requires": {
+				"resources": ["database", "messaging"]
+			},
+			"features": {
+				"$ref": "schemas/magic_link.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["magic-links"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "account_pages",
+			"name": "Account pages",
+			"description": "The signed-in customer's account: profile, addresses, devices and sessions, orders, consents and data requests — drop-in, headless or API.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 4
+			},
+			"dependsOn": ["sessions"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/account_pages.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"experiments": true,
+			"api": {
+				"resources": ["account"]
+			},
+			"headless": "headless/account.js#createAccount",
+			"renderer": "ui/account.js#render",
+			"variants": ["tabs", "stacked"],
+			"slots": ["before", "after", "empty"],
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "widget",
+			"name": "Sign-in widget",
+			"description": "Sign-in UI (modal or inline): identifier, code or link, consent, signed-in state; drop-in or headless, on the otp / magic_link API.",
+			"modes": ["A", "B"],
+			"stateful": false,
+			"price": {
+				"hourly": 0
+			},
+			"budget": {
+				"js": 5
+			},
+			"dependsOn": ["sessions"],
+			"features": {
+				"$ref": "schemas/widget.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"headless": "headless/signIn.js#createSignIn",
+			"renderer": "ui/signIn.js#render",
+			"variants": ["modal", "inline"],
+			"slots": ["before", "after", "signed_in"],
+			"a11y": {
+				"role": "dialog",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "risk",
+			"name": "Risk checks",
+			"description": "Disposable e-mail block list, new-device notices, velocity limits per IP (distinct identities, failed verifications) and a risk event log.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["sessions"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/risk.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["risk-events"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "consent",
+			"name": "Terms acceptance",
+			"description": "Versioned terms / privacy acceptance captured at sign-up and asked again when a required document changes.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["profile"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/consent.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["consents"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "data_rights",
+			"name": "Data rights",
+			"description": "Self-service data export and account deletion with a cooling-off period.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["profile"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/data_rights.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["data-requests"]
+			},
+			"headless": null,
+			"renderer": null
+		}
+	],
+	"plans": [
+		{
+			"code": "starter",
+			"name": "Starter",
+			"description": "Passwordless codes, profiles, sessions as the website's identity issuer, the sign-in widget and account pages.",
+			"elements": ["profile", "sessions", "otp", "widget", "account_pages"],
+			"addons": ["magic_link", "risk", "consent", "data_rights"]
+		},
+		{
+			"code": "pro",
+			"name": "Pro",
+			"description": "Everything: codes and magic links, risk checks, consent capture and self-service data rights, higher limits.",
+			"elements": ["profile", "sessions", "otp", "magic_link", "widget", "account_pages", "risk", "consent", "data_rights"]
+		}
+	],
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
+	"trialHours": 48,
+	"retention": {
+		"challenges": "P1D",
+		"counters": "P2D",
+		"sessions": "P365D",
+		"risk_events": "P730D",
+		"orders": "P730D"
+	}
+}

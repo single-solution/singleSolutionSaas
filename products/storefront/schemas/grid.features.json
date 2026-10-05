@@ -1,0 +1,377 @@
+{
+	"type": "object",
+	"title": "Grid features",
+	"additionalProperties": false,
+	"properties": {
+		"source": {
+			"type": "string",
+			"title": "Data source",
+			"description": "page: items embedded in the page; json: a public JSON file; api: the Catalog product (GET /v1/items) through the client the Loader passes when that product is active on the website.",
+			"default": "page",
+			"enum": ["page", "json", "api"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 1,
+				"widget": "select"
+			}
+		},
+		"source_url": {
+			"type": "string",
+			"title": "JSON file URL",
+			"description": "The public JSON file (json source): https, or a path on this website. api sources need no URL or key: the Loader passes the product client.",
+			"default": "",
+			"maxLength": 2048,
+			"pattern": "^(|https://\\S+|/\\S*)$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 2,
+				"widget": "text"
+			}
+		},
+		"page_data_id": {
+			"type": "string",
+			"title": "Page data element id",
+			"description": "Id of the <script type=\"application/json\"> holding the data when the source is the page.",
+			"default": "ss-items",
+			"maxLength": 64,
+			"pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 4,
+				"widget": "text",
+				"advanced": true
+			}
+		},
+		"currency": {
+			"type": "string",
+			"title": "Default currency",
+			"description": "ISO 4217 code for items without their own currency (empty: prices without a currency are not shown).",
+			"default": "",
+			"maxLength": 3,
+			"pattern": "^([A-Z]{3})?$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 5,
+				"widget": "text"
+			}
+		},
+		"locale": {
+			"type": "string",
+			"title": "Locale",
+			"description": "BCP 47 language tag for prices and sorting (empty: the page language).",
+			"default": "",
+			"maxLength": 35,
+			"pattern": "^([A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*)?$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 6,
+				"widget": "text",
+				"advanced": true
+			}
+		},
+		"fields": {
+			"type": "object",
+			"title": "Field mapping",
+			"description": "Which JSON fields hold each item property; | separates alternatives (url|href), dots reach nested values (images.0.url). Empty fields use the defaults.",
+			"default": {},
+			"properties": {
+				"id": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"title": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"href": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"image": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"image_alt": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"price": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"compare_at": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"currency": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"brand": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"badges": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"attributes": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"variants": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"collections": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"in_stock": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"rank": {
+					"type": "string",
+					"maxLength": 200
+				},
+				"created_at": {
+					"type": "string",
+					"maxLength": 200
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Data",
+				"order": 7,
+				"widget": "group",
+				"advanced": true
+			}
+		},
+		"page_size": {
+			"type": "integer",
+			"title": "Items per page",
+			"description": "Items on each page (each page also has its own crawlable URL).",
+			"default": 24,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-plan": {
+				"starter": {
+					"default": 24,
+					"max": 48
+				},
+				"pro": {
+					"default": 24,
+					"max": 100
+				}
+			},
+			"x-ui": {
+				"group": "Listing",
+				"order": 8,
+				"widget": "number"
+			}
+		},
+		"pagination": {
+			"type": "string",
+			"title": "Pagination",
+			"description": "infinite: next pages load as the visitor scrolls; load_more: behind a button; links: page links only. Crawlable page links are always rendered.",
+			"default": "infinite",
+			"enum": ["infinite", "load_more", "links"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Listing",
+				"order": 9,
+				"widget": "select"
+			}
+		},
+		"sort_options": {
+			"type": "array",
+			"title": "Sort options",
+			"description": "Sort orders offered (the first is the default unless set below).",
+			"default": ["relevance", "newest", "price_asc", "price_desc", "title_asc"],
+			"maxItems": 5,
+			"items": {
+				"type": "string",
+				"enum": ["relevance", "newest", "price_asc", "price_desc", "title_asc"]
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Listing",
+				"order": 10,
+				"widget": "list"
+			}
+		},
+		"default_sort": {
+			"type": "string",
+			"title": "Default sort",
+			"description": "Sort order without a sort parameter.",
+			"default": "relevance",
+			"enum": ["relevance", "newest", "price_asc", "price_desc", "title_asc"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Listing",
+				"order": 11,
+				"widget": "select"
+			}
+		},
+		"filter_keys": {
+			"type": "array",
+			"title": "Filter parameters",
+			"description": "Facet keys the grid reads from the URL (the same keys as the filters element: brand, collection, in_stock or attribute keys).",
+			"default": ["brand", "collection", "in_stock"],
+			"maxItems": 20,
+			"items": {
+				"type": "string",
+				"pattern": "^[a-z][a-z0-9_-]{0,63}$",
+				"maxLength": 64
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Listing",
+				"order": 12,
+				"widget": "list"
+			}
+		},
+		"param_prefix": {
+			"type": "string",
+			"title": "URL parameter prefix",
+			"description": "Prefix for this listing’s URL parameters (e.g. g_) when two listings share a page; must match the filters element.",
+			"default": "",
+			"maxLength": 9,
+			"pattern": "^([a-z][a-z0-9]{0,7}_)?$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Listing",
+				"order": 13,
+				"widget": "text",
+				"advanced": true
+			}
+		},
+		"columns": {
+			"type": "object",
+			"title": "Columns",
+			"description": "Columns per breakpoint (mobile < 768 px ≤ tablet < 1024 px ≤ desktop).",
+			"default": {
+				"mobile": 2,
+				"tablet": 3,
+				"desktop": 4
+			},
+			"properties": {
+				"mobile": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 4
+				},
+				"tablet": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 6
+				},
+				"desktop": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 8
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Layout",
+				"order": 14,
+				"widget": "group"
+			}
+		},
+		"card": {
+			"type": "object",
+			"title": "Card",
+			"description": "What each item card shows.",
+			"default": {
+				"show_brand": true,
+				"show_price": true,
+				"show_compare_at": true,
+				"chip_attributes": [],
+				"max_chips": 4,
+				"cycle_chips": true,
+				"cycle_ms": 2000,
+				"show_badges": true,
+				"show_stock": true,
+				"image_ratio": "1/1"
+			},
+			"properties": {
+				"show_brand": {
+					"type": "boolean"
+				},
+				"show_price": {
+					"type": "boolean"
+				},
+				"show_compare_at": {
+					"type": "boolean"
+				},
+				"chip_attributes": {
+					"type": "array",
+					"maxItems": 10,
+					"items": {
+						"type": "string",
+						"maxLength": 64,
+						"pattern": "^[A-Za-z0-9_-]{1,64}$"
+					}
+				},
+				"max_chips": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 12
+				},
+				"cycle_chips": {
+					"type": "boolean"
+				},
+				"cycle_ms": {
+					"type": "integer",
+					"minimum": 1000,
+					"maximum": 10000
+				},
+				"show_badges": {
+					"type": "boolean"
+				},
+				"show_stock": {
+					"type": "boolean"
+				},
+				"image_ratio": {
+					"type": "string",
+					"enum": ["1/1", "4/3", "3/4", "16/9"]
+				}
+			},
+			"additionalProperties": false,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Card",
+				"order": 15,
+				"widget": "group"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders: the shared placement v1 (paths, selectors, page types, devices, referrers, schedule, consent, triggers, frequency incl. cooldown and dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "[data-ss-slot=\"grid\"]",
+						"position": "append"
+					}
+				]
+			},
+			"x-kind": "placement",
+			"x-ui": {
+				"group": "Placement",
+				"order": 16
+			}
+		}
+	}
+}

@@ -1,0 +1,79 @@
+{
+	"type": "object",
+	"title": "Notice bar features",
+	"additionalProperties": false,
+	"properties": {
+		"link_href": {
+			"type": "string",
+			"title": "Link",
+			"description": "Optional link of the announcement (its text is the notice_bar.text string, per language).",
+			"default": "",
+			"maxLength": 2048,
+			"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 1,
+				"widget": "text"
+			}
+		},
+		"tone": {
+			"type": "string",
+			"title": "Tone",
+			"description": "Colour tone from the theme.",
+			"default": "accent",
+			"enum": ["info", "accent", "warning"],
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Appearance",
+				"order": 2,
+				"widget": "select"
+			}
+		},
+		"dismissible": {
+			"type": "boolean",
+			"title": "Dismissible",
+			"description": "Visitors can close the bar; it stays closed for placement.frequency.dismissMemory.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Behaviour",
+				"order": 3,
+				"widget": "switch"
+			}
+		},
+		"sticky": {
+			"type": "boolean",
+			"title": "Sticky",
+			"description": "Keep the bar at the top while scrolling.",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Appearance",
+				"order": 4,
+				"widget": "switch"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders: the shared placement v1 (paths, selectors, page types, devices, referrers, schedule, consent, triggers, frequency incl. cooldown and dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "body",
+						"position": "prepend"
+					}
+				],
+				"frequency": {
+					"dismissMemory": "P7D"
+				}
+			},
+			"x-kind": "placement",
+			"x-ui": {
+				"group": "Placement",
+				"order": 5
+			}
+		}
+	}
+}

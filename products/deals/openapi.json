@@ -1,0 +1,3917 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Deals & Promotions API",
+		"version": "1.0.0",
+		"description": "Mode C API of Deals & Promotions (SSPS v1): automatic offers without codes for any catalog. All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC; deal windows are local time in the deal's or website's zone. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`; replays return the original response. Browser (`pk_`) calls identify the shopper with `SS-Identity` (the website's own login token)."
+	},
+	"servers": [
+		{
+			"url": "https://deals.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"tags": [
+		{
+			"name": "quote_api"
+		},
+		{
+			"name": "badges"
+		},
+		{
+			"name": "price_locks"
+		},
+		{
+			"name": "deals_page"
+		},
+		{
+			"name": "reporting"
+		},
+		{
+			"name": "standard"
+		}
+	],
+	"paths": {
+		"/v1/deals": {
+			"get": {
+				"operationId": "listDeals",
+				"tags": ["quote_api"],
+				"summary": "List deals (not archived unless ?status=archived), with usage and whether each is live now.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"name": "status",
+						"in": "query",
+						"schema": {
+							"enum": ["active", "paused", "archived"]
+						}
+					},
+					{
+						"name": "kind",
+						"in": "query",
+						"schema": {
+							"enum": ["item", "cart", "flash", "bundle"]
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["items", "nextCursor", "hasMore"],
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Deal"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "item",
+											"name": "Weekday evenings: 15% off shoes",
+											"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+											"status": "active",
+											"priority": 0,
+											"class": "item",
+											"badge": {
+												"label": "Evening deal",
+												"tone": "accent"
+											},
+											"schedule": {
+												"timeZone": "Europe/Berlin",
+												"windows": [
+													{
+														"days": ["mon", "tue", "wed", "thu", "fri"],
+														"start": "18:00",
+														"end": "02:00"
+													}
+												]
+											},
+											"scope": {
+												"collections": ["shoes"],
+												"exclude": {
+													"brands": ["luxe"]
+												}
+											},
+											"conditions": {},
+											"action": {
+												"type": "percent",
+												"percent": 15
+											},
+											"bundle": null,
+											"limits": {
+												"perCustomer": 3,
+												"totalUses": null,
+												"stockUnits": null,
+												"maxUnitsPerOrder": null
+											},
+											"combinesWithCoupons": true,
+											"combinesWithLoyalty": true,
+											"custom": {},
+											"version": 1,
+											"createdAt": "2026-09-28T09:00:00.000Z",
+											"updatedAt": "2026-09-28T09:00:00.000Z",
+											"usage": {
+												"uses": 41,
+												"units": 52
+											},
+											"state": {
+												"active": true,
+												"phase": "active",
+												"activeUntil": "2026-10-03T00:00:00.000Z",
+												"nextStart": null,
+												"timeZone": "Europe/Berlin"
+											}
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "createDeal",
+				"tags": ["quote_api"],
+				"summary": "Create a deal. The kind's element must be on (403 kind_disabled); bounds come from the website's configuration (422 validation_failed, 409 deal_limit_reached).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DealInput"
+							},
+							"example": {
+								"kind": "item",
+								"name": "Weekday evenings: 15% off shoes",
+								"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+								"scope": {
+									"collections": ["shoes"],
+									"exclude": {
+										"brands": ["luxe"]
+									}
+								},
+								"action": {
+									"type": "percent",
+									"percent": 15
+								},
+								"schedule": {
+									"timeZone": "Europe/Berlin",
+									"windows": [
+										{
+											"days": ["mon", "tue", "wed", "thu", "fri"],
+											"start": "18:00",
+											"end": "02:00"
+										}
+									]
+								},
+								"limits": {
+									"perCustomer": 3
+								},
+								"badge": {
+									"label": "Evening deal",
+									"tone": "accent"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								},
+								"example": {
+									"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "item",
+									"name": "Weekday evenings: 15% off shoes",
+									"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+									"status": "active",
+									"priority": 0,
+									"class": "item",
+									"badge": {
+										"label": "Evening deal",
+										"tone": "accent"
+									},
+									"schedule": {
+										"timeZone": "Europe/Berlin",
+										"windows": [
+											{
+												"days": ["mon", "tue", "wed", "thu", "fri"],
+												"start": "18:00",
+												"end": "02:00"
+											}
+										]
+									},
+									"scope": {
+										"collections": ["shoes"],
+										"exclude": {
+											"brands": ["luxe"]
+										}
+									},
+									"conditions": {},
+									"action": {
+										"type": "percent",
+										"percent": 15
+									},
+									"bundle": null,
+									"limits": {
+										"perCustomer": 3,
+										"totalUses": null,
+										"stockUnits": null,
+										"maxUnitsPerOrder": null
+									},
+									"combinesWithCoupons": true,
+									"combinesWithLoyalty": true,
+									"custom": {},
+									"version": 1,
+									"createdAt": "2026-09-28T09:00:00.000Z",
+									"updatedAt": "2026-09-28T09:00:00.000Z",
+									"usage": {
+										"uses": 0,
+										"units": 0
+									},
+									"state": {
+										"active": true,
+										"phase": "active",
+										"activeUntil": "2026-10-03T00:00:00.000Z",
+										"nextStart": null,
+										"timeZone": "Europe/Berlin"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/deals:check": {
+			"post": {
+				"operationId": "checkDeal",
+				"tags": ["quote_api"],
+				"summary": "Validate a deal without saving it: field errors, rules@1 diagnostics of its conditions, and its schedule state now.",
+				"x-ss-key-kind": "sk",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DealInput"
+							},
+							"example": {
+								"kind": "item",
+								"name": "Weekday evenings: 15% off shoes",
+								"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+								"scope": {
+									"collections": ["shoes"],
+									"exclude": {
+										"brands": ["luxe"]
+									}
+								},
+								"action": {
+									"type": "percent",
+									"percent": 15
+								},
+								"schedule": {
+									"timeZone": "Europe/Berlin",
+									"windows": [
+										{
+											"days": ["mon", "tue", "wed", "thu", "fri"],
+											"start": "18:00",
+											"end": "02:00"
+										}
+									]
+								},
+								"limits": {
+									"perCustomer": 3
+								},
+								"badge": {
+									"label": "Evening deal",
+									"tone": "accent"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"valid": true,
+									"errors": [],
+									"conditions": {},
+									"schedule": {
+										"active": true,
+										"phase": "active",
+										"activeUntil": "2026-10-03T00:00:00.000Z",
+										"nextStart": null,
+										"timeZone": "Europe/Berlin"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/deals/{id}": {
+			"get": {
+				"operationId": "getDeal",
+				"tags": ["quote_api"],
+				"summary": "One deal.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/DealId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								},
+								"example": {
+									"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "item",
+									"name": "Weekday evenings: 15% off shoes",
+									"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+									"status": "active",
+									"priority": 0,
+									"class": "item",
+									"badge": {
+										"label": "Evening deal",
+										"tone": "accent"
+									},
+									"schedule": {
+										"timeZone": "Europe/Berlin",
+										"windows": [
+											{
+												"days": ["mon", "tue", "wed", "thu", "fri"],
+												"start": "18:00",
+												"end": "02:00"
+											}
+										]
+									},
+									"scope": {
+										"collections": ["shoes"],
+										"exclude": {
+											"brands": ["luxe"]
+										}
+									},
+									"conditions": {},
+									"action": {
+										"type": "percent",
+										"percent": 15
+									},
+									"bundle": null,
+									"limits": {
+										"perCustomer": 3,
+										"totalUses": null,
+										"stockUnits": null,
+										"maxUnitsPerOrder": null
+									},
+									"combinesWithCoupons": true,
+									"combinesWithLoyalty": true,
+									"custom": {},
+									"version": 1,
+									"createdAt": "2026-09-28T09:00:00.000Z",
+									"updatedAt": "2026-09-28T09:00:00.000Z",
+									"usage": {
+										"uses": 41,
+										"units": 52
+									},
+									"state": {
+										"active": true,
+										"phase": "active",
+										"activeUntil": "2026-10-03T00:00:00.000Z",
+										"nextStart": null,
+										"timeZone": "Europe/Berlin"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"patch": {
+				"operationId": "updateDeal",
+				"tags": ["quote_api"],
+				"summary": "JSON Merge Patch of a deal (kind is immutable; 409 conflict on a concurrent change).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/DealId"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"action": {
+									"percent": 20
+								},
+								"badge": {
+									"label": "Evening deal −20%"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								},
+								"example": {
+									"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "item",
+									"name": "Weekday evenings: 15% off shoes",
+									"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+									"status": "active",
+									"priority": 0,
+									"class": "item",
+									"badge": {
+										"label": "Evening deal",
+										"tone": "accent"
+									},
+									"schedule": {
+										"timeZone": "Europe/Berlin",
+										"windows": [
+											{
+												"days": ["mon", "tue", "wed", "thu", "fri"],
+												"start": "18:00",
+												"end": "02:00"
+											}
+										]
+									},
+									"scope": {
+										"collections": ["shoes"],
+										"exclude": {
+											"brands": ["luxe"]
+										}
+									},
+									"conditions": {},
+									"action": {
+										"type": "percent",
+										"percent": 20
+									},
+									"bundle": null,
+									"limits": {
+										"perCustomer": 3,
+										"totalUses": null,
+										"stockUnits": null,
+										"maxUnitsPerOrder": null
+									},
+									"combinesWithCoupons": true,
+									"combinesWithLoyalty": true,
+									"custom": {},
+									"version": 2,
+									"createdAt": "2026-09-28T09:00:00.000Z",
+									"updatedAt": "2026-09-28T09:00:00.000Z",
+									"usage": {
+										"uses": 41,
+										"units": 52
+									},
+									"state": {
+										"active": true,
+										"phase": "active",
+										"activeUntil": "2026-10-03T00:00:00.000Z",
+										"nextStart": null,
+										"timeZone": "Europe/Berlin"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "archiveDeal",
+				"tags": ["quote_api"],
+				"summary": "Archive a deal (soft delete; committed history stays).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/DealId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "archived"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/deals/{id}/pause": {
+			"post": {
+				"operationId": "pauseDeal",
+				"tags": ["quote_api"],
+				"summary": "Pause a deal.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/DealId"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								},
+								"example": {
+									"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "item",
+									"name": "Weekday evenings: 15% off shoes",
+									"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+									"status": "paused",
+									"priority": 0,
+									"class": "item",
+									"badge": {
+										"label": "Evening deal",
+										"tone": "accent"
+									},
+									"schedule": {
+										"timeZone": "Europe/Berlin",
+										"windows": [
+											{
+												"days": ["mon", "tue", "wed", "thu", "fri"],
+												"start": "18:00",
+												"end": "02:00"
+											}
+										]
+									},
+									"scope": {
+										"collections": ["shoes"],
+										"exclude": {
+											"brands": ["luxe"]
+										}
+									},
+									"conditions": {},
+									"action": {
+										"type": "percent",
+										"percent": 15
+									},
+									"bundle": null,
+									"limits": {
+										"perCustomer": 3,
+										"totalUses": null,
+										"stockUnits": null,
+										"maxUnitsPerOrder": null
+									},
+									"combinesWithCoupons": true,
+									"combinesWithLoyalty": true,
+									"custom": {},
+									"version": 1,
+									"createdAt": "2026-09-28T09:00:00.000Z",
+									"updatedAt": "2026-09-28T09:00:00.000Z",
+									"usage": {
+										"uses": 41,
+										"units": 52
+									},
+									"state": {
+										"active": true,
+										"phase": "active",
+										"activeUntil": "2026-10-03T00:00:00.000Z",
+										"nextStart": null,
+										"timeZone": "Europe/Berlin"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/deals/{id}/resume": {
+			"post": {
+				"operationId": "resumeDeal",
+				"tags": ["quote_api"],
+				"summary": "Resume a paused deal.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/DealId"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Deal"
+								},
+								"example": {
+									"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+									"kind": "item",
+									"name": "Weekday evenings: 15% off shoes",
+									"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+									"status": "active",
+									"priority": 0,
+									"class": "item",
+									"badge": {
+										"label": "Evening deal",
+										"tone": "accent"
+									},
+									"schedule": {
+										"timeZone": "Europe/Berlin",
+										"windows": [
+											{
+												"days": ["mon", "tue", "wed", "thu", "fri"],
+												"start": "18:00",
+												"end": "02:00"
+											}
+										]
+									},
+									"scope": {
+										"collections": ["shoes"],
+										"exclude": {
+											"brands": ["luxe"]
+										}
+									},
+									"conditions": {},
+									"action": {
+										"type": "percent",
+										"percent": 15
+									},
+									"bundle": null,
+									"limits": {
+										"perCustomer": 3,
+										"totalUses": null,
+										"stockUnits": null,
+										"maxUnitsPerOrder": null
+									},
+									"combinesWithCoupons": true,
+									"combinesWithLoyalty": true,
+									"custom": {},
+									"version": 1,
+									"createdAt": "2026-09-28T09:00:00.000Z",
+									"updatedAt": "2026-09-28T09:00:00.000Z",
+									"usage": {
+										"uses": 41,
+										"units": 52
+									},
+									"state": {
+										"active": true,
+										"phase": "active",
+										"activeUntil": "2026-10-03T00:00:00.000Z",
+										"nextStart": null,
+										"timeZone": "Europe/Berlin"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/quotes": {
+			"post": {
+				"operationId": "quoteCart",
+				"tags": ["quote_api"],
+				"summary": "Quote a cart: item deals, bundles, cart deals and free shipping under the stacking policy, price locks honoured, upsell hints. Stored for commit (quote_ttl_minutes); metered (`quote`); rate limited (429 + Retry-After). pk_ (browser, the shopper from SS-Identity) or sk_.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/QuoteInput"
+							},
+							"example": {
+								"currency": "EUR",
+								"cartId": "cart_42",
+								"lines": [
+									{
+										"lineId": "1",
+										"itemId": "itm_runner",
+										"variantId": "var_runner_42",
+										"quantity": 1,
+										"unitAmount": 8900,
+										"collections": ["shoes"],
+										"brand": "acme"
+									},
+									{
+										"lineId": "2",
+										"itemId": "itm_socks",
+										"quantity": 3,
+										"unitAmount": 900,
+										"collections": ["socks"]
+									}
+								],
+								"customer": {
+									"id": "cus_123",
+									"segments": ["vip"],
+									"orders": 4
+								},
+								"paymentMethod": "card",
+								"deliveryMethod": "courier",
+								"shippingAmount": 495
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								},
+								"example": {
+									"id": "qte_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "open",
+									"expiresAt": "2026-10-02T18:30:00.000Z",
+									"evaluatedAt": "2026-10-02T17:30:00.000Z",
+									"timeZone": "Europe/Berlin",
+									"cartId": "cart_42",
+									"customerId": "cus_123",
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "1",
+											"itemId": "itm_runner",
+											"variantId": "var_runner_42",
+											"quantity": 1,
+											"unitAmount": 8900,
+											"subtotal": 8900,
+											"itemDiscount": 1335,
+											"discount": 1335,
+											"total": 7565,
+											"deals": [
+												{
+													"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+													"amount": 1335,
+													"units": 1
+												}
+											],
+											"locked": false
+										},
+										{
+											"lineId": "2",
+											"itemId": "itm_socks",
+											"variantId": null,
+											"quantity": 3,
+											"unitAmount": 900,
+											"subtotal": 2700,
+											"itemDiscount": 0,
+											"discount": 0,
+											"total": 2700,
+											"deals": [],
+											"locked": false
+										}
+									],
+									"deals": [
+										{
+											"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "item",
+											"name": "Weekday evenings: 15% off shoes",
+											"class": "item",
+											"amount": 1335,
+											"units": 1,
+											"freeShipping": false,
+											"activeUntil": 1790985600000
+										},
+										{
+											"dealId": "dl_1af2k3x1rabcdefghjkmnpqr",
+											"kind": "cart",
+											"name": "Free shipping over 50.00",
+											"class": "cart",
+											"amount": 0,
+											"units": 0,
+											"freeShipping": true,
+											"activeUntil": null
+										}
+									],
+									"subtotal": 11600,
+									"discountTotal": 1335,
+									"shipping": {
+										"amount": 495,
+										"discount": 495,
+										"free": true
+									},
+									"total": 10265,
+									"loyaltyAllowed": true,
+									"couponsAllowed": true,
+									"hints": [],
+									"locks": [
+										{
+											"lineId": "1",
+											"token": "pl1.eyJ2IjoxLCJ3Ijoid2ViXzEifQ.c2lnbmF0dXJl",
+											"expiresAt": "2026-10-02T17:45:00.000Z"
+										}
+									],
+									"stale": []
+								}
+							}
+						},
+						"headers": {
+							"RateLimit-Limit": {
+								"schema": {
+									"type": "integer"
+								},
+								"description": "quote_api.rate_per_minute"
+							},
+							"RateLimit-Remaining": {
+								"schema": {
+									"type": "integer"
+								}
+							},
+							"RateLimit-Reset": {
+								"schema": {
+									"type": "integer"
+								},
+								"description": "seconds"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/quotes/{id}": {
+			"get": {
+				"operationId": "getQuote",
+				"tags": ["quote_api"],
+				"summary": "A stored quote.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/QuoteId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Quote"
+								},
+								"example": {
+									"id": "qte_0mf2k3x1rabcdefghjkmnpqr",
+									"status": "open",
+									"expiresAt": "2026-10-02T18:30:00.000Z",
+									"evaluatedAt": "2026-10-02T17:30:00.000Z",
+									"timeZone": "Europe/Berlin",
+									"cartId": "cart_42",
+									"customerId": "cus_123",
+									"currency": "EUR",
+									"lines": [
+										{
+											"lineId": "1",
+											"itemId": "itm_runner",
+											"variantId": "var_runner_42",
+											"quantity": 1,
+											"unitAmount": 8900,
+											"subtotal": 8900,
+											"itemDiscount": 1335,
+											"discount": 1335,
+											"total": 7565,
+											"deals": [
+												{
+													"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+													"amount": 1335,
+													"units": 1
+												}
+											],
+											"locked": false
+										},
+										{
+											"lineId": "2",
+											"itemId": "itm_socks",
+											"variantId": null,
+											"quantity": 3,
+											"unitAmount": 900,
+											"subtotal": 2700,
+											"itemDiscount": 0,
+											"discount": 0,
+											"total": 2700,
+											"deals": [],
+											"locked": false
+										}
+									],
+									"deals": [
+										{
+											"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "item",
+											"name": "Weekday evenings: 15% off shoes",
+											"class": "item",
+											"amount": 1335,
+											"units": 1,
+											"freeShipping": false,
+											"activeUntil": 1790985600000
+										},
+										{
+											"dealId": "dl_1af2k3x1rabcdefghjkmnpqr",
+											"kind": "cart",
+											"name": "Free shipping over 50.00",
+											"class": "cart",
+											"amount": 0,
+											"units": 0,
+											"freeShipping": true,
+											"activeUntil": null
+										}
+									],
+									"subtotal": 11600,
+									"discountTotal": 1335,
+									"shipping": {
+										"amount": 495,
+										"discount": 495,
+										"free": true
+									},
+									"total": 10265,
+									"loyaltyAllowed": true,
+									"couponsAllowed": true,
+									"hints": [],
+									"locks": [
+										{
+											"lineId": "1",
+											"token": "pl1.eyJ2IjoxLCJ3Ijoid2ViXzEifQ.c2lnbmF0dXJl",
+											"expiresAt": "2026-10-02T17:45:00.000Z"
+										}
+									],
+									"stale": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/quotes/{id}/commit": {
+			"post": {
+				"operationId": "commitQuote",
+				"tags": ["quote_api"],
+				"summary": "Commit a quote to an order: counts uses, stock and per-customer usage atomically (409 deal_exhausted, quote_expired, quote_committed, total_mismatch), records the application, publishes deals.applied@1 (and deals.exhausted@1). Replays for the same order return 200.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/QuoteId"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/CommitInput"
+							},
+							"example": {
+								"orderId": "ord_1001",
+								"expectedTotal": 10265
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Application"
+								},
+								"example": {
+									"quoteId": "qte_0mf2k3x1rabcdefghjkmnpqr",
+									"orderId": "ord_1001",
+									"status": "committed",
+									"customerId": "cus_123",
+									"currency": "EUR",
+									"subtotal": 11600,
+									"discountTotal": 1335,
+									"total": 10265,
+									"freeShipping": true,
+									"deals": [
+										{
+											"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "item",
+											"amount": 1335,
+											"units": 1
+										},
+										{
+											"dealId": "dl_1af2k3x1rabcdefghjkmnpqr",
+											"kind": "cart",
+											"amount": 0,
+											"units": 0
+										}
+									],
+									"committedAt": "2026-10-02T17:31:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/quotes/{id}/release": {
+			"post": {
+				"operationId": "releaseQuote",
+				"tags": ["quote_api"],
+				"summary": "Release a committed quote (cancelled order): uses and stock are given back once. order.cancelled@1 does the same.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/QuoteId"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Application"
+								},
+								"example": {
+									"quoteId": "qte_0mf2k3x1rabcdefghjkmnpqr",
+									"orderId": "ord_1001",
+									"status": "released",
+									"customerId": "cus_123",
+									"currency": "EUR",
+									"subtotal": 11600,
+									"discountTotal": 1335,
+									"total": 10265,
+									"freeShipping": true,
+									"deals": [],
+									"committedAt": "2026-10-02T17:31:00.000Z",
+									"releasedAt": "2026-10-02T18:30:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/items": {
+			"get": {
+				"operationId": "listItems",
+				"tags": ["quote_api"],
+				"summary": "Synced catalog items (cursor by itemId).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["items", "nextCursor", "hasMore"],
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Item"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"itemId": "itm_runner",
+											"title": "Runner 2",
+											"brand": "acme",
+											"collections": ["shoes"],
+											"attributes": {
+												"size": ["42"]
+											},
+											"price": 8900,
+											"cost": 4100,
+											"currency": "EUR",
+											"stock": 12,
+											"url": "/shoes/runner-2",
+											"image": null,
+											"variants": []
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/items/{itemId}": {
+			"get": {
+				"operationId": "getItem",
+				"tags": ["quote_api"],
+				"summary": "One synced item.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/ItemId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Item"
+								},
+								"example": {
+									"itemId": "itm_runner",
+									"title": "Runner 2",
+									"brand": "acme",
+									"collections": ["shoes"],
+									"attributes": {
+										"size": ["42"]
+									},
+									"price": 8900,
+									"cost": 4100,
+									"currency": "EUR",
+									"stock": 12,
+									"url": "/shoes/runner-2",
+									"image": null,
+									"variants": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"put": {
+				"operationId": "putItem",
+				"tags": ["quote_api"],
+				"summary": "Upsert an item in the catalog mirror (collections, brand, attributes, price, cost, stock, variants). Quotes fill what a cart line does not send from here.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/ItemId"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Item"
+							},
+							"example": {
+								"itemId": "itm_runner",
+								"title": "Runner 2",
+								"brand": "acme",
+								"collections": ["shoes"],
+								"attributes": {
+									"size": "42",
+									"colour": "black"
+								},
+								"price": 8900,
+								"cost": 4100,
+								"currency": "EUR",
+								"stock": 12,
+								"url": "/shoes/runner-2"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Item"
+								},
+								"example": {
+									"itemId": "itm_runner",
+									"title": "Runner 2",
+									"brand": "acme",
+									"collections": ["shoes"],
+									"attributes": {
+										"size": ["42"],
+										"colour": ["black"]
+									},
+									"price": 8900,
+									"cost": 4100,
+									"currency": "EUR",
+									"stock": 12,
+									"url": "/shoes/runner-2",
+									"image": null,
+									"variants": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"delete": {
+				"operationId": "deleteItem",
+				"tags": ["quote_api"],
+				"summary": "Remove an item from the mirror (soft).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/ItemId"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"itemId": "itm_runner",
+									"deleted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/items:batch": {
+			"post": {
+				"operationId": "batchItems",
+				"tags": ["quote_api"],
+				"summary": "Upsert up to quote_api.max_batch_items items; per-item results.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["items"],
+								"properties": {
+									"items": {
+										"type": "array",
+										"items": {
+											"$ref": "#/components/schemas/Item"
+										}
+									}
+								}
+							},
+							"example": {
+								"items": [
+									{
+										"itemId": "itm_runner",
+										"collections": ["shoes"],
+										"price": 8900,
+										"currency": "EUR"
+									},
+									{
+										"itemId": "itm_socks",
+										"collections": ["socks"],
+										"price": 900,
+										"currency": "EUR"
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"results": [
+										{
+											"index": 0,
+											"itemId": "itm_runner",
+											"status": "upserted"
+										},
+										{
+											"index": 1,
+											"itemId": "itm_socks",
+											"status": "upserted"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/offers": {
+			"get": {
+				"operationId": "getOffers",
+				"tags": ["badges"],
+				"summary": "Offers for synced items (product cards): ?items=itm_1,itm_2:var_1&currency=EUR. Price after unconditional item deals, badge, pills, countdown. Metered (`quote`, one per request), rate limited.",
+				"parameters": [
+					{
+						"name": "items",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						},
+						"description": "comma-separated itemId or itemId:variantId"
+					},
+					{
+						"name": "currency",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Offers"
+								},
+								"example": {
+									"currency": "EUR",
+									"items": [
+										{
+											"itemId": "itm_runner",
+											"variantId": null,
+											"currency": "EUR",
+											"quantity": 1,
+											"unitAmount": 8900,
+											"price": 7565,
+											"total": 7565,
+											"discount": 1335,
+											"percentOff": 15,
+											"locked": false,
+											"deals": [
+												{
+													"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+													"kind": "item",
+													"name": "Weekday evenings: 15% off shoes",
+													"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+													"badge": {
+														"label": "Evening deal",
+														"tone": "accent"
+													},
+													"reward": {
+														"type": "percent",
+														"percent": 15
+													},
+													"priority": 0,
+													"schedule": {
+														"active": true,
+														"phase": "active",
+														"activeUntil": "2026-10-03T00:00:00.000Z",
+														"nextStart": null,
+														"timeZone": "Europe/Berlin",
+														"windows": [
+															{
+																"days": ["mon", "tue", "wed", "thu", "fri"],
+																"start": "18:00",
+																"end": "02:00"
+															}
+														]
+													},
+													"stockLeft": null,
+													"conditions": {}
+												}
+											],
+											"badge": {
+												"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+												"kind": "item",
+												"label": "Evening deal",
+												"tone": "accent",
+												"reward": {
+													"type": "percent",
+													"percent": 15
+												}
+											},
+											"pills": [
+												{
+													"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+													"kind": "item",
+													"name": "Weekday evenings: 15% off shoes",
+													"label": "Evening deal",
+													"tone": "accent",
+													"reward": {
+														"type": "percent",
+														"percent": 15
+													},
+													"conditions": {},
+													"conditional": false
+												},
+												{
+													"dealId": "dl_1af2k3x1rabcdefghjkmnpqr",
+													"kind": "cart",
+													"name": "Free shipping over 50.00",
+													"label": null,
+													"tone": "accent",
+													"reward": {
+														"type": "free_shipping"
+													},
+													"conditions": {
+														"minSubtotal": 5000
+													},
+													"conditional": true
+												}
+											],
+											"countdown": {
+												"endsAt": "2026-10-03T00:00:00.000Z"
+											}
+										}
+									],
+									"missing": []
+								}
+							}
+						},
+						"headers": {
+							"RateLimit-Limit": {
+								"schema": {
+									"type": "integer"
+								},
+								"description": "quote_api.rate_per_minute"
+							},
+							"RateLimit-Remaining": {
+								"schema": {
+									"type": "integer"
+								}
+							},
+							"RateLimit-Reset": {
+								"schema": {
+									"type": "integer"
+								},
+								"description": "seconds"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/offers:evaluate": {
+			"post": {
+				"operationId": "evaluateOffers",
+				"tags": ["badges"],
+				"summary": "Offers for items with their prices and attributes in the body (no catalog sync needed); optionally with price locks.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/OffersInput"
+							},
+							"example": {
+								"currency": "EUR",
+								"items": [
+									{
+										"itemId": "itm_runner",
+										"unitAmount": 8900,
+										"collections": ["shoes"]
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Offers"
+								},
+								"example": {
+									"currency": "EUR",
+									"items": [
+										{
+											"itemId": "itm_runner",
+											"variantId": null,
+											"currency": "EUR",
+											"quantity": 1,
+											"unitAmount": 8900,
+											"price": 7565,
+											"total": 7565,
+											"discount": 1335,
+											"percentOff": 15,
+											"locked": false,
+											"deals": [
+												{
+													"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+													"kind": "item",
+													"name": "Weekday evenings: 15% off shoes",
+													"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+													"badge": {
+														"label": "Evening deal",
+														"tone": "accent"
+													},
+													"reward": {
+														"type": "percent",
+														"percent": 15
+													},
+													"priority": 0,
+													"schedule": {
+														"active": true,
+														"phase": "active",
+														"activeUntil": "2026-10-03T00:00:00.000Z",
+														"nextStart": null,
+														"timeZone": "Europe/Berlin",
+														"windows": [
+															{
+																"days": ["mon", "tue", "wed", "thu", "fri"],
+																"start": "18:00",
+																"end": "02:00"
+															}
+														]
+													},
+													"stockLeft": null,
+													"conditions": {}
+												}
+											],
+											"badge": {
+												"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+												"kind": "item",
+												"label": "Evening deal",
+												"tone": "accent",
+												"reward": {
+													"type": "percent",
+													"percent": 15
+												}
+											},
+											"pills": [
+												{
+													"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+													"kind": "item",
+													"name": "Weekday evenings: 15% off shoes",
+													"label": "Evening deal",
+													"tone": "accent",
+													"reward": {
+														"type": "percent",
+														"percent": 15
+													},
+													"conditions": {},
+													"conditional": false
+												},
+												{
+													"dealId": "dl_1af2k3x1rabcdefghjkmnpqr",
+													"kind": "cart",
+													"name": "Free shipping over 50.00",
+													"label": null,
+													"tone": "accent",
+													"reward": {
+														"type": "free_shipping"
+													},
+													"conditions": {
+														"minSubtotal": 5000
+													},
+													"conditional": true
+												}
+											],
+											"countdown": {
+												"endsAt": "2026-10-03T00:00:00.000Z"
+											}
+										}
+									],
+									"missing": []
+								}
+							}
+						},
+						"headers": {
+							"RateLimit-Limit": {
+								"schema": {
+									"type": "integer"
+								},
+								"description": "quote_api.rate_per_minute"
+							},
+							"RateLimit-Remaining": {
+								"schema": {
+									"type": "integer"
+								}
+							},
+							"RateLimit-Reset": {
+								"schema": {
+									"type": "integer"
+								},
+								"description": "seconds"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/price-locks": {
+			"post": {
+				"operationId": "issuePriceLocks",
+				"tags": ["price_locks"],
+				"summary": "Lock the shown price of items for price_locks.ttl_minutes (signed tokens; bound to the identified shopper when configured). Pass the tokens back in POST /v1/quotes `locks`.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					},
+					{
+						"$ref": "#/components/parameters/Identity"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/OffersInput"
+							},
+							"example": {
+								"currency": "EUR",
+								"items": [
+									{
+										"itemId": "itm_runner",
+										"unitAmount": 8900,
+										"collections": ["shoes"]
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"currency": "EUR",
+									"items": [
+										{
+											"itemId": "itm_runner",
+											"variantId": null,
+											"unitAmount": 8900,
+											"price": 7565,
+											"lock": {
+												"token": "pl1.eyJ2IjoxfQ.c2ln",
+												"expiresAt": "2026-10-02T17:45:00.000Z"
+											}
+										}
+									],
+									"missing": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/price-locks:verify": {
+			"post": {
+				"operationId": "verifyPriceLock",
+				"tags": ["price_locks"],
+				"summary": "What a lock token holds and whether it is still valid.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["token"],
+								"properties": {
+									"token": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"token": "pl1.eyJ2IjoxfQ.c2ln"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"valid": true,
+									"reason": null,
+									"itemId": "itm_runner",
+									"variantId": null,
+									"currency": "EUR",
+									"unitAmount": 8900,
+									"price": 7565,
+									"units": 10,
+									"dealIds": ["dl_0mf2k3x1rabcdefghjkmnpqr"],
+									"expiresAt": "2026-10-02T17:45:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/deals-page": {
+			"get": {
+				"operationId": "getDealsPage",
+				"tags": ["deals_page"],
+				"summary": "The deals page: live (and upcoming) deals sorted by configuration, each with an item preview priced with today's deals.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["items", "nextCursor", "hasMore"],
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/DealCard"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+											"kind": "item",
+											"name": "Weekday evenings: 15% off shoes",
+											"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+											"badge": {
+												"label": "Evening deal",
+												"tone": "accent"
+											},
+											"reward": {
+												"type": "percent",
+												"percent": 15
+											},
+											"priority": 0,
+											"schedule": {
+												"active": true,
+												"phase": "active",
+												"activeUntil": "2026-10-03T00:00:00.000Z",
+												"nextStart": null,
+												"timeZone": "Europe/Berlin",
+												"windows": [
+													{
+														"days": ["mon", "tue", "wed", "thu", "fri"],
+														"start": "18:00",
+														"end": "02:00"
+													}
+												]
+											},
+											"stockLeft": null,
+											"conditions": {},
+											"currency": "EUR",
+											"items": [
+												{
+													"itemId": "itm_runner",
+													"variantId": null,
+													"title": "Runner 2",
+													"url": "/shoes/runner-2",
+													"image": "https://cdn.example.com/runner.jpg",
+													"currency": "EUR",
+													"unitAmount": 8900,
+													"price": 7565
+												}
+											],
+											"moreItems": false
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/deals-page/{dealId}/items": {
+			"get": {
+				"operationId": "getDealItems",
+				"tags": ["deals_page"],
+				"summary": "More items of one deal on the deals page.",
+				"parameters": [
+					{
+						"name": "dealId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["items", "nextCursor", "hasMore"],
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/DealItem"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"itemId": "itm_runner",
+											"variantId": null,
+											"title": "Runner 2",
+											"url": "/shoes/runner-2",
+											"image": "https://cdn.example.com/runner.jpg",
+											"currency": "EUR",
+											"unitAmount": 8900,
+											"price": 7565
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reports": {
+			"get": {
+				"operationId": "getReport",
+				"tags": ["reporting"],
+				"summary": "Orders with deals, discount given, revenue, average order with/without deals (uplift), margin impact (items with cost), per-deal uses and units. ?from=&to= (default reporting.window_days).",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"schema": {
+							"type": "string",
+							"format": "date-time"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Report"
+								},
+								"example": {
+									"from": "2026-09-01T00:00:00.000Z",
+									"to": "2026-10-01T00:00:00.000Z",
+									"orders": 128,
+									"ordersWithDeals": 74,
+									"subtotal": 912400,
+									"discountTotal": 61250,
+									"revenue": 851150,
+									"averageOrder": {
+										"withDeals": 7840,
+										"withoutDeals": 6630
+									},
+									"upliftPercent": 18.3,
+									"margin": {
+										"cost": 401000,
+										"gross": 511400,
+										"afterDiscounts": 450150,
+										"discountShare": 12
+									},
+									"deals": [
+										{
+											"dealId": "dl_0mf2k3x1rabcdefghjkmnpqr",
+											"name": "Weekday evenings: 15% off shoes",
+											"kind": "item",
+											"uses": 41,
+											"units": 52,
+											"discount": 24000,
+											"revenue": 310000
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/reports/deals/{dealId}": {
+			"get": {
+				"operationId": "getDealReport",
+				"tags": ["reporting"],
+				"summary": "One deal and its report.",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "dealId",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"deal": {
+										"id": "dl_0mf2k3x1rabcdefghjkmnpqr",
+										"kind": "item",
+										"name": "Weekday evenings: 15% off shoes",
+										"description": "Every weekday from 18:00 to 02:00 (Berlin time).",
+										"status": "active",
+										"priority": 0,
+										"class": "item",
+										"badge": {
+											"label": "Evening deal",
+											"tone": "accent"
+										},
+										"schedule": {
+											"timeZone": "Europe/Berlin",
+											"windows": [
+												{
+													"days": ["mon", "tue", "wed", "thu", "fri"],
+													"start": "18:00",
+													"end": "02:00"
+												}
+											]
+										},
+										"scope": {
+											"collections": ["shoes"],
+											"exclude": {
+												"brands": ["luxe"]
+											}
+										},
+										"conditions": {},
+										"action": {
+											"type": "percent",
+											"percent": 15
+										},
+										"bundle": null,
+										"limits": {
+											"perCustomer": 3,
+											"totalUses": null,
+											"stockUnits": null,
+											"maxUnitsPerOrder": null
+										},
+										"combinesWithCoupons": true,
+										"combinesWithLoyalty": true,
+										"custom": {},
+										"version": 1,
+										"createdAt": "2026-09-28T09:00:00.000Z",
+										"updatedAt": "2026-09-28T09:00:00.000Z",
+										"usage": {
+											"uses": 41,
+											"units": 52
+										},
+										"state": {
+											"active": true,
+											"phase": "active",
+											"activeUntil": "2026-10-03T00:00:00.000Z",
+											"nextStart": null,
+											"timeZone": "Europe/Berlin"
+										}
+									},
+									"report": {
+										"orders": 41,
+										"ordersWithDeals": 41,
+										"discountTotal": 24000
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/entitlement": {
+			"get": {
+				"operationId": "getEntitlement",
+				"tags": ["standard"],
+				"summary": "What this website has enabled (from the cached signed document).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"version": 3,
+									"stale": false,
+									"elements": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/config": {
+			"get": {
+				"operationId": "getConfig",
+				"tags": ["standard"],
+				"summary": "Effective configuration of elements (?element=a,b).",
+				"parameters": [
+					{
+						"name": "element",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"elements": {
+										"quote_api": {
+											"time_zone": "Europe/Berlin"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/strings": {
+			"get": {
+				"operationId": "getStrings",
+				"tags": ["standard"],
+				"summary": "String catalog (?lang=).",
+				"security": [],
+				"parameters": [
+					{
+						"name": "lang",
+						"in": "query",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"lang": "en",
+									"strings": {
+										"reward.percent": "{percent}% off"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/events": {
+			"post": {
+				"operationId": "postEvents",
+				"tags": ["standard"],
+				"summary": "Element/domain events the website pushes into this product.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"events": [
+									{
+										"id": "evt_1",
+										"type": "deals.viewed@1",
+										"occurredAt": "2026-10-01T10:00:00Z",
+										"idempotencyKey": "evt_1",
+										"actor": {
+											"type": "anonymous"
+										},
+										"data": {}
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"results": [
+										{
+											"id": "evt_1",
+											"status": "accepted"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/healthz": {
+			"get": {
+				"operationId": "healthz",
+				"tags": ["standard"],
+				"summary": "Liveness.",
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/readyz": {
+			"get": {
+				"operationId": "readyz",
+				"tags": ["standard"],
+				"summary": "Readiness (product DB; Portal reachability reported as degraded).",
+				"security": [],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"status": "ok",
+									"checks": {}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:export": {
+			"post": {
+				"operationId": "data_export",
+				"tags": ["standard"],
+				"summary": "Portal-signed personal data export (quotes, applications, customer usage).",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["websiteId"],
+								"properties": {
+									"websiteId": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "object"
+									},
+									"requestId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"websiteId": "web_1",
+								"subject": {
+									"customerId": "cus_123"
+								},
+								"requestId": "req_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:anonymize": {
+			"post": {
+				"operationId": "data_anonymize",
+				"tags": ["standard"],
+				"summary": "Portal-signed anonymisation of a customer.",
+				"security": [
+					{
+						"portalSignature": []
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["websiteId"],
+								"properties": {
+									"websiteId": {
+										"type": "string"
+									},
+									"subject": {
+										"type": "object"
+									},
+									"requestId": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"websiteId": "web_1",
+								"subject": {
+									"customerId": "cus_123"
+								},
+								"requestId": "req_2"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websiteId": "web_1"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			},
+			"portalSignature": {
+				"type": "apiKey",
+				"in": "header",
+				"name": "SS-Signature",
+				"description": "Portal-signed request (ss-request.v1)"
+			}
+		},
+		"parameters": {
+			"IdempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				}
+			},
+			"IdempotencyKeyOptional": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				}
+			},
+			"Cursor": {
+				"name": "cursor",
+				"in": "query",
+				"schema": {
+					"type": "string"
+				}
+			},
+			"Limit": {
+				"name": "limit",
+				"in": "query",
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100,
+					"default": 20
+				}
+			},
+			"DealId": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"QuoteId": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				}
+			},
+			"ItemId": {
+				"name": "itemId",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"pattern": "^[\\x21-\\x7e]{1,128}$"
+				}
+			},
+			"Identity": {
+				"name": "SS-Identity",
+				"in": "header",
+				"schema": {
+					"type": "string"
+				},
+				"description": "the shopper's login token from the website's identity issuer (pk_ keys)"
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"$ref": "#/components/schemas/Problem"
+						},
+						"example": {
+							"type": "https://deals.example.com/problems/deal_exhausted",
+							"title": "A deal ran out (uses, stock or per-customer limit); quote the cart again",
+							"status": 409,
+							"detail": "Deal dl_0mf2k3x1rabcdefghjkmnpqr ran out; quote the cart again.",
+							"instance": "/v1/quotes/qte_1/commit",
+							"requestId": "req_0abc"
+						}
+					}
+				}
+			}
+		},
+		"schemas": {
+			"Problem": {
+				"type": "object",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string"
+					},
+					"requestId": {
+						"type": "string"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"path": {
+									"type": "string"
+								},
+								"code": {
+									"type": "string"
+								},
+								"message": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"Window": {
+				"type": "object",
+				"required": ["start", "end"],
+				"additionalProperties": false,
+				"description": "[start, end) local time; start > end wraps past midnight and belongs to the start day; start == end = 24 h.",
+				"properties": {
+					"days": {
+						"type": "array",
+						"items": {
+							"enum": ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+						},
+						"maxItems": 7,
+						"uniqueItems": true
+					},
+					"start": {
+						"type": "string",
+						"pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+					},
+					"end": {
+						"type": "string",
+						"pattern": "^([01]\\d|2[0-4]):[0-5]\\d$"
+					}
+				}
+			},
+			"Schedule": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"startsAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"endsAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					},
+					"timeZone": {
+						"type": ["string", "null"],
+						"description": "IANA zone; default quote_api.time_zone"
+					},
+					"windows": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Window"
+						}
+					}
+				}
+			},
+			"Scope": {
+				"type": "object",
+				"additionalProperties": false,
+				"description": "AND across dimensions, OR within one; empty = storewide.",
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[\\x21-\\x7e]{1,128}$"
+						},
+						"maxItems": 1000,
+						"uniqueItems": true
+					},
+					"variants": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[\\x21-\\x7e]{1,128}$"
+						},
+						"maxItems": 1000,
+						"uniqueItems": true
+					},
+					"collections": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[\\x21-\\x7e]{1,128}$"
+						},
+						"maxItems": 1000,
+						"uniqueItems": true
+					},
+					"brands": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[\\x21-\\x7e]{1,128}$"
+						},
+						"maxItems": 1000,
+						"uniqueItems": true
+					},
+					"attributes": {
+						"type": "array",
+						"maxItems": 20,
+						"items": {
+							"type": "object",
+							"required": ["name", "values"],
+							"properties": {
+								"name": {
+									"type": "string",
+									"pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"
+								},
+								"values": {
+									"type": "array",
+									"items": {
+										"type": "string",
+										"maxLength": 200
+									},
+									"minItems": 1,
+									"maxItems": 100
+								}
+							}
+						}
+					},
+					"minUnitAmount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"maxUnitAmount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"exclude": {
+						"type": "object",
+						"additionalProperties": false,
+						"properties": {
+							"items": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								},
+								"maxItems": 1000,
+								"uniqueItems": true
+							},
+							"variants": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								},
+								"maxItems": 1000,
+								"uniqueItems": true
+							},
+							"collections": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								},
+								"maxItems": 1000,
+								"uniqueItems": true
+							},
+							"brands": {
+								"type": "array",
+								"items": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								},
+								"maxItems": 1000,
+								"uniqueItems": true
+							}
+						}
+					},
+					"when": {
+						"type": "string",
+						"maxLength": 4000,
+						"description": "rules@1 over item, cart, customer"
+					}
+				}
+			},
+			"Conditions": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"minSubtotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"minQuantity": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"paymentMethods": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+						},
+						"maxItems": 50
+					},
+					"deliveryMethods": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+						},
+						"maxItems": 50
+					},
+					"customerSegments": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+						},
+						"maxItems": 50
+					},
+					"newCustomersOnly": {
+						"type": "boolean"
+					},
+					"when": {
+						"type": "string",
+						"maxLength": 4000,
+						"description": "rules@1 over cart, customer"
+					}
+				}
+			},
+			"Action": {
+				"type": "object",
+				"required": ["type"],
+				"description": "item/flash: percent, amount_off (per unit), fixed_price (unit price), buy_x_get_y; cart: percent (maxDiscount), amount_off, free_shipping, tiered; bundle: percent, amount_off, fixed_price (per bundle).",
+				"properties": {
+					"type": {
+						"enum": ["percent", "amount_off", "fixed_price", "buy_x_get_y", "free_shipping", "tiered"]
+					},
+					"percent": {
+						"type": "number",
+						"exclusiveMinimum": 0,
+						"maximum": 100
+					},
+					"amount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"maxDiscount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"buy": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"get": {
+						"type": "integer",
+						"minimum": 1
+					},
+					"basis": {
+						"enum": ["subtotal", "quantity"]
+					},
+					"tiers": {
+						"type": "array",
+						"maxItems": 10,
+						"items": {
+							"type": "object",
+							"required": ["min"],
+							"properties": {
+								"min": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"percent": {
+									"type": "number"
+								},
+								"amount": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"freeShipping": {
+									"type": "boolean"
+								}
+							}
+						}
+					}
+				}
+			},
+			"Bundle": {
+				"type": "object",
+				"required": ["type"],
+				"properties": {
+					"type": {
+						"enum": ["buy_together", "mix_and_match"]
+					},
+					"components": {
+						"type": "array",
+						"minItems": 2,
+						"items": {
+							"type": "object",
+							"required": ["scope", "quantity"],
+							"properties": {
+								"scope": {
+									"$ref": "#/components/schemas/Scope"
+								},
+								"quantity": {
+									"type": "integer",
+									"minimum": 1
+								}
+							}
+						}
+					},
+					"scope": {
+						"$ref": "#/components/schemas/Scope"
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 2
+					},
+					"maxPerOrder": {
+						"type": "integer",
+						"minimum": 1
+					}
+				}
+			},
+			"Limits": {
+				"type": "object",
+				"additionalProperties": false,
+				"properties": {
+					"perCustomer": {
+						"type": ["integer", "null"],
+						"minimum": 1
+					},
+					"totalUses": {
+						"type": ["integer", "null"],
+						"minimum": 1
+					},
+					"stockUnits": {
+						"type": ["integer", "null"],
+						"minimum": 1,
+						"description": "discounted units (bundles: bundles)"
+					},
+					"maxUnitsPerOrder": {
+						"type": ["integer", "null"],
+						"minimum": 1
+					}
+				}
+			},
+			"DealInput": {
+				"type": "object",
+				"required": ["kind", "name", "action"],
+				"additionalProperties": false,
+				"properties": {
+					"kind": {
+						"enum": ["item", "cart", "flash", "bundle"]
+					},
+					"name": {
+						"type": "string",
+						"maxLength": 120
+					},
+					"description": {
+						"type": "string",
+						"maxLength": 2000
+					},
+					"status": {
+						"enum": ["active", "paused"]
+					},
+					"priority": {
+						"type": "integer",
+						"minimum": -1000,
+						"maximum": 1000
+					},
+					"class": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+					},
+					"badge": {
+						"type": "object",
+						"properties": {
+							"label": {
+								"type": "string",
+								"maxLength": 40
+							},
+							"tone": {
+								"enum": ["accent", "urgent", "neutral", "success"]
+							}
+						}
+					},
+					"schedule": {
+						"$ref": "#/components/schemas/Schedule"
+					},
+					"scope": {
+						"$ref": "#/components/schemas/Scope"
+					},
+					"conditions": {
+						"$ref": "#/components/schemas/Conditions"
+					},
+					"action": {
+						"$ref": "#/components/schemas/Action"
+					},
+					"bundle": {
+						"$ref": "#/components/schemas/Bundle"
+					},
+					"limits": {
+						"$ref": "#/components/schemas/Limits"
+					},
+					"combinesWithCoupons": {
+						"type": "boolean"
+					},
+					"combinesWithLoyalty": {
+						"type": "boolean"
+					},
+					"custom": {
+						"type": "object"
+					}
+				}
+			},
+			"Deal": {
+				"allOf": [
+					{
+						"$ref": "#/components/schemas/DealInput"
+					}
+				],
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"version": {
+						"type": "integer"
+					},
+					"usage": {
+						"type": "object",
+						"properties": {
+							"uses": {
+								"type": "integer"
+							},
+							"units": {
+								"type": "integer"
+							}
+						}
+					},
+					"state": {
+						"type": "object",
+						"properties": {
+							"active": {
+								"type": "boolean"
+							},
+							"phase": {
+								"type": "string"
+							},
+							"activeUntil": {
+								"type": ["string", "null"]
+							},
+							"nextStart": {
+								"type": ["string", "null"]
+							},
+							"timeZone": {
+								"type": "string"
+							}
+						}
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"CartLine": {
+				"type": "object",
+				"required": ["itemId", "quantity", "unitAmount"],
+				"additionalProperties": false,
+				"properties": {
+					"lineId": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"itemId": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"variantId": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"quantity": {
+						"type": "integer",
+						"minimum": 1,
+						"maximum": 1000000
+					},
+					"unitAmount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"attributes": {
+						"type": "object",
+						"additionalProperties": {
+							"oneOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								}
+							]
+						}
+					},
+					"collections": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[\\x21-\\x7e]{1,128}$"
+						},
+						"maxItems": 100
+					},
+					"brand": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					}
+				}
+			},
+			"Customer": {
+				"type": "object",
+				"additionalProperties": false,
+				"description": "Server keys only (browsers: SS-Identity), unless quote_api.trust_browser_customer.",
+				"properties": {
+					"id": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"segments": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+						}
+					},
+					"orders": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"tags": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+						}
+					}
+				}
+			},
+			"QuoteInput": {
+				"type": "object",
+				"required": ["currency", "lines"],
+				"additionalProperties": false,
+				"properties": {
+					"currency": {
+						"type": "string",
+						"pattern": "^[A-Z]{3}$"
+					},
+					"cartId": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"lines": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 500,
+						"items": {
+							"$ref": "#/components/schemas/CartLine"
+						}
+					},
+					"customer": {
+						"$ref": "#/components/schemas/Customer"
+					},
+					"paymentMethod": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+					},
+					"deliveryMethod": {
+						"type": "string",
+						"pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+					},
+					"shippingAmount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"locks": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"maxLength": 2048
+						},
+						"description": "price-lock tokens from earlier quotes, offers or POST /v1/price-locks"
+					}
+				}
+			},
+			"Quote": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"status": {
+						"enum": ["open", "committing", "committed", "released"]
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"evaluatedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"timeZone": {
+						"type": "string"
+					},
+					"cartId": {
+						"type": "string"
+					},
+					"customerId": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"lineId": {
+									"type": "string"
+								},
+								"itemId": {
+									"type": "string"
+								},
+								"variantId": {
+									"type": ["string", "null"]
+								},
+								"quantity": {
+									"type": "integer"
+								},
+								"unitAmount": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"subtotal": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"itemDiscount": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"discount": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"total": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"locked": {
+									"type": "boolean"
+								},
+								"deals": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"dealId": {
+												"type": "string"
+											},
+											"amount": {
+												"type": "integer",
+												"minimum": 0,
+												"description": "Integer minor units of the currency."
+											},
+											"units": {
+												"type": "integer"
+											},
+											"locked": {
+												"type": "boolean"
+											}
+										}
+									}
+								}
+							}
+						}
+					},
+					"deals": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"dealId": {
+									"type": "string"
+								},
+								"kind": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"class": {
+									"type": "string"
+								},
+								"amount": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"units": {
+									"type": "integer"
+								},
+								"freeShipping": {
+									"type": "boolean"
+								},
+								"activeUntil": {
+									"type": ["integer", "null"]
+								}
+							}
+						}
+					},
+					"subtotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"discountTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"shipping": {
+						"type": "object",
+						"properties": {
+							"amount": {
+								"type": ["integer", "null"]
+							},
+							"discount": {
+								"type": "integer",
+								"minimum": 0,
+								"description": "Integer minor units of the currency."
+							},
+							"free": {
+								"type": "boolean"
+							}
+						}
+					},
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"loyaltyAllowed": {
+						"type": "boolean"
+					},
+					"couponsAllowed": {
+						"type": "boolean"
+					},
+					"hints": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"dealId": {
+									"type": "string"
+								},
+								"name": {
+									"type": "string"
+								},
+								"basis": {
+									"enum": ["subtotal", "quantity"]
+								},
+								"remaining": {
+									"type": "integer"
+								},
+								"reward": {
+									"type": "object"
+								}
+							}
+						}
+					},
+					"locks": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"lineId": {
+									"type": "string"
+								},
+								"token": {
+									"type": "string"
+								},
+								"expiresAt": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"stale": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"lineId": {
+									"type": "string"
+								},
+								"reason": {
+									"type": "string"
+								}
+							}
+						}
+					}
+				}
+			},
+			"CommitInput": {
+				"type": "object",
+				"required": ["orderId"],
+				"additionalProperties": false,
+				"properties": {
+					"orderId": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"customerId": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"expectedTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "refuse (409 total_mismatch) when the quote total differs"
+					}
+				}
+			},
+			"Application": {
+				"type": "object",
+				"properties": {
+					"quoteId": {
+						"type": "string"
+					},
+					"orderId": {
+						"type": "string"
+					},
+					"status": {
+						"enum": ["committed", "released"]
+					},
+					"customerId": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"subtotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"discountTotal": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"freeShipping": {
+						"type": "boolean"
+					},
+					"deals": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"committedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"releasedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
+			},
+			"Item": {
+				"type": "object",
+				"required": ["itemId"],
+				"additionalProperties": false,
+				"properties": {
+					"itemId": {
+						"type": "string",
+						"pattern": "^[\\x21-\\x7e]{1,128}$"
+					},
+					"title": {
+						"type": "string",
+						"maxLength": 300
+					},
+					"brand": {
+						"type": ["string", "null"]
+					},
+					"collections": {
+						"type": "array",
+						"items": {
+							"type": "string",
+							"pattern": "^[\\x21-\\x7e]{1,128}$"
+						},
+						"maxItems": 100
+					},
+					"attributes": {
+						"type": "object"
+					},
+					"price": {
+						"type": ["integer", "null"],
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"cost": {
+						"type": ["integer", "null"],
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"currency": {
+						"type": "string",
+						"pattern": "^[A-Z]{3}$"
+					},
+					"stock": {
+						"type": ["integer", "null"],
+						"minimum": 0
+					},
+					"url": {
+						"type": ["string", "null"]
+					},
+					"image": {
+						"type": ["string", "null"]
+					},
+					"variants": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"required": ["variantId"],
+							"properties": {
+								"variantId": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								},
+								"title": {
+									"type": "string"
+								},
+								"price": {
+									"type": ["integer", "null"]
+								},
+								"cost": {
+									"type": ["integer", "null"]
+								},
+								"stock": {
+									"type": ["integer", "null"]
+								},
+								"attributes": {
+									"type": "object"
+								}
+							}
+						}
+					}
+				}
+			},
+			"OffersInput": {
+				"type": "object",
+				"required": ["items"],
+				"additionalProperties": false,
+				"properties": {
+					"currency": {
+						"type": "string",
+						"pattern": "^[A-Z]{3}$"
+					},
+					"items": {
+						"type": "array",
+						"minItems": 1,
+						"maxItems": 500,
+						"items": {
+							"type": "object",
+							"required": ["itemId"],
+							"properties": {
+								"itemId": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								},
+								"variantId": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								},
+								"quantity": {
+									"type": "integer",
+									"minimum": 1
+								},
+								"unitAmount": {
+									"type": "integer",
+									"minimum": 0,
+									"description": "Integer minor units of the currency."
+								},
+								"attributes": {
+									"type": "object"
+								},
+								"collections": {
+									"type": "array",
+									"items": {
+										"type": "string",
+										"pattern": "^[\\x21-\\x7e]{1,128}$"
+									}
+								},
+								"brand": {
+									"type": "string",
+									"pattern": "^[\\x21-\\x7e]{1,128}$"
+								}
+							}
+						}
+					},
+					"customer": {
+						"$ref": "#/components/schemas/Customer"
+					},
+					"lock": {
+						"type": "boolean",
+						"description": "also issue price locks (price_locks on)"
+					}
+				}
+			},
+			"Offer": {
+				"type": "object",
+				"properties": {
+					"itemId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"quantity": {
+						"type": "integer"
+					},
+					"unitAmount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"price": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "unit price after the item deals that apply without cart conditions"
+					},
+					"total": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"discount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"percentOff": {
+						"type": "integer"
+					},
+					"locked": {
+						"type": "boolean"
+					},
+					"deals": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/DealCard"
+						}
+					},
+					"badge": {
+						"type": ["object", "null"]
+					},
+					"pills": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"countdown": {
+						"type": ["object", "null"],
+						"properties": {
+							"endsAt": {
+								"type": "string"
+							}
+						}
+					},
+					"lock": {
+						"type": "object",
+						"properties": {
+							"token": {
+								"type": "string"
+							},
+							"expiresAt": {
+								"type": "string"
+							}
+						}
+					}
+				}
+			},
+			"Offers": {
+				"type": "object",
+				"properties": {
+					"currency": {
+						"type": ["string", "null"]
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Offer"
+						}
+					},
+					"missing": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"itemId": {
+									"type": "string"
+								},
+								"variantId": {
+									"type": ["string", "null"]
+								},
+								"reason": {
+									"enum": ["unknown_item", "unpriced", "currency_unknown", "currency_mismatch"]
+								}
+							}
+						}
+					}
+				}
+			},
+			"DealCard": {
+				"type": "object",
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"description": {
+						"type": ["string", "null"]
+					},
+					"badge": {
+						"type": "object"
+					},
+					"reward": {
+						"type": "object",
+						"description": "structured label: { type, percent?, amount?, buy?, get?, bundle?, quantity? }"
+					},
+					"priority": {
+						"type": "integer"
+					},
+					"schedule": {
+						"type": "object"
+					},
+					"stockLeft": {
+						"type": ["integer", "null"]
+					},
+					"conditions": {
+						"type": "object"
+					}
+				}
+			},
+			"DealItem": {
+				"type": "object",
+				"properties": {
+					"itemId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": ["string", "null"]
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"url": {
+						"type": ["string", "null"]
+					},
+					"image": {
+						"type": ["string", "null"]
+					},
+					"currency": {
+						"type": "string"
+					},
+					"unitAmount": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					},
+					"price": {
+						"type": "integer",
+						"minimum": 0,
+						"description": "Integer minor units of the currency."
+					}
+				}
+			},
+			"Report": {
+				"type": "object"
+			}
+		}
+	}
+}

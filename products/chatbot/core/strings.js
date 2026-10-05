@@ -1,0 +1,19 @@
+/**
+ * String-catalog helpers (pure): flat keys (`window.title`), `{name}` placeholders. Safe in any runtime; used by the
+ * server (bot texts in the conversation's language) and re-exported for headless cores and renderers.
+ * @module
+ */
+
+/**
+ * Create a translator over a resolved catalog. Missing keys return the key itself so gaps are visible, never blank.
+ * @param {Readonly<Record<string, string>>} strings
+ * @returns {(key: string, params?: Readonly<Record<string, string | number>>) => string}
+ */
+export const createTranslator =
+	(strings) =>
+	(key, params = {}) => {
+		const template = Object.hasOwn(strings, key) ? /** @type {string} */ (strings[key]) : key;
+		return template.replace(/\{([A-Za-z_]\w*)\}/g, (match, name) =>
+			Object.hasOwn(params, name) ? String(params[name]) : match,
+		);
+	};

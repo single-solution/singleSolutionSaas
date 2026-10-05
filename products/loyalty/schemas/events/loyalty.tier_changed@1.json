@@ -1,0 +1,26 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "loyalty.tier_changed@1",
+	"description": "A member moved to another tier (upgrade or downgrade).",
+	"type": "object",
+	"required": ["customerId", "from", "to", "direction"],
+	"additionalProperties": false,
+	"properties": {
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"from": { "type": ["string", "null"], "maxLength": 40 },
+		"to": { "type": ["string", "null"], "maxLength": 40 },
+		"direction": { "type": "string", "enum": ["up", "down"] },
+		"metric": { "type": "integer" },
+		"reviewAt": { "type": ["string", "null"], "format": "date-time" }
+	},
+	"examples": [
+		{
+			"customerId": "cus_123",
+			"from": "silver",
+			"to": "gold",
+			"direction": "up",
+			"metric": 5120,
+			"reviewAt": "2027-10-01T00:00:00.000Z"
+		}
+	]
+}

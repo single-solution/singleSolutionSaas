@@ -1,0 +1,62 @@
+{
+	"openapi": "3.1.0",
+	"info": { "title": "{{name}} API", "version": "0.1.0", "description": "Mode C API of {{name}} (SSPS v1)." },
+	"servers": [{ "url": "https://{{slug}}.example.com" }],
+	"security": [{ "websiteKey": [] }],
+	"paths": {
+		"/v1/status": {
+			"get": {
+				"operationId": "getStatus",
+				"summary": "Status of the placeholder element for the key's website",
+				"x-ss-certify": true,
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": { "$ref": "#/components/schemas/Status" },
+								"example": { "websiteId": "web_0123456789abcdefghjkmnpq", "ok": true, "greeting": "Hello" }
+							}
+						}
+					},
+					"default": { "$ref": "#/components/responses/Problem" }
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			}
+		},
+		"schemas": {
+			"Status": {
+				"type": "object",
+				"required": ["websiteId", "ok", "greeting"],
+				"properties": { "websiteId": { "type": "string" }, "ok": { "type": "boolean" }, "greeting": { "type": "string" } }
+			},
+			"Problem": {
+				"type": "object",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"type": { "type": "string" },
+					"title": { "type": "string" },
+					"status": { "type": "integer" },
+					"detail": { "type": "string" },
+					"instance": { "type": "string" },
+					"requestId": { "type": "string" },
+					"errors": { "type": "array", "items": { "type": "object" } }
+				}
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem details",
+				"content": { "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+			}
+		}
+	}
+}

@@ -1,0 +1,44 @@
+{
+	"type": "object",
+	"title": "Sign-in gate",
+	"additionalProperties": false,
+	"properties": {
+		"required": {
+			"type": "string",
+			"title": "When shoppers must sign in",
+			"description": "Identity comes from your website's identity issuer (SS-Identity), e.g. the Signups product.",
+			"default": "never",
+			"enum": ["never", "always", "for_cod", "over_amount"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Gate", "order": 1 }
+		},
+		"over_amount": {
+			"type": "integer",
+			"title": "Sign in above this total (minor units)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100000000000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Gate", "order": 2 }
+		},
+		"signin_url": {
+			"type": "string",
+			"title": "Sign-in page",
+			"default": "",
+			"maxLength": 500,
+			"pattern": "^(?:https://[^\\s]+|/[^\\s]*)?$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Gate", "order": 3 }
+		},
+		"return_param": {
+			"type": "string",
+			"title": "Return address parameter",
+			"default": "return",
+			"minLength": 1,
+			"maxLength": 32,
+			"pattern": "^[A-Za-z][A-Za-z0-9_-]*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Gate", "order": 4 }
+		}
+	}
+}

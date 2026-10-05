@@ -1,0 +1,74 @@
+{
+	"type": "object",
+	"title": "Lead capture",
+	"additionalProperties": false,
+	"properties": {
+		"show_when": {
+			"type": "string",
+			"title": "Ask for contact details",
+			"default": "offline",
+			"enum": ["offline", "handoff", "always", "flow_only"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "When", "order": 1 }
+		},
+		"fields": {
+			"type": "array",
+			"title": "Fields",
+			"default": [
+				{ "name": "name", "type": "text", "required": true },
+				{ "name": "email", "type": "email", "required": true },
+				{ "name": "phone", "type": "phone", "required": false },
+				{ "name": "message", "type": "textarea", "required": false }
+			],
+			"minItems": 1,
+			"maxItems": 20,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["name", "type"],
+				"properties": {
+					"name": { "type": "string", "title": "Name", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"label": { "type": "string", "title": "Label (empty = the string catalog)", "maxLength": 120 },
+					"type": {
+						"type": "string",
+						"title": "Type",
+						"enum": ["text", "email", "phone", "textarea", "select", "checkbox", "number", "date"]
+					},
+					"required": { "type": "boolean", "title": "Required" },
+					"options": {
+						"type": "array",
+						"title": "Options",
+						"maxItems": 50,
+						"items": { "type": "string", "maxLength": 120 }
+					},
+					"max_length": { "type": "integer", "title": "Maximum length", "minimum": 1, "maximum": 4000 }
+				}
+			},
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "widget": "list", "group": "Form", "order": 2 }
+		},
+		"consent_required": {
+			"type": "boolean",
+			"title": "Require a consent checkbox",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Form", "order": 3 }
+		},
+		"forward_tool": {
+			"type": "string",
+			"title": "Also send leads to this webhook tool (empty = no)",
+			"default": "",
+			"maxLength": 48,
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Destinations", "order": 4 }
+		},
+		"publish_event": {
+			"type": "boolean",
+			"title": "Publish chatbot.lead_captured@1 (other products and automations)",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Destinations", "order": 5 }
+		}
+	}
+}

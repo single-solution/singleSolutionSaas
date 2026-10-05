@@ -1,0 +1,72 @@
+{
+	"type": "object",
+	"title": "Limits",
+	"additionalProperties": false,
+	"properties": {
+		"default_per_customer": {
+			"type": "integer",
+			"title": "Default uses per customer (0 = unlimited)",
+			"description": "Applies to coupons without their own per_customer limit, for identified customers.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Per customer", "order": 1 }
+		},
+		"require_identity_for_per_customer": {
+			"type": "boolean",
+			"title": "Per-customer coupons need an identified customer",
+			"description": "On: a coupon with a per-customer limit refuses anonymous carts (identity_required) instead of letting them through unlimited.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Per customer", "order": 2 }
+		},
+		"velocity_window_minutes": {
+			"type": "integer",
+			"title": "Velocity window (minutes)",
+			"default": 15,
+			"minimum": 1,
+			"maximum": 1440,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Velocity", "order": 3 }
+		},
+		"velocity_max_attempts": {
+			"type": "integer",
+			"title": "Maximum code checks per customer, device or address per window",
+			"default": 60,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Velocity", "order": 4 }
+		},
+		"velocity_max_failures": {
+			"type": "integer",
+			"title": "Maximum invalid codes per customer, device or address per window",
+			"description": "Stops code guessing: after this many unknown or refused codes the subject is refused until the window ends.",
+			"default": 10,
+			"minimum": 1,
+			"maximum": 10000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Velocity", "order": 5 }
+		},
+		"velocity_max_reservations": {
+			"type": "integer",
+			"title": "Maximum reservations per customer or device per window",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Velocity", "order": 6 }
+		},
+		"max_blocks": {
+			"type": "integer",
+			"title": "Maximum blocklist entries",
+			"default": 1000,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 100, "max": 1000 }, "pro": { "default": 1000, "max": 100000 } },
+			"x-ui": { "widget": "number", "group": "Blocklist", "order": 7 }
+		}
+	}
+}

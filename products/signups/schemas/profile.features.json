@@ -1,0 +1,71 @@
+{
+	"type": "object",
+	"title": "Profile",
+	"additionalProperties": false,
+	"properties": {
+		"fields": {
+			"type": "array",
+			"title": "Profile fields",
+			"description": "The fields a customer profile holds (e-mail and phone are identifiers, verified by sign-in, not profile fields). Required fields are reported as missingFields so sign-in UIs can ask for them.",
+			"default": [
+				{ "key": "given_name", "label": "Given name", "type": "text", "required": false, "max_length": 100 },
+				{ "key": "family_name", "label": "Family name", "type": "text", "required": false, "max_length": 100 }
+			],
+			"minItems": 0,
+			"maxItems": 40,
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 10 }, "pro": { "max": 40 } },
+			"x-ui": { "widget": "list", "group": "Fields", "order": 1 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "type"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"label": { "type": "string", "title": "Label", "maxLength": 120 },
+					"type": { "type": "string", "title": "Type", "enum": ["text", "date", "boolean", "number", "url"] },
+					"required": { "type": "boolean", "title": "Required" },
+					"max_length": { "type": "integer", "title": "Maximum length (text)", "minimum": 1, "maximum": 2000 }
+				}
+			}
+		},
+		"max_addresses": {
+			"type": "integer",
+			"title": "Addresses per customer",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 50,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "max": 5 }, "pro": { "max": 50 } },
+			"x-ui": { "widget": "number", "group": "Addresses", "order": 2 }
+		},
+		"address_required": {
+			"type": "array",
+			"title": "Required address members",
+			"description": "Addresses use one international shape: label, line1, line2, city, region, postal_code, country (ISO 3166-1 alpha-2).",
+			"default": ["line1", "city", "country"],
+			"maxItems": 7,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["label", "line1", "line2", "city", "region", "postal_code", "country"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "multiselect", "group": "Addresses", "order": 3 }
+		},
+		"max_custom_keys": {
+			"type": "integer",
+			"title": "Custom fields per customer",
+			"default": 20,
+			"minimum": 0,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Fields", "order": 4 }
+		},
+		"share_identifiers_in_events": {
+			"type": "boolean",
+			"title": "Include e-mail and phone in customer.created events",
+			"description": "Off: events carry the customer id only. On: the verified e-mail / phone travel to the products subscribed to customer.created@1.",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Privacy", "order": 5 }
+		}
+	}
+}

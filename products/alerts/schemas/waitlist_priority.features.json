@@ -1,0 +1,52 @@
+{
+	"type": "object",
+	"title": "Waitlist priority",
+	"additionalProperties": false,
+	"properties": {
+		"order": {
+			"type": "string",
+			"title": "Waitlist order",
+			"description": "fifo: first come, first told. tier: customers with a better tier (from their login token) first, then first come.",
+			"default": "fifo",
+			"enum": ["fifo", "tier"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Order", "order": 1 }
+		},
+		"tier_claim": {
+			"type": "string",
+			"title": "Tier claim in the login token",
+			"description": "Claim of the website's own customer token (bring-your-own identity) that holds the tier, e.g. tier or loyalty.tier.",
+			"default": "tier",
+			"minLength": 1,
+			"maxLength": 64,
+			"pattern": "^[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Order", "order": 2 }
+		},
+		"tiers": {
+			"type": "array",
+			"title": "Tier ranks",
+			"description": "Lower rank = told earlier. Unknown tiers come after every listed one.",
+			"default": [],
+			"maxItems": 20,
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Order", "order": 3 },
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "rank"],
+				"properties": {
+					"key": { "type": "string", "title": "Tier", "minLength": 1, "maxLength": 64 },
+					"rank": { "type": "integer", "title": "Rank", "minimum": 0, "maximum": 1000 }
+				}
+			}
+		},
+		"show_position": {
+			"type": "boolean",
+			"title": "Show shoppers their position",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Display", "order": 4 }
+		}
+	}
+}

@@ -1,0 +1,99 @@
+{
+	"type": "object",
+	"title": "Bulk & CSV",
+	"additionalProperties": false,
+	"properties": {
+		"max_orders": {
+			"type": "integer",
+			"title": "Orders per bulk status change",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 100, "max": 100 }, "pro": { "default": 250, "max": 1000 } }
+		},
+		"max_import_rows": {
+			"type": "integer",
+			"title": "Rows per CSV import",
+			"default": 1000,
+			"minimum": 1,
+			"maximum": 10000,
+			"x-kind": "limit"
+		},
+		"max_export_rows": {
+			"type": "integer",
+			"title": "Rows per CSV export",
+			"default": 10000,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "limit"
+		},
+		"export_columns": {
+			"type": "array",
+			"title": "Export columns",
+			"default": [
+				"number",
+				"placed_at",
+				"status",
+				"customer_name",
+				"customer_email",
+				"customer_phone",
+				"currency",
+				"total",
+				"paid",
+				"refunded",
+				"payment_method",
+				"delivery_method",
+				"carrier",
+				"tracking_number",
+				"units"
+			],
+			"minItems": 1,
+			"maxItems": 30,
+			"uniqueItems": true,
+			"items": {
+				"type": "string",
+				"title": "Column",
+				"enum": [
+					"id",
+					"number",
+					"external_id",
+					"source",
+					"placed_at",
+					"status",
+					"revenue",
+					"customer_name",
+					"customer_email",
+					"customer_phone",
+					"city",
+					"country",
+					"currency",
+					"subtotal",
+					"discount",
+					"shipping",
+					"tax",
+					"total",
+					"paid",
+					"refunded",
+					"balance_due",
+					"payment_method",
+					"delivery_method",
+					"carrier",
+					"tracking_number",
+					"units",
+					"lines",
+					"serials",
+					"risk_flags"
+				]
+			},
+			"x-kind": "config"
+		},
+		"csv_delimiter": {
+			"type": "string",
+			"title": "CSV delimiter",
+			"default": ",",
+			"enum": [",", ";", "\t"],
+			"x-kind": "config"
+		}
+	}
+}

@@ -1,0 +1,15 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "chatbot.note_created@1",
+	"description": "An agent added an internal note to a conversation (team only; the note text stays in the merchant database).",
+	"type": "object",
+	"required": ["noteId", "conversationId", "mentions"],
+	"additionalProperties": false,
+	"properties": {
+		"noteId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"conversationId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"authorId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"mentions": { "type": "array", "maxItems": 20, "items": { "type": "string", "maxLength": 64 } }
+	},
+	"examples": [{ "noteId": "msg_0abc", "conversationId": "cnv_0abc", "authorId": "agt_0xyz", "mentions": [] }]
+}

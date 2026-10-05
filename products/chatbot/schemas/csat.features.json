@@ -1,0 +1,49 @@
+{
+	"type": "object",
+	"title": "CSAT",
+	"additionalProperties": false,
+	"properties": {
+		"scale": {
+			"type": "integer",
+			"title": "Rating scale (points)",
+			"default": 5,
+			"enum": [2, 3, 5, 10],
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "widget": "select", "group": "Survey", "order": 1 }
+		},
+		"ask_when": {
+			"type": "string",
+			"title": "Ask",
+			"default": "on_close",
+			"enum": ["on_close", "after_human", "manual"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Survey", "order": 2 }
+		},
+		"follow_up": {
+			"type": "boolean",
+			"title": "Ask for a comment",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Survey", "order": 3 }
+		},
+		"comment_max_length": {
+			"type": "integer",
+			"title": "Comment length (characters)",
+			"default": 1000,
+			"minimum": 50,
+			"maximum": 4000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Survey", "order": 4 }
+		},
+		"target": {
+			"type": "number",
+			"title": "Target satisfaction (share of positive ratings)",
+			"default": 0.85,
+			"minimum": 0,
+			"maximum": 1,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Reporting", "order": 5 }
+		}
+	}
+}

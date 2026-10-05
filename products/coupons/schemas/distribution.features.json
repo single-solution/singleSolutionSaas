@@ -1,0 +1,89 @@
+{
+	"type": "object",
+	"title": "Distribution",
+	"additionalProperties": false,
+	"properties": {
+		"share_path": {
+			"type": "string",
+			"title": "Landing path of share links",
+			"description": "Path on the website the share links and QR codes open (the code is added as the auto-apply parameter).",
+			"default": "/",
+			"minLength": 1,
+			"maxLength": 500,
+			"pattern": "^/(?:[^/].*)?$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Links", "order": 1 }
+		},
+		"utm_source": {
+			"type": "string",
+			"title": "utm_source of share links (empty = none)",
+			"default": "",
+			"maxLength": 64,
+			"pattern": "^[A-Za-z0-9_.-]*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Links", "order": 2 }
+		},
+		"utm_medium": {
+			"type": "string",
+			"title": "utm_medium of share links (empty = none)",
+			"default": "",
+			"maxLength": 64,
+			"pattern": "^[A-Za-z0-9_.-]*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Links", "order": 3 }
+		},
+		"qr_ecc": {
+			"type": "string",
+			"title": "QR error correction",
+			"description": "L 7 %, M 15 %, Q 25 %, H 30 % of the code can be damaged and still read.",
+			"default": "M",
+			"enum": ["L", "M", "Q", "H"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "QR codes", "order": 4 }
+		},
+		"qr_module_px": {
+			"type": "integer",
+			"title": "QR module size (px)",
+			"default": 8,
+			"minimum": 1,
+			"maximum": 64,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "QR codes", "order": 5 }
+		},
+		"qr_margin": {
+			"type": "integer",
+			"title": "QR quiet zone (modules)",
+			"default": 4,
+			"minimum": 0,
+			"maximum": 16,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "QR codes", "order": 6 }
+		},
+		"qr_dark": {
+			"type": "string",
+			"title": "QR dark colour",
+			"default": "#000000",
+			"pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+			"x-kind": "config",
+			"x-ui": { "widget": "color", "group": "QR codes", "order": 7 }
+		},
+		"qr_light": {
+			"type": "string",
+			"title": "QR background colour",
+			"default": "#ffffff",
+			"pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+			"x-kind": "config",
+			"x-ui": { "widget": "color", "group": "QR codes", "order": 8 }
+		},
+		"max_export_rows": {
+			"type": "integer",
+			"title": "Maximum codes per CSV export",
+			"default": 50000,
+			"minimum": 1,
+			"maximum": 100000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 5000, "max": 10000 }, "pro": { "default": 50000, "max": 100000 } },
+			"x-ui": { "widget": "number", "group": "Exports", "order": 9 }
+		}
+	}
+}

@@ -1,0 +1,29 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "loyalty.earned@1",
+	"description": "Points were credited to a member (earn rules, referrals or a manual earn).",
+	"type": "object",
+	"required": ["customerId", "transactionId", "points", "balance", "kind"],
+	"additionalProperties": false,
+	"properties": {
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"transactionId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"kind": { "type": "string", "enum": ["earn", "referral", "adjust"] },
+		"points": { "type": "integer", "minimum": 1 },
+		"balance": { "type": "integer" },
+		"orderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"ruleIds": { "type": "array", "maxItems": 50, "items": { "type": "string", "maxLength": 40 } },
+		"sourceEventId": { "type": "string", "minLength": 1, "maxLength": 128 }
+	},
+	"examples": [
+		{
+			"customerId": "cus_123",
+			"transactionId": "ptx_0abc",
+			"kind": "earn",
+			"points": 120,
+			"balance": 870,
+			"orderId": "ord_1",
+			"ruleIds": ["purchase"]
+		}
+	]
+}

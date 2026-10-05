@@ -1,0 +1,4 @@
+# Written by `ss app init` for a project outside a pnpm workspace (inside one, the workspace's settings apply).
+allowBuilds:
+   esbuild: true
+   mongodb-memory-server: false

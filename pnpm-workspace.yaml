@@ -1,7 +1,8 @@
 packages:
-   - 'portal'
-   - 'apps/*'
-   - 'shared/ui'
+   - 'packages/*'
+   - 'platform'
+   - 'products/*'
+   - 'e2e'
 allowBuilds:
    esbuild: true
-   msgpackr-extract: true
+   mongodb-memory-server: false

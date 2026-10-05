@@ -1,0 +1,43 @@
+{
+	"type": "object",
+	"title": "Brands",
+	"additionalProperties": false,
+	"properties": {
+		"max_brands": {
+			"type": "integer",
+			"title": "Maximum brands",
+			"default": 500,
+			"minimum": 1,
+			"maximum": 10000,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Limits",
+				"order": 1,
+				"widget": "number"
+			}
+		},
+		"scoping": {
+			"type": "boolean",
+			"title": "Scope brands to collections",
+			"default": true,
+			"x-kind": "flag",
+			"description": "A brand with collections may only be set on items in one of them (or their sub-collections).",
+			"x-ui": {
+				"group": "Rules",
+				"order": 2,
+				"widget": "switch"
+			}
+		},
+		"require_brand": {
+			"type": "boolean",
+			"title": "Every item needs a brand",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Rules",
+				"order": 3,
+				"widget": "switch"
+			}
+		}
+	}
+}

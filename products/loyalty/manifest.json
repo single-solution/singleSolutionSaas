@@ -1,0 +1,290 @@
+{
+	"ssps": "1",
+	"product": {
+		"slug": "loyalty",
+		"name": "Loyalty & Rewards",
+		"kind": "service",
+		"version": "1.0.0",
+		"category": "engagement",
+		"description": "Points for purchases and any event, redemption at checkout, tiers, expiry, referrals, a drop-in or headless wallet and manual adjustments — all data in the merchant's own database."
+	},
+	"endpoints": {
+		"base": "https://loyalty.example.com",
+		"dashboard": "/dashboard",
+		"demo": "/dashboard",
+		"events": "/.well-known/ss-events",
+		"register": "/.well-known/ss-register"
+	},
+	"capabilities": {
+		"adminLaunch": true,
+		"sandbox": true,
+		"localEnforcement": [
+			"limit:earn_rules.max_points_per_transaction",
+			"limit:redeem.max_share_percent",
+			"limit:adjustments.max_points"
+		],
+		"offlineGrace": "PT24H"
+	},
+	"scopes": ["events.subscribe:order.*", "events.subscribe:customer.created", "events.subscribe:custom.*"],
+	"requires": {
+		"resources": ["database"]
+	},
+	"events": {
+		"consumes": [
+			"order.completed@1",
+			"order.placed@1",
+			"order.cancelled@1",
+			"order.refunded@1",
+			"customer.created@1",
+			"custom.*"
+		],
+		"publishes": ["loyalty.earned@1", "loyalty.redeemed@1", "loyalty.tier_changed@1", "loyalty.expiring@1"]
+	},
+	"budget": {
+		"shared": 1
+	},
+	"elements": [
+		{
+			"key": "earn_rules",
+			"name": "Earn rules",
+			"description": "Members and their points: rules turn order, customer and custom events into points (rules@1 conditions, fixed / percent / per-unit formulas, caps per period, exclusions); manual and API earns.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 400,
+				"metered": [
+					{
+						"unit": "point_transaction",
+						"perUnit": 1,
+						"per": 10,
+						"included": {
+							"starter": 2000,
+							"pro": 20000
+						}
+					}
+				]
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": [],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/earn_rules.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"rules": ["when"],
+			"customFields": ["member"],
+			"experiments": true,
+			"api": {
+				"resources": ["earnings", "members", "rules", "activities"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "redeem",
+			"name": "Redemption",
+			"description": "Quote, redeem and release points at any checkout (idempotent), with a minimum, a maximum share of the transaction and a conversion rate.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 300
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["earn_rules"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/redeem.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["redemptions"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "wallet",
+			"name": "Wallet",
+			"description": "The customer's balance badge, tier progress, points expiring soon and history — drop-in, headless or API.",
+			"modes": ["A", "B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 200
+			},
+			"budget": {
+				"js": 3
+			},
+			"dependsOn": ["earn_rules"],
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/wallet.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"api": {
+				"resources": ["wallet", "wallet-tokens"]
+			},
+			"headless": "headless/wallet.js#createWallet",
+			"renderer": "ui/wallet.js#render",
+			"variants": ["badge", "panel"],
+			"slots": ["before", "after", "empty"],
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "tiers",
+			"name": "Tiers",
+			"description": "Tier ladder by points earned or spend in a rolling window, earn multipliers, perk flags and a downgrade policy.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 300
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["earn_rules"],
+			"features": {
+				"$ref": "schemas/tiers.features.json"
+			},
+			"strings": "strings/en.json",
+			"api": {
+				"resources": ["tiers"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "expiry",
+			"name": "Expiry",
+			"description": "Points expire FIFO by lot after a number of months, with notices ahead of time (daily job).",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["earn_rules"],
+			"features": {
+				"$ref": "schemas/expiry.features.json"
+			},
+			"strings": "strings/en.json",
+			"api": {
+				"resources": ["expiry"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "referrals",
+			"name": "Referrals",
+			"description": "Referral codes, attribution windows, rewards for both sides and fraud caps.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 300
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["earn_rules"],
+			"features": {
+				"$ref": "schemas/referrals.features.json"
+			},
+			"strings": "strings/en.json",
+			"api": {
+				"resources": ["referral-codes", "referrals"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "adjustments",
+			"name": "Adjustments",
+			"description": "Manual credits and debits with reason codes, from the API or the dashboard (audited).",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["earn_rules"],
+			"features": {
+				"$ref": "schemas/adjustments.features.json"
+			},
+			"strings": "strings/en.json",
+			"api": {
+				"resources": ["adjustments"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "reversal",
+			"name": "Reversal",
+			"description": "Cancelled and refunded orders reverse earned points (capped at the balance or allowed negative) and give redeemed points back.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["earn_rules"],
+			"features": {
+				"$ref": "schemas/reversal.features.json"
+			},
+			"strings": "strings/en.json",
+			"headless": null,
+			"renderer": null
+		}
+	],
+	"plans": [
+		{
+			"code": "starter",
+			"name": "Starter",
+			"description": "Earn rules, redemption at checkout and the wallet.",
+			"elements": ["earn_rules", "redeem", "wallet"],
+			"addons": ["reversal", "adjustments"]
+		},
+		{
+			"code": "pro",
+			"name": "Pro",
+			"description": "Everything in Starter plus tiers, expiry, adjustments and reversal; referrals as an add-on.",
+			"elements": ["earn_rules", "redeem", "wallet", "tiers", "expiry", "adjustments", "reversal"],
+			"addons": ["referrals"]
+		}
+	],
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
+	"trialHours": 48,
+	"retention": {
+		"transactions": "P2555D",
+		"orders": "P730D",
+		"redemptions": "P730D",
+		"referrals": "P730D"
+	}
+}

@@ -1,0 +1,159 @@
+/*
+ * @ss/ui design tokens. Import after Tailwind: `@import 'tailwindcss'; @import '@ss/ui/theme.css';` and add an
+ * `@source` for the package sources. Every colour is a CSS variable (light by default, dark with the OS setting or
+ * `data-theme="dark"` on <html>); utilities read them through `@theme inline`, so components never need `dark:`.
+ * Text/background pairs keep a contrast ratio of at least 4.5:1 (WCAG AA) in both themes.
+ */
+@theme inline {
+	--color-canvas: var(--ss-canvas);
+	--color-surface: var(--ss-surface);
+	--color-surface-2: var(--ss-surface-2);
+	--color-line: var(--ss-line);
+	--color-line-strong: var(--ss-line-strong);
+	--color-fg: var(--ss-fg);
+	--color-muted: var(--ss-muted);
+	--color-primary: var(--ss-primary);
+	--color-primary-hover: var(--ss-primary-hover);
+	--color-on-primary: var(--ss-on-primary);
+	--color-primary-soft: var(--ss-primary-soft);
+	--color-on-primary-soft: var(--ss-on-primary-soft);
+	--color-success: var(--ss-success);
+	--color-success-soft: var(--ss-success-soft);
+	--color-on-success-soft: var(--ss-on-success-soft);
+	--color-warning: var(--ss-warning);
+	--color-warning-soft: var(--ss-warning-soft);
+	--color-on-warning-soft: var(--ss-on-warning-soft);
+	--color-danger: var(--ss-danger);
+	--color-danger-hover: var(--ss-danger-hover);
+	--color-on-danger: var(--ss-on-danger);
+	--color-danger-soft: var(--ss-danger-soft);
+	--color-on-danger-soft: var(--ss-on-danger-soft);
+	--color-info-soft: var(--ss-info-soft);
+	--color-on-info-soft: var(--ss-on-info-soft);
+	--color-focus: var(--ss-focus);
+	--color-overlay: var(--ss-overlay);
+	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+	--radius-card: 1rem;
+	--radius-control: 0.75rem;
+	--shadow-card: 0 1px 2px 0 rgb(15 23 42 / 0.05);
+	--shadow-overlay: 0 24px 48px -12px rgb(15 23 42 / 0.35);
+}
+
+:root {
+	color-scheme: light;
+	--ss-canvas: #f8fafc;
+	--ss-surface: #ffffff;
+	--ss-surface-2: #f1f5f9;
+	--ss-line: #e2e8f0;
+	--ss-line-strong: #94a3b8;
+	--ss-fg: #0f172a;
+	--ss-muted: #475569;
+	--ss-primary: #4f46e5;
+	--ss-primary-hover: #4338ca;
+	--ss-on-primary: #ffffff;
+	--ss-primary-soft: #eef2ff;
+	--ss-on-primary-soft: #3730a3;
+	--ss-success: #047857;
+	--ss-success-soft: #ecfdf5;
+	--ss-on-success-soft: #065f46;
+	--ss-warning: #b45309;
+	--ss-warning-soft: #fffbeb;
+	--ss-on-warning-soft: #92400e;
+	--ss-danger: #dc2626;
+	--ss-danger-hover: #b91c1c;
+	--ss-on-danger: #ffffff;
+	--ss-danger-soft: #fef2f2;
+	--ss-on-danger-soft: #991b1b;
+	--ss-info-soft: #f0f9ff;
+	--ss-on-info-soft: #075985;
+	--ss-focus: #4f46e5;
+	--ss-overlay: rgb(15 23 42 / 0.45);
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--ss-canvas: #0b1120;
+		--ss-surface: #111827;
+		--ss-surface-2: #1e293b;
+		--ss-line: #273449;
+		--ss-line-strong: #64748b;
+		--ss-fg: #f1f5f9;
+		--ss-muted: #a7b4c7;
+		--ss-primary: #818cf8;
+		--ss-primary-hover: #a5b4fc;
+		--ss-on-primary: #0b1120;
+		--ss-primary-soft: #1e1b4b;
+		--ss-on-primary-soft: #c7d2fe;
+		--ss-success: #34d399;
+		--ss-success-soft: #052e22;
+		--ss-on-success-soft: #6ee7b7;
+		--ss-warning: #fbbf24;
+		--ss-warning-soft: #33240a;
+		--ss-on-warning-soft: #fcd34d;
+		--ss-danger: #f87171;
+		--ss-danger-hover: #fca5a5;
+		--ss-on-danger: #1a0505;
+		--ss-danger-soft: #3b0d0d;
+		--ss-on-danger-soft: #fca5a5;
+		--ss-info-soft: #082f49;
+		--ss-on-info-soft: #7dd3fc;
+		--ss-focus: #a5b4fc;
+		--ss-overlay: rgb(2 6 23 / 0.7);
+	}
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--ss-canvas: #0b1120;
+	--ss-surface: #111827;
+	--ss-surface-2: #1e293b;
+	--ss-line: #273449;
+	--ss-line-strong: #64748b;
+	--ss-fg: #f1f5f9;
+	--ss-muted: #a7b4c7;
+	--ss-primary: #818cf8;
+	--ss-primary-hover: #a5b4fc;
+	--ss-on-primary: #0b1120;
+	--ss-primary-soft: #1e1b4b;
+	--ss-on-primary-soft: #c7d2fe;
+	--ss-success: #34d399;
+	--ss-success-soft: #052e22;
+	--ss-on-success-soft: #6ee7b7;
+	--ss-warning: #fbbf24;
+	--ss-warning-soft: #33240a;
+	--ss-on-warning-soft: #fcd34d;
+	--ss-danger: #f87171;
+	--ss-danger-hover: #fca5a5;
+	--ss-on-danger: #1a0505;
+	--ss-danger-soft: #3b0d0d;
+	--ss-on-danger-soft: #fca5a5;
+	--ss-info-soft: #082f49;
+	--ss-on-info-soft: #7dd3fc;
+	--ss-focus: #a5b4fc;
+	--ss-overlay: rgb(2 6 23 / 0.7);
+}
+
+@layer base {
+	html {
+		-webkit-text-size-adjust: 100%;
+	}
+	body {
+		background-color: var(--ss-canvas);
+		color: var(--ss-fg);
+		font-family: var(--font-sans);
+	}
+	:focus-visible {
+		outline: 2px solid var(--ss-focus);
+		outline-offset: 2px;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		*::before,
+		*::after {
+			animation-duration: 0.01ms !important;
+			transition-duration: 0.01ms !important;
+		}
+	}
+}

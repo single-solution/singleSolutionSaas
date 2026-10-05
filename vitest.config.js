@@ -1,0 +1,29 @@
+/**
+ * Orchestration only: `pnpm test:all` (`vitest run`) runs every unit's own vitest.config.js as a Vitest project in
+ * one go, sharing one MongoMemoryReplSet (the @ss/config Mongo setup is reference-counted across projects). Coverage
+ * thresholds are enforced per unit by each unit's own `pnpm test`.
+ */
+import { defineConfig } from 'vitest/config';
+import { THRESHOLDS } from '@ss/config/vitest';
+
+export default defineConfig({
+	test: {
+		projects: [
+			'packages/*/vitest.config.js',
+			'platform/vitest.config.js',
+			'products/*/vitest.config.js',
+			'e2e/vitest.config.js',
+		],
+		coverage: {
+			provider: 'v8',
+			include: [
+				'packages/*/src/**',
+				'packages/config/{eslint,vitest,mongo-setup}.js',
+				'platform/src/**',
+				'products/*/{core,headless,ui,api,adapters,jobs}/**',
+				'products/*/serve.js',
+			],
+			thresholds: { ...THRESHOLDS },
+		},
+	},
+});

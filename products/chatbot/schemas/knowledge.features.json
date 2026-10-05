@@ -1,0 +1,150 @@
+{
+	"type": "object",
+	"title": "Knowledge",
+	"additionalProperties": false,
+	"properties": {
+		"sources": {
+			"type": "array",
+			"title": "Web pages",
+			"description": "Public https pages (your FAQ, policies, help articles) fetched through the SSRF guard and indexed in your database.",
+			"default": [],
+			"maxItems": 100,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["id", "url"],
+				"properties": {
+					"id": { "type": "string", "title": "Source id", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
+					"url": { "type": "string", "title": "URL", "minLength": 9, "maxLength": 2048, "pattern": "^https://" },
+					"title": { "type": "string", "title": "Title (empty = the page title)", "maxLength": 200 },
+					"priority": { "type": "integer", "title": "Priority (boost)", "minimum": 0, "maximum": 10 },
+					"refresh_hours": {
+						"type": "integer",
+						"title": "Refresh every (hours, 0 = manual)",
+						"minimum": 0,
+						"maximum": 8760
+					},
+					"enabled": { "type": "boolean", "title": "Enabled" }
+				}
+			},
+			"x-kind": "config",
+			"x-plan": { "starter": { "max": 5 }, "pro": { "max": 100 } },
+			"x-ui": { "widget": "list", "group": "Sources", "order": 1 }
+		},
+		"max_entries": {
+			"type": "integer",
+			"title": "Maximum FAQ entries",
+			"default": 200,
+			"minimum": 1,
+			"maximum": 20000,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 200, "max": 500 }, "pro": { "default": 2000, "max": 20000 } },
+			"x-ui": { "widget": "number", "group": "Sources", "order": 2 }
+		},
+		"faq_priority": {
+			"type": "integer",
+			"title": "Priority of FAQ entries over pages",
+			"default": 2,
+			"minimum": 0,
+			"maximum": 10,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Retrieval", "order": 3 }
+		},
+		"chunk_chars": {
+			"type": "integer",
+			"title": "Chunk size (characters)",
+			"default": 1200,
+			"minimum": 200,
+			"maximum": 6000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Retrieval", "order": 4, "advanced": true }
+		},
+		"chunk_overlap_chars": {
+			"type": "integer",
+			"title": "Chunk overlap (characters)",
+			"default": 150,
+			"minimum": 0,
+			"maximum": 1000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Retrieval", "order": 5, "advanced": true }
+		},
+		"top_k": {
+			"type": "integer",
+			"title": "Passages given to the AI per answer",
+			"default": 4,
+			"minimum": 1,
+			"maximum": 12,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Retrieval", "order": 6 }
+		},
+		"min_match": {
+			"type": "number",
+			"title": "Minimum share of question words a passage must contain",
+			"default": 0.2,
+			"minimum": 0,
+			"maximum": 1,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Retrieval", "order": 7 }
+		},
+		"bm25_k1": {
+			"type": "number",
+			"title": "BM25 k1",
+			"default": 1.2,
+			"minimum": 0,
+			"maximum": 5,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Retrieval", "order": 8, "advanced": true }
+		},
+		"bm25_b": {
+			"type": "number",
+			"title": "BM25 b",
+			"default": 0.75,
+			"minimum": 0,
+			"maximum": 1,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Retrieval", "order": 9, "advanced": true }
+		},
+		"grounded_only": {
+			"type": "boolean",
+			"title": "Answer only from knowledge (no general knowledge)",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Behaviour", "order": 10 }
+		},
+		"dont_know": {
+			"type": "string",
+			"title": "When no passage matches",
+			"default": "answer",
+			"enum": ["answer", "say_dont_know", "handoff"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Behaviour", "order": 11 }
+		},
+		"fetch_timeout_ms": {
+			"type": "integer",
+			"title": "Page fetch timeout (ms)",
+			"default": 10000,
+			"minimum": 1000,
+			"maximum": 30000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Sources", "order": 12, "advanced": true }
+		},
+		"fetch_max_bytes": {
+			"type": "integer",
+			"title": "Largest page fetched (bytes)",
+			"default": 1000000,
+			"minimum": 10000,
+			"maximum": 5000000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Sources", "order": 13, "advanced": true }
+		},
+		"max_chunks_per_source": {
+			"type": "integer",
+			"title": "Maximum chunks per page",
+			"default": 200,
+			"minimum": 1,
+			"maximum": 2000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Sources", "order": 14, "advanced": true }
+		}
+	}
+}

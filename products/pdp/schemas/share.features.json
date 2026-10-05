@@ -1,0 +1,200 @@
+{
+	"type": "object",
+	"title": "Share",
+	"additionalProperties": false,
+	"properties": {
+		"channels": {
+			"type": "array",
+			"title": "Channels",
+			"default": ["native", "copy", "whatsapp", "facebook", "x", "email"],
+			"minItems": 1,
+			"uniqueItems": true,
+			"items": {
+				"type": "string",
+				"enum": ["native", "copy", "whatsapp", "facebook", "x", "telegram", "linkedin", "pinterest", "email"]
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "checkboxes",
+				"group": "Channels",
+				"order": 1
+			}
+		},
+		"utm": {
+			"type": "boolean",
+			"title": "Tag shared links (utm_source, utm_medium)",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Channels",
+				"order": 2
+			}
+		},
+		"source_url": {
+			"type": "string",
+			"title": "JSON source URL",
+			"description": "Optional public https JSON document of the item, read when the page lacks data. Placeholders: {id} (the page item id), {path}, and the hosted page route parameters.",
+			"default": "",
+			"maxLength": 1000,
+			"pattern": "^(?:$|https://)",
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "url",
+				"group": "Data source",
+				"order": 3,
+				"placeholder": "https://example.com/items/{id}.json",
+				"advanced": true
+			}
+		},
+		"source_fields": {
+			"type": "object",
+			"title": "JSON field mapping",
+			"description": "Dot path of each item field in the JSON source (e.g. data.product.name); `root` selects the item object. Unmapped fields are read from same-named properties.",
+			"default": {},
+			"additionalProperties": false,
+			"properties": {
+				"root": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"id": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"title": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"subtitle": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"brand": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"description": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"url": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"sku": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"gtin": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"mpn": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"category": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"condition": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"availability": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"stock": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"price": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"compareAtPrice": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"currency": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"images": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"ratingValue": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"ratingCount": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"faq": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"related": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				},
+				"attributes": {
+					"type": "string",
+					"maxLength": 200,
+					"pattern": "^[A-Za-z0-9_$.-]*$"
+				}
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "mapping",
+				"group": "Data source",
+				"order": 4,
+				"advanced": true
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders: the shared placement v1 (paths, selectors, page types, devices, referrers, schedule, consent, triggers, frequency incl. cooldown and dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "[data-ss-slot=\"share\"]",
+						"position": "append"
+					}
+				]
+			},
+			"x-kind": "placement",
+			"x-ui": {
+				"group": "Placement",
+				"order": 5
+			}
+		}
+	}
+}

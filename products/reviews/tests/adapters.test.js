@@ -1,0 +1,152 @@
+/** Adapters: link tokens, ids, the site registry, the platform wiring (env, control DB, retention) and settings. */
+import { randomBytes as nodeRandomBytes } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { createPlatform, loadStrings, retentionDays } from '../adapters/platform.js';
+import { createSiteRegistry } from '../adapters/registry.js';
+import { createLinkTokens, linkSecret, randomBytes, stableId } from '../adapters/tokens.js';
+import { createRepositories } from '../adapters/db.js';
+import { sessionView } from '../api/session.js';
+import { settingsFrom } from '../api/settings.js';
+import { dashboardActor } from '../api/dashboard.js';
+import { failure } from '../api/routes.js';
+import { ROOT, mongoUri } from './harness.js';
+
+const T0 = Date.parse('2026-10-01T10:00:00Z');
+
+describe('tokens', () => {
+	it('issues review link tokens bound to a website and a request', async () => {
+		let now = T0;
+		const tokens = createLinkTokens({ secret: Buffer.from('s'.repeat(32)), now: () => now });
+		const { token, expiresAt } = tokens.issue({ websiteId: 'web_1', requestId: 'rrq_1', ttlDays: 2 });
+		expect(expiresAt).toBe(new Date(T0 + 2 * 86_400_000).toISOString());
+		expect(tokens.verify(token, 'web_1')).toBe('rrq_1');
+		expect(tokens.verify(token, 'web_2')).toBeNull();
+		expect(tokens.verify(`${token}x`, 'web_1')).toBeNull();
+		expect(tokens.verify('xx1.a.b', 'web_1')).toBeNull();
+		expect(tokens.verify('rl1.only', 'web_1')).toBeNull();
+		expect(tokens.verify(42, 'web_1')).toBeNull();
+		expect(tokens.verify('x'.repeat(3000), 'web_1')).toBeNull();
+		const other = createLinkTokens({ secret: Buffer.from('t'.repeat(32)) });
+		expect(other.verify(token, 'web_1')).toBeNull();
+		// a valid signature over a payload that is not JSON
+		const forged = createLinkTokens({ secret: Buffer.from('s'.repeat(32)), now: () => now });
+		const [prefix, ,] = token.split('.');
+		const crafted = forged.issue({ websiteId: 'web_1', requestId: 'rrq_1', ttlDays: 1 }).token.split('.');
+		expect(forged.verify([prefix, 'bm90LWpzb24', crafted[2]].join('.'), 'web_1')).toBeNull();
+		now = T0 + 3 * 86_400_000;
+		expect(tokens.verify(token, 'web_1')).toBeNull();
+	});
+
+	it('derives the secret from the signing key, or takes a configured one', async () => {
+		const { privateJwk } = await generateSigningKey({ kid: 'k1' });
+		const derived = linkSecret({ signingKey: JSON.stringify(privateJwk) });
+		expect(derived).toHaveLength(32);
+		expect(linkSecret({ secret: 'short', signingKey: privateJwk }).equals(derived)).toBe(true);
+		expect(linkSecret({ secret: 'c'.repeat(40) }).toString()).toBe('c'.repeat(40));
+		expect(() => linkSecret({ signingKey: null })).toThrow(/REVIEWS_LINK_SECRET/);
+		expect(stableId('a')).toMatch(/^[0-9a-hjkmnp-tv-z]{26}$/);
+		expect(stableId('a')).toBe(stableId('a'));
+		expect(randomBytes(4)).toHaveLength(4);
+	});
+});
+
+describe('site registry', () => {
+	it('remembers website ids in memory or in the control database', async () => {
+		const memory = createSiteRegistry();
+		await memory.remember('web_b');
+		await memory.remember('web_a');
+		await memory.remember('web_a');
+		expect(await memory.list()).toEqual(['web_a', 'web_b']);
+		/** @type {string[]} */
+		const stored = [];
+		let fail = true;
+		const collection = {
+			updateOne: async (/** @type {any} */ filter) => {
+				if (fail) {
+					fail = false;
+					throw new Error('down');
+				}
+				stored.push(filter._id);
+			},
+			find: () => ({ toArray: async () => [{ _id: 'web_z' }] }),
+		};
+		const durable = createSiteRegistry({ collection });
+		await durable.remember('web_1'); // fails, forgotten
+		await durable.remember('web_1'); // retried
+		expect(stored).toEqual(['web_1']);
+		expect(await durable.list()).toEqual(['web_1', 'web_z']);
+	});
+});
+
+describe('platform', () => {
+	it('refuses to start without the required environment', async () => {
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
+			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
+		);
+	});
+
+	it('uses the product control database when configured and reads retention from the manifest', async () => {
+		const { privateJwk } = await generateSigningKey({ kid: 'k2' });
+		const app = await createPlatform({
+			env: {
+				SS_PORTAL_URL: 'https://portal.test',
+				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
+				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_reviews_adapter_0123456789'),
+				SS_PRODUCT_DB_URI: mongoUri(`reviews_ctrl_${nodeRandomBytes(4).toString('hex')}`),
+				SS_OUTBOUND_ALLOW_HOSTS: 'localhost',
+				CRON_SECRET: 'short',
+				REVIEWS_LINK_SECRET: 'l'.repeat(40),
+			},
+			root: ROOT,
+		});
+		expect(app.cronSecret).toBeNull();
+		expect(app.retention).toEqual({ requests: 730, orders: 730, photos: 30 });
+		await app.registry.remember('web_ctrl');
+		expect(await app.registry.list()).toContain('web_ctrl');
+		await app.close();
+		expect(retentionDays('P10D', 1)).toBe(10);
+		expect(retentionDays('P1Y', 7)).toBe(7);
+		expect(retentionDays(undefined, 3)).toBe(3);
+		expect(Object.keys(await loadStrings(ROOT))).toContain('en');
+	});
+});
+
+describe('repositories and helpers', () => {
+	it('requires a website id', () => {
+		expect(() => createRepositories(/** @type {any} */ ({ websiteId: '', collection: () => ({}) }))).toThrow(/websiteId/);
+	});
+
+	it('maps sessions, actors, settings and failures', () => {
+		expect(sessionView({ kind: 'merchant', role: 'merchant', user: { id: 'u' } })).toEqual({
+			kind: 'merchant',
+			role: 'merchant',
+			scope: {},
+			user: 'u',
+			actor: null,
+		});
+		expect(sessionView({ kind: 'admin', role: 'platform_admin', subject: 's', scope: { actor: 'stf' } })).toMatchObject({
+			user: 's',
+			actor: 'stf',
+		});
+		expect(sessionView({ kind: 'demo', role: 'demo' }).user).toBeNull();
+		expect(dashboardActor({ kind: 'impersonate', role: 'impersonate', scope: { actor: 'stf_1' } })).toEqual({
+			type: 'staff',
+			id: 'stf_1',
+		});
+		expect(dashboardActor({ kind: 'admin', role: 'platform_admin', subject: 'adm' })).toEqual({ type: 'staff', id: 'adm' });
+		expect(dashboardActor({ kind: 'merchant', role: 'merchant' })).toEqual({ type: 'merchant', id: 'unknown' });
+		const off = settingsFrom({
+			can: (key) => key === 'collection',
+			config: (key) =>
+				key === 'collection' ? { time_zone: 'Mars/Base' } : key === 'content' ? { rating_scale: 9, attributes: 'x' } : null,
+		});
+		expect(off).toMatchObject({ timeZone: 'UTC', moderation: null, requestFlow: null, photos: null });
+		expect(off.content.rating_scale).toBe(5); // content off → defaults
+		const on = settingsFrom({ can: () => true, config: (key) => (key === 'content' ? { attributes: 'x' } : {}) });
+		expect(on.content.attributes).toEqual([]);
+		expect(failure({ reason: 'not_found' })).toBeTruthy();
+		expect(failure({ reason: 'identity_required' })).toBeTruthy();
+		expect(failure({ reason: 'x', errors: [{ path: '/a', code: 'b' }] })).toBeTruthy();
+	});
+});

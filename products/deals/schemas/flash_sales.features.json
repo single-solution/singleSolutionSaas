@@ -1,0 +1,123 @@
+{
+	"type": "object",
+	"title": "Flash sales",
+	"additionalProperties": false,
+	"properties": {
+		"max_active": {
+			"type": "integer",
+			"title": "Maximum deals of this kind (not archived)",
+			"description": "Upper bound on deals of this kind that are active or paused.",
+			"default": 10,
+			"minimum": 0,
+			"maximum": 10000,
+			"x-kind": "limit",
+			"x-plan": {
+				"starter": {
+					"max": 5
+				},
+				"pro": {
+					"max": 200
+				}
+			},
+			"x-ui": {
+				"widget": "number",
+				"group": "Limits",
+				"order": 1
+			}
+		},
+		"max_percent": {
+			"type": "integer",
+			"title": "Maximum percent off",
+			"description": "No deal of this kind may take more than this percentage off.",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Limits",
+				"order": 2
+			}
+		},
+		"max_windows": {
+			"type": "integer",
+			"title": "Maximum weekly windows per deal",
+			"description": "Weekday/time windows a deal may declare (overnight windows count once).",
+			"default": 7,
+			"minimum": 0,
+			"maximum": 28,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Schedules",
+				"order": 3
+			}
+		},
+		"default_class": {
+			"type": "string",
+			"title": "Default stacking class",
+			"description": "Class given to new deals of this kind (one of stacking.classes).",
+			"default": "item",
+			"minLength": 1,
+			"maxLength": 32,
+			"pattern": "^[a-z][a-z0-9_]{0,31}$",
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "text",
+				"group": "Stacking",
+				"order": 4
+			}
+		},
+		"default_priority": {
+			"type": "integer",
+			"title": "Default priority",
+			"description": "Priority of new deals of this kind (higher first).",
+			"default": 100,
+			"minimum": -1000,
+			"maximum": 1000,
+			"x-kind": "config",
+			"x-ui": {
+				"widget": "number",
+				"group": "Stacking",
+				"order": 5
+			}
+		},
+		"allow_storewide": {
+			"type": "boolean",
+			"title": "Allow storewide deals",
+			"description": "Deals without any scope (every item).",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Limits",
+				"order": 6
+			}
+		},
+		"require_end": {
+			"type": "boolean",
+			"title": "Require an end time",
+			"description": "Flash sales need an end for their countdown.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Schedules",
+				"order": 7
+			}
+		},
+		"max_duration_hours": {
+			"type": "integer",
+			"title": "Maximum duration (hours, 0 = none)",
+			"default": 168,
+			"minimum": 0,
+			"maximum": 8760,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Schedules",
+				"order": 8
+			}
+		}
+	}
+}

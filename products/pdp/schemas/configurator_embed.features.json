@@ -1,0 +1,50 @@
+{
+	"type": "object",
+	"title": "Configurator embed",
+	"additionalProperties": false,
+	"properties": {
+		"target": {
+			"type": "string",
+			"title": "Element of the other product",
+			"default": "widget",
+			"maxLength": 40,
+			"x-kind": "config",
+			"description": "Key of the other product’s element this block hosts (it renders nothing while that product is not active).",
+			"pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+			"x-ui": {
+				"widget": "text",
+				"group": "Embed",
+				"order": 1
+			}
+		},
+		"refresh": {
+			"type": "boolean",
+			"title": "Refresh it for this item",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Embed",
+				"order": 2
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders: the shared placement v1 (paths, selectors, page types, devices, referrers, schedule, consent, triggers, frequency incl. cooldown and dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "[data-ss-slot=\"configurator\"]",
+						"position": "append"
+					}
+				]
+			},
+			"x-kind": "placement",
+			"x-ui": {
+				"group": "Placement",
+				"order": 3
+			}
+		}
+	}
+}

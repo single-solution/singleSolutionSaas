@@ -1,0 +1,63 @@
+{
+	"type": "object",
+	"title": "URL sync",
+	"additionalProperties": false,
+	"properties": {
+		"param_prefix": {
+			"type": "string",
+			"title": "Parameter prefix",
+			"description": "Prepended to every parameter name (for example cfg_ → ?cfg_color=red). Empty: the group keys themselves.",
+			"default": "",
+			"maxLength": 16,
+			"pattern": "^[A-Za-z0-9_.-]*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Parameters", "order": 1 }
+		},
+		"param_names": {
+			"type": "array",
+			"title": "Parameter names per group",
+			"description": "Entries \"<group key>=<parameter name>\", for example \"storage=gb\". Groups not listed use their key.",
+			"default": [],
+			"maxItems": 30,
+			"uniqueItems": true,
+			"items": { "type": "string", "maxLength": 130, "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}=[A-Za-z0-9_.-]{1,64}$" },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Parameters", "order": 2 }
+		},
+		"multi_separator": {
+			"type": "string",
+			"title": "Separator of multi-choice values",
+			"default": ",",
+			"minLength": 1,
+			"maxLength": 1,
+			"enum": [",", "|", "~", "."],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Parameters", "order": 3 }
+		},
+		"omit_defaults": {
+			"type": "boolean",
+			"title": "Leave defaults out of the URL",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Parameters", "order": 4 }
+		},
+		"history": {
+			"type": "string",
+			"title": "Browser history",
+			"description": "replace: the URL follows the selection without new history entries; push: every change is a history entry.",
+			"default": "replace",
+			"enum": ["replace", "push"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Behaviour", "order": 5 }
+		},
+		"canonical": {
+			"type": "string",
+			"title": "Canonical URL",
+			"description": "base: the canonical URL drops the selection (one indexable page per configurator); selection: it keeps the configurator parameters in canonical order and drops every other parameter.",
+			"default": "base",
+			"enum": ["base", "selection"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Behaviour", "order": 6 }
+		}
+	}
+}

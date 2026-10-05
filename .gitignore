@@ -30,3 +30,6 @@ coverage/
 next-env.d.ts
 .vercel
 .data/
+
+# Agent worktrees (local only)
+.claude/worktrees/

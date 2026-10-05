@@ -1,0 +1,364 @@
+{
+	"type": "object",
+	"title": "Chat window",
+	"additionalProperties": false,
+	"properties": {
+		"layout": {
+			"type": "string",
+			"title": "Layout",
+			"description": "bubble = floating card; side_panel = full-height panel; full_screen_mobile = bubble on desktop, full screen on small screens.",
+			"default": "bubble",
+			"enum": ["bubble", "side_panel", "full_screen_mobile"],
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "widget": "select", "group": "Appearance", "order": 1 }
+		},
+		"avatar_url": {
+			"type": "string",
+			"title": "Header avatar image URL",
+			"description": "https URL or a site-relative path; empty = initials.",
+			"default": "",
+			"maxLength": 2048,
+			"x-kind": "config",
+			"x-ui": { "widget": "url", "group": "Appearance", "order": 2 }
+		},
+		"sound": {
+			"type": "boolean",
+			"title": "Play a sound on new replies",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Appearance", "order": 3 }
+		},
+		"typing_indicator": {
+			"type": "boolean",
+			"title": "Show a typing indicator while a reply is prepared",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Appearance", "order": 4 }
+		},
+		"group_messages_within_seconds": {
+			"type": "integer",
+			"title": "Group consecutive messages sent within (seconds)",
+			"default": 60,
+			"minimum": 0,
+			"maximum": 600,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Appearance", "order": 5 }
+		},
+		"emoji": {
+			"type": "boolean",
+			"title": "Show the emoji picker",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Appearance", "order": 6 }
+		},
+		"quick_replies": {
+			"type": "array",
+			"title": "Quick replies on a new conversation",
+			"default": [],
+			"maxItems": 8,
+			"items": { "type": "string", "minLength": 1, "maxLength": 80 },
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "widget": "list", "group": "Conversation", "order": 7 }
+		},
+		"persistent_history": {
+			"type": "boolean",
+			"title": "Keep the history of signed-in customers across devices",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Conversation", "order": 8 }
+		},
+		"history_page_size": {
+			"type": "integer",
+			"title": "Messages per page",
+			"default": 20,
+			"minimum": 5,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Conversation", "order": 9 }
+		},
+		"max_message_length": {
+			"type": "integer",
+			"title": "Maximum message length (characters)",
+			"default": 2000,
+			"minimum": 50,
+			"maximum": 8000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 10 }
+		},
+		"guest_message_limit": {
+			"type": "integer",
+			"title": "Messages a guest may send before signing in (0 = unlimited)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 11 }
+		},
+		"guest_token_days": {
+			"type": "integer",
+			"title": "Guest conversation token lifetime (days)",
+			"description": "How long a guest's browser keeps access to its conversations.",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 365,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 12 }
+		},
+		"max_open_conversations": {
+			"type": "integer",
+			"title": "Open conversations per visitor",
+			"default": 3,
+			"minimum": 1,
+			"maximum": 50,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 13 }
+		},
+		"messages_per_minute": {
+			"type": "integer",
+			"title": "Messages per visitor per minute",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 600,
+			"x-kind": "rate",
+			"x-per": "minute",
+			"x-unit": "message",
+			"x-ui": { "widget": "number", "group": "Limits", "order": 14 }
+		},
+		"poll_interval_ms": {
+			"type": "integer",
+			"title": "Polling interval while open (ms)",
+			"default": 10000,
+			"minimum": 3000,
+			"maximum": 60000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Realtime", "order": 15, "advanced": true }
+		},
+		"poll_idle_after_ms": {
+			"type": "integer",
+			"title": "Back off after this long without activity (ms)",
+			"default": 300000,
+			"minimum": 30000,
+			"maximum": 3600000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Realtime", "order": 16, "advanced": true }
+		},
+		"poll_idle_interval_ms": {
+			"type": "integer",
+			"title": "Polling interval when idle (ms)",
+			"default": 20000,
+			"minimum": 5000,
+			"maximum": 300000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Realtime", "order": 17, "advanced": true }
+		},
+		"poll_stop_after_ms": {
+			"type": "integer",
+			"title": "Stop polling after this long without activity (ms)",
+			"default": 900000,
+			"minimum": 60000,
+			"maximum": 86400000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Realtime", "order": 18, "advanced": true }
+		},
+		"poll_burst_interval_ms": {
+			"type": "integer",
+			"title": "Polling interval while a reply is expected (ms)",
+			"default": 3000,
+			"minimum": 1000,
+			"maximum": 30000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Realtime", "order": 19, "advanced": true }
+		},
+		"poll_burst_window_ms": {
+			"type": "integer",
+			"title": "How long to poll quickly after sending (ms)",
+			"default": 45000,
+			"minimum": 5000,
+			"maximum": 600000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Realtime", "order": 20, "advanced": true }
+		},
+		"default_language": {
+			"type": "string",
+			"title": "Default language (BCP 47)",
+			"default": "en",
+			"minLength": 2,
+			"maxLength": 35,
+			"pattern": "^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Locale", "order": 22 }
+		},
+		"allowed_languages": {
+			"type": "array",
+			"title": "Languages the conversation may use (empty = any)",
+			"default": [],
+			"maxItems": 50,
+			"uniqueItems": true,
+			"items": { "type": "string", "pattern": "^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Locale", "order": 23 }
+		},
+		"detect_language": {
+			"type": "boolean",
+			"title": "Detect the customer's language from each message",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Locale", "order": 24 }
+		},
+		"language_markers": {
+			"type": "array",
+			"title": "Marker words for languages written in Latin script",
+			"description": "Detection of non-Latin scripts is automatic; Latin-script languages are told apart by these common words. Add any language; a romanised language uses a script subtag (e.g. ur-Latn, hi-Latn).",
+			"default": [
+				{
+					"language": "en",
+					"words": [
+						"the",
+						"and",
+						"is",
+						"are",
+						"you",
+						"what",
+						"how",
+						"my",
+						"with",
+						"for",
+						"this",
+						"please",
+						"can",
+						"do",
+						"have"
+					]
+				},
+				{
+					"language": "es",
+					"words": [
+						"el",
+						"la",
+						"los",
+						"las",
+						"es",
+						"que",
+						"por",
+						"para",
+						"con",
+						"una",
+						"como",
+						"mi",
+						"hola",
+						"gracias",
+						"quiero"
+					]
+				},
+				{
+					"language": "fr",
+					"words": [
+						"le",
+						"la",
+						"les",
+						"est",
+						"et",
+						"que",
+						"pour",
+						"avec",
+						"une",
+						"mon",
+						"bonjour",
+						"merci",
+						"je",
+						"vous",
+						"pas"
+					]
+				},
+				{
+					"language": "de",
+					"words": [
+						"der",
+						"die",
+						"das",
+						"und",
+						"ist",
+						"nicht",
+						"mit",
+						"ich",
+						"sie",
+						"ein",
+						"eine",
+						"mein",
+						"hallo",
+						"danke",
+						"bitte"
+					]
+				},
+				{
+					"language": "pt",
+					"words": [
+						"o",
+						"os",
+						"as",
+						"que",
+						"para",
+						"com",
+						"uma",
+						"meu",
+						"minha",
+						"olá",
+						"obrigado",
+						"obrigada",
+						"não",
+						"você",
+						"está"
+					]
+				},
+				{
+					"language": "it",
+					"words": [
+						"il",
+						"lo",
+						"gli",
+						"che",
+						"per",
+						"con",
+						"una",
+						"mio",
+						"ciao",
+						"grazie",
+						"sono",
+						"non",
+						"è",
+						"della",
+						"vorrei"
+					]
+				}
+			],
+			"maxItems": 50,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["language", "words"],
+				"properties": {
+					"language": { "type": "string", "title": "Language", "pattern": "^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$" },
+					"words": {
+						"type": "array",
+						"title": "Words",
+						"maxItems": 200,
+						"items": { "type": "string", "minLength": 1, "maxLength": 40 }
+					}
+				}
+			},
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Locale", "order": 25, "advanced": true }
+		},
+		"time_zone": {
+			"type": "string",
+			"title": "Website time zone (IANA)",
+			"description": "Used by rules@1 conditions, working hours without their own zone and reporting days.",
+			"default": "UTC",
+			"maxLength": 64,
+			"x-kind": "config",
+			"x-ui": { "widget": "timezone", "group": "Locale", "order": 21 }
+		}
+	}
+}

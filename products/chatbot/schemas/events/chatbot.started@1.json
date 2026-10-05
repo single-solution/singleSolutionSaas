@@ -1,0 +1,19 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "chatbot.started@1",
+	"description": "A conversation was started on the website chat (guest or signed-in customer).",
+	"type": "object",
+	"required": ["conversationId", "channel", "identified", "language"],
+	"additionalProperties": false,
+	"properties": {
+		"conversationId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"channel": { "type": "string", "enum": ["web"] },
+		"identified": { "type": "boolean" },
+		"language": { "type": "string", "minLength": 2, "maxLength": 35 },
+		"customerId": { "type": "string", "minLength": 1, "maxLength": 255 },
+		"path": { "type": "string", "maxLength": 1024 }
+	},
+	"examples": [
+		{ "conversationId": "cnv_0abc", "channel": "web", "identified": false, "language": "en", "path": "/products/sofa" }
+	]
+}

@@ -1,0 +1,85 @@
+{
+	"type": "object",
+	"title": "Moderation",
+	"additionalProperties": false,
+	"properties": {
+		"redact_inbound": {
+			"type": "array",
+			"title": "Remove from customer messages before storing",
+			"default": ["card", "iban"],
+			"maxItems": 5,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["card", "iban", "email", "phone", "ip"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "checkboxes", "group": "PII", "order": 1 }
+		},
+		"redact_outbound": {
+			"type": "array",
+			"title": "Remove from AI answers",
+			"default": ["card", "iban", "ip"],
+			"maxItems": 5,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["card", "iban", "email", "phone", "ip"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "checkboxes", "group": "PII", "order": 2 }
+		},
+		"redact_before_ai": {
+			"type": "boolean",
+			"title": "Send redacted text to the AI provider",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "PII", "order": 3 }
+		},
+		"leak_filter": {
+			"type": "boolean",
+			"title": "Block AI answers that leak secrets or internals",
+			"default": true,
+			"x-kind": "flag",
+			"x-lock": true,
+			"x-ui": { "widget": "switch", "group": "Leak filter", "order": 4 }
+		},
+		"leak_phrases": {
+			"type": "array",
+			"title": "Phrases that reveal internals (case-insensitive)",
+			"default": ["system prompt", "my instructions", "my prompt", "safety rules", "developer message", "hidden instructions"],
+			"maxItems": 100,
+			"items": { "type": "string", "minLength": 3, "maxLength": 120 },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Leak filter", "order": 5 }
+		},
+		"link_policy": {
+			"type": "string",
+			"title": "Links in AI answers",
+			"default": "website_only",
+			"enum": ["any", "website_only", "allow_list", "none"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Links", "order": 6 }
+		},
+		"allowed_link_hosts": {
+			"type": "array",
+			"title": "Allowed link hosts (allow_list; also added to website_only)",
+			"default": [],
+			"maxItems": 100,
+			"items": { "type": "string", "minLength": 1, "maxLength": 253, "pattern": "^[a-z0-9.-]+$" },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Links", "order": 7 }
+		},
+		"blocked_terms": {
+			"type": "array",
+			"title": "Blocked terms (your profanity list, any language)",
+			"default": [],
+			"maxItems": 1000,
+			"items": { "type": "string", "minLength": 1, "maxLength": 80 },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Terms", "order": 8 }
+		},
+		"blocked_terms_action": {
+			"type": "string",
+			"title": "When a customer message contains a blocked term",
+			"default": "mask",
+			"enum": ["mask", "reject"],
+			"x-kind": "config",
+			"x-ui": { "widget": "select", "group": "Terms", "order": 9 }
+		}
+	}
+}

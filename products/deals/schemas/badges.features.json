@@ -1,0 +1,95 @@
+{
+	"type": "object",
+	"title": "Badges & pills",
+	"additionalProperties": false,
+	"properties": {
+		"strike_format": {
+			"type": "string",
+			"title": "Strike-through format",
+			"description": "compare_at: 79.00 ~~99.00~~; percent: −20 %; savings: save 20.00.",
+			"default": "compare_at",
+			"enum": ["compare_at", "percent", "savings"],
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": {
+				"widget": "select",
+				"group": "Display",
+				"order": 1
+			}
+		},
+		"countdown_within_hours": {
+			"type": "integer",
+			"title": "Show a countdown within (hours, 0 = never)",
+			"default": 48,
+			"minimum": 0,
+			"maximum": 720,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Display",
+				"order": 2
+			}
+		},
+		"show_conditional": {
+			"type": "boolean",
+			"title": "Pills for conditional deals",
+			"description": "Deals that need a payment method, a minimum spend or a quantity.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Display",
+				"order": 3
+			}
+		},
+		"show_bundles": {
+			"type": "boolean",
+			"title": "Pills for bundles",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Display",
+				"order": 4
+			}
+		},
+		"show_cart_deals": {
+			"type": "boolean",
+			"title": "Pills for cart deals",
+			"description": "e.g. free shipping over a threshold.",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": {
+				"widget": "switch",
+				"group": "Display",
+				"order": 5
+			}
+		},
+		"max_pills": {
+			"type": "integer",
+			"title": "Maximum pills",
+			"default": 3,
+			"minimum": 0,
+			"maximum": 10,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Display",
+				"order": 6
+			}
+		},
+		"low_stock_below": {
+			"type": "integer",
+			"title": "Show 'only N left' below (units, 0 = never)",
+			"default": 10,
+			"minimum": 0,
+			"maximum": 1000,
+			"x-kind": "limit",
+			"x-ui": {
+				"widget": "number",
+				"group": "Display",
+				"order": 7
+			}
+		}
+	}
+}

@@ -1,0 +1,82 @@
+{
+	"type": "object",
+	"title": "Mobile tab bar features",
+	"additionalProperties": false,
+	"properties": {
+		"tabs": {
+			"type": "array",
+			"title": "Tabs",
+			"description": "Two to six tabs: key, link, icon and a label (the string mobile_tab_bar.tab.<key> wins when it exists, so labels are translatable).",
+			"default": [
+				{
+					"key": "home",
+					"href": "/",
+					"icon": "home"
+				}
+			],
+			"maxItems": 6,
+			"items": {
+				"type": "object",
+				"properties": {
+					"key": {
+						"type": "string",
+						"pattern": "^[a-z][a-z0-9_]{0,31}$",
+						"maxLength": 32
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					},
+					"icon": {
+						"type": "string",
+						"enum": ["home", "search", "tag", "cart", "user", "chat", "heart", "menu", "grid", "phone"]
+					},
+					"label": {
+						"type": "string",
+						"maxLength": 40
+					}
+				},
+				"required": ["key", "href"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 1,
+				"widget": "list"
+			}
+		},
+		"show_labels": {
+			"type": "boolean",
+			"title": "Show labels",
+			"description": "Show labels under the icons (without, each tab keeps an accessible name).",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Appearance",
+				"order": 2,
+				"widget": "switch"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders: the shared placement v1 (paths, selectors, page types, devices, referrers, schedule, consent, triggers, frequency incl. cooldown and dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "body",
+						"position": "append"
+					}
+				],
+				"devices": ["mobile", "tablet"]
+			},
+			"x-kind": "placement",
+			"x-ui": {
+				"group": "Placement",
+				"order": 3
+			}
+		}
+	}
+}

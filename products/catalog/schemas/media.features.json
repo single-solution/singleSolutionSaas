@@ -1,0 +1,183 @@
+{
+	"type": "object",
+	"title": "Media",
+	"additionalProperties": false,
+	"properties": {
+		"max_media_per_item": {
+			"type": "integer",
+			"title": "Media per item",
+			"default": 12,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "limit",
+			"x-plan": {
+				"starter": {
+					"default": 12,
+					"max": 20
+				},
+				"pro": {
+					"default": 30,
+					"max": 100
+				}
+			},
+			"x-ui": {
+				"group": "Limits",
+				"order": 1,
+				"widget": "number"
+			}
+		},
+		"kinds": {
+			"type": "array",
+			"title": "Allowed media",
+			"default": ["image", "video"],
+			"minItems": 1,
+			"maxItems": 2,
+			"uniqueItems": true,
+			"items": {
+				"type": "string",
+				"enum": ["image", "video"]
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Rules",
+				"order": 2
+			}
+		},
+		"allowed_hosts": {
+			"type": "array",
+			"title": "Allowed hosts for media URLs",
+			"description": "Empty = any https host.",
+			"default": [],
+			"maxItems": 50,
+			"uniqueItems": true,
+			"items": {
+				"type": "string",
+				"title": "Host",
+				"maxLength": 253,
+				"minLength": 1,
+				"pattern": "^[a-z0-9.-]+$"
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Rules",
+				"order": 3
+			}
+		},
+		"storage_base_url": {
+			"type": "string",
+			"title": "Public base URL of storage keys",
+			"description": "Media referenced by a storage key is served as <base>/<key>. Empty = signed links through Media uploads (or no URL).",
+			"default": "",
+			"maxLength": 500,
+			"pattern": "^(?:https://.+)?$",
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Storage",
+				"order": 4
+			}
+		},
+		"ladder": {
+			"type": "array",
+			"title": "Image size ladder (px)",
+			"description": "Widths offered in srcset when an image URL template is set.",
+			"default": [320, 640, 960, 1280, 1920],
+			"maxItems": 10,
+			"uniqueItems": true,
+			"items": {
+				"type": "integer",
+				"minimum": 16,
+				"maximum": 8192
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Images",
+				"order": 5
+			}
+		},
+		"url_template": {
+			"type": "string",
+			"title": "Resized image URL",
+			"description": "Placeholders {url} and {width}, e.g. {url}?w={width}. Empty = no srcset.",
+			"default": "",
+			"maxLength": 500,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Images",
+				"order": 6
+			}
+		},
+		"alt_template": {
+			"type": "string",
+			"title": "Alt text when none is given",
+			"description": "Placeholders {title}, {brand}, {variant}, {index}.",
+			"default": "{title}",
+			"maxLength": 200,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Images",
+				"order": 7
+			}
+		},
+		"max_upload_bytes": {
+			"type": "integer",
+			"title": "Largest upload (bytes)",
+			"default": 10485760,
+			"minimum": 1024,
+			"maximum": 524288000,
+			"x-kind": "limit",
+			"x-ui": {
+				"group": "Uploads (storage connector)",
+				"order": 8,
+				"widget": "number"
+			},
+			"description": "Used when the storage connector is connected."
+		},
+		"content_types": {
+			"type": "array",
+			"title": "Allowed content types",
+			"default": ["image/jpeg", "image/png", "image/webp", "image/avif", "video/mp4"],
+			"minItems": 1,
+			"maxItems": 20,
+			"uniqueItems": true,
+			"items": {
+				"type": "string",
+				"title": "Type",
+				"maxLength": 100,
+				"minLength": 3,
+				"pattern": "^(?:image|video)/[a-z0-9.+-]+$"
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Uploads (storage connector)",
+				"order": 9
+			},
+			"description": "Used when the storage connector is connected."
+		},
+		"upload_ttl_seconds": {
+			"type": "integer",
+			"title": "Upload link lifetime (seconds)",
+			"default": 300,
+			"minimum": 60,
+			"maximum": 3600,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Uploads (storage connector)",
+				"order": 10
+			},
+			"description": "Used when the storage connector is connected."
+		},
+		"view_ttl_seconds": {
+			"type": "integer",
+			"title": "Signed view link lifetime (seconds)",
+			"default": 3600,
+			"minimum": 60,
+			"maximum": 86400,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Uploads (storage connector)",
+				"order": 11
+			},
+			"description": "Used when the storage connector is connected."
+		}
+	}
+}

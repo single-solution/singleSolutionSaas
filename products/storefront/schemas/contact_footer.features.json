@@ -1,0 +1,173 @@
+{
+	"type": "object",
+	"title": "Contact footer features",
+	"additionalProperties": false,
+	"properties": {
+		"business_name": {
+			"type": "string",
+			"title": "Business name",
+			"description": "Shown in the copyright line.",
+			"default": "",
+			"maxLength": 120,
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 1,
+				"widget": "text"
+			}
+		},
+		"contacts": {
+			"type": "array",
+			"title": "Contacts",
+			"description": "Phone numbers, e-mail addresses, postal addresses, WhatsApp numbers or links, as written (any format; phone links keep digits and +).",
+			"default": [],
+			"maxItems": 12,
+			"items": {
+				"type": "object",
+				"properties": {
+					"kind": {
+						"type": "string",
+						"enum": ["phone", "email", "address", "whatsapp", "link"]
+					},
+					"label": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"value": {
+						"type": "string",
+						"maxLength": 300
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					}
+				},
+				"required": ["kind", "value"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 2,
+				"widget": "list"
+			}
+		},
+		"hours": {
+			"type": "array",
+			"title": "Opening hours",
+			"description": "Rows of days and times, as text in your own words.",
+			"default": [],
+			"maxItems": 14,
+			"items": {
+				"type": "object",
+				"properties": {
+					"days": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"time": {
+						"type": "string",
+						"maxLength": 60
+					}
+				},
+				"required": ["days"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 3,
+				"widget": "list"
+			}
+		},
+		"socials": {
+			"type": "array",
+			"title": "Social links",
+			"description": "Profile links (label and URL).",
+			"default": [],
+			"maxItems": 12,
+			"items": {
+				"type": "object",
+				"properties": {
+					"label": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					}
+				},
+				"required": ["label", "href"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 4,
+				"widget": "list"
+			}
+		},
+		"links": {
+			"type": "array",
+			"title": "Policy and information links",
+			"description": "Links to policies and pages (label and URL).",
+			"default": [],
+			"maxItems": 20,
+			"items": {
+				"type": "object",
+				"properties": {
+					"label": {
+						"type": "string",
+						"maxLength": 60
+					},
+					"href": {
+						"type": "string",
+						"maxLength": 2048,
+						"pattern": "^(|https?://\\S+|/\\S*|\\?\\S*|#\\S*|mailto:\\S+|tel:\\S+)$"
+					}
+				},
+				"required": ["label", "href"],
+				"additionalProperties": false
+			},
+			"x-kind": "config",
+			"x-ui": {
+				"group": "Content",
+				"order": 5,
+				"widget": "list"
+			}
+		},
+		"show_year": {
+			"type": "boolean",
+			"title": "Show the year",
+			"description": "Show the current year in the copyright line.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": {
+				"group": "Content",
+				"order": 6,
+				"widget": "switch"
+			}
+		},
+		"placement": {
+			"type": "object",
+			"title": "Placement",
+			"description": "Where and when the element renders: the shared placement v1 (paths, selectors, page types, devices, referrers, schedule, consent, triggers, frequency incl. cooldown and dismiss memory, audience rule). The Loader enforces it.",
+			"default": {
+				"selectors": [
+					{
+						"selector": "[data-ss-slot=\"footer\"]",
+						"position": "append"
+					}
+				]
+			},
+			"x-kind": "placement",
+			"x-ui": {
+				"group": "Placement",
+				"order": 7
+			}
+		}
+	}
+}
