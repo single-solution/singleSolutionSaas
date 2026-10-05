@@ -36,6 +36,9 @@
 		"consumes": ["item.created@1", "item.updated@1", "item.deleted@1"],
 		"publishes": []
 	},
+	"budget": {
+		"shared": 2
+	},
 	"elements": [
 		{
 			"key": "index",
@@ -156,7 +159,7 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 16
+				"js": 6
 			},
 			"dependsOn": ["index"],
 			"features": {

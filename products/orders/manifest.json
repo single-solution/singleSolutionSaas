@@ -55,6 +55,9 @@
 			"orders.customer_update@1"
 		]
 	},
+	"budget": {
+		"shared": 1
+	},
 	"elements": [
 		{
 			"key": "lifecycle",
@@ -66,7 +69,7 @@
 				"hourly": 200
 			},
 			"budget": {
-				"js": 8
+				"js": 3
 			},
 			"dependsOn": [],
 			"features": {
@@ -100,7 +103,7 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 7
+				"js": 2
 			},
 			"dependsOn": ["lifecycle"],
 			"features": {
@@ -167,7 +170,7 @@
 				]
 			},
 			"budget": {
-				"js": 5
+				"js": 2
 			},
 			"dependsOn": ["lifecycle"],
 			"features": {
