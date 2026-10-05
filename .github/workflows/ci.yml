@@ -19,7 +19,7 @@ jobs:
       timeout-minutes: 10
       steps:
          - uses: actions/checkout@v4
-         - uses: pnpm/action-setup@v4
+         - uses: pnpm/action-setup@v6
          - uses: actions/setup-node@v4
            with:
               node-version-file: .nvmrc
@@ -52,7 +52,7 @@ jobs:
             unit: ${{ fromJson(needs.units.outputs.list) }}
       steps:
          - uses: actions/checkout@v4
-         - uses: pnpm/action-setup@v4
+         - uses: pnpm/action-setup@v6
          - uses: actions/setup-node@v4
            with:
               node-version-file: .nvmrc
