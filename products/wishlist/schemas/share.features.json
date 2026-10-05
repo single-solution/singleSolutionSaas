@@ -1,0 +1,39 @@
+{
+	"type": "object",
+	"title": "Share links",
+	"additionalProperties": false,
+	"properties": {
+		"page_url": {
+			"type": "string",
+			"title": "Share page URL",
+			"description": "An https page of your website that shows the share view, with {token} where the share token goes (e.g. https://example.com/wishlist/shared?t={token}). Empty: the API returns the token only.",
+			"default": "",
+			"maxLength": 512,
+			"x-kind": "config",
+			"x-ui": { "widget": "text", "group": "Links", "order": 1 }
+		},
+		"ttl_days": {
+			"type": "integer",
+			"title": "Link lifetime (days, 0 = until revoked)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 365,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Links", "order": 2 }
+		},
+		"show_prices": {
+			"type": "boolean",
+			"title": "Show prices on shared lists",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Privacy", "order": 3 }
+		},
+		"allow_guests": {
+			"type": "boolean",
+			"title": "Guests may share their list",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Privacy", "order": 4 }
+		}
+	}
+}

@@ -35,6 +35,7 @@
 		"@ss/product-reviews": "workspace:^",
 		"@ss/product-signups": "workspace:^",
 		"@ss/product-storefront": "workspace:^",
+		"@ss/product-wishlist": "workspace:^",
 		"@ss/protocol": "workspace:^",
 		"@types/node": "^22.20.4",
 		"eslint": "^9.39.5",
