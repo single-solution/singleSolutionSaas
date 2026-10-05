@@ -18,7 +18,7 @@ jobs:
       runs-on: ubuntu-latest
       timeout-minutes: 10
       steps:
-         - uses: actions/checkout@v4
+         - uses: actions/checkout@v7
          - uses: pnpm/action-setup@v4
          - uses: actions/setup-node@v4
            with:
@@ -36,7 +36,7 @@ jobs:
       outputs:
          list: ${{ steps.find.outputs.list }}
       steps:
-         - uses: actions/checkout@v4
+         - uses: actions/checkout@v7
          - id: find
            # every folder with a package.json is a unit; new products join CI automatically
            run: echo "list=$(ls -d packages/*/ platform/ products/*/ e2e/ | sed 's:/$::' | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
@@ -51,7 +51,7 @@ jobs:
          matrix:
             unit: ${{ fromJson(needs.units.outputs.list) }}
       steps:
-         - uses: actions/checkout@v4
+         - uses: actions/checkout@v7
          - uses: pnpm/action-setup@v4
          - uses: actions/setup-node@v4
            with:
