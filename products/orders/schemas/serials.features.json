@@ -1,0 +1,99 @@
+{
+	"type": "object",
+	"title": "Serials",
+	"additionalProperties": false,
+	"properties": {
+		"required_for": {
+			"type": "string",
+			"title": "Lines that need a serial per unit before dispatch",
+			"description": "none, flagged (lines marked `serialRequired` in the order, or matching an attribute rule below) or all lines.",
+			"default": "flagged",
+			"enum": ["none", "flagged", "all"],
+			"x-kind": "config"
+		},
+		"required_attributes": {
+			"type": "array",
+			"title": "Attribute rules",
+			"description": "Lines whose snapshot attribute `key` has one of `values` need serials (with required_for = flagged).",
+			"default": [],
+			"maxItems": 20,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "values"],
+				"properties": {
+					"key": {
+						"type": "string",
+						"title": "Attribute",
+						"minLength": 1,
+						"maxLength": 64,
+						"pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"
+					},
+					"values": {
+						"type": "array",
+						"title": "Values",
+						"minItems": 1,
+						"maxItems": 50,
+						"items": { "type": "string", "title": "Value", "minLength": 1, "maxLength": 200 }
+					}
+				}
+			},
+			"x-kind": "config"
+		},
+		"rules": {
+			"type": "array",
+			"title": "Validation rules",
+			"description": "A value is checked by the first rule whose shape it has (characters and length after removing `strip`). `checksum: luhn` catches mistyped check-digit ids. A value that fits no rule is refused.",
+			"default": [
+				{
+					"key": "luhn_id",
+					"chars": "digits",
+					"min_length": 15,
+					"max_length": 15,
+					"checksum": "luhn",
+					"strip": " -",
+					"uppercase": false
+				},
+				{
+					"key": "serial",
+					"chars": "text",
+					"min_length": 1,
+					"max_length": 64,
+					"checksum": "none",
+					"strip": "",
+					"uppercase": false
+				}
+			],
+			"minItems": 1,
+			"maxItems": 20,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "chars", "min_length", "max_length"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+					"chars": {
+						"type": "string",
+						"title": "Characters",
+						"description": "digits, alphanumeric (letters and digits) or text (letters, digits, space and . / : _ -, starting with a letter or digit).",
+						"enum": ["digits", "alphanumeric", "text"]
+					},
+					"min_length": { "type": "integer", "title": "Shortest", "minimum": 1, "maximum": 128 },
+					"max_length": { "type": "integer", "title": "Longest", "minimum": 1, "maximum": 128 },
+					"checksum": { "type": "string", "title": "Check digit", "enum": ["none", "luhn"] },
+					"strip": { "type": "string", "title": "Characters removed first", "maxLength": 10 },
+					"uppercase": { "type": "boolean", "title": "Store in upper case" }
+				}
+			},
+			"x-kind": "config"
+		},
+		"unique_scope": {
+			"type": "string",
+			"title": "A serial may appear once per",
+			"description": "order, or website (refused when another order that is not cancelled holds it).",
+			"default": "website",
+			"enum": ["order", "website"],
+			"x-kind": "config"
+		}
+	}
+}

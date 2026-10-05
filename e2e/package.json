@@ -31,6 +31,7 @@
 		"@ss/product-deals": "workspace:^",
 		"@ss/product-grades": "workspace:^",
 		"@ss/product-loyalty": "workspace:^",
+		"@ss/product-orders": "workspace:^",
 		"@ss/product-pdp": "workspace:^",
 		"@ss/product-reviews": "workspace:^",
 		"@ss/product-signups": "workspace:^",

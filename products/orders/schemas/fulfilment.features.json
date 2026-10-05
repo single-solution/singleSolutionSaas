@@ -1,0 +1,66 @@
+{
+	"type": "object",
+	"title": "Fulfilment",
+	"additionalProperties": false,
+	"properties": {
+		"carriers": {
+			"type": "array",
+			"title": "Carriers",
+			"description": "Your carriers. `tracking_url_template` is an https:// link with {tracking} where the tracking number goes; leave it empty for a carrier without tracking pages. `service_levels` are the services you book with the carrier.",
+			"default": [],
+			"maxItems": 50,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key", "name"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_-]{0,39}$" },
+					"name": { "type": "string", "title": "Name", "minLength": 1, "maxLength": 80 },
+					"tracking_url_template": { "type": "string", "title": "Tracking URL template", "maxLength": 500 },
+					"service_levels": {
+						"type": "array",
+						"title": "Service levels",
+						"uniqueItems": true,
+						"maxItems": 20,
+						"items": { "type": "string", "title": "Service level", "minLength": 1, "maxLength": 60 }
+					}
+				}
+			},
+			"x-kind": "config"
+		},
+		"allow_other_carrier": {
+			"type": "boolean",
+			"title": "Allow a carrier that is not in the list",
+			"description": "Free-text carrier names (no tracking link) for one-off shipments.",
+			"default": false,
+			"x-kind": "flag"
+		},
+		"dispatch_video": {
+			"type": "boolean",
+			"title": "Record a dispatch video link",
+			"description": "Keep an https:// link to a packing or dispatch video on the order (evidence for disputes).",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"show_tracking_to_customer": {
+			"type": "boolean",
+			"title": "Show carrier and tracking to the customer",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"show_video_to_customer": {
+			"type": "boolean",
+			"title": "Show the dispatch video link to the customer",
+			"default": false,
+			"x-kind": "flag"
+		},
+		"max_note_length": {
+			"type": "integer",
+			"title": "Longest tracking note",
+			"default": 500,
+			"minimum": 0,
+			"maximum": 2000,
+			"x-kind": "limit"
+		}
+	}
+}

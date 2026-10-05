@@ -1,0 +1,2615 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Order Manager API",
+		"version": "1.0.0",
+		"description": "Mode C API of the Order Manager (Ecommerce Helper, SSPS v1). sk_ keys (servers) read and change orders; pk_ keys read public metadata, look up tracking and — with a verified SS-Identity — the customer's own orders. Money is integer minor units of each order's currency."
+	},
+	"servers": [
+		{
+			"url": "https://orders.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"paths": {
+		"/v1/orders": {
+			"get": {
+				"operationId": "listOrders",
+				"summary": "Orders of the website, newest first (filters, cursor pages)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Status key",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "Placed at or after (ISO date)",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Placed before (ISO date)",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "payment",
+						"in": "query",
+						"required": false,
+						"description": "Payment method key",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "delivery",
+						"in": "query",
+						"required": false,
+						"description": "Delivery method key",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "review",
+						"in": "query",
+						"required": false,
+						"description": "Review state (pending, cleared, held)",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "customerId",
+						"in": "query",
+						"required": false,
+						"description": "Customer id",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "source",
+						"in": "query",
+						"required": false,
+						"description": "checkout, api, import or dashboard",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "Opaque cursor of the next page",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Page size (1–100)",
+						"schema": {
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OrderPage"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "ord_0123456789abcdefghjkmnpq",
+											"number": "000001",
+											"source": "api",
+											"status": "pending_payment",
+											"currency": "EUR",
+											"lines": [
+												{
+													"id": "l1",
+													"sku": "LAMP-1",
+													"title": "Desk lamp",
+													"quantity": 1,
+													"unitAmount": 4500,
+													"totalAmount": 4500,
+													"serials": []
+												}
+											],
+											"amounts": {
+												"subtotal": 4500,
+												"discount": 0,
+												"shipping": 0,
+												"tax": 0,
+												"total": 4500
+											},
+											"money": {
+												"total": 4500,
+												"paid": 0,
+												"refunded": 0,
+												"netPaid": 0,
+												"balanceDue": 4500,
+												"refundable": 0,
+												"paymentState": "unpaid",
+												"refundState": "none"
+											},
+											"revenue": false,
+											"next": ["confirmed", "cancelled"]
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}": {
+			"get": {
+				"operationId": "getOrder",
+				"summary": "One order with its money summary and the moves an integration may make",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Order"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"number": "000001",
+									"source": "api",
+									"status": "pending_payment",
+									"currency": "EUR",
+									"lines": [
+										{
+											"id": "l1",
+											"sku": "LAMP-1",
+											"title": "Desk lamp",
+											"quantity": 1,
+											"unitAmount": 4500,
+											"totalAmount": 4500,
+											"serials": []
+										}
+									],
+									"amounts": {
+										"subtotal": 4500,
+										"discount": 0,
+										"shipping": 0,
+										"tax": 0,
+										"total": 4500
+									},
+									"money": {
+										"total": 4500,
+										"paid": 0,
+										"refunded": 0,
+										"netPaid": 0,
+										"balanceDue": 4500,
+										"refundable": 0,
+										"paymentState": "unpaid",
+										"refundState": "none"
+									},
+									"revenue": false,
+									"next": ["confirmed", "cancelled"]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}/transitions": {
+			"post": {
+				"operationId": "moveOrder",
+				"summary": "Move an order to a status (matrix, checks, side effects)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Transition"
+							},
+							"example": {
+								"status": "confirmed"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Order"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"number": "000001",
+									"source": "api",
+									"status": "pending_payment",
+									"currency": "EUR",
+									"lines": [
+										{
+											"id": "l1",
+											"sku": "LAMP-1",
+											"title": "Desk lamp",
+											"quantity": 1,
+											"unitAmount": 4500,
+											"totalAmount": 4500,
+											"serials": []
+										}
+									],
+									"amounts": {
+										"subtotal": 4500,
+										"discount": 0,
+										"shipping": 0,
+										"tax": 0,
+										"total": 4500
+									},
+									"money": {
+										"total": 4500,
+										"paid": 0,
+										"refunded": 0,
+										"netPaid": 0,
+										"balanceDue": 4500,
+										"refundable": 0,
+										"paymentState": "unpaid",
+										"refundState": "none"
+									},
+									"revenue": false,
+									"next": ["confirmed", "cancelled"]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}/fulfilment": {
+			"patch": {
+				"operationId": "updateFulfilment",
+				"summary": "Carrier, service level, tracking number, dispatch video, ETA, note",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/FulfilmentPatch"
+							},
+							"example": {
+								"carrier": "parcel-co",
+								"trackingNumber": "PC123"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Order"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"number": "000001",
+									"source": "api",
+									"status": "pending_payment",
+									"currency": "EUR",
+									"lines": [
+										{
+											"id": "l1",
+											"sku": "LAMP-1",
+											"title": "Desk lamp",
+											"quantity": 1,
+											"unitAmount": 4500,
+											"totalAmount": 4500,
+											"serials": []
+										}
+									],
+									"amounts": {
+										"subtotal": 4500,
+										"discount": 0,
+										"shipping": 0,
+										"tax": 0,
+										"total": 4500
+									},
+									"money": {
+										"total": 4500,
+										"paid": 0,
+										"refunded": 0,
+										"netPaid": 0,
+										"balanceDue": 4500,
+										"refundable": 0,
+										"paymentState": "unpaid",
+										"refundState": "none"
+									},
+									"revenue": false,
+									"next": ["confirmed", "cancelled"]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}/serials": {
+			"put": {
+				"operationId": "setSerials",
+				"summary": "Serials per line (validated, unique)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/SerialsPatch"
+							},
+							"example": {
+								"lines": [
+									{
+										"lineId": "l1",
+										"serials": ["SN-0001"]
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Order"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"number": "000001",
+									"source": "api",
+									"status": "pending_payment",
+									"currency": "EUR",
+									"lines": [
+										{
+											"id": "l1",
+											"sku": "LAMP-1",
+											"title": "Desk lamp",
+											"quantity": 1,
+											"unitAmount": 4500,
+											"totalAmount": 4500,
+											"serials": []
+										}
+									],
+									"amounts": {
+										"subtotal": 4500,
+										"discount": 0,
+										"shipping": 0,
+										"tax": 0,
+										"total": 4500
+									},
+									"money": {
+										"total": 4500,
+										"paid": 0,
+										"refunded": 0,
+										"netPaid": 0,
+										"balanceDue": 4500,
+										"refundable": 0,
+										"paymentState": "unpaid",
+										"refundState": "none"
+									},
+									"revenue": false,
+									"next": ["confirmed", "cancelled"]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}/payments": {
+			"post": {
+				"operationId": "recordPayment",
+				"summary": "Record a payment (never above the balance due unless allowed)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LedgerEntryInput"
+							},
+							"example": {
+								"amount": 4500,
+								"method": "bank_transfer",
+								"reference": "TRX-1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LedgerResult"
+								},
+								"example": {
+									"entry": {
+										"id": "pay_0123456789abcdefghjkmnpq",
+										"amount": 4500
+									},
+									"order": {
+										"id": "ord_0123456789abcdefghjkmnpq",
+										"number": "000001",
+										"source": "api",
+										"status": "pending_payment",
+										"currency": "EUR",
+										"lines": [
+											{
+												"id": "l1",
+												"sku": "LAMP-1",
+												"title": "Desk lamp",
+												"quantity": 1,
+												"unitAmount": 4500,
+												"totalAmount": 4500,
+												"serials": []
+											}
+										],
+										"amounts": {
+											"subtotal": 4500,
+											"discount": 0,
+											"shipping": 0,
+											"tax": 0,
+											"total": 4500
+										},
+										"money": {
+											"total": 4500,
+											"paid": 0,
+											"refunded": 0,
+											"netPaid": 0,
+											"balanceDue": 4500,
+											"refundable": 0,
+											"paymentState": "unpaid",
+											"refundState": "none"
+										},
+										"revenue": false,
+										"next": ["confirmed", "cancelled"]
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}/refunds": {
+			"post": {
+				"operationId": "recordRefund",
+				"summary": "Record a refund (never above what is held), optionally with refunded lines",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/LedgerEntryInput"
+							},
+							"example": {
+								"amount": 1000,
+								"method": "bank_transfer",
+								"reference": "RF-1",
+								"reason": "damaged",
+								"lines": [
+									{
+										"lineId": "l1",
+										"quantity": 1
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/LedgerResult"
+								},
+								"example": {
+									"entry": {
+										"id": "rfd_0123456789abcdefghjkmnpq",
+										"amount": 1000
+									},
+									"order": {
+										"id": "ord_0123456789abcdefghjkmnpq",
+										"number": "000001",
+										"source": "api",
+										"status": "pending_payment",
+										"currency": "EUR",
+										"lines": [
+											{
+												"id": "l1",
+												"sku": "LAMP-1",
+												"title": "Desk lamp",
+												"quantity": 1,
+												"unitAmount": 4500,
+												"totalAmount": 4500,
+												"serials": []
+											}
+										],
+										"amounts": {
+											"subtotal": 4500,
+											"discount": 0,
+											"shipping": 0,
+											"tax": 0,
+											"total": 4500
+										},
+										"money": {
+											"total": 4500,
+											"paid": 0,
+											"refunded": 0,
+											"netPaid": 0,
+											"balanceDue": 4500,
+											"refundable": 0,
+											"paymentState": "unpaid",
+											"refundState": "none"
+										},
+										"revenue": false,
+										"next": ["confirmed", "cancelled"]
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}/review": {
+			"post": {
+				"operationId": "reviewOrder",
+				"summary": "Clear or hold an order in the review queue",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Review"
+							},
+							"example": {
+								"decision": "clear"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Order"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"number": "000001",
+									"source": "api",
+									"status": "pending_payment",
+									"currency": "EUR",
+									"lines": [
+										{
+											"id": "l1",
+											"sku": "LAMP-1",
+											"title": "Desk lamp",
+											"quantity": 1,
+											"unitAmount": 4500,
+											"totalAmount": 4500,
+											"serials": []
+										}
+									],
+									"amounts": {
+										"subtotal": 4500,
+										"discount": 0,
+										"shipping": 0,
+										"tax": 0,
+										"total": 4500
+									},
+									"money": {
+										"total": 4500,
+										"paid": 0,
+										"refunded": 0,
+										"netPaid": 0,
+										"balanceDue": 4500,
+										"refundable": 0,
+										"paymentState": "unpaid",
+										"refundState": "none"
+									},
+									"revenue": false,
+									"next": ["confirmed", "cancelled"]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/orders/{id}/invoice": {
+			"get": {
+				"operationId": "renderInvoice",
+				"summary": "Printable invoice (HTML; ?format=json for { title, html }); metered per render",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "kind",
+						"in": "query",
+						"required": false,
+						"description": "customer (default) or internal",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "format",
+						"in": "query",
+						"required": false,
+						"description": "json for { title, html }",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/html": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "<!doctype html><html lang=\"en\">…</html>"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/order-statuses": {
+			"get": {
+				"operationId": "listStatuses",
+				"summary": "The status set and transition matrix (public metadata)",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/StatusList"
+								},
+								"example": {
+									"items": [
+										{
+											"key": "confirmed",
+											"label": "Confirmed",
+											"revenue": true,
+											"open": true,
+											"customerCancellable": false,
+											"terminal": false,
+											"expireAfterHours": 0
+										}
+									],
+									"transitions": [
+										{
+											"from": "confirmed",
+											"to": "packed",
+											"actors": ["staff", "api"],
+											"requires": []
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/my-orders": {
+			"get": {
+				"operationId": "listMyOrders",
+				"summary": "The signed-in customer's orders (pk_ + SS-Identity)",
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "Opaque cursor of the next page",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Page size (1–100)",
+						"schema": {
+							"type": "integer"
+						}
+					},
+					{
+						"name": "SS-Identity",
+						"in": "header",
+						"required": true,
+						"description": "The customer's login token from the website's own identity issuer (verified offline).",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "ord_0123456789abcdefghjkmnpq",
+											"number": "000001",
+											"status": "confirmed",
+											"statusLabel": "Confirmed",
+											"total": 4500,
+											"currency": "EUR",
+											"canCancel": false
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/my-orders/{id}": {
+			"get": {
+				"operationId": "getMyOrder",
+				"summary": "One of the customer's orders: timeline, tracking, lines, payments",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "SS-Identity",
+						"in": "header",
+						"required": true,
+						"description": "The customer's login token from the website's own identity issuer (verified offline).",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"number": "000001",
+									"status": "dispatched",
+									"timeline": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/my-orders/{id}/cancel": {
+			"post": {
+				"operationId": "cancelMyOrder",
+				"summary": "Cancel while the status and window allow it",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "SS-Identity",
+						"in": "header",
+						"required": true,
+						"description": "The customer's login token from the website's own identity issuer (verified offline).",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Object"
+							},
+							"example": {}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"status": "cancelled"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/my-orders/{id}/receipt": {
+			"get": {
+				"operationId": "getMyReceipt",
+				"summary": "The customer's printable receipt (HTML; ?format=json); metered per render",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "format",
+						"in": "query",
+						"required": false,
+						"description": "json for { title, html }",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "SS-Identity",
+						"in": "header",
+						"required": true,
+						"description": "The customer's login token from the website's own identity issuer (verified offline).",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/html": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "<!doctype html><html lang=\"en\">…</html>"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/carriers": {
+			"get": {
+				"operationId": "listCarriers",
+				"summary": "Carriers and service levels (public)",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"key": "parcel-co",
+											"name": "Parcel Co",
+											"serviceLevels": ["standard"],
+											"tracking": true
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/tracking-lookups": {
+			"post": {
+				"operationId": "lookupTracking",
+				"summary": "Guest tracking by order number and the e-mail or phone used (no personal data returned)",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/TrackingLookup"
+							},
+							"example": {
+								"number": "000001",
+								"contact": "ada@example.com"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"number": "000001",
+									"status": "dispatched",
+									"statusLabel": "Dispatched",
+									"tracking": {
+										"carrier": "Parcel Co",
+										"trackingNumber": "PC123",
+										"trackingUrl": "https://track.example.com/PC123"
+									},
+									"timeline": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/serials": {
+			"get": {
+				"operationId": "lookupSerial",
+				"summary": "Orders holding a serial",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "serial",
+						"in": "query",
+						"required": false,
+						"description": "The serial",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"serial": "SN-0001",
+											"orderId": "ord_0123456789abcdefghjkmnpq",
+											"number": "000001",
+											"lineId": "l1"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/invoices": {
+			"get": {
+				"operationId": "listInvoices",
+				"summary": "Orders with an invoice number",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "Opaque cursor of the next page",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Page size (1–100)",
+						"schema": {
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"orderId": "ord_0123456789abcdefghjkmnpq",
+											"number": "000001",
+											"invoiceNumber": "INV-000001"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/packing-slips": {
+			"get": {
+				"operationId": "packingSlips",
+				"summary": "Printable packing slips for ?ids=",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "ids",
+						"in": "query",
+						"required": false,
+						"description": "Comma-separated order ids",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/html": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "<!doctype html><html lang=\"en\">…</html>"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/pick-lists": {
+			"get": {
+				"operationId": "pickList",
+				"summary": "Printable pick list aggregated by SKU for ?ids=",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "ids",
+						"in": "query",
+						"required": false,
+						"description": "Comma-separated order ids",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/html": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "<!doctype html><html lang=\"en\">…</html>"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/order-batches": {
+			"post": {
+				"operationId": "bulkStatus",
+				"summary": "Move many orders to one status (per-order results)",
+				"x-ss-key-kind": "sk",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Batch"
+							},
+							"example": {
+								"ids": ["ord_0123456789abcdefghjkmnpq"],
+								"status": "packed"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"status": "packed",
+									"updated": 1,
+									"skipped": 0,
+									"failed": 0,
+									"results": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/order-exports": {
+			"get": {
+				"operationId": "exportOrders",
+				"summary": "CSV export with the configured columns",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "status",
+						"in": "query",
+						"required": false,
+						"description": "Status key",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "Placed at or after (ISO date)",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "Placed before (ISO date)",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "payment",
+						"in": "query",
+						"required": false,
+						"description": "Payment method key",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "delivery",
+						"in": "query",
+						"required": false,
+						"description": "Delivery method key",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "review",
+						"in": "query",
+						"required": false,
+						"description": "Review state (pending, cleared, held)",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "customerId",
+						"in": "query",
+						"required": false,
+						"description": "Customer id",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "source",
+						"in": "query",
+						"required": false,
+						"description": "checkout, api, import or dashboard",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "number,status,total\r\n000001,confirmed,4500\r\n"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/order-imports": {
+			"post": {
+				"operationId": "importOrders",
+				"summary": "CSV import of status and tracking updates (dry run available)",
+				"x-ss-key-kind": "sk",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Import"
+							},
+							"example": {
+								"csv": "number,status,tracking_number\n000001,dispatched,PC123\n",
+								"dryRun": true
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"dryRun": true,
+									"rows": 1,
+									"updated": 0,
+									"valid": 1,
+									"failed": 0,
+									"results": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/risk-checks": {
+			"post": {
+				"operationId": "checkRisk",
+				"summary": "Pre-checkout risk check (nothing is stored)",
+				"x-ss-key-kind": "sk",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/RiskCheck"
+							},
+							"example": {
+								"currency": "EUR",
+								"total": 4500,
+								"customer": {
+									"email": "ada@example.com"
+								},
+								"payment": {
+									"method": "cod"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"decision": "accept",
+									"flags": [],
+									"advance": 0,
+									"currency": "EUR"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/blocklist": {
+			"get": {
+				"operationId": "listBlocklist",
+				"summary": "Blocked customers (masked)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "Opaque cursor of the next page",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Page size (1–100)",
+						"schema": {
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"key": "e:0123456789abcdef0123456789abcdef01234567",
+											"type": "email",
+											"display": "a***@example.com",
+											"blocked": true,
+											"rtoCount": 0
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "block",
+				"summary": "Block a customer id, subject, e-mail or phone",
+				"x-ss-key-kind": "sk",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/BlockInput"
+							},
+							"example": {
+								"type": "email",
+								"value": "ada@example.com",
+								"reason": "chargebacks"
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"key": "e:0123456789abcdef0123456789abcdef01234567",
+									"blocked": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/blocklist/{key}": {
+			"delete": {
+				"operationId": "unblock",
+				"summary": "Unblock",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "key",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"key": "e:0123456789abcdef0123456789abcdef01234567",
+									"blocked": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/risk-reviews": {
+			"get": {
+				"operationId": "listReviews",
+				"summary": "Orders waiting for manual review",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "Opaque cursor of the next page",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Page size (1–100)",
+						"schema": {
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OrderPage"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "ord_0123456789abcdefghjkmnpq",
+											"number": "000001",
+											"source": "api",
+											"status": "pending_payment",
+											"currency": "EUR",
+											"lines": [
+												{
+													"id": "l1",
+													"sku": "LAMP-1",
+													"title": "Desk lamp",
+													"quantity": 1,
+													"unitAmount": 4500,
+													"totalAmount": 4500,
+													"serials": []
+												}
+											],
+											"amounts": {
+												"subtotal": 4500,
+												"discount": 0,
+												"shipping": 0,
+												"tax": 0,
+												"total": 4500
+											},
+											"money": {
+												"total": 4500,
+												"paid": 0,
+												"refunded": 0,
+												"netPaid": 0,
+												"balanceDue": 4500,
+												"refundable": 0,
+												"paymentState": "unpaid",
+												"refundState": "none"
+											},
+											"revenue": false,
+											"next": ["confirmed", "cancelled"]
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/customer-updates": {
+			"get": {
+				"operationId": "listMessages",
+				"summary": "Customer status messages (log)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "Opaque cursor of the next page",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Page size (1–100)",
+						"schema": {
+							"type": "integer"
+						}
+					},
+					{
+						"name": "orderId",
+						"in": "query",
+						"required": false,
+						"description": "Messages of one order",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "msg_0123456789abcdefghjkmnpq",
+											"orderId": "ord_0123456789abcdefghjkmnpq",
+											"status": "dispatched",
+											"channel": "email",
+											"state": "sent"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/customer-updates/{id}": {
+			"get": {
+				"operationId": "getMessage",
+				"summary": "One message with its recipient and text (for a messaging product)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"id": "msg_0123456789abcdefghjkmnpq",
+									"channel": "email",
+									"to": {
+										"email": "ada@example.com"
+									},
+									"text": "…"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/customer-updates/{id}/retry": {
+			"post": {
+				"operationId": "retryMessage",
+				"summary": "Send a failed message again",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/Object"
+							},
+							"example": {}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"id": "msg_0123456789abcdefghjkmnpq",
+									"result": "sent"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/ledger": {
+			"get": {
+				"operationId": "listLedger",
+				"summary": "Payments and refunds across orders with totals per currency (reconciliation)",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "from",
+						"in": "query",
+						"required": false,
+						"description": "ISO date",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "to",
+						"in": "query",
+						"required": false,
+						"description": "ISO date",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "kind",
+						"in": "query",
+						"required": false,
+						"description": "payment or refund",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "method",
+						"in": "query",
+						"required": false,
+						"description": "Method key",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "1–500",
+						"schema": {
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Object"
+								},
+								"example": {
+									"items": [],
+									"totals": {
+										"EUR": {
+											"payments": 4500,
+											"refunds": 0,
+											"net": 4500
+										}
+									},
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/inbound-orders": {
+			"get": {
+				"operationId": "listInboundOrders",
+				"summary": "Orders received through the inbound API, newest first",
+				"x-ss-key-kind": "sk",
+				"x-ss-certify": true,
+				"parameters": [
+					{
+						"name": "cursor",
+						"in": "query",
+						"required": false,
+						"description": "Opaque cursor of the next page",
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"name": "limit",
+						"in": "query",
+						"required": false,
+						"description": "Page size (1–100)",
+						"schema": {
+							"type": "integer"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Page"
+								},
+								"example": {
+									"items": [
+										{
+											"id": "ord_0123456789abcdefghjkmnpq",
+											"number": "000001",
+											"externalId": null,
+											"status": "pending_payment",
+											"total": 4500,
+											"currency": "EUR"
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			},
+			"post": {
+				"operationId": "receiveOrder",
+				"summary": "Receive an order from any checkout (our schema, or ?mapping=<key>); idempotent per externalId; metered per order",
+				"x-ss-key-kind": "sk",
+				"parameters": [
+					{
+						"name": "mapping",
+						"in": "query",
+						"required": false,
+						"description": "Key of a schema mapping in the settings",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/InboundOrder"
+							},
+							"example": {
+								"currency": "EUR",
+								"customer": {
+									"email": "ada@example.com",
+									"name": "Ada"
+								},
+								"payment": {
+									"method": "bank_transfer"
+								},
+								"lines": [
+									{
+										"title": "Desk lamp",
+										"sku": "LAMP-1",
+										"quantity": 1,
+										"unitAmount": 4500,
+										"warranty": {
+											"days": 365
+										}
+									}
+								],
+								"taxLines": [
+									{
+										"label": "VAT",
+										"rate": "20%",
+										"amount": 750
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Order"
+								},
+								"example": {
+									"id": "ord_0123456789abcdefghjkmnpq",
+									"number": "000001",
+									"source": "api",
+									"status": "pending_payment",
+									"currency": "EUR",
+									"lines": [
+										{
+											"id": "l1",
+											"sku": "LAMP-1",
+											"title": "Desk lamp",
+											"quantity": 1,
+											"unitAmount": 4500,
+											"totalAmount": 4500,
+											"serials": []
+										}
+									],
+									"amounts": {
+										"subtotal": 4500,
+										"discount": 0,
+										"shipping": 0,
+										"tax": 0,
+										"total": 4500
+									},
+									"money": {
+										"total": 4500,
+										"paid": 0,
+										"refunded": 0,
+										"netPaid": 0,
+										"balanceDue": 4500,
+										"refundable": 0,
+										"paymentState": "unpaid",
+										"refundState": "none"
+									},
+									"revenue": false,
+									"next": ["confirmed", "cancelled"],
+									"duplicate": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			}
+		},
+		"schemas": {
+			"Object": {
+				"type": "object"
+			},
+			"Page": {
+				"type": "object",
+				"required": ["items", "nextCursor", "hasMore"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"Order": {
+				"type": "object",
+				"required": ["id", "number", "status", "currency", "lines", "amounts"],
+				"properties": {
+					"id": {
+						"type": "string"
+					},
+					"number": {
+						"type": "string"
+					},
+					"source": {
+						"type": "string"
+					},
+					"status": {
+						"type": "string"
+					},
+					"currency": {
+						"type": "string"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"amounts": {
+						"type": "object"
+					},
+					"taxLines": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"payments": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"refunds": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"timeline": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"fulfilment": {
+						"type": "object"
+					},
+					"risk": {
+						"type": "object"
+					},
+					"money": {
+						"type": "object"
+					},
+					"revenue": {
+						"type": "boolean"
+					},
+					"next": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					}
+				}
+			},
+			"OrderPage": {
+				"type": "object",
+				"required": ["items", "nextCursor", "hasMore"],
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/Order"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
+				}
+			},
+			"StatusList": {
+				"type": "object",
+				"properties": {
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"transitions": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
+				}
+			},
+			"Transition": {
+				"type": "object",
+				"required": ["status"],
+				"properties": {
+					"status": {
+						"type": "string"
+					},
+					"reason": {
+						"type": "string"
+					},
+					"note": {
+						"type": "string",
+						"maxLength": 500
+					}
+				}
+			},
+			"FulfilmentPatch": {
+				"type": "object",
+				"properties": {
+					"carrier": {
+						"type": ["string", "null"]
+					},
+					"serviceLevel": {
+						"type": ["string", "null"]
+					},
+					"trackingNumber": {
+						"type": ["string", "null"]
+					},
+					"dispatchVideoUrl": {
+						"type": ["string", "null"]
+					},
+					"eta": {
+						"type": ["string", "null"]
+					},
+					"note": {
+						"type": ["string", "null"]
+					}
+				}
+			},
+			"SerialsPatch": {
+				"type": "object",
+				"required": ["lines"],
+				"properties": {
+					"lines": {
+						"type": "array",
+						"items": {
+							"type": "object",
+							"properties": {
+								"lineId": {
+									"type": "string"
+								},
+								"serials": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								}
+							}
+						}
+					}
+				}
+			},
+			"LedgerEntryInput": {
+				"type": "object",
+				"required": ["amount", "method"],
+				"properties": {
+					"amount": {
+						"type": "integer",
+						"minimum": 1,
+						"description": "Minor units of the order currency"
+					},
+					"method": {
+						"type": "string"
+					},
+					"reference": {
+						"type": "string"
+					},
+					"proofUrl": {
+						"type": "string",
+						"format": "uri"
+					},
+					"note": {
+						"type": "string"
+					},
+					"reason": {
+						"type": "string",
+						"description": "Required on refunds"
+					},
+					"occurredAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
+				}
+			},
+			"LedgerResult": {
+				"type": "object",
+				"properties": {
+					"entry": {
+						"type": "object"
+					},
+					"order": {
+						"$ref": "#/components/schemas/Order"
+					}
+				}
+			},
+			"Review": {
+				"type": "object",
+				"required": ["decision"],
+				"properties": {
+					"decision": {
+						"type": "string",
+						"enum": ["clear", "hold"]
+					},
+					"note": {
+						"type": "string"
+					}
+				}
+			},
+			"TrackingLookup": {
+				"type": "object",
+				"required": ["number", "contact"],
+				"properties": {
+					"number": {
+						"type": "string"
+					},
+					"contact": {
+						"type": "string"
+					}
+				}
+			},
+			"Batch": {
+				"type": "object",
+				"required": ["ids", "status"],
+				"properties": {
+					"ids": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"status": {
+						"type": "string"
+					},
+					"reason": {
+						"type": "string"
+					},
+					"note": {
+						"type": "string"
+					}
+				}
+			},
+			"Import": {
+				"type": "object",
+				"required": ["csv"],
+				"properties": {
+					"csv": {
+						"type": "string"
+					},
+					"dryRun": {
+						"type": "boolean"
+					}
+				}
+			},
+			"RiskCheck": {
+				"type": "object",
+				"properties": {
+					"currency": {
+						"type": "string"
+					},
+					"total": {
+						"type": "integer"
+					},
+					"customer": {
+						"type": "object"
+					},
+					"payment": {
+						"type": "object"
+					}
+				}
+			},
+			"BlockInput": {
+				"type": "object",
+				"required": ["type", "value"],
+				"properties": {
+					"type": {
+						"type": "string",
+						"enum": ["customer", "subject", "email", "phone"]
+					},
+					"value": {
+						"type": "string"
+					},
+					"reason": {
+						"type": "string"
+					}
+				}
+			},
+			"InboundOrder": {
+				"type": "object",
+				"required": ["lines"],
+				"description": "Our canonical order (or any JSON with ?mapping=). Money in integer minor units of `currency`.",
+				"properties": {
+					"externalId": {
+						"type": "string"
+					},
+					"number": {
+						"type": "string"
+					},
+					"placedAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"currency": {
+						"type": "string",
+						"pattern": "^[A-Z]{3}$"
+					},
+					"lang": {
+						"type": "string"
+					},
+					"customer": {
+						"type": "object"
+					},
+					"shipping": {
+						"type": "object"
+					},
+					"billing": {
+						"type": "object"
+					},
+					"delivery": {
+						"type": "object"
+					},
+					"payment": {
+						"type": "object"
+					},
+					"lines": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"amounts": {
+						"type": "object"
+					},
+					"taxLines": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"adjustments": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					},
+					"notes": {
+						"type": "object"
+					},
+					"custom": {
+						"type": "object"
+					}
+				}
+			},
+			"Problem": {
+				"type": "object",
+				"required": ["type", "title", "status"],
+				"properties": {
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string"
+					},
+					"requestId": {
+						"type": "string"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
+				}
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem details",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"$ref": "#/components/schemas/Problem"
+						}
+					}
+				}
+			}
+		}
+	}
+}
