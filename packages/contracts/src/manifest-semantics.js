@@ -67,7 +67,24 @@ export const MANIFEST_RULES = Object.freeze({
 	planElementConflict: 'planElementConflict',
 	featureOpenObject: 'featureOpenObject',
 	featurePattern: 'featurePattern',
+	featurePlacement: 'featurePlacement',
+	duplicateRead: 'duplicateRead',
+	selfRead: 'selfRead',
+	readScope: 'readScope',
+	optionalResourceRequired: 'optionalResourceRequired',
 });
+
+/**
+ * Products a manifest reads (`reads`), normalised: `{ product, scopes }` with the default scope `<product>.read`.
+ * @param {Pick<Manifest, 'reads'>} manifest
+ * @returns {Array<{ product: string, scopes: string[] }>}
+ */
+export const readsOf = (manifest) =>
+	(manifest.reads ?? []).map((entry) =>
+		typeof entry === 'string'
+			? { product: entry, scopes: [`${entry}.read`] }
+			: { product: entry.product, scopes: [...(entry.scopes ?? [`${entry.product}.read`])] },
+	);
 
 /**
  * @param {ReadonlyArray<string | number>} tokens
@@ -254,6 +271,10 @@ const checkNode = (node, path, options, out) => {
 		return;
 	}
 	const typed = /** @type {FeatureNode} */ (/** @type {unknown} */ (node));
+	if (node['x-kind'] === 'placement' || 'x-placement' in node) {
+		checkPlacementNode(node, path, options, out);
+		return;
+	}
 	if (options.top) {
 		for (const required of ['title', 'default']) {
 			if (!(required in node))
@@ -341,6 +362,88 @@ const checkNode = (node, path, options, out) => {
 					out.push(at([...entryPath, 'default'], MANIFEST_RULES.planDefaultExceedsMax, 'plan default exceeds plan max'));
 				}
 			}
+		}
+	}
+};
+
+/**
+ * A `placement` feature (x-kind `placement`): a top-level `type: 'object'` node whose value is a placement v1 object
+ * (`@ss/contracts` placement schema, every member: paths, selectors, pageTypes, devices, referrers, schedule, consent,
+ * triggers, frequency incl. cooldown and dismissMemory, audience). It declares no `properties`; `x-placement.members`
+ * optionally narrows the members the element supports, and `x-plan.<plan>.members` the members a plan may set.
+ * Defaults are checked against the placement schema by the validator (`validateManifest`).
+ * @param {Record<string, unknown>} node
+ * @param {Array<string | number>} path
+ * @param {{ top: boolean, planCodes: ReadonlySet<string> | null }} options
+ * @param {ValidationProblem[]} out
+ */
+const checkPlacementNode = (node, path, options, out) => {
+	if (!options.top)
+		out.push(at([...path, 'x-kind'], MANIFEST_RULES.featurePlacement, 'placement features must be top-level features'));
+	if (node['x-kind'] !== 'placement')
+		out.push(at([...path, 'x-kind'], MANIFEST_RULES.featurePlacement, "x-placement requires x-kind 'placement'"));
+	if (node.type !== 'object')
+		out.push(at([...path, 'type'], MANIFEST_RULES.featurePlacement, "placement features must be type 'object'"));
+	for (const keyword of ['properties', 'required', 'enum', 'const', 'items'])
+		if (keyword in node)
+			out.push(
+				at(
+					[...path, keyword],
+					MANIFEST_RULES.featurePlacement,
+					`'${keyword}' is not allowed on a placement feature (the placement v1 schema applies)`,
+				),
+			);
+	for (const required of ['title', 'default'])
+		if (!(required in node))
+			out.push(at([...path, required], MANIFEST_RULES.featureRequired, `top-level feature needs '${required}'`));
+	const members =
+		isPlainObject(node['x-placement']) && Array.isArray(node['x-placement'].members) ? node['x-placement'].members : null;
+	/** @param {unknown} value @param {Array<string | number>} at_ */
+	const outside = (value, at_) => {
+		if (members === null || !isPlainObject(value)) return;
+		for (const name of Object.keys(value))
+			if (!members.includes(name))
+				out.push(at(at_, MANIFEST_RULES.featurePlacement, `placement member '${name}' is not in x-placement.members`));
+	};
+	if ('default' in node) outside(node.default, [...path, 'default']);
+	const xPlan = node['x-plan'];
+	if (isPlainObject(xPlan)) {
+		for (const [code, entry] of Object.entries(xPlan)) {
+			const entryPath = [...path, 'x-plan', code];
+			if (options.planCodes !== null && !options.planCodes.has(code))
+				out.push(at(entryPath, MANIFEST_RULES.unknownPlan, `plan '${code}' is not declared in plans`));
+			if (!isPlainObject(entry)) continue;
+			if ('max' in entry)
+				out.push(
+					at([...entryPath, 'max'], MANIFEST_RULES.boundType, 'placement features are bounded with x-plan.<plan>.members'),
+				);
+			const allowed = Array.isArray(entry.members) ? entry.members : null;
+			if (allowed !== null && members !== null)
+				for (const name of allowed)
+					if (!members.includes(name))
+						out.push(
+							at([...entryPath, 'members'], MANIFEST_RULES.featurePlacement, `'${name}' is not in x-placement.members`),
+						);
+			if (allowed !== null && 'default' in entry && isPlainObject(entry.default))
+				for (const name of Object.keys(entry.default))
+					if (!allowed.includes(name))
+						out.push(
+							at(
+								[...entryPath, 'default'],
+								MANIFEST_RULES.planDefaultExceedsMax,
+								`plan default sets '${name}', which the plan's members do not allow`,
+							),
+						);
+			if (allowed !== null && !('default' in entry) && isPlainObject(node.default))
+				for (const name of Object.keys(node.default))
+					if (!allowed.includes(name))
+						out.push(
+							at(
+								[...entryPath, 'members'],
+								MANIFEST_RULES.planDefaultExceedsMax,
+								`the product default sets '${name}', which plan '${code}' does not allow (give the plan its own default)`,
+							),
+						);
 		}
 	}
 };
@@ -599,6 +702,16 @@ export const checkManifest = (manifest) => {
 				}
 			}
 		}
+		for (const [kindIndex, kind] of (element.requires?.optionalResources ?? []).entries()) {
+			if ((element.requires?.resources ?? []).includes(kind) || (manifest.requires?.resources ?? []).includes(kind))
+				out.push(
+					at(
+						[...base, 'requires', 'optionalResources', kindIndex],
+						MANIFEST_RULES.optionalResourceRequired,
+						`'${kind}' is already required; list it in resources or optionalResources, not both`,
+					),
+				);
+		}
 		if (manifest.product.kind === 'pack' && !modes.has('A'))
 			out.push(at([...base, 'modes'], MANIFEST_RULES.packRequiresModeA, 'every element of a pack must support mode A'));
 		if (modes.has('A') && !element.renderer)
@@ -788,6 +901,25 @@ export const checkManifest = (manifest) => {
 				);
 			}
 		}
+	}
+
+	/** @type {Set<string>} */
+	const readProducts = new Set();
+	for (const [index, read] of readsOf(manifest).entries()) {
+		if (read.product === manifest.product.slug)
+			out.push(at(['reads', index], MANIFEST_RULES.selfRead, 'a product does not read its own API through reads'));
+		if (readProducts.has(read.product))
+			out.push(at(['reads', index], MANIFEST_RULES.duplicateRead, `'${read.product}' is listed twice`));
+		readProducts.add(read.product);
+		for (const [scopeIndex, scope] of read.scopes.entries())
+			if (scope !== `${read.product}.read` && scope !== `${read.product}.*` && !scope.startsWith(`${read.product}.read.`))
+				out.push(
+					at(
+						['reads', index, 'scopes', scopeIndex],
+						MANIFEST_RULES.readScope,
+						`'${scope}' must be a read scope of '${read.product}' (${read.product}.read)`,
+					),
+				);
 	}
 
 	if (!isUtcTimestamp(manifest.priceBook.effectiveFrom)) {

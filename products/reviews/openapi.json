@@ -2903,7 +2903,7 @@
 			"get": {
 				"operationId": "cronRequests",
 				"tags": ["request_flow"],
-				"summary": "Hourly job (Vercel cron, Authorization: Bearer $CRON_SECRET): the request flow of every website.",
+				"summary": "Hourly job (Vercel cron, Authorization: Bearer $CRON_SECRET): per website, the sweep of stale photo slots (objects deleted from the merchant’s bucket, then the slots) and, with the request flow on, the request flow.",
 				"security": [
 					{
 						"cron": []
@@ -2940,7 +2940,13 @@
 											"failed": 0,
 											"expired": 0,
 											"skipped": 0,
-											"quiet": false
+											"quiet": false,
+											"photos": {
+												"scanned": 1,
+												"deleted": 1,
+												"missing": 0,
+												"failed": 0
+											}
 										}
 									]
 								}

@@ -1255,7 +1255,7 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 - **Artefacts** (our software, platform asset storage, never client data): pack assets `packs/<appId>/<version>/<path>` (bytes must equal the signed descriptor's sha256 and size; js/mjs/css/json/svg/png/woff2 with per-type caps); website bundles `w/<websiteId>/<env>/<version>/loader.js` + `manifest.json` (`ss-website-bundle@1`: sri sha384, sha256, sizes, budget report, CSP sources, elements, warnings). `version` = first 16 hex of SHA-256 of the bundle (deterministic); the alias flips by compare-and-set on the compile request counter, so bursts coalesce and an older compile never wins.
 - **Serving:** `/w/<websiteId>/loader.js` (alias, 60 s + stale-while-revalidate), `/w/<websiteId>/<version>/…` and `/w/packs/…` immutable; one `pk_` key per website (`events.write elements.read`) issued by the system actor.
-- **Budgets:** Loader gzip + Σ element `budget.js` ≤ `DELIVERY_BUDGET_KB` (60 by default) and no element may ship more gzip bytes than it declares; a refusal (`delivery_budget_exceeded`, offenders listed) keeps the current alias.
+- **Budgets:** Loader gzip + Σ element `budget.js` + Σ product `budget.shared` (F.18) ≤ `DELIVERY_BUDGET_KB` (60 by default) and no element may ship more gzip bytes than it declares (measured as F.18 describes); a refusal (`delivery_budget_exceeded`, offenders listed) keeps the current alias.
 - **Service-product elements** run through the product's signed UI bundle when it has one (F.16), else the element stub `ss-element-stub@1` (now `@2`, F.16; no product code in the bundle): the stub calls `GET <base>/v1/elements/<key>/view` and `POST …/actions/<action>` with the website's `pk_` (+ `SS-Identity` when federated); view models are text only (`title ≤ 200, body ≤ 2000, items ≤ 50, actions ≤ 10`), rendered with the Loader's safe `h()` and design tokens; it emits `<key>.action@1` and exposes `refresh()` / `invoke()`.
 - **Preview proxy** (`/p/<token>/<path>`, signed 10-minute sessions): fetches the merchant's public page via `@ss/net` (website origin only, GET, no cookies, HTML ≤ 2 MB), injects the candidate bundle and a ribbon, stores nothing. **Trade-off:** it is served from the Portal origin, so it must be `CSP: sandbox` (opaque origin, no Portal cookies) and the merchant's own scripts do not run — previews are faithful for layout and our elements, not for site behaviour. **Recommendation:** move previews to a dedicated cookie-less preview origin (e.g. `preview.<platform domain>`, per-preview subdomain) so the sandbox can allow same-origin scripts and the merchant's scripts can run, without ever sharing an origin with the consoles — implemented as `PREVIEW_ORIGIN` (F.16).
 
@@ -1305,3 +1305,80 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 - **System tests: `e2e/` (`@ss/e2e`, private).** Tests needing two or more deployables (each product against the real Portal; Signups + Loyalty identity) live there, not in a unit. They depend on `@ss/platform` and the product packages; products keep their own `certify.test.js` through `@ss/cli`.
 - **The root only orchestrates.** `pnpm check` (root files' format, then every unit's `check` in turn), `pnpm test|lint|typecheck|format|format:check` (`pnpm -r`), `pnpm --filter <unit> <script>`, and `pnpm test:all` (Vitest projects: every unit's own config in one run, one shared MongoDB). No root ESLint, TypeScript or Prettier config. CI installs once, then checks each unit in a matrix (`check`, plus `build` for deployables and `ss app validate` for products), runs the e2e workspace and `pnpm audit --prod --audit-level high`.
 - **Enforced.** `ss app validate` reports `imports.outside` for any import (every code file, `tests/` and `app/` included) or stylesheet `@import` / `@source` that leaves the product folder, and checks the package wiring (`package.dependency`, `package.devDependency` for `@ss/cli` and `@ss/config`, `package.script` for the scripts above). `ss app init` generates the same shape (config from `@ss/config`, Vitest tests with the thresholds, `@ss/*` at `workspace:^` by default); outside a pnpm workspace it adds `pnpm-workspace.yaml` (allowed build scripts) and `.nvmrc`.
+
+## F.18 Wave-1 platform changes (from the first product wave's platform and tooling gaps)
+
+Every change is additive: existing manifests, bundles, documents and products keep working (migrations noted).
+Still later (unchanged, not started): server-rendered hosted pages (§4.3), Edge Injection (§4.2) and usage metering
+for packs.
+
+- **Honest bundle budgets.** One measurement for the CLI and the Portal: `@ss/contracts/budget` (Node only)
+  `measureBundle({ elements, read, gzip? })` over the **minified, bundled** browser modules (gzip level 9; KB rounded up
+  to 0.1). An element's own size is the gzip of its entry modules (headless + renderer); a module that several elements
+  name and every chunk reachable through relative imports is **shared** and counted once. `ss app validate` builds the
+  elements exactly like `ss pack build` and warns `budget.estimate` (an element ships more than `budget.js`),
+  `budget.padded` (a declaration above the measurement rounded up plus a quarter, ≥ 1 KB), `budget.shared` (shared
+  chunks undeclared or above `budget.shared`) and `budget.build` (cannot bundle). Every product re-declared its budgets
+  from the measurement (≈ ceil(measured × 1.1)); the CLI templates too. Service-product elements delivered through the
+  element stub ship no product code, so they take **0 KB** of the website budget (their `budget.js` applies to their UI
+  bundle).
+- **Website budget (`DELIVERY_BUDGET_KB`, default 60, unchanged).** Before, declarations were unminified source
+  closures — 2–5× the real gzip — so the 60 KB ceiling held perhaps 20 KB of real element code next to the ≈ 13–15 KB
+  Loader. Measured honestly, the same 60 KB now admits ≈ 45 KB of real gzip element code (≈ 35 KB with the audience
+  evaluator), which is what a third-party embed should cost at most: about a third of a ~170 KB mobile JS budget, as a
+  worst case, since modules load lazily only on pages whose placement matches. A full Storefront (≈ 44 KB declared with its
+  shared chunks) plus a full PDP (≈ 37 KB) together exceed it on purpose; a deployment may raise the limit.
+- **Shared chunks.** Product-level manifest `budget: { shared }` (KB gzip). The compiler measures, per product, the
+  shared modules the delivered elements load and checks: loader + Σ `budget.js` + Σ `budget.shared` (the measured
+  size where none is declared, with a `shared_undeclared` warning — so older packs still compile) ≤ the website budget,
+  and measured shared ≤ declared (`shared_over_declared`, refused). `manifest.json` reports `budget.sharedKb` and
+  `budget.shared[]` (slug, declared, measured, modules) and each element's measured `gzipBytes`.
+- **`placement` feature kind.** `x-kind: 'placement'` on a top-level `type: 'object'` feature without `properties`:
+  values are validated against the full placement v1 schema (every member: paths, selectors, page types, devices,
+  referrers, schedule, consent, triggers, frequency incl. cooldown and dismissMemory, audience) plus its semantic
+  checks. `x-placement.members` narrows what an element supports; the plan bound is `x-plan.<plan>.members` (a value
+  setting another member exceeds the plan → `plan_max`, the lower layer applies). Contracts (`PLACEMENT_MEMBERS`,
+  meta-schema, `validateFeatureConfig`), entitlements (`kind: 'placement'`, member bounds) and `@ss/ui` (`placement`
+  widget: structured editor per member + JSON) implement it; the merchant console's Configure tab shows it. PDP and
+  Storefront declare their `placement` features with it.
+- **Element ids namespaced per product.** Compiled elements carry `product` (slug); the Loader id is
+  `<product>:<key>`, so two products may deliver the same key (Storefront and Deals `deals_page`). `SS.elements.get`
+  takes the id or, when only one element has it, the bare key; `list()` adds `id` / `product`; element events reach
+  `SS.on` as `<key>.<verb>` and `<product>:<key>.<verb>` (the Event Hub keeps `<key>.<verb>`); containers keep
+  `data-ss-element="<key>"` and add `data-ss-product` / `data-ss-id`; frequency caps stay keyed by key while unique
+  (no reset for existing visitors). The compiler's `conflict` refusal now means one product delivering an id twice.
+- **Pack read clients.** Manifest `reads: ['catalog', { product: 'search', scopes: ['search.read'] }]` (default
+  scope `<product>.read`). For each read product with an active subscription on the website (https base) the compiler
+  adds `reads: { <slug>: <base> }` to the pack's elements and the read scopes to the website's loader `pk_` key
+  (re-issued when a scope is missing; the superseded key stays active for cached bundles). The Loader passes
+  `clients[<slug>]` (an `@ss/web` element API client bound to that base and the `pk_`) to the element; inactive
+  products give no client and a `reads_inactive` warning. Storefront dropped its pasted `source_key`: `api` sources
+  read through these clients; public-JSON and page sources stay.
+- **Validate scans sources.** Build output is never scanned (`dist/`, `.ss-pack-out/` ignored; packs no longer commit
+  bundles); Storefront and PDP ship minified bundles from `ss pack build`. Elements reading the product catalogs are
+  checked for their slice (`strings.slice`: a rendered key outside the element's `stringKeys` and every sibling's).
+- **Per-language strings.** Products keep `strings/<lang>.json`; element `stringKeys` (exact keys or `prefix*`, default
+  `<key>.*`) slices them at compile time. The compiler picks the website's language (`website.language`, also in the
+  entitlement document) with fallback chain `en` → `de` → `de-CH`; an element naming a non-language file in `strings`
+  keeps the legacy whole-file catalog. Merchants override texts per website, element and language (`*` = every
+  language): `GET|PUT /v1/merchants/:m/websites/:w/delivery/strings[/:appId/:element/:language]` (collection
+  `delivery_strings`, audited `delivery.strings_updated`, recompiles), console Subscription → Texts. Storefront's and
+  PDP's generated `strings/<element>.en.json` are gone.
+- **`ss pack build | publish`.** `build` bundles every manifest module ref with esbuild (minified ESM, browser,
+  code-split `chunks/`), adds the catalogs, hashes everything and writes `dist/pack/descriptor.json` + assets;
+  `publish` signs with `signBundle` and uploads to `POST /v1/admin/packs` + `PUT …/assets/*` (optional `--activate`)
+  with a **staff API token**: `POST /v1/admin/api-tokens` (`platform.apps.manage`, ≤ 12 h) mints `sst_<token>`, a
+  staff session flagged `api` accepted only as `Authorization: Bearer sst_…` (never as a cookie, no CSRF), listed and
+  revocable under `/v1/me/sessions`, unable to mint tokens. Programmatic API `@ss/cli/pack`. PDP and Storefront
+  `pack.js` are thin wrappers over it.
+- **Optional element resources.** Element `requires.optionalResources`: never `resource_missing`; commerce lists them in
+  `resourceNeeds` (`optional: true`, needed while a using element is on), connectors resolve them, consoles show "can
+  use". The kit reports the connection: `entitlements.resource(doc, kind) → { status, connected }`. Catalog folded
+  `media_uploads` into `media` (storage optional; uploads answer `409 storage_not_connected` without it; its four
+  settings are `media` features; plans and the price moved with it — uploads are now part of `media`).
+- **Kit:** `sweepStaleUploads` (delete objects of expired presigned uploads per website, bounded, idempotent), used by
+  the Grades (`/cron/sweep`) and Reviews crons.
+- **Products:** Storefront maps Catalog's real `GET /v1/items` (brand object, `collectionIds`, variant `options`,
+  `availability` / `purchasable`, `nextCursor`, no badges or rank); Grades serves the stub's
+  `POST /v1/elements/<key>/actions/*`; Catalog's SKU uniqueness is race-free (unique partial index on normalised
+  `skuKeys` while the setting is on, lazy backfill) and its CSV export uses short-lived signed download links.

@@ -64,6 +64,11 @@
 	"inspection.error.not_found": "This report link is unknown, revoked or expired.",
 	"inspection.error.rate_limited": "Too many requests. Please try again in a minute.",
 
+	"stub.field.tier": "Grade",
+	"stub.action.select": "Show",
+	"stub.field.token": "Report code",
+	"stub.action.open": "Open report",
+
 	"dashboard.title": "Grade & Condition System",
 	"dashboard.signed_in_as": "Signed in as {user} ({role})",
 	"dashboard.audit_banner": "You are acting on behalf of this merchant as {actor}. Every action is audited.",

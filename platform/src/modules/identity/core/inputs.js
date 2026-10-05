@@ -415,4 +415,7 @@ export const inputs = Object.freeze({
 		(b) => object(b, { userId: idOf('usr'), minutes: int(1, 60), reason: text(500) })
 	),
 	note: /** @type {(b: unknown) => Parsed<{ body: string }>} */ ((b) => object(b, { body: text(2000) })),
+	apiToken: /** @type {(b: unknown) => Parsed<{ minutes: number, label?: string }>} */ (
+		(b) => object(b ?? {}, { minutes: int(5, 720), label: { optional: text(80) } })
+	),
 });

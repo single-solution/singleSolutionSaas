@@ -1,7 +1,0 @@
-{
-	"sticky_buy_bar.label": "Quick buy",
-	"sticky_buy_bar.cta": "Add to cart",
-	"sticky_buy_bar.unavailable": "Unavailable",
-	"sticky_buy_bar.dismiss": "Hide",
-	"sticky_buy_bar.invalid": "Check the item data: {field} is missing or invalid."
-}

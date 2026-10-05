@@ -3,9 +3,10 @@
  * delivery included), in process, on the test run's MongoMemoryReplSet. An element pack has no server, so instead
  * of a product handshake this test publishes the Product Detail Page pack the way a developer does:
  *
- *   bootstrap staff (password + TOTP) → build the pack (`@ss/product-pdp/pack`: esbuild entries + shared chunks) →
- *   sign the `ss-pack-bundle@1` descriptor with a developer key and upload it → upload every asset (bytes checked
- *   against the signed hashes) → activate → merchant signs up, adds a website, receives credits and subscribes
+ *   bootstrap staff (password + TOTP) → build the pack (`@ss/product-pdp/pack`: `ss pack build`, minified entries +
+ *   shared chunks) → a staff API token (`POST /v1/admin/api-tokens`) → `ss pack publish` (`@ss/cli/pack`
+ *   `publishPack`): sign the `ss-pack-bundle@1` descriptor with a developer key, upload it and every asset (bytes
+ *   checked against the signed hashes) and activate → merchant signs up, adds a website, receives credits and subscribes
  *   (standard plan: gallery, price block, structured data on) → the website bundle compiles with exactly those
  *   elements, inside the website budget, serving the pack modules immutably → an add-on (reviews block) joins the
  *   bundle → switching every element on is refused for the budget and the live alias stays → hourly settlement
@@ -15,7 +16,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MongoClient } from 'mongodb';
 import { noopLogger } from '@ss/app-kit';
-import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
+import { publishPack } from '@ss/cli/pack';
 import {
 	closeMongoClients,
 	commerceModule,
@@ -30,7 +32,7 @@ import {
 	systemModule,
 	totpCode,
 } from '@ss/platform/testing';
-import { buildPack, descriptorOf } from '@ss/product-pdp/pack';
+import { buildPack } from '@ss/product-pdp/pack';
 import { createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
@@ -76,6 +78,8 @@ beforeAll(async () => {
 		WEBSITE_KEY_PEPPER: randomBytes(32).toString('base64'),
 		CRON_SECRET,
 		PLATFORM_ASSET_STORAGE: 'memory',
+		// honest budgets (F.18): the default plan fits, every element at once does not
+		DELIVERY_BUDGET_KB: '45',
 		STAFF_SESSION_IDLE_MINUTES: '720',
 	});
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.SS_TEST_MONGO_URI)).connect();
@@ -166,41 +170,39 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		state.staff = confirm.cookie ?? login.cookie;
 	});
 
-	it('registers the signed pack, uploads its assets and activates it', async () => {
-		const { call, state, pack } = ctx;
+	it('publishes the signed pack with `ss pack publish` and a staff API token, and activates it', async () => {
+		const { call, state, pack, portal } = ctx;
 		const developer = await generateSigningKey({ kid: 'pdp-dev-1' });
-		const descriptor = descriptorOf(pack);
-		const signature = await signBundle({ signer: createSigner(developer.privateJwk), descriptor });
-		const uploaded = await call('POST', '/v1/admin/packs', {
-			cookie: state.staff,
-			body: { descriptor, signature, publicJwk: developer.publicJwk },
+		const minted = await call('POST', '/v1/admin/api-tokens', { cookie: state.staff, body: { minutes: 30, label: 'e2e' } });
+		expect(minted.status, minted.text).toBe(201);
+		const token = minted.json.token;
+		expect(token).toMatch(/^sst_/);
+		// an API token cannot mint another one, and is refused as a cookie
+		expect((await call('POST', '/v1/admin/api-tokens', { bearer: token, body: { minutes: 5 } })).status).toBe(403);
+		/** @type {typeof globalThis.fetch} */
+		const fetch = async (/** @type {any} */ url, /** @type {any} */ init) => portal.handle(new Request(url, init));
+		const published = await publishPack({
+			pack,
+			portalUrl: PORTAL_URL,
+			token,
+			signingKey: developer.privateJwk,
+			fetch,
+			activate: true,
 		});
-		expect(uploaded.status, uploaded.text).toBe(201);
-		expect(uploaded.json.app).toMatchObject({ slug: 'pdp', kind: 'pack', status: 'pending' });
-		expect(uploaded.json.version).toMatchObject({ version: 1, status: 'accepted' });
-		state.appId = uploaded.json.app.appId;
+		expect(published).toMatchObject({ version: 1, uploaded: pack.assets.length, status: 'active' });
+		state.appId = published.appId;
 
 		// a tampered asset is refused against the signed hash
 		const first = pack.assets[0];
 		const tampered = await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${first.path}`, {
-			cookie: state.staff,
+			bearer: token,
 			raw: Buffer.concat([first.bytes, Buffer.from(' ')]),
 			headers: { 'content-type': first.contentType },
 		});
 		expect(tampered.status).toBe(422);
-		for (const asset of pack.assets) {
-			const put = await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${asset.path}`, {
-				cookie: state.staff,
-				raw: asset.bytes,
-				headers: { 'content-type': asset.contentType },
-			});
-			expect(put.status, `${asset.path}: ${put.text}`).toBeLessThan(300);
-		}
-		const activated = await call('POST', `/v1/admin/apps/${state.appId}/lifecycle`, {
-			cookie: state.staff,
-			body: { action: 'activate' },
-		});
-		expect(activated.json.status).toBe('active');
+		expect(
+			(await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${first.path}`, { bearer: 'sst_nope' })).status,
+		).toBe(401);
 		const catalog = await call('GET', '/v1/catalog/products');
 		const listed = catalog.json.items.find((/** @type {any} */ item) => item.slug === 'pdp');
 		expect(listed).toMatchObject({ appId: state.appId });
@@ -252,7 +254,14 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		const manifest = await call('GET', `/w/${state.websiteId}/${state.version}/manifest.json`);
 		expect(manifest.status).toBe(200);
 		expect(manifest.json.budget.totalKb).toBeLessThanOrEqual(manifest.json.budget.limitKb);
-		expect(manifest.json.budget.elementsKb).toBe(18 + 11 + 9);
+		const declared = pack.manifest.elements
+			.filter((/** @type {any} */ e) => DEFAULT_ELEMENTS.includes(e.key))
+			.reduce((/** @type {number} */ sum, /** @type {any} */ e) => sum + e.budget.js, 0);
+		expect(manifest.json.budget.elementsKb).toBe(declared);
+		// the shared chunks count once, against the pack's budget.shared
+		expect(manifest.json.budget.sharedKb).toBe(pack.manifest.budget.shared);
+		expect(manifest.json.budget.shared[0]).toMatchObject({ slug: 'pdp', declaredKb: pack.manifest.budget.shared });
+		expect(manifest.json.budget.shared[0].measuredKb).toBeLessThanOrEqual(pack.manifest.budget.shared);
 		for (const element of manifest.json.elements) {
 			expect(element).toMatchObject({ slug: 'pdp', kind: 'pack', delivery: 'pack' });
 			expect(element.modules).toHaveLength(2);
@@ -263,6 +272,9 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		for (const key of DEFAULT_ELEMENTS) expect(loader.text).toContain(`"key":"${key}"`);
 		expect(loader.text).toContain(`packs/${state.appId}/1/headless/gallery.js`);
 		expect(loader.text).toContain('"gallery.alt":"{title}, image {index} of {total}"');
+		// strings are sliced per element from strings/en.json
+		expect(loader.text).not.toContain('"faq.title"');
+		expect(loader.text).toContain('"product":"pdp"');
 		expect(loader.text).not.toContain('"key":"related"');
 
 		// the pack modules (entries and shared chunks) are served immutably, byte for byte

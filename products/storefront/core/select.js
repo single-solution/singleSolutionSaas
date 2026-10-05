@@ -26,8 +26,10 @@ export const pickItems = (
 		pool = pool.filter(
 			(item) => item.badges.includes(attribute) || ['true', '1', 'yes'].includes(valuesOf(item, attribute)[0] ?? ''),
 		);
-	if (strategy === 'rank')
-		pool = pool.filter((item) => item.rank !== null).sort((a, b) => Number(b.rank) - Number(a.rank) || a.order - b.order);
-	else pool.sort(comparator(strategy === 'newest' ? 'newest' : sort, locale));
+	if (strategy === 'rank') {
+		// items without any rank (Catalog has none) keep the source's own order (its `sort=trending`)
+		const ranked = pool.filter((item) => item.rank !== null);
+		pool = ranked.length > 0 ? ranked.sort((a, b) => Number(b.rank) - Number(a.rank) || a.order - b.order) : pool;
+	} else pool.sort(comparator(strategy === 'newest' ? 'newest' : sort, locale));
 	return pool.slice(0, count);
 };

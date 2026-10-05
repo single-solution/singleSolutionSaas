@@ -47,6 +47,7 @@ export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell } from './AppShell.js';
 export { BarChart, ShareBars, Sparkline } from './charts.js';
 export { SchemaForm } from './SchemaForm.js';
+export { PlacementField, setMember as setPlacementMember } from './PlacementField.js';
 export * from './schema.js';
 export * from './format.js';
 export * from './problems.js';

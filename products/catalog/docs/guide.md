@@ -31,7 +31,8 @@ Everything that differs between websites is a setting in the Portal:
 
 Variants: declare variant-option attributes (`variantOption: true`), set an item's dimensions with `options: ["size",
 "color"]` and optionally restrict them per item with `optionPool`. `variants.uniqueness` decides whether option
-combinations and / or SKUs must be unique within an item; `variants.unique_sku_across_items` across the catalog. A
+combinations and / or SKUs must be unique within an item; `variants.unique_sku_across_items` across the catalog
+(enforced by a unique index, so concurrent writes cannot both claim an SKU; the loser gets `sku_taken`). A
 single-variant item can be created with `price`, `sku`, `quantity` at item level.
 
 ## Stock
@@ -55,8 +56,9 @@ the count. Public items carry card fields `price`, `compareAtPrice` and `image`.
 ## Media
 
 Reference media by `url` (https; `media.allowed_hosts`) or by `key` in your storage (served under
-`media.storage_base_url`, or as short signed links when Media uploads is on). With Media uploads,
-`POST /v1/media-uploads { contentType, contentLength }` returns a presigned `PUT`; upload, then
+`media.storage_base_url`, or as short signed links while a storage connector is connected — storage is optional for
+`media`). With storage connected, `POST /v1/media-uploads { contentType, contentLength }` returns a presigned `PUT`
+(`409 storage_not_connected` without it); upload, then
 `POST /v1/media { itemId, key }`. `media.url_template` (`{url}?w={width}`) and `media.ladder` produce `srcset`.
 
 ## Import and export
@@ -66,6 +68,10 @@ Reference media by `url` (https; `media.allowed_hosts`) or by `key` in your stor
 `{ csv, dryRun: false, expectedVersions: <versions> }`. Items changed since the dry run follow `conflictPolicy`
 (`skip`, `overwrite`, `fail`). Rows are grouped by `item_id` / `item_slug`; variant rows match by `variant_id` or
 `sku`; blank cells leave values unchanged; `image_urls` adds media by URL.
+
+The dashboard's **Download CSV** asks `POST /v1/dashboard/exports:link` for a signed link valid for five minutes
+(`{ url, expiresAt }`; optional `{ params: { "filter[status]": "active", q } }`) and opens it; the link works without
+a session, so it can be handed to the browser's download manager.
 
 ## Feeds
 

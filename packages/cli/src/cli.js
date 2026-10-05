@@ -18,6 +18,7 @@ import { createEmulatorServer } from './emulator/server.js';
 import { createDatabaseResolver } from './emulator/mongo.js';
 import { formatSettlement } from './emulator/settle.js';
 import { formatReport, runCertification } from './certify/index.js';
+import { PACK_OUT_DIR, buildPack, measurePack, publishPack, writePack } from './pack/index.js';
 
 export const VERSION = '0.1.0';
 
@@ -37,6 +38,10 @@ export const USAGE = `ss — Single Solution developer CLI (SSPS v1)
 Usage:
   ss app init <dir> --kind service|pack --slug <slug> --name <name> [--sdk-version <range>] [--minimal]
   ss app validate [dir] [--json]
+  ss pack build [dir] [--out <dir>] [--json]   bundle (minified ESM, shared chunks), hash, write descriptor.json (default dist/pack)
+  ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <private JWK|@file>] [--activate]
+                                               sign the descriptor (signBundle) and upload it to the Portal admin pack API
+                                               (token: SS_ADMIN_TOKEN, key: SS_PACK_SIGNING_KEY)
   ss dev [--dir <dir>] [--port <n>] [--fixture ss.dev.json] [--state <file>] [--mongo-uri <uri>]
   ss dev env                                   development env values (signing key, registration token + hash)
   ss dev register --url <product url> --token <registration token> [--audience <aud>]
@@ -162,6 +167,79 @@ const readData = async (value, cwd) => {
 	const parsed = JSON.parse(text);
 	if (!isObject(parsed)) throw new Error('--data must be a JSON object');
 	return parsed;
+};
+
+/**
+ * A private JWK given inline or as `@file`.
+ * @param {string} value
+ * @param {string} cwd
+ * @returns {Promise<Record<string, unknown>>}
+ */
+const readKey = async (value, cwd) => {
+	const text = value.startsWith('@') ? await readFile(path.resolve(cwd, value.slice(1)), 'utf8') : value;
+	const parsed = JSON.parse(text);
+	if (!isObject(parsed) || typeof parsed.d !== 'string' || typeof parsed.kid !== 'string')
+		throw Object.assign(new Error('--key must be a private Ed25519 JWK with a kid'), { code: 'invalid_key' });
+	return parsed;
+};
+
+/**
+ * `ss pack build | publish` (F.18).
+ * @param {string[]} args
+ * @param {Required<Pick<CliDeps, 'io' | 'cwd' | 'env' | 'fetch'>> & CliDeps} deps
+ * @returns {Promise<number>}
+ */
+const pack = async (args, deps) => {
+	const { io, cwd, env, fetch } = deps;
+	const [sub, ...rest] = args;
+	if (sub === 'build') {
+		const { values, positionals } = parse(rest, { out: { type: 'string' }, json: { type: 'boolean' } });
+		const dir = path.resolve(cwd, positionals[0] ?? '.');
+		const out = path.resolve(dir, typeof values.out === 'string' ? values.out : PACK_OUT_DIR);
+		const built = await buildPack(dir);
+		await writePack(built, out);
+		const measured = measurePack(built);
+		if (values.json)
+			io.out(`${JSON.stringify({ out, assets: built.assets.length, budget: measured }, null, 2)}
+`);
+		else
+			io.out(
+				[
+					...built.assets.map((asset) => `${asset.path.padEnd(48)} ${String(asset.size).padStart(7)} B`),
+					...measured.elements.map((element) => `budget ${element.key.padEnd(24)} ${element.kb} KB gzip`),
+					`budget shared ${String(measured.shared.kb)} KB gzip (${measured.shared.modules.length} modules)`,
+					`${built.assets.length} assets and descriptor.json written to ${path.relative(cwd, out) || out}`,
+					'',
+				].join('\n'),
+			);
+		return 0;
+	}
+	if (sub === 'publish') {
+		const { values, positionals } = parse(rest, {
+			portal: { type: 'string' },
+			token: { type: 'string' },
+			key: { type: 'string' },
+			activate: { type: 'boolean' },
+		});
+		const portalUrl = typeof values.portal === 'string' ? values.portal : env.SS_PORTAL_URL;
+		const token = typeof values.token === 'string' ? values.token : env.SS_ADMIN_TOKEN;
+		const key = typeof values.key === 'string' ? values.key : env.SS_PACK_SIGNING_KEY;
+		if (!portalUrl) return usageError(io, 'pack publish needs --portal <url> (or SS_PORTAL_URL)');
+		if (!token) return usageError(io, 'pack publish needs --token <staff API token> (or SS_ADMIN_TOKEN)');
+		if (!key) return usageError(io, 'pack publish needs --key <private JWK|@file> (or SS_PACK_SIGNING_KEY)');
+		const dir = path.resolve(cwd, positionals[0] ?? '.');
+		const result = await publishPack({
+			pack: await buildPack(dir),
+			portalUrl,
+			token,
+			signingKey: await readKey(key, cwd),
+			fetch,
+			activate: values.activate === true,
+		});
+		io.out(`Published ${result.appId} version ${result.version} (${result.uploaded} assets, ${result.status})\n`);
+		return 0;
+	}
+	return usageError(io, `unknown pack command '${sub ?? ''}'`);
 };
 
 /**
@@ -583,6 +661,7 @@ export const main = async (argv, deps) => {
 			}
 			return usageError(io, `unknown app command '${sub ?? ''}'`);
 		}
+		if (command === 'pack') return await pack(rest, full);
 		if (command === 'dev') return await dev(rest, full);
 		if (command === 'certify') {
 			const { values, positionals } = parse(rest, {

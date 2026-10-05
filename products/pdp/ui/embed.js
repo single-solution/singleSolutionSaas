@@ -1,6 +1,6 @@
 /**
  * Renderer of the embed elements. While the other product's element is mounted, its Loader container
- * (`[data-ss-element="<target>"]`) moves into this block — inside the item's scope — and is asked to `refresh()`;
+ * (`[data-ss-id="<product>:<target>"]`, else `[data-ss-element="<target>"]`) moves into this block — inside the item's scope — and is asked to `refresh()`;
  * otherwise the block stays hidden and empty. Self-contained (smallest budget); only `SS.elements` / `SS.on` used.
  */
 
@@ -33,11 +33,13 @@ export const render = ({ state, actions, strings, dom }) => {
 		root.setAttribute('hidden', '');
 		return root;
 	}
-	const target = dom.querySelector?.(`[data-ss-element="${state.target}"]`);
+	const id = `${state.product}:${state.target}`;
+	const target = dom.querySelector?.(`[data-ss-id="${id}"]`) ?? dom.querySelector?.(`[data-ss-element="${state.target}"]`);
 	if (target) {
 		const fresh = !root.contains?.(target) && target.parentElement?.getAttribute?.('data-ss-embed') !== state.target;
 		root.append(target);
-		if (fresh && state.refresh) void Promise.resolve().then(() => ss?.elements?.get?.(state.target)?.actions?.refresh?.());
+		if (fresh && state.refresh)
+			void Promise.resolve().then(() => (ss?.elements?.get?.(id) ?? ss?.elements?.get?.(state.target))?.actions?.refresh?.());
 	}
 	return root;
 };

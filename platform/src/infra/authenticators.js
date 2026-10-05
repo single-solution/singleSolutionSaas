@@ -3,7 +3,7 @@
  *
  * | mode         | credential                                   | verified by                                              |
  * | ------------ | -------------------------------------------- | -------------------------------------------------------- |
- * | `staff`      | `__Host-ss_staff` session cookie             | session store; MFA required unless the route says `mfa: false` |
+ * | `staff`      | `__Host-ss_staff` session cookie, or `Authorization: Bearer sst_…` (staff API token, F.18) | session store; MFA required unless the route says `mfa: false` |
  * | `merchant`   | `__Host-ss_merchant` session cookie          | session store                                            |
  * | `websiteKey` | `Authorization: Bearer pk_…/sk_…`            | `verifyWebsiteKey` (website-key JWKS) + revocation port; `originAllowed` for pk_ |
  * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = PORTAL_URL) |
@@ -22,6 +22,9 @@ import { isProtocolError, originAllowed, verifyAssertion, verifyWebsiteKey } fro
 import { actorFromSession, readCookie, sessionCookieName } from './auth.js';
 import { isProblem, problem } from './http.js';
 import { safeEqual } from './util.js';
+
+/** Staff API tokens (F.18): `sst_` + an opaque session token. */
+const STAFF_TOKEN = /^sst_([A-Za-z0-9_-]{43})$/;
 
 /** @typedef {import('./http.js').Authenticator} Authenticator */
 /** @typedef {import('./http.js').AuthMode} AuthMode */
@@ -152,15 +155,19 @@ export const createAuthenticators = ({
 	 * @returns {Authenticator}
 	 */
 	const sessionAuth = (kind) => async (request, route) => {
-		const token = readCookie(request.headers.get('cookie'), sessionCookieName(kind, cookieSecure));
+		const cookieToken = readCookie(request.headers.get('cookie'), sessionCookieName(kind, cookieSecure));
+		const bearer = kind === 'staff' && !cookieToken ? STAFF_TOKEN.exec(bearerOf(request) ?? '')?.[1] : undefined;
+		const token = cookieToken || bearer;
 		if (token === undefined || token === '') return null;
 		const session = await sessions.get(token);
 		if (!session || session.kind !== kind) return problem('unauthorized', 'The session has expired. Sign in again.');
+		// a bearer must be an API token, and an API token is never accepted from a cookie
+		if (Boolean(bearer) !== (session.api === true)) return problem('unauthorized', 'The session has expired. Sign in again.');
 		if (kind === 'staff' && !session.mfa && route.mfa !== false)
 			return problem('forbidden', 'Two-factor authentication is required.');
 		const actor = await sessionActor(session);
 		if (!actor) return problem('unauthorized', 'The account is no longer active.');
-		return { ok: true, actor, mode: kind, cookie: true, session };
+		return { ok: true, actor, mode: kind, cookie: !bearer, session };
 	};
 
 	/** @type {Authenticator} */

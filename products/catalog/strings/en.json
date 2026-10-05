@@ -110,6 +110,7 @@
 	"dashboard.export.title": "Export",
 	"dashboard.export.columns": "Columns: {columns}",
 	"dashboard.export.download": "Download CSV",
+	"dashboard.export.failed": "The download could not be prepared. Try again.",
 	"dashboard.export.help": "One row per variant. Prices are in major units of the item's currency. Edit and import the file again to update in bulk.",
 	"dashboard.feeds.intro": "Give these links to shopping and marketing channels. Feeds are cached for {seconds} seconds. Raise feeds.token_version in the Portal to revoke every link.",
 	"dashboard.feeds.disabled": "Turn on the Feeds element in the Portal to publish shopping feeds.",

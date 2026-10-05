@@ -51,6 +51,19 @@ if (!result.ok) return errors.fromValidation(result.problems, { code: 'invalid_m
   lazily created process-wide validator. Product events are added with `createValidator({ events: { 'coupon.redeemed@1': schema } })`.
 - Schema ids are URNs: `urn:ss:contracts:v1:<name>`; standard event data: `urn:ss:contracts:v1:event:<type@v>`.
 
+## Wave-1 additions (F.18)
+
+- `@ss/contracts/budget` (Node only): `gzipSize`, `toKb`, `relativeImports`, `resolveModule`, `measureBundle({ elements,
+read, gzip? }) → { elements: [{ key, modules, gzipBytes, kb }], shared: { modules, gzipBytes, kb }, missing }` — the
+  one measurement of `ss app validate` and the Portal delivery compiler (own entry modules per element; modules named
+  by several elements and every imported chunk counted once as shared).
+- Manifest: product `budget.shared` (KB gzip of shared chunks), product `reads` (`slug` or `{ product, scopes? }`,
+  `readsOf(manifest)` normalises; rules `selfRead`, `duplicateRead`, `readScope`), element `stringKeys` (exact keys or
+  `prefix*`), element `requires.optionalResources` (rule `optionalResourceRequired`).
+- Feature kind `placement` (`FEATURE_KINDS`, `PLACEMENT_MEMBERS`, keyword `x-placement: { members }`, plan bound
+  `x-plan.<plan>.members`; rule `featurePlacement`): a top-level object feature validated by `validateFeatureConfig`
+  against the placement v1 schema (`$ref`) plus `checkPlacement`.
+
 ## Conventions
 
 - **Credits** are **millicredits (1 credit = 1000)** everywhere — manifest prices and the ledger. A metered price is `perUnit`

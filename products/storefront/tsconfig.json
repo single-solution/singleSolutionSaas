@@ -1,5 +1,4 @@
 {
 	"extends": "@ss/config/tsconfig.base.json",
-	"include": ["core/**/*.js", "headless/**/*.js", "ui/**/*.js", "tests/**/*.js", "scripts/**/*.js", "pack.js"],
-	"exclude": ["headless/bundle", "ui/bundle"]
+	"include": ["core/**/*.js", "headless/**/*.js", "ui/**/*.js", "tests/**/*.js", "tests/**/*.d.ts", "pack.js"]
 }

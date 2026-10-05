@@ -30,6 +30,8 @@ export const fail = (code, detail) => ({ ok: false, problem: detail ? { code, de
  * @property {Record<string, unknown>} [config] the element's configuration (from the signed entitlement document)
  * @property {Record<string, string>} [strings] the resolved string catalog
  * @property {unknown} [client] the runtime's Mode-C client (unused by packs: data comes from the configured source)
+ * @property {Readonly<Record<string, import('./source.js').ReadClient>>} [clients] read-API clients of the products the
+ *   pack reads (`manifest.reads`: catalog, search, deals), passed by the Loader when active on the website
  * @property {(verb: string, data?: Record<string, unknown>) => unknown} [emit] element UI events (`<key>.<verb>`)
  * @property {typeof fetch} [fetch]
  * @property {() => number} [now]

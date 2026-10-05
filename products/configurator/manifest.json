@@ -34,10 +34,15 @@
 		"events.subscribe:item.deleted@1",
 		"events.subscribe:inventory.changed@1"
 	],
-	"requires": { "resources": ["database"] },
+	"requires": {
+		"resources": ["database"]
+	},
 	"events": {
 		"consumes": ["inventory.changed@1", "item.created@1", "item.updated@1", "item.deleted@1"],
 		"publishes": ["configurator.published@1"]
+	},
+	"budget": {
+		"shared": 1
 	},
 	"elements": [
 		{
@@ -46,15 +51,25 @@
 			"description": "Configurators: option groups (single, multi, range, text) in order, required options and defaults, hidden options, swatches and images, dependencies and exclusions written in rules@1, optional combinations (variant matrix with SKU, stock and price) — defined directly or linked to a catalog item fed by item.* and inventory.changed@1 events.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": [],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/schema.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/schema.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"rules": ["group_when", "option_when", "exclusion"],
-			"api": { "resources": ["configurators", "catalog-items"] },
+			"api": {
+				"resources": ["configurators", "catalog-items"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -63,10 +78,16 @@
 			"name": "Resolver",
 			"description": "Pure, deterministic closest-match resolution of a partial selection to a valid combination: the option just picked wins, then the shopper's other picks, then stock (prefer / require / ignore), defaults and a tie-break (schema order, price, popularity); fill or keep partial selections; fallbacks (closest, defaults, reject) and a clear problem when no valid combination exists. Runs in the browser (headless) and behind the evaluate API.",
 			"modes": ["B"],
-			"price": { "hourly": 150 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["schema"],
-			"features": { "$ref": "schemas/resolver.features.json" },
+			"features": {
+				"$ref": "schemas/resolver.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"experiments": true,
@@ -78,14 +99,22 @@
 			"name": "Price deltas",
 			"description": "Price of a configuration in integer minor units: base or combination price, per-option deltas, per-unit prices of range options, rules@1 delta rules (amount or percent) per combination or quantity, rounding (nearest / up / down to an increment, optional price ending) and a breakdown.",
 			"modes": ["B", "C"],
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["schema"],
-			"features": { "$ref": "schemas/price_deltas.features.json" },
+			"features": {
+				"$ref": "schemas/price_deltas.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"rules": ["price_rule"],
-			"api": { "resources": ["quotes"] },
+			"api": {
+				"resources": ["quotes"]
+			},
 			"headless": "headless/priceDeltas.js#createPriceDeltas",
 			"renderer": null
 		},
@@ -94,13 +123,21 @@
 			"name": "URL sync",
 			"description": "Selection ↔ URL query parameters: parameter names and prefix, multi-value separator, defaults omitted or kept, history replace or push, and canonical rules (base URL or the canonical selection) so shared links and bookmarks land on the same configuration.",
 			"modes": ["B", "C"],
-			"price": { "hourly": 0 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 0
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["schema"],
-			"features": { "$ref": "schemas/url_sync.features.json" },
+			"features": {
+				"$ref": "schemas/url_sync.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
-			"api": { "resources": ["url-params"] },
+			"api": {
+				"resources": ["url-params"]
+			},
 			"headless": "headless/urlSync.js#createUrlSync",
 			"renderer": null
 		},
@@ -109,19 +146,32 @@
 			"name": "Configurator widget",
 			"description": "The embeddable selector: pills, dropdowns or swatches per group, ARIA radio groups with arrow-key navigation and visible focus, price and summary, out-of-stock and \"we changed your selection\" notices, a notify-me hook for alerts and URL sync — drop-in, headless or API.",
 			"modes": ["A", "B", "C"],
-			"price": { "hourly": 150 },
-			"budget": { "js": 16 },
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 6
+			},
 			"dependsOn": ["schema", "resolver", "api"],
-			"features": { "$ref": "schemas/widget.features.json" },
+			"features": {
+				"$ref": "schemas/widget.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"experiments": true,
-			"api": { "resources": ["widgets"] },
+			"api": {
+				"resources": ["widgets"]
+			},
 			"headless": "headless/configurator.js#createConfigurator",
 			"renderer": "ui/configurator.js#render",
 			"variants": ["pills", "dropdowns", "swatches"],
 			"slots": ["before", "after", "summary"],
-			"a11y": { "role": "radiogroup", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "radiogroup",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "api",
@@ -130,14 +180,30 @@
 			"modes": ["C"],
 			"price": {
 				"hourly": 50,
-				"metered": [{ "unit": "evaluation", "perUnit": 1, "per": 100, "included": { "starter": 10000, "pro": 100000 } }]
+				"metered": [
+					{
+						"unit": "evaluation",
+						"perUnit": 1,
+						"per": 100,
+						"included": {
+							"starter": 10000,
+							"pro": 100000
+						}
+					}
+				]
 			},
-			"budget": { "js": 0 },
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["schema", "resolver"],
-			"features": { "$ref": "schemas/api.features.json" },
+			"features": {
+				"$ref": "schemas/api.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
-			"api": { "resources": ["evaluations"] },
+			"api": {
+				"resources": ["evaluations"]
+			},
 			"headless": null,
 			"renderer": null
 		}
@@ -157,6 +223,9 @@
 			"elements": ["schema", "resolver", "price_deltas", "url_sync", "widget", "api"]
 		}
 	],
-	"priceBook": { "version": "2026-10-01", "effectiveFrom": "2026-10-01T00:00:00Z" },
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
 	"trialHours": 48
 }

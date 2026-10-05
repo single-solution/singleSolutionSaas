@@ -187,7 +187,7 @@ describe('ss app validate', () => {
 
 	it('reports semantic manifest problems (mode rules) and the budget estimate', async () => {
 		const dir = await project();
-		await edit(dir, 'manifest.json', (text) => text.replace('"budget": { "js": 8 }', '"budget": { "js": 1 }'));
+		await edit(dir, 'manifest.json', (text) => text.replace('"budget": { "js": 3 }', '"budget": { "js": 1 }'));
 		let report = await validateProject(dir);
 		expect(report.ok).toBe(true);
 		expect(report.problems.map((problem) => `${problem.severity}:${problem.rule}`)).toEqual(['warning:budget.estimate']);

@@ -24,7 +24,9 @@
  *   fields: { <name>: value } }` when the view has fields (v1 products never send fields, so their bodies are
  *   unchanged).
  * - Pack elements receive a placeholder Graph client (every call resolves to a `graph_unavailable` result) until the
- *   Website Graph API exists.
+ *   Website Graph API exists, plus `clients`: an element API client per service product the pack reads
+ *   (`manifest.reads`, F.18) that is active on the website, bound to its API base and the website's `pk_` key.
+ * - Every element carries its product slug: the Loader addresses it as `<product>:<key>` (F.18).
  * @module
  */
 import { err, problem } from '@ss/web/element';
@@ -82,11 +84,12 @@ export const adaptHeadless = (exported, key) => {
 	const factory = /** @type {(input: Record<string, unknown>) => any} */ (exported);
 	return {
 		key,
-		create: (/** @type {any} */ { config, strings, client, identity, emit, store }) => {
+		create: (/** @type {any} */ { config, strings, client, clients, identity, emit, store }) => {
 			const inner = factory({
 				config,
 				strings,
 				client: client ?? unavailableClient(),
+				clients: clients ?? {},
 				identity,
 				emit: (/** @type {unknown} */ name, /** @type {unknown} */ data) => emit(String(name), isObject(data) ? data : {}),
 			});
@@ -164,9 +167,10 @@ export const adaptRenderer = (mod, name, win, nonce) => {
  * @param {any} win
  * @param {string} key
  * @param {Record<string, any> | undefined} placement
+ * @param {string} [product] the element's product (its container is then `[data-ss-id="<product>:<key>"]`)
  * @returns {{ path: string, itemId?: string, pageType?: string }}
  */
-export const pageContext = (win, key, placement) => {
+export const pageContext = (win, key, placement, product) => {
 	const doc = win?.document;
 	const path = text(win?.location?.pathname ?? '/', 512) || '/';
 	/** @param {string} name @returns {string | undefined} */
@@ -174,7 +178,7 @@ export const pageContext = (win, key, placement) => {
 		/** @type {any[]} */
 		const nodes = [];
 		try {
-			const container = doc?.querySelector?.(`[data-ss-element="${key}"]`);
+			const container = doc?.querySelector?.(product ? `[data-ss-id="${product}:${key}"]` : `[data-ss-element="${key}"]`);
 			const near = container?.closest?.(`[${name}]`);
 			if (near) nodes.push(near);
 			for (const entry of Array.isArray(placement?.selectors) ? placement.selectors : []) {
@@ -397,6 +401,8 @@ export const stubRenderer = Object.freeze({
 /**
  * @typedef {object} CompiledElement
  * @property {string} key
+ * @property {string} [product] the delivering product's slug (the Loader id is `<product>:<key>`)
+ * @property {Record<string, string>} [reads] API base of each read service product active on the website
  * @property {Record<string, unknown>} [placement] placement v1 with `audience` precompiled to a rules@1 program
  * @property {Record<string, unknown>} [config]
  * @property {Record<string, unknown>} [strings]
@@ -443,8 +449,15 @@ export const start = (data, options = {}) => {
 	/** @param {{ path: string }} ref */
 	const url = (ref) => `${data.assets}${ref.path}`;
 	const elements = data.elements.map((spec) => {
+		const reads = Object.fromEntries(
+			Object.entries(isObject(spec.reads) ? spec.reads : {})
+				.filter(([, base]) => typeof base === 'string')
+				.map(([slug, base]) => [slug, { baseUrl: String(base) }]),
+		);
 		const common = {
 			key: spec.key,
+			...(typeof spec.product === 'string' ? { product: spec.product } : {}),
+			...(Object.keys(reads).length > 0 ? { reads } : {}),
 			...(spec.placement ? { placement: spec.placement } : {}),
 			config: spec.config ?? {},
 			strings: spec.strings ?? {},
@@ -455,7 +468,7 @@ export const start = (data, options = {}) => {
 				...common,
 				headless: stubDefinition(
 					spec.key,
-					spec.stub === STUB_PROTOCOL ? { context: () => pageContext(win, spec.key, spec.placement) } : {},
+					spec.stub === STUB_PROTOCOL ? { context: () => pageContext(win, spec.key, spec.placement, spec.product) } : {},
 				),
 				renderer: stubRenderer,
 				api: { baseUrl: String(spec.api) },

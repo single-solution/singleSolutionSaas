@@ -27,6 +27,7 @@ export {
 	checkManifest,
 	checkFeatureSchema,
 	featureValueError,
+	readsOf,
 	resolveFeature,
 	findCycles,
 	isUtcTimestamp,

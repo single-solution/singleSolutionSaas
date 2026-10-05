@@ -105,3 +105,51 @@ export const answerText = (result, t) =>
 		: result.kind === 'score'
 			? t('inspection.points', { value: Number(result.value), max: result.max ?? Number(result.value) })
 			: String(result.value);
+
+/** Stub control limits (ss-element-stub@2): options per select, label lengths. */
+const CONTROL_LIMITS = Object.freeze({ options: 50, label: 200, action: 80 });
+
+/**
+ * Add the stub's input controls to a view: a select of tiers and the `select` action (showcase, warranty).
+ * @param {ReturnType<typeof stubView>} view
+ * @param {Array<{ key: string, label: string }>} tiers active tiers in ladder order
+ * @param {import('./text.js').Translate} t
+ */
+export const withTierPicker = (view, tiers, t) => ({
+	...view,
+	fields: [
+		{
+			name: 'tier',
+			type: 'select',
+			label: t('stub.field.tier').slice(0, CONTROL_LIMITS.label),
+			options: tiers
+				.slice(0, CONTROL_LIMITS.options)
+				.map((tier) => ({ value: tier.key, label: tier.label.slice(0, CONTROL_LIMITS.label) })),
+		},
+	],
+	actions: [{ action: 'select', label: t('stub.action.select').slice(0, CONTROL_LIMITS.action) }],
+});
+
+/**
+ * Add the report-code field and the `open` action (inspection).
+ * @param {ReturnType<typeof stubView>} view
+ * @param {import('./text.js').Translate} t
+ */
+export const withReportPicker = (view, t) => ({
+	...view,
+	fields: [{ name: 'token', type: 'text', label: t('stub.field.token').slice(0, CONTROL_LIMITS.label), required: true }],
+	actions: [{ action: 'open', label: t('stub.action.open').slice(0, CONTROL_LIMITS.action) }],
+});
+
+/**
+ * The input of a stub action: `body.fields` (stub v2 with fields) or the body itself (v1).
+ * @param {unknown} body
+ * @returns {Record<string, unknown>}
+ */
+export const actionInput = (body) => {
+	if (typeof body !== 'object' || body === null || Array.isArray(body)) return {};
+	const fields = /** @type {Record<string, unknown>} */ (body).fields;
+	return typeof fields === 'object' && fields !== null && !Array.isArray(fields)
+		? /** @type {Record<string, unknown>} */ (fields)
+		: /** @type {Record<string, unknown>} */ (body);
+};

@@ -7,7 +7,7 @@ export { createLogger, noopLogger, redact } from './logger.js';
 export { createMemoryStores } from './stores/memory.js';
 export { createMongoStores } from './stores/mongo.js';
 export { createPortalClient } from './portal-client.js';
-export { can, config, feature, featuresOf, createEntitlements, STOPPED_STATES } from './entitlements.js';
+export { can, config, feature, featuresOf, resource, createEntitlements, STOPPED_STATES } from './entitlements.js';
 export { createWebsiteKeys, scopeGranted } from './keys.js';
 export { createLaunch, ROLE_OF_KIND } from './launch.js';
 export { createUsage, backoffDelay } from './usage.js';
@@ -31,6 +31,7 @@ export { ok, created, noContent, problem, paginate, isProblem, RESERVED_PROBLEM_
 export { standardRoutes, resolveStrings } from './http/standard.js';
 export { toNextRoute } from './http/next.js';
 export { isKitError, collectionPrefix } from './util.js';
+export { sweepStaleUploads, SWEEP_DEFAULT_LIMIT, SWEEP_MAX_LIMIT } from './uploads.js';
 
 /** @typedef {import('./stores/types.js').Stores} Stores */
 /** @typedef {import('./keys.js').WebsiteBinding} WebsiteBinding */
@@ -42,3 +43,5 @@ export { isKitError, collectionPrefix } from './util.js';
 /** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('./identity.js').CustomerIdentity} CustomerIdentity */
 /** @typedef {import('./product.js').ProductOptions} ProductOptions */
+/** @typedef {import('./uploads.js').SweepInput} SweepInput */
+/** @typedef {import('./uploads.js').SweepResult} SweepResult */

@@ -32,7 +32,12 @@ import {
 	systemModule,
 	totpCode,
 } from '@ss/platform/testing';
-import { loadManifest, packAssets } from '@ss/product-storefront/pack';
+import { buildPack, descriptorOf } from '@ss/product-storefront/pack';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { relativeImports } from '@ss/contracts/budget';
 import { createClock, mongoUri } from './helpers.js';
 
 /** jsdom ships no type declarations (the same typed require as the Portal's delivery tests). */
@@ -82,6 +87,8 @@ beforeAll(async () => {
 		WEBSITE_KEY_PEPPER: randomBytes(32).toString('base64'),
 		CRON_SECRET,
 		PLATFORM_ASSET_STORAGE: 'memory',
+		// honest budgets (F.18): the pro defaults fit, every add-on at once does not
+		DELIVERY_BUDGET_KB: '55',
 		STAFF_SESSION_IDLE_MINUTES: '720',
 	});
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.SS_TEST_MONGO_URI)).connect();
@@ -166,14 +173,11 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 
 	it('registers the signed pack, uploads every asset and lists it after activation', async () => {
 		const { call, state } = ctx;
-		const manifest = await loadManifest();
-		const assets = await packAssets();
+		// `ss pack build`: minified entries + shared chunks + strings/en.json, hashed into the descriptor (F.18)
+		const pack = await buildPack();
+		const { manifest, assets } = pack;
 		const developer = await generateSigningKey({ kid: 'storefront-dev-1' });
-		const descriptor = {
-			format: 'ss-pack-bundle@1',
-			manifest,
-			assets: assets.map(({ path, sha256, size, contentType }) => ({ path, sha256, size, contentType })),
-		};
+		const descriptor = descriptorOf(pack);
 		const signature = await signBundle({ signer: createSigner(developer.privateJwk), descriptor });
 		const uploaded = await call('POST', '/v1/admin/packs', {
 			cookie: state.staff,
@@ -187,7 +191,7 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		state.appId = uploaded.json.app.appId;
 		state.assets = assets;
 		// a tampered asset is refused: the bytes must equal the signed descriptor
-		const grid = /** @type {any} */ (assets.find((a) => a.path === 'ui/bundle/grid.js'));
+		const grid = /** @type {any} */ (assets.find((a) => a.path === 'ui/grid.js'));
 		const tampered = await call('PUT', `/v1/admin/packs/${state.appId}/versions/1/assets/${grid.path}`, {
 			cookie: state.staff,
 			raw: Buffer.concat([grid.bytes, Buffer.from('\n')]),
@@ -258,18 +262,21 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		const loader = await call('GET', `/w/${state.websiteId}/loader.js`);
 		expect(loader.status).toBe(200);
 		expect(loader.headers.get('cache-control')).toBe('public, max-age=60, stale-while-revalidate=600');
-		expect(loader.text).toContain(`packs/${state.appId}/1/headless/bundle/grid.js`);
+		expect(loader.text).toContain(`packs/${state.appId}/1/headless/grid.js`);
+		expect(loader.text).toContain('"product":"storefront"');
 		expect(loader.text).toContain('[data-ss-slot=\\"grid\\"]');
 		state.loader = loader.text;
 		const artefact = await call('GET', `/w/${state.websiteId}/${state.version}/manifest.json`);
 		expect(artefact.status).toBe(200);
 		const bundle = JSON.parse(artefact.text);
 		expect(bundle.format).toBe('ss-website-bundle@1');
-		expect(bundle.budget.limitKb).toBe(60);
-		expect(bundle.budget.totalKb).toBeLessThanOrEqual(60);
+		expect(bundle.budget.limitKb).toBe(55);
+		expect(bundle.budget.totalKb).toBeLessThanOrEqual(55);
+		expect(bundle.budget.shared).toEqual([expect.objectContaining({ slug: 'storefront', declaredKb: 21 })]);
 		expect(bundle.elements.every((/** @type {any} */ e) => e.delivery === 'pack' && e.slug === 'storefront')).toBe(true);
-		expect(bundle.warnings).toEqual([]);
-		for (const path of ['headless/bundle/grid.js', 'ui/bundle/grid.js', 'strings/grid.en.json']) {
+		// the pack reads Catalog, Search and Deals (manifest.reads); none is subscribed here, so no client is passed
+		expect(bundle.warnings.map((/** @type {any} */ w) => w.code)).toEqual(['reads_inactive']);
+		for (const path of ['headless/grid.js', 'ui/grid.js', 'strings/en.json']) {
 			const served = await call('GET', `/w/packs/${state.appId}/1/${path}`);
 			expect(served.status, path).toBe(200);
 			expect(served.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
@@ -284,6 +291,9 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 			{ id: 'a2', title: 'Armchair', url: '/items/armchair', price: 30000, currency: 'EUR', brand: 'Sitwell' },
 			{ id: 'a3', title: 'Floor lamp', url: '/items/floor-lamp', price: 12000, currency: 'EUR', brand: 'Lumo' },
 		];
+		const modules = await mkdtemp(path.join(tmpdir(), 'ss-e2e-storefront-'));
+		/** @type {Set<string>} */
+		const mirrored = new Set();
 		const dom = new JSDOM(
 			`<!doctype html><html lang="en"><head></head><body><div data-ss-slot="filters"></div><div data-ss-slot="grid"></div><script type="application/json" id="ss-items">${JSON.stringify(items)}</script></body></html>`,
 			{ url: `${SHOP}/collections/all?brand=Lumo`, runScripts: 'outside-only', pretendToBeVisual: true },
@@ -295,10 +305,22 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 			window: win,
 			storage: null,
 			fetch: win.fetch,
+			// the served modules import their shared chunks relatively: mirror them (as served) in a folder and import there
 			importModule: async (/** @type {string} */ url) => {
-				const served = await call('GET', new URL(url).pathname);
-				expect(served.status, url).toBe(200);
-				return import(`data:text/javascript;base64,${served.bytes.toString('base64')}`);
+				/** @param {string} pathname */
+				const mirror = async (pathname) => {
+					const target = path.join(modules, pathname);
+					if (mirrored.has(target)) return target;
+					mirrored.add(target);
+					const served = await call('GET', pathname);
+					expect(served.status, pathname).toBe(200);
+					await mkdir(path.dirname(target), { recursive: true });
+					await writeFile(target, served.bytes);
+					for (const specifier of relativeImports(served.text))
+						await mirror(path.posix.join(path.posix.dirname(pathname), specifier));
+					return target;
+				};
+				return import(pathToFileURL(await mirror(new URL(url).pathname)).href);
 			},
 		};
 		// the loader ends with `__ssr.start(<data>);})();`: pass the test's options (module import, fetch) as well
@@ -328,6 +350,7 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		expect(await until(() => doc.querySelectorAll('.ss-grid__list li').length === 3)).toBe(true);
 		expect(win.location.search).toBe('');
 		dom.window.close();
+		await rm(modules, { recursive: true, force: true });
 	});
 
 	it('refuses to switch on every add-on beyond the website budget, keeping the live bundle', async () => {

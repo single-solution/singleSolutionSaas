@@ -12,6 +12,8 @@
  * | `POST /v1/merchants/:merchantId/websites/:websiteId/delivery/compile`       | merchant, staff  |
  * | `POST /v1/merchants/:merchantId/websites/:websiteId/delivery/rollback`      | merchant, staff  |
  * | `POST /v1/merchants/:merchantId/websites/:websiteId/preview`                | merchant, staff  |
+ * | `GET  /v1/merchants/:merchantId/websites/:websiteId/delivery/strings`       | merchant, staff  |
+ * | `PUT  …/delivery/strings/:appId/:element/:language` (string overrides)      | merchant, staff  |
  * | `GET  /w/:websiteId/loader.js` · `/w/:websiteId/:version/{loader.js,manifest.json}` | public   |
  * | `GET  /w/packs/:appId/:version/<path>` · `/w/ui/:appId/:version/<path>`     | public           |
  * | `GET  /p/:token[/<path>]`                                                   | public           |
@@ -147,6 +149,31 @@ export const deliveryRoutes = (delivery) => [
 				websiteId: ctx.params.websiteId ?? '',
 				merchantId: ctx.params.merchantId ?? '',
 				version: /** @type {Record<string, unknown> | undefined} */ (ctx.body)?.version,
+				...caller(ctx),
+			}),
+	}),
+	defineRoute({
+		method: 'GET',
+		path: `${SITE}/delivery/strings`,
+		auth: CONSOLE,
+		permission: 'websites.read',
+		handler: (ctx) =>
+			delivery.listStringOverrides({ websiteId: ctx.params.websiteId ?? '', merchantId: ctx.params.merchantId ?? '' }),
+	}),
+	defineRoute({
+		method: 'PUT',
+		path: `${SITE}/delivery/strings/:appId/:element/:language`,
+		auth: CONSOLE,
+		permission: 'websites.write',
+		rateLimit: { limit: 60, windowMs: 10 * 60_000, key: (ctx) => `merchant:${ctx.params.merchantId}` },
+		handler: (ctx) =>
+			delivery.setStringOverride({
+				websiteId: ctx.params.websiteId ?? '',
+				merchantId: ctx.params.merchantId ?? '',
+				appId: ctx.params.appId ?? '',
+				element: ctx.params.element ?? '',
+				language: ctx.params.language ?? '',
+				body: ctx.body,
 				...caller(ctx),
 			}),
 	}),

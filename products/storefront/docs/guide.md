@@ -43,7 +43,12 @@ units (or `{ amount, currency }`), `currency` (ISO 4217), `brand`, `badges`, `at
 `variants` (`[{ price, attributes, inventory }]`; chips cycle per variant), `collections`, `inStock`, `rank`,
 `createdAt`.
 
-Catalog list (assumed public read API, `pk_` key): `GET /v1/items?limit=&page=|cursor=&sort=&q=&filter[<facet>]=a,b&filter[price_min]=&filter[price_max]=`
-→ `{ items, next | nextCursor, total?, facets?: [{ key, values: [{ value, count }], range?: { min, max } }] }`.
+`api` sources read through the clients the Loader passes (`clients.catalog | search | deals`, one per product the pack
+`reads` that is active on the website, bound to the website's `pk_` key). Building your own UI, pass them yourself:
+`createGrid({ config: { source: 'api' }, clients: { catalog: createElementApi({ baseUrl, key }) } })`.
+
+Catalog list: `GET /v1/items?limit=&page=|cursor=&sort=&q=&filter[<facet>]=a,b&filter[price_min]=&filter[price_max]=`
+→ `{ items, nextCursor, total?, facets? }`, mapped as Catalog ships it (`brand { id, slug, name }`, `collectionIds`,
+variant `options`, `availability` / `purchasable`; no badges or rank).
 Site Search: `GET /v1/search?q=&limit=` → `{ items | results }`. Deals: `GET /v1/deals-page?limit=&cursor=` (Deals'
 documented response).

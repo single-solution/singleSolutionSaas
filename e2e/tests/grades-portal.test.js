@@ -465,6 +465,23 @@ describe.skipIf(!hasOpenssl)('Grade & Condition System on the real Portal', () =
 		]);
 		const warranty = await (await fetch(`${PRODUCT_URL}/v1/warranty/excellent`, { headers: browser })).json();
 		expect(warranty).toMatchObject({ tier: 'excellent', periodText: 'No warranty' });
+		// the Loader element stub's action (ss-element-stub@2) answers the next view model with the Portal-issued pk_
+		const stubCtx = encodeURIComponent(JSON.stringify({ path: '/p/jacket', itemId: 'itm_e2e' }));
+		const selected = await fetch(`${PRODUCT_URL}/v1/elements/warranty/actions/select?ctx=${stubCtx}`, {
+			method: 'POST',
+			headers: { ...browser, 'content-type': 'application/json', 'idempotency-key': randomUUID() },
+			body: JSON.stringify({ fields: { tier: 'excellent' } }),
+		});
+		const stub = await selected.json();
+		expect(selected.status, JSON.stringify(stub)).toBe(200);
+		expect(stub.items).toEqual([{ text: expect.stringMatching(/^Excellent: No warranty/) }]);
+		expect(stub.actions).toEqual([{ action: 'select', label: 'Show' }]);
+		const stubOff = await fetch(`${PRODUCT_URL}/v1/elements/inspection/actions/refresh`, {
+			method: 'POST',
+			headers: { ...browser, 'content-type': 'application/json', 'idempotency-key': randomUUID() },
+			body: '{}',
+		});
+		expect(stubOff.status).toBe(403); // the inspection add-on is off on starter
 		const conditions = await (await fetch(`${PRODUCT_URL}/v1/condition-mappings/items/itm_e2e`, { headers: browser })).json();
 		expect(conditions.variants[0].offer).toEqual({ itemCondition: 'https://schema.org/UsedCondition' });
 		// the browser key cannot write; the server key grades a standalone unit of an external id

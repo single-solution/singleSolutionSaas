@@ -1,17 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createMobileTabBar, createContactFooter, createNoticeBar } from '../headless/blocks.js';
-import { createCards, createTrendingBand } from '../headless/cards.js';
-import { createDealsPage } from '../headless/dealsPage.js';
-import { createFilters } from '../headless/filters.js';
-import { createGrid } from '../headless/grid.js';
+import { createCards as rawCreateCards, createTrendingBand as rawCreateTrendingBand } from '../headless/cards.js';
+import { createDealsPage as rawCreateDealsPage } from '../headless/dealsPage.js';
+import { createFilters as rawCreateFilters } from '../headless/filters.js';
+import { createGrid as rawCreateGrid } from '../headless/grid.js';
 import { createHero } from '../headless/hero.js';
 import { createCore, emitter, fail, ok } from '../headless/kit.js';
 import { createBrandCards, createCategoryCards } from '../headless/navCards.js';
-import { createSearchOverlay } from '../headless/searchOverlay.js';
+import { createSearchOverlay as rawCreateSearchOverlay } from '../headless/searchOverlay.js';
 import { MAX_BYTES, createSource, getJson } from '../headless/source.js';
 import { createTheme, themeCss } from '../headless/theme.js';
 import { sourceConfig } from '../core/source.js';
-import { ITEMS, fakeFetch, strings } from './helpers.js';
+import { ITEMS, fakeFetch, strings, viaLoader } from './helpers.js';
+
+const createGrid = viaLoader(rawCreateGrid);
+const createFilters = viaLoader(rawCreateFilters);
+const createCards = viaLoader(rawCreateCards);
+const createTrendingBand = viaLoader(rawCreateTrendingBand);
+const createSearchOverlay = viaLoader(rawCreateSearchOverlay);
+const createDealsPage = viaLoader(rawCreateDealsPage);
 
 const API = 'https://catalog.example.com';
 const KEY = 'pk_live_0123456789abcdef';
@@ -338,7 +345,8 @@ describe('headless/cards and trending band', () => {
 		const { fetch, calls } = fakeFetch({ [`${API}/v1/items`]: { items: ITEMS } });
 		const band = createTrendingBand({ config: { source: 'api', source_url: API, source_key: KEY, count: 2 }, strings, fetch });
 		await band.actions.start();
-		expect(band.state().items.map((c) => c.id)).toEqual(['itm_2', 'itm_1']);
+		// Catalog has no rank: the API's `sort=trending` order is kept
+		expect(band.state().items.map((c) => c.id)).toEqual(['itm_1', 'itm_2']);
 		expect(band.state().layout).toBe('strip');
 		expect(calls[0]?.url).toBe(`${API}/v1/items?limit=2&sort=trending`);
 		const manual = createTrendingBand({

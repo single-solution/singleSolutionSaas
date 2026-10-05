@@ -6,7 +6,7 @@
  * adjustments, status changes, imports) go through the same services as the API and are audited with the session's
  * actor (staff when impersonating or launched as admin).
  */
-import { defineRoute, ok, paginate, problem } from '@ss/app-kit';
+import { created, defineRoute, ok, paginate, problem } from '@ss/app-kit';
 import { formatMoney } from '../core/money.js';
 import { ownerItem } from '../core/views.js';
 import { statusDef } from '../core/items.js';
@@ -21,6 +21,42 @@ import { viewContext } from './items.js';
 export const DASHBOARD_PAGE = 50;
 /** Dashboard roles that may change data (demo sessions are read-only). */
 export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin', 'impersonate']);
+
+/** Export parameters a download link may carry (item filters as for `GET /v1/items`). */
+const EXPORT_PARAM = /^(?:q|filter\[[A-Za-z_.]{1,40}\])$/;
+const MAX_EXPORT_PARAMS = 20;
+const MAX_EXPORT_VALUE = 200;
+
+/**
+ * The export parameters of a link request (`{ params?: { 'filter[status]': 'active', q: '…' } }`), or null when invalid.
+ * @param {unknown} body
+ * @returns {Record<string, string> | null}
+ */
+export const exportParamsOf = (body) => {
+	if (body === undefined || body === null) return {};
+	if (!isObject(body)) return null;
+	const params = /** @type {Record<string, unknown>} */ (body).params ?? {};
+	if (!isObject(params)) return null;
+	const entries = Object.entries(params);
+	if (entries.length > MAX_EXPORT_PARAMS) return null;
+	for (const [key, value] of entries)
+		if (!EXPORT_PARAM.test(key) || typeof value !== 'string' || value.length > MAX_EXPORT_VALUE) return null;
+	return Object.fromEntries(entries.sort(([a], [b]) => (a < b ? -1 : 1)));
+};
+
+/**
+ * The CSV download response of an export.
+ * @param {string} csv
+ */
+const csvDownload = (csv) =>
+	new Response(csv, {
+		status: 200,
+		headers: {
+			'content-type': 'text/csv; charset=utf-8',
+			'content-disposition': 'attachment; filename="catalog.csv"',
+			'cache-control': 'no-store',
+		},
+	});
 
 /**
  * The audited actor of a dashboard session.
@@ -245,14 +281,48 @@ export const createDashboardApi = (catalog) => {
 				if (!s) return noWebsite();
 				const result = await transfer.exportItems(s, ctx.query, { exposeCost: true });
 				if (!result.ok) return problem(result.reason, result.detail ?? result.reason);
-				return new Response(result.csv, {
-					status: 200,
-					headers: {
-						'content-type': 'text/csv; charset=utf-8',
-						'content-disposition': 'attachment; filename="catalog.csv"',
-						'cache-control': 'no-store',
-					},
-				});
+				return csvDownload(result.csv);
+			},
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/exports:link',
+			auth: 'launch',
+			element: 'import_export',
+			idempotent: 'optional',
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				if (!s) return noWebsite();
+				const params = exportParamsOf(ctx.body);
+				if (!params)
+					return problem('validation_failed', 'The export parameters are not valid.', {
+						errors: [{ path: '/params', code: 'params_invalid', message: 'params invalid' }],
+					});
+				const link = catalog.app.exportLinks.issue({ websiteId: s.websiteId, kind: 'items', params });
+				const url = new URL(`/v1/dashboard/exports/${link.token}`, ctx.request.url).toString();
+				return created({ url, expiresAt: link.expiresAt }, { headers: { 'cache-control': 'no-store' } });
+			},
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/dashboard/exports/:token',
+			auth: 'none',
+			handler: async (ctx) => {
+				const link = catalog.app.exportLinks.verify(ctx.params.token);
+				if (!link.ok)
+					return problem(
+						'unauthorized',
+						link.reason === 'expired' ? 'This download link has expired.' : 'This download link is not valid.',
+						{ headers: { 'cache-control': 'no-store' } },
+					);
+				const s = await catalog.siteFor(link.websiteId);
+				if (!s || !s.settings.enabled('import_export'))
+					return problem('element_disabled', 'Import & export is not enabled for this website.', {
+						headers: { 'cache-control': 'no-store' },
+					});
+				const result = await transfer.exportItems(s, link.params, { exposeCost: true });
+				if (!result.ok) return problem(result.reason, result.detail ?? result.reason);
+				return csvDownload(result.csv);
 			},
 		}),
 	];
@@ -323,6 +393,7 @@ export const demoDashboard = ({ now }) => {
 		config: () => ({}),
 		domain: 'shop.example.com',
 		website: { currency: 'EUR' },
+		storage: false,
 	});
 	/** @type {Array<[string, string, string, number, number, string]>} slug, title, status, price, quantity, kind */
 	const script = [

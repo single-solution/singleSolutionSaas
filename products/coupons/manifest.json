@@ -28,10 +28,15 @@
 		"offlineGrace": "PT24H"
 	},
 	"scopes": ["events.subscribe:order.*"],
-	"requires": { "resources": ["database"] },
+	"requires": {
+		"resources": ["database"]
+	},
 	"events": {
 		"consumes": ["order.completed@1", "order.cancelled@1", "order.refunded@1"],
 		"publishes": ["coupons.redeemed@1", "coupons.released@1", "coupons.exhausted@1"]
+	},
+	"budget": {
+		"shared": 1
 	},
 	"elements": [
 		{
@@ -40,16 +45,26 @@
 			"description": "Coupons and their codes: one shared code or bulk unique codes from patterns (cryptographically random), single- or multi-use, validity windows (dates, weekdays, overnight times, any time zone), auto-apply links.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 250 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 250
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": [],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/codes.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/codes.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"customFields": ["coupon"],
 			"experiments": false,
-			"api": { "resources": ["coupons", "codes"] },
+			"api": {
+				"resources": ["coupons", "codes"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -59,15 +74,25 @@
 			"description": "Who and what a coupon applies to: structured conditions (items, variants, collections, attributes, prices, quantities, subtotal, payment and delivery method, country, segments, first order, device, source; and/or groups) plus a rules@1 condition over cart, customer and context.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 150 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["codes"],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/eligibility.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/eligibility.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"rules": ["when"],
-			"api": { "resources": ["eligibility"] },
+			"api": {
+				"resources": ["eligibility"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -77,10 +102,16 @@
 			"description": "What a coupon takes off: percent (bounded 0–100 %), fixed amount (once or per unit), free shipping, buy X get Y, tiered by quantity or subtotal, gift item — rounded once, allocated to lines.",
 			"modes": ["C"],
 			"stateful": false,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["codes"],
-			"features": { "$ref": "schemas/actions.features.json" },
+			"features": {
+				"$ref": "schemas/actions.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"headless": null,
@@ -92,14 +123,24 @@
 			"description": "Uses per customer (bring-your-own identity) and per device, velocity limits on checks, failures and reservations, and a blocklist of customers, e-mails, devices and codes.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["codes"],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/limits.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/limits.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
-			"api": { "resources": ["blocks"] },
+			"api": {
+				"resources": ["blocks"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -109,10 +150,16 @@
 			"description": "Several coupons per cart: classes that combine (item / order / shipping or your own), exclusive coupons, priorities, best-discount or in-order selection, and loyalty / deals flags on every quote.",
 			"modes": ["C"],
 			"stateful": false,
-			"price": { "hourly": 50 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["codes", "actions"],
-			"features": { "$ref": "schemas/stacking.features.json" },
+			"features": {
+				"$ref": "schemas/stacking.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"experiments": true,
@@ -127,15 +174,33 @@
 			"stateful": true,
 			"price": {
 				"hourly": 150,
-				"metered": [{ "unit": "redemption", "perUnit": 1, "per": 1, "included": { "starter": 500, "pro": 5000 } }]
+				"metered": [
+					{
+						"unit": "redemption",
+						"perUnit": 1,
+						"per": 1,
+						"included": {
+							"starter": 500,
+							"pro": 5000
+						}
+					}
+				]
 			},
-			"budget": { "js": 0 },
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["codes", "actions"],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/api.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/api.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
-			"api": { "resources": ["validations", "quotes", "reservations", "redemptions"] },
+			"api": {
+				"resources": ["validations", "quotes", "reservations", "redemptions"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -145,19 +210,32 @@
 			"description": "The code field of a cart or checkout: drop-in renderer on the website's design tokens, headless core for your own UI, auto-apply from links, live savings.",
 			"modes": ["A", "B", "C"],
 			"stateful": false,
-			"price": { "hourly": 50 },
-			"budget": { "js": 8 },
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 4
+			},
 			"dependsOn": ["api"],
-			"features": { "$ref": "schemas/apply_box.features.json" },
+			"features": {
+				"$ref": "schemas/apply_box.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"experiments": true,
-			"api": { "resources": ["elements"] },
+			"api": {
+				"resources": ["elements"]
+			},
 			"headless": "headless/applyBox.js#createApplyBox",
 			"renderer": "ui/applyBox.js#render",
 			"variants": ["inline", "collapsible"],
 			"slots": ["before", "after", "success"],
-			"a11y": { "role": "region", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "distribution",
@@ -165,14 +243,24 @@
 			"description": "Share links with the auto-apply parameter, QR codes as SVG generated by the product, CSV exports of codes.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["codes"],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/distribution.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/distribution.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
-			"api": { "resources": ["share-links", "exports"] },
+			"api": {
+				"resources": ["share-links", "exports"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -182,14 +270,24 @@
 			"description": "Redemptions, discount given, revenue and average order with coupons per currency, discount rate, undone redemptions, top codes and coupons.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["api"],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/reporting.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/reporting.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
-			"api": { "resources": ["reports"] },
+			"api": {
+				"resources": ["reports"]
+			},
 			"headless": null,
 			"renderer": null
 		}
@@ -209,7 +307,14 @@
 			"elements": ["codes", "eligibility", "actions", "limits", "stacking", "api", "apply_box", "distribution", "reporting"]
 		}
 	],
-	"priceBook": { "version": "2026-10-01", "effectiveFrom": "2026-10-01T00:00:00Z" },
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
 	"trialHours": 48,
-	"retention": { "reservations": "P730D", "usage": "P730D", "velocity": "P2D" }
+	"retention": {
+		"reservations": "P730D",
+		"usage": "P730D",
+		"velocity": "P2D"
+	}
 }

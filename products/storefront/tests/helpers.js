@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createElementApi } from '@ss/web/element';
 
 /** The pack's folder (a path, not a URL: jsdom replaces the global URL). */
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -178,3 +179,28 @@ export const fakeIntersection = () => {
 	};
 	return { IO, observers };
 };
+
+/** The website key the Loader's read clients carry in tests. */
+export const LOADER_KEY = 'pk_live_0123456789abcdef';
+
+/**
+ * Wrap an element factory the way the Loader calls it (F.18): an `api` source's `source_url` (a test-only shortcut)
+ * becomes the read clients the Loader passes — one `@ss/web` element API client per read product, bound to that
+ * base URL and the website's `pk_` key, using the test `fetch`.
+ * @template {(options?: any) => any} F
+ * @param {F} factory
+ * @returns {F}
+ */
+export const viaLoader = (factory) =>
+	/** @type {F} */ (
+		(/** @type {any} */ options = {}) => {
+			const base = options.config?.source_url;
+			const config = Object.fromEntries(
+				Object.entries(options.config ?? {}).filter(([key]) => key !== 'source_url' && key !== 'source_key'),
+			);
+			if (config.source !== 'api' || typeof base !== 'string') return factory(options);
+			const fetch = options.fetch ?? (async () => Promise.reject(new TypeError('network down')));
+			const client = createElementApi({ baseUrl: base, key: LOADER_KEY, fetch });
+			return factory({ ...options, config, clients: { catalog: client, search: client, deals: client } });
+		}
+	);

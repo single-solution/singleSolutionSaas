@@ -27,7 +27,17 @@ import {
 	validateUnit,
 	validateUnitPatch,
 } from '../core/validate.js';
-import { filtersStub, inspectionStub, mappingStub, showcaseStub, tiersStub, warrantyStub } from '../core/views.js';
+import {
+	actionInput,
+	filtersStub,
+	inspectionStub,
+	mappingStub,
+	showcaseStub,
+	tiersStub,
+	warrantyStub,
+	withReportPicker,
+	withTierPicker,
+} from '../core/views.js';
 import { printableTerms } from '../core/warranty.js';
 import { repositoriesFor } from '../adapters/db.js';
 import { DASHBOARD_WRITE_ROLES, dashboardActor } from './dashboard.js';
@@ -46,6 +56,21 @@ const MAX_BATCH_ITEMS = 100;
 const MAX_SORT_ITEMS = 500;
 /** Language tags accepted in `?lang=`. */
 const LANG = /^[a-z]{2,3}(?:-[A-Za-z0-9]{1,8}){0,3}$/;
+/** Longest report token accepted from a stub action. */
+const MAX_TOKEN_LENGTH = 100;
+
+/**
+ * Element stub actions (`POST /v1/elements/<key>/actions/<action>`, ss-element-stub@2): `refresh` re-reads the view;
+ * `select` shows one tier (showcase, warranty); `open` opens an inspection report by its code. All are reads.
+ */
+export const STUB_ACTIONS = Object.freeze({
+	tiers: Object.freeze(['refresh']),
+	showcase: Object.freeze(['refresh', 'select']),
+	filters: Object.freeze(['refresh']),
+	warranty: Object.freeze(['refresh', 'select']),
+	mapping: Object.freeze(['refresh']),
+	inspection: Object.freeze(['refresh', 'open']),
+});
 
 /**
  * Field problems → RFC 9457 `validation_failed`.
@@ -116,11 +141,14 @@ export const createGrades = (app) => {
 	 * @param {any} doc
 	 * @returns {Promise<Site>}
 	 */
-	const siteOf = async (websiteId, doc) => ({
-		websiteId,
-		settings: settingsForDoc(product, doc),
-		repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
-	});
+	const siteOf = async (websiteId, doc) => {
+		await app.registry.remember(websiteId);
+		return {
+			websiteId,
+			settings: settingsForDoc(product, doc),
+			repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
+		};
+	};
 	/**
 	 * Site of a website from its entitlement (null without an active subscription or with `tiers` off).
 	 * @param {string} websiteId
@@ -192,6 +220,99 @@ export const buildRoutes = (grades) => {
 	/** Dashboard session → website (null = pick a website / demo). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? site(ctx) : null);
 	const noWebsite = () => problem('bad_request', 'Open the dashboard for a website.');
+
+	/** Active tiers for the stub's tier select. @param {Site} s */
+	const tierOptions = (s) =>
+		s.settings.tiers.filter((tier) => tier.active).map((tier) => ({ key: tier.key, label: tier.label }));
+	/**
+	 * Element stub view models, shared by `GET /v1/elements/<key>/view` and the action routes.
+	 * @type {Record<keyof typeof STUB_ACTIONS, (ctx: any, s: Site, input: ReturnType<typeof pageContext>) => Promise<Record<string, unknown>>>}
+	 */
+	const stubViews = {
+		tiers: async (ctx, s, { itemId }) => {
+			const tiers = itemId
+				? (await service.itemTiers(s, itemId)).tiers
+				: s.settings.tiers.filter((tier) => tier.active).map((tier) => tierView(tier, s.settings.badgeStyle));
+			return tiersStub(tiers, service.translate(langOf(ctx, s)));
+		},
+		showcase: async (ctx, s, { tier, itemId }) => {
+			const t = service.translate(langOf(ctx, s));
+			const view = await service.showcase(s, { tier, itemId, lang: langOf(ctx, s) });
+			return withTierPicker(showcaseStub(view.entries, t), tierOptions(s), t);
+		},
+		filters: async (ctx, s, { collection }) => {
+			const view = await service.filters(s, collection);
+			return filtersStub(view.options, service.translate(langOf(ctx, s)));
+		},
+		warranty: async (ctx, s, { tier }) => {
+			const lang = langOf(ctx, s);
+			const t = service.translate(lang);
+			const terms = service.warranty(s, lang).filter((term) => !tier || term.tier === tier);
+			return withTierPicker(warrantyStub(terms, t), tierOptions(s), t);
+		},
+		mapping: async (ctx, s, { itemId }) => {
+			const t = service.translate(langOf(ctx, s));
+			if (!itemId) return mappingStub(null, t);
+			const view = await service.conditions(s, itemId);
+			const first = /** @type {{ tier: { label: string } | null, values: Record<string, string | null> } | null} */ (
+				view.item ?? view.tiers[0] ?? null
+			);
+			const shown = view.vocabularies.filter((v) => v.display);
+			return mappingStub(
+				first ? { tier: first.tier, values: shown.map((v) => ({ name: v.name, value: first.values[v.key] ?? null })) } : null,
+				t,
+			);
+		},
+		inspection: async (ctx, s, { token }) => {
+			const t = service.translate(langOf(ctx, s));
+			const report = token ? await service.report(s, token) : null;
+			const view = inspectionStub(report, t);
+			return withReportPicker(token && !report ? { ...view, body: t('inspection.error.not_found') } : view, t);
+		},
+	};
+	/**
+	 * The page context with a stub action's input applied (`select` → tier, `open` → report token).
+	 * @param {Site} s
+	 * @param {string} action
+	 * @param {ReturnType<typeof pageContext>} context
+	 * @param {unknown} body
+	 * @returns {{ ok: true, input: ReturnType<typeof pageContext> } | { ok: false, problems: Array<{ path: string, code: string }> }}
+	 */
+	const stubInput = (s, action, context, body) => {
+		const input = actionInput(body);
+		if (action === 'select') {
+			const tier = input.tier ?? null;
+			if (tier === null || tier === '') return { ok: true, input: { ...context, tier: null } };
+			const known = typeof tier === 'string' ? s.settings.index.get(tier) : undefined;
+			if (!isKey(tier) || !known?.active) return { ok: false, problems: [{ path: '/fields/tier', code: 'tier_invalid' }] };
+			return { ok: true, input: { ...context, tier: /** @type {string} */ (tier) } };
+		}
+		if (action === 'open') {
+			const token = input.token;
+			if (typeof token !== 'string' || token.trim().length === 0 || token.length > MAX_TOKEN_LENGTH)
+				return { ok: false, problems: [{ path: '/fields/token', code: 'token_invalid' }] };
+			return { ok: true, input: { ...context, token: token.trim() } };
+		}
+		return { ok: true, input: context };
+	};
+	const stubActionRoutes = /** @type {Array<[keyof typeof STUB_ACTIONS, readonly string[]]>} */ (
+		Object.entries(STUB_ACTIONS)
+	).map(([element, actions]) =>
+		defineRoute({
+			method: 'POST',
+			path: `/v1/elements/${element}/actions/:action`,
+			...website(element, 'pk'),
+			idempotent: 'optional',
+			...(element === 'inspection' ? { rateLimit: { limit: 120, windowMs: 60_000 } } : {}),
+			handler: async (ctx) => {
+				if (!actions.includes(ctx.params.action)) return problem('not_found', 'Unknown action.');
+				const s = await site(ctx);
+				const parsed = stubInput(s, ctx.params.action, pageContext(ctx.query), ctx.body);
+				if (!parsed.ok) return invalid(parsed.problems);
+				return ok(await stubViews[element](ctx, s, parsed.input), { headers: { 'cache-control': 'private, no-store' } });
+			},
+		}),
+	);
 
 	return [
 		...standardRoutes(product),
@@ -437,11 +558,7 @@ export const buildRoutes = (grades) => {
 			...website('tiers', 'pk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const { itemId } = pageContext(ctx.query);
-				const tiers = itemId
-					? (await service.itemTiers(s, itemId)).tiers
-					: s.settings.tiers.filter((tier) => tier.active).map((tier) => tierView(tier, s.settings.badgeStyle));
-				return ok(tiersStub(tiers, service.translate(langOf(ctx, s))), {
+				return ok(await stubViews.tiers(ctx, s, pageContext(ctx.query)), {
 					headers: cacheFor(ctx, s.settings.tiersConfig.cache_seconds),
 				});
 			},
@@ -468,9 +585,7 @@ export const buildRoutes = (grades) => {
 			...website('showcase', 'pk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const { tier, itemId } = pageContext(ctx.query);
-				const view = await service.showcase(s, { tier, itemId, lang: langOf(ctx, s) });
-				return ok(showcaseStub(view.entries, service.translate(langOf(ctx, s))), {
+				return ok(await stubViews.showcase(ctx, s, pageContext(ctx.query)), {
 					headers: cacheFor(ctx, s.settings.showcase.cache_seconds),
 				});
 			},
@@ -537,8 +652,7 @@ export const buildRoutes = (grades) => {
 			...website('filters', 'pk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const view = await service.filters(s, pageContext(ctx.query).collection);
-				return ok(filtersStub(view.options, service.translate(langOf(ctx, s))), {
+				return ok(await stubViews.filters(ctx, s, pageContext(ctx.query)), {
 					headers: cacheFor(ctx, s.settings.filters.cache_seconds),
 				});
 			},
@@ -582,10 +696,7 @@ export const buildRoutes = (grades) => {
 			...website('warranty', 'pk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const { tier } = pageContext(ctx.query);
-				const lang = langOf(ctx, s);
-				const terms = service.warranty(s, lang).filter((term) => !tier || term.tier === tier);
-				return ok(warrantyStub(terms, service.translate(lang)), {
+				return ok(await stubViews.warranty(ctx, s, pageContext(ctx.query)), {
 					headers: cacheFor(ctx, s.settings.warranty.cache_seconds),
 				});
 			},
@@ -659,23 +770,10 @@ export const buildRoutes = (grades) => {
 			...website('mapping', 'pk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const { itemId } = pageContext(ctx.query);
-				const t = service.translate(langOf(ctx, s));
-				if (!itemId) return ok(mappingStub(null, t));
-				const view = await service.conditions(s, itemId);
-				const first = /** @type {{ tier: { label: string } | null, values: Record<string, string | null> } | null} */ (
-					view.item ?? view.tiers[0] ?? null
-				);
-				const shown = view.vocabularies.filter((v) => v.display);
-				return ok(
-					mappingStub(
-						first
-							? { tier: first.tier, values: shown.map((v) => ({ name: v.name, value: first.values[v.key] ?? null })) }
-							: null,
-						t,
-					),
-					{ headers: cacheFor(ctx, s.settings.mapping.cache_seconds) },
-				);
+				const context = pageContext(ctx.query);
+				return ok(await stubViews.mapping(ctx, s, context), {
+					...(context.itemId ? { headers: cacheFor(ctx, s.settings.mapping.cache_seconds) } : {}),
+				});
 			},
 		}),
 
@@ -834,13 +932,12 @@ export const buildRoutes = (grades) => {
 			rateLimit: { limit: 120, windowMs: 60_000 },
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const { token } = pageContext(ctx.query);
-				const report = token ? await service.report(s, token) : null;
-				return ok(inspectionStub(report, service.translate(langOf(ctx, s))), {
+				return ok(await stubViews.inspection(ctx, s, pageContext(ctx.query)), {
 					headers: { 'cache-control': 'private, no-store' },
 				});
 			},
 		}),
+		...stubActionRoutes,
 
 		// ── dashboard (SSO session) ─────────────────────────────────────────────────────────────────────────────
 		defineRoute({

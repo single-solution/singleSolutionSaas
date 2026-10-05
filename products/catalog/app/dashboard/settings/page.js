@@ -13,7 +13,6 @@ const ELEMENTS = /** @type {const} */ ([
 	'collections',
 	'brands',
 	'media',
-	'media_uploads',
 	'import_export',
 	'feeds',
 	'api',

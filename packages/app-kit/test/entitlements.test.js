@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateSigningKey } from '@ss/protocol';
-import { can, config, createMemoryStores, createProduct, feature, featuresOf } from '../src/index.js';
+import { can, config, createMemoryStores, createProduct, feature, featuresOf, resource } from '../src/index.js';
 import { APP_ID, MERCHANT, PORTAL_URL, WEBSITE, WEBSITE_2, createClock, entitle, manifest, setup } from './helpers.js';
 
 const coldKey = await generateSigningKey({ kid: 'product-cold' });
@@ -190,6 +190,19 @@ describe('document readers', () => {
 		expect(can(null, 'codes')).toBe(false);
 		expect(can({ ...doc, runtime: { state: 'paused' } }, 'codes')).toBe(false);
 		expect(can({ ...doc, runtime: { state: 'quota_exhausted' } }, 'codes')).toBe(true);
+	});
+	it('resource: whether a client resource is connected (optional resources, F.18)', () => {
+		const withResources = {
+			...doc,
+			resources: [
+				{ kind: 'storage', ref: 'con_1', status: 'connected' },
+				{ kind: 'ai', ref: 'con_2', status: 'failing' },
+			],
+		};
+		expect(resource(withResources, 'storage')).toEqual({ kind: 'storage', status: 'connected', connected: true });
+		expect(resource(withResources, 'ai')).toEqual({ kind: 'ai', status: 'failing', connected: false });
+		expect(resource(withResources, 'messaging')).toEqual({ kind: 'messaging', status: 'missing', connected: false });
+		expect(resource(null, 'storage').connected).toBe(false);
 	});
 	it('feature / config / featuresOf', () => {
 		expect(feature(doc, 'codes.maxActive')).toBe(50);

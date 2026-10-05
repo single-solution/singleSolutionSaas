@@ -19,6 +19,10 @@
 /** @typedef {'A' | 'B' | 'C'} Mode */
 /** @typedef {'database' | 'storage' | 'ai' | 'messaging' | 'payments' | 'analytics'} ResourceKind */
 /** @typedef {'string' | 'integer' | 'number' | 'boolean' | 'array' | 'object'} FeatureType */
+/**
+ * @typedef {'paths' | 'selectors' | 'pageTypes' | 'devices' | 'referrers' | 'schedule' | 'consent' | 'triggers' |
+ *   'frequency' | 'audience'} PlacementMember
+ */
 
 /**
  * @typedef {object} FeatureNode
@@ -45,10 +49,12 @@
  * @property {string[]} [required]
  * @property {false} [additionalProperties]
  * @property {Record<string, unknown>} [x-ui]
- * @property {Record<string, { default?: unknown, max?: number | boolean }>} [x-plan]
+ * @property {Record<string, { default?: unknown, max?: number | boolean, members?: PlacementMember[] }>} [x-plan]
+ *   `members`: placement features only — the placement members the plan may set
  * @property {boolean} [x-lock]
  * @property {boolean} [x-experiment]
- * @property {'flag' | 'quota' | 'limit' | 'rate' | 'config'} [x-kind]
+ * @property {'flag' | 'quota' | 'limit' | 'rate' | 'config' | 'placement'} [x-kind]
+ * @property {{ members?: PlacementMember[] }} [x-placement] placement features: the members the element supports
  * @property {'hour' | 'day' | 'week' | 'month'} [x-period] quota reset period (required for quotas)
  * @property {boolean} [x-hardStop] quota: block at the limit (true) or allow overage (false)
  * @property {string} [x-unit] quota/rate: counted unit, e.g. `redemption`
@@ -81,11 +87,13 @@
  * @property {Mode[]} modes
  * @property {boolean} [stateful]
  * @property {{ hourly: number, metered?: MeteredPrice[] }} price hourly in integer millicredits
- * @property {{ js: number }} [budget] KB
+ * @property {{ js: number }} [budget] KB gzip of the element's own minified entry modules
  * @property {string[]} [dependsOn]
- * @property {{ resources?: ResourceKind[] }} [requires]
+ * @property {{ resources?: ResourceKind[], optionalResources?: ResourceKind[] }} [requires] `optionalResources`
+ *   are used when connected and never disable the element
  * @property {FeatureSchema} [features]
- * @property {string} [strings]
+ * @property {string} [strings] legacy per-element catalog file (one language)
+ * @property {string[]} [stringKeys] keys (or `prefix*`) of the product catalogs `strings/<lang>.json` the element renders
  * @property {boolean} [placement]
  * @property {string[]} [rules]
  * @property {string[]} [hooks]
@@ -116,6 +124,9 @@
  * @property {{ adminLaunch?: boolean, identityIssuer?: boolean, sandbox?: boolean, localEnforcement?: string[], offlineGrace?: string }} [capabilities]
  * @property {string[]} [scopes]
  * @property {{ resources?: ResourceKind[] }} [requires]
+ * @property {{ shared?: number }} [budget] KB gzip of the shared code-split chunks (counted once per website)
+ * @property {Array<string | { product: string, scopes?: string[] }>} [reads] service products whose public read API
+ *   the elements call (the Loader passes an API client per active product)
  * @property {{ consumes?: string[], publishes?: string[] }} [events]
  * @property {ManifestElement[]} elements
  * @property {ManifestPlan[]} [plans]

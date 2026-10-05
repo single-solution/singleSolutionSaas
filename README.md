@@ -134,6 +134,19 @@ pnpm exec ss app validate products/my-app
 pnpm exec ss certify products/my-app --url http://localhost:3000
 ```
 
+An element pack (or a service product's UI bundle) is built and published with:
+
+```bash
+pnpm exec ss pack build products/my-pack
+```
+
+```bash
+pnpm exec ss pack publish products/my-pack --portal https://portal.example --token sst_… --key @dev-key.json --activate
+```
+
+`build` bundles the manifest's modules (minified ES modules, shared chunks), the string catalogs and the signed-bundle
+descriptor into `dist/pack`; `publish` signs it and uploads it with a staff API token (`POST /v1/admin/api-tokens`).
+
 Validate checks the files: manifest, layout, imports, strings and API docs. Certify checks the running product:
 keys, website binding, switching elements off, idempotency, events and offline grace. A product that fails certify is
 not registered.
@@ -144,7 +157,7 @@ not registered.
 manifest.json    what the product is: elements, features, plans, prices (credits per hour), events, resources
 openapi.json     the HTTP API (every route documented)
 schemas/         one *.features.json per element: its settings and their limits
-strings/         all user-facing text, per language (en.json first). No text in code.
+strings/         all user-facing text, per language (en.json first; elements slice it with stringKeys). No text in code.
 core/            pure logic: plain functions, data in, data out. No I/O, no DOM, no network.
 adapters/        the only code that talks to the outside: database, AI, messaging, storage, Portal
 api/             routes: read input, call core, use adapters, return a result
@@ -208,7 +221,9 @@ compile. Use `.js` files with JSDoc types; do not add `.ts` files.
 
 ## Fast and light
 
-- Keep the browser UI small. The Loader has size budgets per product, and `ss app validate` estimates them.
+- Keep the browser UI small. The Loader has size budgets per element (`budget.js`) and per product's shared chunks
+  (`budget.shared`); `ss app validate` measures them exactly as the Portal does (minified, bundled, gzip) and warns
+  when one is exceeded or padded.
 - Prefer static and cacheable responses. API responses that hold private data are `no-store`.
 - Do not poll. Use events (`events.publish`, consumed through `/.well-known/ss-events`) and short-lived caches.
 - Run slow work after the response, with `after()`, or in `jobs/`. Usage and events are flushed automatically.

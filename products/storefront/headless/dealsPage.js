@@ -12,7 +12,7 @@ import { createSource, getJson } from './source.js';
 /** @param {import('./kit.js').Options} [options] */
 export const createDealsPage = (options = {}) => {
 	const config = options.config ?? {};
-	const source = sourceConfig(config);
+	const source = sourceConfig(config, 'page', 'deals');
 	const api = createSource(source, options);
 	const fetcher = options.fetch ?? ((...args) => globalThis.fetch(...args));
 	const now = options.now ?? Date.now;

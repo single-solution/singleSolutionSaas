@@ -1,7 +1,7 @@
 /** Mode A renderers: structure, accessibility, interactions, design tokens only and the gzip budget. */
-import { readFileSync } from 'node:fs';
-import { gzipSync } from 'node:zlib';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { buildPack, measurePack } from '@ss/cli/pack';
 import manifest from '../manifest.json' with { type: 'json' };
 import en from '../strings/en.json' with { type: 'json' };
 import { render as renderLauncher, styles as launcherStyles } from '../ui/launcher.js';
@@ -335,18 +335,15 @@ describe('ui/launcher and ui/proactive renderers', () => {
 });
 
 describe('renderer budgets and tokens', () => {
-	const files = {
-		window: ['ui/window.js', 'ui/notes.js', 'headless/strings.js', 'core/strings.js'],
-		launcher: ['ui/launcher.js', 'ui/notes.js', 'headless/strings.js', 'core/strings.js'],
-		proactive: ['ui/proactive.js', 'ui/notes.js', 'headless/strings.js', 'core/strings.js'],
-	};
-	it('stays within the declared gzip budget', () => {
-		for (const [key, list] of Object.entries(files)) {
-			const source = list.map((file) => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')).join('\n');
+	it('stays within the declared gzip budgets, measured as the Portal measures them (F.18)', async () => {
+		const measured = measurePack(await buildPack(fileURLToPath(new URL('..', import.meta.url))));
+		for (const key of ['window', 'launcher', 'proactive']) {
 			const budget = /** @type {any} */ (manifest.elements.find((element) => element.key === key)).budget.js;
-			expect(gzipSync(source).length, key).toBeLessThan(budget * 1024);
+			const own = measured.elements.find((element) => element.key === key);
+			expect(own?.gzipBytes, key).toBeLessThanOrEqual(budget * 1024);
 		}
-	});
+		expect(measured.shared.gzipBytes).toBeLessThanOrEqual(/** @type {any} */ (manifest).budget.shared * 1024);
+	}, 60_000);
 	it('uses design tokens only', () => {
 		for (const css of [windowStyles, launcherStyles, proactiveStyles]) {
 			expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);

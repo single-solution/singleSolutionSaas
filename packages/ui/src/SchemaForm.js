@@ -15,6 +15,7 @@ import { Checkbox, CheckboxGroup, Input, LABEL_CLASS, RadioGroup, Select, Switch
 import { Badge } from './display.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
+import { PlacementField } from './PlacementField.js';
 import { fieldsOf, groupFields, validateValue, widgetOf } from './schema.js';
 
 /** @typedef {import('./schema.js').FeatureSchema} FeatureSchema */
@@ -79,6 +80,22 @@ function NodeControl({
 	const [jsonError, setJsonError] = useState(/** @type {string | null} */ (null));
 	const common = { id, error, help, aside, disabled };
 	const ph = placeholder ?? undefined;
+
+	if (widget === 'placement')
+		return (
+			<PlacementField
+				id={id}
+				label={label}
+				node={node}
+				value={value}
+				onChange={onChange}
+				plan={plan}
+				disabled={disabled}
+				{...(error ? { error } : {})}
+				{...(help ? { help } : {})}
+				{...(aside ? { aside } : {})}
+			/>
+		);
 
 	if (node.type === 'boolean') {
 		if (widget === 'checkbox')

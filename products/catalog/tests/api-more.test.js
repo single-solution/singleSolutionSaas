@@ -151,7 +151,13 @@ describe('media', () => {
 		expect(based.json.items.find((/** @type {any} */ m) => m.id === attached.json.id).url).toBe(
 			`https://media.example.com/${upload.json.key}`,
 		);
-		await h.entitle({ elements: { media_uploads: false } });
+		// storage is optional for media (F.18): without it media stays on, uploads answer 409 and keys are not checked
+		await h.entitle({ storage: false });
+		const refused = await h.call('POST', '/v1/media-uploads', { body: { contentType: 'image/png', contentLength: 1 } });
+		expect(refused.status).toBe(409);
+		expect(String(refused.json.type)).toMatch(/storage_not_connected$/);
+		expect((await h.call('GET', `/v1/media?filter[itemId]=${shirt.id}`, { key: h.pk })).status).toBe(200);
+		await h.entitle({ elements: { media: false } });
 		expect((await h.call('POST', '/v1/media-uploads', { body: { contentType: 'image/png', contentLength: 1 } })).status).toBe(
 			403,
 		);
@@ -332,6 +338,44 @@ describe('element views, stats, dashboard and the outbox sweep', () => {
 		expect((await h.call('POST', '/v1/dashboard/imports', { key: session, body: { csv: '' } })).status).toBe(422);
 		const exported = await h.call('GET', '/v1/dashboard/exports', { key: session });
 		expect(exported.text).toContain('new-case');
+
+		// signed, short-lived download link: no session or website header on the download
+		const link = await h.call('POST', '/v1/dashboard/exports:link', { key: session, body: { params: {} } });
+		expect(link.status).toBe(201);
+		expect(link.headers.get('cache-control')).toBe('no-store');
+		expect(Date.parse(link.json.expiresAt) - h.clock.now()).toBeLessThanOrEqual(5 * 60_000);
+		const url = new URL(link.json.url);
+		expect(url.pathname).toMatch(/^\/v1\/dashboard\/exports\/ex1\./);
+		const download = await h.call('GET', url.pathname, { key: null });
+		expect(download.status).toBe(200);
+		expect(download.headers.get('content-type')).toBe('text/csv; charset=utf-8');
+		expect(download.headers.get('content-disposition')).toBe('attachment; filename="catalog.csv"');
+		expect(download.headers.get('cache-control')).toBe('no-store');
+		expect(download.text).toBe(exported.text);
+		const filtered = await h.call('POST', '/v1/dashboard/exports:link', {
+			key: session,
+			body: { params: { 'filter[status]': 'nope' } },
+		});
+		expect((await h.call('GET', new URL(filtered.json.url).pathname, { key: null })).status).toBe(422);
+		const token = url.pathname.split('/').at(-1) ?? '';
+		const [prefix, payload, signature] = token.split('.');
+		const forged = Buffer.from(
+			JSON.stringify({ ...JSON.parse(Buffer.from(String(payload), 'base64url').toString()), w: 'web_other' }),
+		).toString('base64url');
+		for (const bad of [`${prefix}.${forged}.${signature}`, `${token}x`, 'ex1.e30.AAAA', 'nope'])
+			expect((await h.call('GET', `/v1/dashboard/exports/${bad}`, { key: null })).status).toBe(401);
+		expect(
+			(await h.call('POST', '/v1/dashboard/exports:link', { key: session, body: { params: { $where: 'x' } } })).status,
+		).toBe(422);
+		expect((await h.call('POST', '/v1/dashboard/exports:link', { key: session, body: { params: 'x' } })).status).toBe(422);
+		expect((await h.call('POST', '/v1/dashboard/exports:link', { key: null, body: {} })).status).toBe(401);
+		await h.entitle({ elements: { import_export: false } });
+		expect((await h.call('GET', url.pathname, { key: null })).status).toBe(403);
+		await h.entitle();
+		h.clock.advance(5 * 60_000 + 1);
+		const expired = await h.call('GET', url.pathname, { key: null });
+		expect(expired.status).toBe(401);
+		expect(expired.json.detail).toBe('This download link has expired.');
 		const audit = await h.db.collection('ss_catalog_audit').findOne({ websiteId: WEBSITE, action: 'stock.adjusted' });
 		expect(audit?.actor).toMatchObject({ type: 'merchant', id: 'usr_merchant' });
 		const demo = await h.session('demo');

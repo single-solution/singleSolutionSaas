@@ -329,7 +329,7 @@ export const neededResources = (needs, subscriptions, catalog) => {
 	};
 	if (Array.isArray(needs)) {
 		for (const need of needs) {
-			const name = productName(catalog, need.appId, need.productSlug);
+			const name = `${productName(catalog, need.appId, need.productSlug)}${need.optional ? ', optional' : ''}`;
 			if (need.neededNow) add(now, need.kind, name);
 			else
 				for (const key of need.elements ?? []) {

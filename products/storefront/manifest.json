@@ -8,6 +8,23 @@
 		"category": "commerce",
 		"description": "Listing and layout blocks for any website: item grid with crawlable pagination, cards with rotating attribute chips, URL-synced filters, search overlay, hero with data-saver media rules, trending band, category and brand cards, deals page, notice bar, mobile tab bar, contact footer and the theme tokens they all use."
 	},
+	"reads": [
+		{
+			"product": "catalog",
+			"scopes": ["catalog.read"]
+		},
+		{
+			"product": "search",
+			"scopes": ["search.read"]
+		},
+		{
+			"product": "deals",
+			"scopes": ["deals.read"]
+		}
+	],
+	"budget": {
+		"shared": 21
+	},
 	"elements": [
 		{
 			"key": "grid",
@@ -19,16 +36,16 @@
 				"hourly": 200
 			},
 			"budget": {
-				"js": 14
+				"js": 4
 			},
 			"features": {
 				"$ref": "schemas/grid.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/grid.js#createGrid",
-			"renderer": "ui/bundle/grid.js#render",
-			"strings": "strings/grid.en.json",
+			"headless": "headless/grid.js#createGrid",
+			"renderer": "ui/grid.js#render",
+			"stringKeys": ["grid.*", "card.*", "storefront.*"],
 			"slots": ["before", "after", "empty"],
 			"a11y": {
 				"role": "region",
@@ -47,16 +64,16 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 11
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/cards.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/cards.js#createCards",
-			"renderer": "ui/bundle/cards.js#renderCards",
-			"strings": "strings/cards.en.json",
+			"headless": "headless/cards.js#createCards",
+			"renderer": "ui/cards.js#renderCards",
+			"stringKeys": ["cards.*", "card.*", "storefront.*"],
 			"variants": ["grid", "rail"],
 			"slots": ["before", "after", "empty"],
 			"a11y": {
@@ -76,16 +93,16 @@
 				"hourly": 150
 			},
 			"budget": {
-				"js": 10
+				"js": 4
 			},
 			"features": {
 				"$ref": "schemas/filters.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/filters.js#createFilters",
-			"renderer": "ui/bundle/filters.js#render",
-			"strings": "strings/filters.en.json",
+			"headless": "headless/filters.js#createFilters",
+			"renderer": "ui/filters.js#render",
+			"stringKeys": ["filters.*", "storefront.*"],
 			"variants": ["sidebar", "sheet", "top_bar"],
 			"slots": ["before", "after"],
 			"a11y": {
@@ -105,16 +122,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 9
+				"js": 4
 			},
 			"features": {
 				"$ref": "schemas/search_overlay.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/search_overlay.js#createSearchOverlay",
-			"renderer": "ui/bundle/search_overlay.js#render",
-			"strings": "strings/search_overlay.en.json",
+			"headless": "headless/searchOverlay.js#createSearchOverlay",
+			"renderer": "ui/searchOverlay.js#render",
+			"stringKeys": ["search_overlay.*", "storefront.*"],
 			"a11y": {
 				"role": "search",
 				"labels": true,
@@ -132,16 +149,16 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 7
+				"js": 3
 			},
 			"features": {
 				"$ref": "schemas/hero.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/hero.js#createHero",
-			"renderer": "ui/bundle/hero.js#render",
-			"strings": "strings/hero.en.json",
+			"headless": "headless/hero.js#createHero",
+			"renderer": "ui/hero.js#render",
+			"stringKeys": ["hero.*"],
 			"variants": ["overlay", "split", "centered"],
 			"slots": ["before", "after"],
 			"a11y": {
@@ -161,16 +178,16 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 11
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/trending_band.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/trending_band.js#createTrendingBand",
-			"renderer": "ui/bundle/trending_band.js#renderTrendingBand",
-			"strings": "strings/trending_band.en.json",
+			"headless": "headless/cards.js#createTrendingBand",
+			"renderer": "ui/entries/trending_band.js#renderTrendingBand",
+			"stringKeys": ["trending_band.*", "card.*", "storefront.*"],
 			"variants": ["strip", "marquee"],
 			"slots": ["before", "after", "empty"],
 			"a11y": {
@@ -190,16 +207,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 5
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/category_cards.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/category_cards.js#createCategoryCards",
-			"renderer": "ui/bundle/category_cards.js#renderCategoryCards",
-			"strings": "strings/category_cards.en.json",
+			"headless": "headless/navCards.js#createCategoryCards",
+			"renderer": "ui/navCards.js#renderCategoryCards",
+			"stringKeys": ["category_cards.*", "nav.*"],
 			"variants": ["grid", "rail"],
 			"slots": ["before", "after"],
 			"a11y": {
@@ -219,16 +236,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 5
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/brand_cards.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/brand_cards.js#createBrandCards",
-			"renderer": "ui/bundle/brand_cards.js#renderBrandCards",
-			"strings": "strings/brand_cards.en.json",
+			"headless": "headless/navCards.js#createBrandCards",
+			"renderer": "ui/navCards.js#renderBrandCards",
+			"stringKeys": ["brand_cards.*", "nav.*"],
 			"variants": ["grid", "rail"],
 			"slots": ["before", "after"],
 			"a11y": {
@@ -248,16 +265,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 11
+				"js": 3
 			},
 			"features": {
 				"$ref": "schemas/deals_page.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/deals_page.js#createDealsPage",
-			"renderer": "ui/bundle/deals_page.js#render",
-			"strings": "strings/deals_page.en.json",
+			"headless": "headless/dealsPage.js#createDealsPage",
+			"renderer": "ui/dealsPage.js#render",
+			"stringKeys": ["deals_page.*", "card.*", "storefront.*"],
 			"variants": ["grid", "list"],
 			"slots": ["before", "after", "empty"],
 			"a11y": {
@@ -277,16 +294,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 3
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/notice_bar.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/notice_bar.js#createNoticeBar",
-			"renderer": "ui/bundle/notice_bar.js#renderNoticeBar",
-			"strings": "strings/notice_bar.en.json",
+			"headless": "headless/blocks.js#createNoticeBar",
+			"renderer": "ui/entries/notice_bar.js#renderNoticeBar",
+			"stringKeys": ["notice_bar.*"],
 			"variants": ["info", "accent", "warning"],
 			"a11y": {
 				"role": "region",
@@ -305,16 +322,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 4
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/mobile_tab_bar.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/mobile_tab_bar.js#createMobileTabBar",
-			"renderer": "ui/bundle/mobile_tab_bar.js#renderMobileTabBar",
-			"strings": "strings/mobile_tab_bar.en.json",
+			"headless": "headless/blocks.js#createMobileTabBar",
+			"renderer": "ui/entries/mobile_tab_bar.js#renderMobileTabBar",
+			"stringKeys": ["mobile_tab_bar.*"],
 			"a11y": {
 				"role": "navigation",
 				"labels": true,
@@ -332,16 +349,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 4
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/contact_footer.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/contact_footer.js#createContactFooter",
-			"renderer": "ui/bundle/contact_footer.js#renderContactFooter",
-			"strings": "strings/contact_footer.en.json",
+			"headless": "headless/blocks.js#createContactFooter",
+			"renderer": "ui/entries/contact_footer.js#renderContactFooter",
+			"stringKeys": ["contact_footer.*"],
 			"slots": ["before", "after"],
 			"a11y": {
 				"role": "contentinfo",
@@ -360,15 +377,16 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 3
+				"js": 2
 			},
 			"features": {
 				"$ref": "schemas/theme.features.json"
 			},
 			"placement": true,
 			"experiments": true,
-			"headless": "headless/bundle/theme.js#createTheme",
-			"renderer": "ui/bundle/theme.js#render"
+			"headless": "headless/theme.js#createTheme",
+			"renderer": "ui/theme.js#render",
+			"stringKeys": ["theme.*"]
 		}
 	],
 	"plans": [

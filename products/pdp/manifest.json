@@ -12,6 +12,9 @@
 	"events": {
 		"publishes": ["item.viewed@1"]
 	},
+	"budget": {
+		"shared": 12
+	},
 	"elements": [
 		{
 			"key": "gallery",
@@ -22,15 +25,15 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 18
+				"js": 4
 			},
 			"features": {
 				"$ref": "schemas/gallery.features.json"
 			},
-			"strings": "strings/gallery.en.json",
 			"placement": true,
 			"headless": "headless/gallery.js#createGallery",
 			"renderer": "ui/gallery.js#render",
+			"stringKeys": ["gallery.*"],
 			"variants": ["carousel", "grid", "stacked"],
 			"slots": ["after"],
 			"experiments": true,
@@ -50,15 +53,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 11
+				"js": 2
 			},
 			"features": {
 				"$ref": "schemas/price_block.features.json"
 			},
-			"strings": "strings/price_block.en.json",
 			"placement": true,
 			"headless": "headless/priceBlock.js#createPriceBlock",
 			"renderer": "ui/priceBlock.js#render",
+			"stringKeys": ["price_block.*"],
 			"experiments": true,
 			"a11y": {
 				"role": "group",
@@ -76,15 +79,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 9
+				"js": 2
 			},
 			"features": {
 				"$ref": "schemas/structured_data.features.json"
 			},
-			"strings": "strings/structured_data.en.json",
 			"placement": true,
 			"headless": "headless/structuredData.js#createStructuredData",
-			"renderer": "ui/structuredData.js#render"
+			"renderer": "ui/structuredData.js#render",
+			"stringKeys": ["structured_data.*"]
 		},
 		{
 			"key": "configurator_embed",
@@ -95,15 +98,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 2
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/configurator_embed.features.json"
 			},
-			"strings": "strings/configurator_embed.en.json",
 			"placement": true,
 			"headless": "headless/embed.js#createConfiguratorEmbed",
 			"renderer": "ui/embed.js#render",
+			"stringKeys": ["configurator_embed.*"],
 			"a11y": {
 				"role": "region",
 				"labels": true,
@@ -120,15 +123,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 2
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/deal_pill.features.json"
 			},
-			"strings": "strings/deal_pill.en.json",
 			"placement": true,
 			"headless": "headless/embed.js#createDealPill",
 			"renderer": "ui/embed.js#render",
+			"stringKeys": ["deal_pill.*"],
 			"a11y": {
 				"role": "region",
 				"labels": true,
@@ -145,15 +148,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 2
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/grade_showcase.features.json"
 			},
-			"strings": "strings/grade_showcase.en.json",
 			"placement": true,
 			"headless": "headless/embed.js#createGradeShowcase",
 			"renderer": "ui/embed.js#render",
+			"stringKeys": ["grade_showcase.*"],
 			"a11y": {
 				"role": "region",
 				"labels": true,
@@ -170,15 +173,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 2
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/reviews_block.features.json"
 			},
-			"strings": "strings/reviews_block.en.json",
 			"placement": true,
 			"headless": "headless/embed.js#createReviewsBlock",
 			"renderer": "ui/embed.js#render",
+			"stringKeys": ["reviews_block.*"],
 			"a11y": {
 				"role": "region",
 				"labels": true,
@@ -195,15 +198,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 2
+				"js": 1
 			},
 			"features": {
 				"$ref": "schemas/alerts_block.features.json"
 			},
-			"strings": "strings/alerts_block.en.json",
 			"placement": true,
 			"headless": "headless/embed.js#createAlertsBlock",
 			"renderer": "ui/embed.js#render",
+			"stringKeys": ["alerts_block.*"],
 			"a11y": {
 				"role": "region",
 				"labels": true,
@@ -220,15 +223,15 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 11
+				"js": 2
 			},
 			"features": {
 				"$ref": "schemas/related.features.json"
 			},
-			"strings": "strings/related.en.json",
 			"placement": true,
 			"headless": "headless/related.js#createRelated",
 			"renderer": "ui/related.js#render",
+			"stringKeys": ["related.*"],
 			"variants": ["rail", "grid"],
 			"a11y": {
 				"role": "region",
@@ -246,15 +249,15 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 11
+				"js": 2
 			},
 			"features": {
 				"$ref": "schemas/faq.features.json"
 			},
-			"strings": "strings/faq.en.json",
 			"placement": true,
 			"headless": "headless/faq.js#createFaq",
 			"renderer": "ui/faq.js#render",
+			"stringKeys": ["faq.*"],
 			"a11y": {
 				"role": "region",
 				"labels": true,
@@ -271,15 +274,15 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 13
+				"js": 3
 			},
 			"features": {
 				"$ref": "schemas/sticky_buy_bar.features.json"
 			},
-			"strings": "strings/sticky_buy_bar.en.json",
 			"placement": true,
 			"headless": "headless/stickyBuyBar.js#createStickyBuyBar",
 			"renderer": "ui/stickyBuyBar.js#render",
+			"stringKeys": ["sticky_buy_bar.*"],
 			"experiments": true,
 			"a11y": {
 				"role": "region",
@@ -297,15 +300,15 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 12
+				"js": 2
 			},
 			"features": {
 				"$ref": "schemas/share.features.json"
 			},
-			"strings": "strings/share.en.json",
 			"placement": true,
 			"headless": "headless/share.js#createShare",
 			"renderer": "ui/share.js#render",
+			"stringKeys": ["share.*"],
 			"a11y": {
 				"role": "group",
 				"labels": true,
@@ -322,15 +325,15 @@
 				"hourly": 300
 			},
 			"budget": {
-				"js": 13
+				"js": 3
 			},
 			"features": {
 				"$ref": "schemas/hosted_page.features.json"
 			},
-			"strings": "strings/hosted_page.en.json",
 			"placement": true,
 			"headless": "headless/hostedPage.js#createHostedPage",
 			"renderer": "ui/hostedPage.js#render",
+			"stringKeys": ["hosted_page.*"],
 			"a11y": {
 				"role": "region",
 				"labels": true,

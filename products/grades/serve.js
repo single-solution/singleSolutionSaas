@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createGrades, wireEvents } from './api/routes.js';
+import { cronRoutes } from './jobs/sweep.js';
 
 export { loadManifest } from './adapters/platform.js';
 
@@ -30,7 +31,7 @@ export const startServer = async ({
 } = {}) => {
 	const grades = wireEvents(createGrades(await createPlatform({ env, root, overrides })));
 	const { product } = grades;
-	const handle = createRequestHandler(product, buildRoutes(grades));
+	const handle = createRequestHandler(product, [...buildRoutes(grades), ...cronRoutes(grades)]);
 	/** @type {import('node:http').RequestListener} */
 	const listener = async (incoming, outgoing) => {
 		const scheme = tls ? 'https' : 'http';

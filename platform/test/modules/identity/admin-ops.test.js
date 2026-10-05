@@ -344,3 +344,44 @@ describe('platform health and audit log', () => {
 		});
 	});
 });
+
+describe('staff API tokens (F.18)', () => {
+	it('mints a bearer token for tooling (ss pack publish), listed and revocable, never usable as a cookie', async () => {
+		const h = await boot();
+		const root = await h.staffUser('root@example.com');
+		const support = await h.staffUser('support@example.com', ['support'], { creator: root.client });
+		expect((await support.client.post('/v1/admin/api-tokens', { minutes: 30 })).status).toBe(403);
+		expect((await root.client.post('/v1/admin/api-tokens', { minutes: 721 })).status).toBe(422);
+		const minted = await root.client.post('/v1/admin/api-tokens', { minutes: 30, label: 'ci' });
+		expect(minted.status).toBe(201);
+		expect(minted.json.token).toMatch(/^sst_[A-Za-z0-9_-]{43}$/);
+		expect(Date.parse(minted.json.expiresAt) - h.clock.now()).toBe(30 * 60_000);
+		const bearer = { authorization: `Bearer ${minted.json.token}` };
+		// a bearer needs no CSRF headers and acts as the staff member
+		const listedStaff = await h.call('GET', '/v1/admin/staff', { headers: { ...bearer, origin: 'https://elsewhere.example' } });
+		expect(listedStaff.status).toBe(200);
+		// a token cannot mint another, a session token is no bearer, an API token is no cookie
+		const again = await h.call('POST', '/v1/admin/api-tokens', {
+			headers: { ...bearer, 'idempotency-key': 'x1' },
+			body: { minutes: 5 },
+		});
+		expect(again.status).toBe(403);
+		const [cookieName, sessionToken] = root.client.cookie.split('=');
+		expect((await h.call('GET', '/v1/admin/staff', { headers: { authorization: `Bearer sst_${sessionToken}` } })).status).toBe(
+			401,
+		);
+		expect((await h.call('GET', '/v1/admin/staff', { cookie: `${cookieName}=${minted.json.token.slice(4)}` })).status).toBe(
+			401,
+		);
+		expect((await h.call('GET', '/v1/admin/staff', { headers: { authorization: 'Bearer sst_short' } })).status).toBe(401);
+		const sessions = await root.client.get('/v1/me/sessions');
+		const listed = sessions.json.items.find((/** @type {any} */ s) => s.sessionId === minted.json.sessionId);
+		expect(listed).toMatchObject({ api: true, mfa: true });
+		expect((await root.client.del(`/v1/me/sessions/${minted.json.sessionId}`)).status).toBe(204);
+		expect((await h.call('GET', '/v1/admin/staff', { headers: bearer })).status).toBe(401);
+		const audit = h.db.collection(COLLECTIONS.audit);
+		expect(await audit.findOne({ action: 'staff.api_token_created' })).toMatchObject({
+			actor: { type: 'staff', id: root.staffId },
+		});
+	});
+});

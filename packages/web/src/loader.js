@@ -11,6 +11,7 @@ import { h, prefersReducedMotion, reserveSpace, tokens } from './renderer.js';
 import { attempt, defaultStorage, isPlainObject } from './util.js';
 
 const ELEMENT_KEY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+const PRODUCT_SLUG = /^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$/;
 const INSTANCES = Symbol.for('ss.loader.instances');
 const OWNER = Symbol.for('ss.loader.owner');
 const ACTIVITY = ['pointermove', 'pointerdown', 'keydown', 'scroll', 'touchstart'];
@@ -38,12 +39,16 @@ const SS_API = ['version', 'track', 'identify', 'consent', 'elements', 'on', 're
 /**
  * @typedef {object} BundleElement
  * @property {string} key
+ * @property {string} [product] slug of the product delivering the element: its id is then `<product>:<key>` (F.18),
+ *   so two products may deliver the same key on one website
  * @property {Record<string, any>} [placement] `@ss/contracts` placement v1
  * @property {Record<string, unknown>} [config]
  * @property {Record<string, unknown>} [strings]
  * @property {import('./element.js').ElementDefinition | (() => Promise<any>)} headless definition or lazy import
  * @property {RendererModule | (() => Promise<any>)} [renderer] default renderer or lazy import (Mode A)
  * @property {{ baseUrl: string }} [api] the element's Mode-C API
+ * @property {Record<string, { baseUrl: string }>} [reads] service products whose public read API the element calls
+ *   (`manifest.reads`): the element receives `clients[<slug>]`, an element API client with the website's key
  * @property {Record<string, unknown>} [theme] per-element token overrides
  * @property {Record<string, unknown>} [slots]
  * @property {{ minHeight?: number | string, minWidth?: number | string, aspectRatio?: number | string }} [reserve] space held before mount
@@ -87,8 +92,9 @@ const SS_API = ['version', 'track', 'identify', 'consent', 'elements', 'on', 're
 /**
  * @typedef {object} LoaderInstance
  * @property {string} websiteId
- * @property {(key: string) => import('./element.js').HeadlessElement | undefined} get
- * @property {() => ReadonlyArray<{ key: string, status: ElementStatus, reason?: string }>} list
+ * @property {(name: string) => import('./element.js').HeadlessElement | undefined} get by id (`<product>:<key>`), or by
+ *   key when one element has it
+ * @property {() => ReadonlyArray<{ key: string, id?: string, product?: string, status: ElementStatus, reason?: string }>} list
  * @property {() => void} refresh re-evaluate placements (SPA navigation)
  * @property {(type: string, handler: (event: { type: string, data: Record<string, unknown> }) => void) => () => void} on
  * @property {(type: string, data?: Record<string, unknown>, options?: import('./client.js').TrackOptions) => unknown} track
@@ -97,14 +103,23 @@ const SS_API = ['version', 'track', 'identify', 'consent', 'elements', 'on', 're
  */
 
 /**
+ * Id of a bundle element: `<product>:<key>` when the product is known (F.18), else the key.
+ * @param {{ key: string, product?: string }} spec
+ * @returns {string}
+ */
+export const elementId = (spec) => (spec.product ? `${spec.product}:${spec.key}` : spec.key);
+
+/**
  * @param {unknown} doc
  * @param {string} key
+ * @param {string} [product]
  * @returns {boolean}
  */
-const enabledByDocs = (doc, key) => {
+const enabledByDocs = (doc, key, product) => {
 	const docs = Array.isArray(doc) ? doc : doc === undefined || doc === null ? [] : [doc];
 	return docs.every((entry) => {
 		if (!isPlainObject(entry) || !isPlainObject(entry.elements) || !Object.hasOwn(entry.elements, key)) return true;
+		if (product && typeof entry.productSlug === 'string' && entry.productSlug !== product) return true;
 		const element = entry.elements[key];
 		const active = !isPlainObject(entry.runtime) || entry.runtime.state === undefined || entry.runtime.state === 'active';
 		return active && !(isPlainObject(element) && element.enabled === false);
@@ -190,10 +205,16 @@ export const boot = (options) => {
 	const handlers = new Map();
 	/** @param {string} type */
 	const baseType = (type) => (type.includes('@') ? type.slice(0, type.indexOf('@')) : type);
-	/** @param {string} type @param {Record<string, unknown>} data */
-	const publish = (type, data) => {
+	/**
+	 * @param {string} type
+	 * @param {Record<string, unknown>} data
+	 * @param {string} [product] element events also go to `<product>:<type>` handlers (F.18)
+	 */
+	const publish = (type, data, product) => {
 		const full = type.includes('@') ? type : `${type}@1`;
-		for (const name of new Set([full, baseType(full), '*'])) {
+		const names = [full, baseType(full)];
+		if (product) names.push(`${product}:${full}`, `${product}:${baseType(full)}`);
+		for (const name of new Set([...names, '*'])) {
 			for (const handler of [...(handlers.get(name) ?? [])])
 				attempt(
 					() => handler({ type: full, data }),
@@ -214,6 +235,16 @@ export const boot = (options) => {
 	const track = (type, data = {}, trackOptions) => {
 		if (typeof type === 'string' && isPlainObject(data)) publish(type, data);
 		return client ? client.track(type, data, trackOptions) : { ok: false, reason: 'no_client' };
+	};
+	/**
+	 * An element's event: hooks get it as `<key>.<verb>` and `<product>:<key>.<verb>`; the Event Hub as `<key>.<verb>`.
+	 * @param {BundleElement} spec
+	 * @param {string} type
+	 * @param {Record<string, unknown>} data
+	 */
+	const trackElement = (spec, type, data) => {
+		if (isPlainObject(data)) publish(type, data, spec.product);
+		return client ? client.track(type, data, { element: spec.key }) : { ok: false, reason: 'no_client' };
 	};
 
 	// ---- environment ---------------------------------------------------------------------------------------------
@@ -337,6 +368,8 @@ export const boot = (options) => {
 	/**
 	 * @typedef {object} ElementRecord
 	 * @property {BundleElement} spec
+	 * @property {string} id `<product>:<key>` (or the key for elements without a product)
+	 * @property {string} cap frequency-cap key: the element key while it is unique in the bundle, else its id
 	 * @property {ElementStatus} status
 	 * @property {number} generation incremented on every mount attempt and unmount
 	 * @property {string} [reason]
@@ -386,6 +419,10 @@ export const boot = (options) => {
 		const record = lookup(key);
 		const container = /** @type {HTMLElement} */ (doc.createElement('div'));
 		container.setAttribute('data-ss-element', record.spec.key);
+		if (record.spec.product) {
+			container.setAttribute('data-ss-product', record.spec.product);
+			container.setAttribute('data-ss-id', record.id);
+		}
 		const target = (placement.selectors ?? [])
 			.map((/** @type {{ selector: string, position?: string }} */ entry) => ({
 				entry,
@@ -444,14 +481,24 @@ export const boot = (options) => {
 				spec.api?.baseUrl && client
 					? createElementApi({ baseUrl: spec.api.baseUrl, key: client.key, identity, fetch: options.fetch })
 					: undefined;
+			/** @type {Record<string, import('./element.js').ElementApi>} */
+			const clients = {};
+			for (const [slug, read] of Object.entries(isPlainObject(spec.reads) ? spec.reads : {})) {
+				if (!client || !PRODUCT_SLUG.test(slug) || typeof read?.baseUrl !== 'string') continue;
+				const made = attempt(() =>
+					createElementApi({ baseUrl: read.baseUrl, key: client.key, identity, fetch: options.fetch }),
+				);
+				if (made) clients[slug] = made;
+			}
 			const instance = mountHeadless(definition, {
 				config: spec.config,
 				strings: spec.strings,
 				client: api,
+				clients: Object.freeze(clients),
 				identity,
 				emit: (type, data) => {
-					if (type === `${spec.key}.dismissed`) frequency.recordDismiss(spec.key);
-					track(type, data, { element: spec.key });
+					if (type === `${spec.key}.dismissed`) frequency.recordDismiss(record.cap);
+					trackElement(spec, type, data);
 				},
 			});
 			record.instance = instance;
@@ -490,9 +537,9 @@ export const boot = (options) => {
 				);
 			}
 			record.status = 'mounted';
-			elementTimings[spec.key] = { mountMs: Math.round((win?.performance?.now?.() ?? now()) - started) };
-			frequency.recordShow(spec.key);
-			track(`${spec.key}.shown`, {}, { element: spec.key });
+			elementTimings[record.cap] = { mountMs: Math.round((win?.performance?.now?.() ?? now()) - started) };
+			frequency.recordShow(record.cap);
+			trackElement(spec, `${spec.key}.shown`, {});
 		} catch (error) {
 			fail(key, 'mount', error);
 		}
@@ -562,7 +609,7 @@ export const boot = (options) => {
 			record.reason = result ? result.reason : 'placement';
 			return;
 		}
-		if (!frequency.allowed(record.spec.key, placement.frequency)) {
+		if (!frequency.allowed(record.cap, placement.frequency)) {
 			record.status = 'blocked';
 			record.reason = 'frequency';
 			return;
@@ -574,7 +621,7 @@ export const boot = (options) => {
 			clearTriggers(record);
 			// Re-check what may have changed while waiting (consent revoked, cap reached in another tab).
 			const again = attempt(() => matchPlacement(placement, env()));
-			if (!again?.ok || !frequency.allowed(record.spec.key, placement.frequency)) {
+			if (!again?.ok || !frequency.allowed(record.cap, placement.frequency)) {
 				record.status = 'blocked';
 				record.reason = again && !again.ok ? again.reason : 'frequency';
 				return;
@@ -592,20 +639,48 @@ export const boot = (options) => {
 			);
 	};
 
-	for (const spec of Array.isArray(bundle.elements) ? bundle.elements : []) {
-		if (!isPlainObject(spec) || typeof spec.key !== 'string' || !ELEMENT_KEY.test(spec.key) || records.has(spec.key)) {
-			report({ key: undefined, phase: 'bundle', error: new TypeError('invalid or duplicate element in bundle') });
+	const specs = (Array.isArray(bundle.elements) ? bundle.elements : []).filter((spec) => {
+		const valid =
+			isPlainObject(spec) &&
+			typeof spec.key === 'string' &&
+			ELEMENT_KEY.test(spec.key) &&
+			(spec.product === undefined || (typeof spec.product === 'string' && PRODUCT_SLUG.test(spec.product)));
+		if (!valid) report({ key: undefined, phase: 'bundle', error: new TypeError('invalid element in bundle') });
+		return valid;
+	});
+	/** @type {Map<string, number>} */
+	const keyCount = new Map();
+	for (const spec of specs) keyCount.set(spec.key, (keyCount.get(spec.key) ?? 0) + 1);
+	for (const spec of specs) {
+		const id = elementId(spec);
+		if (records.has(id)) {
+			report({ key: undefined, phase: 'bundle', error: new TypeError('duplicate element in bundle') });
 			continue;
 		}
-		if (!enabledByDocs(bundle.doc, spec.key)) continue;
-		records.set(spec.key, {
+		if (!enabledByDocs(bundle.doc, spec.key, spec.product)) continue;
+		records.set(id, {
 			spec: /** @type {BundleElement} */ (spec),
+			id,
+			cap: (keyCount.get(spec.key) ?? 0) > 1 ? id : spec.key,
 			status: 'idle',
 			generation: 0,
 			disarm: [],
 			teardown: [],
 		});
 	}
+
+	/**
+	 * The record an element name addresses: its id (`<product>:<key>`), or a key that only one element has.
+	 * @param {string} name
+	 * @returns {ElementRecord | undefined}
+	 */
+	const byName = (name) => {
+		const exact = records.get(name);
+		if (exact) return exact;
+		if (typeof name !== 'string' || name.includes(':')) return undefined;
+		const matches = [...records.values()].filter((record) => record.spec.key === name);
+		return matches.length === 1 ? matches[0] : undefined;
+	};
 
 	const refresh = () => {
 		if (destroyed) return;
@@ -632,14 +707,18 @@ export const boot = (options) => {
 	/** @type {LoaderInstance} */
 	const instance = Object.freeze({
 		websiteId,
-		get: (key) => (records.get(key)?.status === 'mounted' ? records.get(key)?.instance : undefined),
+		get: (name) => {
+			const record = byName(name);
+			return record?.status === 'mounted' ? record.instance : undefined;
+		},
 		list: () =>
 			[...records.values()].map((record) =>
-				Object.freeze(
-					record.reason
-						? { key: record.spec.key, status: record.status, reason: record.reason }
-						: { key: record.spec.key, status: record.status },
-				),
+				Object.freeze({
+					key: record.spec.key,
+					...(record.spec.product ? { id: record.id, product: record.spec.product } : {}),
+					status: record.status,
+					...(record.reason ? { reason: record.reason } : {}),
+				}),
 			),
 		refresh,
 		on,

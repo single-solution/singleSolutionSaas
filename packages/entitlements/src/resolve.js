@@ -193,7 +193,7 @@ export const pickEffective = (candidates) => {
  * @param {FeatureDef} feature
  * @param {Layer | 'experiment'} layer
  * @param {unknown} value
- * @param {number | boolean | undefined} planMax
+ * @param {import('./catalog.js').PlanMax | undefined} planMax
  * @returns {{ value: unknown, reason: string | null }}
  */
 const clampFeature = (feature, layer, value, planMax) => {
@@ -226,7 +226,7 @@ const clampFeature = (feature, layer, value, planMax) => {
  * (strings and arrays: length / item count). Such values are ignored rather than truncated.
  * @param {FeatureDef} feature
  * @param {unknown} value
- * @param {number | boolean | undefined} planMax
+ * @param {import('./catalog.js').PlanMax | undefined} planMax
  * @returns {boolean}
  */
 const exceedsUnclampable = (feature, value, planMax) =>

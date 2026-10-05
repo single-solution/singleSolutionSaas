@@ -7,6 +7,7 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createGrades, wireEvents } from '../../api/routes.js';
+import { cronRoutes } from '../../jobs/sweep.js';
 
 const KEY = Symbol.for('ss.products.grades');
 
@@ -30,7 +31,7 @@ export const getGrades = () => (shared().grades ??= createPlatform().then((app) 
 export const forward = (method) => async (/** @type {Request} */ request, /** @type {unknown} */ context) => {
 	const state = shared();
 	state.next ??= getGrades().then((instance) =>
-		toNextRoute(createRequestHandler(instance.product, buildRoutes(instance)), { after }),
+		toNextRoute(createRequestHandler(instance.product, [...buildRoutes(instance), ...cronRoutes(instance)]), { after }),
 	);
 	return /** @type {any} */ ((await state.next)[method])(request, context);
 };

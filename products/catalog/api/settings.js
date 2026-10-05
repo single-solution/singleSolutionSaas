@@ -13,7 +13,6 @@ import feeds from '../schemas/feeds.features.json' with { type: 'json' };
 import importExport from '../schemas/import_export.features.json' with { type: 'json' };
 import items from '../schemas/items.features.json' with { type: 'json' };
 import media from '../schemas/media.features.json' with { type: 'json' };
-import mediaUploads from '../schemas/media_uploads.features.json' with { type: 'json' };
 import variants from '../schemas/variants.features.json' with { type: 'json' };
 
 /** Feature schema of every element. */
@@ -24,7 +23,6 @@ export const SCHEMAS = Object.freeze({
 	collections,
 	brands,
 	media,
-	media_uploads: mediaUploads,
 	import_export: importExport,
 	feeds,
 	api,
@@ -45,7 +43,9 @@ export const ELEMENTS = /** @type {ElementKey[]} */ (Object.keys(SCHEMAS));
  * @property {Record<string, any>} collections
  * @property {Record<string, any>} brands
  * @property {import('../core/media.js').MediaSettings & Record<string, any>} media
- * @property {Record<string, any>} uploads
+ * @property {Record<string, any>} uploads the upload settings of `media` (used while storage is connected)
+ * @property {boolean} storageConnected the optional storage connector is connected (F.18: `media` stays on without
+ *   it; uploads and signed links need it)
  * @property {Record<string, any>} importing
  * @property {Record<string, any>} feeds
  * @property {Record<string, any>} api
@@ -56,10 +56,10 @@ export const ELEMENTS = /** @type {ElementKey[]} */ (Object.keys(SCHEMAS));
 
 /**
  * @param {{ can: (key: string) => boolean, config: (key: string) => Record<string, unknown> | null | undefined,
- *   domain: string, website?: { currency?: string, language?: string } | null }} source
+ *   domain: string, website?: { currency?: string, language?: string } | null, storage?: boolean }} source
  * @returns {Settings}
  */
-export const settingsFrom = ({ can, config, domain, website = null }) => {
+export const settingsFrom = ({ can, config, domain, website = null, storage = false }) => {
 	const of = (/** @type {ElementKey} */ key) => effectiveConfig(SCHEMAS[key], config(key));
 	const itemSettings = /** @type {Settings['items']} */ (of('items'));
 	const variantSettings = of('variants');
@@ -75,7 +75,8 @@ export const settingsFrom = ({ can, config, domain, website = null }) => {
 		collections: of('collections'),
 		brands: of('brands'),
 		media: /** @type {Settings['media']} */ (of('media')),
-		uploads: of('media_uploads'),
+		uploads: of('media'),
+		storageConnected: storage,
 		importing: of('import_export'),
 		feeds: of('feeds'),
 		api: of('api'),
@@ -106,4 +107,5 @@ export const settingsForDoc = (product, doc) =>
 		config: (key) => product.entitlements.config(doc, key) ?? {},
 		domain: doc.domain,
 		website: doc.website ?? null,
+		storage: product.entitlements.resource(doc, 'storage').connected,
 	});

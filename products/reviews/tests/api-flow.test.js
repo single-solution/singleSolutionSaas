@@ -4,6 +4,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createId } from '@ss/contracts';
+import { MIGRATIONS, STALE_BACKSTOP_MS } from '../adapters/db.js';
 import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
 import { CRON_SECRET, DAY, HOUR, MERCHANT, T0, WEBSITE, WEBSITE_2, createHarness } from './harness.js';
 
@@ -115,7 +116,8 @@ describe('request flow', () => {
 		await h.entitle({ elements: { request_flow: false } });
 		expect((await h.call('GET', '/v1/request-flow')).status).toBe(403);
 		const skipped = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
-		expect(skipped.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)).toBeUndefined();
+		const row = skipped.json.results.find((/** @type {any} */ entry) => entry.websiteId === WEBSITE);
+		expect(row).toEqual({ websiteId: WEBSITE, photos: { scanned: 0, deleted: 0, missing: 0, failed: 0 } });
 		await h.entitle();
 	});
 
@@ -331,6 +333,56 @@ describe('photos', () => {
 		const broken = await h.call('POST', '/v1/review-photos', { key: sk2, body: { contentType: 'image/png', size: 10 } });
 		expect(broken.status).toBe(503);
 		expect(broken.json.type).toMatch(/storage_unavailable$/);
+	});
+});
+
+describe('stale photo slots', () => {
+	it('sweeps slots never attached from the hourly cron: objects deleted from the bucket, records removed', async () => {
+		await h.entitle({ config: { collection: { who: 'identified' } } });
+		const uploaded = await h.call('POST', '/v1/review-photos', {
+			as: 'cus_stale',
+			body: { contentType: 'image/png', size: 10 },
+		});
+		const never = await h.call('POST', '/v1/review-photos', { as: 'cus_stale', body: { contentType: 'image/png', size: 20 } });
+		const doc = await h.collection('photos').findOne({ websiteId: WEBSITE, id: uploaded.json.id });
+		expect(doc?.staleAt).toBeInstanceOf(Date);
+		expect(doc?.purgeAt.getTime() - doc?.staleAt.getTime()).toBe(STALE_BACKSTOP_MS);
+		h.providers.upload(String(doc?.objectKey), 10, 'image/png');
+		// before the stale date nothing is swept
+		const early = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
+		expect(early.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)?.photos.scanned).toBe(0);
+		h.clock.advance(30 * DAY + 1_000);
+		// past the stale date the slot cannot be attached any more
+		const late = await h.call('POST', '/v1/reviews', {
+			as: 'cus_stale',
+			body: { itemId: 'itm_stale', rating: 5, body: text, photoIds: [uploaded.json.id] },
+		});
+		expect(late.status).toBe(422);
+		h.clock.advance(HOUR);
+		const cron = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
+		const swept = cron.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)?.photos;
+		expect(swept.failed).toBe(0);
+		expect(swept.deleted).toBeGreaterThanOrEqual(1); // other tests' slots are swept too
+		expect(swept.missing).toBeGreaterThanOrEqual(1);
+		expect(h.providers.objects.has(String(doc?.objectKey))).toBe(false);
+		expect(
+			await h.collection('photos').countDocuments({ websiteId: WEBSITE, id: { $in: [uploaded.json.id, never.json.id] } }),
+		).toBe(0);
+		const again = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
+		expect(again.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)?.photos.scanned).toBe(0);
+		h.clock.set(T0);
+		await h.entitle();
+	});
+
+	it('migrates pending slots written before the sweep (purgeAt → staleAt, TTL moved back)', async () => {
+		const purgeAt = new Date(T0 + DAY);
+		await h.collection('photos').insertOne({ websiteId: WEBSITE, id: 'rph_legacy', status: 'pending', purgeAt });
+		const migration = MIGRATIONS.find((step) => step.name === 'photo_stale_dates');
+		await migration?.up({ websiteId: WEBSITE, collection: (/** @type {string} */ name) => h.collection(name) });
+		const legacy = await h.collection('photos').findOne({ websiteId: WEBSITE, id: 'rph_legacy' });
+		expect(legacy?.staleAt).toEqual(purgeAt);
+		expect(legacy?.purgeAt).toEqual(new Date(purgeAt.getTime() + STALE_BACKSTOP_MS));
+		await h.collection('photos').deleteOne({ websiteId: WEBSITE, id: 'rph_legacy' });
 	});
 });
 

@@ -1,7 +1,8 @@
 /** Import & export: CSV dry run and apply, export download, the import template columns. */
 import { createElement as h } from 'react';
-import { ButtonLink, Callout, Card } from '@ss/ui';
+import { Callout, Card } from '@ss/ui';
 import { dashboardContext } from '../../_lib/dashboard.js';
+import { ExportButton } from '../_components/ExportButton.js';
 import { ImportTool } from '../_components/ImportTool.js';
 import { Shell, t } from '../_components/Shell.js';
 
@@ -36,13 +37,8 @@ export default async function ImportExport({ searchParams }) {
 			{
 				title: t('dashboard.export.title'),
 				subtitle: t('dashboard.export.columns', { columns: settings.importing.columns.join(', ') }),
-				actions: websiteId
-					? h(
-							ButtonLink,
-							{ href: `/v1/dashboard/exports?website=${encodeURIComponent(websiteId)}`, variant: 'secondary' },
-							t('dashboard.export.download'),
-						)
-					: null,
+				// a signed link valid for five minutes (no session header needed for the download itself)
+				actions: websiteId && !demo ? h(ExportButton, { websiteId }) : null,
 			},
 			h('p', { className: 'text-sm text-muted' }, t('dashboard.export.help')),
 		),

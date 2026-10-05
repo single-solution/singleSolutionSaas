@@ -9,7 +9,7 @@ import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import { INDEXES, MIGRATIONS } from './db.js';
 import { createSiteRegistry } from './registry.js';
-import { createFeedTokens, feedSecret, newId, stableId } from './tokens.js';
+import { createExportLinks, createFeedTokens, exportSecret, feedSecret, newId, stableId } from './tokens.js';
 
 /**
  * @param {string} file
@@ -72,6 +72,7 @@ export const PROBLEM_CODES = Object.freeze({
 	insufficient_stock: { status: 409, title: 'Not enough stock' },
 	media_missing: { status: 422, title: 'The media object is not in storage' },
 	storage_unavailable: { status: 503, title: 'The storage connector is not available' },
+	storage_not_connected: { status: 409, title: 'No storage connector is connected' },
 	csv_invalid: { status: 422, title: 'The file is not a valid import' },
 	writes_disabled: { status: 403, title: 'Writes with sk_ keys are turned off' },
 });
@@ -80,6 +81,7 @@ export const PROBLEM_CODES = Object.freeze({
  * @typedef {object} CatalogApp
  * @property {any} product app-kit product
  * @property {import('./tokens.js').FeedTokens} tokens
+ * @property {import('./tokens.js').ExportLinks} exportLinks signed, short-lived CSV download links of the dashboard
  * @property {import('./registry.js').SiteRegistry} registry
  * @property {string | null} cronSecret
  * @property {string} portalUrl
@@ -151,6 +153,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	return {
 		product,
 		tokens: createFeedTokens({ secret: feedSecret({ secret: env.CATALOG_FEED_SECRET, signingKey }) }),
+		exportLinks: createExportLinks({ secret: exportSecret({ secret: env.CATALOG_FEED_SECRET, signingKey }), now }),
 		registry: createSiteRegistry({ collection: sites }),
 		cronSecret: env.CRON_SECRET && env.CRON_SECRET.length >= 16 ? env.CRON_SECRET : null,
 		portalUrl,

@@ -60,8 +60,9 @@ when a request backs them).
   the item, so widgets, stars and JSON-LD never scan reviews. Each review keeps the scale it was given on; summaries
   normalise to the current `content.rating_scale`.
 - **Data.** Collections `ss_reviews_{reviews,items,requests,orders,photos,questions,audit}` in the merchant database,
-  `websiteId` first in every index, created lazily; TTL retention for requests and orders (`P730D`) and pending photo
-  slots (`P30D`); versioned migrations; export/anonymise through the Portal-signed standard routes (anonymising keeps
+  `websiteId` first in every index, created lazily; TTL retention for requests and orders (`P730D`); pending photo
+  slots are stale after `P30D` and swept by the hourly job (object and slot deleted), with a TTL a week later as a
+  backstop; versioned migrations; export/anonymise through the Portal-signed standard routes (anonymising keeps
   the rating, removes author, text, photos and contact).
 
 ## API (Mode C)
@@ -129,8 +130,9 @@ settlement).
    - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
      registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
    - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required in production.
-   - `CRON_SECRET` — for the hourly cron in `vercel.json` (`/cron/requests`, minute 5). Hourly crons need a Vercel plan
-     that allows them; otherwise call `POST /v1/request-flow:run` from your own scheduler.
+   - `CRON_SECRET` — for the hourly cron in `vercel.json` (`/cron/requests`, minute 5: the request flow and the sweep of
+     stale photo slots). Hourly crons need a Vercel plan that allows them; otherwise call `POST /v1/request-flow:run`
+     from your own scheduler and `GET /cron/requests` with the secret for the sweep.
    - `REVIEWS_LINK_SECRET` — optional (≥ 32 chars, else derived from the signing key); `SS_LOG_LEVEL` — optional.
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
@@ -145,8 +147,9 @@ settlement).
   enforce signed headers); stored keys are relative to the product's area of the bucket (`objectKey` is the full key), and photos stay private in the merchant's bucket (presigned view
   links) unless a public base URL is configured. Merchants who need EXIF stripping should process uploads in their
   bucket (e.g. a storage event function) or set a bucket lifecycle rule; tell shoppers that photos are published as-is.
-  Pending upload slots expire after `retention.photos`; their objects need a bucket lifecycle rule on
-  `reviews/<websiteId>/photos/`.
+  Pending upload slots are stale after `retention.photos` (they can no longer be attached); the hourly job deletes
+  their objects from the bucket and the slots (app-kit `sweepStaleUploads`, ≤ 100 per website per run). Slots created
+  before this release are migrated lazily (`photo_stale_dates`).
 - Incentives for reviews (coupons, points) are left to other products listening to `reviews.approved@1`.
 
 ## Changelog

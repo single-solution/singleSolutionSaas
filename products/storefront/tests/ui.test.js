@@ -2,13 +2,13 @@
 /* global window, document -- these tests run in the jsdom environment */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createContactFooter, createMobileTabBar, createNoticeBar } from '../headless/blocks.js';
-import { createCards, createTrendingBand } from '../headless/cards.js';
-import { createDealsPage } from '../headless/dealsPage.js';
-import { createFilters } from '../headless/filters.js';
-import { createGrid } from '../headless/grid.js';
+import { createCards as rawCreateCards, createTrendingBand as rawCreateTrendingBand } from '../headless/cards.js';
+import { createDealsPage as rawCreateDealsPage } from '../headless/dealsPage.js';
+import { createFilters as rawCreateFilters } from '../headless/filters.js';
+import { createGrid as rawCreateGrid } from '../headless/grid.js';
 import { createHero } from '../headless/hero.js';
 import { createBrandCards, createCategoryCards } from '../headless/navCards.js';
-import { createSearchOverlay } from '../headless/searchOverlay.js';
+import { createSearchOverlay as rawCreateSearchOverlay } from '../headless/searchOverlay.js';
 import { createTheme } from '../headless/theme.js';
 import {
 	footerStyles,
@@ -27,7 +27,14 @@ import { render as renderHero, styles as heroStyles } from '../ui/hero.js';
 import { renderBrandCards, renderCategoryCards, styles as navStyles } from '../ui/navCards.js';
 import { render as renderSearch, styles as searchStyles } from '../ui/searchOverlay.js';
 import { render as renderTheme } from '../ui/theme.js';
-import { ITEMS, fakeIntersection, flush, mount, pageScript, strings } from './helpers.js';
+import { ITEMS, fakeIntersection, flush, mount, pageScript, strings, viaLoader } from './helpers.js';
+
+const createGrid = viaLoader(rawCreateGrid);
+const createFilters = viaLoader(rawCreateFilters);
+const createCards = viaLoader(rawCreateCards);
+const createTrendingBand = viaLoader(rawCreateTrendingBand);
+const createSearchOverlay = viaLoader(rawCreateSearchOverlay);
+const createDealsPage = viaLoader(rawCreateDealsPage);
 
 /** @param {string} url */
 const goTo = (url) => window.history.replaceState(null, '', url);

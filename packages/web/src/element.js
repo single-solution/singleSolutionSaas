@@ -251,6 +251,8 @@ const deepFreezeCopy = (value) => {
  * @property {Readonly<Record<string, any>>} config deep-frozen feature values
  * @property {Readonly<Record<string, string>>} strings resolved strings
  * @property {any} client the element's Mode-C API client ({@link createElementApi})
+ * @property {Readonly<Record<string, ElementApi>>} clients API clients of the service products the element reads
+ *   (`manifest.reads`, F.18), by product slug — only products active on the website
  * @property {ElementIdentity} identity
  * @property {(verb: string, data?: Record<string, unknown>) => boolean} emit publishes `<key>.<verb>`
  * @property {Store<Record<string, any>>} store
@@ -296,6 +298,7 @@ export const defineElement = (definition) => {
  * @property {Record<string, unknown>} [config]
  * @property {Record<string, unknown>} [strings] overrides for the active language
  * @property {any} [client] Mode-C API client
+ * @property {Readonly<Record<string, ElementApi>>} [clients] read-API clients by product slug (`manifest.reads`)
  * @property {ElementIdentity} [identity]
  * @property {(type: string, data: Record<string, unknown>) => void} [emit] receives `<key>.<verb>` events
  */
@@ -344,6 +347,7 @@ export const mountHeadless = (definition, options = {}) => {
 			config,
 			strings,
 			client: options.client,
+			clients: Object.freeze({ ...(isPlainObject(options.clients) ? options.clients : {}) }),
 			identity,
 			emit,
 			store: /** @type {Store<Record<string, any>>} */ (/** @type {unknown} */ (store)),

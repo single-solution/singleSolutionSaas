@@ -11,6 +11,7 @@ import { createFakePortal } from '@ss/app-kit/testing';
 import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
+import { cronRoutes } from '../jobs/sweep.js';
 import { buildRoutes, createGrades, wireEvents } from '../api/routes.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -23,6 +24,7 @@ export const DOMAIN = 'shop.example.com';
 export const ORIGIN = { origin: `https://${DOMAIN}` };
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const HOUR = 3_600_000;
+export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const DAY = 24 * HOUR;
 export const ELEMENTS = ['tiers', 'showcase', 'filters', 'warranty', 'mapping', 'inspection'];
 export const STORAGE = {
@@ -80,6 +82,10 @@ export const createStorage = () => {
 							url,
 						}
 					: { status: 404, headers: {}, body: Buffer.alloc(0), url };
+			if (method === 'DELETE') {
+				objects.delete(key);
+				return { status: 204, headers: {}, body: Buffer.alloc(0), url };
+			}
 		}
 		return { status: 404, headers: {}, body: Buffer.alloc(0), url };
 	};
@@ -113,12 +119,13 @@ export const createHarness = async ({ config = {}, elements = {}, storage = true
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_grades_api_tests_0123456789'),
+			CRON_SECRET,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: bucket.send },
 	});
 	const grades = wireEvents(createGrades(app));
-	const handle = createRequestHandler(grades.product, buildRoutes(grades));
+	const handle = createRequestHandler(grades.product, [...buildRoutes(grades), ...cronRoutes(grades)]);
 
 	let version = 0;
 	/**

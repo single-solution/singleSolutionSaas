@@ -17,6 +17,7 @@ import {
 	validateResults,
 } from '../core/inspection.js';
 import { fill } from '../core/text.js';
+import { STALE_BACKSTOP_MS } from '../adapters/db.js';
 
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('./service.js').Actor} Actor */
@@ -26,6 +27,8 @@ import { fill } from '../core/text.js';
 export const UNIT_INSPECTED = 'grades.unit_inspected@1';
 
 const DAY_MS = 86_400_000;
+/** Grace after a photo slot's `staleAt` before the sweep deletes it (covers completions in flight). */
+const SWEEP_GRACE_MS = 10 * 60_000;
 
 /**
  * Owner view of a unit.
@@ -88,6 +91,21 @@ export const createInspectionService = ({
 	tierChanged,
 }) => {
 	const iso = () => new Date(now()).toISOString();
+
+	/**
+	 * A pending slot past its `staleAt` (the sweep may delete its object at any time).
+	 * @param {{ staleAt?: unknown }} photo
+	 */
+	const isStale = (photo) =>
+		photo.staleAt !== undefined && photo.staleAt !== null && new Date(/** @type {any} */ (photo.staleAt)).getTime() <= now();
+
+	/**
+	 * Delete the objects and records of this website's stale photo slots (cron; bounded and idempotent).
+	 * @param {Site} site
+	 * @returns {Promise<{ scanned: number, deleted: number, missing: number, failed: number }>}
+	 */
+	const sweepPhotos = (site) =>
+		site.repos.photos.sweepStale({ storage: () => storage(site.websiteId), olderThanMs: SWEEP_GRACE_MS });
 
 	/** @param {Site} site */
 	const bucketOf = async (site) => {
@@ -233,12 +251,13 @@ export const createInspectionService = ({
 	const verifyPhotos = async (site, photos) => {
 		/** @type {Map<string, number>} */
 		const counts = new Map();
-		const pending = photos.filter((photo) => photo.status === 'pending');
+		// a slot past its `staleAt` never counts: the sweep may delete its object at any time
+		const pending = photos.filter((photo) => photo.status === 'pending' && !isStale(photo));
 		const bucket = pending.length > 0 ? await bucketOf(site) : null;
 		if (pending.length > 0 && !bucket) return { ok: false, reason: 'storage_unavailable' };
 		for (const photo of photos) {
 			let stored = photo.status === 'stored';
-			if (!stored) {
+			if (!stored && pending.includes(photo)) {
 				/** @type {{ exists: boolean, size?: number, contentType?: string }} */
 				let head;
 				try {
@@ -250,7 +269,8 @@ export const createInspectionService = ({
 					.split(';')[0]
 					?.trim();
 				stored = head.exists && Number(head.size) === photo.size && type === photo.contentType;
-				if (stored) await site.repos.photos.update(photo.id, { status: 'stored', storedAt: iso(), purgeAt: null });
+				if (stored)
+					await site.repos.photos.update(photo.id, { status: 'stored', storedAt: iso(), purgeAt: null, staleAt: null });
 			}
 			if (stored) counts.set(photo.item, (counts.get(photo.item) ?? 0) + 1);
 		}
@@ -443,7 +463,9 @@ export const createInspectionService = ({
 				size,
 				status: 'pending',
 				addedAt: iso(),
-				purgeAt: new Date(now() + Number(config.upload_ttl_seconds) * 1000 + DAY_MS),
+				// past `staleAt` the cron sweep deletes the object and the slot; the TTL on `purgeAt` is only a backstop
+				staleAt: new Date(now() + Number(config.upload_ttl_seconds) * 1000 + DAY_MS),
+				purgeAt: new Date(now() + Number(config.upload_ttl_seconds) * 1000 + DAY_MS + STALE_BACKSTOP_MS),
 			});
 		return {
 			ok: true,
@@ -550,6 +572,7 @@ export const createInspectionService = ({
 		startInspection,
 		updateInspection,
 		photoUpload,
+		sweepPhotos,
 		issueReportLink,
 		revokeReportLink,
 		report,

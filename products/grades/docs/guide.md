@@ -60,6 +60,11 @@ badges.subscribe((state) => paint(state.current)); // { label, color: 'var(--ss-
 | `mapping`    | `createConditions`       | `statement`, `table`         | `GET /v1/condition-mappings/items/{itemId}`                               |
 | `inspection` | `createInspectionReport` | `report`, `summary`          | `GET /v1/inspection-reports/{token}`                                      |
 
+Without this product's UI bundle the Loader's element stub renders the text views
+`GET /v1/elements/{key}/view?ctx=` and posts its actions to `POST /v1/elements/{key}/actions/{action}?ctx=` with your
+pk_ key: `refresh` everywhere, `select` with `{ fields: { tier } }` on `showcase` and `warranty`, and `open` with
+`{ fields: { token } }` (the buyer's report code) on `inspection`. Each answers the next view model.
+
 The filter writes its selection to `state.queryValue` (`new,good`) under `state.param` and emits
 `filters.changed`; your listing reacts to it or uses `actions.apply()` / `state.itemIds`. `POST /v1/tier-filters:sort`
 orders any item ids by tier.
@@ -78,7 +83,8 @@ problems in the dashboard.
 2. `POST /v1/inspections { unitId, results: [{ item, value, note? }] }` — a draft with its weighted score and suggested
    tier (thresholds under **Inspection → Score → suggested tier**; a failed critical item caps the tier).
 3. Photos: `POST /v1/inspections/{id}/photos { item, contentType, size }` → PUT the file to `upload.url` with exactly
-   `upload.headers` (type and length are signed) before the link expires.
+   `upload.headers` (type and length are signed) before the link expires. Complete the inspection within a day of
+   the link expiring: older slots no longer count and the hourly sweep deletes them (and their objects).
 4. `PATCH /v1/inspections/{id} { results?, complete: true, tier? }` — completes when required answers and photos are
    present; the unit takes the suggested tier (or the one you name) and `grades.unit_inspected@1` is published.
 5. `POST /v1/units/{id}/report-link` → `{ token, url }` to share with the buyer; your report page renders the drop-in

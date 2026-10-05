@@ -17,6 +17,7 @@ const elementEntry = (element) => ({
 	modes: [...element.modes],
 	dependsOn: [...(element.dependsOn ?? [])],
 	requires: [...(element.requires?.resources ?? [])],
+	optionalResources: [...(element.requires?.optionalResources ?? [])],
 	price: {
 		hourlyMillicredits: element.price.hourly,
 		metered: (element.price.metered ?? []).map((m) => ({

@@ -65,6 +65,15 @@ export const api = Object.freeze({
 		/** @type {string} */ w,
 		/** @type {{ cursor?: string | null, status?: string | null }} */ q = {},
 	) => `/v1/merchants/${e(m)}/websites/${e(w)}/deliveries${query(q)}`,
+	deliveryStrings: (/** @type {string} */ m, /** @type {string} */ w) =>
+		`/v1/merchants/${e(m)}/websites/${e(w)}/delivery/strings`,
+	deliveryString: (
+		/** @type {string} */ m,
+		/** @type {string} */ w,
+		/** @type {string} */ appId,
+		/** @type {string} */ element,
+		/** @type {string} */ language,
+	) => `/v1/merchants/${e(m)}/websites/${e(w)}/delivery/strings/${e(appId)}/${e(element)}/${e(language)}`,
 	replay: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ d) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/deliveries/${e(d)}/replay`,
 	catalog: () => '/v1/catalog/products',

@@ -343,7 +343,6 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 			'collections',
 			'brands',
 			'media',
-			'media_uploads',
 			'import_export',
 			'feeds',
 			'api',

@@ -26,7 +26,7 @@
 			"limit:collections.max_depth",
 			"limit:brands.max_brands",
 			"limit:media.max_media_per_item",
-			"limit:media_uploads.max_upload_bytes",
+			"limit:media.max_upload_bytes",
 			"limit:import_export.max_rows",
 			"limit:feeds.max_items_per_feed",
 			"rate:api.read_rate_per_minute",
@@ -42,6 +42,9 @@
 		"consumes": ["order.placed@1", "order.cancelled@1", "order.refunded@1"],
 		"publishes": ["item.created@1", "item.updated@1", "item.deleted@1", "inventory.changed@1", "price.changed@1"]
 	},
+	"budget": {
+		"shared": 2
+	},
 	"elements": [
 		{
 			"key": "items",
@@ -53,7 +56,7 @@
 				"hourly": 300
 			},
 			"budget": {
-				"js": 8
+				"js": 3
 			},
 			"dependsOn": [],
 			"features": {
@@ -87,7 +90,7 @@
 				"hourly": 150
 			},
 			"budget": {
-				"js": 7
+				"js": 3
 			},
 			"dependsOn": ["items"],
 			"features": {
@@ -119,7 +122,7 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 6
+				"js": 2
 			},
 			"dependsOn": ["items"],
 			"features": {
@@ -151,7 +154,7 @@
 				"hourly": 100
 			},
 			"budget": {
-				"js": 6
+				"js": 2
 			},
 			"dependsOn": ["items"],
 			"features": {
@@ -183,7 +186,7 @@
 				"hourly": 0
 			},
 			"budget": {
-				"js": 5
+				"js": 2
 			},
 			"dependsOn": ["items"],
 			"features": {
@@ -208,23 +211,26 @@
 		{
 			"key": "media",
 			"name": "Media",
-			"description": "Images and videos per item and variant, referenced by URL or by a key in the merchant's storage, with count limits, a responsive size ladder and alt-text templates. Files themselves belong to the Files product or your own storage.",
+			"description": "Images and videos per item and variant, referenced by URL or by a key in the merchant's storage, with count limits, a responsive size ladder and alt-text templates. With the storage connector connected (optional), presigned uploads straight to the merchant's own bucket with type and size limits, and signed links for private keys.",
 			"modes": ["A", "B", "C"],
 			"stateful": true,
 			"price": {
 				"hourly": 0
 			},
 			"budget": {
-				"js": 8
+				"js": 3
 			},
 			"dependsOn": ["items"],
+			"requires": {
+				"optionalResources": ["storage"]
+			},
 			"features": {
 				"$ref": "schemas/media.features.json"
 			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"api": {
-				"resources": ["media"]
+				"resources": ["media", "media-uploads"]
 			},
 			"headless": "headless/gallery.js#createGallery",
 			"renderer": "ui/gallery.js#render",
@@ -236,33 +242,6 @@
 				"keyboard": true,
 				"reducedMotion": true
 			}
-		},
-		{
-			"key": "media_uploads",
-			"name": "Media uploads",
-			"description": "Optional: presigned uploads straight to the merchant's own bucket through the storage connector, with type and size limits, and signed links for private keys.",
-			"modes": ["C"],
-			"stateful": true,
-			"price": {
-				"hourly": 50
-			},
-			"budget": {
-				"js": 0
-			},
-			"dependsOn": ["media"],
-			"requires": {
-				"resources": ["storage"]
-			},
-			"features": {
-				"$ref": "schemas/media_uploads.features.json"
-			},
-			"strings": "strings/en.json",
-			"placement": false,
-			"api": {
-				"resources": ["media-uploads"]
-			},
-			"headless": null,
-			"renderer": null
 		},
 		{
 			"key": "import_export",
@@ -352,26 +331,15 @@
 		{
 			"code": "starter",
 			"name": "Starter",
-			"description": "Items, variants and stock, attributes, collections, brands, media and the API; uploads, import/export and feeds as add-ons.",
+			"description": "Items, variants and stock, attributes, collections, brands, media (uploads when storage is connected) and the API; import/export and feeds as add-ons.",
 			"elements": ["items", "variants", "attributes", "collections", "brands", "media", "api"],
-			"addons": ["media_uploads", "import_export", "feeds"]
+			"addons": ["import_export", "feeds"]
 		},
 		{
 			"code": "pro",
 			"name": "Pro",
 			"description": "Everything, with higher bounds.",
-			"elements": [
-				"items",
-				"variants",
-				"attributes",
-				"collections",
-				"brands",
-				"media",
-				"media_uploads",
-				"import_export",
-				"feeds",
-				"api"
-			]
+			"elements": ["items", "variants", "attributes", "collections", "brands", "media", "import_export", "feeds", "api"]
 		}
 	],
 	"priceBook": {

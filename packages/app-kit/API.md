@@ -27,6 +27,7 @@ import {
 	feature,
 	config,
 	featuresOf,
+	resource,
 	// lower-level factories (normally used through createProduct)
 	createPortalClient,
 	createEntitlements,
@@ -72,6 +73,9 @@ import {
 	identityTokenOf,
 	IDENTITY_HEADER,
 	IDENTITY_MAX_AGE_MS,
+	sweepStaleUploads,
+	SWEEP_DEFAULT_LIMIT,
+	SWEEP_MAX_LIMIT,
 } from '@ss/app-kit';
 import { createFakePortal, createTestIdentityIssuer, entitlementPayload } from '@ss/app-kit/testing'; // tests / `ss dev` only
 // createTestIdentityIssuer({ alg, kid, issuer, audience, claimMap }) → { section, sign(claims, header?) }:
@@ -142,6 +146,9 @@ createProduct({
     refresh(websiteId),            // fetch now
     invalidate(websiteId),         // the next forWebsite(websiteId) fetches from the Portal (cached copy kept as offline fallback)
     can(doc, elementKey), feature(doc, 'element.feature'), config(doc, elementKey), featuresOf(doc, elementKey),
+    resource(doc, kind) → { kind, status: connected|missing|failing|revoked, connected },
+      // F.18: an element with requires.optionalResources stays on without them — check resource(doc, kind).connected
+      // before using one (e.g. catalog media without storage keeps working with external image URLs)
   },
   identity: {                                                          // bring-your-own customer identity (PLAN F.14)
     verify(request, { doc, body? }) → { ok: true, identity: { subject, email?, phone?, issuer, claims } } | { ok: false, code },
@@ -312,6 +319,29 @@ toNextRoute(handler, { stripPrefix = '/api' | false, after? }?) → { GET, POST,
 - With `createProduct({ devProbes: true })` (never in production), mounted by `standardRoutes`, website key:
    - `GET /v1/ss-probe/data-guard` → `{ rejected, code }`: runs a query without `websiteId` through the guard.
    - `GET /v1/ss-probe/events/:id` → `{ id, effects }`: how many times handlers ran for that event id.
+
+### Stale uploads
+
+```js
+sweepStaleUploads({
+  collection,               // guarded collection of data.forWebsite(websiteId): one record per presigned upload slot
+  websiteId,                // pinned in every filter
+  storage,                  // connectors.storage(websiteId), or async () => storage (resolved only when something is stale)
+  now = Date.now, olderThanMs = 0,   // records with record[field] <= now - olderThanMs are stale
+  field = 'staleAt',        // the record's "stale at" date
+  filter = {},              // extra conditions, e.g. { status: 'pending' } (may not set websiteId or field)
+  keyOf = (record) => record.key,    // RELATIVE object key; null/'' -> no object
+  limit = 100,              // per run, clamped to 1..SWEEP_MAX_LIMIT (1000), oldest first
+  mark = null,              // { ...$set } to keep the record (field is $unset) instead of deleting it
+  onDeleted(record, { existed }), onError(record | null, error),
+}) → { scanned, deleted, missing, failed }
+```
+
+Per stale record: `storage.headObject({ key })`, `deleteObject` when it exists, then `deleteOne` (or the `mark` update) with
+a compare-and-set filter (the stale query plus `_id`), so a record confirmed meanwhile is kept. A storage or database
+error counts as `failed` and leaves the record for the next run; an unresolvable storage fails the whole batch. Safe to
+repeat and to run concurrently. The product indexes `{ websiteId, …filter fields, [field] }`, keeps a TTL index on a
+later date as a backstop, and refuses to confirm a slot past its stale date (so deleting its object is always safe).
 
 ### Stores (product's own control DB, NOT the client DB)
 

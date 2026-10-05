@@ -109,13 +109,15 @@ export const websiteSection = (website) => {
 
 /**
  * Which resource kinds a subscription needs (F.16): product-level `requires.resources` always; an element's kinds
- * only while that element is on (enabled, or configured on but blocked because a resource is missing).
- * @param {{ requires?: { resources?: readonly string[] }, elements: ReadonlyArray<{ key: string, requires?: { resources?: readonly string[] } }> }} manifest
+ * only while that element is on (enabled, or configured on but blocked because a resource is missing). Optional kinds
+ * (`requires.optionalResources`, F.18) are listed with `optional: true` — needed while a using element is on, but a
+ * missing one disables nothing.
+ * @param {{ requires?: { resources?: readonly string[] }, elements: ReadonlyArray<{ key: string, requires?: { resources?: readonly string[], optionalResources?: readonly string[] } }> }} manifest
  * @param {Record<string, { enabled: boolean, reason?: string | null }>} elements resolved element states
- * @returns {Array<{ kind: string, scope: 'product' | 'element', elements: string[], neededNow: boolean }>}
+ * @returns {Array<{ kind: string, scope: 'product' | 'element', elements: string[], neededNow: boolean, optional?: boolean }>}
  */
 export const resourceNeeds = (manifest, elements) => {
-	/** @type {Map<string, { kind: string, scope: 'product' | 'element', elements: string[], neededNow: boolean }>} */
+	/** @type {Map<string, { kind: string, scope: 'product' | 'element', elements: string[], neededNow: boolean, optional?: boolean }>} */
 	const out = new Map();
 	for (const kind of manifest.requires?.resources ?? [])
 		out.set(kind, { kind, scope: 'product', elements: [], neededNow: true });
@@ -125,6 +127,18 @@ export const resourceNeeds = (manifest, elements) => {
 		for (const kind of element.requires?.resources ?? []) {
 			const entry = out.get(kind) ?? { kind, scope: /** @type {const} */ ('element'), elements: [], neededNow: false };
 			entry.elements.push(element.key);
+			if (on) entry.neededNow = true;
+			delete entry.optional;
+			out.set(kind, entry);
+		}
+	}
+	for (const element of manifest.elements) {
+		const state = elements[element.key];
+		const on = state?.enabled === true || state?.reason === 'resource_missing';
+		for (const kind of element.requires?.optionalResources ?? []) {
+			const known = out.get(kind);
+			const entry = known ?? { kind, scope: /** @type {const} */ ('element'), elements: [], neededNow: false, optional: true };
+			if (!entry.elements.includes(element.key)) entry.elements.push(element.key);
 			if (on) entry.neededNow = true;
 			out.set(kind, entry);
 		}

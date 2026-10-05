@@ -4,15 +4,46 @@ Developer tooling for SSPS v1 products (PLAN Part E §14, F.7). JavaScript ESM, 
 `@ss/*` core packages (the emulator's in-memory client database uses the optional peer dependency
 `mongodb-memory-server`, loaded lazily).
 
-| Command                                                                                                                       | What it does                                                                                                                                                                                                                  |
-| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ss app init <dir> --kind service\|pack --slug <slug> --name <name> [--minimal]`                                              | generates a project from `templates/shared` + `templates/<kind>`; `--minimal` (service only) leaves out the `notes` sample                                                                                                    |
-| `ss app validate [dir] [--json]`                                                                                              | manifest (local `$ref`s bundled) schema + semantics, anatomy, module refs/exports, import direction, DOM-free cores, no colour literals in `ui/`, string keys/placeholders, OpenAPI coverage, package wiring, budget estimate |
-| `ss dev`                                                                                                                      | local Portal emulator: JWKS, `/v1/product/*`, website keys, fixtures from `ss.dev.json`, admin API for the subcommands below                                                                                                  |
-| `ss dev env \| register \| launch \| keys \| emit \| entitlements \| subscription \| resource \| identity \| settle \| state` | dev values, registration handshake, launch URLs (all kinds), pk_/sk_ keys, signed event injection, entitlement switches, identity-issuer approval, hourly settlement simulation                                               |
-| `ss certify [dir] --url <product>`                                                                                            | certification suite against a running product (pass/fail table + `ss-certify-report.json`)                                                                                                                                    |
+| Command                                                                                                                       | What it does                                                                                                                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ss app init <dir> --kind service\|pack --slug <slug> --name <name> [--minimal]`                                              | generates a project from `templates/shared` + `templates/<kind>`; `--minimal` (service only) leaves out the `notes` sample                                                                                                                            |
+| `ss app validate [dir] [--json]`                                                                                              | manifest (local `$ref`s bundled) schema + semantics, anatomy, module refs/exports, import direction, DOM-free cores, no colour literals in `ui/`, string keys/placeholders, OpenAPI coverage, package wiring, budgets measured like the Portal (F.18) |
+| `ss pack build [dir] [--out <dir>] [--json]`                                                                                  | bundles the manifest modules (minified ESM + shared chunks), catalogs and the `ss-pack-bundle@1` descriptor into `dist/pack`                                                                                                                          |
+| `ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <JWK\|@file>] [--activate]`                                    | signs the descriptor and uploads it and every asset to the Portal admin pack API with a staff API token                                                                                                                                               |
+| `ss dev`                                                                                                                      | local Portal emulator: JWKS, `/v1/product/*`, website keys, fixtures from `ss.dev.json`, admin API for the subcommands below                                                                                                                          |
+| `ss dev env \| register \| launch \| keys \| emit \| entitlements \| subscription \| resource \| identity \| settle \| state` | dev values, registration handshake, launch URLs (all kinds), pk_/sk_ keys, signed event injection, entitlement switches, identity-issuer approval, hourly settlement simulation                                                                       |
+| `ss certify [dir] --url <product>`                                                                                            | certification suite against a running product (pass/fail table + `ss-certify-report.json`)                                                                                                                                                            |
 
 Exit codes: `0` ok, `1` failed validation/certification or command error, `2` usage error.
+
+## Pack build and publish (F.18)
+
+```sh
+ss pack build [dir] [--out <dir>] [--json]
+ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <private JWK | @file>] [--activate]
+```
+
+- **build** bundles every module the manifest names (`headless` / `renderer`, `file.js#export`) with esbuild —
+  minified ES modules for browsers, code-split shared code in `chunks/<name>-<hash>.js`, each entry at its own path —
+  adds the string catalogs (`strings/<lang>.json` and legacy per-element files, compact JSON), hashes every asset and
+  writes `dist/pack/` (`descriptor.json`: `{ format: 'ss-pack-bundle@1', manifest (features inline), assets: [{ path,
+sha256, size, contentType }] }`). It prints each element's measured size and the shared chunks.
+- **publish** builds, signs the descriptor with the developer key (`@ss/protocol` `signBundle`), `POST /v1/admin/packs`
+  `{ descriptor, signature, publicJwk }`, `PUT /v1/admin/packs/:appId/versions/:version/assets/<path>` per asset and,
+  with `--activate`, activates the app. It authenticates with a **staff API token** (`sst_…`, minted by
+  `POST /v1/admin/api-tokens`). Environment fallbacks: `SS_PORTAL_URL`, `SS_ADMIN_TOKEN`, `SS_PACK_SIGNING_KEY`.
+- Programmatic: `@ss/cli/pack` — `buildPack(dir)`, `descriptorOf(pack)`, `measurePack(pack)`, `writePack(pack, out)`,
+  `publishPack({ pack, portalUrl, token, signingKey, fetch, activate })`, `bundleModules`, `moduleEntries`,
+  `elementModules`, `loadManifest` (also re-exported from `@ss/cli`).
+
+## Budgets in `ss app validate` (F.18)
+
+Validate builds the Mode A elements exactly like `ss pack build` and measures them with `@ss/contracts/budget`, the
+function the Portal's compiler uses: `budget.estimate` (an element's own entry modules exceed `budget.js`),
+`budget.padded` (a declaration above the measured KB rounded up plus a quarter, at least 1 KB), `budget.shared` (shared
+chunks undeclared or above `budget.shared`), `budget.build` (the modules cannot be bundled). It scans sources only —
+never build output (`dist/`, `.ss-pack-out/`) — so minified identifiers never fool the `t('…')` check, and
+`strings.slice` reports keys an element renders outside its `stringKeys` (and every sibling's).
 
 ## Portal product API (emulated)
 

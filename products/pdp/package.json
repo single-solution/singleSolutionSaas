@@ -1,7 +1,7 @@
 {
 	"name": "@ss/product-pdp",
 	"version": "1.0.0",
-	"description": "Product Detail Page — SSPS v1 element pack: gallery, price, structured data, related, FAQ, sticky buy bar, share, hosted page and embeds of other products' elements.",
+	"description": "Product Detail Page \u2014 SSPS v1 element pack: gallery, price, structured data, related, FAQ, sticky buy bar, share, hosted page and embeds of other products' elements.",
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",
@@ -18,7 +18,7 @@
 	"prettier": "@ss/config/prettier.json",
 	"scripts": {
 		"dev": "ss dev",
-		"build": "node pack.js",
+		"build": "ss pack build .",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
 		"test": "vitest run --coverage",
 		"test:watch": "vitest",
@@ -27,11 +27,11 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"validate": "ss app validate .",
-		"certify": "ss certify ."
+		"certify": "ss certify .",
+		"publish:pack": "ss pack publish ."
 	},
 	"dependencies": {
-		"@ss/contracts": "workspace:^",
-		"esbuild": "^0.28.2"
+		"@ss/contracts": "workspace:^"
 	},
 	"devDependencies": {
 		"@ss/cli": "workspace:^",

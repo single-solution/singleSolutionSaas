@@ -353,6 +353,14 @@ export const identityRoutes = (ctx, service) => {
 			handler: async (c) => ok({ items: await accounts.listSessions(sessionOf(c)) }),
 		},
 		{
+			method: 'POST',
+			path: '/v1/admin/api-tokens',
+			auth: 'staff',
+			permission: 'platform.apps.manage',
+			rateLimit: { limit: 10, windowMs: 60 * 60_000 },
+			handler: async (c) => created(await accounts.createApiToken(sessionOf(c), valid(inputs.apiToken(c.body)), metaOf(c))),
+		},
+		{
 			method: 'DELETE',
 			path: '/v1/me/sessions/:sessionId',
 			auth: ['staff', 'merchant'],

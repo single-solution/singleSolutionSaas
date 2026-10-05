@@ -14,7 +14,7 @@ import { checkVariantSet, validateDimensions, validateVariant } from '../core/va
 import { ownerItem, publicItem } from '../core/views.js';
 import { isObject, issue } from '../core/text.js';
 import { isDuplicateKey } from '../adapters/db.js';
-import { attributesOf, entry, fail, flushItem, finalize, invalid, mutateItem, updatedEntry } from './catalog.js';
+import { attributesOf, entry, fail, flushItem, finalize, invalid, mutateItem, skuTaken, updatedEntry } from './catalog.js';
 
 /** @typedef {import('./catalog.js').Site} Site */
 /** @typedef {import('./catalog.js').Deps} Deps */
@@ -309,6 +309,8 @@ export const createItemsService = (deps) => {
 		} catch (error) {
 			if (!isDuplicateKey(error)) throw error;
 			const raced = await site.repos.items.get(id);
+			const taken = raced ? null : skuTaken(error, stored);
+			if (taken) return taken;
 			if (raced)
 				return {
 					ok: /** @type {const} */ (true),

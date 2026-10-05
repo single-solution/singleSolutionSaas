@@ -8,10 +8,14 @@
  *   standard events of a change are pushed onto the item in the same single-document write, then published through
  *   the kit's durable outbox and pulled; the sweep job republishes anything left (same idempotency keys).
  *   Writes are compare-and-set on `version`.
+ *   With "SKUs unique across the catalog" on, a live item also carries `skuKeys` (its normalised SKUs) under a unique
+ *   partial index, so two concurrent writes can never both claim one SKU (the loser gets E11000 → `sku_taken`);
+ *   otherwise `skuKeys` is null and outside the index.
  * - `attributes`, `collections`, `brands`: the taxonomy.
  * - `stock_moves`: stock taken by reservations and orders (one per order), so order events are applied once.
  * @module
  */
+import { skuKeysOf } from '../core/variants.js';
 
 export const SCHEMA_VERSION = 1;
 
@@ -40,6 +44,14 @@ export const INDEXES = [
 	{ collection: 'items', keys: { websiteId: 1, previousSlugs: 1 }, name: 'website_previous_slugs' },
 	{ collection: 'items', keys: { websiteId: 1, 'variants.id': 1 }, name: 'website_variant' },
 	{ collection: 'items', keys: { websiteId: 1, 'variants.sku': 1 }, name: 'website_sku' },
+	{
+		collection: 'items',
+		keys: { websiteId: 1, skuKeys: 1 },
+		name: 'website_sku_unique',
+		unique: true,
+		// only arrays holding strings are indexed: null (setting off, deleted item) and [] never collide
+		partialFilterExpression: { skuKeys: { $type: 'string' } },
+	},
 	{ collection: 'items', keys: { websiteId: 1, 'media.id': 1 }, name: 'website_media' },
 	{ collection: 'items', keys: { websiteId: 1, deletedAt: 1, createdAt: -1, id: -1 }, name: 'website_newest' },
 	{ collection: 'items', keys: { websiteId: 1, deletedAt: 1, updatedAt: -1, id: -1 }, name: 'website_updated' },
@@ -81,8 +93,39 @@ export const INDEXES = [
 	{ collection: 'stock_moves', keys: { websiteId: 1, status: 1, expiresAt: 1 }, name: 'website_expiry' },
 ];
 
-/** @type {Array<{ version: number, name: string, up: (scope: any) => Promise<void> }>} */
-export const MIGRATIONS = [];
+/** Name of the unique index that reserves SKUs (`skuKeys`). */
+export const SKU_INDEX = 'website_sku_unique';
+
+/**
+ * Lazy, versioned migrations (app-kit runs them once per website under a lock).
+ * @type {Array<{ version: number, name: string, up: (scope: any) => Promise<void> }>}
+ */
+export const MIGRATIONS = [
+	{
+		version: 1,
+		name: 'sku_keys',
+		// reserve the SKUs of live items written before `skuKeys`; an SKU another item already holds (possible while the
+		// setting was off) stays unreserved, and the write-time check still reports it
+		up: async (scope) => {
+			const items = scope.collection(COLLECTIONS.items);
+			const cursor = items.find(
+				{ websiteId: scope.websiteId, deletedAt: null, skuKeys: { $exists: false }, 'variants.sku': { $type: 'string' } },
+				{ projection: { _id: 1, variants: 1 }, sort: { _id: 1 } }, // the oldest item keeps a shared SKU
+			);
+			for await (const doc of cursor) {
+				const keys = skuKeysOf(doc.variants ?? []);
+				try {
+					await items.updateOne(
+						{ websiteId: scope.websiteId, _id: doc._id, skuKeys: { $exists: false } },
+						{ $set: { skuKeys: keys.length > 0 ? keys : null } },
+					);
+				} catch (error) {
+					if (!isDuplicateKey(error)) throw error;
+				}
+			}
+		},
+	},
+];
 
 /** Fields a compare-and-set write never sets (the outbox moves with $push / $pull; the rest is stamped once). */
 const UNWRITABLE = new Set(['outbox', '_id', 'websiteId', 'merchantId', 'env', 'schemaVersion', 'createdAt']);
@@ -98,6 +141,19 @@ export const strip = (doc) => (doc ? Object.fromEntries(Object.entries(doc).filt
 
 /** @param {unknown} error */
 export const isDuplicateKey = (error) => /** @type {{ code?: number }} */ (error)?.code === 11000;
+
+/**
+ * The SKU of a duplicate-key error on the SKU index (null for any other error).
+ * @param {unknown} error
+ * @returns {string | null}
+ */
+export const duplicateSkuOf = (error) => {
+	if (!isDuplicateKey(error)) return null;
+	const { keyPattern, keyValue, message } =
+		/** @type {{ keyPattern?: Record<string, unknown>, keyValue?: Record<string, unknown>, message?: string }} */ (error);
+	if (!(keyPattern && 'skuKeys' in keyPattern) && !String(message ?? '').includes(SKU_INDEX)) return null;
+	return typeof keyValue?.skuKeys === 'string' ? keyValue.skuKeys : '';
+};
 
 /**
  * @typedef {object} Scope app-kit website data scope (guarded collections)

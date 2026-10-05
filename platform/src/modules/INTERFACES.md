@@ -28,6 +28,11 @@ currency, createdAt }` — the **website settings** (F.16) are `null` when unset
   `{ defaults, items: [{ scope, group, label, description, product? }] }` (the console key form: one checkbox group
   per product).
 - Website keys are signed with a **dedicated website-key signing key** (`WEBSITE_KEY_SIGNING_KEYS`), not the launch key.
+- **Staff API tokens** (F.18): `POST /v1/admin/api-tokens` (`platform.apps.manage`, `{ minutes: 5..720, label? }`) →
+  201 `{ token: 'sst_…', sessionId, expiresAt }` — a staff session flagged `api` with the member's roles and MFA
+  satisfied, accepted only as `Authorization: Bearer sst_…` (no cookie, so no CSRF check; a cookie carrying it and a
+  bearer carrying a browser session are refused), listed (`api: true`) and revocable under `/v1/me/sessions`; a token
+  cannot mint another. Audited `staff.api_token_created`. Used by `ss pack publish`.
 - Implements ports `sessionActor(session)` and `websiteKeyRevoked(claims, rawKey)` → `true` when the key is revoked,
   unknown, or (for `sk_`) its HMAC does not match `rawKey`; infra calls it after the offline signature check.
 - Calls `integration.emitControl('key.revoked@1', …)` on revoke.
@@ -118,8 +123,9 @@ credits, settlement, spend caps.
 - **Resources** (F.16): product-level `requires.resources` are always required (`@ss/entitlements` adds them to every
   element, so a missing one disables every element); an element's kinds only while that element is on.
   `resourceNeeds(websiteId)` → `[{ subscriptionId, appId, productSlug, kind, scope: 'product'|'element', elements,
-neededNow }]` from the last resolution (stored with the document); `websitesOfApp(appId)` → website ids with a live
-  subscription.
+neededNow, optional? }]` from the last resolution (stored with the document); `websitesOfApp(appId)` → website ids with
+  a live subscription. Element `requires.optionalResources` (F.18) never disable an element; they appear with
+  `optional: true`, needed while a using element is on.
 - Calls `delivery.requestCompile(websiteId)` whenever a document version is bumped and when a subscription is
   cancelled (failures are logged, never fail commerce).
 - Emits `entitlement.changed@1` and `subscription.*@1` via integration.
@@ -179,7 +185,7 @@ Client-owned resources (§1a): database, storage, ai, messaging, payments, analy
 - `rotate`, `revoke`, `assign({ connectorId, websiteIds })`
 - `statusFor(websiteId)` → `[{ kind, ref, status: connected|missing|failing|revoked }]`
 - `resolve({ appId, websiteId, kind })` → `{ kind, descriptor, expiresAt }` (F.9) — only for products whose manifest
-  requires `kind` (product level, or an element) and that have an active subscription on that website, and (F.16)
+  requires `kind` (product level, or an element, optional kinds included — F.18) and that have an active subscription on that website, and (F.16)
   only while the kind is **needed now** per `commerce.resourceNeeds` (an element-level kind whose elements are all
   off is refused, `element_off`); audited every time; `expiresAt` ≤ 15 min.
 - `GET /v1/merchants/:merchantId/websites/:websiteId/resources` adds `needs` (above); the console shows "needed now"
@@ -210,10 +216,27 @@ active` subscriptions, whose manifest declares mode A. Packs → their headless 
   (`ss-element-stub@1`, below). Output `w/<websiteId>/<env>/<version>/loader.js` + `manifest.json`
   (`ss-website-bundle@1`: integrity sha384, sha256, sizes, budget, CSP sources, elements, warnings); version = first 16
   hex of SHA-256 of the bundle (deterministic). The alias flips by compare-and-set on `compiledRequest`.
-  Refusals: `delivery_budget_exceeded` (422; `errors[]` lists offenders: `budget` when loader gzip + Σ `budget.js` >
-  `DELIVERY_BUDGET_KB` (default 60), `over_declared` when an element's modules ship more gzip bytes than its
-  `budget.js`), `conflict` (two products deliver the same element key).
+  Refusals: `delivery_budget_exceeded` (422; `errors[]` lists offenders: `budget` when loader gzip + Σ `budget.js` +
+  Σ product `budget.shared` > `DELIVERY_BUDGET_KB` (default 60), `over_declared` when an element's own entry modules
+  ship more gzip bytes than its `budget.js`, `shared_over_declared` when a product's shared chunks exceed its
+  `budget.shared`), `conflict` (one product delivers the same element id twice).
+  **Wave-1 (F.18):** sizes come from `@ss/contracts/budget` `measureBundle` over the stored modules (own entry modules
+  per element; shared modules and every imported chunk once per product; an undeclared `budget.shared` counts as
+  measured, warning `shared_undeclared`); stub elements count 0 KB. Every bundle element carries `product` (the Loader
+  id is `<product>:<key>`; two products may deliver the same key). Pack elements get `reads: { <slug>: <base> }` for
+  each manifest `reads` product with an active subscription (warning `reads_inactive` otherwise) and the loader key
+  gains their read scopes (re-issued when one is missing). Strings: the product catalogs `strings/<lang>.json` sliced
+  by the element's `stringKeys` (default `<key>.*`) for the website language (`identity.getWebsite().language`,
+  fallback `en`), then the merchant's overrides. `manifest.json` adds `budget.sharedKb`, `budget.shared[]` and per
+  element `gzipBytes` / `reads`.
 - `rollback({ websiteId, merchantId?, version, actor })`, `status({ websiteId, merchantId? })`, `snippet(...)`.
+- **String overrides** (F.18, `delivery_strings`, `_id` = `<websiteId>:<appId>:<element>`):
+  `listStringOverrides({ merchantId, websiteId })` → `{ items: [{ appId, element, languages, updatedAt }] }` and
+  `setStringOverride({ merchantId, websiteId, appId, element, language, body: { strings }, actor })` (`language` a BCP
+  47 tag or `*`; ≤ 200 keys, text ≤ 2000, ≤ 32 KiB; an empty object removes that language; the website must subscribe
+  to the product and the element must be mode A) — audited `delivery.strings_updated`, then `requestCompile`. Routes
+  `GET /v1/merchants/:m/websites/:w/delivery/strings`, `PUT …/delivery/strings/:appId/:element/:language`
+  (`websites.read` / `websites.write`).
 - `uploadAsset({ appId, version, path, bytes, contentType, actor })` — bytes must equal the descriptor's sha256 and
   size (`delivery_asset_mismatch`), types js/mjs/css/json/svg/png/woff2 with per-type caps (415 / 413).
 - **Service UI bundles** (F.16, `delivery_ui_bundles`): a service product publishes the browser modules of its mode-A

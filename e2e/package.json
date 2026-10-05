@@ -20,6 +20,7 @@
 	},
 	"devDependencies": {
 		"@ss/app-kit": "workspace:^",
+		"@ss/cli": "workspace:^",
 		"@ss/config": "workspace:^",
 		"@ss/contracts": "workspace:^",
 		"@ss/platform": "workspace:^",

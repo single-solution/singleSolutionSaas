@@ -1,6 +1,7 @@
 /** Mode A: the display element's default renderer (structure, a11y, variants, slots, tokens only, budget). */
 import { readFileSync } from 'node:fs';
-import { gzipSync } from 'node:zlib';
+import { fileURLToPath } from 'node:url';
+import { buildPack, measurePack } from '@ss/cli/pack';
 import { describe, expect, it } from 'vitest';
 import { createReviews } from '../headless/reviews.js';
 import { render, styles } from '../ui/reviews.js';
@@ -165,18 +166,13 @@ describe('ui/reviews renderer', () => {
 		);
 	});
 
-	it('uses design tokens only and stays inside the declared budget', () => {
+	it('uses design tokens only and stays inside the declared budget (measured as the Portal measures, F.18)', async () => {
 		expect(styles).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
 		expect(styles).toMatch(/var\(--ss-color-primary\)/);
 		const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8'));
 		const budget = manifest.elements.find((/** @type {any} */ e) => e.key === 'display').budget.js;
-		const source = [
-			'../ui/reviews.js',
-			'../headless/reviews.js',
-			'../headless/strings.js',
-			'../core/validate.js',
-			'../core/text.js',
-		].map((file) => readFileSync(new URL(file, import.meta.url)));
-		expect(gzipSync(Buffer.concat(source)).length).toBeLessThan(budget * 1024);
-	});
+		const measured = measurePack(await buildPack(fileURLToPath(new URL('..', import.meta.url))));
+		expect(measured.elements.find((e) => e.key === 'display')?.gzipBytes).toBeLessThanOrEqual(budget * 1024);
+		expect(measured.shared.gzipBytes).toBeLessThanOrEqual(manifest.budget.shared * 1024);
+	}, 60_000);
 });

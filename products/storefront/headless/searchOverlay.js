@@ -14,8 +14,8 @@ export const API_PATHS = Object.freeze(/** @type {const} */ (['/v1/search', '/v1
 /** @param {import('./kit.js').Options} [options] */
 export const createSearchOverlay = (options = {}) => {
 	const config = options.config ?? {};
-	const source = createSource(sourceConfig(config), options);
 	const path = oneOf(config.api_path, API_PATHS, '/v1/search');
+	const source = createSource(sourceConfig(config, 'page', path === '/v1/search' ? 'search' : 'catalog'), options);
 	const results = safeUrl(config.results_path) ?? '/search';
 	const param = /^[a-z][a-z0-9_]{0,15}$/.test(str(config.param)) ? str(config.param) : 'q';
 	const minChars = int(config.min_chars, 2, 1, 10);

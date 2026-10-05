@@ -172,6 +172,7 @@ describe('tiers', () => {
 		expect(taken.json.errors[0].code).toBe('serial_taken');
 		expect((await h.call('POST', '/v1/units', { body: { itemId: 'itm_unit', tier: 'zzz' } })).status).toBe(422);
 		expect((await h.call('POST', '/v1/units', { body: { itemId: 'itm unit' } })).status).toBe(422);
+		h.clock.advance(1_000); // units page newest first by addedAt; ids are random, so keep the two apart in time
 		const second = await h.call('POST', '/v1/units', { body: { itemId: 'itm_unit', tier: 'fair', available: false } });
 		expect((await h.call('GET', '/v1/items/itm_unit', { key: h.pk })).json.tiers.map((/** @type {any} */ t) => t.key)).toEqual([
 			'excellent',
@@ -574,6 +575,69 @@ describe('warranty, showcase, mapping', () => {
 		expect(forItem.json.items.map((/** @type {any} */ i) => i.text.split(' — ')[0])).toEqual(['New', 'Fair']);
 		const empty = await h.call('GET', '/v1/elements/tiers/view?ctx=not-json&itemId=nothing', { key: h.pk });
 		expect(empty.json.body).toBe('No grades are defined yet.');
+	});
+
+	it('answers element stub actions with the next view model (pk_, gated, idempotent)', async () => {
+		const ctx = encodeURIComponent(JSON.stringify({ path: '/p/1', itemId: 'ext:1001' }));
+		const view = await h.call('GET', '/v1/elements/showcase/view', { key: h.pk });
+		expect(view.json.fields[0]).toMatchObject({ name: 'tier', type: 'select', label: 'Grade' });
+		expect(view.json.fields[0].options.map((/** @type {any} */ o) => o.value)).toEqual(['new', 'excellent', 'good', 'fair']);
+		expect(view.json.actions).toEqual([{ action: 'select', label: 'Show' }]);
+
+		const selected = await h.call('POST', `/v1/elements/showcase/actions/select?ctx=${ctx}`, {
+			key: h.pk,
+			body: { fields: { tier: 'excellent' } },
+			idempotencyKey: 'stub-select-1',
+		});
+		expect(selected.status).toBe(200);
+		expect(selected.headers.get('cache-control')).toBe('private, no-store');
+		expect(selected.json.items).toHaveLength(1);
+		expect(selected.json.items[0].text).toMatch(/^Excellent/);
+		const replay = await h.call('POST', `/v1/elements/showcase/actions/select?ctx=${ctx}`, {
+			key: h.pk,
+			body: { fields: { tier: 'excellent' } },
+			idempotencyKey: 'stub-select-1',
+		});
+		expect(replay.json).toEqual(selected.json);
+		// v1 body (no fields), cleared selection → the item's tiers from the page context
+		const v1 = await h.call('POST', '/v1/elements/warranty/actions/select', { key: h.pk, body: { tier: 'good' } });
+		expect(v1.json.items).toHaveLength(1);
+		expect(v1.json.items[0].text).toMatch(/^Good: /);
+		const cleared = await h.call('POST', `/v1/elements/showcase/actions/select?ctx=${ctx}`, {
+			key: h.pk,
+			body: { fields: { tier: '' } },
+		});
+		expect(cleared.json.items.length).toBe(2);
+		const refreshed = await h.call('POST', `/v1/elements/tiers/actions/refresh?ctx=${ctx}`, { key: h.pk, body: {} });
+		expect(refreshed.json.items.map((/** @type {any} */ i) => i.text.split(' — ')[0])).toEqual(['New', 'Fair']);
+		for (const element of ['filters', 'mapping']) {
+			const response = await h.call('POST', `/v1/elements/${element}/actions/refresh?ctx=${ctx}`, { key: h.pk, body: {} });
+			expect(response.status).toBe(200);
+			expect(typeof response.json.title).toBe('string');
+		}
+
+		const bad = await h.call('POST', '/v1/elements/showcase/actions/select', { key: h.pk, body: { fields: { tier: 'BAD' } } });
+		expect(bad.status).toBe(422);
+		expect(bad.json.errors[0]).toMatchObject({ path: '/fields/tier', code: 'tier_invalid' });
+		expect((await h.call('POST', '/v1/elements/showcase/actions/select', { key: h.pk, body: { tier: 'nope' } })).status).toBe(
+			422,
+		);
+		expect((await h.call('POST', '/v1/elements/tiers/actions/select', { key: h.pk, body: {} })).status).toBe(404);
+		expect((await h.call('POST', '/v1/elements/tiers/actions/refresh', { key: h.pk, body: [] })).status).toBe(200);
+		expect(
+			(
+				await h.call('POST', '/v1/elements/tiers/actions/refresh', {
+					key: h.pk,
+					body: {},
+					headers: { origin: 'https://evil.example.net' },
+				})
+			).status,
+		).toBe(403);
+		await h.entitle({ elements: { showcase: false } });
+		const off = await h.call('POST', '/v1/elements/showcase/actions/refresh', { key: h.pk, body: {} });
+		expect(off.status).toBe(403);
+		expect(off.json.type).toContain('element_disabled');
+		await h.entitle();
 	});
 
 	it('refuses disabled elements in Mode C (403) and keys of other origins', async () => {

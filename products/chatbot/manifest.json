@@ -30,7 +30,9 @@
 		"offlineGrace": "PT24H"
 	},
 	"scopes": ["events.subscribe:order.*@1", "events.subscribe:customer.*@1"],
-	"requires": { "resources": ["database"] },
+	"requires": {
+		"resources": ["database"]
+	},
 	"events": {
 		"consumes": ["order.*@1", "customer.*@1"],
 		"publishes": [
@@ -42,6 +44,9 @@
 			"chatbot.note_created@1"
 		]
 	},
+	"budget": {
+		"shared": 4
+	},
 	"elements": [
 		{
 			"key": "window",
@@ -51,32 +56,61 @@
 			"stateful": true,
 			"price": {
 				"hourly": 400,
-				"metered": [{ "unit": "conversation", "perUnit": 1, "per": 1, "included": { "starter": 300, "pro": 3000 } }]
+				"metered": [
+					{
+						"unit": "conversation",
+						"perUnit": 1,
+						"per": 1,
+						"included": {
+							"starter": 300,
+							"pro": 3000
+						}
+					}
+				]
 			},
-			"budget": { "js": 20 },
+			"budget": {
+				"js": 7
+			},
 			"dependsOn": [],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/window.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/window.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"customFields": ["conversation"],
 			"experiments": true,
-			"api": { "resources": ["conversations"] },
+			"api": {
+				"resources": ["conversations"]
+			},
 			"headless": "headless/window.js#createWindow",
 			"renderer": "ui/window.js#render",
 			"variants": ["bubble", "side_panel", "full_screen_mobile"],
 			"slots": ["header", "before_messages", "after_messages", "empty", "footer"],
-			"a11y": { "role": "dialog", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "dialog",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "launcher",
 			"name": "Launcher",
 			"description": "The floating chat button: position, offset, size, icon, label, pulse, unread badge, hide rules and open triggers (delay, scroll, exit intent, idle, selector click).",
 			"modes": ["A", "B"],
-			"price": { "hourly": 100 },
-			"budget": { "js": 8 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 3
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/launcher.features.json" },
+			"features": {
+				"$ref": "schemas/launcher.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"experiments": true,
@@ -84,7 +118,12 @@
 			"renderer": "ui/launcher.js#render",
 			"variants": ["round", "pill"],
 			"slots": ["icon", "label"],
-			"a11y": { "role": "button", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "button",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "ai_replies",
@@ -94,17 +133,35 @@
 			"stateful": true,
 			"price": {
 				"hourly": 500,
-				"metered": [{ "unit": "ai_token", "perUnit": 1, "per": 1000, "included": { "starter": 250000, "pro": 2500000 } }]
+				"metered": [
+					{
+						"unit": "ai_token",
+						"perUnit": 1,
+						"per": 1000,
+						"included": {
+							"starter": 250000,
+							"pro": 2500000
+						}
+					}
+				]
 			},
-			"budget": { "js": 0 },
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"requires": { "resources": ["database", "ai"] },
-			"features": { "$ref": "schemas/ai_replies.features.json" },
+			"requires": {
+				"resources": ["database", "ai"]
+			},
+			"features": {
+				"$ref": "schemas/ai_replies.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": false,
 			"rules": ["forbidden_topics"],
 			"experiments": true,
-			"api": { "resources": ["assistant"] },
+			"api": {
+				"resources": ["assistant"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -114,13 +171,23 @@
 			"description": "FAQ entries and web pages (fetched safely, chunked into the merchant database) retrieved by keyword relevance (BM25) to ground AI answers; per-source priority, refresh and a configurable \"don't know\" behaviour.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 200 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 200
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["ai_replies"],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/knowledge.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/knowledge.features.json"
+			},
 			"strings": "strings/en.json",
-			"api": { "resources": ["knowledge-entries", "knowledge-sources", "knowledge"] },
+			"api": {
+				"resources": ["knowledge-entries", "knowledge-sources", "knowledge"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -130,14 +197,22 @@
 			"description": "Visual-builder-ready conversation graphs: message, question, buttons, form, condition (rules@1), action, AI step and handoff nodes with variables and triggers (start, keyword, page, event).",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 200 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 200
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/flows.features.json" },
+			"features": {
+				"$ref": "schemas/flows.features.json"
+			},
 			"strings": "strings/en.json",
 			"rules": ["condition"],
 			"experiments": true,
-			"api": { "resources": ["flows"] },
+			"api": {
+				"resources": ["flows"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -149,14 +224,30 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200,
-				"metered": [{ "unit": "tool_call", "perUnit": 1, "per": 10, "included": { "starter": 500, "pro": 5000 } }]
+				"metered": [
+					{
+						"unit": "tool_call",
+						"perUnit": 1,
+						"per": 10,
+						"included": {
+							"starter": 500,
+							"pro": 5000
+						}
+					}
+				]
 			},
-			"budget": { "js": 0 },
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/tools.features.json" },
+			"features": {
+				"$ref": "schemas/tools.features.json"
+			},
 			"strings": "strings/en.json",
 			"hooks": ["beforeToolCall", "afterToolCall"],
-			"api": { "resources": ["tools"] },
+			"api": {
+				"resources": ["tools"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -166,13 +257,21 @@
 			"description": "Human agents and teams: assignment (manual, round-robin, least loaded, rules), working hours, SLAs with breach tracking, statuses, priorities, tags, canned replies, internal notes and snooze — in the dashboard, headless or by API.",
 			"modes": ["B", "C"],
 			"stateful": true,
-			"price": { "hourly": 400 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 400
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/inbox.features.json" },
+			"features": {
+				"$ref": "schemas/inbox.features.json"
+			},
 			"strings": "strings/en.json",
 			"rules": ["assignment"],
-			"api": { "resources": ["agents", "inbox"] },
+			"api": {
+				"resources": ["agents", "inbox"]
+			},
 			"headless": "headless/inbox.js#createInbox",
 			"renderer": null
 		},
@@ -182,13 +281,21 @@
 			"description": "When the conversation goes to a person (escalation phrases, a rules@1 condition, repeated AI failures, a flow or the AI itself), to which team, what the customer sees, the offline fallback and when the AI may resume.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/handoff.features.json" },
+			"features": {
+				"$ref": "schemas/handoff.features.json"
+			},
 			"strings": "strings/en.json",
 			"rules": ["when"],
-			"api": { "resources": ["handoffs"] },
+			"api": {
+				"resources": ["handoffs"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -198,20 +305,33 @@
 			"description": "Targeted messages by rule (page, cart value, returning visitor, time) with frequency caps and dismissal memory.",
 			"modes": ["A", "B", "C"],
 			"stateful": true,
-			"price": { "hourly": 150 },
-			"budget": { "js": 8 },
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 2
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/proactive.features.json" },
+			"features": {
+				"$ref": "schemas/proactive.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"rules": ["when"],
 			"experiments": true,
-			"api": { "resources": ["proactive"] },
+			"api": {
+				"resources": ["proactive"]
+			},
 			"headless": "headless/proactive.js#createProactive",
 			"renderer": "ui/proactive.js#render",
 			"variants": ["teaser"],
 			"slots": ["before", "after"],
-			"a11y": { "role": "status", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "status",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "lead_capture",
@@ -219,14 +339,22 @@
 			"description": "Collect contact details when nobody is available (or always): configurable fields, consent, stored in the merchant database and published as chatbot.lead_captured@1.",
 			"modes": ["B", "C"],
 			"stateful": true,
-			"price": { "hourly": 150 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 150
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/lead_capture.features.json" },
+			"features": {
+				"$ref": "schemas/lead_capture.features.json"
+			},
 			"strings": "strings/en.json",
 			"customFields": ["lead"],
 			"experiments": true,
-			"api": { "resources": ["leads"] },
+			"api": {
+				"resources": ["leads"]
+			},
 			"headless": "headless/leadForm.js#createLeadForm",
 			"renderer": null
 		},
@@ -236,13 +364,21 @@
 			"description": "Customer satisfaction: rating scale, when it is asked, an optional comment and the target score.",
 			"modes": ["B", "C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/csat.features.json" },
+			"features": {
+				"$ref": "schemas/csat.features.json"
+			},
 			"experiments": true,
 			"strings": "strings/en.json",
-			"api": { "resources": ["ratings"] },
+			"api": {
+				"resources": ["ratings"]
+			},
 			"headless": "headless/csat.js#createCsat",
 			"renderer": null
 		},
@@ -252,12 +388,20 @@
 			"description": "Retention of conversations and messages (TTL), transcript export as JSON or text for the merchant and, optionally, the customer.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/transcripts.features.json" },
+			"features": {
+				"$ref": "schemas/transcripts.features.json"
+			},
 			"strings": "strings/en.json",
-			"api": { "resources": ["transcripts"] },
+			"api": {
+				"resources": ["transcripts"]
+			},
 			"headless": null,
 			"renderer": null
 		},
@@ -267,12 +411,20 @@
 			"description": "PII redaction in and out (cards, IBANs, e-mails, phones, IPs), the leak filter for AI replies (secrets, prompt internals), a link policy and blocked terms.",
 			"modes": ["C"],
 			"stateful": true,
-			"price": { "hourly": 100 },
-			"budget": { "js": 0 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
 			"dependsOn": ["window"],
-			"features": { "$ref": "schemas/moderation.features.json" },
+			"features": {
+				"$ref": "schemas/moderation.features.json"
+			},
 			"strings": "strings/en.json",
-			"api": { "resources": ["moderation"] },
+			"api": {
+				"resources": ["moderation"]
+			},
 			"headless": null,
 			"renderer": null
 		}
@@ -306,7 +458,10 @@
 			]
 		}
 	],
-	"priceBook": { "version": "2026-10-01", "effectiveFrom": "2026-10-01T00:00:00Z" },
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
 	"trialHours": 48,
 	"retention": {
 		"conversations": "P365D",

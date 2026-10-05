@@ -34,6 +34,7 @@ import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
 import { PageProblem } from './common.js';
 import { ConfigurePanel, ExperimentsPanel, SchedulesPanel, diffLine } from './configure.js';
+import { TextsPanel } from './texts.js';
 import { PlanComparison } from './products.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -268,6 +269,9 @@ export function SubscriptionView(props) {
 											{avail === 'unavailable' ? <Badge tone="warning">Not in plan</Badge> : null}
 											{el.dependsOn.length > 0 ? <span>Needs {el.dependsOn.join(', ')}</span> : null}
 											{el.requires.length > 0 ? <span>Uses your {el.requires.join(', ')}</span> : null}
+											{(el.optionalResources ?? []).length > 0 ? (
+												<span>Can use your {el.optionalResources.join(', ')}</span>
+											) : null}
 											{locked ? <span>Set by admin</span> : null}
 										</span>
 									}
@@ -514,6 +518,11 @@ export function SubscriptionView(props) {
 								readOnly={!live}
 							/>
 						),
+					},
+					{
+						id: 'texts',
+						label: 'Texts',
+						content: <TextsPanel merchantId={merchantId} website={website} product={product} readOnly={!live} />,
 					},
 					{ id: 'plan', label: 'Plan', content: planPanel },
 					{

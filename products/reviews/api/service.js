@@ -25,6 +25,7 @@ import { buildReview, dedupeKeyOf, submissionRefusal } from '../core/reviews.js'
 import { productJsonLd, selectReviews } from '../core/structured.js';
 import { displayName, sanitizeText } from '../core/text.js';
 import { DAY_MS, MINUTE_MS, inWindow, iso, toMs } from '../core/time.js';
+import { STALE_BACKSTOP_MS } from '../adapters/db.js';
 import { customerRequestView, ownerReview, publicReview, questionView, requestView } from '../core/views.js';
 
 /** @typedef {import('../adapters/db.js').Repositories} Repositories */
@@ -54,6 +55,9 @@ export const EVENTS = Object.freeze({ submitted: 'reviews.submitted@1', approved
 
 /** Unit metered per collected review. */
 export const METERED_UNIT = 'review';
+
+/** Grace after a photo slot's `staleAt` before the sweep deletes it (covers submissions in flight). */
+const SWEEP_GRACE_MS = 10 * MINUTE_MS;
 
 /** How long a claimed request delivery is held before another run may retry it. */
 const CLAIM_LEASE_MS = 15 * MINUTE_MS;
@@ -219,7 +223,9 @@ export const createReviewsService = ({
 				customerId,
 				status: 'pending',
 				reviewId: null,
-				purgeAt: new Date(now() + retention.photos * DAY_MS),
+				// past `staleAt` the hourly job deletes the object and the slot; the TTL on `purgeAt` is only a backstop
+				staleAt: new Date(now() + retention.photos * DAY_MS),
+				purgeAt: new Date(now() + retention.photos * DAY_MS + STALE_BACKSTOP_MS),
 			});
 		return {
 			ok: true,
@@ -232,6 +238,21 @@ export const createReviewsService = ({
 			},
 		};
 	};
+
+	/**
+	 * A pending slot past its `staleAt` can no longer be attached (the sweep may delete its object at any time).
+	 * @param {{ staleAt?: unknown }} photo
+	 */
+	const isStale = (photo) =>
+		photo.staleAt !== undefined && photo.staleAt !== null && new Date(/** @type {any} */ (photo.staleAt)).getTime() <= now();
+
+	/**
+	 * Delete the objects and records of this website's stale photo slots (hourly job; bounded and idempotent).
+	 * @param {Site} site
+	 * @returns {Promise<{ scanned: number, deleted: number, missing: number, failed: number }>}
+	 */
+	const sweepPhotos = (site) =>
+		site.repos.photos.sweepStale({ storage: () => storage(site.websiteId), olderThanMs: SWEEP_GRACE_MS });
 
 	/**
 	 * Check photos before they are attached: pending, owned by the submitter, uploaded, of an allowed type and exactly the
@@ -260,7 +281,7 @@ export const createReviewsService = ({
 				reason: 'photo_invalid',
 				errors: [{ path: `/photoIds/${index}`, code: 'photo_invalid' }],
 			};
-			if (!photo || photo.status !== 'pending' || (photo.customerId ?? null) !== customerId) return invalid;
+			if (!photo || photo.status !== 'pending' || (photo.customerId ?? null) !== customerId || isStale(photo)) return invalid;
 			/** @type {{ exists: boolean, size?: number, contentType?: string }} */
 			let head;
 			try {
@@ -1167,6 +1188,7 @@ export const createReviewsService = ({
 	};
 
 	return Object.freeze({
+		sweepPhotos,
 		submit,
 		approve,
 		reject,

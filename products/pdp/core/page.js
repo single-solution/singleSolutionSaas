@@ -151,10 +151,16 @@ export const stickyVisible = (rules, view) => {
  * on this website (not subscribed, switched off or failed), `active` when mounted, `waiting` while it is pending.
  * @param {unknown} list
  * @param {string} key
+ * @param {string} [product] the delivering product (entries of another product with the same key do not count)
  * @returns {'absent' | 'waiting' | 'active'}
  */
-export const elementStatus = (list, key) => {
-	const entry = (Array.isArray(list) ? list : []).find((candidate) => isObject(candidate) && candidate.key === key);
+export const elementStatus = (list, key, product) => {
+	const entry = (Array.isArray(list) ? list : []).find(
+		(candidate) =>
+			isObject(candidate) &&
+			candidate.key === key &&
+			(product === undefined || candidate.product === undefined || candidate.product === product),
+	);
 	if (!entry || entry.status === 'failed') return 'absent';
 	return entry.status === 'mounted' ? 'active' : 'waiting';
 };

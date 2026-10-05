@@ -1,7 +1,8 @@
 /**
- * The publishable pack: manifest validity, string catalogs, the esbuild bundle (entries + shared chunks) and the
- * budgets the Portal enforces (each element's entry modules ≤ its `budget.js` in gzip; the default plan fits the
- * default website budget next to the Loader).
+ * The publishable pack (`ss pack build`, F.18): manifest validity, the product string catalog sliced per element, the
+ * esbuild bundle (entries + shared chunks) and the budgets the Portal enforces, measured as it measures them (each
+ * element's own entry modules ≤ its `budget.js`, the shared chunks ≤ `budget.shared`; the default plan fits the default
+ * website budget next to the Loader).
  */
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,7 +11,8 @@ import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateManifest } from '@ss/contracts';
-import { BUNDLE_FORMAT, ROOT, buildPack, descriptorOf, loadManifest, writePack } from '../pack.js';
+import { measurePack } from '@ss/cli/pack';
+import { BUNDLE_FORMAT, buildPack, descriptorOf, loadManifest, writePack } from '../pack.js';
 import { flush, page, strings } from './helpers.js';
 
 /** Loader + events client gzip (F.7) — the website budget's fixed part. */
@@ -68,16 +70,15 @@ describe('manifest and strings', () => {
 		}
 	});
 
-	it('keeps strings/en.json the union of the per-element catalogs', async () => {
+	it('slices strings/en.json per element: every key belongs to exactly one element', async () => {
 		const manifest = await loadManifest();
-		/** @type {Record<string, string>} */
-		const union = {};
-		for (const element of manifest.elements) {
-			const catalog = JSON.parse(await readFile(path.join(ROOT, element.strings), 'utf8'));
-			for (const key of Object.keys(catalog)) expect(key.startsWith(`${element.key}.`)).toBe(true);
-			Object.assign(union, catalog);
+		for (const key of Object.keys(strings)) {
+			const owners = manifest.elements.filter((/** @type {any} */ e) =>
+				e.stringKeys.some((/** @type {string} */ p) => (p.endsWith('*') ? key.startsWith(p.slice(0, -1)) : key === p)),
+			);
+			expect(owners.length, key).toBe(1);
 		}
-		expect(union).toEqual(strings);
+		expect(manifest.elements.every((/** @type {any} */ e) => e.strings === undefined)).toBe(true);
 	});
 });
 
@@ -87,8 +88,8 @@ describe('pack build', () => {
 		for (const element of pack.manifest.elements) {
 			expect(paths).toContain(fileOf(element.headless));
 			expect(paths).toContain(fileOf(element.renderer));
-			expect(paths).toContain(element.strings);
 		}
+		expect(paths).toContain('strings/en.json');
 		expect(paths.some((file) => file.startsWith('chunks/'))).toBe(true);
 		for (const asset of pack.assets) {
 			expect(asset.path).toMatch(/^[A-Za-z0-9_-][A-Za-z0-9_.-]*(\/[A-Za-z0-9_-][A-Za-z0-9_.-]*)*$/);
@@ -117,18 +118,19 @@ describe('pack build', () => {
 	it('keeps every element within its budget and the default plan within the website budget', () => {
 		/** @type {Record<string, number>} */
 		const budgets = {};
+		const measured = measurePack(pack);
 		for (const element of pack.manifest.elements) {
-			const files = [...new Set([fileOf(element.headless), fileOf(element.renderer)])];
-			const bytes = files.reduce((sum, file) => sum + gzip(file), 0);
-			expect(bytes, `${element.key} ships ${bytes} B gzip`).toBeLessThanOrEqual(element.budget.js * 1024);
+			const own = measured.elements.find((e) => e.key === element.key);
+			expect(own?.gzipBytes, `${element.key} ships ${own?.gzipBytes} B gzip`).toBeLessThanOrEqual(element.budget.js * 1024);
 			budgets[element.key] = element.budget.js;
 		}
+		expect(measured.shared.gzipBytes).toBeLessThanOrEqual(pack.manifest.budget.shared * 1024);
 		const plan = pack.manifest.plans[0];
 		const declared = plan.elements.reduce(
 			(/** @type {number} */ sum, /** @type {string} */ key) => sum + (budgets[key] ?? 0),
 			0,
 		);
-		expect(LOADER_KB + declared).toBeLessThanOrEqual(WEBSITE_KB);
+		expect(LOADER_KB + declared + pack.manifest.budget.shared).toBeLessThanOrEqual(WEBSITE_KB);
 		// what a page with every element really downloads (entries + shared chunks), far below the declarations
 		const everything = pack.assets
 			.filter((asset) => asset.path.endsWith('.js'))

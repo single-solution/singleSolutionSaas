@@ -124,6 +124,47 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 	const featureValidators = new WeakMap();
 
 	/**
+	 * The schema Ajv compiles for a feature schema: `placement` features become a `$ref` to the placement v1 schema
+	 * (members narrowed by `x-placement.members`).
+	 * @param {import('./types.js').FeatureSchema} featureSchema
+	 */
+	const compilable = (featureSchema) => {
+		const properties = /** @type {Record<string, Record<string, unknown>>} */ ({ ...featureSchema.properties });
+		let changed = false;
+		for (const [name, node] of Object.entries(properties)) {
+			if (!isPlainObject(node) || node['x-kind'] !== 'placement') continue;
+			const rest = Object.fromEntries(Object.entries(node).filter(([key]) => key !== 'properties'));
+			const members = isPlainObject(node['x-placement']) ? node['x-placement'].members : undefined;
+			properties[name] = {
+				...rest,
+				$ref: SCHEMA_IDS.placement,
+				...(Array.isArray(members) ? { propertyNames: { enum: [...members] } } : {}),
+			};
+			changed = true;
+		}
+		return changed ? { ...featureSchema, properties } : featureSchema;
+	};
+
+	/**
+	 * Semantic placement checks (time zones, schedule windows) of the placement values in a configuration.
+	 * @param {import('./types.js').FeatureSchema} featureSchema
+	 * @param {unknown} value
+	 * @returns {ValidationProblem[]}
+	 */
+	const placementProblems = (featureSchema, value) => {
+		if (!isPlainObject(value)) return [];
+		/** @type {ValidationProblem[]} */
+		const out = [];
+		for (const [name, node] of Object.entries(featureSchema.properties ?? {})) {
+			if (!isPlainObject(node) || node['x-kind'] !== 'placement' || !isPlainObject(value[name])) continue;
+			const prefix = `/${escapePointerToken(name)}`;
+			for (const problem of checkPlacement(/** @type {import('./types.js').Placement} */ (value[name])))
+				out.push({ ...problem, path: `${prefix}${problem.path}` });
+		}
+		return out;
+	};
+
+	/**
 	 * Compiled validator for an id, or undefined for unknown or malformed ids.
 	 * @param {string} schemaId
 	 */
@@ -157,11 +198,14 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 	const validateFeatureConfig = (featureSchema, value) => {
 		let fn = featureValidators.get(featureSchema);
 		if (fn === undefined) {
-			fn = ajv.compile(/** @type {import('ajv').AnySchemaObject} */ (featureSchema));
+			fn = ajv.compile(/** @type {import('ajv').AnySchemaObject} */ (compilable(featureSchema)));
 			featureValidators.set(featureSchema, fn);
 		}
 		const ok = fn(value);
-		return result(/** @type {Record<string, unknown>} */ (value), ok ? [] : problemsFromAjv(fn.errors));
+		return result(
+			/** @type {Record<string, unknown>} */ (value),
+			ok ? placementProblems(featureSchema, value) : problemsFromAjv(fn.errors),
+		);
 	};
 
 	/** @type {Validator['validateManifest']} */

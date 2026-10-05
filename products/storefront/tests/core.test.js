@@ -269,31 +269,24 @@ describe('core/source', () => {
 		expect(sourceConfig({})).toMatchObject({
 			kind: 'page',
 			url: null,
-			key: null,
+			product: 'catalog',
 			pageId: 'ss-items',
 			currency: null,
 			locale: '',
 		});
 		expect(sourceConfig({ source: 'json' }).kind).toBe('page');
-		const api = sourceConfig({
-			source: 'api',
-			source_url: 'https://catalog.example.com',
-			source_key: 'pk_live_abcdefgh123',
-			currency: 'EUR',
-			locale: 'de-DE',
-			page_data_id: 'my-data',
+		// api sources need no URL and no key: the Loader passes the product's client (F.18)
+		const api = sourceConfig({ source: 'api', currency: 'EUR', locale: 'de-DE', page_data_id: 'my-data' });
+		expect(api).toMatchObject({ kind: 'api', product: 'catalog', currency: 'EUR', locale: 'de-DE', pageId: 'my-data' });
+		expect(api).not.toHaveProperty('key');
+		expect(sourceConfig({ source: 'api', locale: '!!', page_data_id: '1x' }, 'page', 'deals')).toMatchObject({
+			product: 'deals',
+			locale: '',
+			pageId: 'ss-items',
 		});
-		expect(api).toMatchObject({ kind: 'api', key: 'pk_live_abcdefgh123', currency: 'EUR', locale: 'de-DE', pageId: 'my-data' });
-		expect(
-			sourceConfig({
-				source: 'api',
-				source_url: 'https://x.example',
-				source_key: 'sk_live_abcdefgh123',
-				locale: '!!',
-				page_data_id: '1x',
-			}),
-		).toMatchObject({ key: null, locale: '', pageId: 'ss-items' });
-		expect(sourceConfig({}, 'api').kind).toBe('page');
+		expect(sourceConfig({ source: 'api', source_product: 'search' }).product).toBe('search');
+		expect(sourceConfig({ source: 'api', source_product: 'nope' }).product).toBe('catalog');
+		expect(sourceConfig({}, 'api').kind).toBe('api');
 	});
 
 	it('builds product API calls', () => {

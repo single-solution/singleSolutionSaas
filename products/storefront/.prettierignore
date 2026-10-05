@@ -1,5 +1,4 @@
 pnpm-lock.yaml
 coverage
 .next
-headless/bundle
-ui/bundle
+dist

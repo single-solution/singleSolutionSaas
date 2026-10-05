@@ -29,6 +29,7 @@ import { deriveSecret } from '../../infra/config.js';
 import { problem } from '../../infra/http.js';
 import { checkUpload, isAssetPath, sha256Hex } from './core/assets.js';
 import {
+	LANGUAGE_CATALOG,
 	VERSION_PATTERN,
 	bundleData,
 	bundleManifest,
@@ -36,10 +37,11 @@ import {
 	compilePlacement,
 	gzipSize,
 	keyConflicts,
-	parseModuleRef,
+	measureSelected,
 	selectElements,
 	versionedLoader,
 } from './core/compile.js';
+import { checkStringOverride } from './core/strings.js';
 import {
 	MAX_PAGE_BYTES,
 	PREVIEW_TTL_MS,
@@ -52,9 +54,8 @@ import {
 	verifyPreviewToken,
 } from './core/preview.js';
 import { RUNTIME_AUDIENCE, RUNTIME_CORE } from './runtime/generated.js';
-import { ALIASES, ARTEFACTS, ASSETS, PREVIEWS, UI_BUNDLES } from './schema.js';
+import { ALIASES, ARTEFACTS, ASSETS, PREVIEWS, STRINGS, UI_BUNDLES } from './schema.js';
 import { createAssetStorage, withImmutableCache } from './storage.js';
-import { gzipSync } from 'node:zlib';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
@@ -156,6 +157,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 	const aliases = ctx.collection(ALIASES);
 	const previews = ctx.collection(PREVIEWS);
 	const uiBundles = ctx.collection(UI_BUNDLES);
+	const stringOverrides = ctx.collection(STRINGS);
 	const identity = () => ctx.service('identity');
 	const catalog = () => ctx.service('catalog');
 	const commerce = () => ctx.service('commerce');
@@ -188,7 +190,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 		if (!isId(websiteId, 'web')) return fail('not_found', 'No such website.');
 		const website = await identity().getWebsite(websiteId);
 		if (merchantId !== null && website.merchantId !== merchantId) return fail('not_found', 'No such website.');
-		return /** @type {{ websiteId: string, merchantId: string, domain: string, env: 'live' | 'test', status: string }} */ (
+		return /** @type {{ websiteId: string, merchantId: string, domain: string, env: 'live' | 'test', status: string, language?: string | null }} */ (
 			website
 		);
 	};
@@ -479,30 +481,32 @@ export const createDeliveryService = (ctx, options = {}) => {
 	// compiler
 
 	/**
-	 * Load stored module assets (gzip sizes of the JS modules, parsed string catalogs) into a source's maps.
+	 * Load stored assets into a source's maps: every JS module (bytes and gzip size — element entries and the shared
+	 * chunks they import, F.18), the product string catalogs `strings/<lang>.json` and any per-element catalog.
 	 * @param {{ appId: string, records: Array<Record<string, any>>, elements: ReadonlyArray<{ key: string, headless?: unknown,
 	 *   renderer?: unknown, strings?: unknown }>, stored: Map<string, { sha256: string, size: number }>,
-	 *   strings: Map<string, Record<string, unknown>>, gzipBytes: Map<string, number> }} input
+	 *   strings: Map<string, Record<string, unknown>>, gzipBytes: Map<string, number>, files: Map<string, Uint8Array> }} input
 	 * @param {Warning[]} warnings
 	 */
-	const loadModules = async ({ appId, records, elements, stored, strings, gzipBytes }, warnings) => {
-		const byPath = new Map(records.map((r) => [String(r.path), r]));
+	const loadModules = async ({ appId, records, elements, stored, strings, gzipBytes, files }, warnings) => {
 		for (const r of records) stored.set(String(r.path), { sha256: String(r.sha256), size: Number(r.size) });
-		for (const element of elements) {
-			for (const ref of [parseModuleRef(element.headless), parseModuleRef(element.renderer)]) {
-				const record = ref ? byPath.get(ref.path) : undefined;
-				if (!ref || !record || gzipBytes.has(ref.path)) continue;
+		const catalogs = new Set(elements.map((element) => element.strings).filter((path) => typeof path === 'string'));
+		for (const record of records) {
+			const path = String(record.path);
+			if (/\.m?js$/.test(path)) {
 				const object = await store().get(String(record.storageKey));
-				if (object) gzipBytes.set(ref.path, gzipSync(object.body, { level: 9 }).byteLength);
-				else stored.delete(ref.path);
-			}
-			const record = typeof element.strings === 'string' ? byPath.get(element.strings) : undefined;
-			if (record && !strings.has(String(record.path))) {
+				if (!object) {
+					stored.delete(path);
+					continue;
+				}
+				files.set(path, object.body);
+				gzipBytes.set(path, gzipSize(object.body));
+			} else if (LANGUAGE_CATALOG.test(path) || catalogs.has(path)) {
 				const object = await store().get(String(record.storageKey));
 				try {
-					if (object) strings.set(String(record.path), JSON.parse(Buffer.from(object.body).toString('utf8')));
+					if (object) strings.set(path, JSON.parse(Buffer.from(object.body).toString('utf8')));
 				} catch {
-					warnings.push({ code: 'strings_invalid', appId, key: element.key, detail: `${record.path} is not JSON` });
+					warnings.push({ code: 'strings_invalid', appId, detail: `${path} is not JSON` });
 				}
 			}
 		}
@@ -527,13 +531,15 @@ export const createDeliveryService = (ctx, options = {}) => {
 		const strings = new Map();
 		/** @type {Map<string, number>} */
 		const gzipBytes = new Map();
+		/** @type {Map<string, Uint8Array>} */
+		const files = new Map();
 		/** @type {import('./core/compile.js').UiBundle | null} */
 		let ui = null;
 		if (app.kind === 'pack') {
 			/** @type {Array<Record<string, any>>} */
 			const records = await assets.find({ appId, version: manifestVersion, bundle: { $exists: false } }).toArray();
 			const elements = manifest.elements.filter((element) => element.modes.includes('A'));
-			await loadModules({ appId, records, elements, stored, strings, gzipBytes }, warnings);
+			await loadModules({ appId, records, elements, stored, strings, gzipBytes, files }, warnings);
 		} else {
 			// the newest ready UI bundle, restricted to the mode-A elements of the pinned manifest
 			const [bundle] = await uiBundles.find({ appId, status: 'ready' }).sort({ version: -1 }).limit(1).toArray();
@@ -543,7 +549,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 				const elements = (bundle.elements ?? []).filter((/** @type {{ key: string }} */ e) => modeA.has(e.key));
 				/** @type {Array<Record<string, any>>} */
 				const records = await assets.find({ appId, version: Number(bundle.version), bundle: 'ui' }).toArray();
-				await loadModules({ appId, records, elements, stored, strings, gzipBytes }, warnings);
+				await loadModules({ appId, records, elements, stored, strings, gzipBytes, files }, warnings);
 				ui = { version: Number(bundle.version), elements: new Map(elements.map((e) => [e.key, e])) };
 			}
 		}
@@ -558,6 +564,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			assets: stored,
 			strings,
 			gzipBytes,
+			files,
 			ui,
 		};
 	};
@@ -621,10 +628,14 @@ export const createDeliveryService = (ctx, options = {}) => {
 	};
 
 	/**
-	 * The alias record of a website, created on first use, with an active public key for the bundle.
+	 * The alias record of a website, created on first use, with an active public key for the bundle. The key holds
+	 * {@link LOADER_SCOPES} plus the read scopes of the products pack elements read (`manifest.reads`, F.18); it is
+	 * re-issued when it is no longer active or lacks a scope the bundle needs.
 	 * @param {{ websiteId: string, merchantId: string, env: 'live' | 'test' }} website
+	 * @param {ReadonlyArray<string>} [readScopes]
 	 */
-	const ensureAlias = async (website) => {
+	const ensureAlias = async (website, readScopes = []) => {
+		const scopes = [...new Set([...LOADER_SCOPES, ...[...readScopes].sort()])];
 		const _id = `${website.websiteId}:${website.env}`;
 		await aliases.updateOne(
 			{ _id },
@@ -651,19 +662,25 @@ export const createDeliveryService = (ctx, options = {}) => {
 				)
 			: [];
 		const active = doc.publicKey && keys.some((k) => k.keyId === doc.publicKey.keyId && k.status === 'active');
-		if (!active) {
+		/** @type {string[]} */
+		const held = Array.isArray(doc.publicKey?.scopes) ? doc.publicKey.scopes : [...LOADER_SCOPES];
+		const covered = scopes.every((scope) => held.includes(scope));
+		if (!active || !covered) {
+			const previous = active ? doc.publicKey.keyId : null;
 			const issued = await identity().issueKey({
 				websiteId: website.websiteId,
 				merchantId: website.merchantId,
 				kind: 'pk',
-				scopes: [...LOADER_SCOPES],
+				scopes,
 				actor: SYSTEM,
 				meta: { purpose: 'loader' },
 			});
 			const updated = await aliases.findOneAndUpdate(
 				{ _id, 'publicKey.keyId': doc.publicKey?.keyId ?? null },
-				{ $set: { publicKey: { keyId: issued.keyId, key: issued.key } } },
+				{ $set: { publicKey: { keyId: issued.keyId, key: issued.key, scopes } } },
 			);
+			// a key superseded for its scopes stays active: browsers may still hold bundles (and aliases) that embed it
+			void previous;
 			if (updated) doc = updated;
 			else {
 				await identity()
@@ -738,16 +755,31 @@ export const createDeliveryService = (ctx, options = {}) => {
 	const build = async ({ websiteId, merchantId = null, candidates = null }) => {
 		store();
 		const website = await loadWebsite(websiteId, merchantId);
-		const alias = await ensureAlias(website);
 		/** @type {Warning[]} */
 		const warnings = [];
 		const sources = website.status === 'active' ? await gatherSources(website, candidates?.elements ?? [], warnings) : [];
-		const selection = selectElements(sources, candidates);
+		const overrides = await overridesFor(website.websiteId);
+		const selection = selectElements(sources, candidates, {
+			language: typeof website.language === 'string' ? website.language : null,
+			overrides,
+		});
 		warnings.push(...selection.warnings);
 		const conflicts = keyConflicts(selection.selected);
-		if (conflicts.length > 0) fail('conflict', 'Two products deliver the same element key.', { errors: conflicts });
+		if (conflicts.length > 0) fail('conflict', 'A product delivers the same element twice.', { errors: conflicts });
+		const measured = measureSelected(selection.selected, sources);
+		for (const shared of measured.shared)
+			if (shared.declaredKb === null)
+				warnings.push({
+					code: 'shared_undeclared',
+					appId: shared.appId,
+					detail: `the elements share ${Math.ceil(shared.gzipBytes / 102.4) / 10} KB gzip of chunks but the product declares no budget.shared`,
+				});
+		const alias = await ensureAlias(
+			website,
+			measured.selected.flatMap((s) => s.readScopes ?? []),
+		);
 		const prepared = [];
-		for (const selected of selection.selected) {
+		for (const selected of measured.selected) {
 			const placed = compilePlacement(selected.placement);
 			if (!placed.ok) {
 				warnings.push({ code: placed.code, appId: selected.appId, key: selected.key, detail: placed.detail });
@@ -766,11 +798,16 @@ export const createDeliveryService = (ctx, options = {}) => {
 			elements: prepared,
 		});
 		const { version, text } = versionedLoader({ data, core: runtime.core, audience });
-		const budget = checkBudget({ loaderGzipBytes: gzipSize(text), limitKb: ctx.config.delivery.budgetKb, elements: prepared });
+		const budget = checkBudget({
+			loaderGzipBytes: gzipSize(text),
+			limitKb: ctx.config.delivery.budgetKb,
+			elements: prepared,
+			shared: measured.shared,
+		});
 		if (!budget.ok)
 			fail(
 				'delivery_budget_exceeded',
-				`The bundle needs ${budget.report.totalKb} KB gzip (loader ${budget.report.loaderKb} KB + elements ${budget.report.elementsKb} KB); the website budget is ${budget.report.limitKb} KB.`,
+				`The bundle needs ${budget.report.totalKb} KB gzip (loader ${budget.report.loaderKb} KB + elements ${budget.report.elementsKb} KB + shared ${budget.report.sharedKb} KB); the website budget is ${budget.report.limitKb} KB.`,
 				{ errors: budget.offenders },
 			);
 		const manifest = bundleManifest({
@@ -786,6 +823,99 @@ export const createDeliveryService = (ctx, options = {}) => {
 			warnings,
 		});
 		return { website, alias, version, text, manifest };
+	};
+
+	// ------------------------------------------------------------------------------------------------------------
+	// per-website string overrides (F.18)
+
+	/**
+	 * A website's string overrides for the compiler: `<appId>:<element key>` → language (or `*`) → strings.
+	 * @param {string} websiteId
+	 * @returns {Promise<Map<string, Record<string, Record<string, string>>>>}
+	 */
+	const overridesFor = async (websiteId) => {
+		/** @type {Array<Record<string, any>>} */
+		const docs = await stringOverrides.find({ websiteId }).toArray();
+		return new Map(docs.map((doc) => [`${doc.appId}:${doc.element}`, isObject(doc.languages) ? doc.languages : {}]));
+	};
+
+	/** @param {Record<string, any>} doc */
+	const overrideView = (doc) => ({
+		appId: doc.appId,
+		element: doc.element,
+		languages: isObject(doc.languages) ? doc.languages : {},
+		updatedAt: iso(doc.updatedAt),
+	});
+
+	/**
+	 * The merchant's string overrides of a website (`GET …/delivery/strings`).
+	 * @param {{ merchantId: string, websiteId: string }} input
+	 */
+	const listStringOverrides = async ({ merchantId, websiteId }) => {
+		await loadWebsite(websiteId, merchantId);
+		/** @type {Array<Record<string, any>>} */
+		const docs = await stringOverrides.find({ websiteId }).sort({ appId: 1, element: 1 }).toArray();
+		return { items: docs.map(overrideView) };
+	};
+
+	/**
+	 * Replace one element's string overrides for one language (`PUT …/delivery/strings/:appId/:element/:language`,
+	 * `language` a BCP 47 tag or `*` for every language; an empty object removes them) and recompile the website.
+	 * @param {{ merchantId: string, websiteId: string, appId: string, element: string, language: string, body: unknown,
+	 *   actor: Actor, requestId?: string | null, ip?: string | null }} input
+	 */
+	const setStringOverride = async ({
+		merchantId,
+		websiteId,
+		appId,
+		element,
+		language,
+		body,
+		actor,
+		requestId = null,
+		ip = null,
+	}) => {
+		const website = await loadWebsite(websiteId, merchantId);
+		const checked = checkStringOverride({ appId, element, language, body });
+		if (!checked.ok) return fail('validation_failed', 'The string override is invalid.', { errors: checked.errors });
+		const subscribed = /** @type {Array<{ appId: string, cancelledAt: string | null }>} */ (
+			await commerce().subscriptionsForWebsite(website.websiteId)
+		).some((sub) => sub.appId === appId && !sub.cancelledAt);
+		if (!subscribed) return fail('not_found', 'The website has no subscription to this product.');
+		const manifest = /** @type {import('@ss/contracts').Manifest} */ (
+			await catalog().getManifest(appId, (await catalog().getApp(appId)).currentVersion)
+		);
+		if (!manifest.elements.some((e) => e.key === element && e.modes.includes('A')))
+			return fail('not_found', 'The product has no drop-in element with this key.');
+		const _id = `${website.websiteId}:${appId}:${element}`;
+		const before = await stringOverrides.findOne({ _id });
+		const languages = { ...(isObject(before?.languages) ? before.languages : {}) };
+		if (Object.keys(checked.strings).length === 0) delete languages[language];
+		else languages[language] = checked.strings;
+		if (Object.keys(languages).length === 0) await stringOverrides.deleteOne({ _id });
+		else
+			await stringOverrides.updateOne(
+				{ _id },
+				{
+					$set: { websiteId: website.websiteId, merchantId: website.merchantId, appId, element, languages },
+				},
+				{ upsert: true },
+			);
+		await audit(
+			actor,
+			'delivery.strings_updated',
+			{ type: 'website', id: website.websiteId, merchantId: website.merchantId, websiteId: website.websiteId },
+			{
+				before: { language, keys: Object.keys(before?.languages?.[language] ?? {}) },
+				after: { language, keys: Object.keys(checked.strings) },
+				requestId,
+				ip,
+			},
+		);
+		await requestCompile(website.websiteId, { reason: 'strings.updated' }).catch((error) =>
+			ctx.logger.warn('recompile not requested', { websiteId: website.websiteId, error }),
+		);
+		return overrideView({ appId, element, languages, updatedAt: new Date(ctx.now()) });
 	};
 
 	/** @param {Record<string, any>} doc */
@@ -1242,6 +1372,8 @@ export const createDeliveryService = (ctx, options = {}) => {
 		snippet,
 		rollback,
 		createPreview,
+		listStringOverrides,
+		setStringOverride,
 		// developers / staff
 		uploadAsset,
 		// service products (F.16)

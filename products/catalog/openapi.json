@@ -35,9 +35,6 @@
 			"name": "media"
 		},
 		{
-			"name": "media_uploads"
-		},
-		{
 			"name": "import_export"
 		},
 		{
@@ -2337,7 +2334,7 @@
 			"post": {
 				"operationId": "addMedia",
 				"tags": ["media"],
-				"summary": "Attach media to an item by URL or storage key (with media_uploads on, the key must exist in your bucket).",
+				"summary": "Attach media to an item by URL or storage key (with the storage connector connected, the key must exist in your bucket).",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKey"
@@ -2565,7 +2562,7 @@
 		"/v1/media-uploads": {
 			"post": {
 				"operationId": "presignUpload",
-				"tags": ["media_uploads"],
+				"tags": ["media"],
 				"summary": "A presigned PUT into the merchant's own bucket (content-type and content-length are signed). Then POST /v1/media with the returned key.",
 				"requestBody": {
 					"required": true,
@@ -3693,7 +3690,7 @@
 			"get": {
 				"operationId": "dashboardExport",
 				"tags": ["dashboard"],
-				"summary": "CSV export from the dashboard.",
+				"summary": "CSV export from the dashboard (session; the website from X-SS-Website). Prefer the signed link of POST /v1/dashboard/exports:link.",
 				"responses": {
 					"200": {
 						"description": "OK",
@@ -3715,6 +3712,121 @@
 						"session": []
 					}
 				]
+			}
+		},
+		"/v1/dashboard/exports:link": {
+			"post": {
+				"operationId": "dashboardExportLink",
+				"tags": ["dashboard"],
+				"summary": "A signed CSV download link for the dashboard, valid for five minutes, bound to the website, the export kind and its filters.",
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"type": "string",
+							"maxLength": 255
+						}
+					}
+				],
+				"requestBody": {
+					"required": false,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"params": {
+										"type": "object",
+										"maxProperties": 20,
+										"description": "Item filters as for GET /v1/items: q and filter[…] keys, string values ≤ 200 characters",
+										"additionalProperties": {
+											"type": "string",
+											"maxLength": 200
+										}
+									}
+								}
+							},
+							"example": {
+								"params": {
+									"filter[status]": "active"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Download link",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["url", "expiresAt"],
+									"properties": {
+										"url": {
+											"type": "string",
+											"format": "uri"
+										},
+										"expiresAt": {
+											"type": "string",
+											"format": "date-time"
+										}
+									}
+								},
+								"example": {
+									"url": "https://catalog.example.com/v1/dashboard/exports/ex1.eyJ3Ijoi….sig",
+									"expiresAt": "2026-10-01T10:05:00.000Z"
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/exports/{token}": {
+			"get": {
+				"operationId": "dashboardExportDownload",
+				"tags": ["dashboard"],
+				"summary": "Download the CSV of a signed export link (no session or header). 401 when the link is tampered or expired, 403 when import_export is off.",
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"description": "Signed export token (ex1.…)",
+						"schema": {
+							"type": "string",
+							"maxLength": 2048
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "CSV attachment (cache-control: no-store)",
+						"content": {
+							"text/csv": {
+								"schema": {
+									"type": "string"
+								},
+								"example": "item_id,…\r\n"
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
 			}
 		},
 		"/cron/sweep": {

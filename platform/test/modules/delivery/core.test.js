@@ -132,10 +132,22 @@ describe('element selection matrix', () => {
 		expect(defaults.selected[0]?.config).toEqual({ message: 'Free shipping today' });
 	});
 
-	it('reports element key conflicts across products', () => {
+	it('namespaces element keys per product: two products may deliver the same key (F.18)', () => {
 		const other = packSource({ appId: 'app_9123456789abcdefghjkmnpq', slug: 'other-bar' });
-		expect(keyConflicts(selectElements([packSource(), other]).selected)).toEqual([
-			{ path: '/elements/bar', message: 'element key bar is used by notice-bar and other-bar' },
+		const selected = selectElements([packSource(), other]).selected;
+		expect(keyConflicts(selected)).toEqual([]);
+		const data = bundleData({
+			websiteId: 'web_1',
+			env: 'live',
+			version: '',
+			publicKey: 'pk_x',
+			eventsUrl: 'https://p/v1/events',
+			assetBase: 'https://p/w/',
+			elements: selected.map((s) => ({ ...s, compiledPlacement: null })),
+		});
+		expect(data.elements.map((e) => `${e.product}:${e.key}`).sort()).toEqual(['notice-bar:bar', 'other-bar:bar']);
+		expect(keyConflicts([...selected, ...selected.slice(0, 1)])).toEqual([
+			{ path: '/elements/notice-bar:bar', message: 'element notice-bar:bar is delivered twice' },
 		]);
 	});
 });
@@ -209,7 +221,7 @@ describe('compiler helpers', () => {
 		});
 		expect(checkBudget({ loaderGzipBytes: 15 * 1024, limitKb: 60, elements: [el('a', 20), el('b', 25)] })).toEqual({
 			ok: true,
-			report: { limitKb: 60, loaderKb: 15, elementsKb: 45, totalKb: 60 },
+			report: { limitKb: 60, loaderKb: 15, elementsKb: 45, sharedKb: 0, totalKb: 60, shared: [] },
 			offenders: [],
 		});
 		const over = checkBudget({ loaderGzipBytes: 15 * 1024 + 1, limitKb: 60, elements: [el('a', 20), el('b', 25), el('c', 0)] });

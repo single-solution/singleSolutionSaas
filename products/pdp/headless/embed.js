@@ -20,12 +20,24 @@ export const EMBED_TARGETS = Object.freeze({
 	alerts_block: 'capture',
 });
 
+/**
+ * Product of each embed's target: element keys are namespaced per product (F.18, `<product>:<key>`), so an embed
+ * follows its own product's element even when another product delivers the same key.
+ */
+export const EMBED_PRODUCTS = Object.freeze({
+	configurator_embed: 'configurator',
+	deal_pill: 'deals',
+	grade_showcase: 'grades',
+	reviews_block: 'reviews',
+	alerts_block: 'alerts',
+});
+
 const ELEMENT_KEY = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 
 /**
  * The Loader's public element API (`window.SS`), or the merchant's equivalent.
  * @typedef {object} ElementsApi
- * @property {() => ReadonlyArray<{ key: string, status: string }>} list
+ * @property {() => ReadonlyArray<{ key: string, product?: string, status: string }>} list
  * @property {(key: string) => any} get
  * @property {(type: string, handler: (event: unknown) => void) => () => void} [on]
  */
@@ -38,10 +50,12 @@ const createEmbed = (key) => {
 	const factory = ({ config = {}, strings = {}, emit = () => {} }) => {
 		const configured = text(config.target, 40);
 		const target = ELEMENT_KEY.test(configured) ? configured : EMBED_TARGETS[key];
+		const product = EMBED_PRODUCTS[key];
 		const t = createTranslator(strings);
 		const store = createStore({
 			key,
 			target,
+			product,
 			refresh: bool(config.refresh, true),
 			/** @type {'idle' | 'absent' | 'waiting' | 'active'} */
 			status: /** @type {'idle' | 'absent' | 'waiting' | 'active'} */ ('idle'),
@@ -52,8 +66,8 @@ const createEmbed = (key) => {
 		let off = null;
 		const check = () => {
 			if (!api) return;
-			let status = elementStatus(api.list(), target);
-			if (status === 'active' && api.get(target) === undefined) status = 'waiting';
+			let status = elementStatus(api.list(), target, product);
+			if (status === 'active' && (api.get(`${product}:${target}`) ?? api.get(target)) === undefined) status = 'waiting';
 			if (status !== store.get().status) {
 				store.set({ status });
 				if (status === 'active') emit('embedded', { target });

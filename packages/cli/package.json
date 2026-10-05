@@ -1,11 +1,12 @@
 {
 	"name": "@ss/cli",
 	"version": "0.1.0",
-	"description": "Developer CLI: app init, validate, dev (local Portal emulator), register, certify.",
+	"description": "Developer CLI: app init, validate, pack build | publish, dev (local Portal emulator), register, certify.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
+		"./pack": "./src/pack/index.js",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -26,6 +27,10 @@
 				"types": "./types/src/index.d.ts",
 				"default": "./src/index.js"
 			},
+			"./pack": {
+				"types": "./types/src/pack/index.d.ts",
+				"default": "./src/pack/index.js"
+			},
 			"./package.json": "./package.json"
 		}
 	},
@@ -45,7 +50,8 @@
 		"@ss/contracts": "workspace:^",
 		"@ss/entitlements": "workspace:^",
 		"@ss/protocol": "workspace:^",
-		"@ss/rules": "workspace:^"
+		"@ss/rules": "workspace:^",
+		"esbuild": "^0.28.2"
 	},
 	"peerDependencies": {
 		"mongodb-memory-server": "^10.4.3"

@@ -85,7 +85,7 @@ page types, devices, consent and frequency per element in the console.
   title (`hosted_page.title` string), description, canonical (`canonical_url` template, default the page URL) and
   robots. It then asks the Loader to place the other elements (`SS.refresh()`).
 
-All copy is in the string catalogs (`strings/<element>.en.json`), all colours, fonts, radii and spacing come from the
+All copy is in the string catalogs (`strings/<lang>.json`, sliced per element by `stringKeys` and the website language), all colours, fonts, radii and spacing come from the
 website's design tokens (`--ss-color-*`, `--ss-space-*`, …).
 
 ## 4. Your own UI (Mode B)

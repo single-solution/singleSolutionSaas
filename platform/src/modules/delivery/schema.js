@@ -12,6 +12,7 @@ export const ARTEFACTS = 'delivery_artefacts';
 export const ALIASES = 'delivery_aliases';
 export const PREVIEWS = 'delivery_previews';
 export const UI_BUNDLES = 'delivery_ui_bundles';
+export const STRINGS = 'delivery_strings';
 
 export const collections = Object.freeze([
 	defineCollection({
@@ -50,6 +51,15 @@ export const collections = Object.freeze([
 			'(key → headless / renderer / strings), declared assets (path, sha256, size), signature kid, status ' +
 			'pending | ready, readiness time. The newest ready bundle replaces the element stub in compiled bundles.',
 		indexes: [{ keys: { appId: 1, version: -1 } }, { keys: { appId: 1, descriptorHash: 1 }, unique: true }],
+	}),
+	defineCollection({
+		module: 'delivery',
+		name: STRINGS,
+		description:
+			'Per-website string overrides of delivered elements (F.18; `_id` = `<websiteId>:<appId>:<element key>`): ' +
+			"merchant, product, element, `languages` (BCP 47 tag or `*` → { key: text }). Our copy of the merchant's " +
+			'wording for our elements, applied on top of the product catalogs at compile time.',
+		indexes: [{ keys: { merchantId: 1, websiteId: 1 } }, { keys: { websiteId: 1, appId: 1, element: 1 } }],
 	}),
 	defineCollection({
 		module: 'delivery',

@@ -1,22 +1,24 @@
 /**
  * Where an element's data comes from (pure part): the merchant's public JSON file, data embedded in the page, or a
- * Single Solution product's public read API (Catalog items, Deals' deals page, Site Search) called with the website's
- * browser key. Only `pk_` keys are accepted: a secret `sk_` key must never reach a browser.
+ * Single Solution product's public read API (Catalog items, Deals' deals page, Site Search). The pack declares the
+ * products it reads (`manifest.reads`); the Loader hands each element an API client per product active on the
+ * website, bound to its base URL and the website's `pk_` key (F.18) — no key is ever configured.
  */
 import { fieldMap } from './items.js';
 import { isObject, oneOf, safeUrl, str } from './util.js';
 
 /** Source kinds. `api` is the public read API of a Single Solution product (Catalog, Deals, Search). */
 export const SOURCE_KINDS = Object.freeze(/** @type {const} */ (['page', 'json', 'api']));
-const PK = /^pk_[A-Za-z0-9_.-]{8,1000}$/;
+/** Products the pack reads (`manifest.reads`). */
+export const READ_PRODUCTS = Object.freeze(/** @type {const} */ (['catalog', 'search', 'deals']));
 /** Default id of the `<script type="application/json">` holding page data. */
 export const PAGE_DATA_ID = 'ss-items';
 
 /**
  * @typedef {object} SourceConfig
  * @property {typeof SOURCE_KINDS[number]} kind
- * @property {string | null} url JSON file URL, or the product's API base (https or same-site relative)
- * @property {string | null} key the website's `pk_` key (api only)
+ * @property {string | null} url JSON file URL (https or same-site relative; `json` only)
+ * @property {typeof READ_PRODUCTS[number]} product the product an `api` source reads
  * @property {string} pageId
  * @property {string | null} currency fallback ISO 4217 code for items without one
  * @property {string} locale BCP 47 tag ('' = the page's language)
@@ -26,17 +28,17 @@ export const PAGE_DATA_ID = 'ss-items';
 /**
  * @param {Record<string, unknown>} config element configuration
  * @param {typeof SOURCE_KINDS[number]} [fallback]
+ * @param {typeof READ_PRODUCTS[number]} [product] the product an `api` source reads by default
  * @returns {SourceConfig}
  */
-export const sourceConfig = (config, fallback = 'page') => {
+export const sourceConfig = (config, fallback = 'page', product = 'catalog') => {
 	const kind = oneOf(config.source, SOURCE_KINDS, fallback);
 	const url = safeUrl(config.source_url, { src: true });
-	const key = str(config.source_key, '', 1000);
 	const currency = str(config.currency, '', 3);
 	return {
-		kind: kind !== 'page' && url === null ? 'page' : kind,
+		kind: kind === 'json' && url === null ? 'page' : kind,
 		url,
-		key: PK.test(key) ? key : null,
+		product: oneOf(config.source_product, READ_PRODUCTS, product),
 		pageId: /^[A-Za-z][\w-]{0,63}$/.test(str(config.page_data_id)) ? str(config.page_data_id) : PAGE_DATA_ID,
 		currency: /^[A-Z]{3}$/.test(currency) ? currency : null,
 		locale: /^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(str(config.locale)) ? str(config.locale) : '',

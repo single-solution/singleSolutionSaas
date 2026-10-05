@@ -20,14 +20,20 @@ Prices are millicredits per hour (1 credit = 1000).
 | `attributes`    | attribute definitions, options with units, filters and facet counts, card position, collection scope | A, B, C | 100                                                            |
 | `collections`   | collections tree: depth limit, order, marketing copy, SEO, visibility cascade                        | A, B, C | 100                                                            |
 | `brands`        | brand registry with logos and collection scoping                                                     | A, B, C | 0                                                              |
-| `media`         | images and videos by URL or storage key, size ladder (srcset), alt templates                         | A, B, C | 0                                                              |
-| `media_uploads` | optional presigned uploads to the merchant's bucket (storage connector)                              | C       | 50                                                             |
+| `media`         | images and videos by URL or storage key, size ladder (srcset), alt templates; presigned uploads      | A, B, C | 0                                                              |
 | `import_export` | CSV export, template, import with mapping, dry-run diff and conflict policy                          | C       | 150                                                            |
 | `feeds`         | tokened, cacheable shopping / marketing feeds from settings-driven mapping                           | C       | 150                                                            |
 | `api`           | sk\_ server access (writes switch, cost exposure, read / write rates)                                | C       | 100 + metered `request` (1 per 100; 100 000 / 1 000 000 incl.) |
 
-Plans: **starter** (items, variants, attributes, collections, brands, media, api; add-ons media_uploads, import_export,
-feeds) and **pro** (everything, higher bounds).
+Plans: **starter** (items, variants, attributes, collections, brands, media, api; add-ons import_export, feeds) and
+**pro** (everything, higher bounds).
+
+`media` uses the storage connector **optionally** (`requires.optionalResources: ["storage"]`, F.18): without it the
+element stays on (media by URL; keys are not checked), and with it connected `POST /v1/media-uploads` presigns uploads
+to the merchant's bucket and private keys get signed links (`409 storage_not_connected` otherwise). The kit reports
+the connection (`product.entitlements.resource(doc, 'storage').connected`). The former `media_uploads` element is
+folded into `media`; its settings (`max_upload_bytes`, `content_types`, upload / view link lifetimes) are `media`
+features now.
 
 ## Events
 
@@ -78,4 +84,15 @@ pnpm portal     # ss dev (Portal emulator) and, in another terminal, pnpm dev
   PLAN Part D §6 are not in this version.
 - `q` on `GET /v1/items` is word-prefix matching on title, SKUs and tags; ranking and typo tolerance belong to Site
   Search.
-- SKUs unique across the catalog are checked before each write, not by a unique index (the rule is a setting).
+- SKUs unique across the catalog (`variants.unique_sku_across_items`) are race-free: each live item carries its
+  normalised SKUs (`skuKeys`: Unicode NFC, trimmed, case kept) under a unique partial index
+  (`website_sku_unique`, `{ websiteId, skuKeys }`, only arrays of strings are indexed), so of two concurrent writes
+  claiming one SKU exactly one succeeds and the other answers `422 validation_failed` with `sku_taken`, as the check
+  before the write does. With the setting off, or for deleted items, `skuKeys` is null and nothing is reserved. Items
+  written before this index are reserved lazily by the `sku_keys` migration (the oldest item keeps a shared SKU).
+- Dashboard CSV export: `POST /v1/dashboard/exports:link` (dashboard session) answers `{ url, expiresAt }`, a download
+  link valid for five minutes whose `ex1.…` token is HMAC-SHA-256-signed (key derived with HKDF from
+  `CATALOG_FEED_SECRET`, else the signing key, label `export-link/v1`) over the website, export kind, filters and
+  expiry. `GET /v1/dashboard/exports/{token}` needs no session or `X-SS-Website`: it checks the signature in constant
+  time, refuses tampered (401) and expired (401) links and switched-off `import_export` (403), and answers the CSV as
+  an attachment with `no-store`. `GET /v1/dashboard/exports` (session + `X-SS-Website`) is kept for compatibility.

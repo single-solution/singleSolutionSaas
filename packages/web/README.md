@@ -225,6 +225,17 @@ nothing twice): `track`, `identify`, `consent.get/set`, `elements.get(key)` (the
 merchant can drive a drop-in element from their own code), `elements.list()`, `on`, `refresh()` (SPA navigation; also
 on `popstate`). Calls made before the Loader arrives can be queued in a stub: `window.SS = { q: [['track', 'custom.x', {}]] }`.
 
+## Namespaced ids and read clients (F.18)
+
+- A bundle element may carry `product` (its product slug): its id is then `<product>:<key>`, so two products can
+  deliver the same key on one page. `SS.elements.get(name)` accepts the id, or a bare key that only one element has;
+  `list()` entries add `id` and `product`. Element events reach `SS.on` as `<key>.<verb>` and as
+  `<product>:<key>.<verb>` (the events client still sends `<key>.<verb>`). Containers keep `data-ss-element="<key>"`
+  and add `data-ss-product` and `data-ss-id`. Frequency caps stay keyed by the bare key while it is unique.
+- `reads: { <slug>: { baseUrl } }` on a bundle element gives its headless core `clients[<slug>]`, an element API client
+  (`createElementApi`) bound to that base and the website key — how packs read service products (`manifest.reads`).
+  `mountHeadless(definition, { clients })` passes them to `create({ clients })`.
+
 ## Renderer helpers (Mode A)
 
 - `h(tag, props, ...children)` — allowlisted HTML tags (no `script`, `style`, `iframe`, `object`, `embed`, `form`,

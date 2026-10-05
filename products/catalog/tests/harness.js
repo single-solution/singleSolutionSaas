@@ -26,18 +26,7 @@ export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const HOUR = 3_600_000;
 export const DAY = 24 * HOUR;
-export const ELEMENTS = [
-	'items',
-	'variants',
-	'attributes',
-	'collections',
-	'brands',
-	'media',
-	'media_uploads',
-	'import_export',
-	'feeds',
-	'api',
-];
+export const ELEMENTS = ['items', 'variants', 'attributes', 'collections', 'brands', 'media', 'import_export', 'feeds', 'api'];
 export const STORAGE = {
 	bucket: 'shop-media',
 	region: 'eu-west-1',
@@ -137,13 +126,14 @@ export const createHarness = async ({ config = {}, elements = {}, website = { cu
 	let version = 0;
 	/**
 	 * Publish the entitlement of a website (all elements on by default); every call is a newer document version.
-	 * @param {{ websiteId?: string, config?: Record<string, any>, elements?: Record<string, boolean>, website?: Record<string, string> | null }} [input]
+	 * @param {{ websiteId?: string, config?: Record<string, any>, elements?: Record<string, boolean>, website?: Record<string, string> | null, storage?: boolean }} [input] `storage`: the optional storage connector is connected (default true)
 	 */
 	const entitle = async ({
 		websiteId = WEBSITE,
 		config: overrides = {},
 		elements: switches = {},
 		website: section = website,
+		storage = true,
 	} = {}) => {
 		const merged = { ...config, ...overrides };
 		const flags = { ...elements, ...switches };
@@ -162,6 +152,7 @@ export const createHarness = async ({ config = {}, elements = {}, website = { cu
 			),
 			config: Object.fromEntries(ELEMENTS.map((key) => [key, merged[key] ?? {}])),
 			...(section ? { website: section } : {}),
+			resources: [{ kind: 'storage', ref: 'con_storage', status: storage ? 'connected' : 'missing' }],
 		});
 		await catalog.product.entitlements.refresh(websiteId);
 	};

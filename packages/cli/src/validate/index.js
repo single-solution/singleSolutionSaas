@@ -2,7 +2,10 @@
  * `ss app validate` — manifest (schema + semantics, with local `$ref`s bundled), anatomy (Part E §2), manifest ↔ code
  * consistency (headless/renderer modules and exports, strings, OpenAPI resources), import direction
  * (`ui → headless → core`, `api → core`), no DOM globals in `headless/` and `core/`, no hard-coded colours in `ui/`,
- * string keys that exist in the catalog, and a budget estimate for Mode A renderers.
+ * string keys that exist in the catalog (scanned in the sources, never in build output), each element's string slice
+ * (`stringKeys`), and the budget of Mode A elements measured the way the Portal measures it (F.18): the elements are
+ * bundled like `ss pack build` (minified ESM, code splitting) and measured with `@ss/contracts/budget` — each element's
+ * own entry modules against its `budget.js`, the shared chunks once against `budget.shared`.
  * @module
  */
 import { readFile } from 'node:fs/promises';
@@ -10,6 +13,7 @@ import path from 'node:path';
 import { validateManifest } from '@ss/contracts';
 import { isObject, parseJson, walk } from '../fsutil.js';
 import { loadManifest, problemOf } from '../manifest.js';
+import { buildPack, measurePack } from '../pack/index.js';
 import {
 	colourLiterals,
 	findColours,
@@ -410,7 +414,7 @@ export const checkStringKeys = async (files, catalogs, catalogFiles) => {
 };
 
 /**
- * Relative import closure of a module (for the budget estimate).
+ * Relative import closure of a module (the source files an element renders from).
  * @param {ProjectFiles} files
  * @param {string} entry
  * @returns {Promise<string[]>}
@@ -475,23 +479,6 @@ export const checkModules = async (files, manifest) => {
 					problemOf({ rule: 'module.export', file, message: `'${name}' is not exported (referenced by ${pointer})` }),
 				);
 			}
-			if (field === 'renderer' && typeof element.budget?.js === 'number' && element.budget.js > 0) {
-				const closure = await importClosure(files, file);
-				const bytes = (await Promise.all(closure.map((member) => files.read(member)))).reduce(
-					(sum, text) => sum + Buffer.byteLength(text),
-					0,
-				);
-				if (bytes > element.budget.js * 1024) {
-					problems.push(
-						problemOf({
-							severity: 'warning',
-							rule: 'budget.estimate',
-							file,
-							message: `renderer source closure is ${(bytes / 1024).toFixed(1)} KB (unminified) against budget.js ${element.budget.js} KB`,
-						}),
-					);
-				}
-			}
 		}
 		if (typeof element.strings === 'string' && !files.set.has(element.strings)) {
 			problems.push(
@@ -502,6 +489,147 @@ export const checkModules = async (files, manifest) => {
 					message: `'${element.strings}' does not exist`,
 				}),
 			);
+		}
+	}
+	return problems;
+};
+
+/**
+ * Headroom a declared budget may keep over its measurement before it counts as padding: the measured KB rounded up,
+ * plus a quarter (at least 1 KB).
+ * @param {number} measuredKb
+ * @returns {number}
+ */
+export const budgetHeadroom = (measuredKb) => Math.ceil(measuredKb) + Math.max(1, Math.ceil(measuredKb / 4));
+
+/**
+ * Mode A budgets measured as the Portal measures them: build the product's browser bundle (`ss pack build`) and
+ * compare each element's own gzip size with its `budget.js`, and the shared chunks with `budget.shared`. A declaration
+ * above the measurement plus {@link budgetHeadroom} is padding (`budget.padded`).
+ * @param {ProjectFiles} files
+ * @param {Manifest} manifest
+ * @param {{ build?: (dir: string) => Promise<import('../pack/index.js').Pack> }} [options]
+ * @returns {Promise<Problem[]>}
+ */
+export const checkBudgets = async (files, manifest, { build = buildPack } = {}) => {
+	const ui = manifest.elements.filter(
+		(element) =>
+			element.modes.includes('A') &&
+			typeof element.renderer === 'string' &&
+			files.set.has(element.renderer.split('#')[0] ?? ''),
+	);
+	if (ui.length === 0) return [];
+	/** @type {import('../pack/index.js').Pack} */
+	let pack;
+	try {
+		pack = await build(files.dir);
+	} catch (error) {
+		return [
+			problemOf({
+				severity: 'warning',
+				rule: 'budget.build',
+				file: 'manifest.json',
+				message: `the elements could not be bundled to measure their budgets: ${String(/** @type {Error} */ (error).message).split('\n')[0]}`,
+			}),
+		];
+	}
+	const measured = measurePack(pack);
+	/** @type {Problem[]} */
+	const problems = [];
+	/** @param {string} rule @param {string} pointer @param {string} message */
+	const warn = (rule, pointer, message) =>
+		problems.push(problemOf({ severity: 'warning', rule, file: 'manifest.json', pointer, message }));
+	for (const [index, element] of manifest.elements.entries()) {
+		const own = measured.elements.find((entry) => entry.key === element.key);
+		const declared = element.budget?.js ?? 0;
+		if (!own || !ui.includes(element)) continue;
+		const pointer = `/elements/${index}/budget/js`;
+		if (own.gzipBytes > declared * 1024)
+			warn(
+				'budget.estimate',
+				pointer,
+				`${element.key} ships ${own.kb} KB gzip (minified entry modules) but declares budget.js ${declared} KB`,
+			);
+		else if (declared > budgetHeadroom(own.kb))
+			warn(
+				'budget.padded',
+				pointer,
+				`${element.key} declares budget.js ${declared} KB but ships ${own.kb} KB gzip; declare at most ${budgetHeadroom(own.kb)} KB`,
+			);
+	}
+	const shared = manifest.budget?.shared;
+	if (measured.shared.gzipBytes > 0 && shared === undefined)
+		warn(
+			'budget.shared',
+			'/budget',
+			`the elements share ${measured.shared.kb} KB gzip of chunks (${measured.shared.modules.length} modules); declare budget.shared`,
+		);
+	else if (shared !== undefined && measured.shared.gzipBytes > shared * 1024)
+		warn(
+			'budget.shared',
+			'/budget/shared',
+			`the shared chunks are ${measured.shared.kb} KB gzip but budget.shared is ${shared} KB`,
+		);
+	else if (
+		shared !== undefined &&
+		shared > budgetHeadroom(measured.shared.kb) &&
+		!(measured.shared.gzipBytes === 0 && shared === 0)
+	)
+		warn(
+			'budget.padded',
+			'/budget/shared',
+			`budget.shared is ${shared} KB but the shared chunks are ${measured.shared.kb} KB gzip; declare at most ${budgetHeadroom(measured.shared.kb)} KB`,
+		);
+	return problems;
+};
+
+/**
+ * Whether a string key falls in an element's slice (`stringKeys`: exact keys or `prefix*`; default `<key>.*`).
+ * @param {readonly string[]} patterns
+ * @param {string} key
+ * @returns {boolean}
+ */
+export const inStringSlice = (patterns, key) =>
+	patterns.some((pattern) => (pattern.endsWith('*') ? key.startsWith(pattern.slice(0, -1)) : key === pattern));
+
+/**
+ * Elements that take their strings from the product catalogs (`strings/<lang>.json`, sliced at compile time) must
+ * list every key their modules render in `stringKeys` (default `<key>.*`), or the website shows the bare key. A key
+ * in another element's slice counts as that element's (modules shared by several elements render each one's text).
+ * @param {ProjectFiles} files
+ * @param {Manifest} manifest
+ * @returns {Promise<Problem[]>}
+ */
+export const checkStringSlices = async (files, manifest) => {
+	/** @type {Problem[]} */
+	const problems = [];
+	const sliced = manifest.elements.filter((element) => typeof element.strings !== 'string' && element.modes.includes('A'));
+	// a module shared by several elements renders each one's keys: a key in a sibling's slice is that sibling's text
+	const anySlice = sliced.flatMap((element) => element.stringKeys ?? [`${element.key}.*`]);
+	for (const [index, element] of manifest.elements.entries()) {
+		if (!sliced.includes(element)) continue;
+		const patterns = element.stringKeys ?? [`${element.key}.*`];
+		/** @type {Set<string>} */
+		const reported = new Set();
+		for (const ref of [element.headless, element.renderer]) {
+			const file = typeof ref === 'string' ? (ref.split('#')[0] ?? '') : '';
+			if (!files.set.has(file)) continue;
+			for (const member of await importClosure(files, file)) {
+				if (!CODE_FILE.test(member)) continue;
+				for (const { key } of findStringKeys(lex(await files.read(member)))) {
+					if (inStringSlice(patterns, key) || inStringSlice(anySlice, key) || reported.has(key)) continue;
+					reported.add(key);
+					problems.push(
+						problemOf({
+							severity: 'warning',
+							rule: 'strings.slice',
+							file: 'manifest.json',
+							pointer: `/elements/${index}/stringKeys`,
+							message: `${element.key} renders '${key}' (${member}) outside its stringKeys ${patterns.join(', ')}`,
+						}),
+					);
+				}
+			}
 		}
 	}
 	return problems;
@@ -684,10 +812,13 @@ export const validateProject = async (dir) => {
 	const rawKind = isObject(loaded.manifest) && isObject(loaded.manifest.product) ? loaded.manifest.product.kind : null;
 	const kind = rawKind === 'service' || rawKind === 'pack' ? rawKind : null;
 	const catalogs = await loadCatalogs(files);
-	const catalogFiles = manifest
-		? [...new Set(manifest.elements.map((element) => element.strings).filter((file) => typeof file === 'string'))]
-		: [];
-	const defaultCatalogs = /** @type {string[]} */ (catalogFiles.length > 0 ? catalogFiles : ['strings/en.json']);
+	// the product catalog strings/en.json plus any legacy per-element catalog
+	const defaultCatalogs = /** @type {string[]} */ ([
+		...new Set([
+			'strings/en.json',
+			...(manifest ? manifest.elements.map((element) => element.strings).filter((file) => typeof file === 'string') : []),
+		]),
+	]);
 	problems.push(
 		...checkAnatomy(files, kind),
 		...(await checkImports(files)),
@@ -697,7 +828,12 @@ export const validateProject = async (dir) => {
 		...(await checkStringKeys(files, catalogs, defaultCatalogs)),
 	);
 	if (manifest !== null && Array.isArray(manifest.elements)) {
-		problems.push(...(await checkModules(files, manifest)), ...checkEventSchemas(files, manifest));
+		problems.push(
+			...(await checkModules(files, manifest)),
+			...checkEventSchemas(files, manifest),
+			...(await checkStringSlices(files, manifest)),
+			...(await checkBudgets(files, manifest)),
+		);
 		if (kind === 'service') problems.push(...(await checkServiceContract(files, manifest)));
 		if (kind !== null) problems.push(...(await checkPackageWiring(files, kind)));
 	}

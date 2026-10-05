@@ -140,6 +140,48 @@ export const toItem = (raw, map, order) => {
 	};
 };
 
+/**
+ * One record of Catalog's real `GET /v1/items` shape (F.18) in the shape the default field map reads: `brand`
+ * `{ id, slug, name }` → its name, `collectionIds` → collections, variant `options` → variant attributes, `inStock`
+ * from the variants' `purchasable` (else `availability`), and no badges or rank (Catalog has neither; its `tags` are
+ * not badges).
+ * @param {unknown} raw
+ * @returns {unknown}
+ */
+export const catalogRecord = (raw) => {
+	if (!isObject(raw)) return raw;
+	const variants = Array.isArray(raw.variants) ? raw.variants.filter(isObject) : [];
+	const states = variants.map((v) =>
+		typeof v.purchasable === 'boolean'
+			? v.purchasable
+			: typeof v.availability === 'string'
+				? v.availability !== 'out_of_stock' && v.availability !== 'unavailable'
+				: null,
+	);
+	const known = states.filter((state) => state !== null);
+	const rest = Object.fromEntries(Object.entries(raw).filter(([key]) => !['tags', 'rank', 'score'].includes(key)));
+	return {
+		...rest,
+		brand: isObject(raw.brand) ? raw.brand.name : (raw.brand ?? ''),
+		collections: Array.isArray(raw.collectionIds) ? raw.collectionIds : (raw.collections ?? []),
+		variants: variants.map((v) => ({ ...v, attributes: isObject(v.options) ? v.options : (v.attributes ?? {}) })),
+		inStock: known.length > 0 ? known.some(Boolean) : typeof raw.inStock === 'boolean' ? raw.inStock : null,
+		badges: [],
+	};
+};
+
+/**
+ * A Catalog list response (`{ items, nextCursor, … }`) with every item mapped by {@link catalogRecord}.
+ * @param {unknown} json
+ * @returns {unknown}
+ */
+export const fromCatalog = (json) =>
+	Array.isArray(json)
+		? json.map(catalogRecord)
+		: isObject(json) && Array.isArray(json.items)
+			? { ...json, items: json.items.map(catalogRecord) }
+			: json;
+
 /** Most items one source may hold (the JSON file or the page). */
 export const MAX_ITEMS = 2000;
 

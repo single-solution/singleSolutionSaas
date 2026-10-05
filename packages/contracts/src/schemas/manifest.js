@@ -15,6 +15,9 @@ import { MAX_SAFE, MODES, PATTERNS, commonRef as ref } from './common.js';
 /** Millicredits per credit (1 credit = 1000). Millicredits are canonical everywhere: prices and the ledger. */
 export const MILLICREDITS_PER_CREDIT = 1000;
 
+/** A string catalog key, or a key prefix ending in `*` (element `stringKeys`). */
+export const STRING_KEY_PATTERN = '^[A-Za-z][\\w.-]*\\*?$';
+
 /** Product kinds. */
 export const PRODUCT_KINDS = Object.freeze(/** @type {const} */ (['service', 'pack']));
 
@@ -36,9 +39,26 @@ const requiresOf = (description) => ({
 	additionalProperties: false,
 	properties: { resources: { type: 'array', uniqueItems: true, items: ref('resourceKind'), description } },
 });
-const elementRequires = requiresOf(
-	'Client resource kinds this element needs; the element is disabled (resource_missing) while one is not connected.',
-);
+const elementRequires = {
+	type: 'object',
+	additionalProperties: false,
+	properties: {
+		resources: {
+			type: 'array',
+			uniqueItems: true,
+			items: ref('resourceKind'),
+			description:
+				'Client resource kinds this element needs; the element is disabled (resource_missing) while one is not connected.',
+		},
+		optionalResources: {
+			type: 'array',
+			uniqueItems: true,
+			items: ref('resourceKind'),
+			description:
+				'Client resource kinds this element uses when connected; a missing one never disables it (the kit reports whether it is connected).',
+		},
+	},
+};
 const productRequires = requiresOf(
 	'Client resource kinds every subscription needs, whatever elements are enabled; while one is not connected every element is disabled (resource_missing). Kinds only some elements need belong on those elements.',
 );
@@ -85,13 +105,28 @@ const element = {
 			required: ['js'],
 			additionalProperties: false,
 			properties: {
-				js: { type: 'integer', minimum: 0, maximum: 1024, description: 'Mode A bundle budget in KB; 0 = no UI.' },
+				js: {
+					type: 'integer',
+					minimum: 0,
+					maximum: 1024,
+					description:
+						"Mode A budget in KB gzip of the element's own minified entry modules (headless + renderer); 0 = no UI. Code shared by several elements is declared once in the product-level budget.shared.",
+				},
 			},
 		},
 		dependsOn: { type: 'array', maxItems: 50, uniqueItems: true, items: ref('elementKey') },
 		requires: elementRequires,
 		features: { $ref: SCHEMA_IDS.featureSchema },
 		strings: ref('relativePath'),
+		stringKeys: {
+			type: 'array',
+			minItems: 1,
+			maxItems: 100,
+			uniqueItems: true,
+			items: { type: 'string', minLength: 1, maxLength: 120, pattern: STRING_KEY_PATTERN },
+			description:
+				'The keys of the product catalogs strings/<lang>.json this element renders: exact keys, or prefixes ending in `*` (default `<key>.*`). The Portal slices them per element and language at compile time.',
+		},
 		placement: { type: 'boolean' },
 		rules: names(PATTERNS.elementKey, 50),
 		hooks: names(PATTERNS.hookName, 50),
@@ -171,6 +206,45 @@ export const manifestSchema = deepFreeze({
 		},
 		scopes: names(PATTERNS.scope, 200),
 		requires: productRequires,
+		budget: {
+			type: 'object',
+			additionalProperties: false,
+			properties: {
+				shared: {
+					type: 'integer',
+					minimum: 0,
+					maximum: 1024,
+					description:
+						'KB gzip of the code-split chunks the elements share (counted once per website bundle, whatever elements are delivered).',
+				},
+			},
+		},
+		reads: {
+			type: 'array',
+			maxItems: 20,
+			description:
+				"Service products whose public read API the elements call. The Loader passes each element an API client per listed product that is active on the website, bound to its base URL and the website's pk_ key.",
+			items: {
+				anyOf: [
+					ref('slug'),
+					{
+						type: 'object',
+						required: ['product'],
+						additionalProperties: false,
+						properties: {
+							product: ref('slug'),
+							scopes: {
+								type: 'array',
+								minItems: 1,
+								maxItems: 10,
+								uniqueItems: true,
+								items: { type: 'string', pattern: PATTERNS.scope, maxLength: 64 },
+							},
+						},
+					},
+				],
+			},
+		},
 		events: {
 			type: 'object',
 			additionalProperties: false,

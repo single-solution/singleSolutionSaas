@@ -8,11 +8,16 @@
  * - `assignments`: the tier of an item or of one of its variants (unique per item + variant).
  * - `units`: individually graded units (a serial, a lot, a room…) with their tier and report link (hash only).
  * - `inspections`: checklist results, score and suggested tier per inspection of a unit.
- * - `photos`: inspection photo slots in the merchant's bucket; pending slots expire (TTL).
+ * - `photos`: inspection photo slots in the merchant's bucket; a pending slot past its `staleAt` is swept by the
+ *   cron (object and record deleted), with a later TTL (`purgeAt`) as a backstop.
  * @module
  */
+import { sweepStaleUploads } from '@ss/app-kit';
 
 export const SCHEMA_VERSION = 1;
+
+/** A pending photo slot is kept this long after its `staleAt` before the TTL index removes it (sweep backstop). */
+export const STALE_BACKSTOP_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const COLLECTIONS = Object.freeze({
 	items: 'items',
@@ -61,6 +66,12 @@ export const INDEXES = [
 	{ collection: 'photos', keys: { websiteId: 1, inspectionId: 1, item: 1 }, name: 'website_inspection' },
 	{
 		collection: 'photos',
+		keys: { websiteId: 1, status: 1, staleAt: 1 },
+		name: 'website_stale',
+		partialFilterExpression: { status: 'pending' },
+	},
+	{
+		collection: 'photos',
 		keys: { purgeAt: 1 },
 		name: 'pending_expiry',
 		expireAfterSeconds: 0,
@@ -80,6 +91,19 @@ export const MIGRATIONS = [
 			await scope
 				.collection(COLLECTIONS.units)
 				.updateMany({ websiteId: scope.websiteId, available: { $exists: false } }, { $set: { available: true } });
+		},
+	},
+	{
+		version: 2,
+		name: 'photo_stale_dates',
+		// pending slots written before the sweep: their `purgeAt` becomes `staleAt`, and the TTL moves back by the backstop
+		up: async (scope) => {
+			await scope
+				.collection(COLLECTIONS.photos)
+				.updateMany(
+					{ websiteId: scope.websiteId, status: 'pending', staleAt: { $exists: false }, purgeAt: { $type: 'date' } },
+					[{ $set: { staleAt: '$purgeAt', purgeAt: { $add: ['$purgeAt', STALE_BACKSTOP_MS] } } }],
+				);
 		},
 	},
 ];
@@ -136,7 +160,9 @@ export const afterPair = (a, b, after) => {
  * @typedef {Record<string, any> & {
  *   find: (filter: Record<string, unknown>, options?: Record<string, unknown>) => { toArray: () => Promise<any[]> },
  *   aggregate: (pipeline: Array<Record<string, unknown>>) => { toArray: () => Promise<any[]> },
- *   distinct: (field: string, filter: Record<string, unknown>) => Promise<unknown[]> }} GuardedCollection
+ *   distinct: (field: string, filter: Record<string, unknown>) => Promise<unknown[]>,
+ *   deleteOne: (filter: Record<string, unknown>) => Promise<{ deletedCount?: number }>,
+ *   updateOne: (filter: Record<string, unknown>, update: Record<string, unknown>, options?: Record<string, unknown>) => Promise<any> }} GuardedCollection
  */
 
 /**
@@ -480,6 +506,21 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			remove: async (id) => {
 				await photos.deleteOne({ websiteId, id });
 			},
+			/**
+			 * Sweep pending slots past their `staleAt`: delete the object from the merchant's bucket when it was uploaded,
+			 * then the record (app-kit `sweepStaleUploads`, bounded and idempotent).
+			 * @param {{ storage: () => Promise<any>, olderThanMs?: number, limit?: number }} input
+			 */
+			sweepStale: ({ storage, olderThanMs = 0, limit }) =>
+				sweepStaleUploads({
+					collection: photos,
+					websiteId,
+					storage,
+					now,
+					olderThanMs,
+					filter: { status: 'pending' },
+					...(limit === undefined ? {} : { limit }),
+				}),
 		}),
 	});
 };

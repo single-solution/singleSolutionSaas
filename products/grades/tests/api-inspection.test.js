@@ -375,7 +375,25 @@ describe('report links', () => {
 		expect(stub.json.title).toBe('Inspection report · New');
 		expect(stub.json.body).toBe('Score 100 / 100');
 		expect(stub.json.items.map((/** @type {any} */ i) => i.text)).toContain('Works as intended: Pass');
-		expect((await h.call('GET', '/v1/elements/inspection/view', { key: h.pk })).json.body).toBe(
+		const blank = await h.call('GET', '/v1/elements/inspection/view', { key: h.pk });
+		expect(blank.json.body).toBe('Open the report from the link you received.');
+		expect(blank.json.fields).toEqual([{ name: 'token', type: 'text', label: 'Report code', required: true }]);
+		expect(blank.json.actions).toEqual([{ action: 'open', label: 'Open report' }]);
+		const opened = await h.call('POST', '/v1/elements/inspection/actions/open', {
+			key: h.pk,
+			body: { fields: { token: ` ${link.json.token} ` } },
+		});
+		expect(opened.status).toBe(200);
+		expect(opened.json.title).toBe('Inspection report · New');
+		const unknown = await h.call('POST', '/v1/elements/inspection/actions/open', {
+			key: h.pk,
+			body: { fields: { token: 'grr_unknown' } },
+		});
+		expect(unknown.json.body).toBe('This report link is unknown, revoked or expired.');
+		const missing = await h.call('POST', '/v1/elements/inspection/actions/open', { key: h.pk, body: { fields: {} } });
+		expect(missing.status).toBe(422);
+		expect(missing.json.errors[0]).toMatchObject({ path: '/fields/token', code: 'token_invalid' });
+		expect((await h.call('POST', '/v1/elements/inspection/actions/refresh', { key: h.pk, body: {} })).json.body).toBe(
 			'Open the report from the link you received.',
 		);
 		await h.entitle({

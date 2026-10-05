@@ -158,4 +158,38 @@ describe('the pack in the Loader', () => {
 		expect(block?.children.length).toBe(0);
 		expect(win.SS.elements.get('reviews_block').state().status).toBe('absent');
 	});
+	it("hosts its own product's element when two products deliver the same key (F.18 namespaced ids)", async () => {
+		const win = page(HTML, { url: 'https://shop.example/lamp' });
+		const other = {
+			...reviewsDisplay(win),
+			product: 'gallery-reviews',
+			renderer: {
+				render: () => {
+					const node = win.document.createElement('p');
+					node.className = 'other';
+					return node;
+				},
+			},
+		};
+		const instance = boot({
+			websiteId: 'web_0123456789abcdefghjkmnpq',
+			env: 'live',
+			window: win,
+			storage: null,
+			bundle: {
+				elements: [
+					{ ...element('reviews_block', win, createReviewsBlock, embed, 'reviews'), product: 'pdp' },
+					other,
+					{ ...reviewsDisplay(win), product: 'reviews' },
+				],
+			},
+		});
+		running.push(instance);
+		await instance.ready();
+		await flush(10);
+		const block = win.document.querySelector('[data-ss-slot="reviews"] .ss-embed');
+		expect(block?.hidden).toBe(false);
+		expect(block?.querySelector('[data-ss-id="reviews:display"] .reviews')).not.toBeNull();
+		expect(block?.querySelector('.other')).toBeNull();
+	});
 });

@@ -1,3 +1,4 @@
+import { PLACEMENT_MEMBERS, validatePlacement } from '@ss/contracts';
 import { deepEqual } from './hash.js';
 import { toMs } from './time.js';
 import { assertMillicredits, normaliseRate } from './units.js';
@@ -9,9 +10,12 @@ import { assertMillicredits, normaliseRate } from './units.js';
  *
  * Mapping from the manifest:
  * - element `features` is a JSON Schema object; each top-level property is a feature. Metadata keywords:
- *   `x-kind` (flag|quota|limit|rate|config; inferred as `flag` for booleans, `config` otherwise), `x-lock`
- *   (lockable, default true), `x-experiment`, `x-plan` ({ planCode: { default?, max? } } — the only source of
- *   per-plan bounds), quota `x-period` / `x-hardStop` / `x-unit`, rate `x-per` / `x-unit`.
+ *   `x-kind` (flag|quota|limit|rate|config|placement; inferred as `flag` for booleans, `config` otherwise), `x-lock`
+ *   (lockable, default true), `x-experiment`, `x-plan` ({ planCode: { default?, max?, members? } } — the only source
+ *   of per-plan bounds), quota `x-period` / `x-hardStop` / `x-unit`, rate `x-per` / `x-unit`. A `placement` feature
+ *   (F.18) is an object validated against the placement v1 schema; `x-placement.members` limits the members it may
+ *   set, and a plan's `members` is its plan bound (a value setting another member exceeds the plan, `plan_max`).
+ * - element `requires.optionalResources` are used when connected but never disable the element.
  * - plans `{ code, name?, description?, elements, addons? }`: `elements` are included and on by default,
  *   `addons` are allowed but off by default; anything else is unavailable on that plan.
  * - element `requires` is `{ resources: [resourceKind] }` (a bare array is accepted too). The product-level
@@ -22,7 +26,8 @@ import { assertMillicredits, normaliseRate } from './units.js';
  *   (each optionally with `base`, `elements` and `metered` overrides, all integer millicredits).
  */
 
-/** @typedef {'flag' | 'quota' | 'limit' | 'rate' | 'config'} FeatureKind */
+/** @typedef {'flag' | 'quota' | 'limit' | 'rate' | 'config' | 'placement'} FeatureKind */
+/** @typedef {number | boolean | readonly string[]} PlanMax a plan bound: number, flag, or allowed placement members */
 /** @typedef {'string' | 'integer' | 'number' | 'boolean' | 'array' | 'object'} JsonType */
 /** @typedef {'hour' | 'day' | 'week' | 'month'} PeriodUnit */
 /** @typedef {'second' | 'minute' | 'hour'} RateWindow */
@@ -46,7 +51,8 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {FeatureKind} [x-kind]
  * @property {boolean} [x-lock]
  * @property {boolean} [x-experiment]
- * @property {Readonly<Record<string, { default?: unknown, max?: number | boolean }>>} [x-plan]
+ * @property {Readonly<Record<string, { default?: unknown, max?: number | boolean, members?: readonly string[] }>>} [x-plan]
+ * @property {{ members?: readonly string[] }} [x-placement] placement features: the members it may set
  * @property {PeriodUnit} [x-period]
  * @property {boolean} [x-hardStop]
  * @property {string} [x-unit]
@@ -70,8 +76,9 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {boolean} hardStop Quota blocks once exhausted (`x-hardStop`, default true).
  * @property {string | null} unit Metered unit (`x-unit`).
  * @property {RateWindow | null} per Rate window (`x-per`, required on rates).
- * @property {Readonly<Record<string, { default?: unknown, max?: number | boolean }>>} plans `x-plan`.
+ * @property {Readonly<Record<string, { default?: unknown, max?: number | boolean, members?: readonly string[] }>>} plans `x-plan`.
  * @property {FeatureSchemaNode} schema The original schema node (for full validation by callers).
+ * @property {readonly string[] | null} [members] placement features: the members it may set (null: all)
  */
 
 /**
@@ -81,6 +88,7 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {readonly string[]} dependsOn Direct dependencies (sorted).
  * @property {readonly string[]} requires Resource kinds that must be connected (sorted): the element's own kinds plus
  *   the product-level (always required) kinds.
+ * @property {readonly string[]} [optionalResources] Kinds used when connected; never disable the element (sorted).
  * @property {boolean} defaultEnabled Product default when the subscription has no plan (default false).
  * @property {readonly string[]} features Fully-qualified feature keys (sorted).
  */
@@ -93,7 +101,7 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {readonly string[]} addons Allowed, off by default.
  * @property {readonly string[]} available `elements ∪ addons` (sorted).
  * @property {Readonly<Record<string, unknown>>} defaults Feature defaults from `x-plan`, by feature key.
- * @property {Readonly<Record<string, number | boolean>>} max Plan maxima from `x-plan`, by feature key.
+ * @property {Readonly<Record<string, PlanMax>>} max Plan maxima from `x-plan`, by feature key (placement: members).
  */
 
 /**
@@ -139,7 +147,7 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {string} key
  * @property {string} [name]
  * @property {readonly string[]} [dependsOn]
- * @property {{ resources?: readonly string[] } | readonly string[]} [requires]
+ * @property {{ resources?: readonly string[], optionalResources?: readonly string[] } | readonly string[]} [requires]
  * @property {boolean} [defaultEnabled] Not part of the SSPS manifest; defaults to false.
  * @property {{ hourly?: number, metered?: readonly MeteredInput[] }} [price]
  * @property {{ type?: 'object', properties?: Readonly<Record<string, FeatureSchemaNode>> }} [features]
@@ -173,7 +181,7 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {readonly PriceBookInput[]} [priceBooks] Full price-book history (Portal-side); overrides `priceBook`.
  */
 
-export const FEATURE_KINDS = /** @type {const} */ (['flag', 'quota', 'limit', 'rate', 'config']);
+export const FEATURE_KINDS = /** @type {const} */ (['flag', 'quota', 'limit', 'rate', 'config', 'placement']);
 export const PERIOD_UNITS = /** @type {const} */ (['hour', 'day', 'week', 'month']);
 export const RATE_WINDOWS = /** @type {const} */ (['second', 'minute', 'hour']);
 const JSON_TYPES = ['string', 'integer', 'number', 'boolean', 'array', 'object'];
@@ -245,6 +253,11 @@ export const isValidFeatureValue = (feature, value) => {
 				Array.isArray(value) && value.length >= (s.minItems ?? 0) && value.length <= (s.maxItems ?? Number.POSITIVE_INFINITY)
 			);
 		default:
+			if (feature.kind === 'placement') {
+				if (!isPlainObject(value) || !validatePlacement(value).ok) return false;
+				const members = feature.members ?? null;
+				return members === null || Object.keys(value).every((name) => members.includes(name));
+			}
 			return isPlainObject(value);
 	}
 };
@@ -266,19 +279,34 @@ export const withinAbsolute = (feature, value) => {
  * Whether `value` is within a plan maximum (`undefined` = unbounded). Boolean max `false` forbids `true`;
  * a numeric max bounds numbers, string length (characters) and array length; `null` (unlimited) exceeds
  * any numeric max.
+ * A placement feature's bound is its allowed members: every member the value sets must be listed.
  * @param {FeatureDef} feature
  * @param {unknown} value
- * @param {number | boolean | undefined} max
+ * @param {PlanMax | undefined} max
  * @returns {boolean}
  */
 export const withinPlanMax = (feature, value, max) => {
 	if (max === undefined) return true;
+	if (typeof max === 'object') return !isPlainObject(value) || Object.keys(value).every((name) => max.includes(name));
 	if (typeof max === 'boolean') return max || value !== true;
 	if (value === null) return !isCountKind(feature.kind);
 	if (typeof value === 'number') return value <= max;
 	if (typeof value === 'string') return [...value].length <= max;
 	if (Array.isArray(value)) return value.length <= max;
 	return true;
+};
+
+/**
+ * Placement members of `x-placement.members` / `x-plan.<plan>.members` (null: every member).
+ * @param {string} key
+ * @param {unknown} list
+ * @returns {readonly string[] | null}
+ */
+const placementMembers = (key, list) => {
+	if (list === undefined) return null;
+	if (!Array.isArray(list) || list.some((name) => !(/** @type {readonly unknown[]} */ (PLACEMENT_MEMBERS).includes(name))))
+		throw catalogError('invalid_feature_kind', `placement ${key} members must be placement v1 members`);
+	return Object.freeze([...list]);
 };
 
 /**
@@ -315,6 +343,8 @@ const normaliseFeature = (element, name, node, planCodes) => {
 	if (!FEATURE_KINDS.includes(kind))
 		throw catalogError('invalid_feature_kind', `feature ${key} has unknown x-kind ${String(kind)}`);
 	if (kind === 'flag' && node.type !== 'boolean') throw catalogError('invalid_feature_kind', `flag ${key} must be boolean`);
+	if (kind === 'placement' && node.type !== 'object')
+		throw catalogError('invalid_feature_kind', `placement ${key} must be an object`);
 	if (isCountKind(kind) && node.type !== 'integer' && node.type !== 'number') {
 		throw catalogError('invalid_feature_kind', `${kind} ${key} must be integer or number`);
 	}
@@ -353,11 +383,21 @@ const normaliseFeature = (element, name, node, planCodes) => {
 		per: kind === 'rate' ? /** @type {RateWindow} */ (node['x-per']) : null,
 		plans,
 		schema: node,
+		members: kind === 'placement' ? placementMembers(key, node['x-placement']?.members) : null,
 	};
 	if (!isValidFeatureValue(feature, feature.default) || !withinAbsolute(feature, feature.default)) {
 		throw catalogError('invalid_default', `feature ${key} default is not valid for its schema`);
 	}
 	for (const [code, entry] of Object.entries(plans)) {
+		if (kind === 'placement' && entry.max !== undefined)
+			throw catalogError('invalid_plan', `placement ${key} x-plan.${code} is bounded with members, not max`);
+		if (entry.members !== undefined) {
+			if (kind !== 'placement')
+				throw catalogError('invalid_plan', `feature ${key} x-plan.${code}.members is for placement features only`);
+			const allowed = placementMembers(key, entry.members);
+			if (feature.members !== null && allowed?.some((name) => !feature.members?.includes(name)))
+				throw catalogError('invalid_plan', `feature ${key} x-plan.${code}.members exceeds x-placement.members`);
+		}
 		if (entry.max !== undefined && typeof entry.max !== (feature.jsonType === 'boolean' ? 'boolean' : 'number')) {
 			throw catalogError('invalid_plan', `feature ${key} x-plan.${code}.max does not fit a ${feature.jsonType} feature`);
 		}
@@ -365,7 +405,7 @@ const normaliseFeature = (element, name, node, planCodes) => {
 			entry.default !== undefined &&
 			(!isValidFeatureValue(feature, entry.default) ||
 				!withinAbsolute(feature, entry.default) ||
-				!withinPlanMax(feature, entry.default, entry.max))
+				!withinPlanMax(feature, entry.default, entry.members ?? entry.max))
 		) {
 			throw catalogError('invalid_plan', `feature ${key} x-plan.${code}.default is invalid or exceeds the plan max`);
 		}
@@ -488,6 +528,11 @@ export const normaliseProduct = (input) => {
 			name: el.name ?? el.key,
 			dependsOn: sortedUnique(el.dependsOn),
 			requires: sortedUnique(requires),
+			optionalResources: sortedUnique(
+				(Array.isArray(el.requires) ? [] : (el.requires?.optionalResources ?? [])).filter(
+					(/** @type {string} */ kind) => !requires.includes(kind),
+				),
+			),
 			defaultEnabled: el.defaultEnabled === true,
 			features: featureKeys.sort(),
 		};
@@ -543,12 +588,13 @@ const normalisePlan = (plan, elements, features) => {
 	}
 	/** @type {Record<string, unknown>} */
 	const defaults = {};
-	/** @type {Record<string, number | boolean>} */
+	/** @type {Record<string, PlanMax>} */
 	const max = {};
 	for (const feature of Object.values(features)) {
 		const entry = feature.plans[plan.code];
 		if (entry?.default !== undefined) defaults[feature.key] = entry.default;
 		if (entry?.max !== undefined) max[feature.key] = entry.max;
+		if (entry?.members !== undefined) max[feature.key] = Object.freeze([...entry.members]);
 	}
 	return { code: plan.code, name: plan.name ?? plan.code, elements: included, addons, available, defaults, max };
 };

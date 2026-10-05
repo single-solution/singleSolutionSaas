@@ -1,5 +1,6 @@
 /**
- * Media service: references (URL or storage key) on items, and — with the optional `media_uploads` element — presigned
+ * Media service: references (URL or storage key) on items, and — while the optional storage connector is connected
+ * (`media` `requires.optionalResources`, F.18) — presigned
  * uploads straight to the merchant's own bucket (the storage connector signs `content-type` and `content-length`, so
  * the bucket enforces both), an existence check before a key is attached, and short signed view links for keys when
  * no public storage base URL is set. The catalog never receives file bytes.
@@ -26,7 +27,7 @@ const EXTENSIONS = Object.freeze({
  */
 export const createMediaService = (deps) => {
 	/** @param {Site} site */
-	const uploadsOn = (site) => site.settings.enabled('media_uploads');
+	const uploadsOn = (site) => site.settings.storageConnected === true;
 
 	/**
 	 * Whether a storage key exists in the merchant's bucket (only checked when uploads are on).
@@ -167,6 +168,7 @@ export const createMediaService = (deps) => {
 	 * @param {unknown} body `{ contentType, contentLength, itemId? }`
 	 */
 	const presign = async (site, body) => {
+		if (!uploadsOn(site)) return fail('storage_not_connected', 'Connect a storage connector to upload media.');
 		if (!isObject(body)) return invalid([issue('', 'object_required')]);
 		const { contentType, contentLength, itemId } = /** @type {Record<string, any>} */ (body);
 		const { uploads } = site.settings;

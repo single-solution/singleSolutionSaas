@@ -124,6 +124,21 @@ export const validateVariant = (input, { current = null, path = '' } = {}) => {
 };
 
 /**
+ * The normalised form of an SKU used for catalog-wide uniqueness: Unicode NFC with surrounding white space removed.
+ * Case is kept, because SKUs are matched exactly everywhere else (stock lines, `filter[sku]`).
+ * @param {string} sku
+ */
+export const skuKey = (sku) => sku.normalize('NFC').trim();
+
+/**
+ * The distinct normalised SKUs of an item's variants, sorted (empty SKUs skipped).
+ * @param {ReadonlyArray<{ sku?: string | null }>} variants
+ * @returns {string[]}
+ */
+export const skuKeysOf = (variants) =>
+	[...new Set(variants.map((variant) => (typeof variant.sku === 'string' ? skuKey(variant.sku) : '')).filter(Boolean))].sort();
+
+/**
  * The option combination of a variant as a stable string.
  * @param {readonly string[]} optionKeys
  * @param {Record<string, string>} options

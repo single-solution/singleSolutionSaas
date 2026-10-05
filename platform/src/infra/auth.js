@@ -283,6 +283,7 @@ export const findRecoveryCode = (code, hashes, secret) => {
  * @property {Array<{ websiteId: string, roles: string[] }>} grants
  * @property {boolean} mfa second factor completed
  * @property {{ type: 'staff', id: string, name?: string | null } | null} via impersonating staff member
+ * @property {boolean} [api] a staff API token (`Authorization: Bearer sst_…`, F.18) rather than a browser session
  * @property {Date} createdAt
  * @property {Date} lastSeenAt
  * @property {Date} expiresAt min(idle expiry, absolute expiry)
@@ -298,6 +299,7 @@ export const findRecoveryCode = (code, hashes, secret) => {
  * @property {Array<{ websiteId: string, roles: string[] }>} [grants]
  * @property {boolean} [mfa]
  * @property {{ type: 'staff', id: string, name?: string | null } | null} [via]
+ * @property {boolean} [api] a staff API token (never a cookie)
  * @property {number} [absoluteMs] shorter absolute lifetime (e.g. impersonation ≤ 1 h)
  * @property {string | null} [ip]
  * @property {string | null} [userAgent]
@@ -319,6 +321,7 @@ const toSession = (doc) =>
 		grants: doc.grants ?? [],
 		mfa: doc.mfa === true,
 		via: doc.via ?? null,
+		api: doc.api === true,
 		createdAt: doc.createdAt,
 		lastSeenAt: doc.lastSeenAt,
 		expiresAt: doc.expireAt,
@@ -359,6 +362,7 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 			grants: input.grants ?? [],
 			mfa: input.mfa === true,
 			via: input.via ?? null,
+			...(input.api === true ? { api: true } : {}),
 			ip: input.ip ?? null,
 			userAgent: input.userAgent ? String(input.userAgent).slice(0, 256) : null,
 			createdAt: input.createdAt ?? new Date(t),

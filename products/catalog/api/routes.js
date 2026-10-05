@@ -720,7 +720,7 @@ export const buildRoutes = (catalog) => {
 		route({
 			method: 'POST',
 			path: '/v1/media-uploads',
-			element: 'media_uploads',
+			element: 'media',
 			write: true,
 			idempotent: 'optional',
 			handler: async (ctx, s) => reply(await media.presign(s, ctx.body), (r) => created(r.upload)),

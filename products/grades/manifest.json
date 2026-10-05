@@ -22,10 +22,15 @@
 		"offlineGrace": "PT24H"
 	},
 	"scopes": ["events.subscribe:item.*"],
-	"requires": { "resources": ["database"] },
+	"requires": {
+		"resources": ["database"]
+	},
 	"events": {
 		"consumes": ["item.created@1", "item.updated@1", "item.deleted@1"],
 		"publishes": ["grades.tier_assigned@1", "grades.unit_inspected@1"]
+	},
+	"budget": {
+		"shared": 2
 	},
 	"elements": [
 		{
@@ -34,21 +39,36 @@
 			"description": "Your quality ladder (names, notes, order, hex or design-token colours, icons, applicability rules, count limit) and the tier of every item, variant and individually graded unit — set through the API, by a catalog attribute on item.created@1 / item.updated@1, or from inspections. Badges drop-in, headless or by API.",
 			"modes": ["A", "B", "C"],
 			"stateful": true,
-			"price": { "hourly": 200 },
-			"budget": { "js": 7 },
+			"price": {
+				"hourly": 200
+			},
+			"budget": {
+				"js": 2
+			},
 			"dependsOn": [],
-			"requires": { "resources": ["database"] },
-			"features": { "$ref": "schemas/tiers.features.json" },
+			"requires": {
+				"resources": ["database"]
+			},
+			"features": {
+				"$ref": "schemas/tiers.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"rules": ["applies_when"],
 			"experiments": true,
-			"api": { "resources": ["tiers", "items", "tier-assignments", "units"] },
+			"api": {
+				"resources": ["tiers", "items", "tier-assignments", "units"]
+			},
 			"headless": "headless/tiers.js#createTierBadges",
 			"renderer": "ui/tiers.js#render",
 			"variants": ["badge", "list", "legend"],
 			"slots": ["before", "after", "empty"],
-			"a11y": { "role": "img", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "img",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "showcase",
@@ -56,19 +76,32 @@
 			"description": "The tier explainer block: headline, copy, bullet points, a video link and images per tier with the warranty period — as cards, a comparison table or tabs.",
 			"modes": ["A", "B", "C"],
 			"stateful": false,
-			"price": { "hourly": 100 },
-			"budget": { "js": 10 },
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 3
+			},
 			"dependsOn": ["tiers"],
-			"features": { "$ref": "schemas/showcase.features.json" },
+			"features": {
+				"$ref": "schemas/showcase.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"experiments": true,
-			"api": { "resources": ["showcase"] },
+			"api": {
+				"resources": ["showcase"]
+			},
 			"headless": "headless/showcase.js#createShowcase",
 			"renderer": "ui/showcase.js#render",
 			"variants": ["cards", "compare", "single"],
 			"slots": ["before", "after", "empty"],
-			"a11y": { "role": "region", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "filters",
@@ -76,19 +109,32 @@
 			"description": "Tiers as a listing filter: options with item counts per collection, hide-empty and rules@1 visibility, single or multi select, the URL parameter, matching item ids and ordering items by tier.",
 			"modes": ["A", "B", "C"],
 			"stateful": false,
-			"price": { "hourly": 0 },
-			"budget": { "js": 7 },
+			"price": {
+				"hourly": 0
+			},
+			"budget": {
+				"js": 3
+			},
 			"dependsOn": ["tiers"],
-			"features": { "$ref": "schemas/filters.features.json" },
+			"features": {
+				"$ref": "schemas/filters.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"rules": ["visible_when"],
-			"api": { "resources": ["tier-filters"] },
+			"api": {
+				"resources": ["tier-filters"]
+			},
 			"headless": "headless/filters.js#createTierFilter",
 			"renderer": "ui/filters.js#render",
 			"variants": ["chips", "list"],
 			"slots": ["before", "after", "empty"],
-			"a11y": { "role": "group", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "group",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "warranty",
@@ -96,18 +142,31 @@
 			"description": "Days of cover, text templates ({days}, {period}, {tier}) and exclusions per tier, periods written in the shopper's language, and printable terms.",
 			"modes": ["A", "B", "C"],
 			"stateful": false,
-			"price": { "hourly": 0 },
-			"budget": { "js": 6 },
+			"price": {
+				"hourly": 0
+			},
+			"budget": {
+				"js": 2
+			},
 			"dependsOn": ["tiers"],
-			"features": { "$ref": "schemas/warranty.features.json" },
+			"features": {
+				"$ref": "schemas/warranty.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"api": { "resources": ["warranty"] },
+			"api": {
+				"resources": ["warranty"]
+			},
 			"headless": "headless/warranty.js#createWarranty",
 			"renderer": "ui/warranty.js#render",
 			"variants": ["inline", "terms", "table"],
 			"slots": ["before", "after", "empty"],
-			"a11y": { "role": "region", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "mapping",
@@ -115,18 +174,31 @@
 			"description": "Tier → external condition values from merchant-editable vocabularies (schema.org itemCondition and a shopping-feed condition ship as defaults): allowed values, fallbacks, per-item Offer properties, feed rows and a drop-in condition statement.",
 			"modes": ["A", "B", "C"],
 			"stateful": false,
-			"price": { "hourly": 0 },
-			"budget": { "js": 7 },
+			"price": {
+				"hourly": 0
+			},
+			"budget": {
+				"js": 2
+			},
 			"dependsOn": ["tiers"],
-			"features": { "$ref": "schemas/mapping.features.json" },
+			"features": {
+				"$ref": "schemas/mapping.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"api": { "resources": ["condition-mappings"] },
+			"api": {
+				"resources": ["condition-mappings"]
+			},
 			"headless": "headless/mapping.js#createConditions",
 			"renderer": "ui/mapping.js#render",
 			"variants": ["statement", "table"],
 			"slots": ["before", "after", "empty"],
-			"a11y": { "role": "region", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		},
 		{
 			"key": "inspection",
@@ -134,20 +206,35 @@
 			"description": "Per-unit inspection checklists (pass/fail, scored and note items, weights, critical items, required photos), score → suggested tier, photos uploaded straight to the merchant's storage with presigned links that sign the content length, and a shareable report link per unit.",
 			"modes": ["A", "B", "C"],
 			"stateful": true,
-			"price": { "hourly": 300 },
-			"budget": { "js": 10 },
+			"price": {
+				"hourly": 300
+			},
+			"budget": {
+				"js": 3
+			},
 			"dependsOn": ["tiers"],
-			"requires": { "resources": ["storage"] },
-			"features": { "$ref": "schemas/inspection.features.json" },
+			"requires": {
+				"resources": ["storage"]
+			},
+			"features": {
+				"$ref": "schemas/inspection.features.json"
+			},
 			"strings": "strings/en.json",
 			"placement": true,
 			"rules": ["applies_when"],
-			"api": { "resources": ["checklists", "inspections", "inspection-reports"] },
+			"api": {
+				"resources": ["checklists", "inspections", "inspection-reports"]
+			},
 			"headless": "headless/inspection.js#createInspectionReport",
 			"renderer": "ui/inspection.js#render",
 			"variants": ["report", "summary"],
 			"slots": ["before", "after", "empty"],
-			"a11y": { "role": "region", "labels": true, "keyboard": true, "reducedMotion": true }
+			"a11y": {
+				"role": "region",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
 		}
 	],
 	"plans": [
@@ -165,7 +252,12 @@
 			"elements": ["tiers", "showcase", "filters", "warranty", "mapping", "inspection"]
 		}
 	],
-	"priceBook": { "version": "2026-10-01", "effectiveFrom": "2026-10-01T00:00:00Z" },
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
 	"trialHours": 48,
-	"retention": { "photos": "P1D" }
+	"retention": {
+		"photos": "P1D"
+	}
 }

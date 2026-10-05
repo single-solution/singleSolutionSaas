@@ -11,14 +11,21 @@
  * product's API base), else the generic element stub (`ss-element-stub@2`, see `runtime/entry.js`). Anything that
  * cannot be delivered is skipped with a warning (fail closed for that element, never for the website).
  *
+ * Wave-1 (F.18): every element carries its product slug (the Loader id is `<product>:<key>`, so two products may
+ * deliver the same key); pack elements get an API base per service product they read (`manifest.reads`) that is active
+ * on the website; strings come from the product catalogs `strings/<lang>.json`, sliced per element (`stringKeys`) for
+ * the website's language with fallback to `en`, then the merchant's per-website overrides; budgets are measured with
+ * `@ss/contracts/budget` — each element's own entry modules against `budget.js`, the product's shared chunks once
+ * against `budget.shared`.
+ *
  * Determinism: inputs are sorted and embedded as canonical JSON, no timestamps enter the artefact, and the version is
  * the first 16 hex digits of the SHA-256 of the bundle rendered with a zero version — the same inputs always produce
  * the same bytes and the same version.
  * @module
  */
 import { createHash } from 'node:crypto';
-import { gzipSync } from 'node:zlib';
-import { validatePlacement } from '@ss/contracts';
+import { readsOf, validatePlacement } from '@ss/contracts';
+import { gzipSize as measureGzip, measureBundle, toKb } from '@ss/contracts/budget';
 import { canonicalJson } from '@ss/protocol';
 import { compile as compileRule } from '@ss/rules';
 import { sha256Hex, sha384Integrity } from './assets.js';
@@ -31,6 +38,9 @@ export const VERSION_PATTERN = /^[0-9a-f]{16}$/;
 const ZERO_VERSION = '0'.repeat(16);
 const MODULE_REF = /^((?!\/)(?!.*\.\.)[A-Za-z0-9_./-]+\.m?js)#([A-Za-z_$][A-Za-z0-9_$]*)$/;
 const MAX_STRING_BYTES = 64 * 1024;
+/** Product string catalogs (`strings/<lang>.json`). */
+export const LANGUAGE_CATALOG = /^strings\/([a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*)\.json$/;
+export const DEFAULT_LANGUAGE = 'en';
 
 /**
  * @typedef {object} Source one subscription (or one previewed, unsubscribed product)
@@ -44,8 +54,16 @@ const MAX_STRING_BYTES = 64 * 1024;
  * @property {ReadonlyMap<string, { sha256: string, size: number }>} assets uploaded, hash-verified pack assets by path
  * @property {ReadonlyMap<string, Record<string, unknown>>} strings parsed string catalogs by asset path
  * @property {ReadonlyMap<string, number>} gzipBytes gzip size of each stored JS asset by path
+ * @property {ReadonlyMap<string, Uint8Array>} [files] bytes of the stored JS assets by path (shared-chunk walk)
  * @property {UiBundle | null} [ui] service products: the current ready UI bundle (its assets are in `assets`,
  *   `strings` and `gzipBytes`), or null
+ */
+
+/**
+ * @typedef {object} StringContext what element strings are resolved with
+ * @property {string | null} language the website's language (BCP 47), null = `en`
+ * @property {ReadonlyMap<string, Readonly<Record<string, Readonly<Record<string, string>>>>>} [overrides] per-website
+ *   overrides by `<appId>:<element key>` → language (or `*`) → strings
  */
 
 /**
@@ -82,6 +100,8 @@ const MAX_STRING_BYTES = 64 * 1024;
  * @property {{ path: string, name: string, sha256: string } | null} headless
  * @property {{ path: string, name: string, sha256: string } | null} renderer
  * @property {string | null} api
+ * @property {Record<string, string>} reads API base of each read service product active on the website, by slug
+ * @property {string[]} readScopes key scopes the reads need (`<slug>.read`)
  */
 
 /**
@@ -132,12 +152,119 @@ const stringCatalog = (value) => {
 };
 
 /**
+ * Languages to look up, least specific first: `en`, then each prefix of the website language (`de`, `de-CH`).
+ * @param {string | null | undefined} language
+ * @returns {string[]}
+ */
+export const languageChain = (language) => {
+	const chain = [DEFAULT_LANGUAGE];
+	if (typeof language !== 'string' || language === '') return chain;
+	const parts = language.split('-');
+	for (let i = 1; i <= parts.length; i += 1) {
+		const tag = parts.slice(0, i).join('-');
+		const lower = tag.toLowerCase();
+		if (!chain.some((known) => known.toLowerCase() === lower)) chain.push(tag);
+	}
+	return chain;
+};
+
+/**
+ * Whether a string key is in an element's slice (`stringKeys`: exact keys or `prefix*`).
+ * @param {readonly string[]} patterns
+ * @param {string} key
+ */
+export const inSlice = (patterns, key) =>
+	patterns.some((pattern) => (pattern.endsWith('*') ? key.startsWith(pattern.slice(0, -1)) : key === pattern));
+
+/**
+ * The catalog of a language chain from the product catalogs (case-insensitive language match), more specific wins.
+ * @param {ReadonlyMap<string, Record<string, unknown>>} catalogs by asset path
+ * @param {readonly string[]} chain
+ * @returns {Record<string, string>}
+ */
+const chainCatalog = (catalogs, chain) => {
+	/** @type {Map<string, Record<string, unknown>>} */
+	const byLanguage = new Map();
+	for (const [file, catalog] of catalogs) {
+		const match = LANGUAGE_CATALOG.exec(file);
+		if (match) byLanguage.set(String(match[1]).toLowerCase(), catalog);
+	}
+	return Object.assign({}, ...chain.map((tag) => stringCatalog(byLanguage.get(tag.toLowerCase()) ?? null)));
+};
+
+/**
+ * An element's strings (F.18): the product catalogs sliced by `stringKeys` (default `<key>.*`) for the website's
+ * language chain — or, for an element naming a catalog in `strings`, that catalog (a `strings/<lang>.json` path takes
+ * the language chain too) — then the merchant's per-website overrides (`*` first, then the chain).
+ * @param {{ element: Record<string, any>, modules: { strings?: unknown, stringKeys?: unknown }, source: Source,
+ *   context: StringContext }} input
+ * @returns {Record<string, string>}
+ */
+export const elementStrings = ({ element, modules, source, context }) => {
+	const chain = languageChain(context.language);
+	const stringsPath = typeof modules.strings === 'string' ? modules.strings : null;
+	const patterns = Array.isArray(modules.stringKeys)
+		? modules.stringKeys.filter((p) => typeof p === 'string')
+		: Array.isArray(element.stringKeys)
+			? element.stringKeys
+			: null;
+	/** @type {Record<string, string>} */
+	let base;
+	if (patterns === null && stringsPath !== null && !LANGUAGE_CATALOG.test(stringsPath))
+		base = stringCatalog(source.strings.get(stringsPath) ?? null);
+	else {
+		const full = chainCatalog(source.strings, chain);
+		const slice = patterns ?? (stringsPath !== null ? null : [`${element.key}.*`]);
+		base = slice === null ? full : Object.fromEntries(Object.entries(full).filter(([key]) => inSlice(slice, key)));
+	}
+	const override = context.overrides?.get(`${source.appId}:${element.key}`);
+	if (!override) return stringCatalog(base);
+	return stringCatalog(Object.assign({}, base, ...['*', ...chain].map((tag) => stringCatalog(override[tag] ?? null))));
+};
+
+/**
+ * Read API bases a source's elements get (`manifest.reads`): each listed service product with an active subscription
+ * on the website and an https API base.
+ * @param {Source} source
+ * @param {ReadonlyArray<Source>} sources
+ * @returns {{ reads: Record<string, string>, scopes: string[], missing: string[] }}
+ */
+export const readsFor = (source, sources) => {
+	/** @type {Record<string, string>} */
+	const reads = {};
+	/** @type {string[]} */
+	const scopes = [];
+	/** @type {string[]} */
+	const missing = [];
+	for (const read of readsOf(/** @type {any} */ (source.manifest))) {
+		const product = sources.find(
+			(s) =>
+				s.kind === 'service' &&
+				s.slug === read.product &&
+				s.document !== null &&
+				isObject(s.document.runtime) &&
+				s.document.runtime.state === 'active' &&
+				typeof s.apiBase === 'string' &&
+				s.apiBase.startsWith('https://'),
+		);
+		if (!product) {
+			missing.push(read.product);
+			continue;
+		}
+		reads[read.product] = /** @type {string} */ (product.apiBase);
+		scopes.push(...read.scopes);
+	}
+	return { reads, scopes: [...new Set(scopes)].sort(), missing };
+};
+
+/**
  * Select the deliverable elements.
  * @param {ReadonlyArray<Source>} sources
  * @param {{ base?: 'current' | 'empty', elements: ReadonlyArray<Candidate> } | null} [candidates]
+ * @param {StringContext} [context] website language and string overrides
  * @returns {{ selected: Selected[], warnings: Warning[] }}
  */
-export const selectElements = (sources, candidates = null) => {
+export const selectElements = (sources, candidates = null, context = { language: null }) => {
 	/** @type {Selected[]} */
 	const selected = [];
 	/** @type {Warning[]} */
@@ -149,6 +276,8 @@ export const selectElements = (sources, candidates = null) => {
 	for (const source of [...sources].sort((a, b) => (a.appId < b.appId ? -1 : a.appId > b.appId ? 1 : 0))) {
 		const doc = source.document;
 		const state = doc && isObject(doc.runtime) ? doc.runtime.state : null;
+		const read = readsFor(source, sources);
+		let readsWarned = false;
 		for (const element of source.manifest.elements) {
 			const id = `${source.appId}:${element.key}`;
 			const candidate = wanted.get(id);
@@ -177,7 +306,17 @@ export const selectElements = (sources, candidates = null) => {
 				budgetKb: element.budget?.js ?? 0,
 				config: { ...config, ...(candidate?.config ?? {}) },
 				placement,
+				reads: read.reads,
+				readScopes: read.scopes,
 			};
+			if (read.missing.length > 0 && !readsWarned) {
+				readsWarned = true;
+				warnings.push({
+					code: 'reads_inactive',
+					appId: source.appId,
+					detail: `no active subscription to ${read.missing.join(', ')}; its elements get no client for it`,
+				});
+			}
 			/** @type {{ headless?: unknown, renderer?: unknown, strings?: unknown }} */
 			let modules = /** @type {any} */ (element);
 			/** @type {'pack' | 'ui'} */
@@ -197,6 +336,8 @@ export const selectElements = (sources, candidates = null) => {
 					if (ui) warn('ui_assets_missing', 'the UI bundle modules are not uploaded; the element stub is delivered');
 					selected.push({
 						...base,
+						// the stub ships no product code (it is part of the loader), so it uses none of the website budget
+						budgetKb: 0,
 						delivery: 'stub',
 						moduleVersion: 0,
 						actualGzipBytes: 0,
@@ -224,7 +365,6 @@ export const selectElements = (sources, candidates = null) => {
 				warn('assets_missing', `not uploaded: ${missing.join(', ')}`);
 				continue;
 			}
-			const stringsPath = typeof modules.strings === 'string' ? modules.strings : null;
 			const files = [...new Set([headless.path, renderer.path])];
 			selected.push({
 				...base,
@@ -232,7 +372,7 @@ export const selectElements = (sources, candidates = null) => {
 				moduleVersion: delivery === 'ui' ? /** @type {UiBundle} */ (source.ui).version : source.manifestVersion,
 				actualGzipBytes: files.reduce((sum, path) => sum + (source.gzipBytes.get(path) ?? 0), 0),
 				strings: {
-					...stringCatalog(stringsPath ? source.strings.get(stringsPath) : null),
+					...elementStrings({ element, modules, source, context }),
 					...stringCatalog(candidate?.strings),
 				},
 				headless: { ...headless, sha256: /** @type {{ sha256: string }} */ (source.assets.get(headless.path)).sha256 },
@@ -255,17 +395,90 @@ export const selectElements = (sources, candidates = null) => {
 };
 
 /**
- * Element keys must be unique in one bundle (the Loader, `SS.elements` and frequency caps are keyed by element key).
+ * Element ids (`<product>:<key>`) must be unique in one bundle (F.18: keys are namespaced per product, so two products
+ * may deliver the same key; only one product delivering a key twice conflicts).
  * @param {ReadonlyArray<Selected>} selected
  * @returns {Array<{ path: string, message: string }>}
  */
 export const keyConflicts = (selected) => {
-	/** @type {Map<string, string[]>} */
-	const owners = new Map();
-	for (const s of selected) owners.set(s.key, [...(owners.get(s.key) ?? []), s.slug]);
-	return [...owners.entries()]
-		.filter(([, slugs]) => slugs.length > 1)
-		.map(([key, slugs]) => ({ path: `/elements/${key}`, message: `element key ${key} is used by ${slugs.join(' and ')}` }));
+	/** @type {Map<string, number>} */
+	const seen = new Map();
+	for (const s of selected) seen.set(`${s.slug}:${s.key}`, (seen.get(`${s.slug}:${s.key}`) ?? 0) + 1);
+	return [...seen.entries()]
+		.filter(([, count]) => count > 1)
+		.map(([id]) => ({ path: `/elements/${id}`, message: `element ${id} is delivered twice` }));
+};
+
+/**
+ * @typedef {object} SharedChunks one product's shared code in the bundle
+ * @property {string} appId
+ * @property {string} slug
+ * @property {number | null} declaredKb `budget.shared` (null: not declared — the measured size counts, with a warning)
+ * @property {number} gzipBytes measured gzip size of the shared modules the delivered elements load
+ * @property {string[]} modules
+ */
+
+/**
+ * Measure the delivered elements with `@ss/contracts/budget` (the measurement `ss app validate` uses): an element's
+ * own size is that of its entry modules not shared with another element of its product (`actualGzipBytes`); every
+ * module shared by several elements, and every chunk the delivered elements import, counts once per product.
+ * @param {ReadonlyArray<Selected>} selected
+ * @param {ReadonlyArray<Source>} sources
+ * @returns {{ selected: Selected[], shared: SharedChunks[] }}
+ */
+export const measureSelected = (selected, sources) => {
+	/** @type {SharedChunks[]} */
+	const shared = [];
+	/** @type {Map<string, number>} */
+	const own = new Map();
+	for (const source of sources) {
+		const delivered = selected.filter((s) => s.appId === source.appId && s.delivery !== 'stub' && s.headless && s.renderer);
+		if (delivered.length === 0) continue;
+		const files = source.files ?? new Map();
+		const read = (/** @type {string} */ path) => files.get(path);
+		const gzip = (/** @type {string} */ path) => source.gzipBytes.get(path);
+		const modulesOf = (/** @type {Selected} */ s) => [
+			/** @type {any} */ (s.headless).path,
+			/** @type {any} */ (s.renderer).path,
+		];
+		const ui = delivered[0]?.delivery === 'ui';
+		/** @type {Array<{ key: string, modules: string[] }>} */
+		const all = /** @type {Array<{ key: string, headless?: unknown, renderer?: unknown }>} */ (
+			ui
+				? [...(source.ui?.elements.entries() ?? [])].map(([key, element]) => ({ ...element, key }))
+				: source.manifest.elements.filter((element) => element.modes.includes('A'))
+		).map((element) => ({
+			key: element.key,
+			modules: [parseModuleRef(element.headless), parseModuleRef(element.renderer)]
+				.filter((ref) => ref !== null && source.assets.has(ref.path))
+				.map((ref) => /** @type {{ path: string }} */ (ref).path),
+		}));
+		const full = measureBundle({ elements: all, read, gzip });
+		const partial = measureBundle({ elements: delivered.map((s) => ({ key: s.key, modules: modulesOf(s) })), read, gzip });
+		for (const element of full.elements) own.set(`${source.appId}:${element.key}`, element.gzipBytes);
+		const fullShared = new Set(full.shared.modules);
+		const modules = [
+			...new Set([...partial.shared.modules, ...delivered.flatMap(modulesOf).filter((m) => fullShared.has(m))]),
+		].sort();
+		if (modules.length === 0 && source.manifest.budget?.shared === undefined) continue;
+		const gzipBytes = modules.reduce((sum, m) => {
+			const bytes = files.get(m);
+			return sum + (gzip(m) ?? (bytes ? measureGzip(bytes) : 0));
+		}, 0);
+		shared.push({
+			appId: source.appId,
+			slug: source.slug,
+			declaredKb: typeof source.manifest.budget?.shared === 'number' ? source.manifest.budget.shared : null,
+			gzipBytes,
+			modules,
+		});
+	}
+	return {
+		selected: selected.map((s) =>
+			s.delivery === 'stub' ? s : { ...s, actualGzipBytes: own.get(`${s.appId}:${s.key}`) ?? s.actualGzipBytes },
+		),
+		shared,
+	};
 };
 
 /**
@@ -313,6 +526,8 @@ export const bundleData = ({ websiteId, env, version, publicKey, eventsUrl, asse
 		.map((s) => {
 			return {
 				key: s.key,
+				product: s.slug,
+				...(s.reads && Object.keys(s.reads).length > 0 ? { reads: s.reads } : {}),
 				...(s.compiledPlacement ? { placement: s.compiledPlacement } : {}),
 				config: s.config,
 				strings: s.strings,
@@ -342,8 +557,11 @@ export const renderLoader = ({ data, core, audience }) =>
 		'',
 	].join('\n');
 
-/** @param {string} text */
-export const gzipSize = (text) => gzipSync(Buffer.from(text, 'utf8'), { level: 9 }).byteLength;
+/**
+ * Gzip size (the shared `@ss/contracts/budget` measurement, level 9).
+ * @param {string | Uint8Array} content
+ */
+export const gzipSize = (content) => measureGzip(content);
 
 /**
  * Render with a zero version, hash, render again with the derived version.
@@ -357,33 +575,64 @@ export const versionedLoader = ({ data, core, audience }) => {
 };
 
 /**
- * Budget check: Σ element `budget.js` + the loader itself (gzip) ≤ the website budget, and no element ships more than
- * it declares.
- * @param {{ loaderGzipBytes: number, limitKb: number, elements: ReadonlyArray<Pick<Selected, 'appId' | 'slug' | 'key' | 'budgetKb' | 'actualGzipBytes'>> }} input
+ * Budget check (F.13, F.18): the loader itself (gzip) + Σ element `budget.js` + Σ product `budget.shared` (the
+ * measured size where a product declares none) ≤ the website budget; no element ships more than it declares, and no
+ * product's shared chunks exceed its `budget.shared`.
+ * @param {{ loaderGzipBytes: number, limitKb: number,
+ *   elements: ReadonlyArray<Pick<Selected, 'appId' | 'slug' | 'key' | 'budgetKb' | 'actualGzipBytes'>>,
+ *   shared?: ReadonlyArray<SharedChunks> }} input
  */
-export const checkBudget = ({ loaderGzipBytes, limitKb, elements }) => {
+export const checkBudget = ({ loaderGzipBytes, limitKb, elements, shared = [] }) => {
 	const elementsKb = elements.reduce((sum, e) => sum + e.budgetKb, 0);
-	const loaderKb = Math.ceil((loaderGzipBytes / 1024) * 10) / 10;
-	const totalKb = Math.round((loaderKb + elementsKb) * 10) / 10;
-	const report = { limitKb, loaderKb, elementsKb, totalKb };
+	const sharedKb = Math.round(shared.reduce((sum, s) => sum + (s.declaredKb ?? toKb(s.gzipBytes)), 0) * 10) / 10;
+	const loaderKb = toKb(loaderGzipBytes);
+	const totalKb = Math.round((loaderKb + elementsKb + sharedKb) * 10) / 10;
+	const report = {
+		limitKb,
+		loaderKb,
+		elementsKb,
+		sharedKb,
+		totalKb,
+		shared: shared.map((s) => ({
+			slug: s.slug,
+			declaredKb: s.declaredKb,
+			measuredKb: toKb(s.gzipBytes),
+			modules: s.modules.length,
+		})),
+	};
 	const overDeclared = elements.filter((e) => e.actualGzipBytes > e.budgetKb * 1024);
+	const overShared = shared.filter((s) => s.declaredKb !== null && s.gzipBytes > s.declaredKb * 1024);
 	const overTotal = totalKb > limitKb;
 	/** @type {Array<{ path: string, message: string, code: string }>} */
 	const offenders = [
 		...overDeclared.map((e) => ({
 			path: `/elements/${e.key}`,
 			code: 'over_declared',
-			message: `${e.slug}/${e.key} ships ${Math.ceil(e.actualGzipBytes / 102.4) / 10} KB gzip but declares budget.js ${e.budgetKb} KB`,
+			message: `${e.slug}/${e.key} ships ${toKb(e.actualGzipBytes)} KB gzip but declares budget.js ${e.budgetKb} KB`,
+		})),
+		...overShared.map((s) => ({
+			path: `/products/${s.slug}/budget/shared`,
+			code: 'shared_over_declared',
+			message: `${s.slug} ships ${toKb(s.gzipBytes)} KB gzip of shared chunks but declares budget.shared ${s.declaredKb} KB`,
 		})),
 		...(overTotal
-			? [...elements]
-					.filter((e) => e.budgetKb > 0)
-					.sort((a, b) => b.budgetKb - a.budgetKb || (a.key < b.key ? -1 : 1))
-					.map((e) => ({
-						path: `/elements/${e.key}`,
-						code: 'budget',
-						message: `${e.slug}/${e.key} budget.js ${e.budgetKb} KB`,
-					}))
+			? [
+					...[...elements]
+						.filter((e) => e.budgetKb > 0)
+						.sort((a, b) => b.budgetKb - a.budgetKb || (a.key < b.key ? -1 : 1))
+						.map((e) => ({
+							path: `/elements/${e.key}`,
+							code: 'budget',
+							message: `${e.slug}/${e.key} budget.js ${e.budgetKb} KB`,
+						})),
+					...shared
+						.filter((s) => (s.declaredKb ?? toKb(s.gzipBytes)) > 0)
+						.map((s) => ({
+							path: `/products/${s.slug}/budget/shared`,
+							code: 'budget',
+							message: `${s.slug} shared chunks ${s.declaredKb ?? toKb(s.gzipBytes)} KB`,
+						})),
+				]
 			: []),
 	];
 	return { ok: offenders.length === 0, report, offenders };
@@ -433,6 +682,8 @@ export const bundleManifest = ({ websiteId, env, version, text, portalOrigin, co
 				delivery: DELIVERY_KINDS[e.delivery],
 				...(e.delivery === 'ui' ? { uiBundleVersion: e.moduleVersion } : {}),
 				budgetKb: e.budgetKb,
+				...(e.delivery === 'stub' ? {} : { gzipBytes: e.actualGzipBytes }),
+				...(e.reads && Object.keys(e.reads).length > 0 ? { reads: Object.keys(e.reads).sort() } : {}),
 				audience: e.audience,
 				modules: [e.headless, e.renderer]
 					.filter((m) => m !== null)

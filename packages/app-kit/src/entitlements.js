@@ -81,6 +81,20 @@ export const featuresOf = (doc, elementKey) => {
 };
 
 /**
+ * A client resource as the signed document reports it (F.18): its connection `status` (`connected` | `missing` |
+ * `failing` | `revoked`, or `missing` when the document does not list the kind) and whether the product may use it
+ * now. Elements with an optional resource (`requires.optionalResources`) stay on without it and check this.
+ * @param {EntitlementDocument | null | undefined} doc
+ * @param {string} kind
+ * @returns {{ kind: string, status: string, connected: boolean }}
+ */
+export const resource = (doc, kind) => {
+	const entry = Array.isArray(doc?.resources) ? doc.resources.find((r) => r?.kind === kind) : undefined;
+	const status = typeof entry?.status === 'string' ? entry.status : 'missing';
+	return { kind, status, connected: status === 'connected' };
+};
+
+/**
  * @param {{
  *   portal: { entitlements: (websiteId: string) => Promise<{ document: string }> },
  *   keyResolver: KeyResolver,
@@ -261,5 +275,6 @@ export const createEntitlements = ({
 		feature,
 		config,
 		featuresOf,
+		resource,
 	});
 };

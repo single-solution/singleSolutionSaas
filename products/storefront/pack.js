@@ -1,75 +1,35 @@
 /**
- * The pack as the Portal receives it: the manifest with its feature schemas inline, and the browser assets (the
- * built element modules and the string catalog) with their SHA-256 and size for the signed `ss-pack-bundle@1`
- * descriptor. Used to publish the pack (Admin → Apps → upload) and by the system test against the real Portal.
+ * The pack as the Portal receives it, built by `ss pack build` (`@ss/cli`, F.18): the manifest with its feature
+ * schemas inline, and the browser assets — the manifest's headless and renderer modules bundled as minified ES modules
+ * with shared `chunks/*.js`, and the product string catalogs `strings/<lang>.json` — with their SHA-256 and size for
+ * the signed `ss-pack-bundle@1` descriptor. `ss pack publish` signs and uploads it; the system test against the real
+ * Portal uses this module. Development only (Node).
  * @module
  */
-import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BUNDLE_FORMAT, buildPack as build, descriptorOf, loadManifest as load, writePack as write } from '@ss/cli/pack';
 
 /** The pack's root folder. */
 export const ROOT = path.dirname(fileURLToPath(import.meta.url));
 
-const TYPES = Object.freeze({ js: 'text/javascript', json: 'application/json' });
+export { BUNDLE_FORMAT, descriptorOf };
 
-/**
- * @param {string} dir
- * @param {string} relative
- */
-const readJson = async (dir, relative) => JSON.parse(await readFile(path.join(dir, relative), 'utf8'));
+/** The pack's manifest and built assets. */
+export const buildPack = () => build(ROOT);
 
 /**
  * The manifest with every `features: { $ref }` replaced by the schema it points to.
- * @param {string} [dir]
  * @returns {Promise<Record<string, any>>}
  */
-export const loadManifest = async (dir = ROOT) => {
-	const manifest = await readJson(dir, 'manifest.json');
-	const elements = await Promise.all(
-		manifest.elements.map(async (/** @type {Record<string, any>} */ element) =>
-			typeof element.features?.$ref === 'string'
-				? { ...element, features: await readJson(dir, element.features.$ref) }
-				: element,
-		),
-	);
-	return { ...manifest, elements };
-};
+export const loadManifest = async () => /** @type {Record<string, any>} */ ((await load(ROOT)).manifest);
 
 /**
- * Asset paths the Portal must hold: every element's headless and renderer module and every string catalog.
- * @param {Record<string, any>} manifest
- * @returns {string[]}
+ * Build and write the pack to a folder (assets + `descriptor.json`).
+ * @param {string} outDir
  */
-export const assetPaths = (manifest) => [
-	...new Set(
-		manifest.elements.flatMap((/** @type {Record<string, any>} */ element) =>
-			[element.headless, element.renderer, element.strings]
-				.filter((ref) => typeof ref === 'string')
-				.map((ref) => String(ref).split('#')[0] ?? ''),
-		),
-	),
-];
-
-/**
- * The assets with their bytes and descriptor entries.
- * @param {string} [dir]
- * @returns {Promise<Array<{ path: string, bytes: Buffer, sha256: string, size: number, contentType: string }>>}
- */
-export const packAssets = async (dir = ROOT) => {
-	const manifest = await readJson(dir, 'manifest.json');
-	return Promise.all(
-		assetPaths(manifest).map(async (relative) => {
-			const bytes = await readFile(path.join(dir, relative));
-			const ext = /** @type {keyof typeof TYPES} */ (relative.slice(relative.lastIndexOf('.') + 1));
-			return {
-				path: relative,
-				bytes,
-				sha256: createHash('sha256').update(bytes).digest('hex'),
-				size: bytes.byteLength,
-				contentType: TYPES[ext] ?? 'application/octet-stream',
-			};
-		}),
-	);
+export const writePack = async (outDir) => {
+	const pack = await buildPack();
+	await write(pack, outDir);
+	return pack;
 };

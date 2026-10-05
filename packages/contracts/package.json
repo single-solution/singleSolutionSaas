@@ -6,6 +6,7 @@
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
+		"./budget": "./src/budget.js",
 		"./testing": "./src/testing.js",
 		"./package.json": "./package.json"
 	},
@@ -22,6 +23,10 @@
 			".": {
 				"types": "./types/src/index.d.ts",
 				"default": "./src/index.js"
+			},
+			"./budget": {
+				"types": "./types/src/budget.d.ts",
+				"default": "./src/budget.js"
 			},
 			"./testing": {
 				"types": "./types/src/testing.d.ts",

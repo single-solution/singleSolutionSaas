@@ -156,7 +156,7 @@ All variables are validated together at start (names only are reported, never va
 | `PLATFORM_SMTP_URL`             |          | Platform mailer `smtp(s)://user:pass@host:port` (percent-encode the credentials).                                                                                                                                                                                                                                                                                         |
 | `PLATFORM_MAIL_FROM`            |          | Sender, `Name <address>` or `address`; required with `PLATFORM_SMTP_URL`.                                                                                                                                                                                                                                                                                                 |
 | `PLATFORM_ASSET_STORAGE`        |          | Platform-owned artefact storage (pack assets, compiled website bundles — our software, never client data): JSON `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }` (S3-compatible, https in production), or `memory` / `file:<dir>` outside production. Without it the delivery routes answer 503.                    |
-| `DELIVERY_BUDGET_KB`            |          | Website bundle budget in KB gzip: Loader + Σ element `budget.js` (default 60).                                                                                                                                                                                                                                                                                            |
+| `DELIVERY_BUDGET_KB`            |          | Website bundle budget in KB gzip: Loader + Σ element `budget.js` + Σ product `budget.shared`, all measured minified and gzipped (default 60; PLAN F.18 has the reasoning).                                                                                                                                                                                                |
 | `PREVIEW_ORIGIN`                |          | Dedicated cookie-less preview origin (https, host ≠ `PORTAL_URL`'s, ideally another registrable domain) pointed at the same deployment. Preview links use it, the Portal host refuses `/p/*`, and that host serves only `/p/*` (API, `/w/*`, cron and console pages answer 404). Previews there stay `CSP: sandbox` + `allow-same-origin` and run the merchant's scripts. |
 | `PROBLEM_BASE_URI`              |          | RFC 9457 type base (default `<PORTAL_URL>/problems/`).                                                                                                                                                                                                                                                                                                                    |
 | `PORTAL_ENV`                    |          | `production` · `preview` · `development` · `test` (default from `NODE_ENV`).                                                                                                                                                                                                                                                                                              |
@@ -303,3 +303,21 @@ global setup) `startMongo()` starts a private replica set.
   `/w/ui/…`; element stub v2 (`ss-element-stub@2`: `?ctx=` page context, input `fields`).
 - **Event provenance**: `context.keyKind` stamped by the Event Hub; **resources**: needed now vs needed if enabled.
   Contracts and wire details: `src/modules/INTERFACES.md`; decisions: PLAN.md F.16.
+
+## Wave-1 platform changes (F.18)
+
+- **Delivery budgets** are measured with `@ss/contracts/budget` (the measurement `ss app validate` uses): each
+  element's own entry modules against its `budget.js`, every product's shared chunks once against `budget.shared`
+  (`shared_over_declared`; undeclared counts as measured with a warning). Element-stub elements take 0 KB.
+- **Namespaced element ids**: bundles carry each element's `product`; the Loader addresses `<product>:<key>`, so two
+  products may deliver the same key (the compile `conflict` is now only a duplicate id).
+- **Pack reads**: `manifest.reads` products active on the website give the pack's elements `reads` bases; the loader
+  `pk_` gains their read scopes.
+- **Strings**: product catalogs `strings/<lang>.json` sliced per element (`stringKeys`) for the website language
+  (fallback `en`); per-website overrides `GET|PUT /v1/merchants/:m/websites/:w/delivery/strings[/:appId/:element/:language]`
+  (console: Subscription → Texts).
+- **Staff API tokens**: `POST /v1/admin/api-tokens` → `sst_…` bearer for tooling (`ss pack publish`), ≤ 12 h,
+  revocable in `/v1/me/sessions`.
+- **Optional resources** (`requires.optionalResources`): never `resource_missing`; listed `optional` in resource needs.
+- **Placement features** (`x-kind: placement`) are validated against placement v1 and edited with the `placement`
+  widget in Configure.

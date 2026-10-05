@@ -10,6 +10,8 @@
  */
 import { EVENT_TYPES, itemSnapshot } from '../core/events.js';
 import { nextTransition, rollupOf } from '../core/items.js';
+import { skuKey, skuKeysOf } from '../core/variants.js';
+import { duplicateSkuOf } from '../adapters/db.js';
 
 /** @typedef {import('../adapters/db.js').Repositories} Repositories */
 /** @typedef {import('./settings.js').Settings} Settings */
@@ -51,6 +53,20 @@ export const fail = (reason, detail, errors) => ({
 export const invalid = (errors) => fail('validation_failed', 'The request is not valid.', errors);
 
 /**
+ * A write refused by the SKU index → the same `sku_taken` problem as the check before the write (null: another error).
+ * @param {unknown} error
+ * @param {Record<string, any>} item the item that was being written
+ * @returns {Failure | null}
+ */
+export const skuTaken = (error, item) => {
+	const sku = duplicateSkuOf(error);
+	if (sku === null) return null;
+	const variants = /** @type {Array<{ sku?: string | null }>} */ (item.variants ?? []);
+	const index = variants.findIndex((variant) => typeof variant.sku === 'string' && skuKey(variant.sku) === sku);
+	return invalid([{ path: index >= 0 ? `/variants/${index}/sku` : '/variants', code: 'sku_taken' }]);
+};
+
+/**
  * The website's attributes (bounded by `attributes.max_attributes`).
  * @param {Site} site
  * @returns {Promise<import('../core/attributes.js').Attribute[]>}
@@ -65,9 +81,12 @@ export const attributesOf = async (site) => site.repos.attributes.list({ limit: 
  */
 export const finalize = (site, next, { attributes, now }) => {
 	const rollup = rollupOf(/** @type {any} */ (next), { attributes, stock: site.settings.stock });
+	const keys = site.settings.variants.unique_sku_across_items && !next.deletedAt ? skuKeysOf(next.variants ?? []) : [];
 	return {
 		...next,
 		...rollup,
+		// SKUs reserved under the unique index (null = none reserved: setting off, deleted, or no SKUs)
+		skuKeys: keys.length > 0 ? keys : null,
 		sortPriceLow: rollup.priceMin ?? Number.MAX_SAFE_INTEGER,
 		sortPriceHigh: rollup.priceMax ?? -1,
 		nextTransitionAt: site.settings.items.scheduled_publish ? nextTransition(next, now) : null,
@@ -151,7 +170,16 @@ export const mutateItem = async (deps, site, load, change) => {
 		if ('ok' in outcome && outcome.ok === false) return outcome;
 		const planned = /** @type {{ next: Record<string, any>, entries: Array<Record<string, unknown>>, result?: T }} */ (outcome);
 		const next = finalize(site, planned.next, { attributes, now: deps.now() });
-		if (await site.repos.items.write(next, current.version ?? 1, planned.entries)) {
+		/** @type {boolean} */
+		let written;
+		try {
+			written = await site.repos.items.write(next, current.version ?? 1, planned.entries);
+		} catch (error) {
+			const taken = skuTaken(error, next);
+			if (taken) return taken;
+			throw error;
+		}
+		if (written) {
 			const stored = { ...next, outbox: [...(current.outbox ?? []), ...planned.entries] };
 			await flushItem(deps, site, stored);
 			return {
