@@ -246,13 +246,96 @@ pnpm --filter @ss/product-my-app test
 pnpm --filter @ss/e2e test
 ```
 
-## Deploying
+## Deploying (Vercel + MongoDB Atlas)
 
-- Every deployable (`platform/` and each `products/*`) is its own Vercel project, with that folder as the root
-  directory and its own MongoDB Atlas database.
-- Crons are declared in each folder's `vercel.json`.
-- Nothing is Vercel-specific: any Node 22 host that runs `next start` works.
-- Set the environment variables listed in each folder's README. Run `pnpm db:indexes` and `pnpm db:migrate` on the
-  Portal after deploys that change data.
-- An admin registers a new product in the Portal (Admin → Apps). The product shows a one-time registration token
-  bound to the Portal URL. Paste it once, and the two sides then trust each other's signed keys.
+One GitHub repository feeds many Vercel projects. Each project uses one folder as its **Root Directory**:
+
+| Vercel project          | Root Directory                        | What it is                                                                                                                                |
+| ----------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Portal                  | `platform`                            | Merchant console, admin console, API, website script delivery                                                                             |
+| One per service product | `products/<name>`                     | aftersales, alerts, catalog, chatbot, checkout, configurator, coupons, deals, grades, loyalty, orders, reviews, search, signups, wishlist |
+| —                       | `products/pdp`, `products/storefront` | **Not deployed.** These are element packs, published into the Portal with `ss pack publish` (step 5)                                      |
+
+**Plan:** the Portal runs a cron every minute and products every 5–15 minutes. That needs **Vercel Pro**; Hobby
+allows only daily crons.
+
+### 1. Atlas
+
+Create one cluster. Give every deployable its own database and its own database user, so a leak in one product
+cannot read another: `ss_portal` for the Portal, and `ss_<product>` (for example `ss_chatbot`) for each product's
+small control database. Client data never goes here; merchants connect their own databases in the Portal.
+
+### 2. Storage for the Portal's delivery files
+
+Website scripts and pack files are stored in an S3-compatible bucket (Cloudflare R2, AWS S3, …). Create one bucket
+and an access key limited to it.
+
+### 3. Portal project
+
+1. In Vercel: **Add New → Project** → import the repository → **Root Directory `platform`**. Leave "Include files
+   outside the root directory" on; Vercel detects Next.js and pnpm.
+2. Generate secrets locally and copy them into the project's environment variables (Production):
+
+   ```bash
+   cd platform && pnpm env:dev
+   ```
+
+   Then change, for production:
+   - `PORTAL_ENV=production`
+   - `PORTAL_URL=https://portal.<your-domain>`
+   - `MONGODB_URI=` the Atlas URI for `ss_portal`
+   - `PLATFORM_ASSET_STORAGE=` JSON of the bucket from step 2:
+     `{"endpoint":"https://…","region":"auto","bucket":"…","accessKeyId":"…","secretAccessKey":"…"}`
+   - `PREVIEW_ORIGIN=https://preview.<another-domain>` (recommended; point that domain at the same project)
+   - `PLATFORM_SMTP_URL` and `PLATFORM_MAIL_FROM` for sign-up and password e-mails
+   - `LOG_LEVEL=info`, and delete `OUTBOUND_DEV_ALLOW_HOSTS`
+
+   The full list is in `platform/.env.example`.
+
+3. Deploy, then add the domain `portal.<your-domain>`.
+4. Prepare the database and create the first admin, from your machine with the production values in
+   `platform/.env.local`:
+
+   ```bash
+   cd platform && pnpm db:indexes && pnpm db:migrate && pnpm admin:bootstrap you@example.com
+   ```
+
+   The last command prints a one-time password link. Open it, set a password, and enrol two-factor sign-in.
+
+### 4. Each service product
+
+For every folder in the table above:
+
+1. Vercel: **Add New → Project** → same repository → **Root Directory `products/<name>`**.
+2. Generate the product's keys locally:
+
+   ```bash
+   pnpm exec ss dev env --portal-url https://portal.<your-domain>
+   ```
+
+   Copy `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY` and `SS_REGISTRATION_TOKEN_HASH` into the project's environment
+   variables. Keep the **registration token** printed in the first comment line somewhere safe for step 4; it must
+   not go into Vercel.
+
+3. Also set `SS_PRODUCT_DB_URI` (its Atlas database from step 1), `SS_LOG_LEVEL=info`, `CRON_SECRET` (any random
+   string of 32+ characters), and the product's own variables from `products/<name>/.env.example`.
+4. Deploy and add a domain, for example `chatbot.apps.<your-domain>`.
+5. Portal → **Admin → Apps → Register**: enter the product URL and paste the registration token. The Portal checks
+   the product proves it holds the key, then lists it. Activate it, and merchants can subscribe.
+
+### 5. Element packs (pdp, storefront)
+
+Packs have no server; their files are uploaded into the Portal and served from it. Create a staff API token
+(`POST /v1/admin/api-tokens` while signed in as an admin), then:
+
+```bash
+pnpm exec ss pack publish products/pdp --portal https://portal.<your-domain> --token sst_… --activate
+```
+
+Repeat for `products/storefront`.
+
+### After launch
+
+- Vercel only rebuilds the projects whose folder or `@ss/*` dependencies changed in a push.
+- After a deploy that changes Portal data, run `pnpm db:indexes && pnpm db:migrate` in `platform` again.
+- Nothing is Vercel-specific: any Node 22 host that runs `next start` with the same variables and crons works.
