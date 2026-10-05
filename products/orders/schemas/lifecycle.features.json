@@ -1,0 +1,375 @@
+{
+	"type": "object",
+	"title": "Lifecycle",
+	"additionalProperties": false,
+	"properties": {
+		"statuses": {
+			"type": "array",
+			"title": "Statuses",
+			"description": "The status set. `revenue` statuses count as sales everywhere (KPIs, exports, customer totals); `open` statuses count toward the open-order cap; `customer_cancellable` statuses may be cancelled by the customer; `expire_after_hours` > 0 moves an order that stays in the status to `expire_to` automatically. Names come from the strings (`orders.status.<key>`) unless `label` is set.",
+			"default": [
+				{
+					"key": "pending_payment",
+					"revenue": false,
+					"open": true,
+					"customer_cancellable": true,
+					"terminal": false,
+					"expire_after_hours": 48,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "awaiting_confirmation",
+					"revenue": false,
+					"open": true,
+					"customer_cancellable": true,
+					"terminal": false,
+					"expire_after_hours": 24,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "confirmed",
+					"revenue": true,
+					"open": true,
+					"customer_cancellable": false,
+					"terminal": false,
+					"expire_after_hours": 0,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "packed",
+					"revenue": true,
+					"open": true,
+					"customer_cancellable": false,
+					"terminal": false,
+					"expire_after_hours": 0,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "dispatched",
+					"revenue": true,
+					"open": false,
+					"customer_cancellable": false,
+					"terminal": false,
+					"expire_after_hours": 0,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "delivered",
+					"revenue": true,
+					"open": false,
+					"customer_cancellable": false,
+					"terminal": false,
+					"expire_after_hours": 0,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "returned",
+					"revenue": false,
+					"open": false,
+					"customer_cancellable": false,
+					"terminal": false,
+					"expire_after_hours": 0,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "cancelled",
+					"revenue": false,
+					"open": false,
+					"customer_cancellable": false,
+					"terminal": true,
+					"expire_after_hours": 0,
+					"expire_to": "cancelled"
+				},
+				{
+					"key": "refunded",
+					"revenue": false,
+					"open": false,
+					"customer_cancellable": false,
+					"terminal": true,
+					"expire_after_hours": 0,
+					"expire_to": "cancelled"
+				}
+			],
+			"minItems": 2,
+			"maxItems": 30,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["key"],
+				"properties": {
+					"key": { "type": "string", "title": "Key", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+					"label": { "type": "string", "title": "Label", "minLength": 1, "maxLength": 80 },
+					"revenue": { "type": "boolean", "title": "Counts as revenue" },
+					"open": { "type": "boolean", "title": "Open (counts toward the open-order cap)" },
+					"customer_cancellable": { "type": "boolean", "title": "The customer may cancel" },
+					"terminal": { "type": "boolean", "title": "Final (no transitions out)" },
+					"expire_after_hours": {
+						"type": "integer",
+						"title": "Auto-expire after (hours, 0 = never)",
+						"minimum": 0,
+						"maximum": 8760
+					},
+					"expire_to": {
+						"type": "string",
+						"title": "Status after expiry",
+						"minLength": 1,
+						"maxLength": 40,
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					}
+				}
+			},
+			"x-kind": "config"
+		},
+		"transitions": {
+			"type": "array",
+			"title": "Transition matrix",
+			"description": "Allowed moves. `actors` may perform it (staff = dashboard, api = sk_ key, customer = pk_ key with a verified identity, system = expiry and consumed events). `requires` lists checks (serials, tracking, dispatch_video, full_refund, paid_in_full, return_reason). `publish` is the catalogued order event the move publishes. `reasons` are the return reasons the move accepts.",
+			"default": [
+				{
+					"from": "pending_payment",
+					"to": "confirmed",
+					"actors": ["staff", "api", "system"],
+					"requires": [],
+					"publish": "none",
+					"reasons": []
+				},
+				{
+					"from": "pending_payment",
+					"to": "cancelled",
+					"actors": ["staff", "api", "customer", "system"],
+					"requires": [],
+					"publish": "order.cancelled",
+					"reasons": []
+				},
+				{
+					"from": "awaiting_confirmation",
+					"to": "confirmed",
+					"actors": ["staff", "api", "system"],
+					"requires": [],
+					"publish": "none",
+					"reasons": []
+				},
+				{
+					"from": "awaiting_confirmation",
+					"to": "cancelled",
+					"actors": ["staff", "api", "customer", "system"],
+					"requires": [],
+					"publish": "order.cancelled",
+					"reasons": []
+				},
+				{ "from": "confirmed", "to": "packed", "actors": ["staff", "api"], "requires": [], "publish": "none", "reasons": [] },
+				{
+					"from": "confirmed",
+					"to": "cancelled",
+					"actors": ["staff", "api", "system"],
+					"requires": [],
+					"publish": "order.cancelled",
+					"reasons": []
+				},
+				{
+					"from": "packed",
+					"to": "dispatched",
+					"actors": ["staff", "api"],
+					"requires": ["serials"],
+					"publish": "none",
+					"reasons": []
+				},
+				{
+					"from": "packed",
+					"to": "cancelled",
+					"actors": ["staff", "api", "system"],
+					"requires": [],
+					"publish": "order.cancelled",
+					"reasons": []
+				},
+				{
+					"from": "dispatched",
+					"to": "delivered",
+					"actors": ["staff", "api", "system"],
+					"requires": [],
+					"publish": "order.completed",
+					"reasons": []
+				},
+				{
+					"from": "dispatched",
+					"to": "returned",
+					"actors": ["staff", "api", "system"],
+					"requires": ["return_reason"],
+					"publish": "order.cancelled",
+					"reasons": ["rto", "customer_return"]
+				},
+				{
+					"from": "delivered",
+					"to": "returned",
+					"actors": ["staff", "api"],
+					"requires": ["return_reason"],
+					"publish": "order.cancelled",
+					"reasons": ["customer_return"]
+				},
+				{
+					"from": "delivered",
+					"to": "refunded",
+					"actors": ["staff", "api", "system"],
+					"requires": ["full_refund"],
+					"publish": "none",
+					"reasons": []
+				},
+				{
+					"from": "returned",
+					"to": "refunded",
+					"actors": ["staff", "api", "system"],
+					"requires": ["full_refund"],
+					"publish": "none",
+					"reasons": []
+				}
+			],
+			"maxItems": 200,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["from", "to"],
+				"properties": {
+					"from": {
+						"type": "string",
+						"title": "From",
+						"minLength": 1,
+						"maxLength": 40,
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"to": { "type": "string", "title": "To", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+					"actors": {
+						"type": "array",
+						"title": "Who may move",
+						"uniqueItems": true,
+						"maxItems": 4,
+						"items": { "type": "string", "title": "Actor", "enum": ["staff", "api", "customer", "system"] }
+					},
+					"requires": {
+						"type": "array",
+						"title": "Checks",
+						"uniqueItems": true,
+						"maxItems": 6,
+						"items": {
+							"type": "string",
+							"title": "Check",
+							"enum": ["serials", "tracking", "dispatch_video", "full_refund", "paid_in_full", "return_reason"]
+						}
+					},
+					"publish": {
+						"type": "string",
+						"title": "Event",
+						"enum": ["none", "order.completed", "order.cancelled"]
+					},
+					"reasons": {
+						"type": "array",
+						"title": "Return reasons",
+						"uniqueItems": true,
+						"maxItems": 20,
+						"items": {
+							"type": "string",
+							"title": "Reason",
+							"minLength": 1,
+							"maxLength": 40,
+							"pattern": "^[a-z][a-z0-9_]{0,39}$"
+						}
+					}
+				}
+			},
+			"x-kind": "config"
+		},
+		"initial_status": {
+			"type": "string",
+			"title": "Status of a new unpaid order",
+			"default": "pending_payment",
+			"minLength": 1,
+			"maxLength": 40,
+			"pattern": "^[a-z][a-z0-9_]{0,39}$",
+			"x-kind": "config"
+		},
+		"initial_status_paid": {
+			"type": "string",
+			"title": "Status of a new order that arrives paid in full",
+			"default": "confirmed",
+			"minLength": 1,
+			"maxLength": 40,
+			"pattern": "^[a-z][a-z0-9_]{0,39}$",
+			"x-kind": "config"
+		},
+		"initial_status_cod": {
+			"type": "string",
+			"title": "Status of a new pay-on-delivery order (the confirmation step)",
+			"description": "Pay-on-delivery orders without an advance wait here until staff confirm them with the customer.",
+			"default": "awaiting_confirmation",
+			"minLength": 1,
+			"maxLength": 40,
+			"pattern": "^[a-z][a-z0-9_]{0,39}$",
+			"x-kind": "config"
+		},
+		"cod_methods": {
+			"type": "array",
+			"title": "Pay-on-delivery payment methods",
+			"description": "Payment method keys that mean the customer pays on delivery.",
+			"default": ["cod"],
+			"uniqueItems": true,
+			"maxItems": 20,
+			"items": { "type": "string", "title": "Method", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
+			"x-kind": "config"
+		},
+		"confirm_on_payment": {
+			"type": "boolean",
+			"title": "Confirm automatically once paid",
+			"description": "When recorded payments cover the total (or the pay-on-delivery advance), move the order to the paid status if the matrix allows it.",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"customer_cancel_window_minutes": {
+			"type": "integer",
+			"title": "Customer cancellation window (minutes after placement, 0 = while cancellable)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 43200,
+			"x-kind": "config"
+		},
+		"max_lines": {
+			"type": "integer",
+			"title": "Maximum lines per order",
+			"default": 200,
+			"minimum": 1,
+			"maximum": 500,
+			"x-kind": "limit"
+		},
+		"max_timeline_entries": {
+			"type": "integer",
+			"title": "Timeline entries kept per order",
+			"default": 200,
+			"minimum": 10,
+			"maximum": 500,
+			"x-kind": "limit"
+		},
+		"customer_page_size": {
+			"type": "integer",
+			"title": "Orders per page for customers",
+			"default": 20,
+			"minimum": 1,
+			"maximum": 100,
+			"x-kind": "config"
+		},
+		"number_prefix": {
+			"type": "string",
+			"title": "Order number prefix",
+			"description": "Prefix of the numbers given to orders that arrive without one.",
+			"default": "",
+			"maxLength": 20,
+			"pattern": "^[A-Za-z0-9_-]*$",
+			"x-kind": "config"
+		},
+		"number_padding": {
+			"type": "integer",
+			"title": "Order number digits",
+			"default": 6,
+			"minimum": 1,
+			"maximum": 12,
+			"x-kind": "config"
+		}
+	}
+}

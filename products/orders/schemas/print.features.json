@@ -1,0 +1,47 @@
+{
+	"type": "object",
+	"title": "Packing slips & pick lists",
+	"additionalProperties": false,
+	"properties": {
+		"max_orders_per_print": {
+			"type": "integer",
+			"title": "Orders per print run",
+			"default": 100,
+			"minimum": 1,
+			"maximum": 500,
+			"x-kind": "limit",
+			"x-plan": { "starter": { "default": 100, "max": 100 }, "pro": { "default": 200, "max": 500 } }
+		},
+		"slip_show_prices": {
+			"type": "boolean",
+			"title": "Show prices on packing slips",
+			"default": false,
+			"x-kind": "flag"
+		},
+		"slip_show_collect": {
+			"type": "boolean",
+			"title": "Show the amount to collect on delivery",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"slip_serial_slots": {
+			"type": "boolean",
+			"title": "One serial slot per unit on packing slips",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"slip_signature": {
+			"type": "boolean",
+			"title": "Packed-by signature line",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"pick_list_sort": {
+			"type": "string",
+			"title": "Pick list order",
+			"default": "title",
+			"enum": ["title", "sku"],
+			"x-kind": "config"
+		}
+	}
+}

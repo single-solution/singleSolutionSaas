@@ -1,0 +1,124 @@
+{
+	"type": "object",
+	"title": "Invoices & receipts",
+	"additionalProperties": false,
+	"properties": {
+		"brand_name": {
+			"type": "string",
+			"title": "Business name",
+			"description": "Printed on invoices and receipts. Empty = the website's domain.",
+			"default": "",
+			"maxLength": 120,
+			"x-kind": "config"
+		},
+		"logo_url": {
+			"type": "string",
+			"title": "Logo (https:// URL)",
+			"default": "",
+			"maxLength": 1000,
+			"x-kind": "config"
+		},
+		"address_lines": {
+			"type": "array",
+			"title": "Business address lines",
+			"default": [],
+			"maxItems": 6,
+			"items": { "type": "string", "title": "Line", "minLength": 1, "maxLength": 200 },
+			"x-kind": "config"
+		},
+		"contact_lines": {
+			"type": "array",
+			"title": "Contact lines (phone, e-mail, website)",
+			"default": [],
+			"maxItems": 6,
+			"items": { "type": "string", "title": "Line", "minLength": 1, "maxLength": 200 },
+			"x-kind": "config"
+		},
+		"tax_id": {
+			"type": "string",
+			"title": "Tax or registration number",
+			"default": "",
+			"maxLength": 80,
+			"x-kind": "config"
+		},
+		"legal_text": {
+			"type": "string",
+			"title": "Legal text",
+			"description": "Terms, warranty conditions or the legal notice your jurisdiction requires.",
+			"default": "",
+			"maxLength": 4000,
+			"x-kind": "config"
+		},
+		"footer_text": {
+			"type": "string",
+			"title": "Footer",
+			"default": "",
+			"maxLength": 500,
+			"x-kind": "config"
+		},
+		"number_prefix": {
+			"type": "string",
+			"title": "Invoice number prefix",
+			"default": "INV-",
+			"maxLength": 20,
+			"pattern": "^[A-Za-z0-9_/-]*$",
+			"x-kind": "config"
+		},
+		"number_padding": {
+			"type": "integer",
+			"title": "Invoice number digits",
+			"default": 6,
+			"minimum": 1,
+			"maximum": 12,
+			"x-kind": "config"
+		},
+		"numbering": {
+			"type": "string",
+			"title": "Invoice numbers",
+			"description": "sequence (a gap-free counter of its own, given at the first render) or order (the order number).",
+			"default": "sequence",
+			"enum": ["sequence", "order"],
+			"x-kind": "config"
+		},
+		"show_warranty": {
+			"type": "boolean",
+			"title": "Print each line's warranty (from the order snapshot)",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"show_serials": {
+			"type": "boolean",
+			"title": "Print serials per line",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"show_sku": {
+			"type": "boolean",
+			"title": "Print SKUs",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"show_tax_lines": {
+			"type": "boolean",
+			"title": "Print the order's tax lines",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"show_payments": {
+			"type": "boolean",
+			"title": "Print payments, refunds and the balance due",
+			"default": true,
+			"x-kind": "flag"
+		},
+		"renders_per_minute": {
+			"type": "integer",
+			"title": "Renders per minute",
+			"default": 120,
+			"minimum": 1,
+			"maximum": 6000,
+			"x-kind": "rate",
+			"x-per": "minute",
+			"x-unit": "render"
+		}
+	}
+}
