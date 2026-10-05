@@ -1,0 +1,15 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "checkout.order_confirmed@1",
+	"description": "An order waiting for payment or confirmation (bank transfer, cash on delivery) was confirmed by the merchant or paid. There is no standard confirmation event; payments also publish order.paid@1.",
+	"type": "object",
+	"required": ["orderId", "number", "method"],
+	"additionalProperties": false,
+	"properties": {
+		"orderId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"number": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"method": { "type": "string", "enum": ["bank_transfer", "cod", "pickup_pay", "gateway"] },
+		"by": { "type": "string", "enum": ["merchant", "payment"] }
+	},
+	"examples": [{ "orderId": "ord_0mf2k3x1rabcdefghjkmnpqr", "number": "000042", "method": "cod", "by": "merchant" }]
+}
