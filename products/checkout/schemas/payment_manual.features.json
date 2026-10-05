@@ -1,0 +1,184 @@
+{
+	"type": "object",
+	"title": "Manual payments",
+	"additionalProperties": false,
+	"properties": {
+		"bank_transfer_enabled": {
+			"type": "boolean",
+			"title": "Offer bank transfer",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Bank transfer", "order": 1 }
+		},
+		"bank_details": {
+			"type": "array",
+			"title": "Bank details shown to the shopper",
+			"description": "Label / value pairs (bank, account holder, account number, IBAN, reference to quote …).",
+			"default": [],
+			"maxItems": 10,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["label", "value"],
+				"properties": {
+					"label": { "type": "string", "minLength": 1, "maxLength": 60 },
+					"value": { "type": "string", "minLength": 1, "maxLength": 200 }
+				}
+			},
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Bank transfer", "order": 2 }
+		},
+		"bank_hold_hours": {
+			"type": "integer",
+			"title": "Hold stock for an unpaid transfer (hours)",
+			"description": "An order still waiting for its transfer (or a cash-on-delivery advance) after this long is cancelled and its stock, codes and points go back.",
+			"default": 48,
+			"minimum": 1,
+			"maximum": 336,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Bank transfer", "order": 3 }
+		},
+		"bank_available_when": {
+			"type": "string",
+			"title": "Bank transfer available when (rules@1)",
+			"description": "Optional condition over cart, customer, delivery, country. Empty: always.",
+			"default": "",
+			"maxLength": 1000,
+			"x-kind": "config",
+			"x-ui": { "widget": "code", "group": "Bank transfer", "order": 4 }
+		},
+		"cod_enabled": {
+			"type": "boolean",
+			"title": "Offer cash on delivery",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Cash on delivery", "order": 5 }
+		},
+		"cod_surcharge_bp": {
+			"type": "integer",
+			"title": "Cash-on-delivery surcharge (basis points)",
+			"description": "Share of the subtotal after discounts; 100 = 1 %.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 5000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Cash on delivery", "order": 6 }
+		},
+		"cod_surcharge_flat": {
+			"type": "integer",
+			"title": "Cash-on-delivery flat fee (minor units)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100000000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Cash on delivery", "order": 7 }
+		},
+		"cod_min_order": {
+			"type": "integer",
+			"title": "Minimum order for cash on delivery (minor units)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100000000000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Cash on delivery", "order": 8 }
+		},
+		"cod_max_order": {
+			"type": "integer",
+			"title": "Maximum order for cash on delivery (minor units)",
+			"description": "Orders above this total must pay another way. 0 = no cap.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100000000000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Cash on delivery", "order": 9 }
+		},
+		"cod_advance_flat": {
+			"type": "integer",
+			"title": "Advance paid by bank transfer (minor units)",
+			"description": "Wins over the share below. Needs bank transfer to be on; the order starts pending_payment until the advance is in.",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 100000000000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Cash on delivery", "order": 10 }
+		},
+		"cod_advance_bp": {
+			"type": "integer",
+			"title": "Advance as a share of the total (basis points)",
+			"default": 0,
+			"minimum": 0,
+			"maximum": 10000,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Cash on delivery", "order": 11 }
+		},
+		"cod_confirmation": {
+			"type": "boolean",
+			"title": "Confirm cash-on-delivery orders before preparing them",
+			"description": "Orders start awaiting_confirmation; confirm them (call, message) from the dashboard or POST /v1/orders/{id}/confirm.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Cash on delivery", "order": 12 }
+		},
+		"cod_confirmation_hours": {
+			"type": "integer",
+			"title": "Cancel unconfirmed cash-on-delivery orders after (hours)",
+			"description": "0 = never.",
+			"default": 24,
+			"minimum": 0,
+			"maximum": 336,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Cash on delivery", "order": 13 }
+		},
+		"cod_requires_identity": {
+			"type": "boolean",
+			"title": "Only signed-in shoppers may use cash on delivery",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Cash on delivery", "order": 14 }
+		},
+		"cod_available_when": {
+			"type": "string",
+			"title": "Cash on delivery available when (rules@1)",
+			"default": "",
+			"maxLength": 1000,
+			"x-kind": "config",
+			"x-ui": { "widget": "code", "group": "Cash on delivery", "order": 15 }
+		},
+		"pickup_pay_enabled": {
+			"type": "boolean",
+			"title": "Offer pay at pickup",
+			"default": false,
+			"x-kind": "flag",
+			"x-ui": { "widget": "switch", "group": "Pickup", "order": 16 }
+		},
+		"pickup_hold_hours": {
+			"type": "integer",
+			"title": "Hold a pay-at-pickup order (hours)",
+			"default": 72,
+			"minimum": 1,
+			"maximum": 336,
+			"x-kind": "config",
+			"x-ui": { "widget": "number", "group": "Pickup", "order": 17 }
+		},
+		"max_open_orders": {
+			"type": "integer",
+			"title": "Unconfirmed orders one shopper may hold",
+			"description": "Orders waiting for payment or confirmation each hold stock. 0 = no cap. Counted per signed-in shopper, e-mail and phone.",
+			"default": 3,
+			"minimum": 0,
+			"maximum": 50,
+			"x-kind": "limit",
+			"x-ui": { "widget": "number", "group": "Safety", "order": 18 }
+		},
+		"method_order": {
+			"type": "array",
+			"title": "Order of the methods",
+			"default": ["bank_transfer", "cod", "pickup_pay"],
+			"maxItems": 3,
+			"uniqueItems": true,
+			"items": { "type": "string", "enum": ["bank_transfer", "cod", "pickup_pay"] },
+			"x-kind": "config",
+			"x-ui": { "widget": "list", "group": "Display", "order": 19 }
+		}
+	}
+}
