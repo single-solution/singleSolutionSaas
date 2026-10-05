@@ -1,0 +1,224 @@
+{
+	"ssps": "1",
+	"product": {
+		"slug": "search",
+		"name": "Site Search",
+		"kind": "service",
+		"version": "1.0.0",
+		"category": "tools",
+		"description": "Search for any website: an index of merchant-defined document types (products, articles, docs, listings, pages) in the merchant's own database, served by MongoDB Atlas Search when the database supports it (index definitions managed by the product) or by a portable engine (inverted index, prefix matching, bounded typo tolerance, field boosts); filled from Catalog item events, scheduled crawls of a public JSON feed or sitemap, and sk_ API upserts; ranking with field boosts, synonyms and pinned results; popular and recent suggestions; an accessible search overlay; aggregated query analytics without personal data."
+	},
+	"endpoints": {
+		"base": "https://search.example.com",
+		"dashboard": "/dashboard",
+		"demo": "/dashboard",
+		"events": "/.well-known/ss-events",
+		"register": "/.well-known/ss-register"
+	},
+	"capabilities": {
+		"adminLaunch": true,
+		"sandbox": true,
+		"localEnforcement": [
+			"limit:index.max_documents",
+			"quota:index.upserts_per_day",
+			"rate:index.search_rate_per_minute",
+			"rate:index.api_rate_per_minute",
+			"limit:sources.max_crawl_sources",
+			"limit:sources.max_pages"
+		],
+		"offlineGrace": "PT24H"
+	},
+	"scopes": ["events.subscribe:item.*"],
+	"requires": {
+		"resources": ["database"]
+	},
+	"events": {
+		"consumes": ["item.created@1", "item.updated@1", "item.deleted@1"],
+		"publishes": []
+	},
+	"elements": [
+		{
+			"key": "index",
+			"name": "Search index",
+			"description": "Documents of merchant-defined types with searchable, displayed and private fields, kept in the merchant's database; search with a pk_ key (rate limited per website, private fields never matched or returned) or an sk_ key; Atlas Search when available, else the portable engine. Limited by index.max_documents and the daily indexing quota; metered per query.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 200,
+				"metered": [
+					{
+						"unit": "query",
+						"perUnit": 1,
+						"per": 100,
+						"included": {
+							"starter": 50000,
+							"pro": 500000
+						}
+					}
+				]
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": [],
+			"features": {
+				"$ref": "schemas/index.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"experiments": true,
+			"api": {
+				"resources": ["documents", "search"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "sources",
+			"name": "Sources",
+			"description": "What fills the index: Catalog item.*@1 events (automatic when Catalog is active), scheduled crawls of the website's own public JSON feed or sitemap (fetched through the SSRF-guarded outbound client with page, size and time limits), and direct sk_ API upserts of any document type.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["index"],
+			"features": {
+				"$ref": "schemas/sources.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["sources"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "ranking",
+			"name": "Ranking",
+			"description": "Field boosts, synonyms, typo tolerance (bounded edit distance), prefix matching, document boost, pinned results per query and a match mode; the same rules drive both engines. An explain endpoint shows how a query scores.",
+			"modes": ["C"],
+			"stateful": false,
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["index"],
+			"features": {
+				"$ref": "schemas/ranking.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"experiments": true,
+			"api": {
+				"resources": ["ranking"]
+			},
+			"headless": null,
+			"renderer": null
+		},
+		{
+			"key": "suggestions",
+			"name": "Suggestions",
+			"description": "Popular queries (aggregated, shown only above a minimum count), recently updated documents, completions from the public vocabulary, and the visitor's own recent searches kept only in their browser.",
+			"modes": ["B", "C"],
+			"stateful": true,
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["index"],
+			"features": {
+				"$ref": "schemas/suggestions.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["suggestions"]
+			},
+			"headless": "headless/suggestions.js#createSuggestions",
+			"renderer": null
+		},
+		{
+			"key": "overlay",
+			"name": "Search overlay",
+			"description": "Drop-in search dialog or inline box: an ARIA combobox with a listbox of instant results, keyboard operable (hotkey, arrows, Enter, Escape, focus trap), debounced, with suggestions when empty; design tokens only.",
+			"modes": ["A", "B"],
+			"stateful": false,
+			"price": {
+				"hourly": 100
+			},
+			"budget": {
+				"js": 16
+			},
+			"dependsOn": ["index"],
+			"features": {
+				"$ref": "schemas/overlay.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": true,
+			"experiments": true,
+			"headless": "headless/overlay.js#createOverlay",
+			"renderer": "ui/overlay.js#render",
+			"variants": ["modal", "inline"],
+			"slots": ["before", "after", "empty"],
+			"a11y": {
+				"role": "search",
+				"labels": true,
+				"keyboard": true,
+				"reducedMotion": true
+			}
+		},
+		{
+			"key": "analytics",
+			"name": "Search analytics",
+			"description": "Aggregated daily counts per normalised query (searches, zero results, result clicks) in the merchant's database: no visitor ids, no IP addresses, and queries that look like e-mail addresses or long numbers are never stored. Top and zero-result queries.",
+			"modes": ["C"],
+			"stateful": true,
+			"price": {
+				"hourly": 50
+			},
+			"budget": {
+				"js": 0
+			},
+			"dependsOn": ["index"],
+			"features": {
+				"$ref": "schemas/analytics.features.json"
+			},
+			"strings": "strings/en.json",
+			"placement": false,
+			"api": {
+				"resources": ["search-analytics", "search-clicks"]
+			},
+			"headless": null,
+			"renderer": null
+		}
+	],
+	"plans": [
+		{
+			"code": "starter",
+			"name": "Starter",
+			"description": "Index, sources, ranking, suggestions and the overlay; analytics as an add-on.",
+			"elements": ["index", "sources", "ranking", "suggestions", "overlay"],
+			"addons": ["analytics"]
+		},
+		{
+			"code": "pro",
+			"name": "Pro",
+			"description": "Everything, with higher bounds.",
+			"elements": ["index", "sources", "ranking", "suggestions", "overlay", "analytics"]
+		}
+	],
+	"priceBook": {
+		"version": "2026-10-01",
+		"effectiveFrom": "2026-10-01T00:00:00Z"
+	},
+	"trialHours": 48
+}

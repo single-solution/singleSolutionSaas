@@ -1,0 +1,84 @@
+{
+	"type": "object",
+	"title": "Suggestions",
+	"additionalProperties": false,
+	"properties": {
+		"popular": {
+			"type": "boolean",
+			"title": "Popular searches",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "Popular", "order": 1, "widget": "switch" }
+		},
+		"popular_days": {
+			"type": "integer",
+			"title": "Popular over the last (days)",
+			"default": 30,
+			"minimum": 1,
+			"maximum": 90,
+			"x-kind": "config",
+			"x-ui": { "group": "Popular", "order": 2, "widget": "number" }
+		},
+		"popular_min_count": {
+			"type": "integer",
+			"title": "Searches before a query is shown",
+			"description": "A query is suggested only once this many searches used it, so nobody's rare query is shown to others.",
+			"default": 5,
+			"minimum": 2,
+			"maximum": 1000,
+			"x-kind": "config",
+			"x-ui": { "group": "Popular", "order": 3, "widget": "number" }
+		},
+		"popular_limit": {
+			"type": "integer",
+			"title": "Popular searches shown",
+			"default": 6,
+			"minimum": 1,
+			"maximum": 20,
+			"x-kind": "limit",
+			"x-ui": { "group": "Popular", "order": 4, "widget": "number" }
+		},
+		"recent_documents": {
+			"type": "boolean",
+			"title": "Recently updated documents",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "Recent", "order": 5, "widget": "switch" }
+		},
+		"recent_limit": {
+			"type": "integer",
+			"title": "Recent documents shown",
+			"default": 6,
+			"minimum": 1,
+			"maximum": 20,
+			"x-kind": "limit",
+			"x-ui": { "group": "Recent", "order": 6, "widget": "number" }
+		},
+		"completions": {
+			"type": "boolean",
+			"title": "Word completions",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "Completions", "order": 7, "widget": "switch" }
+		},
+		"completions_limit": {
+			"type": "integer",
+			"title": "Completions shown",
+			"default": 6,
+			"minimum": 1,
+			"maximum": 20,
+			"x-kind": "limit",
+			"x-ui": { "group": "Completions", "order": 8, "widget": "number" }
+		},
+		"history_size": {
+			"type": "integer",
+			"title": "Visitor's own recent searches",
+			"description": "Kept only in the visitor's browser (0 = off).",
+			"default": 5,
+			"minimum": 0,
+			"maximum": 20,
+			"x-kind": "config",
+			"x-ui": { "group": "Recent", "order": 9, "widget": "number" }
+		}
+	}
+}

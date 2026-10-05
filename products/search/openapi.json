@@ -1,0 +1,2239 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Site Search API",
+		"version": "1.0.0",
+		"description": "Mode C API of Site Search (SSPS v1). The index lives in the merchant's own database. Search runs on MongoDB Atlas Search when the database is on Atlas and the product-managed index is ready, else on the portable engine; both return the same shape. Prices are integer minor units. Times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`. `pk_` keys (browsers, domain-locked) search, get suggestions and count clicks, rate limited per website, never seeing or matching private fields; `sk_` keys (servers) do everything. Every search is metered (unit `query`). Events consumed: item.created@1, item.updated@1, item.deleted@1."
+	},
+	"servers": [
+		{
+			"url": "https://search.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
+	"tags": [
+		{
+			"name": "index"
+		},
+		{
+			"name": "sources"
+		},
+		{
+			"name": "ranking"
+		},
+		{
+			"name": "suggestions"
+		},
+		{
+			"name": "overlay"
+		},
+		{
+			"name": "analytics"
+		},
+		{
+			"name": "dashboard"
+		},
+		{
+			"name": "jobs"
+		},
+		{
+			"name": "standard"
+		}
+	],
+	"paths": {
+		"/v1/search": {
+			"get": {
+				"operationId": "search",
+				"tags": ["index"],
+				"summary": "Search the index. pk_ (rate limited per website by index.search_rate_per_minute, public cache headers): private fields are never matched or returned; sk_: every field. Metered per query (unit `query`). Same response whatever engine ran (Atlas Search or the portable engine). Storefront Blocks' search overlay calls this with `q` and `limit`.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Q"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Types"
+					},
+					{
+						"$ref": "#/components/parameters/Track"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"query",
+										"items",
+										"total",
+										"totalIsEstimate",
+										"hasMore",
+										"nextCursor",
+										"engine",
+										"relaxed"
+									],
+									"properties": {
+										"query": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"id",
+													"type",
+													"title",
+													"description",
+													"url",
+													"image",
+													"price",
+													"currency",
+													"fields"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"type": {
+														"type": "string",
+														"description": "document type key (index.document_types)"
+													},
+													"title": {
+														"type": "string"
+													},
+													"description": {
+														"type": "string"
+													},
+													"url": {
+														"type": ["string", "null"]
+													},
+													"image": {
+														"type": ["string", "null"]
+													},
+													"price": {
+														"type": ["integer", "null"],
+														"description": "integer minor units"
+													},
+													"currency": {
+														"type": ["string", "null"],
+														"description": "ISO 4217"
+													},
+													"fields": {
+														"type": "object",
+														"description": "pk_: display fields that are not private; sk_: every field"
+													},
+													"boost": {
+														"type": "number",
+														"description": "sk_ only"
+													},
+													"source": {
+														"type": ["string", "null"],
+														"description": "sk_ only: api | catalog | crawl:<key>"
+													},
+													"updatedAt": {
+														"type": ["string", "null"],
+														"description": "sk_ only"
+													},
+													"score": {
+														"type": "number",
+														"description": "explain only"
+													}
+												}
+											}
+										},
+										"total": {
+											"type": "integer",
+											"description": "results reachable by paging (capped by index.max_results)"
+										},
+										"totalIsEstimate": {
+											"type": "boolean",
+											"description": "true when the engine's candidate cap was reached"
+										},
+										"hasMore": {
+											"type": "boolean"
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"engine": {
+											"type": "string",
+											"enum": ["atlas", "portable"]
+										},
+										"relaxed": {
+											"type": "boolean",
+											"description": "no document matched every word; documents matching some are shown (match_mode all_then_any)"
+										}
+									}
+								},
+								"example": {
+									"query": "linen",
+									"items": [
+										{
+											"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"type": "item",
+											"title": "Linen shirt",
+											"description": "Breathable linen in five colours.",
+											"url": "/items/itm_0mf2k3x1rabcdefghjkmnpqr",
+											"image": "https://cdn.shop.example.com/linen.jpg",
+											"price": 4900,
+											"currency": "EUR",
+											"fields": {
+												"title": "Linen shirt",
+												"brand": "Acme",
+												"description": "Breathable linen in five colours.",
+												"tags": ["summer"]
+											}
+										}
+									],
+									"total": 1,
+									"totalIsEstimate": false,
+									"hasMore": false,
+									"nextCursor": null,
+									"engine": "portable",
+									"relaxed": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/documents": {
+			"get": {
+				"operationId": "listDocuments",
+				"tags": ["index"],
+				"summary": "Documents of the index (owner view), ordered by id, cursor pages.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"$ref": "#/components/parameters/FilterType"
+					},
+					{
+						"$ref": "#/components/parameters/FilterSource"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["items", "nextCursor", "hasMore"],
+									"properties": {
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"id",
+													"type",
+													"title",
+													"description",
+													"url",
+													"image",
+													"price",
+													"currency",
+													"fields"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"type": {
+														"type": "string",
+														"description": "document type key (index.document_types)"
+													},
+													"title": {
+														"type": "string"
+													},
+													"description": {
+														"type": "string"
+													},
+													"url": {
+														"type": ["string", "null"]
+													},
+													"image": {
+														"type": ["string", "null"]
+													},
+													"price": {
+														"type": ["integer", "null"],
+														"description": "integer minor units"
+													},
+													"currency": {
+														"type": ["string", "null"],
+														"description": "ISO 4217"
+													},
+													"fields": {
+														"type": "object",
+														"description": "pk_: display fields that are not private; sk_: every field"
+													},
+													"boost": {
+														"type": "number",
+														"description": "sk_ only"
+													},
+													"source": {
+														"type": ["string", "null"],
+														"description": "sk_ only: api | catalog | crawl:<key>"
+													},
+													"updatedAt": {
+														"type": ["string", "null"],
+														"description": "sk_ only"
+													},
+													"score": {
+														"type": "number",
+														"description": "explain only"
+													}
+												}
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"items": [
+										{
+											"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"type": "item",
+											"title": "Linen shirt",
+											"description": "Breathable linen in five colours.",
+											"url": "/items/itm_0mf2k3x1rabcdefghjkmnpqr",
+											"image": "https://cdn.shop.example.com/linen.jpg",
+											"price": 4900,
+											"currency": "EUR",
+											"fields": {
+												"title": "Linen shirt",
+												"brand": "Acme",
+												"description": "Breathable linen in five colours.",
+												"tags": ["summer"]
+											}
+										}
+									],
+									"nextCursor": null,
+									"hasMore": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			},
+			"post": {
+				"operationId": "upsertDocument",
+				"tags": ["index"],
+				"summary": "Create (201) or replace (200) a document of any type. Needs the sources element with sources.api_upserts. Counts against index.max_documents (409 limit_reached) and the daily index.upserts_per_day quota (429 quota_exhausted).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["type"],
+								"properties": {
+									"id": {
+										"type": "string",
+										"pattern": "^[A-Za-z0-9][A-Za-z0-9._:~-]{0,127}$",
+										"description": "generated (doc_…) when omitted; an existing id replaces the document"
+									},
+									"type": {
+										"type": "string"
+									},
+									"url": {
+										"type": ["string", "null"],
+										"description": "https URL or site-relative path"
+									},
+									"image": {
+										"type": ["string", "null"]
+									},
+									"price": {
+										"type": ["integer", "null"],
+										"minimum": 0
+									},
+									"currency": {
+										"type": ["string", "null"],
+										"pattern": "^[A-Z]{3}$"
+									},
+									"boost": {
+										"type": "number",
+										"minimum": 0,
+										"maximum": 1000000
+									},
+									"fields": {
+										"type": "object",
+										"description": "the type's fields: strings, numbers, booleans, lists of those, or a flat attribute map; undeclared fields are ignored (listed in ignoredFields)"
+									}
+								}
+							},
+							"example": {
+								"type": "page",
+								"url": "/help/returns",
+								"fields": {
+									"title": "Returns and exchanges",
+									"description": "How to return an order within 30 days.",
+									"body": "Start a return from your account page."
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"201": {
+						"description": "Created",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["id", "type", "title", "description", "url", "image", "price", "currency", "fields"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"type": {
+											"type": "string",
+											"description": "document type key (index.document_types)"
+										},
+										"title": {
+											"type": "string"
+										},
+										"description": {
+											"type": "string"
+										},
+										"url": {
+											"type": ["string", "null"]
+										},
+										"image": {
+											"type": ["string", "null"]
+										},
+										"price": {
+											"type": ["integer", "null"],
+											"description": "integer minor units"
+										},
+										"currency": {
+											"type": ["string", "null"],
+											"description": "ISO 4217"
+										},
+										"fields": {
+											"type": "object",
+											"description": "pk_: display fields that are not private; sk_: every field"
+										},
+										"boost": {
+											"type": "number",
+											"description": "sk_ only"
+										},
+										"source": {
+											"type": ["string", "null"],
+											"description": "sk_ only: api | catalog | crawl:<key>"
+										},
+										"updatedAt": {
+											"type": ["string", "null"],
+											"description": "sk_ only"
+										},
+										"score": {
+											"type": "number",
+											"description": "explain only"
+										}
+									}
+								},
+								"example": {
+									"id": "doc_0mf2k3x1rabcdefghjkmnpqr",
+									"type": "page",
+									"title": "Linen shirt",
+									"description": "Breathable linen in five colours.",
+									"url": "/items/itm_0mf2k3x1rabcdefghjkmnpqr",
+									"image": "https://cdn.shop.example.com/linen.jpg",
+									"price": 4900,
+									"currency": "EUR",
+									"fields": {
+										"title": "Linen shirt",
+										"brand": "Acme",
+										"description": "Breathable linen in five colours.",
+										"tags": ["summer"]
+									},
+									"source": "api",
+									"boost": 0,
+									"updatedAt": "2026-10-01T10:00:00.000Z"
+								}
+							}
+						}
+					},
+					"200": {
+						"description": "Replaced",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["id", "type", "title", "description", "url", "image", "price", "currency", "fields"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"type": {
+											"type": "string",
+											"description": "document type key (index.document_types)"
+										},
+										"title": {
+											"type": "string"
+										},
+										"description": {
+											"type": "string"
+										},
+										"url": {
+											"type": ["string", "null"]
+										},
+										"image": {
+											"type": ["string", "null"]
+										},
+										"price": {
+											"type": ["integer", "null"],
+											"description": "integer minor units"
+										},
+										"currency": {
+											"type": ["string", "null"],
+											"description": "ISO 4217"
+										},
+										"fields": {
+											"type": "object",
+											"description": "pk_: display fields that are not private; sk_: every field"
+										},
+										"boost": {
+											"type": "number",
+											"description": "sk_ only"
+										},
+										"source": {
+											"type": ["string", "null"],
+											"description": "sk_ only: api | catalog | crawl:<key>"
+										},
+										"updatedAt": {
+											"type": ["string", "null"],
+											"description": "sk_ only"
+										},
+										"score": {
+											"type": "number",
+											"description": "explain only"
+										}
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk",
+				"x-ss-certify": true
+			}
+		},
+		"/v1/documents:batch": {
+			"post": {
+				"operationId": "upsertDocuments",
+				"tags": ["index"],
+				"summary": "Create or replace up to 100 documents; per-item results.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["documents"],
+								"properties": {
+									"documents": {
+										"type": "array",
+										"minItems": 1,
+										"maxItems": 100,
+										"items": {
+											"type": "object",
+											"required": ["type"],
+											"properties": {
+												"id": {
+													"type": "string",
+													"pattern": "^[A-Za-z0-9][A-Za-z0-9._:~-]{0,127}$",
+													"description": "generated (doc_…) when omitted; an existing id replaces the document"
+												},
+												"type": {
+													"type": "string"
+												},
+												"url": {
+													"type": ["string", "null"],
+													"description": "https URL or site-relative path"
+												},
+												"image": {
+													"type": ["string", "null"]
+												},
+												"price": {
+													"type": ["integer", "null"],
+													"minimum": 0
+												},
+												"currency": {
+													"type": ["string", "null"],
+													"pattern": "^[A-Z]{3}$"
+												},
+												"boost": {
+													"type": "number",
+													"minimum": 0,
+													"maximum": 1000000
+												},
+												"fields": {
+													"type": "object",
+													"description": "the type's fields: strings, numbers, booleans, lists of those, or a flat attribute map; undeclared fields are ignored (listed in ignoredFields)"
+												}
+											}
+										}
+									}
+								}
+							},
+							"example": {
+								"documents": [
+									{
+										"type": "page",
+										"url": "/help/returns",
+										"fields": {
+											"title": "Returns and exchanges",
+											"description": "How to return an order within 30 days.",
+											"body": "Start a return from your account page."
+										}
+									}
+								]
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"results": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"index": {
+														"type": "integer"
+													},
+													"status": {
+														"type": "string",
+														"enum": ["created", "updated", "failed"]
+													},
+													"id": {
+														"type": "string"
+													},
+													"reason": {
+														"type": "string"
+													},
+													"errors": {
+														"type": "array"
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"results": [
+										{
+											"index": 0,
+											"status": "created",
+											"id": "doc_0mf2k3x1rabcdefghjkmnpqr"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/documents/{id}": {
+			"get": {
+				"operationId": "getDocument",
+				"tags": ["index"],
+				"summary": "One document (owner view, with its status).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["id", "type", "title", "description", "url", "image", "price", "currency", "fields"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"type": {
+											"type": "string",
+											"description": "document type key (index.document_types)"
+										},
+										"title": {
+											"type": "string"
+										},
+										"description": {
+											"type": "string"
+										},
+										"url": {
+											"type": ["string", "null"]
+										},
+										"image": {
+											"type": ["string", "null"]
+										},
+										"price": {
+											"type": ["integer", "null"],
+											"description": "integer minor units"
+										},
+										"currency": {
+											"type": ["string", "null"],
+											"description": "ISO 4217"
+										},
+										"fields": {
+											"type": "object",
+											"description": "pk_: display fields that are not private; sk_: every field"
+										},
+										"boost": {
+											"type": "number",
+											"description": "sk_ only"
+										},
+										"source": {
+											"type": ["string", "null"],
+											"description": "sk_ only: api | catalog | crawl:<key>"
+										},
+										"updatedAt": {
+											"type": ["string", "null"],
+											"description": "sk_ only"
+										},
+										"score": {
+											"type": "number",
+											"description": "explain only"
+										}
+									}
+								},
+								"example": {
+									"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+									"type": "item",
+									"title": "Linen shirt",
+									"description": "Breathable linen in five colours.",
+									"url": "/items/itm_0mf2k3x1rabcdefghjkmnpqr",
+									"image": "https://cdn.shop.example.com/linen.jpg",
+									"price": 4900,
+									"currency": "EUR",
+									"fields": {
+										"title": "Linen shirt",
+										"brand": "Acme",
+										"description": "Breathable linen in five colours.",
+										"tags": ["summer"]
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			},
+			"delete": {
+				"operationId": "deleteDocument",
+				"tags": ["index"],
+				"summary": "Remove a document from the index.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Id"
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "Removed"
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/index-status": {
+			"get": {
+				"operationId": "indexStatus",
+				"tags": ["index"],
+				"summary": "Engine in use and the Atlas Search state (unavailable | permission_denied | missing | building | ready | failed); with permission_denied the index definition to create by hand. `refresh=true` probes Atlas now.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Refresh"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"engine": {
+										"configured": "auto",
+										"active": "portable",
+										"atlas": {
+											"state": "permission_denied",
+											"detail": "Unauthorized",
+											"checkedAt": "2026-10-01T10:00:00.000Z",
+											"definition": {
+												"name": "ss_search_v1",
+												"definition": {
+													"mappings": {
+														"dynamic": false,
+														"fields": {}
+													}
+												}
+											}
+										}
+									},
+									"documents": {
+										"total": 120,
+										"limit": 10000,
+										"byType": {
+											"item": 100,
+											"page": 20
+										}
+									},
+									"vocabulary": 1840,
+									"quota": {
+										"day": "2026-10-01",
+										"used": 140,
+										"perDay": 20000
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/sources": {
+			"get": {
+				"operationId": "listSources",
+				"tags": ["sources"],
+				"summary": "Sources: Catalog events, API writes and the crawled sources with their last run (refused sources say why).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"catalog": {
+											"type": "object"
+										},
+										"api": {
+											"type": "object"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"key": {
+														"type": "string"
+													},
+													"kind": {
+														"type": "string"
+													},
+													"url": {
+														"type": "string"
+													},
+													"type": {
+														"type": "string"
+													},
+													"everyHours": {
+														"type": "integer"
+													},
+													"allowed": {
+														"type": "boolean"
+													},
+													"reason": {
+														"type": ["string", "null"]
+													},
+													"crawl": {
+														"type": ["object", "null"],
+														"properties": {
+															"status": {
+																"type": ["string", "null"]
+															},
+															"total": {
+																"type": "integer"
+															},
+															"processed": {
+																"type": "integer"
+															},
+															"indexed": {
+																"type": "integer"
+															},
+															"failed": {
+																"type": "integer"
+															},
+															"removed": {
+																"type": "integer"
+															},
+															"error": {
+																"type": ["string", "null"]
+															},
+															"startedAt": {
+																"type": ["string", "null"]
+															},
+															"finishedAt": {
+																"type": ["string", "null"]
+															},
+															"nextRunAt": {
+																"type": ["string", "null"]
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"catalog": {
+										"enabled": true,
+										"type": "item"
+									},
+									"api": {
+										"enabled": true
+									},
+									"items": [
+										{
+											"key": "help",
+											"kind": "sitemap",
+											"url": "https://shop.example.com/sitemap.xml",
+											"type": "page",
+											"everyHours": 24,
+											"allowed": true,
+											"reason": null,
+											"crawl": {
+												"status": "ok",
+												"total": 20,
+												"processed": 20,
+												"indexed": 20,
+												"failed": 0,
+												"removed": 1,
+												"error": null,
+												"startedAt": "2026-10-01T09:00:00.000Z",
+												"finishedAt": "2026-10-01T09:05:00.000Z",
+												"nextRunAt": "2026-10-02T09:05:00.000Z"
+											}
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/sources/{key}/crawl": {
+			"post": {
+				"operationId": "crawlSource",
+				"tags": ["sources"],
+				"summary": "Start a new run of a crawled source now and run its first step (the scheduler continues it).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SourceKey"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"key": "help",
+									"kind": "sitemap",
+									"url": "https://shop.example.com/sitemap.xml",
+									"type": "page",
+									"everyHours": 24,
+									"allowed": true,
+									"reason": null,
+									"crawl": {
+										"status": "ok",
+										"total": 20,
+										"processed": 20,
+										"indexed": 20,
+										"failed": 0,
+										"removed": 1,
+										"error": null,
+										"startedAt": "2026-10-01T09:00:00.000Z",
+										"finishedAt": "2026-10-01T09:05:00.000Z",
+										"nextRunAt": "2026-10-02T09:05:00.000Z"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/ranking": {
+			"get": {
+				"operationId": "getRanking",
+				"tags": ["ranking"],
+				"summary": "The effective ranking settings both engines use.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"fieldBoosts": [
+										{
+											"field": "title",
+											"weight": 5
+										}
+									],
+									"synonyms": [],
+									"typoTolerance": true,
+									"typoMinLength": 4,
+									"typoTwoEditsLength": 8,
+									"maxEdits": 2,
+									"prefixMatching": true,
+									"matchMode": "all_then_any",
+									"stopwords": [],
+									"documentBoostWeight": 1,
+									"pinned": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/ranking:explain": {
+			"get": {
+				"operationId": "explainRanking",
+				"tags": ["ranking"],
+				"summary": "A search (owner view) with each hit's score; not counted in analytics' clicks, metered like any query.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Q"
+					},
+					{
+						"$ref": "#/components/parameters/Limit"
+					},
+					{
+						"$ref": "#/components/parameters/Cursor"
+					},
+					{
+						"$ref": "#/components/parameters/Types"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": [
+										"query",
+										"items",
+										"total",
+										"totalIsEstimate",
+										"hasMore",
+										"nextCursor",
+										"engine",
+										"relaxed"
+									],
+									"properties": {
+										"query": {
+											"type": "string"
+										},
+										"items": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"required": [
+													"id",
+													"type",
+													"title",
+													"description",
+													"url",
+													"image",
+													"price",
+													"currency",
+													"fields"
+												],
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"type": {
+														"type": "string",
+														"description": "document type key (index.document_types)"
+													},
+													"title": {
+														"type": "string"
+													},
+													"description": {
+														"type": "string"
+													},
+													"url": {
+														"type": ["string", "null"]
+													},
+													"image": {
+														"type": ["string", "null"]
+													},
+													"price": {
+														"type": ["integer", "null"],
+														"description": "integer minor units"
+													},
+													"currency": {
+														"type": ["string", "null"],
+														"description": "ISO 4217"
+													},
+													"fields": {
+														"type": "object",
+														"description": "pk_: display fields that are not private; sk_: every field"
+													},
+													"boost": {
+														"type": "number",
+														"description": "sk_ only"
+													},
+													"source": {
+														"type": ["string", "null"],
+														"description": "sk_ only: api | catalog | crawl:<key>"
+													},
+													"updatedAt": {
+														"type": ["string", "null"],
+														"description": "sk_ only"
+													},
+													"score": {
+														"type": "number",
+														"description": "explain only"
+													}
+												}
+											}
+										},
+										"total": {
+											"type": "integer",
+											"description": "results reachable by paging (capped by index.max_results)"
+										},
+										"totalIsEstimate": {
+											"type": "boolean",
+											"description": "true when the engine's candidate cap was reached"
+										},
+										"hasMore": {
+											"type": "boolean"
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"engine": {
+											"type": "string",
+											"enum": ["atlas", "portable"]
+										},
+										"relaxed": {
+											"type": "boolean",
+											"description": "no document matched every word; documents matching some are shown (match_mode all_then_any)"
+										}
+									}
+								},
+								"example": {
+									"query": "linen",
+									"items": [
+										{
+											"id": "itm_0mf2k3x1rabcdefghjkmnpqr",
+											"type": "item",
+											"title": "Linen shirt",
+											"description": "Breathable linen in five colours.",
+											"url": "/items/itm_0mf2k3x1rabcdefghjkmnpqr",
+											"image": "https://cdn.shop.example.com/linen.jpg",
+											"price": 4900,
+											"currency": "EUR",
+											"fields": {
+												"title": "Linen shirt",
+												"brand": "Acme",
+												"description": "Breathable linen in five colours.",
+												"tags": ["summer"]
+											},
+											"score": 7.31
+										}
+									],
+									"total": 1,
+									"totalIsEstimate": false,
+									"hasMore": false,
+									"nextCursor": null,
+									"engine": "portable",
+									"relaxed": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/suggestions": {
+			"get": {
+				"operationId": "suggestions",
+				"tags": ["suggestions"],
+				"summary": "Suggestions: popular queries (searched at least suggestions.popular_min_count times, with results), completions of the last word from the public vocabulary, and recently updated documents (empty query). The visitor's own recent searches never reach the server.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Q"
+					},
+					{
+						"$ref": "#/components/parameters/Types"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"query": {
+											"type": "string"
+										},
+										"popular": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													}
+												}
+											}
+										},
+										"completions": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"text": {
+														"type": "string"
+													}
+												}
+											}
+										},
+										"recent": {
+											"type": "array",
+											"items": {
+												"type": "object",
+												"properties": {
+													"id": {
+														"type": "string"
+													},
+													"type": {
+														"type": "string"
+													},
+													"title": {
+														"type": "string"
+													},
+													"url": {
+														"type": ["string", "null"]
+													}
+												}
+											}
+										}
+									}
+								},
+								"example": {
+									"query": "lin",
+									"popular": [
+										{
+											"text": "linen shirt"
+										}
+									],
+									"completions": [
+										{
+											"text": "linen"
+										}
+									],
+									"recent": []
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/search-analytics": {
+			"get": {
+				"operationId": "searchAnalytics",
+				"tags": ["analytics"],
+				"summary": "Aggregated counts over the last `days` days: totals, daily, top queries and zero-result queries. No personal data is stored.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Days"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"from": "2026-09-02",
+									"days": 30,
+									"totals": {
+										"searches": 120,
+										"zero": 9,
+										"clicks": 40,
+										"zeroRate": 0.075,
+										"clickRate": 0.333
+									},
+									"daily": [
+										{
+											"day": "2026-10-01",
+											"searches": 12,
+											"zero": 1,
+											"clicks": 4
+										}
+									],
+									"top": [
+										{
+											"q": "linen",
+											"searches": 42,
+											"zero": 0,
+											"clicks": 30,
+											"results": 3
+										}
+									],
+									"zeroResults": [
+										{
+											"q": "gift card",
+											"searches": 8,
+											"zero": 8,
+											"clicks": 0,
+											"results": 0
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/search-clicks": {
+			"post": {
+				"operationId": "searchClick",
+				"tags": ["analytics"],
+				"summary": "Count a click on a result of a query (pk_ from the overlay; idempotency optional). Personal-looking queries are not counted.",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"required": ["q"],
+								"properties": {
+									"q": {
+										"type": "string"
+									},
+									"id": {
+										"type": "string"
+									}
+								}
+							},
+							"example": {
+								"q": "linen",
+								"id": "itm_0mf2k3x1rabcdefghjkmnpqr"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"counted": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"counted": true
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/overlay/view": {
+			"get": {
+				"operationId": "overlayView",
+				"tags": ["overlay"],
+				"summary": "Element stub view of the overlay (ss-element-stub@2): a query field and a search action.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"fields": {
+											"type": "array"
+										},
+										"actions": {
+											"type": "array"
+										},
+										"items": {
+											"type": "array"
+										}
+									}
+								},
+								"example": {
+									"title": "Search",
+									"fields": [
+										{
+											"name": "q",
+											"type": "text",
+											"label": "Search this website",
+											"required": true
+										}
+									],
+									"actions": [
+										{
+											"action": "search",
+											"label": "Search"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/elements/overlay/actions/search": {
+			"post": {
+				"operationId": "overlaySearch",
+				"tags": ["overlay"],
+				"summary": "Element stub action: search and return the results as links.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/Ctx"
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object",
+								"properties": {
+									"fields": {
+										"type": "object",
+										"properties": {
+											"q": {
+												"type": "string"
+											}
+										}
+									}
+								}
+							},
+							"example": {
+								"fields": {
+									"q": "linen"
+								}
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"title": {
+											"type": "string"
+										},
+										"body": {
+											"type": "string"
+										},
+										"fields": {
+											"type": "array"
+										},
+										"actions": {
+											"type": "array"
+										},
+										"items": {
+											"type": "array"
+										}
+									}
+								},
+								"example": {
+									"title": "Search",
+									"fields": [],
+									"actions": [],
+									"items": [
+										{
+											"text": "Linen shirt",
+											"href": "/items/itm_1"
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/session": {
+			"get": {
+				"operationId": "getSession",
+				"tags": ["dashboard"],
+				"summary": "The dashboard session (launch kind, role, scope).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"kind": "merchant",
+									"role": "merchant",
+									"scope": {},
+									"user": "usr_1",
+									"actor": null
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/sources/{key}/crawl": {
+			"post": {
+				"operationId": "dashboardCrawl",
+				"tags": ["dashboard"],
+				"summary": "Crawl a source now (dashboard session; audited).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/SourceKey"
+					},
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"key": "help",
+									"kind": "sitemap",
+									"url": "https://shop.example.com/sitemap.xml",
+									"type": "page",
+									"everyHours": 24,
+									"allowed": true,
+									"reason": null,
+									"crawl": {
+										"status": "ok",
+										"total": 20,
+										"processed": 20,
+										"indexed": 20,
+										"failed": 0,
+										"removed": 1,
+										"error": null,
+										"startedAt": "2026-10-01T09:00:00.000Z",
+										"finishedAt": "2026-10-01T09:05:00.000Z",
+										"nextRunAt": "2026-10-02T09:05:00.000Z"
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/engine/check": {
+			"post": {
+				"operationId": "dashboardEngineCheck",
+				"tags": ["dashboard"],
+				"summary": "Probe Atlas Search now and create the index when allowed (dashboard session; audited).",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"engine": {
+										"configured": "auto",
+										"active": "portable",
+										"atlas": {
+											"state": "permission_denied",
+											"detail": "Unauthorized",
+											"checkedAt": "2026-10-01T10:00:00.000Z",
+											"definition": {
+												"name": "ss_search_v1",
+												"definition": {
+													"mappings": {
+														"dynamic": false,
+														"fields": {}
+													}
+												}
+											}
+										}
+									},
+									"documents": {
+										"total": 120,
+										"limit": 10000,
+										"byType": {
+											"item": 100,
+											"page": 20
+										}
+									},
+									"vocabulary": 1840,
+									"quota": {
+										"day": "2026-10-01",
+										"used": 140,
+										"perDay": 20000
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/cron/sweep": {
+			"get": {
+				"operationId": "sweep",
+				"tags": ["jobs"],
+				"summary": "Scheduled work for every website: a step of each due crawl, the Atlas index state, vocabulary cleanup.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"websites": 1,
+									"results": [
+										{
+											"websiteId": "web_1",
+											"crawled": 1,
+											"atlas": "unavailable",
+											"termsRemoved": 0
+										}
+									]
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"cron": []
+					}
+				]
+			}
+		},
+		"/v1/entitlement": {
+			"get": {
+				"operationId": "getEntitlement",
+				"tags": ["standard"],
+				"summary": "The website's entitlement (from cache).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/config": {
+			"get": {
+				"operationId": "getConfig",
+				"tags": ["standard"],
+				"summary": "Effective configuration of the requested elements (?element=a,b).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/strings": {
+			"get": {
+				"operationId": "getStrings",
+				"tags": ["standard"],
+				"summary": "String catalog (?lang=).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/healthz": {
+			"get": {
+				"operationId": "healthz",
+				"tags": ["standard"],
+				"summary": "Liveness.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/readyz": {
+			"get": {
+				"operationId": "readyz",
+				"tags": ["standard"],
+				"summary": "Readiness (product database).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": []
+			}
+		},
+		"/v1/events": {
+			"post": {
+				"operationId": "postEvents",
+				"tags": ["standard"],
+				"summary": "Website events into this product (product namespace).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"events": []
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
+		"/v1/data:export": {
+			"post": {
+				"operationId": "dataExport",
+				"tags": ["standard"],
+				"summary": "Portal-signed personal data export (this product stores none).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"websiteId": "web_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"portalSignature": []
+					}
+				]
+			}
+		},
+		"/v1/data:anonymize": {
+			"post": {
+				"operationId": "dataAnonymize",
+				"tags": ["standard"],
+				"summary": "Portal-signed anonymisation (this product stores no personal data).",
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {
+								"websiteId": "web_1"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"portalSignature": []
+					}
+				]
+			}
+		}
+	},
+	"components": {
+		"securitySchemes": {
+			"websiteKey": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			},
+			"portalSignature": {
+				"type": "apiKey",
+				"in": "header",
+				"name": "SS-Signature",
+				"description": "Portal-signed request (ss-request.v1)"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
+			},
+			"cron": {
+				"type": "http",
+				"scheme": "bearer",
+				"description": "CRON_SECRET"
+			}
+		},
+		"parameters": {
+			"IdempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": true,
+				"schema": {
+					"type": "string",
+					"maxLength": 255
+				},
+				"description": "Required on POSTs that create or move state; a replay returns the original response."
+			},
+			"Q": {
+				"name": "q",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"maxLength": 2000
+				},
+				"description": "The query as typed (normalised; a trailing space ends prefix matching of the last word)."
+			},
+			"Limit": {
+				"name": "limit",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100
+				},
+				"description": "Page size (1 to index.max_page_size; default 10, 20 for documents)."
+			},
+			"Cursor": {
+				"name": "cursor",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Opaque cursor from nextCursor."
+			},
+			"Types": {
+				"name": "types",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Comma-separated document types (default: every type)."
+			},
+			"Track": {
+				"name": "track",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string"
+				},
+				"description": "`0` or `false`: do not count this search in analytics."
+			},
+			"FilterType": {
+				"name": "type",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Only this document type."
+			},
+			"FilterSource": {
+				"name": "source",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Only this source (api, catalog, crawl:<key>)."
+			},
+			"Id": {
+				"name": "id",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Document id."
+			},
+			"SourceKey": {
+				"name": "key",
+				"in": "path",
+				"required": true,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Crawled source key."
+			},
+			"Refresh": {
+				"name": "refresh",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"enum": ["true", "false"]
+				},
+				"description": "`true`: probe Atlas Search now."
+			},
+			"Days": {
+				"name": "days",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 400
+				},
+				"description": "Window in days (1 to analytics.retention_days; default 30)."
+			},
+			"Ctx": {
+				"name": "ctx",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string",
+					"maxLength": 2048
+				},
+				"description": "Element stub page context (JSON)."
+			}
+		},
+		"responses": {
+			"Problem": {
+				"description": "RFC 9457 problem",
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"type": "object",
+							"properties": {
+								"type": {
+									"type": "string"
+								},
+								"title": {
+									"type": "string"
+								},
+								"status": {
+									"type": "integer"
+								},
+								"detail": {
+									"type": "string"
+								},
+								"instance": {
+									"type": "string"
+								},
+								"requestId": {
+									"type": "string"
+								},
+								"errors": {
+									"type": "array",
+									"items": {
+										"type": "object",
+										"properties": {
+											"path": {
+												"type": "string"
+											},
+											"code": {
+												"type": "string"
+											},
+											"message": {
+												"type": "string"
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

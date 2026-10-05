@@ -1,0 +1,163 @@
+{
+	"type": "object",
+	"title": "Ranking",
+	"additionalProperties": false,
+	"properties": {
+		"field_boosts": {
+			"type": "array",
+			"title": "Field boosts",
+			"description": "How much a match in each field counts (fields not listed count 1).",
+			"default": [
+				{ "field": "title", "weight": 5 },
+				{ "field": "brand", "weight": 3 },
+				{ "field": "skus", "weight": 3 },
+				{ "field": "tags", "weight": 2 },
+				{ "field": "headings", "weight": 2 },
+				{ "field": "description", "weight": 1 },
+				{ "field": "attributes", "weight": 1 },
+				{ "field": "body", "weight": 0.5 }
+			],
+			"maxItems": 40,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["field", "weight"],
+				"properties": {
+					"field": {
+						"type": "string",
+						"title": "Field",
+						"minLength": 1,
+						"maxLength": 40,
+						"pattern": "^[a-z][a-z0-9_]{0,39}$"
+					},
+					"weight": { "type": "number", "title": "Weight", "minimum": 0, "maximum": 100 }
+				}
+			},
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "group": "Relevance", "order": 1, "widget": "list" }
+		},
+		"synonyms": {
+			"type": "array",
+			"title": "Synonyms",
+			"description": "Groups of words or phrases that mean the same thing on this website (a query for one finds the others).",
+			"default": [],
+			"maxItems": 500,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["terms"],
+				"properties": {
+					"terms": {
+						"type": "array",
+						"title": "Terms",
+						"minItems": 2,
+						"maxItems": 20,
+						"items": { "type": "string", "minLength": 1, "maxLength": 60 }
+					}
+				}
+			},
+			"x-kind": "config",
+			"x-ui": { "group": "Relevance", "order": 2, "widget": "list" }
+		},
+		"typo_tolerance": {
+			"type": "boolean",
+			"title": "Typo tolerance",
+			"default": true,
+			"x-kind": "flag",
+			"x-experiment": true,
+			"x-ui": { "group": "Matching", "order": 3, "widget": "switch" }
+		},
+		"typo_min_length": {
+			"type": "integer",
+			"title": "Shortest word with one typo allowed",
+			"default": 4,
+			"minimum": 2,
+			"maximum": 20,
+			"x-kind": "config",
+			"x-ui": { "group": "Matching", "order": 4, "widget": "number" }
+		},
+		"typo_two_edits_length": {
+			"type": "integer",
+			"title": "Shortest word with two typos allowed",
+			"default": 8,
+			"minimum": 3,
+			"maximum": 30,
+			"x-kind": "config",
+			"x-ui": { "group": "Matching", "order": 5, "widget": "number" }
+		},
+		"max_edits": {
+			"type": "integer",
+			"title": "Most typos per word",
+			"default": 2,
+			"minimum": 0,
+			"maximum": 2,
+			"x-kind": "limit",
+			"x-ui": { "group": "Matching", "order": 6, "widget": "number" }
+		},
+		"prefix_matching": {
+			"type": "boolean",
+			"title": "Match as you type",
+			"description": "The last word of a query also matches longer words in prefix fields.",
+			"default": true,
+			"x-kind": "flag",
+			"x-ui": { "group": "Matching", "order": 7, "widget": "switch" }
+		},
+		"match_mode": {
+			"type": "string",
+			"title": "Words a result must match",
+			"description": "all: every word; any: at least one; all_then_any: every word, else at least one when nothing matches all.",
+			"default": "all_then_any",
+			"enum": ["all", "any", "all_then_any"],
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "group": "Matching", "order": 8, "widget": "select" }
+		},
+		"stopwords": {
+			"type": "array",
+			"title": "Ignored words",
+			"description": "Words that never count in a query (for the website's languages).",
+			"default": [],
+			"maxItems": 300,
+			"uniqueItems": true,
+			"items": { "type": "string", "minLength": 1, "maxLength": 40 },
+			"x-kind": "config",
+			"x-ui": { "group": "Matching", "order": 9 }
+		},
+		"document_boost_weight": {
+			"type": "number",
+			"title": "Weight of the document boost",
+			"description": "How much a document's own boost value (popularity, rank) lifts it.",
+			"default": 1,
+			"minimum": 0,
+			"maximum": 10,
+			"x-kind": "config",
+			"x-experiment": true,
+			"x-ui": { "group": "Relevance", "order": 10, "widget": "number" }
+		},
+		"pinned": {
+			"type": "array",
+			"title": "Pinned results",
+			"description": "Documents shown first for an exact query (after normalisation).",
+			"default": [],
+			"maxItems": 200,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["query", "ids"],
+				"properties": {
+					"query": { "type": "string", "title": "Query", "minLength": 1, "maxLength": 100 },
+					"ids": {
+						"type": "array",
+						"title": "Document ids",
+						"minItems": 1,
+						"maxItems": 10,
+						"items": { "type": "string", "minLength": 1, "maxLength": 128 }
+					}
+				}
+			},
+			"x-kind": "config",
+			"x-ui": { "group": "Relevance", "order": 11, "widget": "list" }
+		}
+	}
+}
