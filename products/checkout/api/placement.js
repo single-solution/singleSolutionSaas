@@ -43,13 +43,22 @@ export const createPlacement = (checkout, { items, carts, pricing }) => {
 	const { app, integrations, product } = checkout;
 
 	/**
-	 * Local part: take tracked stock and insert the order — one transaction, or compensated steps.
+	 * Local part: take tracked stock, number the order and insert it — one transaction, or compensated steps.
+	 * The number is drawn only after the stock is taken, so a refused placement never consumes one.
 	 * @param {Site} site
 	 * @param {Record<string, any>} order
 	 * @param {Array<{ itemId: string, variantId: string, quantity: number }>} stockLines
 	 */
 	const commitLocal = async (site, order, stockLines) => {
 		const { repos } = site;
+		/** @param {any} [session] */
+		const numbered = async (session) => ({
+			...order,
+			number: orderNumber(await repos.counters.next('order', session), {
+				prefix: site.settings.place.number_prefix,
+				padding: site.settings.place.number_padding,
+			}),
+		});
 		const untracked = site.settings.place.untracked_stock;
 		/** @param {any} [session] */
 		const takeAll = async (session) => {
@@ -70,23 +79,26 @@ export const createPlacement = (checkout, { items, carts, pricing }) => {
 			return taken;
 		};
 		try {
-			await repos.transaction(async (session) => {
+			const placed = await repos.transaction(async (session) => {
 				await takeAll(session);
-				await repos.orders.insert(order, session);
+				const doc = await numbered(session);
+				await repos.orders.insert(doc, session);
+				return doc;
 			});
-			return { mode: 'transaction' };
+			return { mode: 'transaction', number: placed.number };
 		} catch (error) {
 			if (!isTransactionUnsupported(error)) throw error;
 		}
 		// standalone server: the same steps in sequence, compensating exactly what completed
 		const taken = await takeAll();
 		try {
-			await repos.orders.insert(order);
+			const doc = await numbered();
+			await repos.orders.insert(doc);
+			return { mode: 'sequential', number: doc.number };
 		} catch (error) {
 			for (const done of taken) await repos.items.give(done);
 			throw error;
 		}
-		return { mode: 'sequential' };
 	};
 
 	/**
@@ -240,16 +252,12 @@ export const createPlacement = (checkout, { items, carts, pricing }) => {
 			total: q.totals.total,
 			now,
 		});
-		const number = orderNumber(await repos.counters.next('order'), {
-			prefix: settings.place.number_prefix,
-			padding: settings.place.number_padding,
-		});
 		const token = `oat_${encodeBase32(app.randomBytes(20))}`;
 		const stockSource = settings.place.stock_source;
 		/** @type {Record<string, any>} */
 		const order = {
 			id: orderId,
-			number,
+			number: '',
 			status: start.status,
 			idempotencyKey: keyHash,
 			accessTokenHash: app.hash(token),
@@ -403,13 +411,15 @@ export const createPlacement = (checkout, { items, carts, pricing }) => {
 
 		// ── local transaction ────────────────────────────────────────────────────────────────────────────────
 		try {
-			await commitLocal(
-				site,
-				order,
-				stockSource === 'checkout'
-					? lines.map((line) => ({ itemId: line.itemId, variantId: line.variantId, quantity: line.quantity }))
-					: [],
-			);
+			order.number = (
+				await commitLocal(
+					site,
+					order,
+					stockSource === 'checkout'
+						? lines.map((line) => ({ itemId: line.itemId, variantId: line.variantId, quantity: line.quantity }))
+						: [],
+				)
+			).number;
 		} catch (error) {
 			if (isDuplicateKey(error)) {
 				// a parallel submission with the same key won: its reservations are the same (derived keys), keep them
@@ -446,7 +456,7 @@ export const createPlacement = (checkout, { items, carts, pricing }) => {
 			'order.placed@1',
 			{
 				orderId,
-				number,
+				number: order.number,
 				...(ref ? { customer: ref } : {}),
 				currency: q.currency,
 				lines: eventLines(order.lines),

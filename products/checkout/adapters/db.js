@@ -296,12 +296,12 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 		}),
 
 		counters: Object.freeze({
-			/** @param {string} name @returns {Promise<number>} */
-			next: async (name) => {
+			/** @param {string} name @param {any} [session] @returns {Promise<number>} */
+			next: async (name, session) => {
 				const doc = await counters.findOneAndUpdate(
 					{ websiteId, name },
 					{ $inc: { value: 1 }, $setOnInsert: onInsert({}) },
-					{ upsert: true, returnDocument: 'after' },
+					{ upsert: true, returnDocument: 'after', ...opts(session) },
 				);
 				return /** @type {number} */ (doc?.value);
 			},
