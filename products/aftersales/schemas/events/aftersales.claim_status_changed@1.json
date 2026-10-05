@@ -1,0 +1,28 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"title": "aftersales.claim_status_changed@1",
+	"description": "A claim moved from one status to another along the merchant's transitions; kind is the new status's kind (open, resolved, rejected or closed).",
+	"type": "object",
+	"required": ["claimId", "reference", "type", "from", "to", "kind"],
+	"additionalProperties": false,
+	"properties": {
+		"claimId": { "type": "string", "minLength": 1, "maxLength": 64 },
+		"reference": { "type": "string", "minLength": 1, "maxLength": 32 },
+		"type": { "type": "string", "minLength": 1, "maxLength": 40 },
+		"orderId": { "type": "string", "minLength": 1, "maxLength": 128 },
+		"from": { "type": "string", "minLength": 1, "maxLength": 40 },
+		"to": { "type": "string", "minLength": 1, "maxLength": 40 },
+		"kind": { "type": "string", "enum": ["open", "resolved", "rejected", "closed"] }
+	},
+	"examples": [
+		{
+			"claimId": "clm_0mf2k3x1rabcdefghjkmnpqr",
+			"reference": "CL-ABCDEF",
+			"type": "return",
+			"orderId": "ord_123",
+			"from": "requested",
+			"to": "approved",
+			"kind": "open"
+		}
+	]
+}
