@@ -1,7 +1,7 @@
 'use client';
 /**
- * Apps (products): list with status / kind filters; registration of a service product (base URL + one-time token,
- * never shown again); upload of a signed pack bundle (descriptor + detached signature + key); app detail with
+ * Apps (products): list with status / kind filters; adding a service product (a one-time connection code the owner
+ * pastes into the product's /setup; shown once); upload of a signed pack bundle (descriptor + detached signature + key); app detail with
  * manifest versions (diff viewer with breaking flags, approve / reject with reason), lifecycle (activate,
  * deprecate with a sunset date, retire), environments, keys (revoke), health and the admin launch (one merchant,
  * or app-wide `all` for superadmins/admins).
@@ -66,7 +66,7 @@ export function AppsView(props) {
 		(cursor) => (ok ? adminApi.apps({ status: filter.status, kind: filter.kind, cursor, limit: 50 }) : null),
 		ok ? props.page : null,
 	);
-	const [dialog, setDialog] = useState(/** @type {null | 'register' | 'pack'} */ (null));
+	const [dialog, setDialog] = useState(/** @type {null | 'add' | 'pack'} */ (null));
 	if (!ok) return <AdminProblem problem={props.problem} />;
 	const canManage = staffCan(props.staff, 'platform.apps.manage');
 	return (
@@ -80,8 +80,8 @@ export function AppsView(props) {
 							<Button variant="secondary" onClick={() => setDialog('pack')} icon={<Icon name="box" size={14} />}>
 								Upload pack
 							</Button>
-							<Button onClick={() => setDialog('register')} icon={<Icon name="plus" size={14} />}>
-								Register service
+							<Button onClick={() => setDialog('add')} icon={<Icon name="plus" size={14} />}>
+								Add product
 							</Button>
 						</>
 					) : null
@@ -159,115 +159,80 @@ export function AppsView(props) {
 				]}
 			/>
 			<ActionProblem problem={list.problem} />
-			<RegisterDialog open={dialog === 'register'} onClose={() => setDialog(null)} />
+			<ConnectionCodeDialog open={dialog === 'add'} onClose={() => setDialog(null)} />
 			<PackDialog open={dialog === 'pack'} onClose={() => setDialog(null)} />
 		</div>
 	);
 }
 
 /**
- * Register a service product: the Portal calls the product's registration endpoint with the one-time token and
- * verifies its proof of possession. The token is write-only (never stored or shown by the Portal).
- * @param {{ open: boolean, onClose: () => void }} props
+ * Add (or reconnect) a service product: a one-time connection code, valid 24 hours, shown once. The owner pastes it into
+ * the product's `/setup`; the product then proves possession of its new key and the Portal pins its address.
+ * @param {{ open: boolean, onClose: () => void, appId?: string | null }} props `appId`: reconnect that app
  */
-export function RegisterDialog({ open, onClose }) {
-	const [baseUrl, setBaseUrl] = useState('');
-	const [stagingBaseUrl, setStaging] = useState('');
-	const [token, setToken] = useState('');
-	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
+export function ConnectionCodeDialog({ open, onClose, appId = null }) {
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [busy, setBusy] = useState(false);
-	const [done, setDone] = useState(/** @type {any} */ (null));
+	const [issued, setIssued] = useState(/** @type {any} */ (null));
 	const close = () => {
-		setToken('');
-		setDone(null);
+		setIssued(null);
 		setProblem(null);
-		setErrors({});
 		onClose();
 	};
-	const submit = async () => {
-		/** @type {Record<string, string>} */
-		const local = {};
-		if (!/^https:\/\/[^\s/]+/.test(baseUrl.trim())) local.baseUrl = 'Enter the product base URL (https://…).';
-		if (stagingBaseUrl.trim() && !/^https:\/\/[^\s/]+/.test(stagingBaseUrl.trim()))
-			local.stagingBaseUrl = 'Enter an https URL or leave empty.';
-		if (!/^[\x21-\x7e]{16,512}$/.test(token)) local.token = 'Paste the one-time registration token (16+ characters).';
-		setErrors(local);
-		if (Object.keys(local).length > 0) return;
+	const create = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.register(), {
-			method: 'POST',
-			body: { baseUrl: baseUrl.trim(), token, ...(stagingBaseUrl.trim() ? { stagingBaseUrl: stagingBaseUrl.trim() } : {}) },
-		});
+		const result = await adminFetch(appId ? adminApi.reconnect(appId) : adminApi.connectionCodes(), { method: 'POST' });
 		setBusy(false);
-		setToken(''); // a token burns on use: never keep it in the form
 		if (!result.ok) {
 			setProblem(result.problem);
-			setErrors(fieldErrors(result.problem));
 			return;
 		}
-		setDone(result.data);
+		setIssued(result.data);
 	};
 	return (
 		<Dialog
 			open={open}
 			onClose={close}
-			title={done ? 'Service registered' : 'Register a service product'}
-			description={done ? undefined : 'Generate a one-time token on the product (ss app register), then paste it here.'}
+			title={appId ? 'Reconnect the product' : 'Add a service product'}
+			description={
+				issued
+					? undefined
+					: 'Deploy the product with its DATABASE_URI, then create a one-time connection code and paste it at https://<product address>/setup.'
+			}
 			footer={
-				done ? (
-					<ButtonLink as={Link} href={adminRoutes.app(done.appId)} variant="primary">
-						Open {done.name ?? done.slug}
-					</ButtonLink>
+				issued ? (
+					<Button variant="secondary" onClick={close}>
+						Done
+					</Button>
 				) : null
 			}>
-			{done ? (
-				<KeyValueList
-					columns={1}
-					items={[
-						{ label: 'App', value: <IdChip id={done.appId} label="app id" /> },
-						{ label: 'Status', value: <StatusBadge status={done.status} /> },
-						{ label: 'Key id', value: <span className="font-mono text-xs">{done.kid}</span> },
-						{ label: 'Thumbprint', value: <span className="break-all font-mono text-xs">{done.thumbprint}</span> },
-					]}
-				/>
+			{issued ? (
+				<div className="space-y-3">
+					<CodeBlock label="Connection code" code={issued.code} />
+					<KeyValueList
+						columns={1}
+						items={[
+							{ label: 'App', value: <IdChip id={issued.appId} label="app id" /> },
+							{ label: 'Valid until', value: formatDateTime(issued.expiresAt) },
+						]}
+					/>
+					<Callout tone="warning" title="Shown once">
+						Copy it now: the Portal keeps only its hash. Open the product's /setup page and paste it there; it works once.
+						{appId && !issued.disconnected
+							? ' The current deployment did not confirm the reset: reset it from its control database if it is still running.'
+							: ''}
+					</Callout>
+				</div>
 			) : (
-				<Form onSubmit={submit} busy={busy} aria-label="Register a service product">
-					<Input
-						label="Production base URL"
-						type="url"
-						value={baseUrl}
-						onChange={(e) => setBaseUrl(e.currentTarget.value)}
-						error={errors.baseUrl}
-						placeholder="https://chat.example.com"
-						required
-					/>
-					<Input
-						label="Staging base URL (optional)"
-						type="url"
-						value={stagingBaseUrl}
-						onChange={(e) => setStaging(e.currentTarget.value)}
-						error={errors.stagingBaseUrl}
-					/>
-					<Input
-						label="One-time registration token"
-						type="password"
-						autoComplete="off"
-						spellCheck={false}
-						value={token}
-						onChange={(e) => setToken(e.currentTarget.value)}
-						error={errors.token}
-						help="Used once and burnt by the product; a failed attempt needs a new token."
-						required
-					/>
-					<FormError problem={problem} fields={['baseUrl', 'stagingBaseUrl', 'token']} />
+				<Form onSubmit={create} busy={busy} aria-label={appId ? 'Reconnect the product' : 'Add a service product'}>
+					<FormError problem={problem} />
 					<FormActions>
 						<Button variant="secondary" onClick={close}>
 							Cancel
 						</Button>
 						<Button type="submit" loading={busy}>
-							Register
+							Create connection code
 						</Button>
 					</FormActions>
 				</Form>
@@ -459,6 +424,7 @@ export function AppView(props) {
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [refreshing, setRefreshing] = useState(false);
 	const [retrying, setRetrying] = useState(false);
+	const [reconnecting, setReconnecting] = useState(false);
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.apps(), label: 'Back to apps' }} />;
 	const { staff } = props;
 	const canReview = staffCan(staff, 'platform.apps.review');
@@ -581,6 +547,11 @@ export function AppView(props) {
 								loading={refreshing}
 								icon={<Icon name="refresh" size={14} />}>
 								Refresh manifest
+							</Button>
+						) : null}
+						{app.kind === 'service' && canManage ? (
+							<Button variant="secondary" onClick={() => setReconnecting(true)} icon={<Icon name="plug" size={14} />}>
+								Reconnect
 							</Button>
 						) : null}
 						{app.kind === 'service' && staffCan(staff, 'platform.jobs.manage') ? (
@@ -726,6 +697,16 @@ export function AppView(props) {
 			</Card>
 
 			{app.kind === 'service' ? <EnvironmentsCard app={app} canManage={canManage} onSaved={reload} /> : null}
+			{app.kind === 'service' ? (
+				<ConnectionCodeDialog
+					open={reconnecting}
+					appId={app.appId}
+					onClose={() => {
+						setReconnecting(false);
+						void reload();
+					}}
+				/>
+			) : null}
 
 			<Card title="Signing keys" subtitle="Keys the product signs client assertions and manifests with.">
 				<Table

@@ -22,7 +22,8 @@ instrumentation.js           validates configuration when a server instance star
 next.config.js               security headers, /v1/* → /api/v1/* rewrite
 src/
   portal.js                  composition root: createPortal({ config, db, modules, logger, now, randomBytes })
-  runtime.js                 getPortal(): lazy, cached on globalThis, built from process.env
+  runtime.js                 getPortal(): lazy, cached; env + system state (secrets, settings), schema prepared
+  setup.js                   /setup: records the Portal URL and creates the first admin (first run only)
   infra/
     config.js                env → typed, frozen config (fails listing every bad variable)
     db.js                    Mongo client cache, collection registry, ensureIndexes, guarded repositories,
@@ -53,10 +54,10 @@ test/                        vitest; integration tests on one shared MongoMemory
 Request pipeline (`src/infra/http.js`): request id → route match (404/405, CORS preflight) → body cap (413) → auth →
 CSRF for cookie sessions (403) → RBAC permission (403) → rate limit (429 + `RateLimit-*`) → JSON (415/400) →
 `Idempotency-Key` on POST (428 / 409 / replay with `Idempotent-Replayed: true`) → handler → RFC 9457 problems
-(`@ss/contracts` factory, type base `<PUBLIC_URL>/problems/`). API responses default to `Cache-Control: no-store`.
+(`@ss/contracts` factory, type base `<Portal URL>/problems/`). API responses default to `Cache-Control: no-store`.
 
 **Idempotency.** The request fingerprint is `HMAC-SHA-256(IDEMPOTENCY_SECRET, method ‖ path ‖ query ‖ body)` (the
-key defaults to an HKDF derivation of `SESSION_SECRET`), so a stored fingerprint of a body holding a password or a
+key defaults to an generated idempotency secret), so a stored fingerprint of a body holding a password or a
 credential cannot be brute-forced offline. Route option `idempotent`: `true` (default for POST: key required, the
 response is stored and replayed), `'optional'`, `false`, or `'no-store'` — for requests or responses that carry
 secrets (login, MFA, password and key routes; connector create/rotate): the key is optional, only the status and
@@ -70,7 +71,7 @@ the original status) instead of executing twice or re-sending a secret. Use a ne
 | `staff`      | `__Host-ss_staff` cookie                   | session store; **MFA required** (routes opt out with `mfa: false` only for the second-factor step)                                       |
 | `merchant`   | `__Host-ss_merchant` cookie                | session store                                                                                                                            |
 | `websiteKey` | `Authorization: Bearer pk_…` / `sk_…`      | `@ss/protocol` `verifyWebsiteKey` with the website-key keys, `websiteKeyRevoked(claims, rawKey)` port, `originAllowed` for `pk_`, scopes |
-| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = `PUBLIC_URL`, shared replay store                                                            |
+| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = the Portal URL, shared replay store                                                          |
 | `public`     | none                                       | —                                                                                                                                        |
 
 A route may list several modes; the first credential present decides (an invalid one fails — it never falls through).
@@ -78,11 +79,11 @@ Modules that receive a website key elsewhere (e.g. a `sendBeacon` body) call `ct
 referer, keyKind?, scopes?, env? })` — the same implementation as the authenticator (claims, or an infra problem).
 
 **CSRF** (cookie sessions only): mutations must carry `Sec-Fetch-Site: same-origin` when the browser sends it, and an
-`Origin` exactly equal to the `PUBLIC_URL` origin when sent; a mutation with neither is refused. Together with
+`Origin` exactly equal to the Portal URL origin when sent; a mutation with neither is refused. Together with
 `SameSite=Lax` cookies and JSON-only bodies (form posts get 415), no CSRF token is needed. Bearer-authenticated calls
 (products, website keys) are not subject to CSRF.
 
-**Sessions**: 256-bit opaque tokens; only `HMAC(SESSION_SECRET, token)` is stored; idle and absolute expiry (TTL);
+**Sessions**: 256-bit opaque tokens; only `HMAC(session secret, token)` is stored; idle and absolute expiry (TTL);
 `rotate` on any privilege change (MFA completed, roles changed, impersonation) keeps the absolute expiry and kills the
 old token; `revokeAll` for password changes and offboarding. Cookies: `HttpOnly; Secure; SameSite=Lax; Path=/` with
 the `__Host-` prefix whenever Secure (plain-http localhost uses `ss_staff` / `ss_merchant`).
@@ -165,69 +166,57 @@ cut run). Each run holds a lease lock (no overlaps), gets `OPERATION_DEADLINE_MS
 
 ## Environment
 
-All variables are validated together at start (names only are reported, never values). Every value is a plain string
-(no JSON), no host is hardcoded and nothing depends on the hosting provider. The environment comes from `NODE_ENV`
-only: production unless `development` or `test`. Logs are `info` in production and `debug` in development.
+Only the database and the asset storage come from the environment; everything else is generated or set inside the
+Portal. All variables are validated together at start (names only are reported, never values), every value is a plain
+string, and nothing depends on the hosting provider. The environment comes from `NODE_ENV` (production unless
+`development` or `test`); logs are `info` in production and `debug` in development.
 
-**Required**
+| Variable                                                                                                                      | Description                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`                                                                                                                 | Control-plane MongoDB (never a client database).                                                                                            |
+| `STORAGE_ENDPOINT`, `STORAGE_REGION` (default `auto`), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | Asset storage for pack files and compiled website bundles: Cloudflare R2 or any S3-compatible service (a bucket is required in production). |
 
-| Variable               | Description                                                                                                                                                                                 |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`          | Control-plane MongoDB connection string (never a client database).                                                                                                                          |
-| `PUBLIC_URL`           | The Portal's address, e.g. `https://portal.example.com`: token issuer/audience, e-mail links, CSRF origin. Development default `http://localhost:4000`; never derived from request headers. |
-| `SIGNING_KEYS`         | `kid:seed[,kid:seed…]` (seed = base64url of a 32-byte Ed25519 key). The first signs; all are published in the JWKS.                                                                         |
-| `WEBSITE_SIGNING_KEYS` | Same form; signs website keys (`pk_`/`sk_`) only, kids and keys distinct from `SIGNING_KEYS`. Outside production derived from `SESSION_SECRET`.                                             |
-| `ENCRYPTION_KEYS`      | `kid:base64(32 bytes)[,kid:base64…]`, first = active.                                                                                                                                       |
-| `SESSION_SECRET`       | ≥ 32 bytes (base64 or text). HMAC key for session ids, recovery codes, throttle keys.                                                                                                       |
-| `KEY_PEPPER`           | ≥ 32 bytes, different from `SESSION_SECRET`. HMAC pepper for website secret keys at rest.                                                                                                   |
+Optional, never needed: `STORAGE_PREFIX`, `STORAGE_PATH_STYLE`, `STORAGE_DIR` (development only, instead of a bucket:
+a directory or `:memory:`), `APP_VERSION`, `MONGODB_DB`, `MONGODB_MAX_POOL_SIZE`, `DELIVERY_BUDGET_KB`,
+`TRUST_PROXY_HEADERS`, `MAX_BODY_BYTES`, `OPERATION_DEADLINE_MS`, the four `*_SESSION_*` lifetimes and
+`OUTBOUND_DEV_ALLOW_HOSTS` (development only). The full list is `ENV_VARS` in `src/infra/config.js`.
 
-**Optional**
+### Kept in the database (`platform_system`, `src/infra/system.js`)
 
-| Variable                                                                                                               | Description                                                                                                                                                                                                                              |
-| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SMTP_URL`, `MAIL_FROM`                                                                                                | Mailer `smtp(s)://user:pass@host:port` (percent-encode the credentials) and its sender (`Name <address>` or `address`). Without them production sends no mail; development logs it.                                                      |
-| `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`                                                 | Asset storage (pack assets, compiled website bundles — our software, never client data) in an S3-compatible bucket. Without storage the delivery routes answer 503.                                                                      |
-| `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_PREFIX`, `STORAGE_PATH_STYLE`                                           | Endpoint origin (https in production; default AWS), region (default `auto`), key prefix (`a/b/`), `true` for path-style URLs.                                                                                                            |
-| `STORAGE_DIR`                                                                                                          | Development only: a local directory (e.g. `.data/assets`) or `:memory:` instead of a bucket.                                                                                                                                             |
-| `PREVIEW_URL`                                                                                                          | Dedicated cookie-less preview origin (https, another host than `PUBLIC_URL`, ideally another registrable domain) pointed at the same deployment. Preview links use it, the Portal host refuses `/p/*`, and that host serves only `/p/*`. |
-| `APP_VERSION`                                                                                                          | Reported by `/healthz` and `/v1/system/info` (default `dev`).                                                                                                                                                                            |
-| `IDEMPOTENCY_SECRET`                                                                                                   | ≥ 32 bytes. HMAC key of idempotency fingerprints (default: HKDF of `SESSION_SECRET`).                                                                                                                                                    |
-| `MONGODB_DB`, `MONGODB_MAX_POOL_SIZE`                                                                                  | Database name (default: path of `MONGODB_URI`, else `ss_portal`); pool per instance (default 5).                                                                                                                                         |
-| `DELIVERY_BUDGET_KB`                                                                                                   | Website bundle budget in KB gzip (default 60; PLAN F.18 has the reasoning).                                                                                                                                                              |
-| `TRUST_PROXY_HEADERS`                                                                                                  | `true` behind a proxy that sets `X-Forwarded-For` (needed for per-IP limits).                                                                                                                                                            |
-| `MAX_BODY_BYTES`, `OPERATION_DEADLINE_MS`                                                                              | Default body cap (1 MiB); time budget of one admin operation (50 000; keep below the host's function time limit).                                                                                                                        |
-| `STAFF_SESSION_IDLE_MINUTES`, `STAFF_SESSION_MAX_HOURS`, `MERCHANT_SESSION_IDLE_MINUTES`, `MERCHANT_SESSION_MAX_HOURS` | Session lifetimes (defaults 30 min, 12 h, 1440 min, 336 h).                                                                                                                                                                              |
-| `OUTBOUND_DEV_ALLOW_HOSTS`                                                                                             | Development only: comma-separated hosts/IPs outbound calls may reach although private or plain http; ignored in production.                                                                                                              |
-
-`instrumentation.js` loads the configuration when a server instance starts: an invalid configuration is logged as
-`Failed to prepare server … Invalid Portal configuration: …` and every request (including `/healthz`) fails, so a
-bad deployment is visible immediately. `next build` never needs the environment or a database.
+- **Generated on first start**, inserted only if absent so concurrent cold starts agree: the Ed25519 Portal signing
+  key, the website-key signing key, the encryption key (KEK), the session secret, the key pepper and the idempotency
+  secret. Loaded once per instance and cached.
+- **Recorded at `/setup`**: the Portal URL — the issuer and audience of every token, the base of e-mail links and the
+  consoles' CSRF origin. It is never read from request headers after setup. `/setup` exists only until the first staff
+  user exists: it shows the origin you are visiting from (editable), records it and creates the first superadmin, then
+  sends you to set a password and enrol two-factor sign-in. **Do it right after deploying**: until then, whoever opens
+  `/setup` first becomes the administrator. Before setup the API answers 503 to everything. `node scripts/bootstrap-admin.js
+<email> --url <portal url>` is the command-line alternative.
+- **Admin → Settings** (`/v1/admin/system/settings…`, audited): the Portal URL (superadmins, typed twice), the optional
+  preview URL (a cookie-less origin on another host serving only `/p/*`), the mailer (host, port, TLS, user, password
+  sealed with the encryption key, sender) and key rotation. Every instance applies a change within 5 seconds (a cheap
+  read of the settings version).
+- **Indexes and migrations** run automatically on the first request after a deploy, once per schema version, under a
+  lock (`scripts/db.js` stays for developers: dry runs, applying ahead of time).
 
 ### Key management
 
-- **Signing key rotation**: generate a new key, deploy `SIGNING_KEYS=new-kid:seed,old-kid:seed` (both published; the new
-  one signs), wait for the overlap (product JWKS caches refresh within 5 min; launch and assertion lifetimes are minutes),
-  then remove the old key. Website keys are not affected: they have their own signer.
-- **Website-key signer** (`WEBSITE_SIGNING_KEYS`, `ctx.keys.websiteKeySigner`): signs `pk_`/`sk_` keys only and
-  verifies them through `ctx.keys.websiteKeyResolver` (a Portal-signed token is never a website key). Its public keys
-  are published in the same JWKS with distinct kids. Rotation: prepend a new key (new keys are signed with it, old
-  ones keep verifying), **re-issue the website keys signed by the old key, then remove it** (F.5). Compromise: remove
-  the key at once and re-issue.
-- **KEK rotation**: prepend a new KEK (`ENCRYPTION_KEYS=k2:…,k1:…`). New secrets are sealed with `k2`; old ones still open
-  with `k1`; `envelope.rewrap(sealed)` moves a record to `k2` without touching its ciphertext. Remove `k1` only after
-  every record is rewrapped.
-- Generate values: `node scripts/dev-env.js` (development only) or, for production, fresh keys from
-  `generateSigningKey` (`@ss/protocol`) for `SIGNING_KEYS` and `WEBSITE_SIGNING_KEYS` (distinct kids) and
-  `openssl rand -base64 32` for the secrets.
+- **Rotation** (Admin → Settings → Keys, superadmin): a new key is prepended; it signs (or seals) from now on while the
+  old ones stay published (or able to open). Product JWKS caches refresh within 5 minutes; launch and assertion
+  lifetimes are minutes. Website keys have their own signer: after rotating it, re-issue the website keys signed by the
+  old key (F.5). Encryption keys: new secrets are sealed with the new KEK; `envelope.rewrap(sealed)` moves a record
+  without touching its ciphertext (the connectors health operation does it).
+- **Website-key signer** (`ctx.keys.websiteKeySigner`): signs `pk_`/`sk_` keys only and verifies them through
+  `ctx.keys.websiteKeyResolver` (a Portal-signed token is never a website key). Its public keys are published in the
+  same JWKS with distinct kids.
 
 ### Mail
 
 `ctx.mailer` sends the Portal's own mail (templates `verify_email`, `account_exists`, `password_reset`, `invite`,
-`staff_welcome`, `issuer_request`: plain text + simple inline-styled HTML, no external assets, escaped variables, http(s) links only).
-With `SMTP_URL` it is a pooled nodemailer transport (10 s connection/greeting/socket timeouts, TLS ≥ 1.2 with
-certificate checks; in production `smtp://` must upgrade with STARTTLS). Without it: development/test log the message
-(including the link — never in production); production and preview refuse (503, `available: false`). The identity
-module uses `ctx.mailer` unless given its own `mailer`.
+`staff_welcome`, `issuer_request`: plain text + simple inline-styled HTML, no external assets, escaped variables, http(s)
+links only). With a mailer set in Admin → Settings it is a pooled nodemailer transport (10 s timeouts, TLS ≥ 1.2 with
+certificate checks; in production a non-TLS port must upgrade with STARTTLS). Without one: development/test log the
+message (including the link — never in production); production refuses (503, `available: false`).
 
 ### RBAC
 
@@ -248,21 +237,27 @@ is filtered by the staff member's permissions (`infra/rbac.js`).
   without its second factor only reaches the MFA routes.
 - **Pages:** dashboard (deliveries, dead letters, unhealthy service apps, operations with Run buttons, job queue, last audit verification,
   reconciliation, alerts) · merchants (search, detail, suspend/resume, notes, impersonation) · websites (lookup,
-  transfer) · apps (register, pack upload, versions with manifest diff and breaking flags, review, lifecycle,
+  transfer) · apps (add product with a connection code, reconnect, pack upload, versions with manifest diff and breaking flags, review, lifecycle,
   environments, keys, health, admin launch per merchant or app-wide) · subscriptions (admin overrides and locks,
   history, rollback) · platform policies per app · finance (credits/adjustments/refunds, ledger and chain
   verification, settlement, reconciliation, alerts) · integration (delivery log, dead letters, replay, metrics) ·
-  connectors (status only) · audit log (search, chain verification) · staff (invite, roles, MFA reset, deactivate).
+  connectors (status only) · audit log (search, chain verification) · staff (invite, roles, MFA reset, deactivate) ·
+  settings (Portal URL, preview URL, mail, key rotation).
 
-| Route (staff)                                       | Permission                | Notes                                                                            |
-| --------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
-| `GET /v1/admin/merchants?q=`                        | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix     |
-| `GET\|POST /v1/admin/merchants/:merchantId/notes`   | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)        |
-| `POST /v1/admin/merchants/:merchantId/impersonate`  | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)              |
-| `POST /v1/auth/impersonation/exchange`              | staff session             | `{ token }` → merchant session cookie with `via`                                 |
-| `GET /v1/admin/system/health`                       | `platform.jobs.read`      | `{ operations: [{ name, status, lastRun }], jobs, audit: { lastVerification } }` |
-| `GET /v1/admin/audit?scope&actorId&targetId&action` | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses       |
-| `GET /v1/admin/audit/verification?scope=`           | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited                 |
+| Route (staff)                                                                         | Permission                | Notes                                                                            |
+| ------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
+| `GET /v1/admin/merchants?q=`                                                          | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix     |
+| `GET\|POST /v1/admin/merchants/:merchantId/notes`                                     | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)        |
+| `POST /v1/admin/merchants/:merchantId/impersonate`                                    | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)              |
+| `POST /v1/auth/impersonation/exchange`                                                | staff session             | `{ token }` → merchant session cookie with `via`                                 |
+| `GET /v1/admin/system/health`                                                         | `platform.jobs.read`      | `{ operations: [{ name, status, lastRun }], jobs, audit: { lastVerification } }` |
+| `GET /v1/admin/audit?scope&actorId&targetId&action`                                   | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses       |
+| `GET /v1/admin/audit/verification?scope=`                                             | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited                 |
+| `POST\|GET /v1/admin/apps/connection-codes`                                           | `platform.apps.manage`    | add a product: one-time `ssc_…` code (24 h, shown once; only its hash stored)    |
+| `POST /v1/admin/apps/:appId/reconnect`                                                | `platform.apps.manage`    | new code for the same app; signed disconnect to its current deployment           |
+| `POST /v1/apps/connect`                                                               | public (code)             | a product's /setup: one-time token + proof of possession; pins base URL and key  |
+| `GET /v1/admin/system/settings` (`PUT …/mail`, `…/preview-url`)                       | `platform.settings.write` | Portal settings (never key material or the mail password)                        |
+| `PUT /v1/admin/system/settings/portal-url`, `POST /v1/admin/system/keys/:kind/rotate` | `platform.staff.manage`   | Portal URL (typed twice) and key rotation, audited                               |
 
 **Impersonation.** Starting one mints a single-use token bound to the staff member (only its HMAC is stored; an
 attempt by anyone else does not burn it). The staff member's own browser exchanges it within 60 s for a merchant
@@ -279,23 +274,19 @@ chains (`*.impersonation_ended`). Product impersonation stays a separate `impers
 ```bash
 pnpm install                                   # from the repo root (or this folder, once split)
 pnpm --filter @ss/platform db:memory           # terminal 1: docker-free MongoDB (in-memory replica set, port 27999)
-cd platform && node scripts/dev-env.js > .env.local   # fresh dev keys; edit MONGODB_URI for a local mongod
-pnpm --filter @ss/platform db:indexes          # create indexes
-pnpm --filter @ss/platform db:migrate          # apply migrations (db:migrate:dry to preview)
-pnpm --filter @ss/platform dev                 # http://localhost:4000
-curl localhost:4000/v1/system/info
+cd platform && pnpm env:dev > .env.local       # NODE_ENV, MONGODB_URI, STORAGE_DIR (local files), dev allowlist
+pnpm --filter @ss/platform dev                 # http://localhost:4000 — then open http://localhost:4000/setup
 ```
 
-The ops scripts read the environment from the shell (`set -a; . ./.env.local; set +a` first); Next loads `.env.local`
-by itself. A local `mongod` (`mongodb://127.0.0.1:27017/ss_portal`) works the same; transactions need a replica set.
+The first request generates the keys and secrets in the database and applies indexes and migrations. A local `mongod`
+(`mongodb://127.0.0.1:27017/ss_portal`) works the same; transactions need a replica set.
 
 ## Deployment
 
-Any Node 22 host that runs Next.js (`pnpm --filter @ss/platform build` then `start`, or a serverless platform), one
-database and database user on the shared Atlas M0 cluster (PLAN §13, F.19). The `MongoClient` is created once per
-instance and cached on `globalThis` (`getMongoClient`). Set the required variables above with `NODE_ENV=production`
-(`TRUST_PROXY_HEADERS=true` behind a proxy that sets `X-Forwarded-For`). Run `db:indexes` and `db:migrate` before
-traffic moves (migration gate). There is nothing to schedule: no crons and no `CRON_SECRET` exist.
+Any Node 22 host that runs Next.js (`pnpm --filter @ss/platform build` then `start`, a container, or a serverless
+platform), one database and database user on the shared Atlas cluster (PLAN §13, F.19). Set `NODE_ENV=production`,
+`MONGODB_URI` and the `STORAGE_*` variables, deploy, then open `https://<your domain>/setup` at once. The `MongoClient`
+is created once per instance and cached on `globalThis`. There is nothing to schedule and nothing to run by hand.
 
 ## Checks
 

@@ -98,17 +98,17 @@ impersonation shows the audit banner; replies by dashboard users create their ag
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # signing key, token hash, portal URL (keep the printed registration token)
+ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev register --url http://localhost:3000 --token <token>
+ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at /setup
 ss app validate                # 0 problems
-ss certify . --url http://localhost:3000 --token <fresh token>
+ss certify . --url http://localhost:3000
 pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB, certify
 ```
 
 `tests/certify.test.js` runs the full `ss certify` suite (47/47). The system test `e2e/tests/chatbot-portal.test.js` (monorepo workspace `@ss/e2e`) runs the real Portal in
-process: staff → catalog handshake → activation → merchant signup → website → credits → starter subscription →
+process: staff → connection code (/setup) → activation → merchant signup → website → credits → starter subscription →
 database and AI connectors (a fake OpenAI-compatible provider on local https; the Portal's check calls `/models`) →
 `pk_` key → a guest opens a conversation from the website's origin → the product resolves the merchant's AI credentials
 through the Portal and answers → data in the merchant DB → `ai_token` usage → hourly settlement (1 550 mc for the
@@ -116,16 +116,14 @@ elements, 10 mc metered for the tokens above the included amount).
 
 ## Deploy
 
-1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
-   workspace root automatically.
-2. Environment variables (Production): `PORTAL_URL` (pinned Portal), `SIGNING_KEY` (`kid:seed`, Ed25519 seed in
-   base64url), `REGISTRATION_TOKEN_HASH`, `APP_ID` (optional), `DATABASE_URI` (the product's own small MongoDB:
-   sessions, caches, usage queue — required in production), optional `CHATBOT_TOKEN_SECRET` (≥ 32 chars; else derived
-   from the signing key). There are no crons: nothing runs unless a request arrives (see
-   [jobs/README.md](jobs/README.md)).
-3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
-   review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
-4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
+3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
+   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
+   and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
 
 ## Changelog
 

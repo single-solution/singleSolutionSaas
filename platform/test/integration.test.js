@@ -11,6 +11,7 @@ import { afterResponse } from '../src/infra/request-scope.js';
 import { toNextRoute } from '../src/infra/http.js';
 import { getPortal, resetPortal } from '../src/runtime.js';
 import { closeMongoClients } from '../src/infra/db.js';
+import { createSystemStore } from '../src/infra/system.js';
 import {
 	MERCHANT,
 	MERCHANT_2,
@@ -96,9 +97,9 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 	});
 
 /**
- * @param {{ dbName: string, modules?: any[], clock?: ReturnType<typeof createClock>, db?: any, background?: any }} options
+ * @param {{ dbName: string, modules?: any[], clock?: ReturnType<typeof createClock>, db?: any, background?: any, system?: any }} options
  */
-const boot = async ({ dbName, modules, clock = createClock(), db, background }) => {
+const boot = async ({ dbName, modules, clock = createClock(), db, background, system }) => {
 	const config = await testConfig();
 	const { logger, entries } = createTestLogger();
 	const portal = createPortal({
@@ -109,6 +110,7 @@ const boot = async ({ dbName, modules, clock = createClock(), db, background }) 
 		now: clock.now,
 		pingTimeoutMs: 200,
 		...(background ? { background } : {}),
+		...(system ? { system } : {}),
 	});
 	/**
 	 * @param {string} method
@@ -677,36 +679,179 @@ describe('login throttle (Mongo)', () => {
 	});
 });
 
+describe('admin settings (stored in the database, never in the environment)', () => {
+	it('changes the Portal URL (superadmin, re-confirmed), the preview URL and the mailer; rotates keys; audited', async () => {
+		const db = mongo.db('it_settings');
+		const system = createSystemStore(db);
+		await system.update({ portalUrl: PORTAL_URL, setup: true });
+		const { portal, call } = await boot({ dbName: 'it_settings', db, system });
+		const admin = await login(portal, { kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
+		const superadmin = await login(portal, { kind: 'staff', subject: 'stf_root', roles: ['superadmin'], mfa: true });
+		/** @param {{ cookie: string }} who */
+		const as = (who) => ({ cookie: who.cookie, ...SAME_ORIGIN });
+
+		const read = await call('GET', '/v1/admin/system/settings', { headers: as(admin) });
+		expect(read.status).toBe(200);
+		expect(read.json).toMatchObject({ portalUrl: PORTAL_URL, previewUrl: null, mail: null });
+		expect(read.json.keys.signing).toEqual([expect.objectContaining({ active: true })]);
+		expect(JSON.stringify(read.json)).not.toMatch(/seed/);
+
+		// the Portal URL: superadmins only, typed twice
+		const url = { portalUrl: 'https://portal2.example.test', confirmation: 'https://portal2.example.test' };
+		expect((await call('PUT', '/v1/admin/system/settings/portal-url', { headers: as(admin), body: url })).status).toBe(403);
+		const mismatch = await call('PUT', '/v1/admin/system/settings/portal-url', {
+			headers: as(superadmin),
+			body: { ...url, confirmation: 'https://other.test' },
+		});
+		expect(mismatch.status).toBe(422);
+		expect(
+			(
+				await call('PUT', '/v1/admin/system/settings/portal-url', {
+					headers: as(superadmin),
+					body: { portalUrl: 'http://x.test', confirmation: 'http://x.test' },
+				})
+			).status,
+		).toBe(422);
+		const changed = await call('PUT', '/v1/admin/system/settings/portal-url', { headers: as(superadmin), body: url });
+		expect(changed.json.portalUrl).toBe('https://portal2.example.test');
+
+		// preview URL and mailer (the password is sealed, never returned)
+		expect(
+			(
+				await call('PUT', '/v1/admin/system/settings/preview-url', {
+					headers: as(admin),
+					body: { previewUrl: 'https://p.test/x' },
+				})
+			).status,
+		).toBe(422);
+		const preview = await call('PUT', '/v1/admin/system/settings/preview-url', {
+			headers: as(admin),
+			body: { previewUrl: 'https://preview.example-previews.test' },
+		});
+		expect(preview.json.previewUrl).toBe('https://preview.example-previews.test');
+		const mail = {
+			host: 'smtp.example.com',
+			port: 587,
+			secure: false,
+			user: 'mailer',
+			password: 's3cret',
+			from: 'Portal <no-reply@example.com>',
+		};
+		expect(
+			(await call('PUT', '/v1/admin/system/settings/mail', { headers: as(admin), body: { mail: { ...mail, from: 'bad' } } }))
+				.status,
+		).toBe(422);
+		const saved = await call('PUT', '/v1/admin/system/settings/mail', { headers: as(admin), body: { mail } });
+		expect(saved.json.mail).toEqual({
+			host: 'smtp.example.com',
+			port: 587,
+			secure: false,
+			user: 'mailer',
+			from: mail.from,
+			hasPassword: true,
+		});
+		expect(JSON.stringify(saved.json)).not.toContain('s3cret');
+		expect((await system.load()).state.mail?.pass).toBe('s3cret');
+		expect(
+			(await call('PUT', '/v1/admin/system/settings/mail', { headers: as(admin), body: { mail: null } })).json.mail,
+		).toBeNull();
+
+		// key rotation: superadmins only; the old key stays published
+		expect((await call('POST', '/v1/admin/system/keys/signing/rotate', { headers: as(admin) })).status).toBe(403);
+		expect((await call('POST', '/v1/admin/system/keys/nope/rotate', { headers: as(superadmin) })).status).toBe(404);
+		const rotated = await call('POST', '/v1/admin/system/keys/signing/rotate', { headers: as(superadmin) });
+		expect(rotated.json).toMatchObject({ kind: 'signing', count: 2 });
+		expect((await system.load()).state.signingKeys).toHaveLength(2);
+
+		const actions = (await db.collection('platform_audit').find({}).toArray()).map((a) => a.action);
+		expect(actions).toEqual(
+			expect.arrayContaining(['system.portal_url_changed', 'system.preview_url_set', 'system.mail_set', 'system.key_rotated']),
+		);
+	});
+
+	it('without a settings store the settings API answers 503', async () => {
+		const { portal, call } = await boot({ dbName: 'it_settings_none' });
+		const admin = await login(portal, { kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
+		expect((await call('GET', '/v1/admin/system/settings', { headers: { cookie: admin.cookie, ...SAME_ORIGIN } })).status).toBe(
+			503,
+		);
+	});
+});
+
 describe('runtime', () => {
-	it('builds one cached Portal from the environment and fails fast on bad config', async () => {
+	it('builds one cached Portal: secrets generated on first start, schema prepared, /setup, then the API', async () => {
 		resetPortal();
-		expect(() => getPortal({ env: {} })).toThrow(/Invalid Portal configuration/);
+		await expect(getPortal({ env: {} })).rejects.toThrow(/Invalid Portal configuration/);
 		/** @type {string[]} */
 		const lines = [];
 		const runtimeDb = mongo.dbName('it_runtime');
 		const env = await testEnv({ MONGODB_URI: `${mongo.uri.replace(/\/?(\?|$)/, `/${runtimeDb}$1`)}`, LOG_LEVEL: 'info' });
-		const portal = getPortal({ env, write: (line) => lines.push(line) });
-		expect(getPortal({ env: {} })).toBe(portal);
-		const res = await portal.handle(new Request(`${PORTAL_URL}/v1/system/info`));
+		const before = await getPortal({ env, write: (line) => lines.push(line) });
+		expect(await getPortal()).toBe(before);
+		expect(before.config.setUp).toBe(false);
+		expect(before.config.mongo.dbName).toBe(runtimeDb);
+		const db = mongo.client.db(runtimeDb);
+		expect(await db.collection('platform_system').countDocuments({ _id: /** @type {any} */ ('secrets') })).toBe(1);
+		expect(await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('schema') })).toMatchObject({
+			fingerprint: expect.any(String),
+		});
+		// before setup the API refuses everything
+		const refused = await before.handle(new Request(`${PORTAL_URL}/v1/system/info`));
+		expect(refused.status).toBe(503);
+		expect((await refused.json()).detail).toMatch(/\/setup/);
+
+		// first-run setup: the visited origin is suggested, the owner confirms it and becomes the first admin
+		const setup = await import('../app/setup/route.js');
+		const form = await setup.GET(new Request('https://portal.example.test/setup'));
+		expect(form.status).toBe(200);
+		expect(await form.text()).toContain('value="https://portal.example.test"');
+		/** @param {Record<string, string>} fields */
+		const post = (fields) =>
+			setup.POST(
+				new Request('https://portal.example.test/setup', {
+					method: 'POST',
+					headers: { 'content-type': 'application/x-www-form-urlencoded' },
+					body: new URLSearchParams(fields).toString(),
+				}),
+			);
+		expect((await post({ portalUrl: 'http://portal.example.test', email: 'owner@example.com', confirm: 'yes' })).status).toBe(
+			400,
+		);
+		expect((await post({ portalUrl: 'https://portal.example.test', email: 'nope', confirm: 'yes' })).status).toBe(400);
+		expect((await post({ portalUrl: 'https://portal.example.test', email: 'owner@example.com' })).status).toBe(400);
+		const done = await post({
+			portalUrl: 'https://portal.example.test',
+			email: 'owner@example.com',
+			name: 'Owner',
+			confirm: 'yes',
+		});
+		expect(done.status).toBe(303);
+		expect(done.headers.get('location')).toMatch(/^https:\/\/portal\.example\.test\//);
+		const portal = await getPortal();
+		expect(portal).not.toBe(before);
+		expect(portal.config).toMatchObject({ setUp: true, portalUrl: 'https://portal.example.test' });
+		expect(portal.config.signingKeys[0]?.kid).toBe(before.config.signingKeys[0]?.kid);
+		expect((await setup.GET(new Request('https://portal.example.test/setup'))).status).toBe(404);
+		expect((await post({ portalUrl: 'https://evil.test', email: 'x@example.com', confirm: 'yes' })).status).toBe(404);
+
+		const res = await portal.handle(new Request('https://portal.example.test/v1/system/info'));
 		expect(res.status).toBe(200);
 		expect(lines.some((line) => JSON.parse(line).msg === 'request')).toBe(true);
-		expect(portal.config.mongo.dbName).toBe(runtimeDb);
 
 		// the Next.js adapters delegate to the cached instance
 		const api = await import('../app/api/[...path]/route.js');
-		expect((await api.GET(new Request(`${PORTAL_URL}/api/v1/system/info`))).status).toBe(200);
+		expect((await api.GET(new Request('https://portal.example.test/api/v1/system/info'))).status).toBe(200);
 		const jwks = await import('../app/.well-known/jwks.json/route.js');
-		expect((await jwks.GET().json()).keys).toHaveLength(3);
+		expect((await (await jwks.GET()).json()).keys).toHaveLength(2);
 		const ready = await import('../app/readyz/route.js');
 		expect((await ready.GET()).status).toBe(200);
 		const health = await import('../app/healthz/route.js');
 		expect((await health.GET()).status).toBe(200);
 		resetPortal();
-		const prev = process.env.SIGNING_KEYS;
-		delete process.env.SIGNING_KEYS;
+		await expect(getPortal({ env: {} })).rejects.toThrow(/MONGODB_URI/);
 		expect((await ready.GET()).status).toBe(503); // config invalid
-		if (prev !== undefined) process.env.SIGNING_KEYS = prev;
-	});
+		resetPortal();
+	}, 60_000);
 });
 
 describe('infra hardening (Mongo)', () => {

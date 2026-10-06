@@ -1,7 +1,8 @@
 /**
  * Public service of the `catalog` module: app registry for service products and element packs.
  *
- * - Service registration (Portal side of the one-time-token handshake, `@ss/protocol`), with SSRF-safe outbound calls.
+ * - Service onboarding by connection code (Portal side of `@ss/protocol` connect): staff add a product and get a one-time
+ *   code; the product's `/setup` connects with it (proof of possession of its key, pinned base URL); reconnect, revoke.
  * - Element-pack bundle uploads (signed descriptor: manifest + asset hashes).
  * - Manifest versions: refresh (staff, or the `catalog_refresh` admin operation; the served manifest must carry a valid
  *   `SS-Manifest-Signature` made with a registered app key, otherwise it is stored as `rejected` and alerted), diff,
@@ -21,16 +22,18 @@ import {
 	canonicalJson,
 	canonicalUrl,
 	createJwks,
+	createConnectResponse,
+	createConnectionCode as protocolConnectionCode,
 	createKeyResolver,
-	createRegistrationRequest,
 	hashManifest,
 	isProtocolError,
 	issueLaunch as protocolIssueLaunch,
 	thumbprint,
 	toPublicJwk,
 	verifyBundle,
+	signRequest,
+	verifyConnectRequest,
 	verifyManifest,
-	verifyRegistrationResponse,
 } from '@ss/protocol';
 import { problem } from '../../infra/http.js';
 import { checkBundleAssets, checkUiManifest, parseBundleUpload } from './core/bundle.js';
@@ -40,7 +43,7 @@ import { launchRefusal, launchUrl } from './core/launch.js';
 import { applyLifecycle, dueForRetirement, reviewRefusal } from './core/lifecycle.js';
 import { catalogEntry } from './core/summary.js';
 import { createCatalogRepo, keyId, versionId } from './repo.js';
-import { APPS, KEYS, LAUNCHES, VERSIONS } from './schema.js';
+import { APPS, CODES, KEYS, LAUNCHES, VERSIONS } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
@@ -63,10 +66,9 @@ export const KEY_OVERLAP_MS = 7 * 24 * 60 * 60_000;
 /** Most keys an app may hold at once (active and inside their overlap window). */
 export const MAX_ACTIVE_KEYS = 5;
 export const WELL_KNOWN_APP = '/.well-known/ss-app.json';
-export const DEFAULT_REGISTER_PATH = '/.well-known/ss-register';
+/** A connection code is valid this long. */
+export const CODE_TTL_MS = 24 * 60 * 60_000;
 const MANIFEST_MAX_BYTES = 256 * 1024;
-const REGISTRATION_MAX_BYTES = 512 * 1024;
-const REGISTER_PATH = /^\/[A-Za-z0-9_./~-]{0,199}$/;
 const SYSTEM = /** @type {Actor} */ ({ type: 'system', id: 'catalog' });
 
 /**
@@ -138,6 +140,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		versions: ctx.collection(VERSIONS),
 		keys: ctx.collection(KEYS),
 		launches: ctx.collection(LAUNCHES),
+		codes: ctx.collection(CODES),
 	});
 	/**
 	 * Retirement on read (F.19: no timer): a deprecated app whose sunset has passed is retired the first time it is
@@ -207,12 +210,6 @@ export const createCatalogService = (ctx, options = {}) => {
 		const checked = checkUrl(canonical, policy);
 		if (!checked.ok) fail('catalog_target_refused', `${path}: destination refused (${checked.reason}).`);
 		return canonical;
-	};
-
-	/** @param {string} url */
-	const allowlisted = (url) => {
-		const checked = checkUrl(url, policy);
-		return checked.ok && checked.allowlisted;
 	};
 
 	/**
@@ -429,134 +426,221 @@ export const createCatalogService = (ctx, options = {}) => {
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
-	// registration (service products)
+	// onboarding by connection code (service products)
+
+	/** @param {import('./repo.js').CodeDoc} doc */
+	const codeView = (doc) => ({
+		codeId: doc._id,
+		appId: doc.appId,
+		reconnect: doc.reconnect,
+		status: doc.revokedAt ? 'revoked' : doc.usedAt ? 'used' : doc.expiresAt.getTime() <= ctx.now() ? 'expired' : 'open',
+		expiresAt: doc.expiresAt.toISOString(),
+		usedAt: doc.usedAt ? doc.usedAt.toISOString() : null,
+		createdBy: doc.createdBy,
+	});
 
 	/**
-	 * Portal side of the registration handshake.
-	 * @param {{ baseUrl: string, token: string, stagingBaseUrl?: string | null } & Audited} input
+	 * Add a product (or reconnect `appId`): a one-time connection code, valid 24 h. Only its hash is stored; the code is
+	 * shown once.
+	 * @param {{ appId?: string | null } & Audited} input
 	 */
-	const registerService = async ({ baseUrl, token, stagingBaseUrl = null, actor, requestId = null, ip = null }) => {
-		const base = baseUrlOf(baseUrl, '/baseUrl');
-		const staging = stagingBaseUrl ? baseUrlOf(stagingBaseUrl, '/stagingBaseUrl') : null;
-
-		const { json: advertised } = await fetchAdvertised(base);
-		const advertisedBase = advertised.endpoints?.base;
-		if (advertised.product?.kind !== 'service' || typeof advertisedBase !== 'string')
-			fail('invalid_manifest', `${WELL_KNOWN_APP} must describe a service product with endpoints.base.`);
-		/** @type {string} */
-		let audience;
-		try {
-			audience = canonicalUrl(advertisedBase);
-		} catch {
-			return fail('invalid_manifest', 'endpoints.base is not a valid URL.');
+	const createConnectionCode = async ({ appId = null, actor, requestId = null, ip = null }) => {
+		if (appId) {
+			const app = await appDoc(appId);
+			if (app.kind !== 'service') fail('conflict', 'Only service products connect with a code.');
 		}
-		if (!allowlisted(base) && audience !== base)
-			fail('catalog_registration_failed', `The product advertises endpoints.base ${audience}, not ${base}.`);
-		const registerPath = advertised.endpoints?.register ?? DEFAULT_REGISTER_PATH;
-		if (typeof registerPath !== 'string' || !REGISTER_PATH.test(registerPath))
-			fail('invalid_manifest', 'endpoints.register is invalid.');
-		if (typeof advertised.product?.slug === 'string' && (await repo.appBySlug(advertised.product.slug)))
-			fail('conflict', `An app with slug ${advertised.product.slug} is already registered.`);
+		const target = appId ?? createId('app', { randomBytes: ctx.randomBytes });
+		const { code, tokenHash } = protocolConnectionCode({ portalUrl, randomBytes: ctx.randomBytes });
+		const at = ctx.now();
+		/** @type {import('./repo.js').CodeDoc} */
+		const doc = {
+			_id: createId('cc', { randomBytes: ctx.randomBytes }),
+			tokenHash,
+			appId: target,
+			reconnect: Boolean(appId),
+			createdBy: actor.id,
+			expiresAt: new Date(at + CODE_TTL_MS),
+			usedAt: null,
+			revokedAt: null,
+			expireAt: new Date(at + CODE_TTL_MS + 30 * 24 * 60 * 60_000),
+		};
+		await repo.insertCode(doc);
+		await audit({
+			actor,
+			action: appId ? 'catalog.reconnect_code_created' : 'catalog.connection_code_created',
+			app: target,
+			after: { codeId: doc._id, expiresAt: doc.expiresAt.toISOString() },
+			requestId,
+			ip,
+		});
+		return { ...codeView(doc), code };
+	};
 
-		const appId = createId('app', { randomBytes: ctx.randomBytes });
-		const request = await createRegistrationRequest({
-			portalUrl,
-			portalJwksUrl: `${portalUrl}/.well-known/jwks.json`,
-			signer: ctx.keys.signer,
-			registrationToken: token,
-			audience: advertisedBase,
-			appId,
-			now: ctx.now,
-			randomBytes: ctx.randomBytes,
-		});
-		const res = await outbound(`${base}${registerPath}`, {
-			method: 'POST',
-			headers: { accept: 'application/json', ...request.headers },
-			body: request.body,
-			maxBytes: REGISTRATION_MAX_BYTES,
-		});
-		if (res.status !== 200) fail('catalog_registration_failed', `The product refused the registration (${res.status}).`);
-		/** @type {Awaited<ReturnType<typeof verifyRegistrationResponse>>} */
+	/** Recent connection codes (never the codes themselves). */
+	const listConnectionCodes = async () => ({ items: (await repo.listCodes(50)).map(codeView) });
+
+	/**
+	 * @param {{ codeId: string } & Audited} input
+	 */
+	const revokeConnectionCode = async ({ codeId, actor, requestId = null, ip = null }) => {
+		const code = await repo.code(codeId);
+		if (!code || !(await repo.revokeCode(codeId, new Date(ctx.now()))))
+			fail('not_found', 'No open connection code with this id.');
+		await audit({ actor, action: 'catalog.connection_code_revoked', app: code.appId, after: { codeId }, requestId, ip });
+	};
+
+	/**
+	 * `POST /v1/apps/connect` — a product's `/setup` connecting with a code. Checks the one-time token, the proof of
+	 * possession of the product key and the manifest, pins the base URL and the key, burns the code atomically, and
+	 * answers the appId and the Portal JWKS, signed. Every refusal is the same generic 401 (details in the audit/logs).
+	 * @param {{ headers: Headers, rawBody: string, requestId?: string | null, ip?: string | null }} input
+	 */
+	const connectService = async ({ headers, rawBody, requestId = null, ip = null }) => {
+		/** @param {string} reason @returns {never} */
+		const refuse = (reason) => {
+			ctx.logger.warn('product connection refused', { reason });
+			return fail('unauthorized', 'The connection code is invalid, used or expired.');
+		};
+		/** @type {Awaited<ReturnType<typeof verifyConnectRequest>>} */
 		let verified;
 		try {
-			verified = await verifyRegistrationResponse({
-				response: parseJson(res.text),
-				expectedNonce: request.nonce,
-				expectedPortalUrl: portalUrl,
-				expectedAppId: appId,
-				now: ctx.now,
-			});
+			verified = await verifyConnectRequest({ headers, body: rawBody, portalUrl, now: ctx.now });
 		} catch (error) {
-			return fail(
-				'catalog_registration_failed',
-				`The registration proof was rejected (${isProtocolError(error) ? error.code : 'invalid'}).`,
-			);
+			return refuse(`request:${isProtocolError(error) ? error.code : 'invalid'}`);
 		}
+		const code = await repo.codeByToken(verified.tokenHash);
+		if (!code || code.usedAt || code.revokedAt || code.expiresAt.getTime() <= ctx.now()) return refuse('code');
 		const manifest = checkedManifest(verified.manifest, 'service', '/manifest');
-		if (canonicalUrl(/** @type {{ base: string }} */ (manifest.endpoints).base) !== audience)
-			fail('catalog_registration_failed', 'The registered manifest does not match the advertised endpoints.base.');
+		const base = baseUrlOf(verified.baseUrl, '/baseUrl');
+		const existing = code.reconnect ? await appDoc(code.appId) : null;
+		if (!existing && (await repo.appBySlug(manifest.product.slug)))
+			fail('conflict', `An app with slug ${manifest.product.slug} exists: reconnect it from its page instead.`);
+		if (existing && existing.slug !== manifest.product.slug)
+			fail('conflict', `This code reconnects ${existing.slug}, not ${manifest.product.slug}.`);
+		if (!(await repo.useCode(code._id, new Date(ctx.now())))) return refuse('code_race');
 
-		const at = new Date(ctx.now());
-		/** @type {AppDoc} */
-		const app = {
-			_id: appId,
-			slug: manifest.product.slug,
-			kind: 'service',
-			status: 'pending',
-			sunsetAt: null,
-			environments: { production: { baseUrl: base }, staging: staging ? { baseUrl: staging } : null },
-			currentVersion: 1,
-			pendingVersion: null,
-			latestVersion: 1,
-			health: null,
-			createdBy: actor.id,
-		};
-		if (!(await repo.insertApp(app))) fail('conflict', `An app with slug ${manifest.product.slug} is already registered.`);
-		/** @type {VersionDoc} */
-		const version = {
-			_id: versionId(appId, 1),
-			appId,
-			version: 1,
-			manifestJson: canonicalJson(manifest),
-			manifestHash: hashManifest(manifest),
-			productVersion: manifest.product.version,
-			status: 'accepted',
-			source: 'registration',
-			diff: diffManifests(null, manifest),
-			breaking: false,
-			assets: null,
-			signature: null,
-			submittedBy: actor.id,
-			review: { by: actor.id, at, reason: 'registration' },
-		};
-		await repo.insertVersion(version);
-		await repo.insertKey({
+		const appId = code.appId;
+		const actor = /** @type {Actor} */ ({ type: 'system', id: `connection:${code.createdBy}` });
+		const key = {
 			_id: keyId(appId, verified.publicJwk.kid),
 			appId,
 			kid: verified.publicJwk.kid,
 			publicJwk: verified.publicJwk,
 			thumbprint: verified.thumbprint,
-			status: 'active',
+			status: /** @type {const} */ ('active'),
 			notAfter: null,
-			source: 'registration',
+			source: 'connection',
 			revoked: null,
-		});
-		await audit({
-			actor,
-			action: 'catalog.app_registered',
-			app: appId,
-			after: {
-				slug: app.slug,
+		};
+		if (existing) {
+			const at = new Date(ctx.now());
+			for (const old of await repo.keys(appId))
+				if (old.status === 'active' && old.kid !== key.kid)
+					await repo.revokeKey(appId, old.kid, { at, by: actor.id, reason: 'reconnected' });
+			await repo.insertKey(key);
+			await repo.updateApp(appId, {}, { $set: { 'environments.production': { baseUrl: base } } });
+			const hash = hashManifest(manifest);
+			if (!(await sameAsKnown(existing, hash)))
+				await storePending({ app: existing, manifest, source: 'refresh', submittedBy: actor.id });
+			await audit({
+				actor,
+				action: 'catalog.app_reconnected',
+				app: appId,
+				after: { baseUrl: base, kid: key.kid, codeId: code._id },
+				requestId,
+				ip,
+			});
+		} else {
+			/** @type {AppDoc} */
+			const app = {
+				_id: appId,
+				slug: manifest.product.slug,
 				kind: 'service',
-				baseUrl: base,
-				staging,
-				kid: verified.publicJwk.kid,
-				manifestHash: version.manifestHash,
-			},
-			requestId,
-			ip,
+				status: 'pending',
+				sunsetAt: null,
+				environments: { production: { baseUrl: base }, staging: null },
+				currentVersion: 1,
+				pendingVersion: null,
+				latestVersion: 1,
+				health: null,
+				createdBy: code.createdBy,
+			};
+			if (!(await repo.insertApp(app))) fail('conflict', `An app with slug ${manifest.product.slug} exists.`);
+			/** @type {VersionDoc} */
+			const version = {
+				_id: versionId(appId, 1),
+				appId,
+				version: 1,
+				manifestJson: canonicalJson(manifest),
+				manifestHash: hashManifest(manifest),
+				productVersion: manifest.product.version,
+				status: 'accepted',
+				source: 'connection',
+				diff: diffManifests(null, manifest),
+				breaking: false,
+				assets: null,
+				signature: null,
+				submittedBy: code.createdBy,
+				review: { by: code.createdBy, at: new Date(ctx.now()), reason: 'connection' },
+			};
+			await repo.insertVersion(version);
+			await repo.insertKey(key);
+			await audit({
+				actor,
+				action: 'catalog.app_connected',
+				app: appId,
+				after: {
+					slug: app.slug,
+					kind: 'service',
+					baseUrl: base,
+					kid: key.kid,
+					manifestHash: version.manifestHash,
+					codeId: code._id,
+				},
+				requestId,
+				ip,
+			});
+		}
+		return createConnectResponse({
+			signer: ctx.keys.signer,
+			appId,
+			portalUrl,
+			jkt: verified.thumbprint,
+			nonce: verified.nonce,
+			jwks: ctx.keys.publishedJwks(),
+			now: ctx.now,
 		});
-		return { ...appView(app, manifest), kid: verified.publicJwk.kid, thumbprint: verified.thumbprint };
+	};
+
+	/**
+	 * Reconnect (move) a service product: a new connection code for the same app, and a Portal-signed
+	 * `POST <base>/v1/ss/disconnect` to its current deployment so its `/setup` opens again (best effort: a deployment
+	 * that is gone is reset by deleting its stored connection directly in its control database).
+	 * @param {{ appId: string } & Audited} input
+	 */
+	const reconnect = async ({ appId, actor, requestId = null, ip = null }) => {
+		const app = await appDoc(appId);
+		const issued = await createConnectionCode({ appId, actor, requestId, ip });
+		const base = app.environments.production?.baseUrl ?? null;
+		let disconnected = false;
+		if (base) {
+			const path = '/v1/ss/disconnect';
+			const headers = await signRequest({
+				signer: ctx.keys.signer,
+				method: 'POST',
+				path,
+				audience: appId,
+				body: '',
+				timestamp: Math.floor(ctx.now() / 1000),
+			});
+			try {
+				const res = await outbound(`${base}${path}`, { method: 'POST', headers, maxBytes: 16 * 1024 });
+				disconnected = res.status === 200;
+			} catch {
+				disconnected = false;
+			}
+		}
+		return { ...issued, disconnected };
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -1274,7 +1358,11 @@ export const createCatalogService = (ctx, options = {}) => {
 		// catalog
 		productDetail,
 		// staff
-		registerService,
+		createConnectionCode,
+		listConnectionCodes,
+		revokeConnectionCode,
+		connectService,
+		reconnect,
 		uploadPack,
 		refreshManifest,
 		reviewVersion,

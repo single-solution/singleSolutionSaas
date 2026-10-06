@@ -4,7 +4,7 @@
  * A guest proves a purchase once (order number + the e-mail or phone used) and gets a token that lets them claim
  * against that purchase and follow their claims, without a sign-in. Tokens are HMAC-SHA-256 over
  * `{ w: websiteId, p: purchaseId, e: expiry }`, bound to one website and one purchase, compared in constant time. The
- * secret is `AFTERSALES_TOKEN_SECRET`, else derived (HKDF) from the product signing key, so a deployment works without
+ * secret is the generated secret (`product.secret`, kept in the control database), else derived (HKDF) from the product signing key, so a deployment works without
  * an extra variable.
  */
 import { createHash, createHmac, hkdfSync, randomBytes as nodeRandomBytes, timingSafeEqual } from 'node:crypto';
@@ -40,7 +40,7 @@ export const stableId = (text) => {
 export const randomBytes = (n) => new Uint8Array(nodeRandomBytes(n));
 
 /**
- * The token secret: `AFTERSALES_TOKEN_SECRET`, else HKDF of the product signing key.
+ * The token secret: the generated secret (`product.secret`, kept in the control database), else HKDF of the product signing key.
  * @param {{ secret?: string | undefined, signingKey?: string | Record<string, unknown> | null }} input
  * @returns {Buffer}
  */
@@ -48,7 +48,7 @@ export const tokenSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('AFTERSALES_TOKEN_SECRET (≥ 32 chars) or SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-aftersales', 'claim-token/v1', 32));
 };
 

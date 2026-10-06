@@ -6,7 +6,7 @@ that every other product accepts offline (bring-your-own identity, PLAN §5.3 / 
 merchant's own MongoDB; every message goes through the merchant's own messaging connector; this deployment keeps only
 caches, queues and website ids.
 
-Built on `@ss/app-kit` (registration, SSO launches, website keys, entitlements with offline grace, events, usage,
+Built on `@ss/app-kit` (connection-code setup, SSO launches, website keys, entitlements with offline grace, events, usage,
 client-owned data, connectors). Business rules live only in `core/` (pure) and `headless/`. Ported from ibrahimMobiles:
 the OTP service (atomic attempts, per-identity / IP / global caps, hashed codes — `apps/web/src/lib/otp`), the gateway
 response handling (`packages/shared/src/messaging`) and the phone rules (`packages/shared/src/phone.ts`, generalised to
@@ -76,10 +76,9 @@ nothing runs on a timer.
 - **Codes and tokens are never stored.** Codes, magic-link and refresh tokens are HMAC-SHA-256 with a per-website
   pepper; IPs and identifiers used as counter keys are HMACs too; comparisons are constant time.
 - **Key custody.** The pepper and the issuer's Ed25519 private keys live in the merchant's database, sealed with
-  AES-256-GCM; the sealing key is derived per website (HKDF, `info` = website id) from `SIGNUPS_SEAL_SECRET`, and the AAD
+  AES-256-GCM; the sealing key is derived per website (HKDF, `info` = website id) from the product's sealing secret (generated once and kept in its control database), and the AAD
   binds website, purpose and key id. The merchant database alone reveals no key; this deployment alone holds no key.
-  Rotate with `SIGNUPS_SEAL_SECRET_PREVIOUS` (old records open and are re-sealed). Losing the secret invalidates every
-  sealed key (customers sign in again).
+  Losing the control database (and with it the secret) invalidates every sealed key (customers sign in again).
 - **Attempts.** Each verification reserves an attempt atomically (`attempts < maxAttempts`) before comparing; parallel
   guesses never exceed the budget; consumption is a compare-and-set so one code signs in once.
 - **Limits.** Cooldown first (so "resend" spam does not burn the hourly budget), then per identity / per IP / whole
@@ -144,11 +143,11 @@ data; impersonation shows the audit banner.
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # signing key, token hash, portal URL (keep the printed registration token)
+ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000 --token <fresh token>
+ss certify . --url http://localhost:3000
 pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB, certify
 ```
 
@@ -160,18 +159,17 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
 
 ## Deploy
 
-1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
-   workspace root automatically.
-2. Environment variables (Production): `PORTAL_URL`, `SIGNING_KEY` (`kid:seed`, Ed25519 seed in base64url),
-   `REGISTRATION_TOKEN_HASH`, `APP_ID` (optional), `DATABASE_URI` (the product's own small MongoDB —
-   required in production), **`SIGNUPS_SEAL_SECRET`** (≥ 32 random characters; keep it safe).
-   There are no crons: nothing runs unless a request or event arrives (see [jobs/README.md](jobs/README.md)).
-3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
-   review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin — it is also the
-   prefix of every website's issuer, so keep it stable.
-4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
+3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
+   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
+   and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
 5. Per merchant website: connect a database and a messaging connector; Signups then requests to be the issuer and the
-   merchant approves it in the Portal (above).
+   merchant approves it in the Portal (above). The address recorded at `/setup` prefixes every website's issuer: keep it
+   stable.
 
 ## Changelog
 

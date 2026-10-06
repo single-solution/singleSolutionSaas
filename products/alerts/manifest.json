@@ -12,8 +12,7 @@
 		"base": "https://alerts.example.com",
 		"dashboard": "/dashboard",
 		"demo": "/dashboard",
-		"events": "/.well-known/ss-events",
-		"register": "/.well-known/ss-register"
+		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
 		"adminLaunch": true,

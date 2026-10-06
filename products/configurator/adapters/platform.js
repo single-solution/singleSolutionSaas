@@ -1,7 +1,7 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: PORTAL_URL, APP_ID,
- * SIGNING_KEY, REGISTRATION_TOKEN_HASH, DATABASE_URI, OUTBOUND_DEV_ALLOW_HOSTS) and the
- * project files (manifest with feature schemas inlined, string catalogs). This is the only place that reads the
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: only `DATABASE_URI`, the
+ * product's control database, plus optional tuning) and the project files (manifest with feature schemas inlined, string
+ * catalogs). The Portal connection is made at `/setup` and, like every secret, kept in the control database. This is the only place that reads the
  * environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
@@ -62,7 +62,6 @@ export const PROBLEM_CODES = Object.freeze({
 /**
  * @typedef {object} ConfiguratorApp
  * @property {any} product app-kit product
- * @property {string} portalUrl
  * @property {() => number} now
  * @property {(prefix: string) => string} newId
  * @property {Record<string, Record<string, string>>} strings
@@ -77,17 +76,6 @@ export const PROBLEM_CODES = Object.freeze({
  */
 export const createPlatform = async ({ env = process.env, root = process.cwd(), overrides = {} } = {}) => {
 	const config = configFromEnv(env);
-	const { portalUrl, signingKey, registrationTokenHash } = config;
-	if (!portalUrl || !signingKey || !registrationTokenHash) {
-		const missing = [
-			['PORTAL_URL', portalUrl],
-			['SIGNING_KEY', signingKey],
-			['REGISTRATION_TOKEN_HASH', registrationTokenHash],
-		]
-			.filter(([, value]) => !value)
-			.map(([name]) => name);
-		throw new Error(`Missing environment variables: ${missing.join(', ')} (run \`ss dev env\`)`);
-	}
 	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
 	/** @type {unknown} */
 	let stores;
@@ -106,10 +94,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		/** @type {any} */ ({
 			manifest,
 			strings,
-			portalUrl,
-			appId: config.appId,
-			signingKey,
-			registrationTokenHash,
 			logger: createLogger({ level: config.logLevel }),
 			privacy: PRIVACY,
 			problemCodes: PROBLEM_CODES,
@@ -124,9 +108,10 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			...overrides,
 		}),
 	);
+	// generated secrets and the Portal connection live in the control database (set up at /setup)
+	await product.ready();
 	return {
 		product,
-		portalUrl,
 		now,
 		newId: (prefix) => createId(prefix),
 		strings,

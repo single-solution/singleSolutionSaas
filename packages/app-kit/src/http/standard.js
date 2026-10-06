@@ -9,6 +9,7 @@ import { checkEvent } from '../events.js';
 import { config as configOf, featuresOf, can } from '../entitlements.js';
 import { isObject } from '../util.js';
 import { ok, problem } from './results.js';
+import { setupClosed, setupDone, setupForm } from './setup-page.js';
 import { defineRoute } from './routes.js';
 
 /** @typedef {import('./routes.js').RouteDefinition} RouteDefinition */
@@ -62,6 +63,7 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 	const manifest = ctxKit.manifest;
 	const namespace = eventNamespace(manifest.product.slug);
 	const consumes = /** @type {string[]} */ (manifest.events?.consumes ?? []);
+	const productName = typeof manifest.product.name === 'string' ? manifest.product.name : manifest.product.slug;
 	const elementKeys = new Set(manifest.elements.map((/** @type {{ key: string }} */ e) => e.key));
 
 	/** @param {string} type */
@@ -180,6 +182,7 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 			method: 'GET',
 			path: '/healthz',
 			auth: 'none',
+			connected: false,
 			handler: () => {
 				const { status, body } = product.health.healthz();
 				return ok(body, { status, headers: { 'cache-control': 'no-store' } });
@@ -189,6 +192,7 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 			method: 'GET',
 			path: '/readyz',
 			auth: 'none',
+			connected: false,
 			handler: async () => {
 				const { status, body } = await product.health.readyz();
 				return ok(body, { status, headers: { 'cache-control': 'no-store' } });
@@ -226,19 +230,68 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 				method: 'GET',
 				path: '/.well-known/ss-app.json',
 				auth: 'none',
+				connected: false,
 				handler: async () => {
 					const { status, body, headers } = await product.manifestRoute();
 					return ok(body, { status, headers });
 				},
 			}),
 			defineRoute({
-				method: 'POST',
-				path: '/.well-known/ss-register',
+				method: 'GET',
+				path: '/setup',
 				auth: 'none',
+				connected: false,
+				handler: (ctx) =>
+					product.connected() || product.setup.fixed()
+						? setupClosed()
+						: setupForm({ productName, baseUrl: new URL(ctx.request.url).origin }),
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/setup',
+				auth: 'none',
+				connected: false,
 				rawBody: true,
 				idempotent: false,
+				maxBodyBytes: 8192,
 				rateLimit: { limit: 20, windowMs: 60_000 },
-				handler: passthrough({ response: ({ headers, body }) => product.registration.handle({ headers, body }) }),
+				handler: async (ctx) => {
+					const json = (ctx.headers.get('content-type') ?? '').includes('application/json');
+					if (product.connected() || product.setup.fixed())
+						return json ? problem('not_found', 'This product is already connected.') : setupClosed();
+					/** @type {Record<string, unknown>} */
+					let input = {};
+					try {
+						input = json ? JSON.parse(ctx.rawBody || '{}') : Object.fromEntries(new URLSearchParams(ctx.rawBody));
+					} catch {
+						input = {};
+					}
+					const code = typeof input.code === 'string' ? input.code.trim() : '';
+					const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : '';
+					try {
+						const result = await product.setup.connect({ code, baseUrl });
+						ctx.log.info('setup completed', { appId: result.appId });
+						return json ? ok(result) : setupDone({ productName, ...result });
+					} catch (error) {
+						const known = /** @type {{ code?: string, message?: string }} */ (error);
+						const message = typeof known.message === 'string' ? known.message : 'The connection failed.';
+						const status = known.code === 'conflict' ? 409 : known.code === 'invalid_argument' ? 400 : 502;
+						ctx.log.warn('setup refused', { reason: known.code ?? 'error' });
+						if (json) return problem(status === 409 ? 'conflict' : status === 400 ? 'bad_request' : 'upstream_error', message);
+						return setupForm({ productName, baseUrl: baseUrl || new URL(ctx.request.url).origin, error: message }, status);
+					}
+				},
+			}),
+			defineRoute({
+				method: 'POST',
+				path: '/v1/ss/disconnect',
+				auth: 'portal',
+				idempotent: false,
+				handler: async () => {
+					if (product.setup.fixed()) return problem('conflict', 'This product has a fixed connection.');
+					await product.setup.disconnect();
+					return ok({ disconnected: true });
+				},
 			}),
 			defineRoute({
 				method: 'POST',

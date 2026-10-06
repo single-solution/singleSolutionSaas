@@ -140,25 +140,53 @@ export const createTestLogger = () => {
 export const b64 = (n, fill = 7) => Buffer.alloc(n, fill).toString('base64');
 
 /**
- * A complete, valid environment (fresh signing keys).
+ * A complete, valid environment (only the database and tuning live there).
  * @param {Record<string, string | undefined>} [overrides]
  */
-export const testEnv = async (overrides = {}) => {
+export const testEnv = async (overrides = {}) => ({
+	NODE_ENV: 'test',
+	MONGODB_URI: 'mongodb://127.0.0.1:27017/ss_portal_test',
+	...overrides,
+});
+
+/** The environment of a production Portal (a bucket is required there). */
+export const PRODUCTION_ENV = Object.freeze({
+	NODE_ENV: 'production',
+	STORAGE_ENDPOINT: 'https://r2.example.net',
+	STORAGE_BUCKET: 'ss-assets',
+	STORAGE_ACCESS_KEY_ID: 'AK',
+	STORAGE_SECRET_ACCESS_KEY: 'SK',
+});
+
+/**
+ * A complete system state (generated secrets and settings, as `infra/system.js` keeps them in the database), with
+ * fresh signing keys: Portal keys `portal-2026-10` (signs) and `portal-2026-04`, website-key signer `website-2026-10`.
+ * @param {Partial<import('../src/infra/config.js').SystemState>} [overrides]
+ * @returns {Promise<import('../src/infra/config.js').SystemState>}
+ */
+export const testSystem = async (overrides = {}) => {
 	const { privateJwk } = await generateSigningKey({ kid: 'portal-2026-10' });
 	const { privateJwk: previous } = await generateSigningKey({ kid: 'portal-2026-04' });
 	const { privateJwk: website } = await generateSigningKey({ kid: 'website-2026-10' });
 	return {
-		NODE_ENV: 'test',
-		MONGODB_URI: 'mongodb://127.0.0.1:27017/ss_portal_test',
-		PUBLIC_URL: PORTAL_URL,
-		SIGNING_KEYS: `${privateJwk.kid}:${privateJwk.d},${previous.kid}:${previous.d}`,
-		WEBSITE_SIGNING_KEYS: `${website.kid}:${website.d}`,
-		ENCRYPTION_KEYS: `kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}`,
-		SESSION_SECRET: b64(32, 3),
-		KEY_PEPPER: b64(32, 4),
+		portalUrl: PORTAL_URL,
+		previewUrl: null,
+		mail: null,
+		signingKeys: [privateJwk, previous],
+		websiteKeySigningKeys: [website],
+		keks: [
+			{ id: 'kek-2', key: Buffer.alloc(32, 2) },
+			{ id: 'kek-1', key: Buffer.alloc(32, 1) },
+		],
+		sessionSecret: Buffer.alloc(32, 3),
+		websiteKeyPepper: Buffer.alloc(32, 4),
+		idempotencySecret: Buffer.alloc(32, 5),
 		...overrides,
 	};
 };
 
-/** @param {Record<string, string | undefined>} [overrides] */
-export const testConfig = async (overrides = {}) => loadConfig(await testEnv(overrides));
+/**
+ * @param {Record<string, string | undefined>} [overrides] environment
+ * @param {Partial<import('../src/infra/config.js').SystemState>} [system] system state
+ */
+export const testConfig = async (overrides = {}, system = {}) => loadConfig(await testEnv(overrides), await testSystem(system));

@@ -495,8 +495,8 @@ describe('manifest semantics', () => {
 		expect(validateManifest({ ...packManifest(), endpoints: { base: 'https://x.dev' } }).ok).toBe(false);
 	});
 
-	it('requires base, register and events endpoints for service products', () => {
-		for (const key of ['register', 'events']) {
+	it('requires base and events endpoints for service products', () => {
+		for (const key of ['events']) {
 			const m = manifest();
 			delete m.endpoints[key];
 			expectProblem(validateManifest(m), `/endpoints/${key}`, 'required');

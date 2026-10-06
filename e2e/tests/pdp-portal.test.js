@@ -29,11 +29,12 @@ import {
 	createIntegrationModule,
 	createPortal,
 	loadConfig,
+	testSystemState,
 	systemModule,
 	totpCode,
 } from '@ss/platform/testing';
 import { buildPack } from '@ss/product-pdp/pack';
-import { createClock, mongoUri } from './helpers.js';
+import { connectProduct, createClock, mongoUri, postSetup } from './helpers.js';
 
 const HOUR = 3_600_000;
 const PORTAL_URL = 'http://127.0.0.1:4999';
@@ -64,22 +65,18 @@ let ctx;
 
 beforeAll(async () => {
 	const clock = createClock(Date.UTC(2026, 9, 5, 10, 10));
-	const { privateJwk: portalKey } = await generateSigningKey({ kid: 'portal-e2e-1' });
-	const { privateJwk: websiteKeySigner } = await generateSigningKey({ kid: 'website-e2e-1' });
-	const config = loadConfig({
-		NODE_ENV: 'test',
-		MONGODB_URI: mongoUri('unused'),
-		PUBLIC_URL: PORTAL_URL,
-		SIGNING_KEYS: `${portalKey.kid}:${portalKey.d}`,
-		WEBSITE_SIGNING_KEYS: `${websiteKeySigner.kid}:${websiteKeySigner.d}`,
-		ENCRYPTION_KEYS: `kek-1:${randomBytes(32).toString('base64')}`,
-		SESSION_SECRET: randomBytes(32).toString('base64'),
-		KEY_PEPPER: randomBytes(32).toString('base64'),
-		STORAGE_DIR: ':memory:',
-		// honest budgets (F.18): the default plan fits, every element at once does not
-		DELIVERY_BUDGET_KB: '45',
-		STAFF_SESSION_IDLE_MINUTES: '720',
-	});
+	const config = loadConfig(
+		{
+			NODE_ENV: 'test',
+			MONGODB_URI: mongoUri('unused'),
+			STORAGE_DIR: ':memory:',
+			// honest budgets (F.18): the default plan fits, every element at once does not
+			DELIVERY_BUDGET_KB: '45',
+			STAFF_SESSION_IDLE_MINUTES: '720',
+		},
+		// keys and secrets as the Portal generates them on first start; the URL as recorded at /setup
+		testSystemState({ portalUrl: PORTAL_URL }),
+	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const portalDb = mongo.db(`e2e_pdp_portal_${randomBytes(4).toString('hex')}`);
 	const mailer = createMailer();

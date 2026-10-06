@@ -27,7 +27,6 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 	const names = Object.freeze({
 		replay: `${prefix}replay`,
 		nonce: `${prefix}nonce`,
-		burnedTokens: `${prefix}registration`,
 		entitlements: `${prefix}entitlements`,
 		usageQueue: `${prefix}usage_queue`,
 		eventOutbox: `${prefix}event_outbox`,
@@ -103,24 +102,22 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 		},
 		replay: replayStore(names.replay),
 		nonce: replayStore(names.nonce),
-		burnedTokens: Object.freeze({
-			burn: async (hash) => {
+		settings: Object.freeze({
+			get: async (id) => {
+				const doc = await col(names.state).findOne(/** @type {any} */ ({ _id: `setting:${id}` }));
+				return doc ? /** @type {Record<string, any>} */ (doc.value) : null;
+			},
+			insert: async (id, value) => {
 				try {
-					await col(names.burnedTokens).insertOne(/** @type {any} */ ({ _id: hash, burnedAt: new Date(now()) }));
+					await col(names.state).insertOne(/** @type {any} */ ({ _id: `setting:${id}`, value, at: new Date(now()) }));
 					return true;
 				} catch (error) {
 					if (isDuplicateKey(error)) return false;
 					throw error;
 				}
 			},
-			isBurned: async (hash) =>
-				(await col(names.burnedTokens).countDocuments(/** @type {any} */ ({ _id: hash }), { limit: 1 })) > 0,
-			annotate: async (hash, data) => {
-				await col(names.burnedTokens).updateOne(/** @type {any} */ ({ _id: hash }), { $set: { ...data } }, { upsert: true });
-			},
-			get: async (hash) => {
-				const doc = await col(names.burnedTokens).findOne(/** @type {any} */ ({ _id: hash }), { projection: { _id: 0 } });
-				return doc ? /** @type {Record<string, unknown>} */ (doc) : null;
+			delete: async (id) => {
+				await col(names.state).deleteOne(/** @type {any} */ ({ _id: `setting:${id}` }));
 			},
 		}),
 		entitlements: Object.freeze({

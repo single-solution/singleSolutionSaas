@@ -466,6 +466,18 @@ export const loadAudit = async (api, filter = {}) => {
 };
 
 /**
+ * Portal settings (needs `platform.settings.write`): the Portal URL, the preview URL, the mailer and the key ids.
+ * @param {ConsoleApi} api
+ * @param {any} staff the signed-in staff member
+ */
+export const loadSettings = async (api, staff) => {
+	const settings = await api.get(paths.settings());
+	const failed = firstFailure(settings);
+	if (failed) return failed;
+	return { ok: /** @type {const} */ (true), me: staff, settings: /** @type {any} */ (settings).data };
+};
+
+/**
  * Staff users (needs `platform.staff.manage`).
  * @param {ConsoleApi} api
  * @param {any} staff the signed-in staff member

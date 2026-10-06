@@ -51,7 +51,7 @@ export const randomId = (prefix, random = nodeRandomBytes) => `${prefix}_${base3
 export const hashShareToken = (token) => createHash('sha256').update(`wishlist-share|${token}`).digest('base64url');
 
 /**
- * The token secret: `WISHLIST_TOKEN_SECRET`, else derived (HKDF) from the product signing key so a deployment works
+ * The token secret: the generated secret (`product.secret`, kept in the control database), else derived (HKDF) from the product signing key so a deployment works
  * without an extra variable (rotating the key then signs every guest out of their guest list).
  * @param {{ secret?: string | undefined, signingKey?: string | Record<string, unknown> | null }} input
  * @returns {Buffer}
@@ -60,7 +60,7 @@ export const tokenSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('WISHLIST_TOKEN_SECRET (≥ 32 chars) or SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-wishlist', 'guest-token/v1', 32));
 };
 

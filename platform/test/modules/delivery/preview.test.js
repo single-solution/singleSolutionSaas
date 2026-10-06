@@ -163,9 +163,9 @@ describe('preview sessions', () => {
 		expect(doc.body.className).toBe('home');
 	});
 
-	it('a dedicated PREVIEW_URL serves previews (merchant scripts allowed, still sandboxed) and nothing else (F.16)', async () => {
+	it('a dedicated preview URL serves previews (merchant scripts allowed, still sandboxed) and nothing else (F.16)', async () => {
 		const up = upstream();
-		const t = await boot({ env: { PREVIEW_URL: 'https://preview.example-previews.test' }, delivery: { fetch: up.fetch } });
+		const t = await boot({ system: { previewUrl: 'https://preview.example-previews.test' }, delivery: { fetch: up.fetch } });
 		const created = await t.request('POST', `${SITE}/preview`, {
 			cookie: await t.cookie(),
 			body: { path: '/', elements: [{ appId: PACK, key: 'bar' }] },

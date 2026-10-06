@@ -31,6 +31,7 @@
  * @property {'required' | 'optional'} [identity] website auth: verify the customer's `SS-Identity` token against the
  *   website's identity issuer (entitlement document) into `ctx.identity`; `required` answers 401 without a valid one,
  *   `optional` leaves `ctx.identity` null (and `ctx.identityProblem` set) when it is absent or invalid
+ * @property {boolean} [connected] the route needs the Portal connection (default true): before setup it answers 503
  * @property {(ctx: any) => unknown} handler
  */
 

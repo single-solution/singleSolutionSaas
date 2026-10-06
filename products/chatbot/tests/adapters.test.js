@@ -45,7 +45,7 @@ describe('tokens and platform', () => {
 		const { privateJwk } = await generateSigningKey({ kid: 't' });
 		expect(rootSecret({ secret: 'x'.repeat(32) }).toString()).toBe('x'.repeat(32));
 		expect(rootSecret({ signingKey: `${privateJwk.kid}:${privateJwk.d}` })).toHaveLength(32);
-		expect(() => rootSecret({ signingKey: {} })).toThrow(/CHATBOT_TOKEN_SECRET/);
+		expect(() => rootSecret({ signingKey: {} })).toThrow(/generated secret/);
 		let now = 0;
 		const tokens = createTokens({ secret: Buffer.alloc(32, 1), now: () => now });
 		const { token, expiresAt } = tokens.issueMarker({ websiteId: 'web_1', visitorId: 'vis_1', days: 1 });
@@ -67,7 +67,10 @@ describe('tokens and platform', () => {
 		expect(retentionDays('P1Y')).toBe(30);
 	});
 	it('refuses to start without the required environment and loads the string catalogs', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 		expect(Object.keys(await loadStrings(ROOT))).toContain('en');
 	});
 });

@@ -24,7 +24,6 @@ export const manifest = (version = '1.4.0') => ({
 	endpoints: {
 		base: 'https://coupons.example.dev',
 		events: '/.well-known/ss-events',
-		register: '/.well-known/ss-register',
 	},
 	scopes: ['events.subscribe:order.*'],
 	events: { consumes: ['order.placed@1'], publishes: [] },

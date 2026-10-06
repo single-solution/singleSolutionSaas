@@ -52,9 +52,9 @@ const bodies = [];
 
 /**
  * @param {string} dbName
- * @param {{ env?: Record<string, string> }} [options]
+ * @param {{ env?: Record<string, string>, system?: Partial<import('../../../src/infra/config.js').SystemState> }} [options]
  */
-const boot = async (dbName, { env = {} } = {}) => {
+const boot = async (dbName, { env = {}, system = {} } = {}) => {
 	const clock = createClock(Date.now());
 	const state = {
 		websites: new Map([
@@ -88,7 +88,7 @@ const boot = async (dbName, { env = {} } = {}) => {
 	state.appJwks.set(APP, createJwks([publicJwk]));
 	state.appJwks.set(APP_OTHER, createJwks([publicJwk]));
 	const signer = createSigner(privateJwk);
-	const config = await testConfig(env);
+	const config = await testConfig(env, system);
 	const { logger, entries } = createTestLogger();
 	const portal = createPortal({
 		config,
@@ -780,7 +780,13 @@ describe('connectors: health checks on demand and on resolve', () => {
 
 		// KEK rotation: a Portal with a new active KEK re-wraps on the next run
 		const rotated = await boot('cn_health', {
-			env: { ENCRYPTION_KEYS: `kek-3:${b64(32, 9)},kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}` },
+			system: {
+				keks: [
+					{ id: 'kek-3', key: Buffer.alloc(32, 9) },
+					{ id: 'kek-2', key: Buffer.alloc(32, 2) },
+					{ id: 'kek-1', key: Buffer.alloc(32, 1) },
+				],
+			},
 		});
 		rotated.clock.set(clock.now() + 2 * 3600_000);
 		const svc = /** @type {any} */ (rotated.portal.modules.service('connectors'));

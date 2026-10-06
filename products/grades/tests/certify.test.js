@@ -6,12 +6,10 @@
 import { createServer } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { noopLogger } from '@ss/app-kit';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createDatabaseResolver, formatReport, runCertification, validateProject } from '@ss/cli';
 import { startServer } from '../serve.js';
 import { ROOT } from './harness.js';
 
-const TOKEN = 'rt_grades_certify_0123456789abcdef';
 
 /** @returns {Promise<number>} */
 const freePort = () =>
@@ -32,14 +30,10 @@ const database = createDatabaseResolver({ uri: process.env.TEST_MONGODB_URI ?? n
 
 beforeAll(async () => {
 	portalUrl = `http://127.0.0.1:${await freePort()}`;
-	const { privateJwk } = await generateSigningKey({ kid: 'grades-certify-1' });
 	server = await startServer({
 		port: 0,
 		root: ROOT,
 		env: {
-			PORTAL_URL: portalUrl,
-			SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-			REGISTRATION_TOKEN_HASH: hashRegistrationToken(TOKEN),
 			LOG_LEVEL: 'error',
 		},
 		overrides: { logger: noopLogger },
@@ -59,7 +53,7 @@ describe('ss certify', () => {
 	});
 
 	it('passes every certification check (100 %)', async () => {
-		const report = await runCertification({ dir: ROOT, url: server.url, portalUrl, token: TOKEN, database });
+		const report = await runCertification({ dir: ROOT, url: server.url, portalUrl, database });
 		const table = formatReport(report);
 		expect(
 			report.checks.filter((check) => check.status !== 'pass'),

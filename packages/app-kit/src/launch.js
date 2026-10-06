@@ -42,7 +42,7 @@ export const ROLE_OF_KIND = Object.freeze({
 /**
  * @param {{
  *   keyResolver: KeyResolver,
- *   issuer: string,
+ *   issuer: string | (() => string),
  *   audience: () => Promise<string | null>,
  *   replay: ReplayStore,
  *   sessions: SessionStore,
@@ -77,7 +77,7 @@ export const createLaunch = ({
 				token,
 				keyResolver,
 				audience: aud,
-				issuer,
+				issuer: typeof issuer === 'function' ? issuer() : issuer,
 				now,
 				consume: async (jti, expiresAtMs) => {
 					if (!(await consumeLocal(jti, expiresAtMs))) return false;

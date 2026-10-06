@@ -1,13 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { main, SESSION_FILE, USAGE, VERSION } from '../src/cli.js';
 import { exists } from '../src/fsutil.js';
 import { createFakeProduct } from './helpers/fake-product.js';
 import { createIo, freePort, removeDir, tempDir } from './helpers/util.js';
 
-const TOKEN = 'rt_cli_registration_token_0123456789';
 /** @type {string} */
 let root;
 beforeAll(async () => {
@@ -55,19 +54,17 @@ describe('ss (main)', () => {
 	});
 
 	it('prints development env values', async () => {
-		const result = await ss(['dev', 'env', '--kid', 'my-kid']);
+		const result = await ss(['dev', 'env']);
 		expect(result.code).toBe(0);
-		const token = /--token (\S+)/.exec(result.out)?.[1] ?? '';
-		expect(result.out).toContain(`REGISTRATION_TOKEN_HASH=${hashRegistrationToken(token)}`);
-		expect(result.out).toMatch(/^SIGNING_KEY=my-kid:[A-Za-z0-9_-]{43}$/m);
-		expect(result.out).not.toContain('{');
+		expect(result.out.split('\n').filter((line) => /^[A-Z_]+=/.test(line))).toEqual(['DATABASE_URI=']);
+		expect(result.out).toContain('ss dev connect');
 	});
 
 	it('explains that dev subcommands need a running emulator', async () => {
 		const result = await ss(['dev', 'launch', '--kind', 'merchant', '--dir', 'nowhere']);
 		expect(result.code).toBe(1);
 		expect(result.err).toMatch(/no running emulator/);
-		expect((await ss(['dev', 'register'])).code).toBe(2);
+		expect((await ss(['dev', 'connect'])).code).toBe(2);
 		expect((await ss(['dev', 'launch'])).code).toBe(2);
 		expect((await ss(['dev', 'emit'])).code).toBe(2);
 		expect((await ss(['dev', 'entitlements'])).code).toBe(2);
@@ -104,7 +101,6 @@ describe('ss (main)', () => {
 		const product = createFakeProduct({
 			manifest,
 			portalUrl,
-			tokenHash: hashRegistrationToken(TOKEN),
 			signingKey: (await generateSigningKey({ kid: 'cli-app-1' })).privateJwk,
 		});
 		const productUrl = await product.start();
@@ -132,10 +128,11 @@ describe('ss (main)', () => {
 		expect(await exists(path.join(dir, SESSION_FILE))).toBe(true);
 		const d = ['--dir', 'live'];
 		try {
-			expect(await ss(['dev', 'register', ...d, '--url', productUrl, '--token', TOKEN])).toMatchObject({
+			expect(await ss(['dev', 'connect', ...d, '--url', productUrl])).toMatchObject({
 				code: 0,
 				out: expect.stringContaining('proof of possession verified'),
 			});
+			expect((await ss(['dev', 'code', ...d])).out).toMatch(/^ssc_\S+\n/);
 			const launch = await ss(['dev', 'launch', ...d, '--kind', 'admin', '--scope', 'mer_devmerchant01']);
 			expect(launch.out).toContain(`${productUrl}/sso?launch=`);
 			expect(launch.err).toContain('admin launch');
@@ -192,7 +189,7 @@ describe('ss (main)', () => {
 			expect((await ss(['dev', 'identity', ...d, '--website', 'web_devwebsite01', '--decision', 'approve'])).code).toBe(1);
 			expect((await ss(['dev', 'settle', ...d, '--hours', '2'])).out).toContain('Total');
 			expect(JSON.parse((await ss(['dev', 'state', ...d])).out).apps).toHaveLength(1);
-			expect(devIo.out()).toContain('registered  live-notes');
+			expect(devIo.out()).toContain('connected   live-notes');
 		} finally {
 			stop();
 			expect(await running).toBe(0);
@@ -201,10 +198,10 @@ describe('ss (main)', () => {
 		const state = JSON.parse(await readFile(path.join(dir, '.ss/state.json'), 'utf8'));
 		expect(state.apps[0].manifest.product.slug).toBe('live-notes');
 
-		// certify reuses the ss dev state (Portal key + registered app) instead of a new handshake
+		// certify reuses the ss dev state (Portal key + connected app) instead of connecting again
 		const cert = await ss(['certify', 'live', '--url', productUrl, '--state', 'live/.ss/state.json', '--json']);
 		const report = JSON.parse(cert.out);
-		expect(report.checks.find((/** @type {any} */ check) => check.id === 'registration.handshake').status).toBe('skip');
+		expect(report.checks.find((/** @type {any} */ check) => check.id === 'connection.setup').status).toBe('skip');
 		expect(
 			report.checks.filter((/** @type {any} */ check) => check.status === 'fail').map((/** @type {any} */ check) => check.id),
 		).toEqual([]);

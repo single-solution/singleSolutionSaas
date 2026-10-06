@@ -13,12 +13,13 @@
  */
 
 /**
- * One-time registration token burns.
- * @typedef {object} BurnedTokenStore
- * @property {(tokenHash: string) => Promise<boolean>} burn atomically burn; false when already burned
- * @property {(tokenHash: string) => Promise<boolean>} isBurned
- * @property {(tokenHash: string, data: Record<string, unknown>) => Promise<void>} annotate attach registration details
- * @property {(tokenHash: string) => Promise<Record<string, unknown> | null>} get
+ * The product's own settings in its control database: the Portal connection (Portal URL, appId, base URL, the
+ * product's private key) and generated secrets. `insert` is insert-if-absent, so concurrent cold starts and
+ * concurrent setups agree on one value.
+ * @typedef {object} SettingsStore
+ * @property {(id: string) => Promise<Record<string, any> | null>} get
+ * @property {(id: string, value: Record<string, any>) => Promise<boolean>} insert false when `id` already exists
+ * @property {(id: string) => Promise<void>} delete
  */
 
 /**
@@ -133,7 +134,7 @@
  * @typedef {object} Stores
  * @property {ReplayStore} replay
  * @property {ReplayStore} nonce
- * @property {BurnedTokenStore} burnedTokens
+ * @property {SettingsStore} settings
  * @property {EntitlementStore} entitlements
  * @property {UsageQueueStore} usageQueue
  * @property {EventOutboxStore} eventOutbox

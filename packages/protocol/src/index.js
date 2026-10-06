@@ -20,14 +20,19 @@ export { DEFAULT_GRACE_MS, ENTITLEMENT_TYP, signEntitlementDocument, verifyEntit
 export * from './events.js';
 export * from './requests.js';
 export {
-	REGISTRATION_RESPONSE_TYP,
-	REGISTRATION_TYP,
+	CONNECTED_TYP,
+	CONNECTION_CODE_PREFIX,
+	CONNECT_PATH,
+	CONNECT_TYP,
 	canonicalUrl,
-	createRegistrationHandler,
-	createRegistrationRequest,
+	createConnectRequest,
+	createConnectResponse,
+	createConnectionCode,
+	hashConnectionToken,
 	hashManifest,
-	hashRegistrationToken,
-	verifyRegistrationResponse,
+	parseConnectionCode,
+	verifyConnectRequest,
+	verifyConnectResponse,
 } from './registration.js';
 export { BUNDLE_SIGNING_PREFIX, bundleSigningInput, signBundle, verifyBundle } from './bundle.js';
 export {
@@ -47,5 +52,4 @@ export { canonicalJson } from './encoding.js';
 /** @typedef {import('./assertion.js').AssertionClaims} AssertionClaims */
 /** @typedef {import('./website-keys.js').WebsiteKeyClaims} WebsiteKeyClaims */
 /** @typedef {import('./entitlement-doc.js').EntitlementPayload} EntitlementPayload */
-/** @typedef {import('./registration.js').RegistrationResult} RegistrationResult */
-/** @typedef {import('./registration.js').RegistrationProofClaims} RegistrationProofClaims */
+/** @typedef {import('./registration.js').ConnectClaims} ConnectClaims */

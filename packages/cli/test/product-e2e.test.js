@@ -9,7 +9,6 @@ import { mkdir, symlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { formatReport, runCertification } from '../src/certify/index.js';
 import { createDatabaseResolver } from '../src/emulator/mongo.js';
 import { initApp } from '../src/init.js';
@@ -22,7 +21,6 @@ const require = createRequire(import.meta.url);
  * @param {string} name
  */
 const packageDir = (name) => path.dirname(require.resolve(`@ss/${name}/package.json`));
-const TOKEN = 'rt_product_e2e_token_0123456789abcdef';
 
 /** @type {string} */
 let root;
@@ -41,16 +39,12 @@ const serveGenerated = async (slug, { minimal = false } = {}) => {
 		await symlink(packageDir(name), path.join(dir, 'node_modules', '@ss', name), 'dir');
 	}
 	const portalUrl = `http://127.0.0.1:${await freePort()}`;
-	const { privateJwk } = await generateSigningKey({ kid: `${slug}-1` });
 	const { startServer } = await import(pathToFileURL(path.join(dir, 'serve.js')).href);
 	/** @type {{ url: string, product: any, close: () => Promise<void> }} */
 	const server = await startServer({
 		port: 0,
 		root: dir,
 		env: {
-			PORTAL_URL: portalUrl,
-			SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-			REGISTRATION_TOKEN_HASH: hashRegistrationToken(TOKEN),
 			LOG_LEVEL: 'error',
 		},
 		overrides: {
@@ -81,7 +75,6 @@ describe('ss certify against a generated app-kit product', () => {
 			dir: generated.dir,
 			url: generated.server.url,
 			portalUrl: generated.portalUrl,
-			token: TOKEN,
 			database,
 		});
 		const table = formatReport(report);
@@ -101,7 +94,6 @@ describe('ss certify against a generated app-kit product', () => {
 			dir: generated.dir,
 			url: generated.server.url,
 			portalUrl: generated.portalUrl,
-			token: TOKEN,
 			database,
 		});
 		const table = formatReport(report);

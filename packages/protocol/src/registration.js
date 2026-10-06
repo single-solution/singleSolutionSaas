@@ -1,43 +1,54 @@
 /**
- * One-time-token registration handshake (Portal ↔ product).
+ * Connection-code onboarding (product ↔ Portal).
  *
- * The product is deployed with the SHA-256 hash of a one-time registration token and a pinned Portal URL. The
- * developer pastes the plain token into the Portal once. The Portal then calls the product's register endpoint with
- * `Authorization: Bearer <token>` and a body that is a JWS signed with the Portal's key. The product accepts only if:
- *   1. the token has not been burned,
- *   2. the bearer token hashes to the stored hash (constant-time),
- *   3. the Portal's signature verifies against the JWKS fetched from the PINNED Portal URL (never a URL from the body),
- *   4. the signed `portalUrl` equals the pinned URL,
- *   5. `iat` is within ±5 min, 6. the signed token hash (`tth`) matches the bearer token, 7. `aud` matches (if set),
- *   8. the nonce is unused, and 9. the token is burned atomically (a concurrent second request loses).
- * Then it calls `onRegistered` and answers with its manifest, its public key and a proof-of-possession JWS
- * (`typ: ss-registration-response+jws`) signed with the matching private key over
- * `{ appId?, manifestHash, jkt, nonce, portalUrl, iat }`. Every failure returns the same generic
- * `401 { error: 'unauthorized' }`; the precise cause is in `reason` for server-side logs only.
- *
- * The Portal checks the response with `verifyRegistrationResponse`: signature under the included public key, RFC 7638
- * thumbprint, nonce echo, portal URL, manifest hash (SHA-256 of canonical JSON) and freshness. This proves the product
- * holds the private key for the key it registers and that the manifest was not swapped in transit or by a proxy.
+ * Portal staff add a product and get a one-time **connection code** (`ssc_…`): an opaque string that carries the Portal
+ * URL and a random one-time token. The Portal stores only the token's SHA-256. The owner pastes the code into the
+ * product's `/setup` page; the product then
+ *   1. generates its own Ed25519 key,
+ *   2. calls `POST <portalUrl>/v1/apps/connect` with `Authorization: Bearer <token>` and a body
+ *      `{ request, publicJwk, manifest }`, where `request` is a JWS (`typ: ss-connect+jws`) signed with the NEW key over
+ *      `{ portalUrl, baseUrl, tth, manifestHash, jkt, nonce, iat }` — proof of possession of the key, bound to the token,
+ *      the manifest and the base URL the product is set up on;
+ *   3. the Portal (`verifyConnectRequest`) checks the token hash, the signature under the included key, the thumbprint,
+ *      its own URL, the manifest hash and freshness, burns the token atomically, pins `baseUrl` and the key, and answers
+ *      `createConnectResponse`: `{ appId, jwks, response }`, `response` being a JWS (`typ: ss-connected+jws`) signed with
+ *      the Portal key over `{ appId, portalUrl, jkt, nonce, iat }`;
+ *   4. the product (`verifyConnectResponse`) verifies that answer against the returned JWKS (fetched over TLS from the
+ *      URL in the code: the pinned Portal), then stores the Portal URL, its appId and the pinned Portal keys.
+ * From then on each side trusts only the other's keys. Every failure on the Portal side answers the same generic 401.
  */
-import { createProtocolError, isProtocolError } from './errors.js';
-import { canonicalJson, constantTimeEqual, defaultRandomBytes, getHeader, randomId, sha256Hex } from './encoding.js';
+import { createProtocolError } from './errors.js';
+import {
+	b64url,
+	canonicalJson,
+	constantTimeEqual,
+	defaultRandomBytes,
+	fromB64url,
+	fromUtf8,
+	getHeader,
+	randomId,
+	sha256Hex,
+	utf8,
+} from './encoding.js';
 import { createKeyResolver, importPublicKey, thumbprint, toPublicJwk } from './keys.js';
 import { isObject, nowSeconds, requireString, signCompact, verifyCompact } from './jws.js';
 
 /** @typedef {import('./keys.js').Signer} Signer */
 /** @typedef {import('./keys.js').PublicJwk} PublicJwk */
-/** @typedef {import('./replay.js').ReplayStore} ReplayStore */
 /**
- * @typedef {{ portalUrl: string, portalJwksUrl?: string, nonce: string, iat: number, exp: number, tth: string, aud?: string,
- *   appId?: string }} RegistrationClaims
- */
-/** @typedef {{ status: number, body: Record<string, unknown>, reason?: string }} RegistrationResult */
-/**
- * @typedef {{ appId?: string, manifestHash: string, jkt: string, nonce: string, portalUrl: string, iat: number }} RegistrationProofClaims
+ * @typedef {{ portalUrl: string, baseUrl: string, tth: string, manifestHash: string, jkt: string, nonce: string, iat: number }} ConnectClaims
  */
 
-/** JOSE `typ` of the product's proof-of-possession response. */
-export const REGISTRATION_RESPONSE_TYP = 'ss-registration-response+jws';
+/** Prefix of connection codes. */
+export const CONNECTION_CODE_PREFIX = 'ssc_';
+/** Path of the Portal's connect endpoint. */
+export const CONNECT_PATH = '/v1/apps/connect';
+/** JOSE `typ` of the product's connect request. */
+export const CONNECT_TYP = 'ss-connect+jws';
+/** JOSE `typ` of the Portal's answer. */
+export const CONNECTED_TYP = 'ss-connected+jws';
+const TOLERANCE_SECONDS = 300;
+const TOKEN = /^sct_[A-Za-z0-9_-]{32,128}$/;
 
 /**
  * SHA-256 (hex) of the canonical JSON of a manifest.
@@ -52,16 +63,12 @@ export const hashManifest = (manifest) => {
 	}
 };
 
-/** JOSE `typ` of registration requests. */
-export const REGISTRATION_TYP = 'ss-registration+jws';
-const TOLERANCE_SECONDS = 300;
-
 /**
- * Hash a registration token for storage at rest (tokens are ≥ 128-bit random, so plain SHA-256 suffices).
+ * Hash a connection token for storage at rest (tokens are 256-bit random, so plain SHA-256 suffices).
  * @param {string} token
  * @returns {string} hex
  */
-export const hashRegistrationToken = (token) => sha256Hex(requireString(token, 'token'));
+export const hashConnectionToken = (token) => sha256Hex(requireString(token, 'token'));
 
 /**
  * Canonicalise a URL for pinning comparisons (lower-case scheme/host, default port dropped, no trailing slash, no
@@ -85,248 +92,174 @@ export const canonicalUrl = (value) => {
 };
 
 /**
- * Portal side: build the registration request. The registration token is used for the header only and not retained.
- * @param {{ portalUrl: string, portalJwksUrl?: string, signer: Signer, registrationToken: string, nonce?: string,
- *   audience?: string, appId?: string, now?: () => number, randomBytes?: (length: number) => Uint8Array }} params
- *   `audience` is the product's register endpoint or base URL; `portalJwksUrl` is informational only.
- * @returns {Promise<{ headers: Record<string, string>, body: string, nonce: string }>} keep `nonce` to pass as
- *   `expectedNonce` to `verifyRegistrationResponse`.
+ * Portal side: a fresh connection code. Store `tokenHash` only; show `code` once.
+ * @param {{ portalUrl: string, randomBytes?: (length: number) => Uint8Array }} params
+ * @returns {{ code: string, token: string, tokenHash: string }}
  */
-export const createRegistrationRequest = async ({
-	portalUrl,
-	portalJwksUrl,
+export const createConnectionCode = ({ portalUrl, randomBytes = defaultRandomBytes }) => {
+	const token = `sct_${b64url(randomBytes(32))}`;
+	const code = `${CONNECTION_CODE_PREFIX}${b64url(utf8(`${canonicalUrl(portalUrl)} ${token}`))}`;
+	return { code, token, tokenHash: hashConnectionToken(token) };
+};
+
+/**
+ * Product side: read a connection code.
+ * @param {unknown} code
+ * @returns {{ portalUrl: string, token: string }}
+ */
+export const parseConnectionCode = (code) => {
+	const text = typeof code === 'string' ? code.trim() : '';
+	if (!text.startsWith(CONNECTION_CODE_PREFIX) || text.length > 1024)
+		throw createProtocolError('invalid_argument', 'not a connection code');
+	/** @type {string} */
+	let decoded;
+	try {
+		decoded = fromUtf8(fromB64url(text.slice(CONNECTION_CODE_PREFIX.length)));
+	} catch {
+		throw createProtocolError('invalid_argument', 'not a connection code');
+	}
+	const [url, token, ...rest] = decoded.split(' ');
+	if (rest.length > 0 || !token || !TOKEN.test(token)) throw createProtocolError('invalid_argument', 'not a connection code');
+	return { portalUrl: canonicalUrl(url), token };
+};
+
+/**
+ * Product side: the connect request (proof of possession of the new key, bound to token, manifest and base URL).
+ * @param {{ code: string, baseUrl: string, manifest: unknown, signer: Signer, publicJwk: PublicJwk, nonce?: string,
+ *   now?: () => number, randomBytes?: (length: number) => Uint8Array }} params
+ * @returns {Promise<{ url: string, portalUrl: string, headers: Record<string, string>, body: string, nonce: string, jkt: string }>}
+ */
+export const createConnectRequest = async ({
+	code,
+	baseUrl,
+	manifest,
 	signer,
-	registrationToken,
+	publicJwk,
 	nonce,
-	audience,
-	appId,
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
 }) => {
-	requireString(registrationToken, 'registrationToken');
-	const iat = nowSeconds(now);
-	/** @type {RegistrationClaims} */
+	const { portalUrl, token } = parseConnectionCode(code);
+	const pub = toPublicJwk(publicJwk);
+	if (!signer || signer.kid !== pub.kid) throw createProtocolError('invalid_argument', 'signer must sign with publicJwk');
+	const jkt = await thumbprint(pub);
+	/** @type {ConnectClaims} */
 	const claims = {
-		portalUrl: canonicalUrl(portalUrl),
+		portalUrl,
+		baseUrl: canonicalUrl(baseUrl),
+		tth: hashConnectionToken(token),
+		manifestHash: hashManifest(manifest),
+		jkt,
 		nonce: nonce ?? randomId(randomBytes),
-		iat,
-		exp: iat + TOLERANCE_SECONDS,
-		tth: hashRegistrationToken(registrationToken),
+		iat: nowSeconds(now),
 	};
-	if (portalJwksUrl !== undefined) claims.portalJwksUrl = canonicalUrl(portalJwksUrl);
-	if (audience !== undefined) claims.aud = audience;
-	if (appId !== undefined) claims.appId = appId;
-	const request = await signCompact({ signer, typ: REGISTRATION_TYP, payload: claims });
+	const request = await signCompact({ signer, typ: CONNECT_TYP, payload: claims });
 	return {
-		headers: { Authorization: `Bearer ${registrationToken}`, 'Content-Type': 'application/json' },
-		body: JSON.stringify({ request }),
+		url: `${portalUrl}${CONNECT_PATH}`,
+		portalUrl,
+		headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', accept: 'application/json' },
+		body: JSON.stringify({ request, publicJwk: pub, manifest }),
 		nonce: claims.nonce,
+		jkt,
 	};
 };
 
 /**
- * @param {string} reason
- * @returns {RegistrationResult}
+ * Portal side: verify a connect request. Look the app up by `tokenHash`, then burn the token atomically and check the
+ * nonce against a replay store before binding anything.
+ * @param {{ headers: Headers | Record<string, string | string[] | undefined>, body: unknown, portalUrl: string,
+ *   now?: () => number }} params
+ * @returns {Promise<{ tokenHash: string, publicJwk: PublicJwk, thumbprint: string, manifest: unknown, baseUrl: string,
+ *   nonce: string, iat: number }>}
  */
-const deny = (reason) => ({ status: 401, body: { error: 'unauthorized' }, reason });
-
-/**
- * Product side: create the registration endpoint handler.
- * @param {{
- *   registrationTokenHash: string,
- *   allowedPortalUrl: string,
- *   allowedPortalJwksUrl?: string,
- *   fetchJwks: (url: string) => Promise<unknown>,
- *   manifest: unknown,
- *   productPublicJwk: PublicJwk,
- *   productSigner: Signer,
- *   onRegistered: (registration: { portalUrl: string, appId?: string, portalKid: string, nonce: string, registeredAt: number }) => unknown,
- *   burnToken: () => boolean | Promise<boolean>,
- *   isTokenBurned?: () => boolean | Promise<boolean>,
- *   nonceStore: ReplayStore,
- *   expectedAudience?: string,
- *   now?: () => number,
- * }} options `registrationTokenHash` = `hashRegistrationToken(token)`; `burnToken` must atomically mark the token used
- *   and return `false` if it already was; `allowedPortalJwksUrl` defaults to `<allowedPortalUrl>/.well-known/jwks.json`
- *   and must share the pinned origin; `productSigner` holds the private key of `productPublicJwk` (same `kid`) and
- *   signs the proof-of-possession response.
- * @returns {{ handle: (request: { headers: Record<string, string | string[] | undefined> | Headers, body: unknown }) => Promise<RegistrationResult> }}
- */
-export const createRegistrationHandler = ({
-	registrationTokenHash,
-	allowedPortalUrl,
-	allowedPortalJwksUrl,
-	fetchJwks,
-	manifest,
-	productPublicJwk,
-	productSigner,
-	onRegistered,
-	burnToken,
-	isTokenBurned = () => false,
-	nonceStore,
-	expectedAudience,
-	now = Date.now,
-}) => {
-	if (typeof registrationTokenHash !== 'string' || !/^[0-9a-f]{64}$/.test(registrationTokenHash)) {
-		throw createProtocolError('invalid_argument', 'registrationTokenHash must be a SHA-256 hex digest');
-	}
-	for (const [name, fn] of Object.entries({ fetchJwks, onRegistered, burnToken })) {
-		if (typeof fn !== 'function') throw createProtocolError('invalid_argument', `${name} is required`);
-	}
-	if (!nonceStore || typeof nonceStore.seen !== 'function')
-		throw createProtocolError('invalid_argument', 'nonceStore is required');
-	const publicJwk = toPublicJwk(productPublicJwk); // strips any private member, so `d` can never be sent
-	if (!productSigner || typeof productSigner.sign !== 'function' || productSigner.kid !== publicJwk.kid) {
-		throw createProtocolError('invalid_argument', 'productSigner must sign with the kid of productPublicJwk');
-	}
-	const manifestHash = hashManifest(manifest);
-	const jktPromise = thumbprint(publicJwk);
-	const pinnedPortal = canonicalUrl(allowedPortalUrl);
-	const pinnedJwks = canonicalUrl(allowedPortalJwksUrl ?? `${pinnedPortal}/.well-known/jwks.json`);
-	if (new URL(pinnedJwks).origin !== new URL(pinnedPortal).origin) {
-		throw createProtocolError('invalid_argument', 'allowedPortalJwksUrl must be on the pinned Portal origin');
-	}
-
-	/** @param {{ headers: Record<string, string | string[] | undefined> | Headers, body: unknown }} request */
-	const handle = async ({ headers, body }) => {
+export const verifyConnectRequest = async ({ headers, body, portalUrl, now = Date.now }) => {
+	const ours = canonicalUrl(portalUrl);
+	const match = /^Bearer (\S{16,256})$/.exec(getHeader(headers, 'authorization') ?? '');
+	if (!match?.[1] || !TOKEN.test(match[1])) throw createProtocolError('malformed', 'connection token missing');
+	const tokenHash = hashConnectionToken(match[1]);
+	/** @type {unknown} */
+	let parsed = body;
+	if (typeof body === 'string') {
 		try {
-			if (await isTokenBurned()) return deny('token_burned');
-			const match = /^Bearer ([\x21-\x7e]{16,512})$/.exec(getHeader(headers, 'authorization') ?? '');
-			const presented = match?.[1];
-			if (!presented || !constantTimeEqual(hashRegistrationToken(presented), registrationTokenHash))
-				return deny('token_invalid');
-
-			/** @type {unknown} */
-			let parsed = body;
-			if (typeof body === 'string') {
-				try {
-					parsed = JSON.parse(body);
-				} catch {
-					return deny('body_malformed');
-				}
-			}
-			if (!isObject(parsed) || typeof parsed.request !== 'string') return deny('body_malformed');
-
-			// Keys come ONLY from the pinned Portal JWKS URL; any URL in the body is ignored.
-			const keyResolver = createKeyResolver({ fetchJwks: () => fetchJwks(pinnedJwks), now });
-			/** @type {{ payload: Record<string, unknown>, kid: string }} */
-			let verified;
-			try {
-				verified = await verifyCompact({ token: parsed.request, keyResolver, typ: REGISTRATION_TYP });
-			} catch (error) {
-				return deny(`signature:${isProtocolError(error) ? error.code : 'error'}`);
-			}
-			const { payload, kid } = verified;
-
-			/** @type {string | null} */
-			let claimedPortal = null;
-			try {
-				claimedPortal = canonicalUrl(payload.portalUrl);
-			} catch {
-				// handled below
-			}
-			if (claimedPortal !== pinnedPortal) return deny('portal_url');
-			const iat = payload.iat;
-			if (typeof iat !== 'number' || Math.abs(now() / 1000 - iat) > TOLERANCE_SECONDS) return deny('timestamp');
-			if (typeof payload.tth !== 'string' || !constantTimeEqual(payload.tth, registrationTokenHash))
-				return deny('token_binding');
-			if (expectedAudience !== undefined && payload.aud !== expectedAudience) return deny('audience');
-			const nonce = payload.nonce;
-			if (typeof nonce !== 'string' || nonce.length < 16 || nonce.length > 256) return deny('nonce_invalid');
-			if (await nonceStore.seen(`registration|${nonce}`, (iat + 2 * TOLERANCE_SECONDS) * 1000)) return deny('nonce_reused');
-			/** @type {RegistrationProofClaims} */
-			const proofClaims = { manifestHash, jkt: await jktPromise, nonce, portalUrl: pinnedPortal, iat: nowSeconds(now) };
-			if (typeof payload.appId === 'string') proofClaims.appId = payload.appId;
-			const proof = await signCompact({ signer: productSigner, typ: REGISTRATION_RESPONSE_TYP, payload: proofClaims });
-			if (!(await burnToken())) return deny('token_burned');
-
-			try {
-				await onRegistered({
-					portalUrl: pinnedPortal,
-					...(typeof payload.appId === 'string' ? { appId: payload.appId } : {}),
-					portalKid: kid,
-					nonce,
-					registeredAt: now(),
-				});
-			} catch {
-				// the token stays burned: a fresh token must be issued for a retry
-				return { status: 500, body: { error: 'registration_failed' }, reason: 'on_registered_failed' };
-			}
-			return { status: 200, body: { manifest, publicJwk, proof } };
+			parsed = JSON.parse(body);
 		} catch {
-			return deny('internal_error');
+			throw createProtocolError('malformed', 'body is not JSON');
 		}
-	};
-
-	return Object.freeze({ handle });
-};
-
-/**
- * Portal side: verify the product's registration response (proof of possession).
- *
- * Checks, in order: shape; the included `publicJwk` is a valid Ed25519 public key; `proof` verifies under exactly that
- * key (header `kid` must equal the JWK's kid, `typ: ss-registration-response+jws`); `jkt` equals the JWK thumbprint;
- * `nonce` echoes the request nonce; `portalUrl` equals ours; `manifestHash` equals SHA-256 of the canonical manifest;
- * `iat` within ±5 min; `appId` matches when `expectedAppId` is given.
- * @param {{ response: unknown, expectedNonce: string, expectedPortalUrl: string, expectedAppId?: string, now?: () => number }} params
- *   `response` is the parsed JSON body returned by the product.
- * @returns {Promise<{ manifest: unknown, publicJwk: PublicJwk, thumbprint: string, appId?: string }>}
- */
-export const verifyRegistrationResponse = async ({
-	response,
-	expectedNonce,
-	expectedPortalUrl,
-	expectedAppId,
-	now = Date.now,
-}) => {
-	requireString(expectedNonce, 'expectedNonce');
-	const portalUrl = canonicalUrl(expectedPortalUrl);
-	if (!isObject(response) || typeof response.proof !== 'string' || !('manifest' in response)) {
-		throw createProtocolError('malformed', 'registration response must carry manifest, publicJwk and proof');
 	}
+	if (!isObject(parsed) || typeof parsed.request !== 'string' || !('manifest' in parsed))
+		throw createProtocolError('malformed', 'connect body must carry request, publicJwk and manifest');
 	/** @type {PublicJwk} */
 	let publicJwk;
 	try {
-		publicJwk = toPublicJwk(response.publicJwk);
+		publicJwk = toPublicJwk(parsed.publicJwk);
 	} catch {
-		throw createProtocolError('malformed', 'registration response publicJwk is invalid');
+		throw createProtocolError('malformed', 'publicJwk is invalid');
 	}
 	const key = await importPublicKey(publicJwk);
-	const keyResolver = {
-		/** @param {string} kid */
-		resolve: async (kid) => {
-			if (kid !== publicJwk.kid) throw createProtocolError('unknown_kid', 'proof is not signed by the registered key');
-			return key;
+	const { payload } = await verifyCompact({
+		token: parsed.request,
+		typ: CONNECT_TYP,
+		keyResolver: {
+			resolve: async (kid) => {
+				if (kid !== publicJwk.kid) throw createProtocolError('unknown_kid', 'request is not signed by the included key');
+				return key;
+			},
 		},
-	};
-	const { payload } = await verifyCompact({ token: response.proof, keyResolver, typ: REGISTRATION_RESPONSE_TYP });
+	});
 	const jkt = await thumbprint(publicJwk);
-	if (payload.jkt !== jkt) throw createProtocolError('signature', 'proof thumbprint does not match publicJwk');
-	if (typeof payload.nonce !== 'string' || !constantTimeEqual(payload.nonce, expectedNonce)) {
-		throw createProtocolError('replay', 'proof does not echo the request nonce');
-	}
-	if (payload.portalUrl !== portalUrl) throw createProtocolError('audience', 'proof is for another Portal');
-	/** @type {string} */
-	let manifestHash;
+	if (payload.jkt !== jkt) throw createProtocolError('signature', 'thumbprint does not match publicJwk');
+	if (typeof payload.tth !== 'string' || !constantTimeEqual(payload.tth, tokenHash))
+		throw createProtocolError('signature', 'request is not bound to this token');
+	if (payload.portalUrl !== ours) throw createProtocolError('audience', 'request is for another Portal');
+	let baseUrl = '';
 	try {
-		manifestHash = hashManifest(response.manifest);
+		baseUrl = canonicalUrl(payload.baseUrl);
 	} catch {
-		throw createProtocolError('malformed', 'manifest is not JSON-serialisable');
+		throw createProtocolError('malformed', 'baseUrl is invalid');
 	}
-	if (payload.manifestHash !== manifestHash) throw createProtocolError('signature', 'manifest does not match the signed hash');
+	if (payload.manifestHash !== hashManifest(parsed.manifest))
+		throw createProtocolError('signature', 'manifest does not match the signed hash');
 	const iat = payload.iat;
-	if (typeof iat !== 'number' || !Number.isFinite(iat)) throw createProtocolError('malformed', 'iat is missing');
-	const age = now() / 1000 - iat;
-	if (age > TOLERANCE_SECONDS) throw createProtocolError('expired', 'proof is stale');
-	if (age < -TOLERANCE_SECONDS) throw createProtocolError('not_yet_valid', 'proof is from the future');
-	if (payload.appId !== undefined && typeof payload.appId !== 'string')
+	if (typeof iat !== 'number' || Math.abs(now() / 1000 - iat) > TOLERANCE_SECONDS)
+		throw createProtocolError('expired', 'request is stale');
+	const nonce = payload.nonce;
+	if (typeof nonce !== 'string' || nonce.length < 16 || nonce.length > 256) throw createProtocolError('malformed', 'nonce');
+	return { tokenHash, publicJwk, thumbprint: jkt, manifest: parsed.manifest, baseUrl, nonce, iat };
+};
+
+/**
+ * Portal side: the signed answer to a successful connect.
+ * @param {{ signer: Signer, appId: string, portalUrl: string, jkt: string, nonce: string, jwks: unknown, now?: () => number }} params
+ * @returns {Promise<{ appId: string, jwks: unknown, response: string }>}
+ */
+export const createConnectResponse = async ({ signer, appId, portalUrl, jkt, nonce, jwks, now = Date.now }) => {
+	const response = await signCompact({
+		signer,
+		typ: CONNECTED_TYP,
+		payload: { appId, portalUrl: canonicalUrl(portalUrl), jkt, nonce, iat: nowSeconds(now) },
+	});
+	return { appId, jwks, response };
+};
+
+/**
+ * Product side: verify the Portal's answer against the JWKS it returned (received over TLS from the pinned URL).
+ * @param {{ body: unknown, portalUrl: string, nonce: string, jkt: string, now?: () => number }} params
+ * @returns {Promise<{ appId: string, jwks: { keys: PublicJwk[] }, portalKid: string }>}
+ */
+export const verifyConnectResponse = async ({ body, portalUrl, nonce, jkt, now = Date.now }) => {
+	if (!isObject(body) || typeof body.response !== 'string' || !isObject(body.jwks) || !Array.isArray(body.jwks.keys))
+		throw createProtocolError('malformed', 'connect answer must carry appId, jwks and response');
+	const jwks = { keys: body.jwks.keys.map((key) => toPublicJwk(key)) };
+	const resolver = createKeyResolver({ fetchJwks: async () => jwks, now });
+	const { payload, kid } = await verifyCompact({ token: body.response, keyResolver: resolver, typ: CONNECTED_TYP });
+	if (payload.portalUrl !== canonicalUrl(portalUrl)) throw createProtocolError('audience', 'answer is from another Portal');
+	if (payload.jkt !== jkt) throw createProtocolError('subject', 'answer is for another key');
+	if (typeof payload.nonce !== 'string' || !constantTimeEqual(payload.nonce, nonce))
+		throw createProtocolError('replay', 'answer does not echo the request nonce');
+	const iat = payload.iat;
+	if (typeof iat !== 'number' || Math.abs(now() / 1000 - iat) > TOLERANCE_SECONDS)
+		throw createProtocolError('expired', 'answer is stale');
+	if (typeof payload.appId !== 'string' || payload.appId !== body.appId)
 		throw createProtocolError('malformed', 'appId is invalid');
-	if (expectedAppId !== undefined && payload.appId !== expectedAppId)
-		throw createProtocolError('subject', 'proof is for another app');
-	return {
-		manifest: response.manifest,
-		publicJwk,
-		thumbprint: jkt,
-		...(typeof payload.appId === 'string' ? { appId: payload.appId } : {}),
-	};
+	return { appId: payload.appId, jwks, portalKid: kid };
 };

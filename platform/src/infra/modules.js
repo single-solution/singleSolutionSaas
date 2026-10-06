@@ -47,6 +47,8 @@ import { platformError } from './errors.js';
  * @property {import('@ss/protocol').ReplayStore} replayStore
  * @property {{ name: (kind: 'staff' | 'merchant') => string, set: (kind: 'staff' | 'merchant', token: string, maxAgeSeconds: number) => string, clear: (kind: 'staff' | 'merchant') => string }} cookies
  * @property {{ can: typeof import('./rbac.js').can, websitesVisible: typeof import('./rbac.js').websitesVisible }} rbac
+ * @property {import('./system.js').SystemStore | null} system generated secrets and recorded settings (admin settings,
+ *   key rotation); null when the Portal was built without one (tests)
  */
 
 /**

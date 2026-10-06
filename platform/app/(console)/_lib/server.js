@@ -2,7 +2,7 @@
 // redirects of signed-out users. Thin adapter over src/console (no business logic here).
 import { cache } from 'react';
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { createConsoleApi } from '../../../src/console/api.js';
 import { loadSession } from '../../../src/console/loaders.js';
 import { getPortal } from '../../../src/runtime.js';
@@ -10,7 +10,11 @@ import { getPortal } from '../../../src/runtime.js';
 /** The request's console API client (one per request). */
 export const consoleApi = cache(async () => {
 	const h = await headers(); // first: makes the page dynamic before the Portal (environment) is touched
-	const portal = getPortal();
+	const portal = await getPortal();
+	if (!portal.config.setUp) redirect('/setup'); // first run: nothing but /setup until it is done
+	// the dedicated preview origin serves previews only, never a console page
+	const preview = portal.config.delivery.previewOrigin;
+	if (preview && new URL(preview).host === h.get('host')) notFound();
 	return createConsoleApi({
 		handle: portal.handle,
 		baseUrl: portal.config.portalUrl,

@@ -55,7 +55,10 @@ export const ADMIN_NAV = Object.freeze([
 	},
 	{
 		label: 'Team',
-		items: [{ href: adminRoutes.staff(), label: 'Staff', icon: 'key', permission: 'platform.staff.manage' }],
+		items: [
+			{ href: adminRoutes.staff(), label: 'Staff', icon: 'key', permission: 'platform.staff.manage' },
+			{ href: adminRoutes.settings(), label: 'Settings', icon: 'sliders', permission: 'platform.settings.write' },
+		],
 	},
 ]);
 

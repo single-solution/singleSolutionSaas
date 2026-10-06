@@ -7,7 +7,7 @@ locks that honour the price a shopper was shown, drop-in or headless badges and 
 and reporting. **All deal data lives in the merchant's own MongoDB** (connected in the Portal); this deployment keeps
 only caches, queues and sessions.
 
-Built on `@ss/app-kit` (registration, SSO launches, website keys, entitlements with offline grace, events, usage,
+Built on `@ss/app-kit` (connection-code setup, SSO launches, website keys, entitlements with offline grace, events, usage,
 client-owned data, bring-your-own identity) and `@ss/rules` (conditions). Business rules live only in `core/` (pure)
 and `headless/`. Ported and generalised from ibrahimMobiles `packages/shared/src/pricing/**` (evaluator, matching,
 scope, schedule with timezone and overnight windows, stacking, cart offer locks) and its storefront deals page, PDP
@@ -114,29 +114,30 @@ sandbox deals evaluated with the real engine; impersonation shows the audit bann
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # signing key, token hash, portal URL (keep the printed registration token)
+ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev register --url http://localhost:3000 --token <token>
+ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at /setup
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000 --token <fresh token>
+ss certify . --url http://localhost:3000
 pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB, certify
 ```
 
 `tests/certify.test.js` runs the full `ss certify` suite (every check passes); the system test `e2e/tests/deals-portal.test.js` (monorepo workspace `@ss/e2e`) runs the real
-Portal in process: staff bootstrap → catalog handshake → activation → merchant signup → website → credits →
+Portal in process: staff bootstrap → connection code (/setup) → activation → merchant signup → website → credits →
 subscription → database connector → weekday-evening deal in Asia/Karachi → quotes outside / inside the overnight
 window → price lock honoured after the window closed → commit (uses in the merchant DB) → metered usage → settlement.
 
 ## Deploy
 
-1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder); `next.config.js` sets the monorepo root.
-2. Environment (Production): `PORTAL_URL`, `SIGNING_KEY`, `REGISTRATION_TOKEN_HASH`, `APP_ID`
-   (optional), `DATABASE_URI` (required in production),
-   `DATABASE_MAX_POOL_SIZE` (optional, default 5), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars).
-3. Deploy, register from the Portal admin with the deployment URL and token, review and activate; `endpoints.base` in
-   `manifest.json` must be the deployment's https origin.
-4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
+3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
+   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
+   and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
 
 ## Changelog
 

@@ -1,14 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { certificationTarget, formatReport, nextCursorOf, problemShapeError, runCertification } from '../src/certify/index.js';
 import { initApp } from '../src/init.js';
 import { loadManifest } from '../src/manifest.js';
 import { createFakeProduct } from './helpers/fake-product.js';
 import { freePort, removeDir, tempDir } from './helpers/util.js';
 
-const TOKEN = 'rt_certify_registration_token_0123456789';
 const database = {
 	resolve: async (/** @type {{ merchantId: string }} */ { merchantId }) => ({
 		uri: `mongodb://127.0.0.1:1/client_${merchantId}`,
@@ -39,13 +38,12 @@ const certify = async (broken = {}, options = {}) => {
 	const product = createFakeProduct({
 		manifest,
 		portalUrl,
-		tokenHash: hashRegistrationToken(TOKEN),
 		signingKey: (await generateSigningKey({ kid: 'cert-app-1' })).privateJwk,
 		broken,
 	});
 	const url = await product.start();
 	try {
-		return await runCertification({ dir, url, portalUrl, token: TOKEN, database, ...options });
+		return await runCertification({ dir, url, portalUrl, database, ...options });
 	} finally {
 		await product.stop();
 	}
@@ -63,8 +61,9 @@ describe('ss certify (service)', () => {
 		expect(report.ok).toBe(true);
 		const ids = report.checks.map((check) => check.id);
 		for (const id of [
-			'registration.handshake',
-			'registration.single-use',
+			'setup.rejects-bad-code',
+			'connection.setup',
+			'connection.setup-closed',
 			'launch.merchant',
 			'launch.demo',
 			'launch.admin',
@@ -158,12 +157,9 @@ describe('ss certify (service)', () => {
 		}
 	}, 120_000);
 
-	it('skips the live suite without --url and without a token', async () => {
+	it('skips the live suite without --url', async () => {
 		const noUrl = await runCertification({ dir });
 		expect(noUrl.checks.map((check) => `${check.id}:${check.status}`)).toEqual(['project.validate:pass', 'service.url:skip']);
-		const report = await certify({}, { token: undefined });
-		expect(report.checks.find((check) => check.id === 'registration.handshake')?.status).toBe('skip');
-		expect(report.checks.at(-1)?.id).toBe('live');
 	}, 60_000);
 
 	it('fails fast when the Portal port is busy or the project is invalid', async () => {

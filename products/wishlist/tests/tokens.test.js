@@ -50,6 +50,6 @@ describe('tokens', () => {
 		const derived = tokenSecret({ secret: 'short', signingKey: `${privateJwk.kid}:${privateJwk.d}` });
 		expect(derived).toHaveLength(32);
 		expect(tokenSecret({ signingKey: privateJwk }).equals(derived)).toBe(true);
-		expect(() => tokenSecret({ signingKey: { kty: 'OKP' } })).toThrow(/WISHLIST_TOKEN_SECRET/);
+		expect(() => tokenSecret({ signingKey: { kty: 'OKP' } })).toThrow(/generated secret/);
 	});
 });

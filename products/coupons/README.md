@@ -89,31 +89,31 @@ core; impersonation shows the audit banner.
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # signing key, token hash, portal URL (keep the printed registration token)
+ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev register --url http://localhost:3000 --token <token>
+ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at /setup
 ss app validate
-ss certify . --url http://localhost:3000 --token <fresh token>
+ss certify . --url http://localhost:3000
 pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
 ```
 
 `tests/certify.test.js` runs the full `ss certify` suite (every check must pass); the system test `e2e/tests/coupons-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
-real Portal in process: staff bootstrap → catalog handshake → activation → merchant signup → website → credits →
+real Portal in process: staff bootstrap → connection code (/setup) → activation → merchant signup → website → credits →
 subscription → database connector → single-use code created through the API → two concurrent reservations (exactly
 one wins) → `order.completed@1` through the Event Hub → redeemed in the merchant DB → usage → hourly settlement
 (elements charged, metered hour booked).
 
 ## Deploy
 
-1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
-   workspace root automatically.
-2. Environment variables (Production): `PORTAL_URL` (pinned Portal), `SIGNING_KEY` (`kid:seed`, Ed25519 seed in
-   base64url), `REGISTRATION_TOKEN_HASH`, `APP_ID` (optional; recorded by the handshake), `DATABASE_URI` (the
-   product's own small MongoDB — required in production), `DATABASE_MAX_POOL_SIZE` (optional, default 5).
-3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
-   review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
-4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
+3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
+   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
+   and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
 
 ## Changelog
 

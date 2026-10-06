@@ -63,6 +63,78 @@ export const systemRoutes = (service) => [
 	}),
 	defineRoute({
 		method: 'GET',
+		path: '/v1/admin/system/settings',
+		auth: 'staff',
+		permission: 'platform.settings.write',
+		handler: async () => ok(await service.settings()),
+	}),
+	defineRoute({
+		method: 'PUT',
+		path: '/v1/admin/system/settings/portal-url',
+		auth: 'staff',
+		permission: 'platform.staff.manage',
+		handler: async (ctx) => {
+			const body = /** @type {Record<string, unknown>} */ (ctx.body ?? {});
+			return ok(
+				await service.setPortalUrl({
+					portalUrl: body.portalUrl,
+					confirmation: body.confirmation,
+					actor: /** @type {import('../../infra/rbac.js').Actor} */ (ctx.actor),
+					requestId: ctx.requestId,
+					ip: ctx.ip,
+				}),
+			);
+		},
+	}),
+	defineRoute({
+		method: 'PUT',
+		path: '/v1/admin/system/settings/preview-url',
+		auth: 'staff',
+		permission: 'platform.settings.write',
+		handler: async (ctx) =>
+			ok(
+				await service.setPreviewUrl({
+					previewUrl: /** @type {Record<string, unknown>} */ (ctx.body ?? {}).previewUrl ?? null,
+					actor: /** @type {import('../../infra/rbac.js').Actor} */ (ctx.actor),
+					requestId: ctx.requestId,
+					ip: ctx.ip,
+				}),
+			),
+	}),
+	defineRoute({
+		method: 'PUT',
+		path: '/v1/admin/system/settings/mail',
+		auth: 'staff',
+		permission: 'platform.settings.write',
+		handler: async (ctx) =>
+			ok(
+				await service.setMail({
+					mail: /** @type {Record<string, unknown>} */ (ctx.body ?? {}).mail ?? null,
+					actor: /** @type {import('../../infra/rbac.js').Actor} */ (ctx.actor),
+					requestId: ctx.requestId,
+					ip: ctx.ip,
+				}),
+			),
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/system/keys/:kind/rotate',
+		auth: 'staff',
+		permission: 'platform.staff.manage',
+		idempotent: false,
+		rateLimit: { limit: 10, windowMs: 60_000 },
+		handler: async (ctx) =>
+			ok(
+				await service.rotateKey({
+					kind: ctx.params.kind ?? '',
+					actor: /** @type {import('../../infra/rbac.js').Actor} */ (ctx.actor),
+					requestId: ctx.requestId,
+					ip: ctx.ip,
+				}),
+			),
+	}),
+	defineRoute({
+		method: 'GET',
 		path: '/v1/admin/system/health',
 		auth: 'staff',
 		permission: 'platform.jobs.read',

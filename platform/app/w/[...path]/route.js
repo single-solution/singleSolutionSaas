@@ -5,6 +5,6 @@ import { getPortal } from '../../../src/runtime.js';
 
 export const dynamic = 'force-dynamic';
 
-export const { GET, HEAD, OPTIONS } = toNextRoute((request) => getPortal().handle(request), {
+export const { GET, HEAD, OPTIONS } = toNextRoute(async (request) => (await getPortal()).handle(request), {
 	after,
 });

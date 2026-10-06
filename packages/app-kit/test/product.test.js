@@ -27,9 +27,7 @@ describe('createProduct', () => {
 			priceBook: { version: '1', effectiveFrom: '2026-10-01T00:00:00Z' },
 		};
 		expect(() => createProduct({ ...base, manifest: /** @type {any} */ (pack) })).toThrow(/service products/);
-		expect(() => createProduct({ ...base, manifest: manifest(), portalUrl: /** @type {any} */ (undefined) })).toThrow(
-			/portalUrl/,
-		);
+		expect(() => createProduct({ ...base, manifest: manifest(), portalUrl: /** @type {any} */ (5) })).toThrow(/portalUrl/);
 		expect(() => createProduct({ ...base, manifest: manifest(), signingKey: 'not json' })).toThrow(/signingKey/);
 		expect(() => createProduct({ ...base, manifest: manifest(), signingKey: '[1]' })).toThrow(/signingKey/);
 		expect(() => createProduct({ ...base, manifest: manifest(), signingKey: /** @type {any} */ (publicJwk) })).toThrow(

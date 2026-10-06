@@ -40,6 +40,7 @@ export const adminRoutes = Object.freeze({
 		/** @type {{ scope?: string | null, actorId?: string | null, targetId?: string | null, action?: string | null }} */ q = {},
 	) => `/admin/audit${query(q)}`,
 	staff: () => '/admin/staff',
+	settings: () => '/admin/settings',
 });
 
 /** Staff API paths. */
@@ -70,6 +71,12 @@ export const adminApi = Object.freeze({
 	websiteLookup: (/** @type {{ domain: string, env?: string | null }} */ q) => `/v1/admin/websites${query(q)}`,
 	transfer: (/** @type {string} */ w) => `/v1/admin/websites/${e(w)}/transfer`,
 	staffList: () => '/v1/admin/staff',
+	// system settings (kept in the database; never environment variables)
+	settings: () => '/v1/admin/system/settings',
+	settingsPortalUrl: () => '/v1/admin/system/settings/portal-url',
+	settingsPreviewUrl: () => '/v1/admin/system/settings/preview-url',
+	settingsMail: () => '/v1/admin/system/settings/mail',
+	rotateKey: (/** @type {'signing' | 'website' | 'encryption'} */ kind) => `/v1/admin/system/keys/${e(kind)}/rotate`,
 	staffMember: (/** @type {string} */ s) => `/v1/admin/staff/${e(s)}`,
 	staffMfaReset: (/** @type {string} */ s) => `/v1/admin/staff/${e(s)}/mfa/reset`,
 
@@ -77,7 +84,10 @@ export const adminApi = Object.freeze({
 	apps: (/** @type {{ status?: string | null, kind?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
 		`/v1/admin/apps${query(q)}`,
 	app: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}`,
-	register: () => '/v1/admin/apps/register',
+	/** `POST` → `{ code, codeId, appId, expiresAt }` (one-time connection code, shown once) / `GET` → recent codes */
+	connectionCodes: () => '/v1/admin/apps/connection-codes',
+	connectionCode: (/** @type {string} */ c) => `/v1/admin/apps/connection-codes/${e(c)}`,
+	reconnect: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/reconnect`,
 	packs: () => '/v1/admin/packs',
 	versions: (/** @type {string} */ a, /** @type {{ cursor?: string | null }} */ q = {}) =>
 		`/v1/admin/apps/${e(a)}/versions${query(q)}`,

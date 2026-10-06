@@ -6,13 +6,15 @@
 import { createServer } from 'node:http';
 import { validateEvent } from '@ss/contracts';
 import {
+	createConnectRequest,
 	createKeyResolver,
 	createMemoryReplayStore,
-	createRegistrationHandler,
 	createSigner,
 	originAllowed,
+	parseConnectionCode,
 	signAssertion,
 	toPublicJwk,
+	verifyConnectResponse,
 	verifyEntitlementDocument,
 	verifyEvent,
 	verifyLaunch,
@@ -33,20 +35,18 @@ const readBody = (request) =>
 	});
 
 /**
- * @param {{ manifest: any, portalUrl: string, tokenHash: string, signingKey: any, broken?: Record<string, boolean>, fetch?: typeof fetch }} options
+ * @param {{ manifest: any, portalUrl: string, signingKey: any, broken?: Record<string, boolean>, fetch?: typeof fetch }} options
  */
-export const createFakeProduct = ({ manifest, portalUrl, tokenHash, signingKey, broken = {}, fetch = globalThis.fetch }) => {
+export const createFakeProduct = ({ manifest, portalUrl, signingKey, broken = {}, fetch = globalThis.fetch }) => {
 	const signer = createSigner(signingKey);
 	const publicJwk = toPublicJwk(signingKey);
 	const portalKeys = createKeyResolver({
 		fetchJwks: async () => (await fetch(`${portalUrl}/.well-known/jwks.json`)).json(),
 		minRefreshIntervalMs: 0,
 	});
-	const nonceStore = createMemoryReplayStore();
 	const launchStore = createMemoryReplayStore();
 	const eventReplay = createMemoryReplayStore();
 	const portalCallReplay = createMemoryReplayStore();
-	let burned = false;
 	let pkReads = 0;
 	/** @type {string | null} */
 	let appId = null;
@@ -65,25 +65,6 @@ export const createFakeProduct = ({ manifest, portalUrl, tokenHash, signingKey, 
 	/** @type {Map<string, any>} */
 	const sessions = new Map();
 	let counter = 0;
-
-	const registration = createRegistrationHandler({
-		registrationTokenHash: tokenHash,
-		allowedPortalUrl: portalUrl,
-		fetchJwks: async (url) => (await fetch(url)).json(),
-		manifest,
-		productPublicJwk: publicJwk,
-		productSigner: signer,
-		onRegistered: (result) => {
-			appId = result.appId ?? null;
-		},
-		burnToken: () => {
-			if (burned) return false;
-			burned = true;
-			return true;
-		},
-		isTokenBurned: () => burned,
-		nonceStore,
-	});
 
 	/**
 	 * Signed Portal call (client assertion).
@@ -169,9 +150,31 @@ export const createFakeProduct = ({ manifest, portalUrl, tokenHash, signingKey, 
 		const raw = method === 'GET' ? '' : await readBody(request);
 		const route = `${method} ${url.pathname}`;
 		if (route === 'GET /.well-known/ss-app.json') return send(response, 200, manifest);
-		if (route === 'POST /.well-known/ss-register') {
-			const result = await registration.handle({ headers: /** @type {any} */ (request.headers), body: raw });
-			return send(response, result.status, result.body);
+		if (route === 'POST /setup') {
+			if (appId) return send(response, 404, { error: 'not_found' });
+			/** @type {Record<string, any>} */
+			let input = {};
+			try {
+				input = JSON.parse(raw);
+			} catch {
+				// handled below
+			}
+			try {
+				if (parseConnectionCode(input.code).portalUrl !== portalUrl) throw new Error('another Portal');
+			} catch {
+				return send(response, 400, { error: 'bad_request' });
+			}
+			const connect = await createConnectRequest({ code: input.code, baseUrl: input.baseUrl, manifest, signer, publicJwk });
+			const answered = await fetch(connect.url, { method: 'POST', headers: connect.headers, body: connect.body });
+			if (!answered.ok) return send(response, 502, { error: 'refused' });
+			const accepted = await verifyConnectResponse({
+				body: await answered.json(),
+				portalUrl,
+				nonce: connect.nonce,
+				jkt: connect.jkt,
+			});
+			appId = accepted.appId;
+			return send(response, 200, { appId });
 		}
 		if (route === 'POST /.well-known/ss-events') {
 			try {

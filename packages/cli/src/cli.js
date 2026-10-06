@@ -5,9 +5,8 @@
  */
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { formatSigningKey, generateSigningKey, hashRegistrationToken, parseSigningKeys } from '@ss/protocol';
+import { parseSigningKeys } from '@ss/protocol';
 import { initApp, INIT_KINDS } from './init.js';
 import { formatValidation, validateProject } from './validate/index.js';
 import { loadManifest } from './manifest.js';
@@ -43,8 +42,9 @@ Usage:
                                                sign the descriptor (signBundle) and upload it to the Portal admin pack API
                                                (token: ADMIN_TOKEN, key: PACK_SIGNING_KEY)
   ss dev [--dir <dir>] [--port <n>] [--fixture ss.dev.json] [--state <file>] [--mongo-uri <uri>]
-  ss dev env                                   development env values (signing key, registration token + hash)
-  ss dev register --url <product url> --token <registration token> [--audience <aud>]
+  ss dev env                                   the product environment (only DATABASE_URI)
+  ss dev code                                  a one-time connection code to paste into the product's /setup
+  ss dev connect --url <product url>           connect a running product (posts a fresh code to its /setup)
   ss dev launch --kind merchant|demo|admin|impersonate|partner|developer [--scope <merchantId|all>] [--merchant <id>] [--website <id>] [--actor <staff id>]
   ss dev keys [--website <id>] [--rotate] [--revoke <keyId>]
   ss dev emit <type[@v]> [--website <id>] [--data <json|@file>] [--force]
@@ -54,7 +54,8 @@ Usage:
   ss dev identity [--website <id> --decision approve|reject]   list or decide identity-issuer requests
   ss dev settle [--hours <n>]
   ss dev state
-  ss certify [dir] --url <product url> [--portal-url <url>] [--token <registration token>] [--state <file>] [--report <file>] [--json]
+  ss certify [dir] --url <product url> [--portal-url <url>] [--state <file>] [--report <file>] [--json]
+                                               (an unconnected product: certify connects it with a code)
 
 Exit codes: 0 ok, 1 validation/certification failed or command error, 2 usage error.
 `;
@@ -271,19 +272,12 @@ const dev = async (args, deps) => {
 	const rest = args.slice(1);
 
 	if (sub === 'env') {
-		const { values } = parse(rest, { kid: { type: 'string' }, 'portal-url': { type: 'string' } });
-		const kid = typeof values.kid === 'string' ? values.kid : `app-dev-${randomBytes(3).toString('hex')}`;
-		const { privateJwk } = await generateSigningKey({ kid });
-		const token = `rt_${randomBytes(24).toString('base64url')}`;
+		parse(rest, {});
 		io.out(
 			[
-				`# Development values — keep the registration token out of the product env:`,
-				`#   ss dev register --url http://localhost:3000 --token ${token}`,
-				`PORTAL_URL=${typeof values['portal-url'] === 'string' ? values['portal-url'] : 'http://localhost:4400'}`,
-				'APP_ID=',
-				`SIGNING_KEY=${formatSigningKey(privateJwk)}`,
-				`REGISTRATION_TOKEN_HASH=${hashRegistrationToken(token)}`,
+				'# Product environment: only its own control database (empty = in memory, development only).',
 				'DATABASE_URI=',
+				'# Then connect it at /setup with a connection code: `ss dev code`, or `ss dev connect --url http://localhost:3000`.',
 				'',
 			].join('\n'),
 		);
@@ -359,8 +353,8 @@ const dev = async (args, deps) => {
 					(key) =>
 						`  ${key.kind === 'pk' ? 'publishable' : 'secret     '}    ${key.key.slice(0, 24)}…  (${key.websiteId}; full key: ss dev keys)`,
 				),
-				...portal.apps().map((app) => `  registered     ${app.manifest.product.slug} → ${app.baseUrl} (${app.appId})`),
-				`Register the product: ss dev register --url ${fixture.product.url ?? 'http://localhost:3000'} --token <registration token>`,
+				...portal.apps().map((app) => `  connected      ${app.manifest.product.slug} → ${app.baseUrl} (${app.appId})`),
+				`Connect the product: ss dev connect --url ${fixture.product.url ?? 'http://localhost:3000'} (or ss dev code, then open its /setup)`,
 				statePath
 					? `State file: ${path.relative(cwd, statePath)}`
 					: 'State: in memory (pass --state .ss/dev-state.json to persist)',
@@ -393,23 +387,18 @@ const dev = async (args, deps) => {
 		});
 
 	switch (sub) {
-		case 'register': {
-			const { values } = parse(rest, {
-				...common,
-				url: { type: 'string' },
-				token: { type: 'string' },
-				audience: { type: 'string' },
-			});
-			const token = typeof values.token === 'string' ? values.token : deps.env.REGISTRATION_TOKEN;
-			if (typeof values.url !== 'string' || !token)
-				return usageError(io, 'dev register needs --url and --token (or REGISTRATION_TOKEN)');
-			const result = await call(values, 'register', {
-				url: values.url,
-				token,
-				...(typeof values.audience === 'string' ? { audience: values.audience } : {}),
-			});
+		case 'code': {
+			const { values } = parse(rest, { ...common });
+			const result = await call(values, 'code', {});
+			io.out(`${result.code}\n  one-time connection code for ${result.appId}, valid until ${result.expiresAt}: paste it into the product's /setup\n`);
+			return 0;
+		}
+		case 'connect': {
+			const { values } = parse(rest, { ...common, url: { type: 'string' } });
+			if (typeof values.url !== 'string') return usageError(io, 'dev connect needs --url <product url>');
+			const result = await call(values, 'connect', { url: values.url });
 			io.out(
-				`Registered ${result.manifest.product.slug} as ${result.appId}\n  product key ${result.kid} (jkt ${result.thumbprint}) — proof of possession verified\n  set APP_ID=${result.appId} if your product does not persist it\n`,
+				`Connected ${result.manifest.product.slug} as ${result.appId}\n  product key ${result.kid} (jkt ${result.thumbprint}) — proof of possession verified\n`,
 			);
 			return 0;
 		}
@@ -678,19 +667,16 @@ export const main = async (argv, deps) => {
 			const { values, positionals } = parse(rest, {
 				url: { type: 'string' },
 				'portal-url': { type: 'string' },
-				token: { type: 'string' },
 				state: { type: 'string' },
 				report: { type: 'string' },
 				json: { type: 'boolean' },
 			});
 			const dir = path.resolve(full.cwd, positionals[0] ?? '.');
-			const token = typeof values.token === 'string' ? values.token : full.env.REGISTRATION_TOKEN;
 			const saved = typeof values.state === 'string' ? await readJson(path.resolve(full.cwd, values.state)) : null;
 			const report = await runCertification({
 				dir,
 				...(typeof values.url === 'string' ? { url: values.url } : {}),
 				...(typeof values['portal-url'] === 'string' ? { portalUrl: values['portal-url'] } : {}),
-				...(token ? { token } : {}),
 				...(saved?.ok && isObject(saved.value) ? { snapshot: saved.value } : {}),
 				fetch: full.fetch,
 				log: values.json ? () => {} : (line) => io.err(`${line}\n`),

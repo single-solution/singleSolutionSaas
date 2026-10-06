@@ -427,6 +427,6 @@ export const resolveDashboard = async ({ searchApp, sessionId, website = null, n
 		state: 'ready',
 		session,
 		data: liveDashboard({ searchApp, site, canWrite: DASHBOARD_WRITE_ROLES.includes(session.role) }),
-		portalLink: `${app.portalUrl.replace(/\/+$/, '')}/websites/${encodeURIComponent(websiteId)}/subscriptions/${encodeURIComponent(result.doc.subscriptionId)}`,
+		portalLink: `${app.product.portal.baseUrl}/websites/${encodeURIComponent(websiteId)}/subscriptions/${encodeURIComponent(result.doc.subscriptionId)}`,
 	};
 };

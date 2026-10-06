@@ -1,6 +1,6 @@
 /** Dashboard resolution (sign-in, demo, pick website, not subscribed, live data) and the adapters (tokens, platform). */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { createHmac } from 'node:crypto';
 import { demoDashboard, dashboardActor, exportParamsOf, resolveDashboard, statusLabel, stubContext } from '../api/dashboard.js';
 import { sessionView } from '../api/session.js';
@@ -113,7 +113,7 @@ describe('adapters', () => {
 		expect(forged.verify(`fd1.${Buffer.from('not json').toString('base64url')}.${signature}`)).toBeNull();
 		expect(feedSecret({ secret: 's'.repeat(32) }).toString()).toBe('s'.repeat(32));
 		expect(feedSecret({ signingKey: `k:${Buffer.alloc(32, 3).toString('base64url')}` })).toHaveLength(32);
-		expect(() => feedSecret({ signingKey: {} })).toThrow(/CATALOG_FEED_SECRET/);
+		expect(() => feedSecret({ signingKey: {} })).toThrow(/generated secret/);
 		expect(stableId('a')).toHaveLength(26);
 		expect(stableId('a')).toBe(stableId('a'));
 		expect(newId('itm')).toMatch(/^itm_[0-9a-z]{26}$/);
@@ -126,7 +126,7 @@ describe('adapters', () => {
 		expect(secret).toHaveLength(32);
 		expect(secret.equals(feedSecret({ secret: 's'.repeat(32) }))).toBe(false); // its own derived key
 		expect(exportSecret({ signingKey: { d: Buffer.alloc(32, 3).toString('base64url') } })).toHaveLength(32);
-		expect(() => exportSecret({ signingKey: 'k:' })).toThrow(/CATALOG_FEED_SECRET/);
+		expect(() => exportSecret({ signingKey: 'k:' })).toThrow(/generated secret/);
 		const links = createExportLinks({ secret, now: () => now, ttlMs: 60 * 60_000 });
 		const { token, expiresAt } = links.issue({ websiteId: 'web_1', kind: 'items', params: { q: 'shirt' } });
 		expect(Date.parse(expiresAt) - now).toBe(EXPORT_LINK_MAX_MS); // clamped to five minutes
@@ -175,16 +175,16 @@ describe('adapters', () => {
 	});
 
 	it('builds the platform from the environment (control database optional) and refuses missing variables', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 		const { privateJwk } = await generateSigningKey({ kid: 'catalog-platform-1' });
 		const app = await createPlatform({
 			env: {
-				PORTAL_URL: 'https://portal.test',
-				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_catalog_platform_test_000000'),
 				DATABASE_URI: mongoUri(`control_${Date.now()}`),
-				CATALOG_FEED_SECRET: 'f'.repeat(40),
 			},
+			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}` },
 			root: ROOT,
 		});
 		expect(Object.keys(app)).not.toContain('registry');

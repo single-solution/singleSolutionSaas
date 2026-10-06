@@ -1,5 +1,6 @@
-// Operational entry point: `node scripts/db.js <indexes|migrate> [--dry-run]` with the Portal environment set.
-// Run `indexes` then `migrate` in the deploy pipeline before traffic moves (the "migration gate", PLAN §13).
+// Developer entry point: `node scripts/db.js <indexes|migrate> [--dry-run]` with the Portal environment set. The
+// Portal applies indexes and migrations itself on its first request after a deploy (once per schema version, under a
+// lock); this script inspects them (`--dry-run`) or applies them ahead of time.
 import { closeMongoClients } from '../src/infra/db.js';
 import { getPortal } from '../src/runtime.js';
 
@@ -9,7 +10,7 @@ const dryRun = flags.includes('--dry-run');
 const print = (value) => process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 
 try {
-	const portal = getPortal();
+	const portal = await getPortal();
 	if (command === 'indexes') print(await portal.ensureIndexes({ dryRun }));
 	else if (command === 'migrate') print(await portal.migrate({ dryRun }));
 	else {

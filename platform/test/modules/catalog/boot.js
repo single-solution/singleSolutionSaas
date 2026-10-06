@@ -108,12 +108,29 @@ export const bootPortal = async ({
 			now: clock.now,
 		});
 
+	/**
+	 * Add a product the way staff and its owner do: a connection code (Admin → Apps → Add product), then the product's
+	 * `/setup` connects with it. Answers like the old registration (201 with the app view and the product kid).
+	 * @param {Awaited<ReturnType<typeof import('./fakes/product.js').startFakeProduct>>} p
+	 */
+	const register = async (p) => {
+		const issued = await staff('POST', '/v1/admin/apps/connection-codes');
+		if (issued.status !== 201) return issued;
+		const request = await p.connectRequest(issued.json.code);
+		const res = await call('POST', '/v1/apps/connect', { body: request.body, headers: request.headers, idempotencyKey: null });
+		if (res.status !== 200) return res;
+		await p.accept(res.json, request);
+		const app = await staff('GET', `/v1/admin/apps/${res.json.appId}`);
+		return { status: 201, headers: res.headers, json: { ...app.json, kid: p.publicJwk.kid } };
+	};
+
 	return {
 		portal,
 		clock,
 		entries,
 		integration,
 		call,
+		register,
 		staff,
 		session,
 		assertion,

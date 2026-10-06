@@ -10,16 +10,14 @@ import {
 	DEFAULT_GRACE_MS,
 	canonicalUrl,
 	createKeyResolver,
-	createRegistrationHandler,
-	createSigner,
 	isProtocolError,
 	parseSigningKeys,
 	signManifest,
-	toPublicJwk,
 	verifyRequest,
 } from '@ss/protocol';
 import { createAudit } from './audit.js';
 import { createBackground } from './background.js';
+import { createConnection, withBase } from './connection.js';
 import { createConnectors } from './connectors/index.js';
 import { createData } from './data.js';
 import { createEntitlements } from './entitlements.js';
@@ -51,21 +49,18 @@ const MANIFEST_RESIGN_MS = 3_600_000;
 /**
  * @typedef {object} ProductOptions
  * @property {Manifest} manifest validated SSPS manifest (service product, features inline)
- * @property {string} portalUrl pinned Portal URL (`PORTAL_URL`)
- * @property {string | null} [appId] assigned at registration; when null the id recorded by the registration is used
- * @property {Record<string, unknown> | string} signingKey product private Ed25519 key: a private JWK, or `kid:seed`
- *   (`SIGNING_KEY`; seed = base64url of 32 bytes)
- * @property {string | null} [registrationTokenHash] SHA-256 hex of the one-time registration token
+ * @property {string} [portalUrl] a fixed Portal connection (tests, tools): with `signingKey` and `appId`. Without it the
+ *   connection is made at `/setup` with a connection code and kept in the control database (`stores.settings`)
+ * @property {string | null} [appId] with `portalUrl`
+ * @property {Record<string, unknown> | string} [signingKey] with `portalUrl`: a private Ed25519 JWK, or `kid:seed`
  * @property {Partial<Stores>} [stores] defaults: in-memory (development only)
  * @property {typeof globalThis.fetch} [fetch]
  * @property {() => number} [now]
  * @property {(length: number) => Uint8Array} [randomBytes]
  * @property {Logger} [logger]
  * @property {string} [portalIssuer] `iss` of launches (default: the canonical Portal URL)
- * @property {string | string[]} [registrationAudience] extra accepted `aud` values of registration requests (always accepted: `endpoints.base` and the appId)
  * @property {boolean} [devProbes] mount `/v1/ss-probe/*` (only when `nodeEnv !== 'production'`)
  * @property {string} [nodeEnv] default `process.env.NODE_ENV`
- * @property {(registration: { portalUrl: string, appId?: string, portalKid: string }) => unknown} [onRegistered]
  * @property {string} [problemBaseUri] RFC 9457 type base (default `<endpoints.base>/problems/`)
  * @property {Record<string, { status: number, title: string }>} [problemCodes] product-specific problem codes
  * @property {string} [requestIdHeader] default `x-request-id`
@@ -112,37 +107,6 @@ const parseKey = (value) => {
 };
 
 /**
- * @param {string} a
- * @param {string} b
- * @returns {boolean} true when both are URLs with the same canonical form
- */
-const sameUrl = (a, b) => {
-	try {
-		return canonicalUrl(a) === canonicalUrl(b);
-	} catch {
-		return false;
-	}
-};
-
-/**
- * Read (without verifying) the claims of a registration request, only to choose which accepted audience the protocol
- * handler must then verify against the signed `aud`.
- * @param {unknown} body
- * @returns {Record<string, unknown> | null}
- */
-const peekRegistrationClaims = (body) => {
-	try {
-		const parsed = typeof body === 'string' ? JSON.parse(body) : body;
-		const payload = isObject(parsed) && typeof parsed.request === 'string' ? parsed.request.split('.')[1] : undefined;
-		if (!payload) return null;
-		const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-		return isObject(claims) ? claims : null;
-	} catch {
-		return null;
-	}
-};
-
-/**
  * Wire a product.
  * @param {ProductOptions} options
  */
@@ -151,7 +115,6 @@ export const createProduct = (options) => {
 		manifest,
 		portalUrl,
 		appId = null,
-		registrationTokenHash = null,
 		fetch = globalThis.fetch,
 		now = Date.now,
 		randomBytes = defaultRandomBytes,
@@ -168,12 +131,8 @@ export const createProduct = (options) => {
 	if (manifest.product.kind !== 'service' || !manifest.endpoints) {
 		throw kitError('invalid_manifest', 'app-kit serves service products; element packs have no backend');
 	}
-	if (typeof portalUrl !== 'string') throw kitError('invalid_config', 'portalUrl is required');
-	const pinnedPortal = canonicalUrl(portalUrl);
-	const privateJwk = parseKey(options.signingKey);
-	const publicJwk = toPublicJwk(privateJwk);
-	if (typeof privateJwk.d !== 'string') throw kitError('invalid_config', 'signingKey must include the private member d');
-	const signer = createSigner(/** @type {import('@ss/protocol').PrivateJwk} */ (privateJwk));
+	if (portalUrl !== undefined && typeof portalUrl !== 'string') throw kitError('invalid_config', 'portalUrl must be a URL');
+	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
 
 	const defaults = createMemoryStores({ now });
 	if (!options.stores) logger.warn('using in-memory stores: development only (use createMongoStores in production)');
@@ -181,22 +140,78 @@ export const createProduct = (options) => {
 	const stores = { ...defaults, ...(options.stores ?? {}) };
 	if (options.stores && !options.stores.ping) delete stores.ping;
 
-	const tokenHash =
-		typeof registrationTokenHash === 'string' && /^[0-9a-f]{64}$/.test(registrationTokenHash) ? registrationTokenHash : null;
-	/** @type {string | null} */
-	let knownAppId = appId;
+	const connection = createConnection({
+		settings: stores.settings,
+		portalKeys: stores.portalKeys,
+		manifest,
+		injected:
+			typeof portalUrl === 'string'
+				? { portalUrl: canonicalUrl(portalUrl), appId, privateJwk: parseKey(options.signingKey) }
+				: null,
+		fetch,
+		now,
+		randomBytes,
+		...(nodeEnv ? { nodeEnv } : {}),
+		logger,
+	});
 	const resolveAppId = async () => {
-		if (knownAppId) return knownAppId;
-		if (!tokenHash) return null;
-		const registration = await stores.burnedTokens.get(tokenHash).catch(() => null);
-		if (registration && typeof registration.appId === 'string') knownAppId = registration.appId;
-		return knownAppId;
+		await connection.ready();
+		return connection.current()?.appId ?? null;
 	};
 
 	/** @type {{ appId: string, at: number, jws: string } | null} the current manifest signature (re-signed hourly) */
 	let manifestSignature = null;
 
-	const portal = createPortalClient({ portalUrl: pinnedPortal, appId: resolveAppId, signer, fetch, now, randomBytes });
+	/** @type {{ of: import('./connection.js').Connection, client: ReturnType<typeof createPortalClient> } | null} */
+	let clientCache = null;
+	/** The signed Portal client of the current connection (call after `connection.ready()`). */
+	const client = () => {
+		const of = connection.active();
+		if (clientCache?.of !== of) {
+			clientCache = {
+				of,
+				client: createPortalClient({
+					portalUrl: of.portalUrl,
+					appId: async () => of.appId,
+					signer: of.signer,
+					fetch,
+					now,
+					randomBytes,
+				}),
+			};
+		}
+		return clientCache.client;
+	};
+	/**
+	 * @template {keyof ReturnType<typeof createPortalClient>} K
+	 * @param {K} name
+	 * @returns {any}
+	 */
+	const via =
+		(name) =>
+		async (/** @type {any[]} */ ...args) => {
+			await connection.ready();
+			return /** @type {any} */ (client())[name](...args);
+		};
+	const portalMethods = {
+		jwks: via('jwks'),
+		entitlements: via('entitlements'),
+		revocations: via('revocations'),
+		usage: via('usage'),
+		consumeLaunch: via('consumeLaunch'),
+		heartbeat: via('heartbeat'),
+		rotateKey: via('rotateKey'),
+		publishEvent: via('publishEvent'),
+		publishEvents: via('publishEvents'),
+		resolveResource: via('resolveResource'),
+		requestIdentityIssuer: via('requestIdentityIssuer'),
+	};
+	/** `baseUrl` / `jwksUrl` of the current connection (they throw `not_connected` before setup). */
+	const urlProperties = {
+		baseUrl: { get: () => connection.active().portalUrl, enumerable: true },
+		jwksUrl: { get: () => `${connection.active().portalUrl}/.well-known/jwks.json`, enumerable: true },
+	};
+	const portal = /** @type {import('./portal-client.js').PortalClient} */ (/** @type {unknown} */ (Object.freeze(Object.defineProperties({ ...portalMethods }, urlProperties))));
 	const graceMs = parseDurationMs(manifest.capabilities?.offlineGrace, DEFAULT_GRACE_MS);
 	// The last good Portal JWKS is persisted so cold instances can verify during a Portal outage. Serving stays bounded
 	// by the documents themselves (entitlements: validUntil + grace; keys: revocation staleness ≤ grace).
@@ -240,7 +255,7 @@ export const createProduct = (options) => {
 	});
 	const launch = createLaunch({
 		keyResolver,
-		issuer: options.portalIssuer ?? pinnedPortal,
+		issuer: () => options.portalIssuer ?? connection.active().portalUrl,
 		audience: resolveAppId,
 		replay: stores.replay,
 		sessions: stores.sessions,
@@ -263,7 +278,6 @@ export const createProduct = (options) => {
 		},
 	});
 	const outbox = createOutbox({ store: stores.eventOutbox, portal, now, randomBytes, logger });
-	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
 	const background = createBackground({
 		tasks: [
 			{ name: 'usage', run: (options) => usage.flush(options) },
@@ -292,10 +306,14 @@ export const createProduct = (options) => {
 	});
 	const audit = createAudit({ data, now, sink: options.auditSink ?? null });
 	const devProbes = options.devProbes === true && !production;
-	// HMAC key for idempotency records (key + request fingerprint): derived from the product signing key, so the
-	// control store never holds request content or brute-forceable plain hashes of it.
-	const hmacKey = createHmac('sha256', 'ss-app-kit.idempotency.v1').update(String(privateJwk.d)).digest();
-	const hmac = (/** @type {string} */ value) => createHmac('sha256', hmacKey).update(value).digest('hex');
+	// HMAC key for idempotency records (key + request fingerprint): derived from the generated product secret, so the
+	// control store never holds request content or brute-forceable plain hashes of it. Requests run after `ready()`.
+	/** @type {Buffer | null} */
+	let hmacKey = null;
+	const hmac = (/** @type {string} */ value) => {
+		hmacKey ??= connection.secret('idempotency');
+		return createHmac('sha256', hmacKey).update(value).digest('hex');
+	};
 	const replayBodies = createReplayBodies({ data, now, logger });
 	const events = createEvents({ keyResolver, replay: stores.replay, now, logger, trackEffects: devProbes });
 	const health = createHealth({ product: manifest.product, portal, ping: stores.ping ?? null, now });
@@ -313,82 +331,6 @@ export const createProduct = (options) => {
 		data.forget(event.websiteId);
 		connectors.forget(event.websiteId);
 	});
-
-	/** @type {{ handle: (request: { headers: any, body: unknown }) => Promise<{ status: number, body: Record<string, unknown> }> }} */
-	let registration = {
-		handle: async () => {
-			logger.warn('registration attempted without a registration token hash');
-			return { status: 401, body: { error: 'unauthorized' } };
-		},
-	};
-	if (tokenHash) {
-		/** @type {Parameters<typeof createRegistrationHandler>[0]} */
-		const registrationOptions = {
-			registrationTokenHash: tokenHash,
-			allowedPortalUrl: pinnedPortal,
-			fetchJwks: async (url) => {
-				const response = await fetch(url, {
-					headers: { accept: 'application/json' },
-					signal: AbortSignal.timeout(10_000),
-					redirect: 'error',
-				});
-				if (!response.ok) throw kitError('portal_error', `JWKS answered ${response.status}`);
-				return response.json();
-			},
-			manifest,
-			productPublicJwk: publicJwk,
-			productSigner: signer,
-			onRegistered: async (reg) => {
-				await stores.burnedTokens.annotate(tokenHash, {
-					appId: reg.appId ?? null,
-					portalKid: reg.portalKid,
-					portalUrl: reg.portalUrl,
-					registeredAt: reg.registeredAt,
-				});
-				if (reg.appId) knownAppId = knownAppId ?? reg.appId;
-				await options.onRegistered?.(reg);
-			},
-			burnToken: () => stores.burnedTokens.burn(tokenHash),
-			isTokenBurned: () => stores.burnedTokens.isBurned(tokenHash),
-			nonceStore: stores.nonce,
-			now,
-		};
-		/** @type {Map<string, ReturnType<typeof createRegistrationHandler>>} */
-		const byAudience = new Map();
-		/** @param {string} aud one protocol handler per accepted audience; the protocol still verifies the signed `aud` */
-		const handlerFor = (aud) => {
-			let found = byAudience.get(aud);
-			if (!found) {
-				found = createRegistrationHandler({ ...registrationOptions, expectedAudience: aud });
-				byAudience.set(aud, found);
-			}
-			return found;
-		};
-		registration = {
-			handle: async (request) => {
-				const claims = peekRegistrationClaims(request.body);
-				const endpointsBase = /** @type {{ base: string }} */ (manifest.endpoints).base;
-				const allowed = new Set([
-					endpointsBase,
-					canonicalUrl(endpointsBase),
-					...[options.registrationAudience ?? []].flat(),
-					...(knownAppId ? [knownAppId] : typeof claims?.appId === 'string' ? [claims.appId] : []),
-				]);
-				if (typeof claims?.aud !== 'string' || claims.aud.length === 0) {
-					logger.warn('registration refused', { reason: 'audience_missing', status: 401 });
-					return { status: 401, body: { error: 'unauthorized' } };
-				}
-				// an audience outside the accepted set is pinned to a value the signed aud can never equal
-				const chosen = handlerFor(
-					allowed.has(claims.aud) || sameUrl(claims.aud, endpointsBase) ? claims.aud : `\u0000refused`,
-				);
-				const result = await chosen.handle(request);
-				if (result.reason) logger.warn('registration refused', { reason: result.reason, status: result.status });
-				else logger.info('product registered with the Portal', { portalUrl: pinnedPortal });
-				return { status: result.status, body: result.body };
-			},
-		};
-	}
 
 	/**
 	 * Verify a Portal-signed request (`@ss/protocol` `verifyRequest`: method, canonical path + query, audience = appId,
@@ -487,7 +429,6 @@ export const createProduct = (options) => {
 		defaultLang: options.defaultLang ?? 'en',
 		sessionCookie: options.sessionCookie ?? 'ss_session',
 		requestIdHeader: options.requestIdHeader ?? 'x-request-id',
-		publicJwk,
 		appId: resolveAppId,
 		devProbes,
 		hmac,
@@ -498,7 +439,20 @@ export const createProduct = (options) => {
 	/** @type {any} */
 	const product = {
 		manifest,
-		registration,
+		/** Load the generated secrets and the Portal connection (cached; the request handler awaits it first). */
+		ready: () => connection.ready(),
+		/** This deployment's address: the one recorded at `/setup`, else the manifest's `endpoints.base` (no trailing slash). */
+		baseUrl: () => canonicalUrl(connection.current()?.baseUrl ?? /** @type {{ base: string }} */ (manifest.endpoints).base),
+		/** @returns {boolean} true once connected to a Portal (or with a fixed connection) */
+		connected: () => connection.connected(),
+		/**
+		 * A secret generated for this product and kept in its control database, derived per purpose (after `ready()`).
+		 * @param {string} label e.g. `feed-tokens`
+		 * @returns {Buffer}
+		 */
+		secret: (label) => connection.secret(label),
+		/** Connection-code onboarding: `connect({ code, baseUrl })` (the `/setup` page), `disconnect()`, `fixed()`. */
+		setup: Object.freeze({ connect: connection.connect, disconnect: connection.disconnect, fixed: connection.fixed }),
 		events: Object.freeze({ handle: events.handle, on: events.on, dispatch: events.dispatch, effects: events.effects }),
 		/**
 		 * The manifest as served at `/.well-known/ss-app.json`: once the appId is known (after registration) it carries
@@ -509,14 +463,20 @@ export const createProduct = (options) => {
 			/** @type {Record<string, string>} */
 			const headers = { 'cache-control': `public, max-age=${MANIFEST_CACHE_SECONDS}` };
 			const id = await resolveAppId().catch(() => null);
-			if (id) {
+			const current = connection.current();
+			const served = withBase(manifest, current?.baseUrl ?? null);
+			if (id && current) {
 				const at = now();
 				if (!manifestSignature || manifestSignature.appId !== id || at - manifestSignature.at > MANIFEST_RESIGN_MS) {
-					manifestSignature = { appId: id, at, jws: await signManifest({ signer, manifest, appId: id, now: () => at }) };
+					manifestSignature = {
+						appId: id,
+						at,
+						jws: await signManifest({ signer: current.signer, manifest: served, appId: id, now: () => at }),
+					};
 				}
 				headers['ss-manifest-signature'] = manifestSignature.jws;
 			}
-			return { status: 200, body: manifest, headers };
+			return { status: 200, body: served, headers };
 		},
 		launch,
 		keys,
@@ -548,7 +508,7 @@ export const createProduct = (options) => {
 		flush: () => background.tick(),
 		/** Queue delivery after requests: `on`, or `off` (tests; explicit `flush()` only). */
 		background: Object.freeze({ mode: background.mode }),
-		portal: Object.freeze({ ...portal, publishEvent }),
+		portal: Object.freeze(Object.defineProperties({ ...portalMethods, publishEvent }, urlProperties)),
 		data,
 		connectors,
 		audit,

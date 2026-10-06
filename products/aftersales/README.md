@@ -49,9 +49,8 @@ Every integration is optional: without Orders, register purchases with `POST /v1
 
 ## Environment
 
-The app-kit variables (`PORTAL_URL`, `APP_ID`, `SIGNING_KEY`, `REGISTRATION_TOKEN_HASH`,
-`DATABASE_URI`, `OUTBOUND_DEV_ALLOW_HOSTS`) and optionally `AFTERSALES_TOKEN_SECRET` (≥ 32
-characters; guest claim tokens — derived from the signing key when unset). See `.env.example`.
+Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
+`/setup` with a connection code), the product's signing key and its generated secrets live there. The guest claim-token secret is one of them.
 
 ## Commands
 

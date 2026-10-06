@@ -8,7 +8,7 @@
  * (ported from the ibrahimMobiles guest thread cookie). A signed-in customer is identified by the website's own
  * login token instead (app-kit identity); `POST /v1/conversations:claim` moves the guest's history to them.
  *
- * Secrets are `CHATBOT_TOKEN_SECRET` (≥ 32 chars) or derived with HKDF from the product signing key, so nothing has
+ * Secrets are the generated secret (`product.secret`, kept in the control database) (≥ 32 chars) or derived with HKDF from the product signing key, so nothing has
  * to be stored. Webhook tools are signed with a per-website secret derived from it and the configured version
  * (rotation = increment `tools.signing_key_version`).
  */
@@ -44,7 +44,7 @@ export const stableId = (text) => {
 export const randomBytes = (n) => new Uint8Array(nodeRandomBytes(n));
 
 /**
- * Root secret: `CHATBOT_TOKEN_SECRET`, else HKDF of the product signing key.
+ * Root secret: the generated secret (`product.secret`, kept in the control database), else HKDF of the product signing key.
  * @param {{ secret?: string | undefined, signingKey?: string | Record<string, unknown> | null }} input
  * @returns {Buffer}
  */
@@ -52,7 +52,7 @@ export const rootSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('CHATBOT_TOKEN_SECRET (≥ 32 chars) or SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-chatbot', 'root/v1', 32));
 };
 

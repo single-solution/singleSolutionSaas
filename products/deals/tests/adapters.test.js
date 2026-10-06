@@ -47,12 +47,15 @@ describe('price-lock tokens', () => {
 		const key = { kid: 'k', kty: 'OKP', crv: 'Ed25519', d: Buffer.from('k'.repeat(32)).toString('base64url'), x: 'x' };
 		expect(lockSecret({ signingKey: `${key.kid}:${key.d}` })).toEqual(lockSecret({ signingKey: key }));
 		expect(lockSecret({ secret: 'short', signingKey: key }).length).toBe(32);
-		expect(() => lockSecret({ signingKey: null })).toThrow(/DEALS_LOCK_SECRET/);
+		expect(() => lockSecret({ signingKey: null })).toThrow(/generated secret/);
 	});
 });
 
 describe('platform', () => {
 	it('refuses to start without the required environment', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 	});
 });

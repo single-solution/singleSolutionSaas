@@ -1,6 +1,7 @@
 /**
  * node:http server for the emulated Portal: public JWKS, the `/v1/product/*` API, and a local admin API under
- * `/_dev/*` (loopback only, `x-ss-dev-token` required) used by `ss dev register|launch|keys|emit|settle`.
+ * `/_dev/*` (loopback only, `x-ss-dev-token` required) used by `ss dev connect|code|launch|keys|emit|settle`, and
+ * `POST /v1/apps/connect` (a product's `/setup` connecting with a code).
  * The server can be stopped and started again on the same port (offline-grace certification).
  * @module
  */
@@ -20,7 +21,7 @@ const adminError = (error) => {
 	const status =
 		code === 'unknown_app' || code === 'unknown_website' || code === 'unknown_key' || code === 'not_registered'
 			? 404
-			: code === 'registration_rejected'
+			: code === 'connection_rejected'
 				? 502
 				: 400;
 	return { status, body: { error: typeof code === 'string' ? code : 'error', message: /** @type {Error} */ (error).message } };
@@ -35,12 +36,10 @@ const adminError = (error) => {
  */
 const admin = async (portal, name, input) => {
 	switch (name) {
-		case 'register':
-			return portal.register({
-				url: String(input.url ?? ''),
-				token: String(input.token ?? ''),
-				...(input.audience ? { audience: String(input.audience) } : {}),
-			});
+		case 'connect':
+			return portal.connect({ url: String(input.url ?? '') });
+		case 'code':
+			return portal.connectionCode(input.appId ? { appId: String(input.appId) } : {});
 		case 'launch':
 			return portal.launch(/** @type {any} */ (input));
 		case 'keys':
@@ -108,6 +107,10 @@ export const createEmulatorServer = ({
 				return sendJson(response, 200, portal.jwks(), { 'cache-control': 'max-age=60' });
 			if (method === 'GET' && url.pathname === '/healthz')
 				return sendJson(response, 200, { ok: true, portalUrl: portal.portalUrl });
+			if (method === 'POST' && url.pathname === '/v1/apps/connect') {
+				const result = await portal.handleConnect({ headers: headerMap(request.headers), body: await readBody(request) });
+				return sendJson(response, result.status, result.body, result.headers);
+			}
 			if (url.pathname.startsWith('/v1/product/')) {
 				const raw = method === 'GET' ? '' : await readBody(request);
 				/** @type {unknown} */

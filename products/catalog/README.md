@@ -3,7 +3,7 @@
 SSPS v1 **service product**: headless item data for any website — physical goods, services, digital products,
 rentals or anything else. It follows the Product Standard (PLAN Part E): the manifest is the single source of truth,
 business logic lives in `core/` (pure) and `headless/` (DOM-free), and `@ss/app-kit` implements the App Protocol
-(registration, launches, website keys, entitlements with offline grace, events, usage, data guard).
+(connection-code setup, launches, website keys, entitlements with offline grace, events, usage, data guard).
 
 All catalog data lives in the **merchant's own database** (`ss_catalog_*` collections through `data.forWebsite`); files
 stay in the merchant's storage or the Files product. The product's control database holds only kit caches and queues.
@@ -71,7 +71,8 @@ app/        Next.js wiring and the dashboard (overview, items, item detail with 
 
 ## Environment
 
-See `.env.example`: the app-kit variables plus `CATALOG_FEED_SECRET` (optional, feed-token HMAC secret).
+Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
+`/setup` with a connection code), the product's signing key and its generated secrets live there. The feed-token and export-link secrets are derived from them.
 
 ## Commands
 
@@ -96,7 +97,7 @@ pnpm portal     # ss dev (Portal emulator) and, in another terminal, pnpm dev
   written before this index are reserved lazily by the `sku_keys` migration (the oldest item keeps a shared SKU).
 - Dashboard CSV export: `POST /v1/dashboard/exports:link` (dashboard session) answers `{ url, expiresAt }`, a download
   link valid for five minutes whose `ex1.…` token is HMAC-SHA-256-signed (key derived with HKDF from
-  `CATALOG_FEED_SECRET`, else the signing key, label `export-link/v1`) over the website, export kind, filters and
+  the product's generated secret, label `export-link/v1`) over the website, export kind, filters and
   expiry. `GET /v1/dashboard/exports/{token}` needs no session or `X-SS-Website`: it checks the signature in constant
   time, refuses tampered (401) and expired (401) links and switched-off `import_export` (403), and answers the CSV as
   an attachment with `no-store`. `GET /v1/dashboard/exports` (session + `X-SS-Website`) is kept for compatibility.

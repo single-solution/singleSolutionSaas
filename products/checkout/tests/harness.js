@@ -10,7 +10,7 @@ import { MongoClient } from 'mongodb';
 import { createRequestHandler, noopLogger } from '@ss/app-kit';
 import { createFakePortal } from '@ss/app-kit/testing';
 import { createId } from '@ss/contracts';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createApplication, wireEvents } from '../api/routes.js';
 
@@ -144,14 +144,10 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, webs
 	const client = await new MongoClient(uri).connect();
 	const app = await createPlatform({
 		env: {
-			PORTAL_URL,
-			APP_ID,
-			SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-			REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_checkout_api_tests_0123456789'),
 			...env,
 		},
 		root: ROOT,
-		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: remote.send },
+		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`, fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: remote.send },
 	});
 	const application = wireEvents(createApplication(app));
 	const handle = createRequestHandler(application.product, buildRoutes(application));

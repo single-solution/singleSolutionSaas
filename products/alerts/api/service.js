@@ -58,7 +58,7 @@ export const createAlerts = (app) => {
 		strings: app.strings,
 		hashText: (text) => createHash('sha256').update(text).digest('base64url').slice(0, 22),
 		consentText: (lang) => catalogText('capture.consent', {}, { catalogs: app.strings, lang, defaultLang: 'en' }),
-		baseUrl: () => String(product.manifest.endpoints.base).replace(/\/+$/, ''),
+		baseUrl: () => product.baseUrl(),
 		instanceId: app.instanceId,
 		publish: async (event) => {
 			try {

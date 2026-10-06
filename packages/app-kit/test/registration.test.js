@@ -1,135 +1,135 @@
 import { describe, expect, it } from 'vitest';
-import { hashRegistrationToken } from '@ss/protocol';
-import { createProduct, standardRoutes } from '../src/index.js';
-import { PORTAL_URL, WEBSITE, createClock, createTestLogger, entitle, manifest, setup } from './helpers.js';
+import { createFakePortal } from '../src/testing.js';
+import { createProduct, createRequestHandler, standardRoutes } from '../src/index.js';
+import { APP_ID, PORTAL_URL, WEBSITE, createClock, createTestLogger, entitle, manifest } from './helpers.js';
 
-const TOKEN = 'reg_tok_0123456789abcdefghijklmnop';
-const BASE = 'https://coupons.example.dev';
+const BASE = 'https://coupons.deploy.test';
 
-describe('registration', () => {
-	it('completes the handshake, burns the token and learns the appId', async () => {
-		const { portal, product, logs } = await setup({
-			overrides: { appId: null, registrationTokenHash: hashRegistrationToken(TOKEN) },
-		});
-		portal.trustProductKey(/** @type {any} */ (null));
-		expect((await product.manifestRoute()).headers).not.toHaveProperty('ss-manifest-signature');
-		const request = await portal.registrationRequest({ token: TOKEN, audience: BASE });
-		const handle = product.handler(standardRoutes(product));
-		const res = await handle(
-			new Request('https://coupons.example.dev/.well-known/ss-register', {
+/**
+ * An unconnected product (no fixed connection) and its fake Portal.
+ * @param {{ clock?: ReturnType<typeof createClock>, stores?: any, nodeEnv?: string }} [options]
+ */
+const unconnected = async ({ clock = createClock(), stores, nodeEnv = 'test' } = {}) => {
+	const portal = await createFakePortal({ url: PORTAL_URL, now: clock.now, appId: APP_ID });
+	const { logger, entries } = createTestLogger();
+	const product = createProduct({
+		manifest: manifest(),
+		fetch: portal.fetch,
+		now: clock.now,
+		logger,
+		nodeEnv,
+		...(stores ? { stores } : {}),
+	});
+	const handle = createRequestHandler(product, standardRoutes(product));
+	/** @param {Record<string, string>} fields @param {boolean} [json] */
+	const post = (fields, json = false) =>
+		handle(
+			new Request(`${BASE}/setup`, {
 				method: 'POST',
-				headers: request.headers,
-				body: request.body,
+				headers: { 'content-type': json ? 'application/json' : 'application/x-www-form-urlencoded' },
+				body: json ? JSON.stringify(fields) : new URLSearchParams(fields).toString(),
 			}),
 		);
+	return { portal, product, handle, post, clock, logs: entries };
+};
+
+describe('connection-code setup', () => {
+	it('refuses product routes before setup and serves the setup page, health and the manifest', async () => {
+		const { product, handle } = await unconnected();
+		const entitlement = await handle(new Request(`${BASE}/v1/entitlement`));
+		expect(entitlement.status).toBe(503);
+		expect((await entitlement.json()).detail).toMatch(/\/setup/);
+		const page = await handle(new Request(`${BASE}/setup`));
+		expect(page.status).toBe(200);
+		expect(page.headers.get('content-type')).toContain('text/html');
+		const html = await page.text();
+		expect(html).toContain('Connection code');
+		expect(html).toContain(`value="${BASE}"`);
+		expect(html).toContain('right after deploying');
+		expect((await handle(new Request(`${BASE}/healthz`))).status).toBe(200);
+		expect((await handle(new Request(`${BASE}/.well-known/ss-app.json`))).status).toBe(200);
+		expect(product.connected()).toBe(false);
+		expect(() => product.portal.baseUrl).toThrow(/not connected/);
+		await expect(product.portal.jwks()).rejects.toMatchObject({ code: 'not_connected' });
+	});
+
+	it('connects with a code: own key, proof of possession, pinned Portal; setup then closes', async () => {
+		const { portal, product, handle, post, logs } = await unconnected();
+		const res = await post({ code: portal.connectionCode(), baseUrl: `${BASE}/` });
 		expect(res.status).toBe(200);
-		const response = await res.json();
-		const verified = await portal.completeRegistration({ response, nonce: request.nonce });
-		expect(verified.appId).toBe('app_test');
-		expect(logs.some((l) => l.msg.includes('registered'))).toBe(true);
-		// once registered, the served manifest is signed for the learned appId
-		expect((await product.manifestRoute()).headers['ss-manifest-signature']).toMatch(/\./);
-		// the product now authenticates to the Portal with the learned appId
+		expect(await res.text()).toContain('is connected');
+		expect(product.connected()).toBe(true);
+		expect(product.portal.baseUrl).toBe(PORTAL_URL);
+		expect(portal.connected()).toMatchObject({ baseUrl: BASE });
+		expect(/** @type {any} */ (portal.connected()).manifest.endpoints.base).toBe(BASE);
+		expect(logs.some((l) => l.msg === 'product connected to the Portal')).toBe(true);
+		// the served manifest carries the recorded address and is signed for the appId
+		const served = await product.manifestRoute();
+		expect(served.body.endpoints.base).toBe(BASE);
+		expect(served.headers['ss-manifest-signature']).toMatch(/\./);
+		// the product now authenticates to the Portal with the stored key and appId
 		await entitle(portal);
 		expect((await product.entitlements.forWebsite(WEBSITE)).ok).toBe(true);
-		// the token is burned
-		const again = await portal.registrationRequest({ token: TOKEN, audience: BASE });
-		expect(await product.registration.handle({ headers: again.headers, body: again.body })).toEqual({
-			status: 401,
-			body: { error: 'unauthorized' },
-		});
-		expect(logs.some((l) => l.fields?.reason === 'token_burned')).toBe(true);
+		// setup is closed
+		expect((await handle(new Request(`${BASE}/setup`))).status).toBe(404);
+		expect((await post({ code: portal.connectionCode(), baseUrl: BASE })).status).toBe(404);
+		expect((await post({ code: portal.connectionCode(), baseUrl: BASE }, true)).status).toBe(404);
 	});
 
-	it('learns the appId from the shared store on another instance', async () => {
+	it('another instance on the same control database picks the connection up', async () => {
 		const clock = createClock();
-		const { portal, product, privateJwk } = await setup({
-			clock,
-			overrides: { appId: null, registrationTokenHash: hashRegistrationToken(TOKEN) },
-		});
-		const request = await portal.registrationRequest({ token: TOKEN, audience: BASE });
-		expect((await product.registration.handle({ headers: request.headers, body: request.body })).status).toBe(200);
-		const stores = product.context.stores;
-		const sibling = createProduct({
-			manifest: manifest(),
-			portalUrl: PORTAL_URL,
-			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
-			registrationTokenHash: hashRegistrationToken(TOKEN),
-			stores,
-			fetch: portal.fetch,
-			now: clock.now,
-		});
-		expect(await sibling.context.appId()).toBe('app_test');
+		const first = await unconnected({ clock });
+		const stores = first.product.context.stores;
+		const second = createProduct({ manifest: manifest(), stores, fetch: first.portal.fetch, now: clock.now });
+		await second.ready();
+		expect(second.connected()).toBe(false);
+		expect((await first.post({ code: first.portal.connectionCode(), baseUrl: BASE }, true)).status).toBe(200);
+		clock.advance(1500);
+		await second.ready();
+		expect(second.connected()).toBe(true);
+		expect(await second.context.appId()).toBe(APP_ID);
+		// both instances share the generated secret
+		expect(second.secret('feed').equals(first.product.secret('feed'))).toBe(true);
+		expect(second.secret('feed').equals(second.secret('other'))).toBe(false);
 	});
 
-	it.each([
-		['endpoints.base', 'https://coupons.example.dev', 200],
-		['endpoints.base with a trailing slash', 'https://coupons.example.dev/', 200],
-		['the appId', 'app_test', 200],
-		['a configured extra audience', 'urn:extra', 200],
-		['another product', 'https://other.example.dev', 401],
-	])('accepts or refuses aud = %s', async (_label, audience, status) => {
-		const { portal, product } = await setup({
-			overrides: { appId: null, registrationTokenHash: hashRegistrationToken(TOKEN), registrationAudience: 'urn:extra' },
-		});
-		const request = await portal.registrationRequest({ token: TOKEN, audience });
-		expect((await product.registration.handle({ headers: request.headers, body: request.body })).status).toBe(status);
+	it('refuses bad codes, used codes, plain-http addresses and Portal refusals; nothing is stored', async () => {
+		const { portal, product, post } = await unconnected({ nodeEnv: 'production' });
+		const bad = await post({ code: 'nope', baseUrl: BASE });
+		expect(bad.status).toBe(400);
+		expect(await bad.text()).toContain('connection code');
+		const insecure = await post({ code: portal.connectionCode(), baseUrl: 'http://coupons.deploy.test' }, true);
+		expect(insecure.status).toBe(400);
+		const unknown = await createFakePortal({ url: PORTAL_URL });
+		const refused = await post({ code: unknown.connectionCode(), baseUrl: BASE }, true);
+		expect(refused.status).toBe(502);
+		expect((await refused.json()).detail).toMatch(/refused/);
+		portal.setDown(true);
+		expect((await post({ code: portal.connectionCode(), baseUrl: BASE }, true)).status).toBe(502);
+		portal.setDown(false);
+		expect(product.connected()).toBe(false);
+		expect(await product.context.stores.settings.get('connection')).toBeNull();
+		const code = portal.connectionCode();
+		expect((await post({ code, baseUrl: BASE }, true)).status).toBe(200);
 	});
 
-	it('rejects requests without aud (generic 401, reason audience_missing) and keeps the token unburned', async () => {
-		const { portal, product, logs } = await setup({ overrides: { registrationTokenHash: hashRegistrationToken(TOKEN) } });
-		const request = await portal.registrationRequest({ token: TOKEN });
-		expect(await product.registration.handle({ headers: request.headers, body: request.body })).toEqual({
-			status: 401,
-			body: { error: 'unauthorized' },
-		});
-		expect(logs.some((l) => l.fields?.reason === 'audience_missing')).toBe(true);
-		const retry = await portal.registrationRequest({ token: TOKEN, audience: BASE });
-		expect((await product.registration.handle({ headers: retry.headers, body: retry.body })).status).toBe(200);
-	});
+	it('a Portal-signed disconnect reopens setup; a fixed connection cannot be changed', async () => {
+		const { portal, product, handle, post } = await unconnected();
+		expect((await post({ code: portal.connectionCode(), baseUrl: BASE }, true)).status).toBe(200);
+		const signed = await portal.signRequest({ method: 'POST', path: '/v1/ss/disconnect' });
+		const res = await handle(new Request(`${BASE}/v1/ss/disconnect`, { method: 'POST', headers: signed.headers }));
+		expect(res.status).toBe(200);
+		expect(product.connected()).toBe(false);
+		expect((await handle(new Request(`${BASE}/setup`))).status).toBe(200);
+		const unsigned = await handle(new Request(`${BASE}/v1/ss/disconnect`, { method: 'POST' }));
+		expect(unsigned.status).toBe(503);
 
-	it('accepts the known appId as audience and tolerates unparseable bodies', async () => {
-		const { portal, product } = await setup({ overrides: { registrationTokenHash: hashRegistrationToken(TOKEN) } });
-		expect((await product.registration.handle({ headers: {}, body: '{' })).status).toBe(401);
-		expect((await product.registration.handle({ headers: {}, body: { request: 'x' } })).status).toBe(401);
-		const request = await portal.registrationRequest({ token: TOKEN, audience: 'app_test' });
-		expect((await product.registration.handle({ headers: request.headers, body: JSON.parse(request.body) })).status).toBe(200);
-	});
-
-	it('refuses wrong tokens and products without a token hash', async () => {
-		const { portal, product } = await setup({ overrides: { registrationTokenHash: hashRegistrationToken(TOKEN) } });
-		const wrong = await portal.registrationRequest({ token: 'reg_tok_wrong_wrong_wrong_wrong_1', audience: BASE });
-		expect((await product.registration.handle({ headers: wrong.headers, body: wrong.body })).status).toBe(401);
-		const { logger, entries } = createTestLogger();
-		const none = await setup({ overrides: { logger } });
-		const request = await portal.registrationRequest({ token: TOKEN, audience: BASE });
-		expect(await none.product.registration.handle({ headers: request.headers, body: request.body })).toEqual({
-			status: 401,
-			body: { error: 'unauthorized' },
+		const fixed = createProduct({ manifest: manifest(), portalUrl: PORTAL_URL, appId: APP_ID, signingKey: 'k1:' + 'A'.repeat(43) });
+		const fixedHandle = createRequestHandler(fixed, standardRoutes(fixed));
+		expect((await fixedHandle(new Request(`${BASE}/setup`))).status).toBe(404);
+		await expect(fixed.setup.connect({ code: portal.connectionCode(), baseUrl: BASE })).rejects.toMatchObject({
+			code: 'conflict',
 		});
-		expect(entries.some((e) => e.msg.includes('without a registration token'))).toBe(true);
-	});
-
-	it('returns 500 when onRegistered fails (token stays burned)', async () => {
-		const { portal, product } = await setup({
-			overrides: {
-				registrationTokenHash: hashRegistrationToken(TOKEN),
-				onRegistered: async () => {
-					throw new Error('persist failed');
-				},
-			},
-		});
-		const request = await portal.registrationRequest({ token: TOKEN, audience: BASE });
-		expect(await product.registration.handle({ headers: request.headers, body: request.body })).toEqual({
-			status: 500,
-			body: { error: 'registration_failed' },
-		});
-	});
-
-	it('fails the JWKS fetch cleanly when the Portal is down', async () => {
-		const { portal, product } = await setup({ overrides: { registrationTokenHash: hashRegistrationToken(TOKEN) } });
-		const request = await portal.registrationRequest({ token: TOKEN, audience: BASE });
-		portal.failNext('/.well-known/jwks.json', 503);
-		expect((await product.registration.handle({ headers: request.headers, body: request.body })).status).toBe(401);
+		await expect(fixed.setup.disconnect()).rejects.toMatchObject({ code: 'conflict' });
 	});
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { base32, randomBytes, randomId, stableId } from '../adapters/crypto.js';
 import { createPlatform, loadStrings } from '../adapters/platform.js';
 import { createRepositories, isDuplicateKey } from '../adapters/repositories.js';
@@ -68,18 +68,19 @@ describe('adapters/repositories', () => {
 describe('adapters/platform', () => {
 	it('loads string catalogs and refuses to start without the required environment', async () => {
 		expect((await loadStrings(ROOT)).en?.['apply_box.title']).toBe('Coupon code');
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 	});
 
 	it('uses the product control database when DATABASE_URI is set', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k' });
 		const app = await createPlatform({
 			env: {
-				PORTAL_URL: 'https://portal.test',
-				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_x_0123456789abcdef'),
 				DATABASE_URI: mongoUri('coupons_control_test'),
 			},
+			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}` },
 			root: ROOT,
 		});
 		expect(app.randomId('rsv')).toMatch(/^rsv_/);

@@ -16,7 +16,6 @@ export const manifest = () => ({
 		dashboard: '/dashboard',
 		demo: '/demo',
 		events: '/.well-known/ss-events',
-		register: '/.well-known/ss-register',
 	},
 	capabilities: { adminLaunch: true, sandbox: true, localEnforcement: ['quota:redeem'], offlineGrace: 'PT24H' },
 	scopes: [

@@ -63,8 +63,8 @@ app/        Next.js wiring and the merchant dashboard (overview, editor, live pr
 
 ## Environment
 
-Only the app-kit variables (see `.env.example`): `PORTAL_URL`, `APP_ID`, `SIGNING_KEY`,
-`REGISTRATION_TOKEN_HASH`, `DATABASE_URI`, `OUTBOUND_DEV_ALLOW_HOSTS`. No crons.
+Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
+`/setup` with a connection code), the product's signing key and its generated secrets live there. No crons.
 
 ## Commands
 

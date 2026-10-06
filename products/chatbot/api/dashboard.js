@@ -205,7 +205,7 @@ export const resolveDashboard = async ({ chatbot, sessionId, website = null, now
 		state: 'ready',
 		session,
 		data: liveDashboard({ service, site, canWrite: DASHBOARD_WRITE_ROLES.includes(session.role) }),
-		portalLink: `${app.portalUrl.replace(/\/+$/, '')}/websites/${encodeURIComponent(websiteId)}/subscriptions/${encodeURIComponent(result.doc.subscriptionId)}`,
+		portalLink: `${app.product.portal.baseUrl}/websites/${encodeURIComponent(websiteId)}/subscriptions/${encodeURIComponent(result.doc.subscriptionId)}`,
 		aiConnected: product.entitlements.can(result.doc, 'ai_replies'),
 	};
 };

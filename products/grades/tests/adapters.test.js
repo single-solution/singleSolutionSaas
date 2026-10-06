@@ -1,7 +1,7 @@
 /** adapters/ and the composition helpers: tokens, keyset filters, platform wiring, settings and the plain server. */
 import { describe, expect, it } from 'vitest';
 import { noopLogger } from '@ss/app-kit';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { afterPair, beforePair, createRepositories, isDuplicateKey } from '../adapters/db.js';
 import { createPlatform, loadManifest, loadStrings } from '../adapters/platform.js';
 import { createReportTokens, stableId } from '../adapters/tokens.js';
@@ -101,7 +101,10 @@ describe('platform', () => {
 	});
 
 	it('refuses to start without the Portal variables', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 	});
 
 	it('serves over plain http and https-less hosts through serve.js', async () => {
@@ -109,12 +112,8 @@ describe('platform', () => {
 		const server = await startServer({
 			port: 0,
 			root: ROOT,
-			env: {
-				PORTAL_URL: 'http://127.0.0.1:9',
-				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_grades_serve_0123456789abcdef'),
-			},
-			overrides: { logger: noopLogger },
+			env: {},
+			overrides: { portalUrl: 'http://127.0.0.1:9', signingKey: `${privateJwk.kid}:${privateJwk.d}`, logger: noopLogger },
 		});
 		try {
 			const health = await fetch(`${server.url}/healthz`);

@@ -6,7 +6,8 @@
  * @module
  */
 export { createPortal } from './portal.js';
-export { loadConfig } from './infra/config.js';
+export { loadConfig, loadEnv } from './infra/config.js';
+export { createSystemStore, testSystemState } from './infra/system.js';
 export { totpCode } from './infra/auth.js';
 export { closeMongoClients } from './infra/db.js';
 export { modules } from './modules/index.js';

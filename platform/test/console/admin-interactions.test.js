@@ -433,21 +433,14 @@ describe('admin console interactions (jsdom)', () => {
 		// and back, so the rest of the flow uses the original owner
 		await staff.api.post(adminApi.transfer(websiteId), { toMerchantId: merchantId, reason: 'undo' });
 
-		// ---------------------------------------------------------------- apps: register, upload, lifecycle, keys, review
+		// ---------------------------------------------------------------- apps: add (connection code), upload, lifecycle, keys, review
 		render(<AppsView {...await admin.loadApps(staff.api, {})} staff={me} />);
-		await press('Register service');
-		await press('Register');
-		expect(shows('Enter the product base URL')).toBe(true);
-		fill('Production base URL', 'https://chat.example.invalid');
-		fill('Staging base URL (optional)', 'ftp://x');
-		fill('One-time registration token', 'x'.repeat(32));
-		await press('Register');
-		expect(shows('Enter an https URL or leave empty.')).toBe(true);
-		fill('Staging base URL (optional)', '');
-		await press('Register');
-		await until(() => staff.calls.some((c) => c.path === adminApi.register() && c.status >= 400));
-		expect(/** @type {HTMLInputElement} */ (byLabel(document, 'One-time registration token')).value).toBe('');
-		await press('Cancel');
+		await press('Add product');
+		await press('Create connection code');
+		await until(() => staff.calls.some((c) => c.path === adminApi.connectionCodes() && c.status === 201));
+		expect(shows('Shown once')).toBe(true);
+		expect(document.body.textContent).toMatch(/ssc_[A-Za-z0-9_-]+/);
+		await press('Done');
 		await press('Upload pack');
 		await press('Upload');
 		expect(shows('Paste the JSON here.')).toBe(true);

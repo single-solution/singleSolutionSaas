@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { createKeyResolver, generateSigningKey, hashRegistrationToken, verifyLaunch } from '@ss/protocol';
+import { createKeyResolver, generateSigningKey, verifyLaunch } from '@ss/protocol';
 import { createPortal } from '../src/emulator/portal.js';
 import { createEmulatorServer } from '../src/emulator/server.js';
 import { normaliseFixture } from '../src/emulator/fixture.js';
@@ -9,7 +9,6 @@ import { loadManifest } from '../src/manifest.js';
 import { createFakeProduct } from './helpers/fake-product.js';
 import { freePort, removeDir, tempDir } from './helpers/util.js';
 
-const TOKEN = 'rt_e2e_registration_token_0123456789';
 
 /** @type {string} */
 let root;
@@ -55,7 +54,6 @@ beforeAll(async () => {
 	product = createFakeProduct({
 		manifest,
 		portalUrl,
-		tokenHash: hashRegistrationToken(TOKEN),
 		signingKey: (await generateSigningKey({ kid: 'e2e-app-1' })).privateJwk,
 	});
 	productUrl = await product.start();
@@ -79,14 +77,25 @@ describe('ss dev emulator end to end (with @ss/protocol verification on the prod
 		expect(bad.status).toBe(400);
 	});
 
-	it('registers the product via the handshake (proof of possession) and refuses a second use', async () => {
-		const registered = await admin('register', { url: productUrl, token: TOKEN });
-		expect(registered.status).toBe(200);
-		expect(registered.body).toMatchObject({ kid: 'e2e-app-1', manifest: { product: { slug: 'e2e-notes' } } });
-		expect(product.appId).toBe(registered.body.appId);
-		const again = await admin('register', { url: productUrl, token: TOKEN });
+	it('connects the product with a code (proof of possession); setup then closes and codes are single use', async () => {
+		const code = (await admin('code', {})).body.code;
+		const connect = async () =>
+			fetch(`${productUrl}/setup`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ code, baseUrl: productUrl }),
+			});
+		const connected = await connect();
+		expect(connected.status).toBe(200);
+		expect(product.appId).toBe((await connected.json()).appId);
+		expect((await admin('state')).body.apps).toMatchObject([{ kids: ['e2e-app-1'], slug: 'e2e-notes', baseUrl: productUrl }]);
+		expect((await connect()).status).toBe(404);
+		const again = await admin('connect', { url: productUrl });
 		expect(again.status).toBe(502);
-		expect(again.body.error).toBe('registration_rejected');
+		expect(again.body.error).toBe('connection_rejected');
+		// a used code is refused by the Portal itself
+		const replay = await fetch(`${portalUrl}/v1/apps/connect`, { method: 'POST', body: '{}' });
+		expect(replay.status).toBe(401);
 	});
 
 	it('issues launches the product verifies, keys the product accepts, and delivers signed events', async () => {

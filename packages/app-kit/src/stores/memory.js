@@ -35,7 +35,8 @@ const memoryReplay = (now) => {
  */
 export const createMemoryStores = ({ now = Date.now } = {}) => {
 	/** @type {Map<string, Record<string, unknown>>} */
-	const burned = new Map();
+	/** @type {Map<string, Record<string, any>>} */
+	const settings = new Map();
 	/** @type {Map<string, import('./types.js').EntitlementCacheEntry>} */
 	const entitlements = new Map();
 	/** @type {Map<string, QueuedUsage & { nextAttemptAt: number, leaseUntil: number, leaseOwner: string | null, expireAt: number | null }>} */
@@ -84,17 +85,16 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 	return {
 		replay: memoryReplay(now),
 		nonce: memoryReplay(now),
-		burnedTokens: Object.freeze({
-			burn: async (hash) => {
-				if (burned.has(hash)) return false;
-				burned.set(hash, { burnedAt: now() });
+		settings: Object.freeze({
+			get: async (id) => (settings.has(id) ? structuredClone(settings.get(id) ?? null) : null),
+			insert: async (id, value) => {
+				if (settings.has(id)) return false;
+				settings.set(id, structuredClone(value));
 				return true;
 			},
-			isBurned: async (hash) => burned.has(hash),
-			annotate: async (hash, data) => {
-				burned.set(hash, { ...(burned.get(hash) ?? { burnedAt: now() }), ...data });
+			delete: async (id) => {
+				settings.delete(id);
 			},
-			get: async (hash) => burned.get(hash) ?? null,
 		}),
 		entitlements: Object.freeze({
 			get: async (websiteId) => entitlements.get(websiteId) ?? null,

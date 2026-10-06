@@ -186,7 +186,6 @@ export const manifestSchema = deepFreeze({
 				dashboard: path,
 				demo: path,
 				events: path,
-				register: path,
 			},
 		},
 		capabilities: {
@@ -297,8 +296,8 @@ export const manifestSchema = deepFreeze({
 		properties: {
 			endpoints: {
 				type: 'object',
-				required: ['base', 'register', 'events'],
-				properties: { base: true, register: true, events: true },
+				required: ['base', 'events'],
+				properties: { base: true, events: true },
 			},
 		},
 	},

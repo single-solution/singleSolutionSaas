@@ -10,7 +10,6 @@
  * @typedef {{ ok: true, value: T } | { ok: false, errors: FieldError[] }} Parsed
  */
 
-const TOKEN = /^[\x21-\x7e]{16,512}$/;
 const JTI = /^[A-Za-z0-9_-]{16,256}$/;
 const REASON_MAX = 500;
 
@@ -56,21 +55,6 @@ const str = (value, path, errors, { required = false, max = 2048 } = {}) => {
 		return undefined;
 	}
 	return value.trim();
-};
-
-/**
- * `POST /v1/admin/apps/register`
- * @param {unknown} body
- * @returns {Parsed<{ baseUrl: string, token: string, stagingBaseUrl: string | null }>}
- */
-export const parseRegistration = (body) => {
-	const { input, errors } = open(body, ['baseUrl', 'token', 'stagingBaseUrl']);
-	const baseUrl = str(input.baseUrl, '/baseUrl', errors, { required: true });
-	const token = typeof input.token === 'string' && TOKEN.test(input.token) ? input.token : undefined;
-	if (!token)
-		errors.push({ path: '/token', message: 'token must be the one-time registration token (16..512 printable chars)' });
-	const staging = str(input.stagingBaseUrl, '/stagingBaseUrl', errors);
-	return done(errors, { baseUrl: baseUrl ?? '', token: token ?? '', stagingBaseUrl: staging ?? null });
 };
 
 /**

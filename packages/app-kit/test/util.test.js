@@ -117,29 +117,17 @@ describe('configFromEnv', () => {
 	it('reads the documented variables', () => {
 		expect(
 			configFromEnv({
-				PORTAL_URL: 'https://p',
-				APP_ID: 'app',
-				SIGNING_KEY: 'k1:seed',
-				REGISTRATION_TOKEN_HASH: 'h',
 				DATABASE_URI: 'mongodb://x',
 				LOG_LEVEL: 'debug',
 				OUTBOUND_DEV_ALLOW_HOSTS: ' minio.dev , 127.0.0.1,,',
 			}),
 		).toEqual({
-			portalUrl: 'https://p',
-			appId: 'app',
-			signingKey: 'k1:seed',
-			registrationTokenHash: 'h',
 			productDbUri: 'mongodb://x',
 			productDbOptions: { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000, serverSelectionTimeoutMS: 5_000 },
 			logLevel: 'debug',
 			outboundAllowHosts: ['minio.dev', '127.0.0.1'],
 		});
-		expect(configFromEnv({ APP_ID: '', NODE_ENV: 'production' })).toMatchObject({
-			appId: null,
-			logLevel: 'info',
-			outboundAllowHosts: [],
-		});
+		expect(configFromEnv({ NODE_ENV: 'production' })).toMatchObject({ logLevel: 'info', outboundAllowHosts: [] });
 		expect(configFromEnv({ NODE_ENV: 'development' }).logLevel).toBe('debug');
 		expect(configFromEnv()).toHaveProperty('logLevel');
 		expect(configFromEnv({ DATABASE_MAX_POOL_SIZE: '2' }).productDbOptions.maxPoolSize).toBe(2);

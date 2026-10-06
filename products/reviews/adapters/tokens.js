@@ -3,7 +3,7 @@
  *
  * A review request message carries a link to the merchant's review page with a token that proves the purchase without
  * a sign-in. Tokens are HMAC-SHA-256 over `{ w: websiteId, r: requestId, e: expiry }`, bound to one website and one
- * request, compared in constant time. The secret is `REVIEWS_LINK_SECRET`, else derived (HKDF) from the product
+ * request, compared in constant time. The secret is the generated secret (`product.secret`, kept in the control database), else derived (HKDF) from the product
  * signing key, so a deployment works without an extra variable.
  */
 import { createHash, createHmac, hkdfSync, randomBytes as nodeRandomBytes, timingSafeEqual } from 'node:crypto';
@@ -39,7 +39,7 @@ export const stableId = (text) => {
 export const randomBytes = (n) => new Uint8Array(nodeRandomBytes(n));
 
 /**
- * The link-token secret: `REVIEWS_LINK_SECRET`, else HKDF of the product signing key.
+ * The link-token secret: the generated secret (`product.secret`, kept in the control database), else HKDF of the product signing key.
  * @param {{ secret?: string | undefined, signingKey?: string | Record<string, unknown> | null }} input
  * @returns {Buffer}
  */
@@ -47,7 +47,7 @@ export const linkSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('REVIEWS_LINK_SECRET (≥ 32 chars) or SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-reviews', 'review-link/v1', 32));
 };
 

@@ -27,7 +27,7 @@ currency, createdAt }` — the **website settings** (F.16) are `null` when unset
   `['elements.read', 'events.write']`. `GET /v1/merchants/:merchantId/websites/:websiteId/keys/scopes` →
   `{ defaults, items: [{ scope, group, label, description, product? }] }` (the console key form: one checkbox group
   per product).
-- Website keys are signed with a **dedicated website-key signing key** (`WEBSITE_SIGNING_KEYS`), not the launch key.
+- Website keys are signed with a **dedicated website-key signing key** (generated on first start, `infra/system.js`), not the launch key.
 - **Staff API tokens** (F.18): `POST /v1/admin/api-tokens` (`platform.apps.manage`, `{ minutes: 5..720, label? }`) →
   201 `{ token: 'sst_…', sessionId, expiresAt }` — a staff session flagged `api` with the member's roles and MFA
   satisfied, accepted only as `Authorization: Bearer sst_…` (no cookie, so no CSRF check; a cookie carrying it and a
@@ -67,9 +67,15 @@ _rejected`). A merchant's own PUT clears `managedBy`. Deleting/transferring a we
 
 ## catalog (`modules/catalog`)
 
-Apps (products), registration handshake (Portal side), manifest versions and review, app keys, environments,
+Apps (products), onboarding by connection code (Portal side), manifest versions and review, app keys, environments,
 health, launches.
 
+- Onboarding: `createConnectionCode({ appId? })` → `{ code, codeId, appId, expiresAt }` (one-time `ssc_…`, 24 h,
+  only the token hash stored; with `appId` it reconnects that app), `connectService({ headers, rawBody })` (the public
+  `POST /v1/apps/connect` a product's `/setup` calls: `@ss/protocol` `verifyConnectRequest`, manifest and base-URL
+  checks, atomic burn, app + version + key created — or, on reconnect, key replaced and base URL moved — answered with
+  `createConnectResponse`), `reconnect({ appId })` (new code + Portal-signed `POST <base>/v1/ss/disconnect`),
+  `listConnectionCodes()`, `revokeConnectionCode({ codeId })`.
 - `getApp(appId)` → `{ appId, slug, kind: service|pack, status: pending|active|deprecated|retired, endpoints, currentVersion }`
 - `appBySlug(slug)`
 - `getManifest(appId, version?)` → validated manifest (features inline)
@@ -81,7 +87,7 @@ health, launches.
   staff may launch per merchant only).
 - Merchant "Try demo": `POST /v1/merchants/:merchantId/apps/:appId/demo` (`subscriptions.read`, listed apps only,
   30/min) → `{ url, expiresAt }` of a `demo` launch with no merchant or website scope (the product shows its sandbox).
-- Environments: `setEnvironments({ appId, production?, staging? })` (registration records `endpoints.base` as
+- Environments: `setEnvironments({ appId, production?, staging? })` (the connection records the product's base URL as
   production). Integration delivers to these registered bases, never to the manifest's self-declared `endpoints.base`.
 - `refreshManifest({ appId })` imports `/.well-known/ss-app.json` only with a valid `SS-Manifest-Signature`
   (`@ss/protocol` `verifyManifest` over the app's registered, non-revoked keys, `expectedAppId = appId`, ≤ 24 h old).

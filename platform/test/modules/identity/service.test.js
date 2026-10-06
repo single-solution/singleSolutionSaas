@@ -3,6 +3,7 @@ import { generateSigningKey } from '@ss/protocol';
 import { createPortalKeys } from '../../../src/infra/crypto.js';
 import { websiteKeySigning } from '../../../src/modules/identity/service.js';
 import { C } from '../../../src/modules/identity/schema.js';
+import { PRODUCTION_ENV } from '../../helpers.js';
 import { boot, setupMongo, teardownMongo } from './boot.js';
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -42,7 +43,7 @@ describe('identity service wiring', () => {
 			template: 'verify_email',
 		});
 
-		const prod = await boot({ identity: { mailer: undefined }, env: { NODE_ENV: 'production' } });
+		const prod = await boot({ identity: { mailer: undefined }, env: { ...PRODUCTION_ENV } });
 		expect(
 			(
 				await prod.call('POST', '/v1/auth/merchant/signup', {

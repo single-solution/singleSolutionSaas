@@ -55,7 +55,6 @@ export const manifest = () => ({
 		base: 'https://coupons.example.dev',
 		dashboard: '/dashboard',
 		events: '/.well-known/ss-events',
-		register: '/.well-known/ss-register',
 	},
 	capabilities: { adminLaunch: true, offlineGrace: 'PT24H' },
 	scopes: ['events.subscribe:order.*'],

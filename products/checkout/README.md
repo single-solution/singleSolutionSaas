@@ -58,7 +58,7 @@ base URLs from the settings and the merchant's own `sk_` key (Dashboard → Sett
 ## Develop
 
 ```sh
-ss dev env > .env.local   # signing key, registration token hash, portal URL
+ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 pnpm portal               # Portal emulator on :4400 (ss.dev.json)
 pnpm dev                  # product on :3000 (or node serve.js 3000)
 ```
@@ -68,7 +68,8 @@ pnpm check                # format, lint, typecheck, tests with coverage
 pnpm validate             # ss app validate
 ```
 
-Environment: the app-kit variables (`.env.example`) and `CHECKOUT_SEAL_KEY`. Nothing runs on a timer (no crons, no
+Environment: only `DATABASE_URI` (`.env.example`); the sealing key of merchants' integration keys is generated and kept
+in the control database. Nothing runs on a timer (no crons, no
 background loops): an expired hold is cancelled when the order is read, listed or confirmed (and released when a
 placement needs the stock); a cart is reported abandoned when the merchant's server reads it; the dashboard's "Process
 expired now" button (`POST /v1/dashboard/expiry:run`) does both for the website at once. Guest carts disappear through a

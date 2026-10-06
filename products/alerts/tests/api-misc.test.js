@@ -1,7 +1,7 @@
 /** Alert types, waitlist tiers from identity claims, analytics, dashboard, privacy, adapters and the plain server. */
 import { afterEach, describe, expect, it } from 'vitest';
 import { noopLogger } from '@ss/app-kit';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { createPlatform, loadManifest, loadStrings } from '../adapters/platform.js';
 import { createTokens, randomId, stableId, tokenSecret } from '../adapters/tokens.js';
 import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
@@ -225,7 +225,7 @@ describe('adapters', () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k1' });
 		expect(tokenSecret({ secret: 'x'.repeat(32) })).toEqual(Buffer.from('x'.repeat(32)));
 		expect(tokenSecret({ signingKey: `${privateJwk.kid}:${privateJwk.d}` })).toHaveLength(32);
-		expect(() => tokenSecret({ secret: 'short', signingKey: null })).toThrow(/ALERTS_TOKEN_SECRET/);
+		expect(() => tokenSecret({ secret: 'short', signingKey: null })).toThrow(/generated secret/);
 		expect(randomId('als')).toMatch(/^als_[0-9a-z]{26}$/);
 		expect(stableId('alm', 'k')).toBe(stableId('alm', 'k'));
 	});
@@ -234,7 +234,10 @@ describe('adapters', () => {
 		const manifest = await loadManifest(ROOT);
 		expect(manifest.elements.every((/** @type {any} */ element) => element.features.type === 'object')).toBe(true);
 		expect(Object.keys(await loadStrings(ROOT))).toEqual(['en']);
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 	});
 
 	it('serves the routes over plain node:http with a control database', async () => {
@@ -243,12 +246,9 @@ describe('adapters', () => {
 			port: 0,
 			root: ROOT,
 			env: {
-				PORTAL_URL: 'https://portal.test',
-				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_alerts_serve_0123456789abcdef'),
 				DATABASE_URI: mongoUri(`alerts_control_${Date.now()}`),
 			},
-			overrides: { logger: noopLogger },
+			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}`, logger: noopLogger },
 		});
 		try {
 			const health = await fetch(`${server.url}/healthz`);

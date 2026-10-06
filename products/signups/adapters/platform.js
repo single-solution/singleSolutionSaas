@@ -1,8 +1,7 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: PORTAL_URL, APP_ID,
- * SIGNING_KEY, REGISTRATION_TOKEN_HASH, DATABASE_URI, OUTBOUND_DEV_ALLOW_HOSTS; plus
- * SIGNUPS_SEAL_SECRET and SIGNUPS_SEAL_SECRET_PREVIOUS) and the project files (manifest with feature
- * schemas inlined, string catalogs). This is the only place that reads the environment.
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: only `DATABASE_URI`, the
+ * product's control database, plus optional tuning) and the project files (manifest with feature schemas inlined, string
+ * catalogs). The Portal connection is made at `/setup` and, like every secret, kept in the control database. This is the only place that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -74,7 +73,6 @@ export const PROBLEM_CODES = Object.freeze({
  * @typedef {object} SignupsApp
  * @property {any} product app-kit product
  * @property {import('./crypto.js').Sealer} sealer
- * @property {string} portalUrl
  * @property {string} base the product's public base URL (issuer prefix)
  * @property {() => number} now
  * @property {any} log structured logger (never receives secrets)
@@ -92,13 +90,6 @@ export const PROBLEM_CODES = Object.freeze({
  */
 export const createPlatform = async ({ env = process.env, root = process.cwd(), overrides = {} } = {}) => {
 	const config = configFromEnv(env);
-	const missing = [
-		['PORTAL_URL', config.portalUrl],
-		['SIGNING_KEY', config.signingKey],
-		['REGISTRATION_TOKEN_HASH', config.registrationTokenHash],
-	].filter(([, value]) => !value);
-	if (missing.length > 0)
-		throw new Error(`Missing environment variables: ${missing.map(([name]) => name).join(', ')} (run \`ss dev env\`)`);
 	const [loaded, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
 	const manifest = overrides.manifest ?? loaded;
 	/** @type {unknown} */
@@ -114,10 +105,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		stores = mongoStores;
 	}
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
-	const signingKey = /** @type {string} */ (config.signingKey);
-	const secrets = [sealSecret({ secret: env.SIGNUPS_SEAL_SECRET, signingKey })];
-	if (env.SIGNUPS_SEAL_SECRET_PREVIOUS && env.SIGNUPS_SEAL_SECRET_PREVIOUS.length >= 32)
-		secrets.push(Buffer.from(env.SIGNUPS_SEAL_SECRET_PREVIOUS, 'utf8'));
 	const logger = overrides.logger ?? createLogger({ level: config.logLevel });
 	/** @type {SignupsApp['privacy']} */
 	const privacy = {};
@@ -125,10 +112,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		/** @type {any} */ ({
 			manifest,
 			strings,
-			portalUrl: config.portalUrl,
-			appId: config.appId,
-			signingKey,
-			registrationTokenHash: config.registrationTokenHash,
 			logger,
 			privacy: {
 				export: (/** @type {any} */ input) => /** @type {any} */ (privacy.export)?.(input),
@@ -147,11 +130,16 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			...overrides,
 		}),
 	);
+	// generated secrets and the Portal connection live in the control database (set up at /setup)
+	await product.ready();
 	return {
 		product,
-		sealer: createSealer({ secrets }),
-		portalUrl: /** @type {string} */ (config.portalUrl),
-		base: String(manifest.endpoints.base).replace(/\/+$/, ''),
+		// sealing secret generated once and kept in the control database
+		sealer: createSealer({ secrets: [sealSecret({ secret: product.secret('seal').toString('base64url') })] }),
+		/** this deployment's address (recorded at /setup) */
+		get base() {
+			return product.baseUrl();
+		},
 		now,
 		log: logger,
 		strings,

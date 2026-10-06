@@ -32,9 +32,9 @@ afterAll(async () => {
  */
 const setup = async (options = {}, manifest = serviceManifest()) => {
 	const t = await bootPortal({ db: mongo.db('cat_life'), ...options });
-	const p = await startFakeProduct({ manifest, portalUrl: PORTAL_URL, fetchJwks: t.jwks, now: t.clock.now });
+	const p = await startFakeProduct({ manifest, portalUrl: PORTAL_URL, now: t.clock.now });
 	products.push(p);
-	const res = await t.staff('POST', '/v1/admin/apps/register', { body: { baseUrl: p.url, token: p.token } });
+	const res = await t.register(p);
 	expect(res.status).toBe(201);
 	const appId = /** @type {string} */ (res.json.appId);
 	return { t, p, appId };
@@ -125,7 +125,8 @@ describe('manifest versions: refresh, diff, review', () => {
 
 		const actions = (await t.audit(appId)).map((a) => a.action);
 		expect(actions).toEqual([
-			'catalog.app_registered',
+			'catalog.connection_code_created',
+			'catalog.app_connected',
 			'catalog.app_activated',
 			'catalog.manifest_refreshed',
 			'catalog.version_approved',
@@ -226,7 +227,6 @@ describe('manifest versions: refresh, diff, review', () => {
 		expect(resumed.stats).toMatchObject({ checked: 1 });
 
 		// failures are counted, not thrown; an exhausted deadline skips the rest
-		p.tamper.registerStatus = 0;
 		p.setManifest({ ...changed, elements: [] });
 		expect(await t.service().refreshAll()).toMatchObject({ checked: 1, failed: 1 });
 		expect(await t.service().refreshAll({ deadline: 0 })).toMatchObject({ checked: 0, skipped: 1 });
@@ -367,7 +367,7 @@ describe('product calls: heartbeat, key rotation, revocation', () => {
 		);
 		const keys = (await t.staff('GET', `/v1/admin/apps/${appId}`)).json.keys;
 		expect(keys.map((/** @type {any} */ k) => [k.kid, k.usable, k.source])).toEqual([
-			['product-k1', false, 'registration'],
+			['product-k1', false, 'connection'],
 			['product-k2', true, 'rotation'],
 		]);
 
@@ -381,7 +381,8 @@ describe('product calls: heartbeat, key rotation, revocation', () => {
 		problemOf(await t.staff('POST', `/v1/admin/apps/${appId}/keys/product-k2/revoke`, { body: { reason: 'again' } }), 404);
 		problemOf(await t.staff('POST', `/v1/admin/apps/${appId}/keys/product-k2/revoke`, { body: {} }), 422);
 		expect((await t.audit(appId)).map((a) => a.action)).toEqual([
-			'catalog.app_registered',
+			'catalog.connection_code_created',
+			'catalog.app_connected',
 			'catalog.key_rotated',
 			'catalog.key_revoked',
 		]);
@@ -598,11 +599,10 @@ describe('launches', () => {
 		const other = await startFakeProduct({
 			manifest: renamedService('coupons-b'),
 			portalUrl: PORTAL_URL,
-			fetchJwks: t.jwks,
 			now: t.clock.now,
 		});
 		products.push(other);
-		const reg = await t.staff('POST', '/v1/admin/apps/register', { body: { baseUrl: other.url, token: other.token } });
+		const reg = await t.register(other);
 		expect(reg.status, JSON.stringify(reg.json)).toBe(201);
 		const second = await t.service().issueLaunch({ kind: 'demo', appId, subject: 'usr_x', user: { id: 'usr_x' } });
 		expect((await consume(second.jti, other.signer, reg.json.appId)).json).toEqual({ consumed: false });

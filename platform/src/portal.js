@@ -59,7 +59,7 @@ export const healthz = ({ version = 'dev', now = Date.now } = {}) =>
 /**
  * @param {{ config: Readonly<PortalConfig>, db: import('mongodb').Db, modules: ReadonlyArray<Readonly<ModuleDefinition>>,
  *   logger: Logger, now?: () => number, randomBytes?: (n: number) => Uint8Array, random?: () => number,
- *   pingTimeoutMs?: number, mailer?: import('./infra/mailer.js').Mailer,
+ *   pingTimeoutMs?: number, mailer?: import('./infra/mailer.js').Mailer, system?: import('./infra/system.js').SystemStore | null,
  *   background?: { mode?: 'on' | 'off', fallback?: import('./infra/http.js').AfterScheduler } }} options
  *   `background`: work after responses (default `off` when `config.env` is `test`); `fallback` runs it when the
  *   adapter gave no `after()` (default: in the background of the request)
@@ -74,6 +74,7 @@ export const createPortal = ({
 	random = Math.random,
 	pingTimeoutMs = 2_000,
 	mailer,
+	system = null,
 	background: backgroundOptions = {},
 }) => {
 	const registry = createRegistry([...INFRA_COLLECTIONS, ...modules.flatMap((m) => m.collections ?? [])]);
@@ -161,6 +162,7 @@ export const createPortal = ({
 				clearCookie(sessionCookieName(kind, config.cookieSecure), { secure: config.cookieSecure }),
 		}),
 		rbac: Object.freeze({ can, websitesVisible }),
+		system,
 	});
 
 	const composed = composeModules(modules, {
@@ -266,6 +268,18 @@ export const createPortal = ({
 	const previewHost = config.delivery?.previewOrigin ? new URL(config.delivery.previewOrigin).host : null;
 	/** @param {Request} request */
 	const handle = (request) => {
+		// before the first-run setup recorded the Portal URL, the API refuses everything (only /setup answers)
+		if (!config.setUp)
+			return Promise.resolve(
+				new Response(
+					JSON.stringify(
+						problems.create('unavailable', {
+							detail: 'The Portal is not set up yet: open /setup to finish installing it.',
+						}),
+					),
+					{ status: 503, headers: { 'content-type': 'application/problem+json', 'cache-control': 'no-store' } },
+				),
+			);
 		if (previewHost !== null) {
 			const url = new URL(request.url);
 			if (url.host === previewHost && !url.pathname.startsWith('/p/'))

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { createWalletTokens, MIN_SECRET_LENGTH, stableId, walletSecret } from '../adapters/tokens.js';
 import { mongoUri, ROOT } from './harness.js';
@@ -15,7 +15,7 @@ describe('adapters/tokens', () => {
 		const derived = walletSecret({ secret: 'short', signingKey: `${privateJwk.kid}:${privateJwk.d}` });
 		expect(derived).toHaveLength(32);
 		expect(walletSecret({ signingKey: /** @type {any} */ (privateJwk) }).equals(derived)).toBe(true);
-		expect(() => walletSecret({ signingKey: null })).toThrow(/LOYALTY_WALLET_SECRET/);
+		expect(() => walletSecret({ signingKey: null })).toThrow(/generated secret/);
 	});
 
 	it('issues website-bound, expiring wallet tokens and refuses tampering', () => {
@@ -40,7 +40,10 @@ describe('adapters/tokens', () => {
 
 describe('adapters/platform', () => {
 	it('refuses to start without the required environment', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 	});
 
 	it('uses the product control database when DATABASE_URI is set', async () => {
@@ -48,12 +51,10 @@ describe('adapters/platform', () => {
 		const app = await createPlatform({
 			root: ROOT,
 			env: {
-				PORTAL_URL: 'https://portal.test',
-				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_0123456789abcdef0123'),
 				DATABASE_URI: mongoUri(`loyalty_control_${Date.now()}`),
 				OUTBOUND_DEV_ALLOW_HOSTS: '127.0.0.1',
 			},
+			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}` },
 		});
 		expect(app.strings.en?.['wallet.title']).toBe('Your rewards');
 		await app.close();

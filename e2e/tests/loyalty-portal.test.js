@@ -24,7 +24,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MongoClient } from 'mongodb';
 import { noopLogger } from '@ss/app-kit';
 import { createId } from '@ss/contracts';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import {
 	closeMongoClients,
 	commerceModule,
@@ -35,14 +34,14 @@ import {
 	createIntegrationModule,
 	createPortal,
 	loadConfig,
+	testSystemState,
 	systemModule,
 	totpCode,
 } from '@ss/platform/testing';
 import { ROOT, loadManifest, startServer } from '@ss/product-loyalty/serve';
-import { createClock, mongoUri } from './helpers.js';
+import { connectProduct, createClock, mongoUri, postSetup } from './helpers.js';
 
 const HOUR = 3_600_000;
-const REGISTRATION_TOKEN = `rt_${randomBytes(24).toString('hex')}`;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
 const MERCHANT_USER = { email: 'owner@shop.example.com', password: 'merchant password 123!' };
 const LOCAL_HOSTS = ['127.0.0.1', 'localhost'];
@@ -130,20 +129,16 @@ beforeAll(async () => {
 	// ── the Portal: real modules, http on 127.0.0.1 ─────────────────────────────────────────────────────────
 	const portalPort = await freePort();
 	const PORTAL_URL = `http://127.0.0.1:${portalPort}`;
-	const { privateJwk: portalKey } = await generateSigningKey({ kid: 'portal-e2e-1' });
-	const { privateJwk: websiteKeySigner } = await generateSigningKey({ kid: 'website-e2e-1' });
-	const config = loadConfig({
-		NODE_ENV: 'test',
-		MONGODB_URI: mongoUri('unused'),
-		PUBLIC_URL: PORTAL_URL,
-		SIGNING_KEYS: `${portalKey.kid}:${portalKey.d}`,
-		WEBSITE_SIGNING_KEYS: `${websiteKeySigner.kid}:${websiteKeySigner.d}`,
-		ENCRYPTION_KEYS: `kek-1:${randomBytes(32).toString('base64')}`,
-		SESSION_SECRET: randomBytes(32).toString('base64'),
-		KEY_PEPPER: randomBytes(32).toString('base64'),
-		OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
-		STAFF_SESSION_IDLE_MINUTES: '720',
-	});
+	const config = loadConfig(
+		{
+			NODE_ENV: 'test',
+			MONGODB_URI: mongoUri('unused'),
+			OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
+			STAFF_SESSION_IDLE_MINUTES: '720',
+		},
+		// keys and secrets as the Portal generates them on first start; the URL as recorded at /setup
+		testSystemState({ portalUrl: PORTAL_URL }),
+	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const suffix = randomBytes(4).toString('hex');
 	const portalDb = mongo.db(`e2e_portal_${suffix}`);
@@ -196,16 +191,12 @@ beforeAll(async () => {
 	const productPort = await freePort();
 	const PRODUCT_URL = `https://localhost:${productPort}`;
 	const manifest = await loadManifest(ROOT);
-	const { privateJwk: productKey } = await generateSigningKey({ kid: 'loyalty-e2e-1' });
 	const product = await startServer({
 		port: productPort,
 		host: '127.0.0.1',
 		root: ROOT,
 		tls: { key, cert },
 		env: {
-			PORTAL_URL,
-			SIGNING_KEY: `${productKey.kid}:${productKey.d}`,
-			REGISTRATION_TOKEN_HASH: hashRegistrationToken(REGISTRATION_TOKEN),
 			LOG_LEVEL: 'error',
 		},
 		overrides: {
@@ -312,24 +303,15 @@ describe.skipIf(!hasOpenssl)('Loyalty & Rewards on the real Portal', () => {
 		state.staff = confirm.cookie ?? login.cookie;
 	});
 
-	it('registers the product through the catalog handshake and lists it after activation', async () => {
+	it('connects the product with a connection code and lists it after activation', async () => {
 		const { call, state, PRODUCT_URL } = ctx;
-		const registered = await call('POST', '/v1/admin/apps/register', {
-			cookie: state.staff,
-			body: { baseUrl: PRODUCT_URL, token: REGISTRATION_TOKEN },
-		});
+		// Admin → Apps → Add product: a one-time code, pasted into the product's /setup
+		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
 		expect(registered.json).toMatchObject({ slug: 'loyalty', kind: 'service', status: 'pending', currentVersion: 1 });
 		state.appId = registered.json.appId;
-		// the product recorded its appId from the handshake; the token is burnt
-		expect(
-			(
-				await call('POST', '/v1/admin/apps/register', {
-					cookie: state.staff,
-					body: { baseUrl: PRODUCT_URL, token: REGISTRATION_TOKEN },
-				})
-			).status,
-		).toBe(409);
+		// the product recorded its appId and the Portal keys; its /setup is closed now
+		expect((await postSetup(PRODUCT_URL, 'ssc_again')).status).toBe(404);
 		const versions = await call('GET', `/v1/admin/apps/${state.appId}/versions`, { cookie: state.staff });
 		expect(versions.json.items[0]).toMatchObject({ version: 1, status: 'accepted' });
 		// approval of the registered version = activation (pending → active, manifest.accepted@1)

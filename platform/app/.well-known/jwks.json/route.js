@@ -3,4 +3,4 @@ import { getPortal } from '../../../src/runtime.js';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = () => getPortal().jwks();
+export const GET = async () => (await getPortal()).jwks();

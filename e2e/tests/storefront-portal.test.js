@@ -29,6 +29,7 @@ import {
 	createIntegrationModule,
 	createPortal,
 	loadConfig,
+	testSystemState,
 	systemModule,
 	totpCode,
 } from '@ss/platform/testing';
@@ -38,7 +39,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { relativeImports } from '@ss/contracts/budget';
-import { createClock, mongoUri } from './helpers.js';
+import { connectProduct, createClock, mongoUri, postSetup } from './helpers.js';
 
 /** jsdom ships no type declarations (the same typed require as the Portal's delivery tests). */
 /** @type {{ JSDOM: new (html?: string, options?: Record<string, unknown>) => { window: any } }} */
@@ -73,22 +74,18 @@ let ctx;
 
 beforeAll(async () => {
 	const clock = createClock(Date.now());
-	const { privateJwk: portalKey } = await generateSigningKey({ kid: 'portal-e2e-1' });
-	const { privateJwk: websiteKeySigner } = await generateSigningKey({ kid: 'website-e2e-1' });
-	const config = loadConfig({
-		NODE_ENV: 'test',
-		MONGODB_URI: mongoUri('unused'),
-		PUBLIC_URL: PORTAL_URL,
-		SIGNING_KEYS: `${portalKey.kid}:${portalKey.d}`,
-		WEBSITE_SIGNING_KEYS: `${websiteKeySigner.kid}:${websiteKeySigner.d}`,
-		ENCRYPTION_KEYS: `kek-1:${randomBytes(32).toString('base64')}`,
-		SESSION_SECRET: randomBytes(32).toString('base64'),
-		KEY_PEPPER: randomBytes(32).toString('base64'),
-		STORAGE_DIR: ':memory:',
-		// honest budgets (F.18): the pro defaults fit, every add-on at once does not
-		DELIVERY_BUDGET_KB: '55',
-		STAFF_SESSION_IDLE_MINUTES: '720',
-	});
+	const config = loadConfig(
+		{
+			NODE_ENV: 'test',
+			MONGODB_URI: mongoUri('unused'),
+			STORAGE_DIR: ':memory:',
+			// honest budgets (F.18): the pro defaults fit, every add-on at once does not
+			DELIVERY_BUDGET_KB: '55',
+			STAFF_SESSION_IDLE_MINUTES: '720',
+		},
+		// keys and secrets as the Portal generates them on first start; the URL as recorded at /setup
+		testSystemState({ portalUrl: PORTAL_URL }),
+	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const portalDb = mongo.db(`e2e_portal_${randomBytes(4).toString('hex')}`);
 	const mailer = createMailer();

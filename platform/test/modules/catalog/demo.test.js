@@ -28,9 +28,9 @@ afterAll(async () => {
 /** @param {any} manifest */
 const setup = async (manifest = serviceManifest()) => {
 	const t = await bootPortal({ db: mongo.db('cat_demo') });
-	const p = await startFakeProduct({ manifest, portalUrl: PORTAL_URL, fetchJwks: t.jwks, now: t.clock.now });
+	const p = await startFakeProduct({ manifest, portalUrl: PORTAL_URL, now: t.clock.now });
 	products.push(p);
-	const res = await t.staff('POST', '/v1/admin/apps/register', { body: { baseUrl: p.url, token: p.token } });
+	const res = await t.register(p);
 	expect(res.status).toBe(201);
 	const appId = /** @type {string} */ (res.json.appId);
 	const cookie = await t.session({ kind: 'merchant', subject: 'usr_owner', roles: ['owner'], merchantId: MERCHANT });

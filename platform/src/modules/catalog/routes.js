@@ -3,9 +3,9 @@
  *
  * Public:   GET  /v1/catalog/products · GET /v1/catalog/products/:slug
  * Merchant: POST /v1/merchants/:merchantId/apps/:appId/launch · POST /v1/merchants/:merchantId/apps/:appId/demo
- * Staff:    /v1/admin/apps… (register, packs, list, detail, versions, refresh, review, lifecycle, environments, keys,
+ * Staff:    /v1/admin/apps… (connection codes, reconnect, packs, list, detail, versions, refresh, review, lifecycle, environments, keys,
  *           launch)
- * Product:  POST /v1/product/heartbeat · /v1/product/keys/rotate · /v1/product/launch/consume (F.9)
+ * Product:  POST /v1/apps/connect (a product's /setup, with a connection code) · POST /v1/product/heartbeat · /v1/product/keys/rotate · /v1/product/launch/consume (F.9)
  * @module
  */
 import { created, defineRoute, ok, paginate, problem } from '../../infra/http.js';
@@ -16,7 +16,6 @@ import {
 	parseLifecycle,
 	parseMerchantLaunch,
 	parseReason,
-	parseRegistration,
 	parseRotate,
 	parseStaffLaunch,
 } from './core/input.js';
@@ -156,11 +155,49 @@ export const catalogRoutes = (service, deps) => [
 	// ---------------------------------------------------------------- staff
 	defineRoute({
 		method: 'POST',
-		path: '/v1/admin/apps/register',
+		path: '/v1/admin/apps/connection-codes',
 		auth: 'staff',
 		permission: 'platform.apps.manage',
+		idempotent: 'no-store', // the answer carries the one-time code
+		rateLimit: { limit: 30, windowMs: 60_000 },
+		handler: async (ctx) => created(await service.createConnectionCode({ ...audited(ctx) })),
+	}),
+	defineRoute({
+		method: 'GET',
+		path: '/v1/admin/apps/connection-codes',
+		auth: 'staff',
+		permission: 'platform.apps.read',
+		handler: async () => ok(await service.listConnectionCodes()),
+	}),
+	defineRoute({
+		method: 'DELETE',
+		path: '/v1/admin/apps/connection-codes/:codeId',
+		auth: 'staff',
+		permission: 'platform.apps.manage',
+		handler: async (ctx) => {
+			await service.revokeConnectionCode({ codeId: ctx.params.codeId ?? '', ...audited(ctx) });
+			return ok({ revoked: true });
+		},
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/apps/:appId/reconnect',
+		auth: 'staff',
+		permission: 'platform.apps.manage',
+		idempotent: 'no-store',
+		rateLimit: { limit: 10, windowMs: 60_000 },
+		handler: async (ctx) => created(await service.reconnect({ appId: ctx.params.appId ?? '', ...audited(ctx) })),
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/apps/connect',
+		auth: 'public',
+		rawBody: true,
+		idempotent: false,
+		maxBodyBytes: 512 * 1024,
 		rateLimit: { limit: 20, windowMs: 60_000 },
-		handler: async (ctx) => created(await service.registerService({ ...valid(parseRegistration(ctx.body)), ...audited(ctx) })),
+		handler: async (ctx) =>
+			ok(await service.connectService({ headers: ctx.headers, rawBody: ctx.rawBody, requestId: ctx.requestId, ip: ctx.ip })),
 	}),
 	defineRoute({
 		method: 'POST',

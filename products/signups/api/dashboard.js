@@ -136,6 +136,6 @@ export const resolveDashboard = async ({ signups, sessionId, website = null, now
 		state: 'ready',
 		session,
 		data: liveDashboard({ service, site }),
-		portalLink: `${app.portalUrl.replace(/\/+$/, '')}/websites/${encodeURIComponent(websiteId)}/identity`,
+		portalLink: `${app.product.portal.baseUrl}/websites/${encodeURIComponent(websiteId)}/identity`,
 	};
 };

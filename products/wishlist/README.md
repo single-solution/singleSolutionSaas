@@ -84,13 +84,13 @@ The collections are `ss_wishlist_{lists,stock,notifications,audit,idempotency}`:
 ## Run
 
 ```bash
-pnpm exec ss dev env > .env.local   # once
+pnpm exec ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 pnpm portal                         # fake Portal on :4400
 pnpm dev                            # product on :3000
 ```
 
-The environment variables are those of app-kit (`.env.example`), plus `WISHLIST_TOKEN_SECRET`. When it is empty, the
-guest-token secret is derived from `SIGNING_KEY`.
+Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
+`/setup` with a connection code), the product's signing key and its generated secrets live there. The guest-token secret is one of them.
 
 `pnpm check` runs format, lint, typecheck and tests with coverage. `pnpm validate` runs `ss app validate`.
 `tests/certify.test.js` runs `ss certify`. The Portal system test is `e2e/tests/wishlist-portal.test.js`.

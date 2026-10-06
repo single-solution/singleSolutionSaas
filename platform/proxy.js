@@ -1,26 +1,12 @@
 // Next.js proxy (formerly middleware): per-request CSP nonce for HTML pages. Logic lives in src/infra/security-headers.js.
 // Delivery responses (/w/*, /p/*) set their own policies (cross-origin scripts; sandboxed previews) and are excluded.
-// On the dedicated preview origin (PREVIEW_URL) no console page is served (API routes refuse it in portal.handle).
+// On the dedicated preview origin no console page is served: the console layouts answer 404 there (the origin is a
+// Portal setting), and API routes refuse it in portal.handle.
 import { NextResponse } from 'next/server';
 import { createNonce, pageCsp } from './src/infra/security-headers.js';
 
-/** @returns {string | null} */
-const previewHost = () => {
-	try {
-		return process.env.PREVIEW_URL ? new URL(process.env.PREVIEW_URL).host : null;
-	} catch {
-		return null;
-	}
-};
-
 /** @param {import('next/server').NextRequest} request */
 export function proxy(request) {
-	const preview = previewHost();
-	if (preview !== null && request.nextUrl.host === preview)
-		return new NextResponse('Not found', {
-			status: 404,
-			headers: { 'content-type': 'text/plain', 'cache-control': 'no-store' },
-		});
 	const nonce = createNonce();
 	const local = request.nextUrl.protocol === 'http:';
 	const csp = pageCsp({ nonce, dev: process.env.NODE_ENV === 'development', upgradeInsecure: !local });
@@ -35,7 +21,7 @@ export function proxy(request) {
 export const config = {
 	matcher: [
 		{
-			source: '/((?!api|v1|w/|p/|healthz|readyz|\\.well-known|_next/static|_next/image|favicon.ico).*)',
+			source: '/((?!api|v1|w/|p/|setup|healthz|readyz|\\.well-known|_next/static|_next/image|favicon.ico).*)',
 			missing: [
 				{ type: 'header', key: 'next-router-prefetch' },
 				{ type: 'header', key: 'purpose', value: 'prefetch' },

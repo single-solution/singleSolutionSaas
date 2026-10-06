@@ -2,7 +2,7 @@
  * `ss certify [dir] --url <product base url>` — the SSPS certification suite (Part E §12) run against a running
  * product through an in-process Portal emulator bound to the product's pinned Portal URL.
  *
- * Service products: `.well-known` endpoints, registration handshake (bad token, proof of possession, single use),
+ * Service products: `.well-known` endpoints, connection-code setup (bad code, proof of possession, setup closes),
  * launches of every kind accepted and bad ones rejected, website keys (sk_, pk_ + origin), RFC 9457 errors, element
  * gating, idempotent POST replay, cursor pagination, standard resources, signed events (delivery, replay, tampering,
  * idempotent consumption), data guard, data export/anonymise, entitlement offline grace (the emulator goes down).
@@ -13,7 +13,6 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createId, validateManifest } from '@ss/contracts';
 import {
-	createRegistrationRequest,
 	createSigner,
 	generateSigningKey,
 	hashManifest,
@@ -211,8 +210,7 @@ export const certificationTarget = (manifest, openapiPaths) => {
  * @property {string} dir project directory (manifest, openapi.json)
  * @property {string} [url] running product base URL (service products)
  * @property {string} [portalUrl] Portal URL the product pins (default: ss.dev.json portal.url or http://localhost:4400)
- * @property {string} [token] one-time registration token (fresh product process)
- * @property {Record<string, any>} [snapshot] `ss dev` state (reuses its Portal key and a registered app instead of a handshake)
+ * @property {Record<string, any>} [snapshot] `ss dev` state (reuses its Portal key and a connected app instead of connecting)
  * @property {typeof fetch} [fetch]
  * @property {() => number} [now]
  * @property {{ resolve: (target: { merchantId: string, websiteId: string }) => Promise<{ uri: string, dbName: string }>, stop?: () => Promise<void> }} [database]
@@ -229,7 +227,6 @@ export const runCertification = async ({
 	dir,
 	url,
 	portalUrl: portalUrlIn,
-	token,
 	snapshot,
 	fetch = globalThis.fetch,
 	now = Date.now,
@@ -420,63 +417,50 @@ export const runCertification = async ({
 			);
 			return 'matches manifest.json';
 		});
-		const registerPath = manifest.endpoints?.register ?? '/.well-known/ss-register';
 		const eventsPath = manifest.endpoints?.events ?? '/.well-known/ss-events';
-		await check('wellknown.register-rejects', 'registration with a wrong token is refused with the generic 401', async () => {
-			const wrong = `rt_${createId('tok').slice(4)}wrong`;
-			const request = await createRegistrationRequest({ portalUrl, signer: portal.signer, registrationToken: wrong, now });
-			const result = await call(registerPath, { method: 'POST', headers: request.headers, raw: request.body });
-			expect(result.status === 401, `status ${result.status}`);
-			expect(isObject(result.json) && result.json.error === 'unauthorized', 'body must be { error: "unauthorized" }');
-			return '401 unauthorized';
-		});
+		const snapshotApp = portal.apps().find((app) => app.baseUrl.replace(/\/+$/, '') === base);
+		if (!snapshotApp)
+			await check('setup.rejects-bad-code', 'POST /setup refuses an invalid connection code and stays unconnected', async () => {
+				const result = await call('/setup', { method: 'POST', body: { code: 'ssc_invalid', baseUrl: base } });
+				expect(result.status === 400, `status ${result.status}`);
+				return '400, still unconnected';
+			});
+
+		// Connection-code onboarding (the product's /setup)
+		let registered = Boolean(snapshotApp);
+		if (snapshotApp) {
+			skip(
+				'connection.setup',
+				'/setup connects with a one-time code and the proof of possession verifies',
+				`reusing ${snapshotApp.appId} from the ss dev state`,
+			);
+		} else {
+			registered = await check(
+				'connection.setup',
+				'/setup connects with a one-time code and the proof of possession verifies',
+				async () => {
+					const result = await portal.connect({ url: base });
+					return `appId ${result.appId}, key ${result.kid}, jkt ${result.thumbprint.slice(0, 12)}…`;
+				},
+			);
+			await check('connection.setup-closed', 'once connected, /setup refuses another code', async () => {
+				const { code } = portal.connectionCode();
+				const result = await call('/setup', { method: 'POST', body: { code, baseUrl: base } });
+				expect(result.status === 404, `status ${result.status}`);
+				return '404 after connection';
+			});
+		}
+		if (!registered) {
+			skip('live', 'remaining live checks', 'the product is not connected to this emulator');
+			return finish(slug, 'service', portalUrl);
+		}
 		await check('wellknown.events-unsigned', 'unsigned event deliveries are refused', async () => {
 			const result = await call(eventsPath, { method: 'POST', body: { id: 'evt_unsigned000001' } });
 			expect(result.status === 401 || result.status === 400 || result.status === 403, `status ${result.status}`);
 			return `status ${result.status}`;
 		});
-
-		// Registration handshake
-		const snapshotApp = portal.apps().find((app) => app.baseUrl.replace(/\/+$/, '') === base);
-		let registered = Boolean(snapshotApp);
-		if (token) {
-			registered = await check(
-				'registration.handshake',
-				'handshake completes and the proof of possession verifies',
-				async () => {
-					const result = await portal.register({ url: base, token });
-					return `appId ${result.appId}, key ${result.kid}, jkt ${result.thumbprint.slice(0, 12)}…`;
-				},
-			);
-			await check('registration.single-use', 'the registration token cannot be used twice', async () => {
-				try {
-					await portal.register({ url: base, token });
-				} catch (error) {
-					const status = /** @type {{ status?: number }} */ (error).status;
-					expect(status === 401, `second use answered ${String(status)}`);
-					return 'second use → 401';
-				}
-				throw new Error('second registration succeeded');
-			});
-		} else if (snapshotApp) {
-			skip(
-				'registration.handshake',
-				'handshake completes and the proof of possession verifies',
-				`reusing ${snapshotApp.appId} from the ss dev state`,
-			);
-		} else {
-			skip(
-				'registration.handshake',
-				'handshake completes and the proof of possession verifies',
-				'no --token (or REGISTRATION_TOKEN) and no ss dev state',
-			);
-		}
-		if (!registered) {
-			skip('live', 'remaining live checks', 'the product is not registered with this emulator');
-			return finish(slug, 'service', portalUrl);
-		}
 		const app = portal.apps().find((candidate) => candidate.baseUrl.replace(/\/+$/, '') === base) ?? portal.apps()[0];
-		if (!app) throw new Error('no registered app');
+		if (!app) throw new Error('no connected app');
 
 		// Launches
 		const kinds = /** @type {const} */ (['merchant', 'demo', 'admin', 'impersonate', 'partner', 'developer']);

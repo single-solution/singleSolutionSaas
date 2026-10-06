@@ -45,17 +45,15 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect(await replay.seen('a', clock.now() + 1000)).toBe(false);
 	});
 
-	it('burned tokens burn once and keep annotations', async () => {
-		const { burnedTokens } = factory(Date.now);
-		expect(await burnedTokens.isBurned('h')).toBe(false);
-		expect(await burnedTokens.get('h')).toBeNull();
-		expect(await burnedTokens.burn('h')).toBe(true);
-		expect(await burnedTokens.burn('h')).toBe(false);
-		expect(await burnedTokens.isBurned('h')).toBe(true);
-		await burnedTokens.annotate('h', { appId: 'app_1' });
-		expect(await burnedTokens.get('h')).toMatchObject({ appId: 'app_1' });
-		await burnedTokens.annotate('other', { appId: 'app_2' });
-		expect(await burnedTokens.get('other')).toMatchObject({ appId: 'app_2' });
+	it('settings insert once, read back and delete', async () => {
+		const { settings } = factory(Date.now);
+		expect(await settings.get('connection')).toBeNull();
+		expect(await settings.insert('connection', { appId: 'app_1', nested: { a: 1 } })).toBe(true);
+		expect(await settings.insert('connection', { appId: 'app_2' })).toBe(false);
+		expect(await settings.get('connection')).toEqual({ appId: 'app_1', nested: { a: 1 } });
+		await settings.delete('connection');
+		expect(await settings.get('connection')).toBeNull();
+		expect(await settings.insert('connection', { appId: 'app_3' })).toBe(true);
 	});
 
 	it('entitlements keep the newest version', async () => {
@@ -246,7 +244,7 @@ describe('mongo stores specifics', () => {
 		fail = false;
 		await stores.ensureIndexes();
 		await expect(stores.replay.seen('x', 1)).rejects.toThrow('other');
-		await expect(stores.burnedTokens.burn('x')).rejects.toThrow('other');
+		await expect(stores.settings.insert('x', {})).rejects.toThrow('other');
 		await expect(stores.entitlements.put('x', { token: 't', version: 1, fetchedAt: 1 })).rejects.toThrow('other');
 		await expect(stores.usageQueue.enqueue(record('x'))).rejects.toThrow('other');
 		await expect(stores.idempotency.begin('x', 'f', 1)).rejects.toThrow('other');

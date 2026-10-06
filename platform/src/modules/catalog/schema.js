@@ -9,6 +9,7 @@ export const APPS = 'catalog_apps';
 export const VERSIONS = 'catalog_versions';
 export const KEYS = 'catalog_app_keys';
 export const LAUNCHES = 'catalog_launches';
+export const CODES = 'catalog_connection_codes';
 
 export const collections = Object.freeze([
 	defineCollection({
@@ -40,6 +41,15 @@ export const collections = Object.freeze([
 		name: LAUNCHES,
 		description: 'Issued launch ids (`_id` = jti) for online single-use consumption by the product; expire with the launch.',
 		indexes: [{ keys: { appId: 1, _id: 1 } }],
+		ttl: { field: 'expireAt', afterSeconds: 0 },
+	}),
+	defineCollection({
+		module: 'catalog',
+		name: CODES,
+		description:
+			'One-time connection codes (`_id` = code id): SHA-256 of the token only, the app it adds or reconnects, expiry, ' +
+			'use or revocation; kept 30 days after expiry for the admin list.',
+		indexes: [{ keys: { tokenHash: 1 }, unique: true }, { keys: { createdAt: -1 } }],
 		ttl: { field: 'expireAt', afterSeconds: 0 },
 	}),
 ]);

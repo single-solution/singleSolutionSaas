@@ -342,21 +342,6 @@ describe('bundle descriptors', () => {
 describe('route inputs', () => {
 	/** @param {any} r */
 	const errs = (r) => (r.ok ? [] : r.errors.map((/** @type {any} */ e) => e.path));
-	const TOKEN = 't'.repeat(32);
-
-	it('registration', () => {
-		expect(input.parseRegistration({ baseUrl: ' https://x.example.com ', token: TOKEN })).toEqual({
-			ok: true,
-			value: { baseUrl: 'https://x.example.com', token: TOKEN, stagingBaseUrl: null },
-		});
-		expect(errs(input.parseRegistration({ token: 'short', stagingBaseUrl: 5, x: 1 }))).toEqual([
-			'/x',
-			'/baseUrl',
-			'/token',
-			'/stagingBaseUrl',
-		]);
-		expect(errs(input.parseRegistration('x'))).toContain('');
-	});
 
 	it('environments', () => {
 		expect(input.parseEnvironments({ production: 'https://a.example.com', staging: null })).toEqual({

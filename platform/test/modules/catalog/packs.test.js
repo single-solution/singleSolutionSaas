@@ -169,11 +169,10 @@ describe('element packs', () => {
 		const p = await startFakeProduct({
 			manifest: renamedService('notice-bar'),
 			portalUrl: PORTAL_URL,
-			fetchJwks: t.jwks,
 			now: t.clock.now,
 		});
 		products.push(p);
-		expect((await t.staff('POST', '/v1/admin/apps/register', { body: { baseUrl: p.url, token: p.token } })).status).toBe(201);
+		expect((await t.register(p)).status).toBe(201);
 		const dev = await generateSigningKey({ kid: 'dev-1' });
 		problemOf(
 			await t.staff('POST', '/v1/admin/packs', {
@@ -205,11 +204,10 @@ describe('catalog reads', () => {
 			const p = await startFakeProduct({
 				manifest: renamedService(slug),
 				portalUrl: PORTAL_URL,
-				fetchJwks: t.jwks,
-				now: t.clock.now,
+					now: t.clock.now,
 			});
 			products.push(p);
-			const res = await t.staff('POST', '/v1/admin/apps/register', { body: { baseUrl: p.url, token: p.token } });
+			const res = await t.register(p);
 			ids.push(res.json.appId);
 		}
 		await t.staff('POST', `/v1/admin/apps/${ids[0]}/lifecycle`, { body: { action: 'activate' } });
@@ -268,11 +266,10 @@ describe('service UI bundles (F.16)', () => {
 		const p = await startFakeProduct({
 			manifest: serviceManifest(),
 			portalUrl: PORTAL_URL,
-			fetchJwks: t.jwks,
 			now: t.clock.now,
 		});
 		products.push(p);
-		const registered = await t.staff('POST', '/v1/admin/apps/register', { body: { baseUrl: p.url, token: p.token } });
+		const registered = await t.register(p);
 		expect(registered.status).toBe(201);
 		const appId = /** @type {string} */ (registered.json.appId);
 		const slug = serviceManifest().product.slug;

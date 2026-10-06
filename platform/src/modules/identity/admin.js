@@ -298,6 +298,9 @@ export const createAdmin = (deps, hooks) => {
 			await audit(actor, 'staff.mfa_reset', { type: 'staff', id: staffId }, { reason, meta });
 		},
 
+		/** @returns {Promise<boolean>} true once any staff user exists (first-run setup is then closed) */
+		hasStaff: async () => (await repo.staff.countDocuments({})) > 0,
+
 		/**
 		 * One-time bootstrap (CLI): create the first superadmin and return a password-setup link. Refused once any
 		 * staff user exists. Never sets a password.

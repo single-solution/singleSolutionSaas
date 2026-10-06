@@ -53,7 +53,7 @@ export const stableId = (prefix, text) => `${prefix}_${base32(createHash('sha256
 export const randomId = (prefix) => `${prefix}_${base32(nodeRandomBytes(17))}`;
 
 /**
- * The token secret: `ALERTS_TOKEN_SECRET`, else derived (HKDF) from the product signing key so a deployment works
+ * The token secret: the generated secret (`product.secret`, kept in the control database), else derived (HKDF) from the product signing key so a deployment works
  * without an extra variable (rotating the key then invalidates outstanding links).
  * @param {{ secret?: string | undefined, signingKey?: string | Record<string, unknown> | null }} input
  * @returns {Buffer}
@@ -62,7 +62,7 @@ export const tokenSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('ALERTS_TOKEN_SECRET (≥ 32 chars) or SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-alerts', 'link-token/v1', 32));
 };
 

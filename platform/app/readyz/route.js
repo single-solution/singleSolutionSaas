@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 
 export const GET = async () => {
 	try {
-		return await getPortal().readyz();
+		return await (await getPortal()).readyz();
 	} catch {
 		return new Response(JSON.stringify({ status: 'unavailable', checks: { config: 'invalid' } }), {
 			status: 503,

@@ -22,16 +22,16 @@ A service product needs at least one element, so this project ships the placehol
 | `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)                          |
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                         |
 | `schemas/`      | feature schemas and product event data schemas                                                                        |
-| `app/`          | Next.js App Router: `.well-known/ss-register`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
+| `app/`          | Next.js App Router: `/setup`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
 | `tests/`        | unit tests (Vitest)                                                                                                   |
 
 ## Develop
 
 ```sh
-ss dev env > .env.local        # signing key, registration token hash, portal URL (keep the printed token)
+ss dev env > .env.local        # only DATABASE_URI (empty = in-memory control store)
 ss dev                         # local Portal emulator on http://localhost:4400 (reads ss.dev.json)
 pnpm dev                       # product on http://localhost:3000 (Next.js), or: node serve.js 3000 (plain node:http)
-ss dev register --url http://localhost:3000 --token <token>
+ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at http://localhost:3000/setup
 ss dev keys                    # pk_test_/sk_test_ website keys
 ss dev launch --kind merchant  # prints a launch URL (GET /sso?launch=… → ss_session cookie → /dashboard)
 ```
@@ -41,5 +41,5 @@ ss dev launch --kind merchant  # prints a launch URL (GET /sso?launch=… → ss
 ```sh
 pnpm check                     # format, lint, typecheck, unit tests with coverage (tooling from @ss/config)
 ss app validate                # manifest, anatomy, import direction, DOM-free cores, tokens, strings
-ss certify . --url http://localhost:3000 --token <fresh token>   # certification suite (restart the product first)
+ss certify . --url http://localhost:3000   # certification suite (an unconnected product: restart it first)
 ```

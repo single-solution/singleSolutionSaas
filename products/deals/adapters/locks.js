@@ -3,7 +3,7 @@
  *
  * A lock token is `pl1.<base64url(JSON claims)>.<base64url(HMAC-SHA-256)>` (claims: core/locks.js). It is bound to
  * one website (and, when configured, one customer), compared in constant time and verified by any instance without a
- * database. The secret is `DEALS_LOCK_SECRET` (≥ 32 chars), else derived with HKDF from the product signing key, so a
+ * database. The secret is the generated secret (`product.secret`, kept in the control database) (≥ 32 chars), else derived with HKDF from the product signing key, so a
  * deployment works without an extra variable (rotating the key then invalidates outstanding locks, which live minutes).
  */
 import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
@@ -16,7 +16,7 @@ export const MAX_TOKEN_LENGTH = 2048;
 export const MIN_SECRET_LENGTH = 32;
 
 /**
- * The lock secret: `DEALS_LOCK_SECRET`, else HKDF of the product signing key.
+ * The lock secret: the generated secret (`product.secret`, kept in the control database), else HKDF of the product signing key.
  * @param {{ secret?: string | undefined, signingKey?: string | Record<string, unknown> | null }} input
  * @returns {Buffer}
  */
@@ -24,7 +24,7 @@ export const lockSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('DEALS_LOCK_SECRET (≥ 32 chars) or SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-deals', 'price-lock/v1', 32));
 };
 

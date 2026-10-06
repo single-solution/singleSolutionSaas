@@ -16,6 +16,7 @@ export const COLLECTIONS = Object.freeze({
 	operationRuns: 'platform_operation_runs',
 	locks: 'platform_locks',
 	migrations: 'platform_migrations',
+	system: 'platform_system',
 });
 
 const DAY = 24 * 60 * 60;
@@ -109,6 +110,13 @@ export const INFRA_COLLECTIONS = Object.freeze([
 		name: COLLECTIONS.migrations,
 		description: 'Applied migrations (append-only).',
 		appendOnly: true,
+		timestamps: false,
+	}),
+	defineCollection({
+		module: 'platform',
+		name: COLLECTIONS.system,
+		description:
+			"The Portal's own state (infra/system.js): generated secrets, the settings recorded at /setup or by admins (mail password sealed), the applied schema fingerprint.",
 		timestamps: false,
 	}),
 ]);

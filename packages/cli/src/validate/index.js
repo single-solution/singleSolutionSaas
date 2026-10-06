@@ -48,7 +48,7 @@ export const ANATOMY = Object.freeze({
 		'jobs/',
 		'.env.example',
 		'vercel.json',
-		'app/.well-known/ss-register/route.js',
+		'app/setup/route.js',
 		'app/.well-known/ss-events/route.js',
 		'app/.well-known/ss-app.json/route.js',
 		'app/api/v1/[...route]/route.js',

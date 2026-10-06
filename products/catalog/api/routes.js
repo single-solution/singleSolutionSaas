@@ -73,7 +73,7 @@ export const createCatalog = (app) => {
 	const taxonomy = createTaxonomyService(deps);
 	const media = createMediaService(deps);
 	const transfer = createTransferService(deps, { items, variants, media });
-	const feeds = createFeedsService(deps, { items, baseUrl: () => product.manifest.endpoints.base });
+	const feeds = createFeedsService(deps, { items, baseUrl: () => product.baseUrl() });
 	/**
 	 * @param {string} websiteId
 	 * @param {any} doc

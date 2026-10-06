@@ -78,7 +78,7 @@ gated by the element, optional `Idempotency-Key`, answers the next view model wi
 ## Run
 
 ```bash
-pnpm exec ss dev env > .env.local   # once
+pnpm exec ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 pnpm portal                          # the local Portal emulator (port 4400)
 pnpm dev                             # the product (port 3000)
 ```
@@ -91,8 +91,8 @@ pnpm --filter @ss/product-grades check
 pnpm --filter @ss/product-grades validate
 ```
 
-Environment: the standard app-kit variables in `.env.example` (`PORTAL_URL`, `APP_ID`, `SIGNING_KEY`,
-`REGISTRATION_TOKEN_HASH`, `DATABASE_URI`, `OUTBOUND_DEV_ALLOW_HOSTS`). There are no crons and no
+Environment: only `DATABASE_URI` (`.env.example`); the Portal connection, the key and the secrets live in that
+database. There are no crons and no
 background work (see [jobs/README.md](jobs/README.md)).
 
 ## Dashboard

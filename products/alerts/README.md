@@ -8,7 +8,7 @@ per language, frequency caps, quiet hours in the website's time zone, batching a
 lives in the merchant's own MongoDB** (connected in the Portal); this deployment keeps only caches, queues and website
 ids.
 
-Built on `@ss/app-kit` (registration, SSO launches, website keys, entitlements with offline grace, events, usage,
+Built on `@ss/app-kit` (connection-code setup, SSO launches, website keys, entitlements with offline grace, events, usage,
 client-owned data, connectors, bring-your-own identity) and `@ss/rules` (custom-type conditions). Business rules live
 only in `core/` (pure) and `headless/`. Ported from ibrahimMobiles (`packages/shared/src/stockAlerts.ts`,
 `packages/db/src/stockAlerts.ts`, the WhatsApp unsubscribe page): the before/after decision of `shouldSendStockAlert`,
@@ -105,17 +105,17 @@ the real type rules; impersonation shows the audit banner.
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # signing key, token hash, portal URL (keep the printed registration token)
+ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev register --url http://localhost:3000 --token <token>
+ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at /setup
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000 --token <fresh token>
+ss certify . --url http://localhost:3000
 pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
 ```
 
 `tests/certify.test.js` runs the full `ss certify` suite (every check must pass). The system test `e2e/tests/alerts-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
-real Portal in process: staff bootstrap → catalog handshake → activation → merchant signup → website → credits →
+real Portal in process: staff bootstrap → connection code (/setup) → activation → merchant signup → website → credits →
 starter subscription → database **and messaging** connectors (a fake HTTP provider on 127.0.0.1, dev allowlist) → a
 shopper subscribes with the `pk_` key → `inventory.changed@1` (0 → 5) through the Event Hub, duplicated → exactly one
 message at the provider → unsubscribe (GET changes nothing, POST stops) → usage once → hourly settlement (850 base +
@@ -123,19 +123,16 @@ message at the provider → unsubscribe (GET changes nothing, POST stops) → us
 
 ## Deploy
 
-1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets
-   the workspace root automatically.
-2. Environment variables (Production):
-   - `PORTAL_URL` — the Portal URL this product trusts (pinned).
-   - `SIGNING_KEY` — `kid:seed` (Ed25519 seed, base64url; `ss dev env` prints one); `REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
-     registration token issued by Portal staff; `APP_ID` — after registration (optional; recorded by the handshake).
-   - `DATABASE_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required.
-   - No cron and no cron secret: the product schedules nothing (see "No timers" above).
-   - `ALERTS_TOKEN_SECRET` — optional (≥ 32 chars) secret of unsubscribe / confirm links and contact hashes; derived
-     from the signing key when empty (rotating the key then invalidates outstanding links and re-keys contact hashes).
-3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register`), review and activate. `endpoints.base`
-   in `manifest.json` must be the deployment's https origin (it is also the origin of the hosted unsubscribe pages).
-4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
+3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
+   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
+   and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
+
+The address recorded at `/setup` is also the origin of the hosted unsubscribe pages.
 
 ## Platform gaps (resolved in the kit)
 

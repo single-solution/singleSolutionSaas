@@ -7,7 +7,7 @@ with rules, show them with drop-in or headless widgets, and publish Product **JS
 MongoDB** and photos in the merchant's own bucket (both connected in the Portal); this deployment keeps only caches,
 queues and website ids.
 
-Built on `@ss/app-kit` (registration, SSO launches, website keys, entitlements with offline grace, bring-your-own
+Built on `@ss/app-kit` (connection-code setup, SSO launches, website keys, entitlements with offline grace, bring-your-own
 identity, events, usage, client-owned data, connectors) and `@ss/rules` (moderation conditions). Business rules live only
 in `core/` (pure) and `headless/`. Ported from ibrahimMobiles: the review model and its one-review-per-order-item
 guard, text sanitation, public reviewer names, moderation with replies, the exact approved-review rollup and the
@@ -105,18 +105,18 @@ also get **Send due requests now** (`POST /v1/dashboard/request-flow:run`) and *
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # signing key, token hash, portal URL (keep the printed registration token)
+ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev register --url http://localhost:3000 --token <token>
+ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at /setup
 ss dev emit order.completed --website web_devwebsite01
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000 --token <fresh token>   # restart the product first (fresh token)
+ss certify . --url http://localhost:3000   # restart the product first (fresh token)
 pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
 ```
 
 The suite includes `tests/certify.test.js` (the full `ss certify` suite, every check must pass). The system test
-`e2e/tests/reviews-portal.test.js` (monorepo workspace `@ss/e2e`) runs the product against the real Portal in process (staff bootstrap → catalog handshake → activation → merchant
+`e2e/tests/reviews-portal.test.js` (monorepo workspace `@ss/e2e`) runs the product against the real Portal in process (staff bootstrap → connection code (/setup) → activation → merchant
 signup → website + its identity issuer → credits → starter subscription → database connector → `order.completed@1`
 through the Event Hub → review request in the merchant DB → the verified customer reviews with the `pk_` key and their
 own login token → auto-approved by the default rule → summary and JSON-LD reflect it → `review` usage → hourly
@@ -124,18 +124,14 @@ settlement).
 
 ## Deploy
 
-1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
-   workspace root automatically.
-2. Environment variables (Production):
-   - `PORTAL_URL` — the Portal URL this product trusts (pinned).
-   - `SIGNING_KEY` — `kid:seed` (Ed25519 seed, base64url; `ss dev env` prints one); `REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
-     registration token issued by Portal staff; `APP_ID` — after registration (optional; recorded by the handshake).
-   - `DATABASE_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required in production.
-   - No cron and no cron secret: the product schedules nothing (see "No scheduled work" below).
-   - `REVIEWS_LINK_SECRET` — optional (≥ 32 chars, else derived from the signing key).
-3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
-   review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
-4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
+3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
+   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
+   and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
 
 ## Notes and limits
 

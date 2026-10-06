@@ -1,7 +1,7 @@
 /** Adapters: link tokens, ids, the platform wiring (env, control DB, retention) and settings. */
 import { randomBytes as nodeRandomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { generateSigningKey } from '@ss/protocol';
 import { createPlatform, loadStrings, retentionDays } from '../adapters/platform.js';
 import { createLinkTokens, linkSecret, randomBytes, stableId } from '../adapters/tokens.js';
 import { createRepositories } from '../adapters/db.js';
@@ -43,7 +43,7 @@ describe('tokens', () => {
 		expect(derived).toHaveLength(32);
 		expect(linkSecret({ secret: 'short', signingKey: privateJwk }).equals(derived)).toBe(true);
 		expect(linkSecret({ secret: 'c'.repeat(40) }).toString()).toBe('c'.repeat(40));
-		expect(() => linkSecret({ signingKey: null })).toThrow(/REVIEWS_LINK_SECRET/);
+		expect(() => linkSecret({ signingKey: null })).toThrow(/generated secret/);
 		expect(stableId('a')).toMatch(/^[0-9a-hjkmnp-tv-z]{26}$/);
 		expect(stableId('a')).toBe(stableId('a'));
 		expect(randomBytes(4)).toHaveLength(4);
@@ -52,20 +52,20 @@ describe('tokens', () => {
 
 describe('platform', () => {
 	it('refuses to start without the required environment', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
+		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		const unconnected = await createPlatform({ env: {}, root: ROOT });
+		expect(unconnected.product.connected()).toBe(false);
+		await unconnected.close?.();
 	});
 
 	it('uses the product control database when configured and reads retention from the manifest', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k2' });
 		const app = await createPlatform({
 			env: {
-				PORTAL_URL: 'https://portal.test',
-				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
-				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_reviews_adapter_0123456789'),
 				DATABASE_URI: mongoUri(`reviews_ctrl_${nodeRandomBytes(4).toString('hex')}`),
 				OUTBOUND_DEV_ALLOW_HOSTS: 'localhost',
-				REVIEWS_LINK_SECRET: 'l'.repeat(40),
 			},
+			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}` },
 			root: ROOT,
 		});
 		expect(app.retention).toEqual({ requests: 730, orders: 730, photos: 30 });
