@@ -57,7 +57,8 @@ export const feedSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
+	if (!material || material.length === 0)
+		throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-catalog', 'feed-token/v1', 32));
 };
 
@@ -116,7 +117,8 @@ export const exportSecret = ({ secret, signingKey }) => {
 		return Buffer.from(hkdfSync('sha256', Buffer.from(secret, 'utf8'), 'ss-catalog', 'export-link/v1', 32));
 	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
+	if (!material || material.length === 0)
+		throw new Error('a generated secret (≥ 32 chars, product.secret) or the signing key is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-catalog', 'export-link/v1', 32));
 };
 

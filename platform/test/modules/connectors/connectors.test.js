@@ -4,7 +4,7 @@ import { closeMongoClients } from '../../../src/infra/db.js';
 import { runInRequestScope } from '../../../src/infra/request-scope.js';
 import { createPortal } from '../../../src/portal.js';
 import { createConnectorsModule } from '../../../src/modules/connectors/index.js';
-import { MERCHANT, MERCHANT_2, PORTAL_URL, createClock, createTestLogger, startMongo, testConfig, b64 } from '../../helpers.js';
+import { MERCHANT, MERCHANT_2, PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../../helpers.js';
 import { fakeModules } from './fakes/modules.js';
 import { startFakeApi, startFakeS3 } from './fakes/servers.js';
 

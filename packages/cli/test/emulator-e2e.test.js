@@ -9,7 +9,6 @@ import { loadManifest } from '../src/manifest.js';
 import { createFakeProduct } from './helpers/fake-product.js';
 import { freePort, removeDir, tempDir } from './helpers/util.js';
 
-
 /** @type {string} */
 let root;
 /** @type {Awaited<ReturnType<typeof createPortal>>} */

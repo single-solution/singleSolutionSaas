@@ -4,7 +4,7 @@
  * ports `sessionActor` (live roles; deactivated users and removed members → null) and `websiteKeyRevoked`.
  *
  * Website keys are signed with the **dedicated website-key signer** `ctx.keys.websiteKeySigner`
- * (`WEBSITE_SIGNING_KEYS`), whose public keys the infra publishes and the `websiteKey` authenticator verifies
+ * (generated on first start), whose public keys the infra publishes and the `websiteKey` authenticator verifies
  * with. The module option `websiteKeySigningKeys` overrides it (tests and embedded setups).
  * @module
  */

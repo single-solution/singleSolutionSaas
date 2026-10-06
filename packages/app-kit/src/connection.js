@@ -191,7 +191,9 @@ export const createConnection = ({
 			const detail = body && typeof body === 'object' && typeof (/** @type {any} */ (body).detail) === 'string';
 			throw kitError(
 				'portal_error',
-				detail ? `the Portal refused the connection: ${/** @type {any} */ (body).detail}` : 'the Portal refused the connection',
+				detail
+					? `the Portal refused the connection: ${/** @type {any} */ (body).detail}`
+					: 'the Portal refused the connection',
 				{ status: response.status },
 			);
 		}
@@ -248,4 +250,6 @@ export const createConnection = ({
  * @returns {M}
  */
 export const withBase = (manifest, baseUrl) =>
-	baseUrl?.startsWith('https://') && manifest.endpoints ? { ...manifest, endpoints: { ...manifest.endpoints, base: baseUrl } } : manifest;
+	baseUrl?.startsWith('https://') && manifest.endpoints
+		? { ...manifest, endpoints: { ...manifest.endpoints, base: baseUrl } }
+		: manifest;

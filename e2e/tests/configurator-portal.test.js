@@ -41,7 +41,7 @@ import {
 	totpCode,
 } from '@ss/platform/testing';
 import { ROOT, loadManifest, startServer } from '@ss/product-configurator/serve';
-import { connectProduct, createClock, mongoUri, postSetup } from './helpers.js';
+import { connectProduct, createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };

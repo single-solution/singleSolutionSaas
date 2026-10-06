@@ -132,7 +132,10 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	return {
 		product,
 		tokens: createFeedTokens({ secret: feedSecret({ secret: product.secret('feed-tokens').toString('base64url') }) }),
-		exportLinks: createExportLinks({ secret: exportSecret({ secret: product.secret('feed-tokens').toString('base64url') }), now }),
+		exportLinks: createExportLinks({
+			secret: exportSecret({ secret: product.secret('feed-tokens').toString('base64url') }),
+			now,
+		}),
 		now,
 		stableId,
 		newId,

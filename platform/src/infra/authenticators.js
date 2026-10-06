@@ -6,7 +6,7 @@
  * | `staff`      | `__Host-ss_staff` session cookie, or `Authorization: Bearer sst_…` (staff API token, F.18) | session store; MFA required unless the route says `mfa: false` |
  * | `merchant`   | `__Host-ss_merchant` session cookie          | session store                                            |
  * | `websiteKey` | `Authorization: Bearer pk_…/sk_…`            | `verifyWebsiteKey` (website-key JWKS) + revocation port; `originAllowed` for pk_ |
- * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = PUBLIC_URL)   |
+ * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = Portal URL) |
  *
  * Ports (provided by modules, see `modules/README.md`): `sessionActor(session) → Actor | null` (default: roles stored
  * in the session), `appKeys(appId) → KeyResolver | null` (default: none — every assertion is refused) and

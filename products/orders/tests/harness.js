@@ -111,7 +111,15 @@ export const createHarness = async ({
 	const app = await createPlatform({
 		env: {},
 		root: ROOT,
-		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`, fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: provider.send },
+		overrides: {
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+			fetch: portal.fetch,
+			now: clock.now,
+			logger: noopLogger,
+			outboundSend: provider.send,
+		},
 	});
 	const orders = wireEvents(createOrders(app));
 	const handle = createRequestHandler(orders.product, buildRoutes(orders), {

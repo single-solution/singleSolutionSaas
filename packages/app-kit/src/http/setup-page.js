@@ -34,7 +34,8 @@ const page = (title, body, status = 200) =>
 			headers: {
 				'content-type': 'text/html; charset=utf-8',
 				'cache-control': 'no-store',
-				'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+				'content-security-policy':
+					"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
 				'x-frame-options': 'DENY',
 				'referrer-policy': 'no-referrer',
 			},
@@ -77,5 +78,4 @@ export const setupDone = ({ productName, appId, portalUrl }) =>
 	);
 
 /** The page once connected: setup is closed. */
-export const setupClosed = () =>
-	page('Not found', '<h1>Not found</h1><p>This product is already connected.</p>', 404);
+export const setupClosed = () => page('Not found', '<h1>Not found</h1><p>This product is already connected.</p>', 404);

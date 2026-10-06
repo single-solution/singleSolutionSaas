@@ -129,7 +129,15 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, webs
 			...env,
 		},
 		root: ROOT,
-		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`, fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: providers.send },
+		overrides: {
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+			fetch: portal.fetch,
+			now: clock.now,
+			logger: noopLogger,
+			outboundSend: providers.send,
+		},
 	});
 	const aftersales = wireEvents(createAftersales(app));
 	const handle = createRequestHandler(aftersales.product, buildRoutes(aftersales));

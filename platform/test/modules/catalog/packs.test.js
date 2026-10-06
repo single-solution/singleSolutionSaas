@@ -204,7 +204,7 @@ describe('catalog reads', () => {
 			const p = await startFakeProduct({
 				manifest: renamedService(slug),
 				portalUrl: PORTAL_URL,
-					now: t.clock.now,
+				now: t.clock.now,
 			});
 			products.push(p);
 			const res = await t.register(p);

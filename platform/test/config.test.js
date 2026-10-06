@@ -125,9 +125,9 @@ describe('loadEnv: only the database, the storage and tuning', () => {
 		expect(env.sessions.merchant).toEqual({ idleMs: 3_600_000, absoluteMs: 7_200_000 });
 		expect(env.outbound.allowHosts).toEqual(['localhost', '127.0.0.1', '[::1]']);
 		expect(loadEnv(await testEnv({ MONGODB_DB: 'explicit' })).mongo.dbName).toBe('explicit');
-		expect(loadEnv({ ...(await testEnv()), ...PROD_STORAGE, OUTBOUND_DEV_ALLOW_HOSTS: 'localhost' }).outbound.allowHosts).toEqual(
-			[],
-		);
+		expect(
+			loadEnv({ ...(await testEnv()), ...PROD_STORAGE, OUTBOUND_DEV_ALLOW_HOSTS: 'localhost' }).outbound.allowHosts,
+		).toEqual([]);
 	});
 
 	it('documents every variable, and nothing but the database and the storage is required', () => {
@@ -140,7 +140,15 @@ describe('loadEnv: only the database, the storage and tuning', () => {
 			'STORAGE_ACCESS_KEY_ID',
 			'STORAGE_SECRET_ACCESS_KEY',
 		]);
-		for (const gone of ['PUBLIC_URL', 'SIGNING_KEYS', 'ENCRYPTION_KEYS', 'SESSION_SECRET', 'KEY_PEPPER', 'SMTP_URL', 'PREVIEW_URL'])
+		for (const gone of [
+			'PUBLIC_URL',
+			'SIGNING_KEYS',
+			'ENCRYPTION_KEYS',
+			'SESSION_SECRET',
+			'KEY_PEPPER',
+			'SMTP_URL',
+			'PREVIEW_URL',
+		])
 			expect(names).not.toContain(gone);
 	});
 });
@@ -197,7 +205,13 @@ describe('buildConfig: environment + system state', () => {
 		for (const bad of ['http://localhost:4000', 'https://x.test/path', 'nope', 'https://u:p@x.test'])
 			expect(checkPortalUrl(bad, { production: true }).ok).toBe(false);
 		expect(checkPreviewUrl('https://preview.test', { production: true, portalUrl: 'https://portal.test' }).ok).toBe(true);
-		for (const bad of ['https://preview.test/p', 'ftp://preview.test', 'https://u:p@preview.test', 'not a url', 'https://portal.test'])
+		for (const bad of [
+			'https://preview.test/p',
+			'ftp://preview.test',
+			'https://u:p@preview.test',
+			'not a url',
+			'https://portal.test',
+		])
 			expect(checkPreviewUrl(bad, { production: true, portalUrl: 'https://portal.test' }).ok).toBe(false);
 	});
 
@@ -237,7 +251,9 @@ describe('system store (secrets generated on first start, settings recorded late
 		expect(state.portalUrl).toBe('https://portal.example.com');
 		expect(state.mail).toMatchObject({ host: 'smtp.example.com', pass: 's3cret', from: 'ops@example.com' });
 		// keep the stored password when none is given; remove it with null
-		await store.update({ mail: { host: 'smtp2.example.com', port: 587, secure: false, user: 'mailer', from: 'ops@example.com' } });
+		await store.update({
+			mail: { host: 'smtp2.example.com', port: 587, secure: false, user: 'mailer', from: 'ops@example.com' },
+		});
 		expect((await store.load()).state.mail?.pass).toBe('s3cret');
 		await store.update({
 			mail: { host: 'smtp2.example.com', port: 587, secure: false, user: null, pass: null, from: 'ops@example.com' },

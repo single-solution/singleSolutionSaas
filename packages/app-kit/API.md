@@ -88,11 +88,9 @@ import { createFakePortal, createTestIdentityIssuer, entitlementPayload } from '
 ```js
 createProduct({
   manifest,                 // validated SSPS manifest (service product, features inline) — throws AppKitError invalid_manifest
-  portalUrl,                // pinned Portal URL (PORTAL_URL)
-  appId,                    // assigned at registration; null → the appId recorded by the registration handshake is used
-  signingKey,               // product private key: a JWK object, or `kid:seed` (SIGNING_KEY)
-  registrationTokenHash,    // sha256 hex of the one-time registration token (REGISTRATION_TOKEN_HASH); absent → register always 401
-  stores,                   // Partial<Stores>; default in-memory (dev only); production: createMongoStores({ db })
+  stores,                   // Partial<Stores>; default in-memory (dev only); production: createMongoStores({ db }) — the
+                            // product's control database also keeps the Portal connection, its key and generated secrets
+  portalUrl, appId, signingKey,   // optional FIXED connection (tests, tools); omit them: the connection is made at /setup
   fetch, now, randomBytes, logger,
   strings,                  // { [lang]: { key: text } } or async (lang) => catalog | null — served at GET /v1/strings
   defaultLang,              // 'en'
@@ -107,9 +105,7 @@ createProduct({
   auditSink,                // async (entry) => void; default: merchant DB collection `audit`
   problemBaseUri,           // RFC 9457 type base, default `<endpoints.base>/problems/`
   problemCodes,             // product-specific { code: { status, title } }
-  registrationAudience,     // string | string[]: extra accepted registration `aud` values (see below)
   portalIssuer,             // launch `iss`, default the canonical Portal URL
-  onRegistered,             // (registration) => void
   sessionCookie,            // 'ss_session'
   sessionTtlMs,             // 8 h
   onlineLaunchConsume,      // also burn launches at POST /v1/product/launch/consume
@@ -119,7 +115,11 @@ createProduct({
   nodeEnv,                  // default process.env.NODE_ENV
 }) → product = {
   manifest,
-  registration: { handle({ headers, body }) → { status, body } },     // POST /.well-known/ss-register
+  ready() → Promise,                                                   // load the generated secrets and the connection (cached; the handler awaits it)
+  connected() → boolean,                                               // false until /setup connected it (routes then answer 503)
+  secret(label) → Buffer,                                              // a secret generated once and kept in the control DB, derived per label
+  baseUrl() → string,                                                  // this deployment's address (recorded at /setup)
+  setup: { connect({ code, baseUrl }), disconnect(), fixed() },        // connection-code onboarding (GET/POST /setup, POST /v1/ss/disconnect)
   events: {
     handle({ headers, rawBody }) → { status, body },                   // POST /.well-known/ss-events (event signatures)
     on(type, handler) → unsubscribe,                                   // type: 'name@v' | 'name' | '*'; handler(event, { source, website? })
@@ -235,11 +235,17 @@ createProduct({
 }
 ```
 
-**Registration audience:** a registration request without a signed `aud` is rejected (generic 401, logged reason
-`audience_missing`). The `aud` must equal
-`manifest.endpoints.base` (trailing-slash and case-insensitive host variants included), the appId, or a
-`registrationAudience` value. The appId is the known one, or the request's `appId` before registration. All other
-handshake rules are those of `@ss/protocol` `createRegistrationHandler`.
+**Connection (`/setup`).** A product is configured with its control database only. Until it is connected, every route
+except `/setup`, `/healthz`, `/readyz` and `/.well-known/ss-app.json` answers 503. `GET /setup` is a plain HTML form
+(connection code + this product's address, prefilled from the request and editable); `POST /setup` (form or JSON
+`{ code, baseUrl }`) generates the product's Ed25519 key, sends `@ss/protocol` `createConnectRequest` to the Portal named
+in the code (one-time token, proof of possession, manifest hash, base URL), verifies the signed answer
+(`verifyConnectResponse`) and stores `{ portalUrl, appId, baseUrl, privateJwk }` (insert-if-absent) plus the Portal
+JWKS. From then on `/setup` answers 404; the served manifest carries the recorded https address as `endpoints.base`.
+A Portal-signed `POST /v1/ss/disconnect` (Admin → Apps → Reconnect) clears the connection so `/setup` opens again;
+without the old Portal, delete the `setting:connection` document of the `ss_kit_state` collection. Other instances
+pick a new connection up within a second. Generated secrets: one 32-byte root secret (`setting:secrets`), derived per
+purpose with `product.secret(label)` (the idempotency HMAC key, product token secrets).
 
 ### Routes
 
@@ -324,7 +330,8 @@ toNextRoute(handler, { stripPrefix = '/api' | false, after? }?) → { GET, POST,
 - `GET /v1/strings?lang=` (none).
 - `GET /healthz` and `GET /readyz`.
 - `POST /v1/data:export` and `POST /v1/data:anonymize` (portal; body `{ websiteId, subject?, requestId? }`).
-- `GET /.well-known/ss-app.json`, `POST /.well-known/ss-register` and `POST /.well-known/ss-events`.
+- `GET /.well-known/ss-app.json` and `POST /.well-known/ss-events`.
+- `GET /setup`, `POST /setup` (only while unconnected) and `POST /v1/ss/disconnect` (portal).
 - `GET /sso?launch=`, which sets the `ss_session` cookie and redirects with 303 to `endpoints.dashboard`.
 - With `createProduct({ devProbes: true })` (never in production), mounted by `standardRoutes`, website key:
    - `GET /v1/ss-probe/data-guard` → `{ rejected, code }`: runs a query without `websiteId` through the guard.
@@ -358,17 +365,18 @@ later date as a backstop, and refuses to confirm a slot past its stale date (so 
 `createMongoStores({ db, prefix = 'ss_kit_', now? })` and `createMemoryStores({ now? })` return:
 
 ```
-{ replay, nonce, burnedTokens, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, ping }
+{ replay, nonce, settings, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, ping }
 ```
 
 Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces are in `src/stores/types.js`.
 
 ### Environment
 
-`configFromEnv(env = process.env)` → `{ portalUrl, appId, signingKey, registrationTokenHash, productDbUri, productDbOptions, logLevel, outboundAllowHosts }`. It reads
-`PORTAL_URL`, `APP_ID`, `SIGNING_KEY` (`kid:seed`, seed = base64url of the 32-byte Ed25519 key), `REGISTRATION_TOKEN_HASH`, `DATABASE_URI`
-(the product's own control DB), `DATABASE_MAX_POOL_SIZE` (its pool, default 5) and `OUTBOUND_DEV_ALLOW_HOSTS` (comma-separated development allowlist for
-`outbound.allowHosts`; ignored in production). `logLevel` is `info` in production and `debug` elsewhere. No value is JSON.
+`configFromEnv(env = process.env)` → `{ productDbUri, productDbOptions, logLevel, outboundAllowHosts }`. It reads
+`DATABASE_URI` (the product's own control DB — the only variable a deployment needs), and optionally
+`DATABASE_MAX_POOL_SIZE` (its pool, default 5) and `OUTBOUND_DEV_ALLOW_HOSTS` (comma-separated development allowlist
+for `outbound.allowHosts`; ignored in production). `logLevel` is `info` in production and `debug` elsewhere. No value
+is JSON, and no URL, key or secret is read from the environment.
 
 The merchant database is vetted with `@ss/net` `isSafeMongoUri` under the `outbound` policy before connecting (refused →
 `resource_invalid`), and the `MongoClient` dials every host through `guardedLookup` (the `lookup` option cannot be

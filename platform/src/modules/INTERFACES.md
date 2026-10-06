@@ -264,7 +264,7 @@ uploadPath }` (same descriptor = same version). Then `PUT /v1/product/ui-bundles
   `<portal>/w/` and module paths start with `packs/` or `ui/`.
 - `createPreview({ merchantId, websiteId, body: { path?, base?: 'current'|'empty', elements?: [{ appId, key, config?,
 strings?, placement? }] }, actor })` → `{ previewId, url, expiresAt, version, budget, elements, warnings }`;
-  `servePreview({ token, path, search, host })`. With `PREVIEW_URL` (F.16) preview URLs use that origin, `/p/*` on
+  `servePreview({ token, path, search, host })`. With a preview URL setting (F.16) preview URLs use that origin, `/p/*` on
   the Portal host is refused (`delivery_preview_refused`), and the preview host serves nothing but `/p/*` (404 from
   `portal.handle` for API and `/w/*` paths; `proxy.js` for console pages). There the page keeps `CSP: sandbox`
   but adds `allow-same-origin` and admits the merchant's own scripts (`script-src https: 'unsafe-inline'`).

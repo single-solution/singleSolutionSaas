@@ -34,7 +34,7 @@ import {
 	totpCode,
 } from '@ss/platform/testing';
 import { buildPack } from '@ss/product-pdp/pack';
-import { connectProduct, createClock, mongoUri, postSetup } from './helpers.js';
+import { createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
 const PORTAL_URL = 'http://127.0.0.1:4999';

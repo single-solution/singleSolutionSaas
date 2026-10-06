@@ -42,7 +42,6 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 		const chunks = [];
 		req.on('data', (c) => chunks.push(c));
 		req.on('end', async () => {
-			const body = Buffer.concat(chunks).toString('utf8');
 			if (req.method === 'GET' && req.url === '/.well-known/ss-app.json') {
 				if (tamper.redirectManifest) {
 					res.writeHead(tamper.redirectManifest.status, { location: tamper.redirectManifest.location });

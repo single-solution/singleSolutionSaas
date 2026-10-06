@@ -12,14 +12,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createId, validateManifest } from '@ss/contracts';
-import {
-	createSigner,
-	generateSigningKey,
-	hashManifest,
-	issueLaunch,
-	issueWebsiteKey,
-	signEvent,
-} from '@ss/protocol';
+import { createSigner, generateSigningKey, hashManifest, issueLaunch, issueWebsiteKey, signEvent } from '@ss/protocol';
 import { validateProject } from '../validate/index.js';
 import { normaliseFixture } from '../emulator/fixture.js';
 import { createPortal } from '../emulator/portal.js';
@@ -420,11 +413,15 @@ export const runCertification = async ({
 		const eventsPath = manifest.endpoints?.events ?? '/.well-known/ss-events';
 		const snapshotApp = portal.apps().find((app) => app.baseUrl.replace(/\/+$/, '') === base);
 		if (!snapshotApp)
-			await check('setup.rejects-bad-code', 'POST /setup refuses an invalid connection code and stays unconnected', async () => {
-				const result = await call('/setup', { method: 'POST', body: { code: 'ssc_invalid', baseUrl: base } });
-				expect(result.status === 400, `status ${result.status}`);
-				return '400, still unconnected';
-			});
+			await check(
+				'setup.rejects-bad-code',
+				'POST /setup refuses an invalid connection code and stays unconnected',
+				async () => {
+					const result = await call('/setup', { method: 'POST', body: { code: 'ssc_invalid', baseUrl: base } });
+					expect(result.status === 400, `status ${result.status}`);
+					return '400, still unconnected';
+				},
+			);
 
 		// Connection-code onboarding (the product's /setup)
 		let registered = Boolean(snapshotApp);

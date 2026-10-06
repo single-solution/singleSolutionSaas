@@ -114,7 +114,15 @@ export const createHarness = async ({ config = {}, elements = {}, storage = true
 	const app = await createPlatform({
 		env: {},
 		root: ROOT,
-		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`, fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: bucket.send },
+		overrides: {
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+			fetch: portal.fetch,
+			now: clock.now,
+			logger: noopLogger,
+			outboundSend: bucket.send,
+		},
 	});
 	const grades = wireEvents(createGrades(app));
 	const handle = createRequestHandler(grades.product, buildRoutes(grades));

@@ -7,7 +7,7 @@
  * and can never use Portal cookies or same-origin APIs. Only the injected, nonce-bearing script runs (`script-src
  * 'nonce-…' 'strict-dynamic'`, which also admits the modules it imports); the merchant's own scripts do not execute.
  *
- * On a **dedicated preview origin** (`PREVIEW_URL`, F.16 — a cookie-less host that serves nothing but `/p/*`) the
+ * On a **dedicated preview origin** (the preview URL setting, F.16 — a cookie-less host that serves nothing but `/p/*`) the
  * sandbox stays but gains `allow-same-origin` and the script policy admits the merchant's own scripts (https and
  * inline), so previews behave like the real site; that origin holds no session and shares nothing with the consoles.
  * @module

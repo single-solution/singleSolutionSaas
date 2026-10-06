@@ -152,7 +152,15 @@ export const createHarness = async (
 			...env,
 		},
 		root: ROOT,
-		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`, fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: providers.send },
+		overrides: {
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+			fetch: portal.fetch,
+			now: clock.now,
+			logger: noopLogger,
+			outboundSend: providers.send,
+		},
 	});
 	const reviews = wireEvents(createReviews(app));
 	const handle = createRequestHandler(reviews.product, [...buildRoutes(reviews)]);

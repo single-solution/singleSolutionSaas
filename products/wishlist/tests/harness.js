@@ -72,7 +72,14 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, webs
 			...env,
 		},
 		root: ROOT,
-		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`, fetch: portal.fetch, now: clock.now, logger: noopLogger },
+		overrides: {
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+			fetch: portal.fetch,
+			now: clock.now,
+			logger: noopLogger,
+		},
 	});
 	const wishlist = wireEvents(createWishlist(app));
 	const handle = createRequestHandler(wishlist.product, buildRoutes(wishlist));

@@ -10,7 +10,6 @@ import { createDatabaseResolver, formatReport, runCertification, validateProject
 import { startServer } from '../serve.js';
 import { ROOT } from './harness.js';
 
-
 /** @returns {Promise<number>} */
 const freePort = () =>
 	new Promise((resolve, reject) => {

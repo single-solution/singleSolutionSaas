@@ -128,7 +128,10 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	await product.ready();
 	return {
 		product,
-		tokens: createWalletTokens({ secret: walletSecret({ secret: product.secret('wallet-tokens').toString('base64url') }), now }),
+		tokens: createWalletTokens({
+			secret: walletSecret({ secret: product.secret('wallet-tokens').toString('base64url') }),
+			now,
+		}),
 		now,
 		hash: stableId,
 		randomBytes,

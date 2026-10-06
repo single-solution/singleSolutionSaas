@@ -39,7 +39,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { relativeImports } from '@ss/contracts/budget';
-import { connectProduct, createClock, mongoUri, postSetup } from './helpers.js';
+import { createClock, mongoUri } from './helpers.js';
 
 /** jsdom ships no type declarations (the same typed require as the Portal's delivery tests). */
 /** @type {{ JSDOM: new (html?: string, options?: Record<string, unknown>) => { window: any } }} */

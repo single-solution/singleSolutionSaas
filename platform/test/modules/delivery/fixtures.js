@@ -113,7 +113,7 @@ export const packManifest = ({ budget = 6, placement = { paths: { include: ['/**
 export const serviceManifest = () => ({
 	ssps: '1',
 	product: { slug: 'chat-box', name: 'Chat', kind: 'service', version: '1.0.0', category: 'engagement' },
-	endpoints: { base: 'https://chat.example.net', register: '/.well-known/ss-register', events: '/.well-known/ss-events' },
+	endpoints: { base: 'https://chat.example.net', events: '/.well-known/ss-events' },
 	elements: [
 		{
 			key: 'launcher',

@@ -14,9 +14,12 @@ describe('@ss/platform/testing', () => {
 			'createIdentityModule',
 			'createIntegrationModule',
 			'createPortal',
+			'createSystemStore',
 			'loadConfig',
+			'loadEnv',
 			'modules',
 			'systemModule',
+			'testSystemState',
 			'totpCode',
 		]);
 		expect(testing.modules).toBe(modules);

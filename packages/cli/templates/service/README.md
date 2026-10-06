@@ -6,20 +6,20 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 
 ## Layout
 
-| Path            | Purpose                                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `manifest.json` | SSPS manifest (features referenced from `schemas/`, bundled inline by the tooling)                                    |
-| `openapi.json`  | Mode C API (every `api.resources` entry documented)                                                                   |
-| `core/`         | pure domain logic (no I/O, no DOM)                                                                                    |
-| `headless/`     | Mode B element cores (`createNotes`) built on `core/`                                                                 |
-| `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                                        |
-| `api/`          | thin REST handlers, event consumers, dashboard session view                                                           |
-| `adapters/`     | data repositories (every query keyed by `websiteId`) and the app-kit platform wiring                                  |
-| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)                          |
-| `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                         |
-| `schemas/`      | feature schemas and product event data schemas                                                                        |
+| Path            | Purpose                                                                                              |
+| --------------- | ---------------------------------------------------------------------------------------------------- |
+| `manifest.json` | SSPS manifest (features referenced from `schemas/`, bundled inline by the tooling)                   |
+| `openapi.json`  | Mode C API (every `api.resources` entry documented)                                                  |
+| `core/`         | pure domain logic (no I/O, no DOM)                                                                   |
+| `headless/`     | Mode B element cores (`createNotes`) built on `core/`                                                |
+| `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                       |
+| `api/`          | thin REST handlers, event consumers, dashboard session view                                          |
+| `adapters/`     | data repositories (every query keyed by `websiteId`) and the app-kit platform wiring                 |
+| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)         |
+| `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                        |
+| `schemas/`      | feature schemas and product event data schemas                                                       |
 | `app/`          | Next.js App Router: `/setup`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
-| `tests/`        | unit tests (Vitest)                                                                                                   |
+| `tests/`        | unit tests (Vitest)                                                                                  |
 
 ## Develop
 

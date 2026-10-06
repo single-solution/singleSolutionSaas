@@ -490,7 +490,9 @@ describe('STORAGE_* configuration', () => {
 			budgetKb: 80,
 		});
 		const prod = await testEnv({ NODE_ENV: 'production' });
-		expect(() => loadEnv({ ...prod, STORAGE_DIR: ':memory:' })).toThrow(/S3-compatible bucket \(STORAGE_BUCKET\) in production/);
+		expect(() => loadEnv({ ...prod, STORAGE_DIR: ':memory:' })).toThrow(
+			/S3-compatible bucket \(STORAGE_BUCKET\) in production/,
+		);
 		expect(() => loadEnv({ ...prod, ...base, STORAGE_ENDPOINT: 'http://minio:9000' })).toThrow(/must use https in production/);
 		expect(loadEnv({ ...prod, ...base, STORAGE_ENDPOINT: 'https://r2.example.net' }).delivery.storage?.kind).toBe('s3');
 		const bogus = await testEnv({ STORAGE_BUCKET: 'Bogus!' });

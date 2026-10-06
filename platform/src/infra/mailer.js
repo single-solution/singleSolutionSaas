@@ -1,7 +1,7 @@
 /**
  * The platform mailer (`ctx.mailer`): transactional mail the Portal itself sends — e-mail verification, password
  * resets, team invitations, staff account setup. It is a Portal concern, not a client connector: the SMTP account
- * is the operator's (`SMTP_URL`, `MAIL_FROM`).
+ * is the operator's (Admin → Settings → Mail).
  *
  * - SMTP via nodemailer: one pooled transport per Portal instance (created on first send), 10 s connection,
  *   greeting and socket timeouts, TLS ≥ 1.2 with certificate verification; in production a `smtp://` URL must

@@ -390,7 +390,9 @@ const dev = async (args, deps) => {
 		case 'code': {
 			const { values } = parse(rest, { ...common });
 			const result = await call(values, 'code', {});
-			io.out(`${result.code}\n  one-time connection code for ${result.appId}, valid until ${result.expiresAt}: paste it into the product's /setup\n`);
+			io.out(
+				`${result.code}\n  one-time connection code for ${result.appId}, valid until ${result.expiresAt}: paste it into the product's /setup\n`,
+			);
 			return 0;
 		}
 		case 'connect': {

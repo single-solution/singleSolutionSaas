@@ -124,7 +124,12 @@ describe('connection-code setup', () => {
 		const unsigned = await handle(new Request(`${BASE}/v1/ss/disconnect`, { method: 'POST' }));
 		expect(unsigned.status).toBe(503);
 
-		const fixed = createProduct({ manifest: manifest(), portalUrl: PORTAL_URL, appId: APP_ID, signingKey: 'k1:' + 'A'.repeat(43) });
+		const fixed = createProduct({
+			manifest: manifest(),
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: 'k1:' + 'A'.repeat(43),
+		});
 		const fixedHandle = createRequestHandler(fixed, standardRoutes(fixed));
 		expect((await fixedHandle(new Request(`${BASE}/setup`))).status).toBe(404);
 		await expect(fixed.setup.connect({ code: portal.connectionCode(), baseUrl: BASE })).rejects.toMatchObject({

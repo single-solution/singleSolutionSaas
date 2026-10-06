@@ -10,20 +10,20 @@ App Protocol primitives shared by the Portal and every product (PLAN.md §8, §1
   or secrets, so they are safe to log.
 - No URLs, issuers or audiences are hard-coded: they are all parameters.
 
-| Module                  | Exports                                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `keys.js`               | `generateSigningKey`, `createSigner`, `importPublicKey`, `importPrivateKey`, `exportPublicJwk`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`      |
-| `launch.js`             | `issueLaunch`, `verifyLaunch`, `kindScopeViolation`, `LAUNCH_KINDS`, `LAUNCH_TYP`, TTL constants                                                                    |
-| `assertion.js`          | `signAssertion`, `verifyAssertion`, `ASSERTION_TYP`, `MAX_ASSERTION_LIFETIME_SECONDS`                                                                               |
-| `replay.js`             | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                               |
-| `website-keys.js`       | `issueWebsiteKey`, `verifyWebsiteKey`, `originAllowed`, `normalizeDomain`, `hashSecretKey`, `compareSecretKey`                                                      |
-| `entitlement-doc.js`    | `signEntitlementDocument`, `verifyEntitlementDocument`, `DEFAULT_GRACE_MS`                                                                                          |
-| `events.js`             | `signEvent`, `verifyEvent`, `EVENT_HEADERS`                                                                                                                         |
-| `requests.js`           | `signRequest`, `verifyRequest`, `canonicalRequestPath`                                                                                                              |
-| `registration.js`       | `createRegistrationRequest` + `verifyRegistrationResponse` (Portal), `createRegistrationHandler` (product), `hashManifest`, `hashRegistrationToken`, `canonicalUrl` |
-| `bundle.js`             | `signBundle`, `verifyBundle`, `bundleSigningInput`, `BUNDLE_SIGNING_PREFIX` (element-pack bundles)                                                                  |
-| `manifest-signature.js` | `signManifest`, `verifyManifest`, `MANIFEST_TYP`, `MANIFEST_SIGNATURE_HEADER`, `DEFAULT_MANIFEST_MAX_AGE_SECONDS`                                                   |
-| `errors.js`             | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                             |
+| Module                  | Exports                                                                                                                                                                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keys.js`               | `generateSigningKey`, `createSigner`, `importPublicKey`, `importPrivateKey`, `exportPublicJwk`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`                                                                                |
+| `launch.js`             | `issueLaunch`, `verifyLaunch`, `kindScopeViolation`, `LAUNCH_KINDS`, `LAUNCH_TYP`, TTL constants                                                                                                                                              |
+| `assertion.js`          | `signAssertion`, `verifyAssertion`, `ASSERTION_TYP`, `MAX_ASSERTION_LIFETIME_SECONDS`                                                                                                                                                         |
+| `replay.js`             | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                                                                                                         |
+| `website-keys.js`       | `issueWebsiteKey`, `verifyWebsiteKey`, `originAllowed`, `normalizeDomain`, `hashSecretKey`, `compareSecretKey`                                                                                                                                |
+| `entitlement-doc.js`    | `signEntitlementDocument`, `verifyEntitlementDocument`, `DEFAULT_GRACE_MS`                                                                                                                                                                    |
+| `events.js`             | `signEvent`, `verifyEvent`, `EVENT_HEADERS`                                                                                                                                                                                                   |
+| `requests.js`           | `signRequest`, `verifyRequest`, `canonicalRequestPath`                                                                                                                                                                                        |
+| `registration.js`       | connection codes: `createConnectionCode`, `parseConnectionCode`, `createConnectRequest` / `verifyConnectResponse` (product), `verifyConnectRequest` / `createConnectResponse` (Portal), `hashManifest`, `hashConnectionToken`, `canonicalUrl` |
+| `bundle.js`             | `signBundle`, `verifyBundle`, `bundleSigningInput`, `BUNDLE_SIGNING_PREFIX` (element-pack bundles)                                                                                                                                            |
+| `manifest-signature.js` | `signManifest`, `verifyManifest`, `MANIFEST_TYP`, `MANIFEST_SIGNATURE_HEADER`, `DEFAULT_MANIFEST_MAX_AGE_SECONDS`                                                                                                                             |
+| `errors.js`             | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                       |
 
 ## Token types
 
@@ -36,8 +36,8 @@ replayed as another (a launch as an assertion, an entitlement document as a webs
 | Client assertion         | `ss-assertion+jwt`             | ≤ 300 s                              | replay store on `iss\|jti`                      |
 | Website key              | `ss-website-key+jws`           | optional `exp`; revocable by `keyId` | n/a (bearer credential)                         |
 | Entitlement document     | `ss-entitlement+jws`           | `validUntil` + offline grace         | n/a (idempotent state)                          |
-| Registration request     | `ss-registration+jws`          | `iat` ± 5 min                        | nonce store + one-time token burn               |
-| Registration proof       | `ss-registration-response+jws` | `iat` ± 5 min                        | echoes the Portal's request nonce               |
+| Connect request          | `ss-connect+jws`               | `iat` ± 5 min                        | one-time token burn (Portal)                    |
+| Connect answer           | `ss-connected+jws`             | `iat` ± 5 min                        | echoes the product's request nonce              |
 | Manifest signature       | `ss-manifest+jws`              | `iat` ≤ `maxAgeSec` (24 h) old       | n/a (binds `appId` + manifest hash)             |
 | Pack bundle signature    | detached, `ss-pack-bundle.v1.` | none (pinned developer key)          | n/a (binds the descriptor hash)                 |
 | Event delivery           | detached, `SS-*` header        | `SS-Timestamp` ± 300 s               | replay store on `timestamp\|sha256`             |
@@ -242,69 +242,47 @@ Portal                                                      Product
 - Verify against the path the Portal addressed (normally `req.url`). If a proxy rewrites paths, pass the original path.
 - The method is upper-cased and the body defaults to empty (for GET).
 
-## Registration handshake (one-time token + pinned Portal URL)
+## Connection code (one-time token + proof of possession + pinned URLs)
 
 ```
-Developer              Portal                                              Product (deployed)
-  │                      │                                                   │ env: REGISTRATION_TOKEN_HASH,
-  │                      │                                                   │      PORTAL_URL (pinned)
-  │ paste token ───────▶ │ createRegistrationRequest({ portalUrl, signer,    │
-  │                      │   registrationToken, audience, appId })           │
-  │                      │── POST /.well-known/ss-register ─────────────────▶│ handle({ headers, body })
-  │                      │   Authorization: Bearer <token>                   │  1. token not burned
-  │                      │   { request: JWS{ portalUrl, nonce, iat, tth,     │  2. sha256(token) = stored hash (const-time)
-  │                      │                   aud, appId, portalJwksUrl } }   │  3. fetch JWKS from the PINNED URL only
-  │                      │◀─────────── GET <pinned>/.well-known/jwks.json ───│     verify JWS (typ, kid, EdDSA)
-  │                      │                                                   │  4. signed portalUrl = pinned URL
-  │                      │                                                   │  5. |now − iat| ≤ 5 min
-  │                      │                                                   │  6. tth = sha256(bearer token)
-  │                      │                                                   │  7. aud = expectedAudience (if set)
-  │                      │                                                   │  8. nonce unused (nonce store)
-  │                      │                                                   │  9. sign proof with productSigner:
-  │                      │                                                   │     JWS{ appId, manifestHash, jkt,
-  │                      │                                                   │          nonce (echo), portalUrl, iat }
-  │                      │                                                   │ 10. burnToken() atomically → true
-  │                      │                                                   │ 11. onRegistered({ portalUrl, appId, portalKid })
-  │                      │◀──── 200 { manifest, publicJwk, proof } ──────────│
-  │                      │ verifyRegistrationResponse({ response,            │
-  │                      │   expectedNonce: req.nonce, expectedPortalUrl,    │
-  │                      │   expectedAppId })                                │
-  │                      │  a. proof verifies under the included publicJwk   │
-  │                      │     (header kid = JWK kid, typ, EdDSA)            │
-  │                      │  b. jkt = RFC 7638 thumbprint(publicJwk)          │
-  │                      │  c. nonce = our request nonce                     │
-  │                      │  d. portalUrl = us, appId = expected              │
-  │                      │  e. manifestHash = sha256(canonicalJson(manifest))│
-  │                      │  f. |now − iat| ≤ 5 min                           │
-  │                      │ → trust publicJwk as the app key, import manifest │
+Staff / owner          Portal                                              Product (deployed with DATABASE_URI only)
+  │ Add product ──────▶ │ createConnectionCode({ portalUrl })              │
+  │ ◀── ssc_… (once) ── │  stores sha256(token) only, 24 h, single use     │
+  │ paste code at /setup ───────────────────────────────────────────────────▶│ parseConnectionCode → { portalUrl, token }
+  │                     │                                                   │ generate an Ed25519 key
+  │                     │◀── POST <portalUrl>/v1/apps/connect ──────────────│ createConnectRequest({ code, baseUrl,
+  │                     │   Authorization: Bearer <token>                   │   manifest, signer, publicJwk })
+  │                     │   { request: JWS{ portalUrl, baseUrl, tth,        │
+  │                     │       manifestHash, jkt, nonce, iat }, publicJwk, │
+  │                     │     manifest }                                    │
+  │                     │ verifyConnectRequest({ headers, body, portalUrl })│
+  │                     │  a. tth = sha256(bearer token), token known/open  │
+  │                     │  b. JWS verifies under the included publicJwk     │
+  │                     │  c. jkt = RFC 7638 thumbprint(publicJwk)          │
+  │                     │  d. portalUrl = us; |now − iat| ≤ 5 min           │
+  │                     │  e. manifestHash = sha256(canonicalJson(manifest))│
+  │                     │ burn the token atomically, pin baseUrl + key      │
+  │                     │── 200 createConnectResponse ──────────────────────▶│ verifyConnectResponse({ body, portalUrl,
+  │                     │   { appId, jwks, response: JWS{ appId, portalUrl, │   nonce, jkt })
+  │                     │       jkt, nonce, iat } signed by the Portal }    │ store portalUrl, appId, key, Portal JWKS
 ```
 
-- The body's `portalJwksUrl` is informational and ignored: keys come only from the pinned Portal JWKS URL (by default
-  `<allowedPortalUrl>/.well-known/jwks.json`, and it must share the pinned origin). An attacker holding a stolen token
-  still cannot register without the Portal's private key.
-- The token is never stored by either side: the product holds `hashRegistrationToken(token)`; the Portal uses it only
-  for the request header. The signed `tth` binds the Portal's signature to that exact token.
-- Every failure returns the same `401 { error: 'unauthorized' }`; the internal `reason` (`token_invalid`,
-  `token_burned`, `portal_url`, `signature:<code>`, `timestamp`, `token_binding`, `audience`, `nonce_invalid`,
-  `nonce_reused`, `body_malformed`, `internal_error`) is for server logs only.
-- The token is burned before `onRegistered` runs. If `onRegistered` fails, the handler returns
-  `500 { error: 'registration_failed' }` and the token stays burned; a new token is needed for a retry. Nothing can
-  register twice.
-- The response carries only the product's public JWK (`toPublicJwk` strips any private member).
-- **Proof of possession.** The product signs its response with the private key of the JWK it registers
-  (`productSigner`, same `kid`). The Portal verifies it with `verifyRegistrationResponse`, which proves that the product
-  holds that private key, so nobody can register a public key they cannot sign with. Because the proof echoes the
-  Portal's nonce and portal URL, a response cannot be replayed into another handshake or to another Portal. Because it
-  signs the manifest hash, a proxy or tampered deployment cannot swap the manifest. The manifest hash is SHA-256 over
-  canonical JSON (`canonicalJson`: sorted keys, no whitespace, RFC 8785-style), so key order and re-serialisation do
-  not change it. The proof is signed before the token is burned; if signing fails, the token is not consumed.
-- Portal-side error codes: `malformed` (shape, JWK, claims), `unknown_kid` (proof header kid ≠ JWK kid), `signature`
-  (bad signature, thumbprint or manifest hash), `replay` (nonce not echoed), `audience` (other Portal), `subject` (other
-  app), `expired` / `not_yet_valid` (outside ±5 min), `wrong_type`.
+- The code is opaque: `ssc_` + base64url(`<portal URL> <token>`), the token 256-bit random (`sct_…`). The Portal keeps
+  only `hashConnectionToken(token)`; the product never stores the token at all.
+- **Proof of possession.** The request is signed with the private key of the JWK the product connects with, so nobody
+  can bind a key they cannot sign with. It also signs the token hash (`tth`), the manifest hash and the base URL, so a
+  proxy cannot swap the manifest or the address, and it echoes into the Portal's signed answer (`nonce`, `jkt`), so an
+  answer cannot be replayed into another connection.
+- **Pinning.** The product accepts the answer only from the Portal URL inside the code, verified against the JWKS it
+  returns over TLS, and keeps that URL and those keys. The Portal pins the product's base URL and key; from then on
+  both sides trust only each other's keys (client assertions, launches, entitlements, events).
+- Errors: `malformed` (shape, token missing, JWK, nonce), `unknown_kid`, `signature` (signature, thumbprint, manifest
+  hash, token binding), `audience` (another Portal), `subject` (another key), `replay` (nonce), `expired` (±5 min),
+  `wrong_type`. The Portal answers every refusal with the same generic 401.
 
 ## Pack bundle signatures
 
-Element packs are published as signed bundles rather than through the registration handshake. The developer signs
+Element packs are published as signed bundles rather than through a connection code. The developer signs
 `ss-pack-bundle.v1.<sha256hex(canonicalJson(descriptor))>` with Ed25519. The signature is detached:
 `{ kid, alg: 'EdDSA', sig: <base64url 64 bytes> }`.
 
@@ -319,12 +297,12 @@ The output is byte-compatible with the Portal catalog's former `signatures.js`. 
 
 A registered product serves `GET /.well-known/ss-app.json` with `SS-Manifest-Signature: <compact JWS>`
 (`typ: ss-manifest+jws`), signed with its registered key. The payload is `{ appId, manifestHash, iat }`, where
-`manifestHash = hashManifest(manifest)`, the same hash as the registration proof. Before importing a refreshed
+`manifestHash = hashManifest(manifest)`, the same hash as the connect request. Before importing a refreshed
 manifest, the Portal runs `verifyManifest({ manifest, jws, keyResolver /* the app's registered JWKS */, expectedAppId,
 now, maxAgeSec = 86400, skewSeconds = 300 })`. It returns `{ appId, manifestHash, iat, kid }` or throws `wrong_type`,
 `signature` (bad signature or manifest mismatch), `issuer` (another app), `expired` (older than `maxAgeSec`),
 `not_yet_valid`, `malformed` or `unknown_kid`. A compromised host or CDN therefore cannot swap the manifest without
-the product key. Before registration, a product has no appId and serves the manifest unsigned.
+the product key. Before it is connected, a product has no appId and serves the manifest unsigned.
 
 ## Testing
 
@@ -334,5 +312,5 @@ pnpm check   # in this folder: format, lint, typecheck, vitest with coverage
 
 The tests cover happy paths and every rejection path: expiry, not-yet-valid, wrong `aud`/`iss`/`kid`/`typ`, tampered
 payloads and signatures, forged keys that reuse a kid, replayed `jti`s and events, revoked and retired keys, rotation
-overlap, more than 50 origin cases, stale entitlements inside and past the grace window, and the full registration
+overlap, more than 50 origin cases, stale entitlements inside and past the grace window, and the full connection
 matrix.

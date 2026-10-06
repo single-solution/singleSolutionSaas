@@ -7,7 +7,7 @@
  *   enumeration by timing) and `needsRehash` for parameter upgrades.
  * - **TOTP** (RFC 6238 over RFC 4226 HOTP, `node:crypto`): base32 secrets, ±1 step window, replay refusal via the
  *   last accepted step; **recovery codes** shown once and stored as HMAC hashes.
- * - **Sessions**: opaque 256-bit tokens, stored only as HMAC-SHA-256(SESSION_SECRET, token); idle + absolute expiry
+ * - **Sessions**: opaque 256-bit tokens, stored only as HMAC-SHA-256(session secret, token); idle + absolute expiry
  *   (TTL index on `expireAt`); rotation on privilege change (new token, old one deleted); revoke one / revoke all.
  *   Cookies are `HttpOnly; Secure; SameSite=Lax; Path=/` with the `__Host-` prefix whenever Secure.
  * - **Login throttling** per account and per IP (Mongo documents with TTL), with progressive account lockouts.

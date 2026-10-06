@@ -277,7 +277,8 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 						const message = typeof known.message === 'string' ? known.message : 'The connection failed.';
 						const status = known.code === 'conflict' ? 409 : known.code === 'invalid_argument' ? 400 : 502;
 						ctx.log.warn('setup refused', { reason: known.code ?? 'error' });
-						if (json) return problem(status === 409 ? 'conflict' : status === 400 ? 'bad_request' : 'upstream_error', message);
+						if (json)
+							return problem(status === 409 ? 'conflict' : status === 400 ? 'bad_request' : 'upstream_error', message);
 						return setupForm({ productName, baseUrl: baseUrl || new URL(ctx.request.url).origin, error: message }, status);
 					}
 				},

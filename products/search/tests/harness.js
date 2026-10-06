@@ -89,7 +89,15 @@ export const createHarness = async ({ config = {}, elements = {}, website = { ti
 	const app = await createPlatform({
 		env: {},
 		root: ROOT,
-		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`, fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: site.send },
+		overrides: {
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+			fetch: portal.fetch,
+			now: clock.now,
+			logger: noopLogger,
+			outboundSend: site.send,
+		},
 	});
 	const search = wireEvents(createSearchApp(app, atlas));
 	const handle = createRequestHandler(search.product, buildRoutes(search), {

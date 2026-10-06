@@ -211,7 +211,9 @@ export const createProduct = (options) => {
 		baseUrl: { get: () => connection.active().portalUrl, enumerable: true },
 		jwksUrl: { get: () => `${connection.active().portalUrl}/.well-known/jwks.json`, enumerable: true },
 	};
-	const portal = /** @type {import('./portal-client.js').PortalClient} */ (/** @type {unknown} */ (Object.freeze(Object.defineProperties({ ...portalMethods }, urlProperties))));
+	const portal = /** @type {import('./portal-client.js').PortalClient} */ (
+		/** @type {unknown} */ (Object.freeze(Object.defineProperties({ ...portalMethods }, urlProperties)))
+	);
 	const graceMs = parseDurationMs(manifest.capabilities?.offlineGrace, DEFAULT_GRACE_MS);
 	// The last good Portal JWKS is persisted so cold instances can verify during a Portal outage. Serving stays bounded
 	// by the documents themselves (entitlements: validUntil + grace; keys: revocation staleness ≤ grace).

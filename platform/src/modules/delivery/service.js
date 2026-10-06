@@ -18,7 +18,7 @@
  *   bundle modules), both immutable.
  * - **Preview**: a signed 10-minute session with a candidate element set; `/p/<token>/<path>` fetches the merchant's
  *   public page through `@ss/net` `safeFetch` (website origin only, GET, no cookies, HTML ≤ 2 MB), injects the
- *   candidate bundle and a ribbon, and returns it sandboxed — nothing fetched is ever stored. With `PREVIEW_URL`
+ *   candidate bundle and a ribbon, and returns it sandboxed — nothing fetched is ever stored. With a preview URL
  *   previews are served only from that dedicated cookie-less origin (the merchant's own scripts may run there).
  * @module
  */

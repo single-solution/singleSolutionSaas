@@ -60,7 +60,8 @@ Each folder has its own `README.md` with its reference. `packages/app-kit/API.md
 
 ## Setup
 
-Needs Node 22+ (`.nvmrc`) and pnpm 11. Each deployable has a `.env.example` listing its variables.
+Needs Node 22+ (`.nvmrc`) and pnpm 11. Each deployable has a short `.env.example`: the Portal needs only its database
+and file storage, a product only its database.
 
 ```bash
 pnpm install
@@ -95,8 +96,8 @@ pnpm db:memory
 pnpm env:dev > .env.local && pnpm dev
 ```
 
-The Portal runs on http://localhost:4000. Create the first admin with `pnpm admin:bootstrap you@example.com`. It
-prints a one-time password-setup link, and two-factor sign-in is required.
+The Portal runs on http://localhost:4000. Open http://localhost:4000/setup: confirm the URL and create the first admin
+(then set a password and enrol two-factor sign-in). Keys and secrets are generated in the database on first start.
 
 ## Building a product
 
@@ -104,13 +105,8 @@ prints a one-time password-setup link, and two-factor sign-in is required.
 pnpm exec ss app init products/my-app --kind service --slug my_app --name "My App"
 ```
 
-Add `--minimal` to start without the sample feature. In the product folder, create the local environment once:
-
-```bash
-pnpm exec ss dev env > .env.local
-```
-
-Then run these two in separate terminals:
+Add `--minimal` to start without the sample feature. A product's only setting is its own database (`DATABASE_URI`;
+empty in development = in memory). Run these two in separate terminals:
 
 ```bash
 pnpm portal
@@ -121,8 +117,9 @@ pnpm dev
 ```
 
 `pnpm portal` runs a fake Portal (`ss dev`) on port 4400 with the merchants, websites and plans from `ss.dev.json`.
-`pnpm dev` runs the product on port 3000. Use `ss dev launch`, `ss dev keys` and `ss dev emit` to sign in, get website
-keys and send events.
+`pnpm dev` runs the product on port 3000. Connect them with `pnpm exec ss dev connect --url http://localhost:3000` (or
+`ss dev code`, then paste the code at http://localhost:3000/setup). Use `ss dev launch`, `ss dev keys` and `ss dev emit`
+to sign in, get website keys and send events.
 
 Before a product ships:
 
@@ -253,9 +250,9 @@ pnpm --filter @ss/e2e test
 ## Deploying (any Node 22 host + MongoDB Atlas)
 
 The Portal and every service product run on **any Node 22 host** that runs Next.js (a server with `next build` +
-`next start`, a container, or a serverless platform such as Vercel), on any domain. Nothing depends on the host: every
-setting is a plain environment variable (no JSON), the environment comes from `NODE_ENV` only, and one MongoDB Atlas
-cluster (M0 works) serves all of them. Each deployable is one folder:
+`next start`, a container, or a serverless platform), on any domain. The environment holds only database and storage
+connections; every key and secret is generated inside the apps, and URLs are recorded at their `/setup` pages. One
+MongoDB Atlas cluster (M0 works) serves all of them. Each deployable is one folder:
 
 | Deployable              | Folder                                | What it is                                                                                                                                |
 | ----------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -263,7 +260,8 @@ cluster (M0 works) serves all of them. Each deployable is one folder:
 | One per service product | `products/<name>`                     | aftersales, alerts, catalog, chatbot, checkout, configurator, coupons, deals, grades, loyalty, orders, reviews, search, signups, wishlist |
 | —                       | `products/pdp`, `products/storefront` | **Not deployed.** These are element packs, published into the Portal with `ss pack publish` (step 5)                                      |
 
-On Vercel, create one project per deployable from the same repository and set its **Root Directory** to the folder.
+On Vercel, for example, create one project per deployable from the same repository with its folder as **Root
+Directory**.
 
 **How it works** (PLAN F.19: event-driven only):
 
@@ -296,48 +294,26 @@ and an access key limited to it.
 
 ### 3. Portal
 
-Generate keys and secrets locally with `cd platform && pnpm env:dev` (every line is `NAME=plain value`), then set on
-the host:
+Set these and deploy (`NODE_ENV=production` where the host does not set it):
 
-| Variable                                                                                   | Value                                                                                                   |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV`                                                                                 | `production` (most hosts set it)                                                                        |
-| `PUBLIC_URL`                                                                               | `https://portal.<your-domain>` — the Portal's address: token issuer/audience, e-mail links, CSRF origin |
-| `MONGODB_URI`                                                                              | the Atlas URI for `ss_portal`                                                                           |
-| `SIGNING_KEYS`, `WEBSITE_SIGNING_KEYS`                                                     | from `pnpm env:dev` (`kid:seed` each)                                                                   |
-| `ENCRYPTION_KEYS`, `SESSION_SECRET`, `KEY_PEPPER`                                          | from `pnpm env:dev`                                                                                     |
-| `STORAGE_BUCKET`, `STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | the bucket from step 2                                                                                  |
-| `SMTP_URL`, `MAIL_FROM`                                                                    | optional: sign-up and password e-mails                                                                  |
-| `PREVIEW_URL`                                                                              | optional: `https://preview.<another-domain>`, pointed at the same deployment                            |
+| Variable                    | Value                                                                       |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `MONGODB_URI`               | the Atlas URI for `ss_portal`                                               |
+| `STORAGE_ENDPOINT`          | the bucket's S3 endpoint (R2: `https://<account>.r2.cloudflarestorage.com`) |
+| `STORAGE_REGION`            | `auto` (the default; the bucket's region on AWS)                            |
+| `STORAGE_BUCKET`            | the bucket from step 2                                                      |
+| `STORAGE_ACCESS_KEY_ID`     | the bucket's access key                                                     |
+| `STORAGE_SECRET_ACCESS_KEY` | its secret                                                                  |
 
-Do not copy `STORAGE_DIR` or `OUTBOUND_DEV_ALLOW_HOSTS` (development only). Other optional tuning is listed in
-`platform/README.md`. Deploy, add the domain, then prepare the database and create the first admin from your machine
-with the production values in `platform/.env.local`:
-
-```bash
-cd platform && pnpm db:indexes && pnpm db:migrate && pnpm admin:bootstrap you@example.com
-```
-
-The last command prints a one-time password link. Open it, set a password, and enrol two-factor sign-in.
+Then open `https://<your domain>/setup` **right away** (until it is done, whoever opens it first becomes the
+administrator): confirm the Portal URL, create the first admin, set a password and enrol two-factor sign-in. Mail and
+an optional preview URL are set later in Admin → Settings. Indexes and migrations run by themselves.
 
 ### 4. Each service product
 
-Generate the product's key with `pnpm exec ss dev env --portal-url https://portal.<your-domain>`, keep the
-**registration token** from its first comment line for the Portal (never in the product's environment), and set:
-
-| Variable                  | Value                                                                      |
-| ------------------------- | -------------------------------------------------------------------------- |
-| `NODE_ENV`                | `production`                                                               |
-| `PORTAL_URL`              | `https://portal.<your-domain>` — the one Portal it trusts                  |
-| `SIGNING_KEY`             | from `ss dev env` (`kid:seed`)                                             |
-| `REGISTRATION_TOKEN_HASH` | from `ss dev env`                                                          |
-| `DATABASE_URI`            | its Atlas database from step 1                                             |
-| product variables         | optional, from `products/<name>/.env.example` (e.g. `CATALOG_FEED_SECRET`) |
-
-`APP_ID` and `DATABASE_MAX_POOL_SIZE` are optional. The product's own address is its registered URL. Deploy, add a
-domain (for example `chatbot.apps.<your-domain>`), then Portal → **Admin → Apps → Register**: enter the product URL
-and paste the registration token. The Portal checks the product proves it holds the key and lists it; activate it, and
-merchants can subscribe.
+Set `DATABASE_URI` (its Atlas database from step 1) and deploy. Then Portal → **Admin → Apps → Add product** → copy the
+connection code → open `https://<product domain>/setup` → paste the code. The product generates its key, proves it
+to the Portal and pins the Portal; review and activate it in the Portal, and merchants can subscribe.
 
 ### 5. Element packs (pdp, storefront)
 
@@ -352,5 +328,6 @@ Repeat for `products/storefront`.
 
 ### After launch
 
-- After a deploy that changes Portal data, run `pnpm db:indexes && pnpm db:migrate` in `platform` again.
+- Indexes and migrations apply themselves on the first request after a deploy. Moving a product: Admin → Apps → the
+  product → Reconnect, then paste the new code at its `/setup`.
 - There is no cron or worker to set up anywhere, on any host.

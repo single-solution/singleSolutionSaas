@@ -88,7 +88,10 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, ai =
 			...env,
 		},
 		root: ROOT,
-		overrides: { portalUrl: PORTAL_URL, appId: APP_ID, signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+		overrides: {
+			portalUrl: PORTAL_URL,
+			appId: APP_ID,
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
 			fetch: portal.fetch,
 			now: clock.now,
 			// CHATBOT_TEST_LOG=1 prints the product's JSON logs (errors included) while debugging a test
