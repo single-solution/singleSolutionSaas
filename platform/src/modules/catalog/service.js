@@ -100,6 +100,24 @@ const parseJson = (text) => {
 };
 
 /**
+ * The reason a product gives in an error answer: its `problems` (a misconfigured product answers
+ * `{ status: 'misconfigured', problems }`), else its problem `detail`; at most 5 short sentences, or null.
+ * @param {string} text the response body
+ * @returns {string | null}
+ */
+export const productReason = (text) => {
+	const json = parseJson(text);
+	if (!isObject(json)) return null;
+	const listed = Array.isArray(json.problems) ? json.problems.filter((p) => typeof p === 'string' && p.trim() !== '') : [];
+	const reasons = listed.length > 0 ? listed : typeof json.detail === 'string' && json.detail.trim() !== '' ? [json.detail] : [];
+	const joined = reasons
+		.slice(0, 5)
+		.map((reason) => reason.trim().slice(0, 300))
+		.join(' ');
+	return joined === '' ? null : joined;
+};
+
+/**
  * @param {unknown} value
  * @returns {value is Record<string, any>}
  */
@@ -245,7 +263,15 @@ export const createCatalogService = (ctx, options = {}) => {
 			headers: { accept: 'application/json' },
 			maxBytes: MANIFEST_MAX_BYTES,
 		});
-		if (res.status !== 200) fail('upstream_error', `${WELL_KNOWN_APP} answered ${res.status}.`);
+		if (res.status !== 200) {
+			const reason = productReason(res.text);
+			fail(
+				'upstream_error',
+				reason
+					? `The product cannot serve (${WELL_KNOWN_APP} answered ${res.status}): ${reason}`
+					: `${WELL_KNOWN_APP} answered ${res.status}.`,
+			);
+		}
 		const json = parseJson(res.text);
 		if (!isObject(json)) return fail('invalid_manifest', `${WELL_KNOWN_APP} is not a JSON object.`);
 		const signature = res.headers[MANIFEST_SIGNATURE_HEADER.toLowerCase()];
@@ -458,7 +484,8 @@ export const createCatalogService = (ctx, options = {}) => {
 			maxBytes: MANIFEST_MAX_BYTES,
 		});
 		if (res.status === 401) fail('unauthorized', 'The product refused the connect secret.');
-		if (res.status === 503) fail('upstream_error', 'The product refuses connections: its CONNECT_SECRET is not set.');
+		if (res.status === 503)
+			fail('upstream_error', productReason(res.text) ?? 'The product refuses connections: its CONNECT_SECRET is not set.');
 		if (res.status !== 200) fail('upstream_error', `The product answered ${res.status}.`);
 		/** @type {Awaited<ReturnType<typeof verifyConnectResponse>>} */
 		let verified;

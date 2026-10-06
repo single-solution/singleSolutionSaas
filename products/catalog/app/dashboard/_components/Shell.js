@@ -3,7 +3,7 @@
  * (audit) and demo. Pages render inside it; states without data (sign in, pick a website) render a callout instead.
  */
 import { createElement as h } from 'react';
-import { Callout } from '@ss/ui';
+import { Callout, ThemeToggle } from '@ss/ui';
 import { createTranslator } from '../../../headless/strings.js';
 import { sessionView } from '../../../api/session.js';
 import en from '../../../strings/en.json' with { type: 'json' };
@@ -52,12 +52,17 @@ export function Shell({ context, active, children }) {
 				: children;
 	return h(
 		'div',
-		{ className: 'mx-auto max-w-6xl space-y-6 p-6' },
+		{ className: 'mx-auto w-full max-w-[1600px] space-y-6 px-4 py-6 md:px-6 lg:px-8' },
 		h(
 			'header',
-			{ className: 'flex flex-wrap items-baseline justify-between gap-3' },
+			{ className: 'flex flex-wrap items-center justify-between gap-3' },
 			h('h1', { className: 'text-2xl font-extrabold text-fg' }, t('dashboard.title')),
-			h('p', { className: 'text-sm text-muted' }, t('dashboard.signed_in_as', { user: view.user ?? '—', role: view.role })),
+			h(
+				'div',
+				{ className: 'flex flex-wrap items-center gap-3' },
+				h('p', { className: 'text-sm text-muted' }, t('dashboard.signed_in_as', { user: view.user ?? '—', role: view.role })),
+				h(ThemeToggle),
+			),
 		),
 		h(
 			'nav',

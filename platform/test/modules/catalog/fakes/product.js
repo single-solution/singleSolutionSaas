@@ -25,7 +25,9 @@ export const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';
  * @property {number} [manifestBytes] pad ss-app.json to this many bytes
  * @property {'omit' | 'garbage' | 'other_app' | 'stale' | 'other_manifest' | 'foreign_key'} [signature] how
  *   `SS-Manifest-Signature` is tampered with (default: signed with the registered key once an appId is known)
- * @property {'bad_signature' | 'other_nonce' | 'other_manifest'} [connect] how the connect answer is tampered with
+ * @property {'bad_signature' | 'other_nonce' | 'other_manifest' | 'no_secret'} [connect] how the connect answer is
+ *   tampered with (`no_secret`: 503 like an app-kit product without a usable `CONNECT_SECRET`)
+ * @property {string[]} [misconfigured] answer every request 503 `{ status: 'misconfigured', problems }` (app-kit)
  */
 
 /**
@@ -48,6 +50,10 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 		const chunks = [];
 		req.on('data', (c) => chunks.push(c));
 		req.on('end', async () => {
+			if (tamper.misconfigured) {
+				res.writeHead(503, { 'content-type': 'application/json' });
+				return void res.end(JSON.stringify({ status: 'misconfigured', problems: tamper.misconfigured }));
+			}
 			if (req.method === 'GET' && req.url === '/.well-known/ss-app.json') {
 				if (tamper.redirectManifest) {
 					res.writeHead(tamper.redirectManifest.status, { location: tamper.redirectManifest.location });
@@ -73,6 +79,11 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 				}
 				res.writeHead(200, headers);
 				return void res.end(text);
+			}
+			if (req.method === 'POST' && req.url === '/.well-known/ss-connect' && tamper.connect === 'no_secret') {
+				const detail = 'This product refuses connections: CONNECT_SECRET is shorter than 32 characters.';
+				res.writeHead(503, { 'content-type': 'application/problem+json' });
+				return void res.end(JSON.stringify({ status: 503, code: 'misconfigured', detail, problems: [detail] }));
 			}
 			if (req.method === 'POST' && req.url === '/.well-known/ss-connect') {
 				/** @type {ReturnType<typeof verifyConnectRequest>} */

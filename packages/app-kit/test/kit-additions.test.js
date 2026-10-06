@@ -344,7 +344,7 @@ describe('standard routes still work with the kit additions', () => {
 describe('configFromEnv in production', () => {
 	it('requires DATABASE_URI outside the build', async () => {
 		const { configFromEnv } = await import('../src/env.js');
-		expect(() => configFromEnv({ NODE_ENV: 'production' })).toThrow(/DATABASE_URI is required/);
+		expect(configFromEnv({ NODE_ENV: 'production' }).problems).toEqual([expect.stringMatching(/DATABASE_URI is required/)]);
 		expect(configFromEnv({ NODE_ENV: 'production', NEXT_PHASE: 'phase-production-build' }).productDbUri).toBeUndefined();
 		expect(configFromEnv({ NODE_ENV: 'production', DATABASE_URI: 'mongodb://db/x' }).productDbUri).toBe('mongodb://db/x');
 	});

@@ -64,6 +64,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		manifest,
 		strings,
 		logger: createLogger({ level: config.logLevel }),
+		problems: config.problems,
 		privacy: PRIVACY,
 		devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
 		// SSRF policy for merchant databases and connectors: in development the `ss dev` client database and local mocks

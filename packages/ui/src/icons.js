@@ -38,6 +38,9 @@ const PATHS = Object.freeze({
 	clock: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 6v6l4 2',
 	trash: 'M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15',
 	eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+	sun: 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41',
+	moon: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z',
+	monitor: 'M3 4h18v12H3zM8 20h8M12 16v4',
 });
 
 /** @typedef {keyof typeof PATHS} IconName */

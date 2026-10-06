@@ -20,6 +20,7 @@ import {
 	createSigner,
 	generateSigningKey,
 	isConnectSecret,
+	MIN_CONNECT_SECRET_LENGTH,
 	toPublicJwk,
 	verifyConnectRequest,
 } from '@ss/protocol';
@@ -180,16 +181,18 @@ export const createConnection = ({
 			return {
 				status,
 				headers: { 'content-type': 'application/problem+json' },
-				body: JSON.stringify({ type: 'about:blank', title: detail, status, code, detail }),
+				body: JSON.stringify({
+					type: 'about:blank',
+					title: detail,
+					status,
+					code,
+					detail,
+					...(code === 'misconfigured' ? { problems: [detail] } : {}),
+				}),
 			};
 		};
 		if (injected) return refuse(409, 'conflict', 'This product has a fixed connection.');
-		if (!isConnectSecret(connectSecret))
-			return refuse(
-				503,
-				'unavailable',
-				'This product refuses connections: CONNECT_SECRET is not set (at least 32 characters).',
-			);
+		if (!isConnectSecret(connectSecret)) return refuse(503, 'misconfigured', connectSecretProblem(connectSecret));
 		/** @type {ReturnType<typeof verifyConnectRequest>} */
 		let request;
 		try {
@@ -240,6 +243,16 @@ export const createConnection = ({
 		fixed: () => injected !== null,
 	});
 };
+
+/**
+ * Why connecting is refused for this `CONNECT_SECRET` (names the variable, never its value).
+ * @param {string | undefined} secret
+ * @returns {string}
+ */
+export const connectSecretProblem = (secret) =>
+	typeof secret === 'string' && secret !== ''
+		? `This product refuses connections: CONNECT_SECRET is shorter than ${MIN_CONNECT_SECRET_LENGTH} characters.`
+		: `This product refuses connections: CONNECT_SECRET is not set (at least ${MIN_CONNECT_SECRET_LENGTH} characters).`;
 
 /**
  * The manifest as this deployment serves it: `endpoints.base` is the address recorded at setup.

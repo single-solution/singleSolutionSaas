@@ -5,13 +5,14 @@
  *   request id → route match (404/405, CORS preflight) → body read with a byte cap (413) → auth (website key /
  *   launch session / Portal signature / none) → entitlement + element gating → JSON parse (415/400) → customer
  *   identity → rate limit (429; limit and key may be functions of the context) → Idempotency-Key (428/409/replay) →
- *   handler → RFC 9457 problems for every error. After the response, the usage and events that request (or this instance) queued, and the website's due retries, are sent.
+ *   handler → RFC 9457 problems for every error. A misconfigured product answers every request 503 with its problems. After the response, the usage and events that request (or this instance) queued, and the website's due retries, are sent.
  * @module
  */
 import { STOPPED_STATES, can } from '../entitlements.js';
 import { createId } from '@ss/contracts';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
 import { replayHeaders } from './replay.js';
+import { misconfiguredResponse } from '../misconfigured.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
 
 /** @typedef {import('./routes.js').RouteDefinition} RouteDefinition */
@@ -187,6 +188,8 @@ export const createRequestHandler = (product, routes, options = {}) => {
 	 * @returns {Promise<Response>}
 	 */
 	return async (request) => {
+		// a misconfigured product (`createProduct({ problems })`) answers every route with the reasons
+		if (Array.isArray(product.problems) && product.problems.length > 0) return misconfiguredResponse(product.problems);
 		const started = now();
 		const url = new URL(request.url);
 		const method = request.method.toUpperCase();

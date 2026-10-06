@@ -1,8 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
 	AppShell,
+	THEME_SCRIPT,
+	THEME_STORAGE_KEY,
+	ThemeScript,
+	ThemeToggle,
 	BarChart,
 	Breadcrumbs,
 	Button,
@@ -576,6 +581,7 @@ describe('AppShell without the optional parts', () => {
 			<AppShell
 				sections={[{ items: [{ href: '/home', label: 'Home', badge: <b>3</b> }] }]}
 				linkAs={RouterLink}
+				themeToggle={false}
 				mainId="content">
 				<p>Body</p>
 			</AppShell>,
@@ -637,5 +643,65 @@ describe('CodeBlock when copying fails', () => {
 		/** @type {any} */ (document).execCommand = undefined;
 		expect(await copyText('x')).toBe(false);
 		Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+	});
+});
+
+describe('theme', () => {
+	afterEach(() => {
+		document.documentElement.removeAttribute('data-theme');
+		window.localStorage.clear();
+		vi.restoreAllMocks();
+	});
+
+	it('the console header has a System / Light / Dark switch that stores the choice and sets data-theme', () => {
+		const { container } = render(
+			<AppShell sections={[{ items: [{ href: '/a', label: 'A' }] }]}>
+				<p>Body</p>
+			</AppShell>,
+		);
+		const group = /** @type {HTMLElement} */ (container.querySelector('header [role="group"][aria-label="Theme"]'));
+		const button = (/** @type {string} */ label) =>
+			/** @type {HTMLElement} */ ([...group.querySelectorAll('button')].find((b) => b.textContent === label));
+		expect(button('System').getAttribute('aria-pressed')).toBe('true');
+		click(button('Dark'));
+		expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+		expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark');
+		expect(button('Dark').getAttribute('aria-pressed')).toBe('true');
+		click(button('Light'));
+		expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+		click(button('System'));
+		expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+		expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+	});
+
+	it('reads the stored choice and survives blocked storage', () => {
+		window.localStorage.setItem(THEME_STORAGE_KEY, 'light');
+		const first = render(<ThemeToggle />);
+		const pressed = () => first.container.querySelector('[aria-pressed="true"]')?.textContent;
+		expect(pressed()).toBe('Light');
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+			throw new Error('blocked');
+		});
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new Error('blocked');
+		});
+		const second = render(<ThemeToggle className="extra" />);
+		expect(second.container.querySelector('[aria-pressed="true"]')?.textContent).toBe('System');
+		click(/** @type {HTMLElement} */ (second.container.querySelector('button[title="Dark theme"]')));
+		expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+	});
+
+	it('the head script applies a stored choice before paint, with the CSP nonce', () => {
+		const html = renderToStaticMarkup(<ThemeScript nonce="abc123" />);
+		expect(html).toContain('nonce="abc123"');
+		expect(html).toContain('ss-theme');
+		expect(renderToStaticMarkup(<ThemeScript />)).not.toContain('nonce');
+		window.localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+		new Function(THEME_SCRIPT)();
+		expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+		window.localStorage.setItem(THEME_STORAGE_KEY, 'bogus');
+		document.documentElement.removeAttribute('data-theme');
+		new Function(THEME_SCRIPT)();
+		expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
 	});
 });

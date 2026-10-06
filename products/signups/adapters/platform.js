@@ -113,6 +113,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			manifest,
 			strings,
 			logger,
+			problems: config.problems,
 			privacy: {
 				export: (/** @type {any} */ input) => /** @type {any} */ (privacy.export)?.(input),
 				anonymize: (/** @type {any} */ input) => /** @type {any} */ (privacy.anonymize)?.(input),

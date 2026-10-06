@@ -126,6 +126,7 @@ describe('configFromEnv', () => {
 			productDbOptions: { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000, serverSelectionTimeoutMS: 5_000 },
 			logLevel: 'debug',
 			outboundAllowHosts: ['minio.dev', '127.0.0.1'],
+			problems: [],
 		});
 		expect(configFromEnv({ NODE_ENV: 'production', DATABASE_URI: 'mongodb://x' })).toMatchObject({
 			logLevel: 'info',

@@ -1,8 +1,9 @@
 /*
  * @ss/ui design tokens. Import after Tailwind: `@import 'tailwindcss'; @import '@ss/ui/theme.css';` and add an
  * `@source` for the package sources. Every colour is a CSS variable (light by default, dark with the OS setting or
- * `data-theme="dark"` on <html>); utilities read them through `@theme inline`, so components never need `dark:`.
- * Text/background pairs keep a contrast ratio of at least 4.5:1 (WCAG AA) in both themes.
+ * `data-theme="dark"` on <html>, set before paint by `ThemeScript` from the `ThemeToggle` choice); utilities read them
+ * through `@theme inline`, so components never need `dark:`. Text/background pairs keep a contrast ratio of at least
+ * 4.5:1 (WCAG AA) in both themes; `line-strong` (form controls) keeps 3:1 against surfaces, `line` stays visible.
  */
 @theme inline {
 	--color-canvas: var(--ss-canvas);
@@ -45,8 +46,8 @@
 	--ss-canvas: #f8fafc;
 	--ss-surface: #ffffff;
 	--ss-surface-2: #f1f5f9;
-	--ss-line: #e2e8f0;
-	--ss-line-strong: #94a3b8;
+	--ss-line: #cbd5e1;
+	--ss-line-strong: #7c8ba1;
 	--ss-fg: #0f172a;
 	--ss-muted: #475569;
 	--ss-primary: #4f46e5;
@@ -77,7 +78,7 @@
 		--ss-canvas: #0b1120;
 		--ss-surface: #111827;
 		--ss-surface-2: #1e293b;
-		--ss-line: #273449;
+		--ss-line: #334155;
 		--ss-line-strong: #64748b;
 		--ss-fg: #f1f5f9;
 		--ss-muted: #a7b4c7;
@@ -109,7 +110,7 @@
 	--ss-canvas: #0b1120;
 	--ss-surface: #111827;
 	--ss-surface-2: #1e293b;
-	--ss-line: #273449;
+	--ss-line: #334155;
 	--ss-line-strong: #64748b;
 	--ss-fg: #f1f5f9;
 	--ss-muted: #a7b4c7;

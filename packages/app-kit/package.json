@@ -7,6 +7,7 @@
 	"exports": {
 		".": "./src/index.js",
 		"./testing": "./src/testing.js",
+		"./proxy": "./src/proxy.js",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -27,6 +28,10 @@
 			"./testing": {
 				"types": "./types/src/testing.d.ts",
 				"default": "./src/testing.js"
+			},
+			"./proxy": {
+				"types": "./types/src/proxy.d.ts",
+				"default": "./src/proxy.js"
 			},
 			"./package.json": "./package.json"
 		}

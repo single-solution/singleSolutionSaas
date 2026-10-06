@@ -1,7 +1,9 @@
 'use client';
 /**
  * Console frame: a floating sidebar island (brand, sections of links) and a top bar island (switchers on the left,
- * account actions on the right). Below `md` the sidebar becomes an off-canvas panel opened by the menu button.
+ * account actions and the System / Light / Dark theme switch on the right). The frame uses the available width (16 px
+ * side padding on phones, 24–32 px from `md`, at most 1600 px wide); pages decide their own reading widths. Below `md`
+ * the sidebar becomes an off-canvas panel opened by the menu button.
  * Includes a skip link to the main content. Router links are rendered with `linkAs` (e.g. Next's `Link`).
  * @module
  */
@@ -9,6 +11,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
 import { useFocusTrap } from './overlay.js';
+import { ThemeToggle } from './theme.js';
 
 /** @typedef {import('react').ReactNode} ReactNode */
 /** @typedef {{ href: string, label: ReactNode, icon?: import('./icons.js').IconName, current?: boolean, badge?: ReactNode }} NavItem */
@@ -73,7 +76,8 @@ function Brand({ name, tagline }) {
 /**
  * @param {{ brand?: { name: ReactNode, tagline?: ReactNode }, sections: NavSection[], topbar?: ReactNode,
  *   actions?: ReactNode, banner?: ReactNode, children: ReactNode, linkAs?: import('react').ElementType,
- *   sidebarFooter?: ReactNode, mainId?: string }} props
+ *   sidebarFooter?: ReactNode, mainId?: string, themeToggle?: boolean }} props `themeToggle`: show the theme switch
+ *   (default true)
  */
 export function AppShell({
 	brand = { name: 'Single Solution', tagline: 'Console' },
@@ -85,6 +89,7 @@ export function AppShell({
 	linkAs,
 	sidebarFooter,
 	mainId = 'main',
+	themeToggle = true,
 }) {
 	const [open, setOpen] = useState(false);
 	const panel = useRef(/** @type {HTMLDivElement | null} */ (null));
@@ -105,7 +110,7 @@ export function AppShell({
 				className="sr-only z-[70] rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-on-primary focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
 				Skip to content
 			</a>
-			<div className="mx-auto flex max-w-[1440px] gap-4 p-3 sm:p-4">
+			<div className="mx-auto flex w-full max-w-[1600px] gap-4 px-4 py-3 sm:py-4 md:px-6 lg:px-8">
 				<aside className="sticky top-4 hidden h-[calc(100vh-2rem)] w-64 shrink-0 flex-col justify-between overflow-y-auto rounded-card border border-line bg-surface p-4 shadow-card md:flex">
 					<div className="space-y-6">
 						<Brand {...brand} />
@@ -155,7 +160,12 @@ export function AppShell({
 							</button>
 							{topbar}
 						</div>
-						{actions ? <div className="flex items-center gap-2">{actions}</div> : null}
+						{actions || themeToggle ? (
+							<div className="flex items-center gap-2">
+								{themeToggle ? <ThemeToggle /> : null}
+								{actions}
+							</div>
+						) : null}
 					</header>
 					{banner}
 					<main id={mainId} tabIndex={-1} className="min-w-0 space-y-6 pb-12 focus:outline-none">

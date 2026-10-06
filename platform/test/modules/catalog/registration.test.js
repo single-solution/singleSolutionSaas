@@ -102,6 +102,20 @@ describe('onboarding with the connect secret (Portal side)', () => {
 		expect((await connect(t, { url: p.url })).status).toBe(201);
 	});
 
+	it("shows a misconfigured product's own reason", async () => {
+		const t = await boot();
+		const p = await product(t, { manifest: renamedService('alerts') });
+		const reason = "DATABASE_URI is required in production: set it to this product's own database.";
+		p.tamper.misconfigured = [reason];
+		const down = problemOf(await connect(t, { url: p.url }), 502, 'upstream_error');
+		expect(down.detail).toContain(reason);
+		expect(down.detail).toContain('503');
+		delete p.tamper.misconfigured;
+		p.tamper.connect = 'no_secret';
+		const refused = problemOf(await connect(t, { url: p.url }), 502, 'upstream_error');
+		expect(refused.detail).toBe('This product refuses connections: CONNECT_SECRET is shorter than 32 characters.');
+	});
+
 	it('checks the address and the answered manifest', async () => {
 		const t = await boot({ allowlist: [] });
 		const p = await product(t, { manifest: renamedService('grades') });

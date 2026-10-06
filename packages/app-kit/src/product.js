@@ -52,6 +52,8 @@ const MANIFEST_RESIGN_MS = 3_600_000;
  * @property {string} [portalUrl] a fixed Portal connection (tests, tools): with `signingKey` and `appId`. Without it a
  *   Portal connects at `POST /.well-known/ss-connect` with `connectSecret`, and the connection is kept in the control
  *   database (`stores.settings`)
+ * @property {string[]} [problems] configuration problems (`configFromEnv().problems`): when any, the product starts
+ *   degraded and every route answers 503 `{ status: 'misconfigured', problems }`
  * @property {string} [connectSecret] the deployer's `CONNECT_SECRET` (≥ 32 characters); without it connecting is refused
  * @property {string | null} [appId] with `portalUrl`
  * @property {Record<string, unknown> | string} [signingKey] with `portalUrl`: a private Ed25519 JWK, or `kid:seed`
@@ -135,6 +137,10 @@ export const createProduct = (options) => {
 	}
 	if (portalUrl !== undefined && typeof portalUrl !== 'string') throw kitError('invalid_config', 'portalUrl must be a URL');
 	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
+	const problemList = Object.freeze([
+		...new Set((options.problems ?? []).filter((entry) => typeof entry === 'string' && entry !== '')),
+	]);
+	if (problemList.length > 0) logger.error('product is misconfigured: every route answers 503', { problems: problemList });
 
 	const defaults = createMemoryStores({ now });
 	if (!options.stores) logger.warn('using in-memory stores: development only (use createMongoStores in production)');
@@ -444,6 +450,8 @@ export const createProduct = (options) => {
 	/** @type {any} */
 	const product = {
 		manifest,
+		/** Configuration problems: when any, every route answers 503 `{ status: 'misconfigured', problems }`. */
+		problems: problemList,
 		/** Load the generated secrets and the Portal connection (cached; the request handler awaits it first). */
 		ready: () => connection.ready(),
 		/** This deployment's address: the one the Portal connected to, else the manifest's `endpoints.base` (no trailing slash). */
