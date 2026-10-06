@@ -342,7 +342,7 @@ export const loadEnv = (env = process.env) => {
 	} catch (error) {
 		problems.push(/** @type {Error} */ (error).message);
 	}
-	if (!assetStorage && strict) problems.push('STORAGE_BUCKET is required in production (with the other STORAGE_* variables)');
+	// storage is optional: without it the Portal runs and only the delivery routes (website scripts, packs) answer 503
 	if (assetStorage && assetStorage.kind !== 's3' && strict)
 		problems.push('STORAGE_DIR is for development: use an S3-compatible bucket (STORAGE_BUCKET) in production');
 	if (assetStorage?.kind === 's3' && assetStorage.endpoint?.startsWith('http:') && strict)

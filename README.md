@@ -291,7 +291,8 @@ Access** (`0.0.0.0/0` for hosts without fixed IPs; every user has its own passwo
 ### 2. Storage for the Portal's delivery files
 
 Website scripts and pack files are stored in an S3-compatible bucket (Cloudflare R2, AWS S3, …). Create one bucket
-and an access key limited to it.
+and an access key limited to it. **Optional to start:** the Portal runs with only `MONGODB_URI`; until the `STORAGE_*`
+variables are set, only the website-script and pack routes answer 503.
 
 ### 3. Portal
 

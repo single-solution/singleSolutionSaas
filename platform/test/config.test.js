@@ -65,11 +65,11 @@ describe('loadEnv: only the database, the storage and tuning', () => {
 		expect(loadEnv(await testEnv({ APP_VERSION: '1a2b3c' })).version).toBe('1a2b3c');
 	});
 
-	it('requires the database, and a bucket in production; reports every problem without values', () => {
-		expect(problemsOf(() => loadEnv({ NODE_ENV: 'production' }))).toEqual([
-			'MONGODB_URI is required',
-			expect.stringMatching(/^STORAGE_BUCKET is required in production/),
-		]);
+	it('requires only the database (storage is optional); reports every problem without values', () => {
+		expect(problemsOf(() => loadEnv({ NODE_ENV: 'production' }))).toEqual(['MONGODB_URI is required']);
+		expect(
+			loadEnv({ NODE_ENV: 'production', MONGODB_URI: 'mongodb+srv://u:p@cluster.example.net/ss_portal' }).delivery.storage,
+		).toBeNull();
 		const problems = problemsOf(() =>
 			loadEnv({
 				NODE_ENV: 'test',
