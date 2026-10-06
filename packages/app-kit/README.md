@@ -120,7 +120,7 @@ request's website — a send that failed is retried by the next request of this 
 Products have no crons and no periodic work: anything with an expiry is treated as expired when read and cleaned up
 when touched (or by a MongoDB TTL index), and work that must be started without a customer request runs on the event
 that makes it relevant or from a dashboard button. The control-database client takes `configFromEnv().productDbOptions`
-(pool `DATABASE_MAX_POOL_SIZE`, default 5); merchant database pools hold 3 connections per instance and are closed
+(pool of 5); merchant database pools hold 3 connections per instance and are closed
 when idle (checked when the next website is served).
 
 Route handlers receive `ctx = { website, websiteId, query, searchParams, body, params, idempotencyKey, request, session,

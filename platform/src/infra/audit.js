@@ -109,7 +109,6 @@ export const createAudit = ({
 	locks,
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
-	logger,
 	lockTtlMs = 10_000,
 	lockWaitMs = 10_000,
 	attempts = 4,
@@ -207,47 +206,6 @@ export const createAudit = ({
 	};
 
 	/**
-	 * Verify every scope in order, from the first scope after `after` (a pass cut by its deadline resumes there).
-	 * Broken chains are logged as errors; scopes not reached before the deadline are reported as `skipped`, and
-	 * `resumeAfter` is the last scope verified then (null when the pass completed).
-	 * @param {{ deadline?: number, signal?: AbortSignal, after?: string | null }} [options]
-	 */
-	const verifyAll = async ({ deadline = Number.POSITIVE_INFINITY, signal, after = null } = {}) => {
-		const scopes = (await repo.aggregate([{ $group: { _id: '$scope' } }, { $sort: { _id: 1 } }]).toArray())
-			.map((row) => row._id)
-			.filter((scope) => typeof scope === 'string' && (after === null || scope > after));
-		/** @type {ChainReport[]} */
-		const broken = [];
-		let verified = 0;
-		let entries = 0;
-		let skipped = 0;
-		/** @type {string | null} */
-		let last = after;
-		for (const scope of scopes) {
-			if (now() >= deadline || signal?.aborted) {
-				skipped += 1;
-				continue;
-			}
-			const report = await verifyChain(scope, signal ? { signal } : {});
-			verified += 1;
-			entries += report.entries;
-			last = scope;
-			if (!report.ok) {
-				broken.push(report);
-				logger?.error('audit chain broken', { scope, broken: report.broken });
-			}
-		}
-		return {
-			scopes: scopes.length,
-			verified,
-			skipped,
-			entries,
-			broken: broken.map((r) => ({ scope: r.scope, ...r.broken })),
-			resumeAfter: skipped > 0 ? last : null,
-		};
-	};
-
-	/**
 	 * Newest-first entries. `before` is the `{ at, id }` of the last entry of the previous page (keyset pagination
 	 * over the `{ at: -1, _id: -1 }` order).
 	 * `scope` filters one chain; `action` is an exact action or a dotted prefix ending in `.*` (`credits.*`).
@@ -273,6 +231,6 @@ export const createAudit = ({
 		return repo.find(filter).sort({ at: -1, _id: -1 }).limit(n).toArray();
 	};
 
-	return Object.freeze({ record, list, verifyChain, verifyAuditChain: verifyChain, verifyAll });
+	return Object.freeze({ record, list, verifyChain, verifyAuditChain: verifyChain });
 };
 /** @typedef {ReturnType<typeof createAudit>} Audit */

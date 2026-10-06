@@ -348,6 +348,8 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	 * @param {{ merchantId: string, connectorId: string, credentials: unknown } & Caller} input
 	 */
 	const rotate = async ({ merchantId, connectorId, credentials, ...caller }) => {
+		// expired rollback copies of old credentials are dropped whenever credentials are rotated
+		await repo.purgeExpiredPrevious(new Date(ctx.now()));
 		const doc = await load(merchantId, connectorId, { live: true });
 		const checked = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, policy);
 		if (!checked.ok) throw invalid('The credentials are invalid.', checked.errors);
@@ -659,67 +661,6 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 		return { kind: k, descriptor, expiresAt };
 	};
 
-	/**
-	 * Health check (admin operation `connectors-health`, on demand): purge expired rollback copies, re-wrap sealed
-	 * values under the active KEK, re-test every live connector not checked within the interval (until 10 s before the
-	 * deadline, a margin for the check in flight). What is left stays due for the next run.
-	 * @param {{ deadline?: number, signal?: AbortSignal, batchSize?: number }} [options]
-	 */
-	const healthCheck = async ({ deadline = Number.POSITIVE_INFINITY, signal, batchSize = 25 } = {}) => {
-		const purged = await repo.purgeExpiredPrevious(new Date(ctx.now()));
-		let checked = 0;
-		let changed = 0;
-		let rewrapped = 0;
-		/** @type {Set<string>} */
-		const seen = new Set();
-		const timeLeft = () => ctx.now() < deadline - 10_000 && !signal?.aborted;
-		for (;;) {
-			if (!timeLeft()) break;
-			const due = (await repo.dueForCheck(new Date(ctx.now() - HEALTH_INTERVAL_MS), batchSize)).filter(
-				(d) => !seen.has(String(d._id)),
-			);
-			if (due.length === 0) return { checked, changed, purged, rewrapped, remaining: false };
-			for (const ref of due) {
-				if (!timeLeft()) break;
-				seen.add(String(ref._id));
-				let doc = await repo.get(ref.merchantId, String(ref._id));
-				if (!doc || !doc.sealed) continue;
-				try {
-					const active = ctx.envelope.activeKekId;
-					if (
-						ctx.envelope.kekIdOf(String(doc.sealed)) !== active ||
-						(doc.previous?.sealed && ctx.envelope.kekIdOf(String(doc.previous.sealed)) !== active)
-					) {
-						const set = {
-							sealed: ctx.envelope.rewrap(String(doc.sealed)),
-							...(doc.previous?.sealed ? { 'previous.sealed': ctx.envelope.rewrap(String(doc.previous.sealed)) } : {}),
-						};
-						const updated = await repo.update(doc.merchantId, String(doc._id), doc.version, set, { bump: false });
-						if (updated) {
-							doc = updated;
-							rewrapped += 1;
-						}
-					}
-				} catch (error) {
-					log.warn('connector rewrap failed', {
-						connectorId: String(doc._id),
-						error: { code: /** @type {any} */ (error)?.code },
-					});
-				}
-				const result = await check(doc);
-				checked += 1;
-				if (result.changed) {
-					changed += 1;
-					await audit({ actor: SYSTEM }, 'connectors.status_changed', result.doc, {
-						before: { status: doc.status },
-						after: { status: result.doc.status },
-					});
-				}
-			}
-		}
-		return { checked, changed, purged, rewrapped, remaining: true };
-	};
-
 	return {
 		create,
 		test,
@@ -736,7 +677,6 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 		statusFor,
 		websiteResources,
 		resolve,
-		healthCheck,
 	};
 };
 

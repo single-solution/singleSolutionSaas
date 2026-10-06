@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { JSDOM } from './dom.js';
 import { createOutboundPolicy } from '@ss/net';
-import { loadConfig, loadEnv, parseAssetStorage } from '../../../src/infra/config.js';
+import { loadEnv, parseAssetStorage } from '../../../src/infra/config.js';
 import { assetType, checkUpload, isAssetPath, mediaType, sha256Hex } from '../../../src/modules/delivery/core/assets.js';
 import {
 	bundleData,
@@ -33,7 +33,7 @@ import {
 	createS3Storage,
 	withImmutableCache,
 } from '../../../src/modules/delivery/storage.js';
-import { testEnv, testSystem } from '../../helpers.js';
+import { testEnv } from '../../helpers.js';
 import { PACK, SERVICE, packAssets, packManifest, serviceManifest } from './fixtures.js';
 
 /** @param {Record<string, any>} [overrides] */
@@ -485,9 +485,9 @@ describe('STORAGE_* configuration', () => {
 		});
 
 		expect(loadEnv(await testEnv()).delivery).toEqual({ storage: null, budgetKb: 60 });
-		expect(loadEnv(await testEnv({ STORAGE_DIR: ':memory:', DELIVERY_BUDGET_KB: '80' })).delivery).toEqual({
+		expect(loadEnv(await testEnv({ STORAGE_DIR: ':memory:' })).delivery).toEqual({
 			storage: { kind: 'memory' },
-			budgetKb: 80,
+			budgetKb: 60,
 		});
 		const prod = await testEnv({ NODE_ENV: 'production' });
 		expect(() => loadEnv({ ...prod, STORAGE_DIR: ':memory:' })).toThrow(
@@ -497,18 +497,5 @@ describe('STORAGE_* configuration', () => {
 		expect(loadEnv({ ...prod, ...base, STORAGE_ENDPOINT: 'https://r2.example.net' }).delivery.storage?.kind).toBe('s3');
 		const bogus = await testEnv({ STORAGE_BUCKET: 'Bogus!' });
 		expect(() => loadEnv(bogus)).toThrow(/STORAGE_BUCKET is not a valid/);
-		const zero = await testEnv({ DELIVERY_BUDGET_KB: '0' });
-		expect(() => loadEnv(zero)).toThrow(/DELIVERY_BUDGET_KB/);
-	});
-
-	it('the preview URL setting: an https origin on another host (F.16)', async () => {
-		const env = await testEnv();
-		const config = loadConfig(env, await testSystem({ previewUrl: 'https://preview.example-previews.test' }));
-		expect(config.delivery.previewOrigin).toBe('https://preview.example-previews.test');
-		for (const bad of ['https://preview.test/p', 'ftp://preview.test', 'https://u:p@preview.test', 'not a url'])
-			await expect(async () => loadConfig(env, await testSystem({ previewUrl: bad }))).rejects.toThrow(/preview URL must be/);
-		await expect(async () => loadConfig(env, await testSystem({ previewUrl: 'https://portal.test' }))).rejects.toThrow(
-			/different host/,
-		);
 	});
 });

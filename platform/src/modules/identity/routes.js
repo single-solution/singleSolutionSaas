@@ -181,6 +181,16 @@ export const identityRoutes = (ctx, service) => {
 			handler: async (c) => withCookie(await accounts.staffLogin(valid(inputs.staffLogin(c.body)), metaOf(c))),
 		},
 		{
+			// first run: while no staff user exists, the visitor chooses a password and becomes the superadmin `admin`
+			method: 'POST',
+			path: '/v1/auth/staff/first-admin',
+			auth: 'public',
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) =>
+				withCookie(await accounts.createFirstAdmin(valid(inputs.firstAdmin(c.body)), metaOf(c)), { status: 201 }),
+		},
+		{
 			method: 'POST',
 			path: '/v1/auth/staff/mfa/verify',
 			auth: 'staff',
@@ -273,6 +283,13 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/me',
 			auth: ['staff', 'merchant'],
 			handler: async (c) => ok(await accounts.me(sessionOf(c))),
+		},
+		{
+			method: 'PATCH',
+			path: '/v1/me',
+			auth: 'staff',
+			handler: async (c) =>
+				ok(await accounts.updateStaffProfile({ ...valid(inputs.staffProfile(c.body)), id: sessionOf(c).subject }, metaOf(c))),
 		},
 		{
 			method: 'POST',

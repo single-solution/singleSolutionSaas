@@ -56,9 +56,7 @@ import {
 } from '../../../src/modules/commerce/core/validate.js';
 import {
 	bookOrThrow,
-	hasFindings,
 	meteredDraft,
-	reconcileWindow,
 	settlementDraft,
 	spendDecisions,
 	subscriptionBurn,
@@ -558,34 +556,7 @@ describe('billing composition', () => {
 		});
 	});
 
-	it('reconciles a window', () => {
-		const buckets = plan.buckets.map((b) => ({ periodKey: b.periodKey, amount: b.amount }));
-		const [k1, k2] = buckets.map((b) => b.periodKey);
-		const clean = reconcileWindow({
-			buckets,
-			entries: [
-				{ type: 'settlement', periodKey: String(k1), amount: -1000 },
-				{ type: 'settlement', periodKey: String(k2), amount: -1000 },
-				{ type: 'metered', periodKey: `${k1}:metered`, amount: -10 },
-				{ type: 'deposit', periodKey: null, amount: 5 },
-			],
-		});
-		expect(hasFindings(clean)).toBe(false);
-		const drift = reconcileWindow({
-			buckets,
-			entries: [
-				{ type: 'settlement', periodKey: String(k1), amount: -999 },
-				{ type: 'settlement', periodKey: `${SUB}:2026-10-01T05:00:00Z`, amount: 0 },
-				{ type: 'metered', periodKey: `${SUB}:2026-10-01T06:00:00Z:metered`, amount: -10 },
-			],
-		});
-		expect(drift).toMatchObject({
-			missing: [k2],
-			extra: [`${SUB}:2026-10-01T05:00:00Z`],
-			mismatched: [{ periodKey: k1, expected: 1000, actual: 999 }],
-			orphanMetered: [`${SUB}:2026-10-01T06:00:00Z:metered`],
-		});
-		expect(hasFindings(drift)).toBe(true);
+	it('exports the product normaliser', () => {
 		expect(normaliseProduct).toBeTypeOf('function');
 	});
 });

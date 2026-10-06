@@ -169,8 +169,6 @@ export const testSystem = async (overrides = {}) => {
 	const { privateJwk: previous } = await generateSigningKey({ kid: 'portal-2026-04' });
 	const { privateJwk: website } = await generateSigningKey({ kid: 'website-2026-10' });
 	return {
-		portalUrl: PORTAL_URL,
-		previewUrl: null,
 		mail: null,
 		signingKeys: [privateJwk, previous],
 		websiteKeySigningKeys: [website],
@@ -188,5 +186,7 @@ export const testSystem = async (overrides = {}) => {
 /**
  * @param {Record<string, string | undefined>} [overrides] environment
  * @param {Partial<import('../src/infra/config.js').SystemState>} [system] system state
+ * @param {Partial<import('../src/infra/config.js').EnvConfig>} [fixed] fixed values replaced (e.g. a smaller budget)
  */
-export const testConfig = async (overrides = {}, system = {}) => loadConfig(await testEnv(overrides), await testSystem(system));
+export const testConfig = async (overrides = {}, system = {}, fixed = {}) =>
+	loadConfig(await testEnv(overrides), await testSystem(system), { baseUrl: PORTAL_URL, overrides: fixed });

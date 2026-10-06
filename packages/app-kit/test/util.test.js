@@ -133,7 +133,6 @@ describe('configFromEnv', () => {
 		});
 		expect(configFromEnv({ NODE_ENV: 'development' }).logLevel).toBe('debug');
 		expect(configFromEnv()).toHaveProperty('logLevel');
-		expect(configFromEnv({ DATABASE_MAX_POOL_SIZE: '2' }).productDbOptions.maxPoolSize).toBe(2);
-		expect(configFromEnv({ DATABASE_MAX_POOL_SIZE: 'lots' }).productDbOptions.maxPoolSize).toBe(5);
+		expect(configFromEnv({ DATABASE_MAX_POOL_SIZE: '2' }).productDbOptions.maxPoolSize).toBe(5); // fixed, not tunable
 	});
 });

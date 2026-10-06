@@ -169,21 +169,13 @@ describe('audit hash chain (MongoDB)', () => {
 			entries: 0,
 			headHash: genesisHashOf('merchant:mer_none'),
 		});
-		const all = await audit.verifyAll();
-		expect(all).toEqual({ scopes: 3, verified: 3, skipped: 0, entries: 12, broken: [], resumeAfter: null });
-		// a pass cut by its deadline reports where to resume, and resumes there
-		const cut = await audit.verifyAll({ deadline: 0 });
-		expect(cut).toMatchObject({ verified: 0, skipped: 3, resumeAfter: null });
-		const chainScopes = (await raw.distinct('scope')).sort();
-		const resumed = await audit.verifyAll({ after: chainScopes[0] });
-		expect(resumed).toMatchObject({ scopes: 2, verified: 2, resumeAfter: null });
 		// stored values are JSON-normalised (dates as ISO, undefined members dropped)
 		const one = await raw.findOne({ 'target.id': 't_1' });
 		expect(one?.after).toEqual({ i: 1, nested: { at: '1970-01-01T00:00:00.000Z' } });
 	});
 
 	it('detects edited, deleted and reordered entries', async () => {
-		const { audit, raw, entries } = await setup('tamper');
+		const { audit, raw } = await setup('tamper');
 		for (let i = 0; i < 4; i += 1)
 			await audit.record({
 				actor: staff,
@@ -197,9 +189,6 @@ describe('audit hash chain (MongoDB)', () => {
 		// edit a field (bypassing the append-only repository, as an attacker with database access would)
 		await raw.updateOne({ scope, seq: 2 }, { $set: { 'after.amount': 1000 } });
 		expect((await audit.verifyChain(scope)).broken).toMatchObject({ seq: 2, reason: 'hash' });
-		const all = await audit.verifyAll();
-		expect(all).toMatchObject({ scopes: 2, verified: 2, broken: [{ scope, seq: 2, reason: 'hash' }] });
-		expect(entries.some((e) => e.level === 'error' && e.msg === 'audit chain broken')).toBe(true);
 		await raw.updateOne({ scope, seq: 2 }, { $set: { 'after.amount': 1 } });
 		expect((await audit.verifyChain(scope)).ok).toBe(true);
 
@@ -223,7 +212,7 @@ describe('audit hash chain (MongoDB)', () => {
 		expect((await audit.verifyChain(scope)).ok).toBe(false);
 	});
 
-	it('appends after the head when a lease expired, waits for busy scopes and stops at the deadline', async () => {
+	it('appends after the head when a lease expired, waits for busy scopes and aborts on a signal', async () => {
 		const { audit, raw, clock, locks } = await setup('locks');
 		const target = { type: 'staff', id: 'stf_9' };
 		await audit.record({ actor: staff, action: 'staff.created', target });
@@ -241,8 +230,7 @@ describe('audit hash chain (MongoDB)', () => {
 		await locks.acquire(`audit:${GLOBAL_SCOPE}`, { ttlMs: 60_000 });
 		await expect(impatient.record({ actor: staff, action: 'staff.updated', target })).rejects.toThrow(/busy/);
 
-		// verification is skipped once the deadline passed, and aborts on a signal
-		expect(await audit.verifyAll({ deadline: clock.now() })).toMatchObject({ scopes: 1, verified: 0, skipped: 1 });
+		// verification aborts on a signal
 		const controller = new AbortController();
 		controller.abort();
 		await expect(audit.verifyChain(GLOBAL_SCOPE, { signal: controller.signal })).rejects.toThrow(/aborted/);

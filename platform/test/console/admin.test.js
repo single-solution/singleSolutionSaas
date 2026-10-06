@@ -1,6 +1,6 @@
 /**
- * End-to-end smoke of the Admin Console: boots the Portal in-process (every module, MongoMemory), bootstraps a
- * superadmin and signs in through the staff flow (password → TOTP enrolment, codes computed here → MFA verify on
+ * End-to-end smoke of the Admin Console: boots the Portal in-process (every module, MongoMemory), creates the first
+ * admin and signs in through the staff flow (password → optional TOTP enrolment, codes computed here → MFA verify on
  * the next sign-in), seeds a merchant with a website, a listed pack (and a breaking second version) and a
  * subscription with admin overrides, then server-renders every admin page (renderToString) and checks that each
  * renders without errors or React warnings. A second test covers impersonation: the merchant session carrying
@@ -30,7 +30,7 @@ import {
 	StaffResetPasswordView,
 	safeAdminNext,
 } from '../../src/console/admin/views/auth.js';
-import { DashboardView, AuditChainLine } from '../../src/console/admin/views/dashboard.js';
+import { DashboardView } from '../../src/console/admin/views/dashboard.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { WebsitesView } from '../../src/console/admin/views/websites.js';
 import {
@@ -200,7 +200,7 @@ const text = (html) =>
 		.replace(/\s+/g, ' ');
 
 /**
- * Boot a Portal with a capturing mailer, bootstrap a superadmin and sign in with TOTP (enrolment, then a second
+ * Boot a Portal with a capturing mailer, create the first admin and sign in with TOTP (enrolment, then a second
  * sign-in with the MFA challenge); create a merchant with a website through the merchant API.
  * @param {string} name database name
  */
@@ -223,25 +223,17 @@ const setup = async (name) => {
 		return decodeURIComponent(String(message?.data.link).split('#token=')[1] ?? '');
 	};
 
-	// ------------------------------------------------------------------ staff: bootstrap, password, TOTP enrolment
+	// ------------------------------------------------------------------ staff: first admin, e-mail, TOTP enrolment
 	const staff = client(portal);
-	const { link } = await /** @type {any} */ (portal.modules.service('identity')).bootstrapSuperadmin({
-		email: 'root@ss.test',
-	});
-	expect(String(link)).toContain('/staff/reset-password#token=');
 	const password = 'root password 123!';
-	expect(
-		(
-			await staff.api.post(adminApi.passwordResetConfirm(), {
-				token: decodeURIComponent(String(link).split('#token=')[1] ?? ''),
-				password,
-			})
-		).ok,
-	).toBe(true);
-	const login = await staff.api.post(adminApi.login(), { email: 'root@ss.test', password });
-	expect(login).toMatchObject({ ok: true, data: { status: 'mfa_enrolment_required' } });
-	// a half-signed session (password only) is not a console session yet
-	expect(await admin.loadStaffSession(staff.api)).toMatchObject({ ok: false, status: 401, problem: { code: 'mfa_pending' } });
+	const created = await staff.api.post(adminApi.firstAdmin(), { password });
+	expect(created).toMatchObject({ ok: true, status: 201, data: { staff: { login: 'admin', email: null } } });
+	expect((await staff.api.post(adminApi.firstAdmin(), { password })).status).toBe(409);
+	expect((await staff.api.request('PATCH', adminApi.me(), { email: 'root@ss.test' })).ok).toBe(true);
+	const login = await staff.api.post(adminApi.login(), { email: 'admin', password });
+	// no MFA until enrolled: the console works at once (and asks to turn two-factor sign-in on)
+	expect(login).toMatchObject({ ok: true, data: { status: 'ok' } });
+	expect(await admin.loadStaffSession(staff.api)).toMatchObject({ ok: true, staff: { mfa: { enabled: false } } });
 	const enrol = await staff.api.post(adminApi.mfaEnrol());
 	const secret = enrol.ok ? enrol.data.secret : '';
 	const confirmed = await staff.api.post(adminApi.mfaConfirm(), { code: totpCode(secret, clock.now()) });
@@ -349,8 +341,7 @@ describe('admin console smoke', () => {
 		const dashboard = await admin.loadDashboard(staff.api);
 		const dashboardHtml = text(ssr(<DashboardView {...dashboard} />));
 		expect(dashboardHtml).toContain('Platform health');
-		expect(dashboardHtml).toContain('audit_verify');
-		expect(dashboardHtml).toContain('not been verified yet');
+		expect(dashboardHtml).toContain('Job queue');
 		expect(dashboard.ok && dashboard.health.problem).toBeNull();
 
 		const merchants = await admin.loadMerchants(staff.api, {});
@@ -430,7 +421,7 @@ describe('admin console smoke', () => {
 		expect(policiesHtml).toContain('default copy');
 
 		const finance = await admin.loadFinance(staff.api);
-		expect(text(ssr(<FinanceView {...finance} staff={staffMember} />))).toContain('Force settlement');
+		expect(text(ssr(<FinanceView {...finance} staff={staffMember} />))).toContain('Finance alerts');
 		const ledger = await admin.loadLedger(staff.api, merchantId);
 		const ledgerHtml = text(ssr(<LedgerView {...ledger} staff={staffMember} />));
 		expect(ledgerHtml).toContain('bank-1');
@@ -754,14 +745,6 @@ describe('admin console smoke', () => {
 		).toEqual({ features: { 'bar.message': { value: 'Hi', locked: true } } });
 
 		// presentational pieces
-		expect(text(ssr(<AuditChainLine verification={null} />))).toContain('not been verified');
-		expect(
-			text(
-				ssr(
-					<AuditChainLine verification={{ at: '2026-10-01T00:00:00Z', scopes: 3, broken: [{ scope: 'global', seq: 4 }] }} />,
-				),
-			),
-		).toContain('global (seq 4');
 		expect(text(ssr(<ManifestDiffView diff={null} />))).toContain('No diff recorded');
 		expect(text(ssr(<ManifestDiffView diff={{ changed: false }} />))).toContain('No changes');
 		expect(

@@ -1,5 +1,5 @@
 import { StaffLoginView } from '../../../../../src/console/admin/views/auth.js';
-import { one, redirectIfStaff } from '../../../_lib/server.js';
+import { isFirstRun, one, redirectIfStaff } from '../../../_lib/server.js';
 
 export const metadata = { title: 'Staff sign in' };
 
@@ -7,5 +7,12 @@ export const metadata = { title: 'Staff sign in' };
 export default async function StaffLoginPage({ searchParams }) {
 	await redirectIfStaff();
 	const q = await searchParams;
-	return <StaffLoginView next={one(q.next) ?? null} expired={one(q.expired) === '1'} reset={one(q.reset) === '1'} />;
+	return (
+		<StaffLoginView
+			next={one(q.next) ?? null}
+			expired={one(q.expired) === '1'}
+			reset={one(q.reset) === '1'}
+			firstRun={await isFirstRun()}
+		/>
+	);
 }

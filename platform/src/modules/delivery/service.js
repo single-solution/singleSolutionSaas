@@ -77,7 +77,6 @@ import { createAssetStorage, withImmutableCache } from './storage.js';
  * @property {ReadonlyArray<string>} [allowHosts] development allowlist (default `ctx.config.outbound.allowHosts`;
  *   always empty in production)
  * @property {{ core: string, audience: string }} [runtime] browser runtime (default: `runtime/generated.js`)
- * @property {string | null} [previewOrigin] dedicated preview origin (default `ctx.config.delivery.previewOrigin`)
  */
 
 export const COMPILE_JOB = 'delivery.compile';
@@ -148,14 +147,9 @@ export const createDeliveryService = (ctx, options = {}) => {
 	const storage = configured ? withImmutableCache(configured) : null;
 	const runtime = options.runtime ?? { core: RUNTIME_CORE, audience: RUNTIME_AUDIENCE };
 	const previewKey = deriveSecret(ctx.config.sessionSecret, 'delivery-preview');
-	const portalUrl = ctx.config.portalUrl;
-	const portalOrigin = ctx.config.portalOrigin;
-	const eventsUrl = `${portalUrl}/v1/events`;
-	// element modules: `packs/<appId>/<version>/<path>` and `ui/<appId>/<version>/<path>` below this base
-	const assetBase = `${portalUrl}/w/`;
-	const previewOrigin =
-		options.previewOrigin === undefined ? (ctx.config.delivery.previewOrigin ?? null) : options.previewOrigin;
-	const previewHost = previewOrigin ? new URL(previewOrigin).host : null;
+	// the Portal's address is the current request's origin, so it is read when used
+	// element modules: `packs/<appId>/<version>/<path>` and `ui/<appId>/<version>/<path>` below the asset base
+	const assetBase = () => `${ctx.config.portalUrl}/w/`;
 
 	const assets = ctx.collection(ASSETS);
 	const artefacts = ctx.collection(ARTEFACTS);
@@ -263,7 +257,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			sha256,
 			size: bytes.byteLength,
 			contentType: checked.contentType,
-			url: `${assetBase}packs/${appId}/${n}/${path}`,
+			url: `${assetBase()}packs/${appId}/${n}/${path}`,
 			changed: !existing,
 			missing: (detail.assets ?? [])
 				.map((/** @type {{ path: string }} */ a) => a.path)
@@ -463,7 +457,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			sha256,
 			size: bytes.byteLength,
 			contentType: checked.contentType,
-			url: `${assetBase}ui/${appId}/${n}/${path}`,
+			url: `${assetBase()}ui/${appId}/${n}/${path}`,
 			changed: !existing,
 			status: settled.bundle.status,
 			missing: settled.missing,
@@ -798,8 +792,8 @@ export const createDeliveryService = (ctx, options = {}) => {
 			env: website.env,
 			version: '',
 			publicKey: alias.publicKey.key,
-			eventsUrl,
-			assetBase,
+			eventsUrl: `${ctx.config.portalUrl}/v1/events`,
+			assetBase: assetBase(),
 			elements: prepared,
 		});
 		const { version, text } = versionedLoader({ data, core: runtime.core, audience });
@@ -820,7 +814,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			env: website.env,
 			version,
 			text,
-			portalOrigin,
+			portalOrigin: ctx.config.portalOrigin,
 			core: runtime.core,
 			audience,
 			budget: budget.report,
@@ -936,7 +930,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 		warnings: doc.warnings,
 		reason: doc.reason ?? null,
 		createdAt: iso(doc.createdAt),
-		url: `${portalUrl}/w/${doc.websiteId}/${doc.version}/loader.js`,
+		url: `${ctx.config.portalUrl}/w/${doc.websiteId}/${doc.version}/loader.js`,
 	});
 
 	/**
@@ -1150,7 +1144,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			lastFailure: alias?.lastFailure ? { ...alias.lastFailure, at: iso(alias.lastFailure.at) } : null,
 			history: (alias?.history ?? []).map((/** @type {Record<string, any>} */ h) => ({ ...h, at: iso(h.at) })).reverse(),
 			publicKeyId: alias?.publicKey?.keyId ?? null,
-			aliasUrl: `${portalUrl}/w/${websiteId}/loader.js`,
+			aliasUrl: `${ctx.config.portalUrl}/w/${websiteId}/loader.js`,
 			artefacts: recent.map(artefactView),
 		};
 	};
@@ -1166,8 +1160,8 @@ export const createDeliveryService = (ctx, options = {}) => {
 		const artefact = /** @type {Record<string, any>} */ (
 			await artefacts.findOne({ _id: `${websiteId}:${website.env}:${alias.version}` })
 		);
-		const immutableUrl = `${portalUrl}/w/${websiteId}/${alias.version}/loader.js`;
-		const aliasUrl = `${portalUrl}/w/${websiteId}/loader.js`;
+		const immutableUrl = `${ctx.config.portalUrl}/w/${websiteId}/${alias.version}/loader.js`;
+		const aliasUrl = `${ctx.config.portalUrl}/w/${websiteId}/loader.js`;
 		return {
 			websiteId,
 			env: website.env,
@@ -1310,7 +1304,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 		const token = signPreviewToken(previewKey, { previewId, merchantId, websiteId, exp });
 		return {
 			previewId,
-			url: `${previewOrigin ?? portalUrl}/p/${token}${candidates.path}`,
+			url: `${ctx.config.portalUrl}/p/${token}${candidates.path}`,
 			expiresAt: new Date(exp).toISOString(),
 			version: built.version,
 			budget: built.manifest.budget,
@@ -1330,14 +1324,12 @@ export const createDeliveryService = (ctx, options = {}) => {
 	};
 
 	/**
-	 * `GET /p/<token>/<path>`: the merchant's public page with the candidate bundle injected. With a dedicated preview
-	 * origin, only requests to that host are served (the Portal host refuses previews).
-	 * @param {{ token: string, path: string, search?: string, host?: string | null }} input
+	 * `GET /p/<token>/<path>`: the merchant's public page with the candidate bundle injected, served from the Portal's
+	 * origin inside a CSP sandbox (opaque origin: no Portal cookies or storage reachable).
+	 * @param {{ token: string, path: string, search?: string }} input
 	 * @returns {Promise<Response>}
 	 */
-	const servePreview = async ({ token, path, search = '', host = null }) => {
-		if (previewHost !== null && host !== previewHost)
-			return fail('delivery_preview_refused', `Previews are served from ${previewOrigin} only.`);
+	const servePreview = async ({ token, path, search = '' }) => {
 		const claims = verifyPreviewToken(previewKey, token, ctx.now()) ?? fail('not_found', 'The preview has expired.');
 		const session = await previews.findOne({ _id: claims.previewId, websiteId: claims.websiteId });
 		if (!session || new Date(session.expireAt).getTime() <= ctx.now()) return fail('not_found', 'The preview has expired.');
@@ -1375,9 +1367,8 @@ export const createDeliveryService = (ctx, options = {}) => {
 			headers: previewHeaders({
 				nonce,
 				origin: String(session.origin),
-				portalOrigin,
+				portalOrigin: ctx.config.portalOrigin,
 				connectOrigins: Array.isArray(session.connectOrigins) ? session.connectOrigins.map(String) : [],
-				dedicated: previewHost !== null,
 			}),
 		});
 	};

@@ -3,8 +3,8 @@
  * build time) and cached on `globalThis`, so warm serverless invocations reuse it:
  *
  * 1. the environment (`MONGODB_URI`, `STORAGE_*`) is validated — a misconfigured deployment fails fast;
- * 2. the system state is loaded from the control database: secrets generated on first start, settings recorded at
- *    `/setup` or by admins (`infra/system.js`);
+ * 2. the system state is loaded from the control database: secrets generated on first start, settings recorded by
+ *    admins (`infra/system.js`);
  * 3. indexes and migrations are applied once per schema version, under a lock (no manual step for the owner);
  * 4. every few seconds a cheap read of the settings version decides whether another instance changed the settings
  *    (or rotated a key), and the Portal is rebuilt.
@@ -74,7 +74,7 @@ export const prepareSchema = async (portal, system, logger) => {
 
 /**
  * The Portal of this process (built or rebuilt when needed). Options given once are kept for later rebuilds (a
- * settings change, `/setup`); by default everything comes from `process.env`.
+ * settings change); by default everything comes from `process.env`.
  * @param {GetPortalOptions} [given]
  * @returns {Promise<import('./portal.js').Portal>}
  */

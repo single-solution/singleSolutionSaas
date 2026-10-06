@@ -1,6 +1,6 @@
 /**
  * Public service of the `commerce` module (INTERFACES.md): subscriptions, element switches, entitlement documents,
- * usage, ledger, credits, settlement, reconciliation and spend caps. Other modules call it via
+ * usage, ledger, credits, settlement and spend caps. Other modules call it via
  * `ctx.service('commerce')`; failures are thrown as RFC 9457 problems (`infra/http.js` `problem`).
  * @module
  */
@@ -8,7 +8,6 @@ import { createCommerceRepo } from './repo.js';
 import { createDeps } from './services/deps.js';
 import { createLedger } from './services/ledger.js';
 import { createMoney, entryView } from './services/money.js';
-import { createReconciliation } from './services/reconciliation.js';
 import { createSettlement } from './services/settlement.js';
 import { createSubscriptions } from './services/subscriptions.js';
 import { createUsage } from './services/usage.js';
@@ -51,7 +50,6 @@ export const createCommerceService = (ctx) => {
 	const settlement = createSettlement({ ctx, repo, deps, ledger, subscriptions });
 	const money = createMoney({ ctx, repo, deps, ledger, settlement });
 	const usage = createUsage({ ctx, repo, deps, subscriptions });
-	const reconciliation = createReconciliation({ ctx, repo, ledger, settlement });
 
 	/**
 	 * Settle the merchant of a website before reading or changing its money-relevant state (F.19: settlement on read).
@@ -178,20 +176,14 @@ export const createCommerceService = (ctx) => {
 		/** @param {string} merchantId @param {{ afterSeq?: number | null, limit?: number }} [page] */
 		ledgerEntries: async (merchantId, { afterSeq = null, limit = 100 } = {}) =>
 			(await ledger.entries(merchantId, { afterSeq, limit })).map(entryView),
-		// operations (admin console) and settlement on read
+		// settlement on read
 		settleDue: money.settleDue,
 		/**
-		 * Settlement pass (all merchants, or `merchantId`), bounded by the operation deadline unless one is given.
+		 * The settlement pass behind settlement on read (all merchants, or `merchantId`); unbounded unless a deadline
+		 * is given.
 		 * @param {Parameters<typeof settlement.runSettlement>[0]} [options]
 		 */
-		runSettlement: (options = {}) =>
-			settlement.runSettlement({ deadline: ctx.now() + ctx.config.operationDeadlineMs, ...options }),
-		/**
-		 * Reconciliation chunk (resumes where the previous one stopped), bounded like {@link runSettlement}.
-		 * @param {Parameters<typeof reconciliation.runReconciliation>[0]} [options]
-		 */
-		runReconciliation: (options = {}) =>
-			reconciliation.runReconciliation({ deadline: ctx.now() + ctx.config.operationDeadlineMs, ...options }),
+		runSettlement: (options = {}) => settlement.runSettlement(options),
 		/** @param {{ merchantId?: string | null, limit?: number }} [query] */
 		alerts: async ({ merchantId = null, limit = 100 } = {}) =>
 			(await repo.listAlerts({ merchantId, limit })).map((a) => ({
@@ -201,14 +193,6 @@ export const createCommerceService = (ctx) => {
 				merchantId: a.merchantId,
 				subscriptionId: a.subscriptionId,
 				details: a.details,
-			})),
-		/** @param {{ limit?: number }} [query] */
-		reconciliationReports: async ({ limit = 30 } = {}) =>
-			(await repo.listReports(limit)).map((r) => ({
-				...r,
-				reportId: r._id,
-				at: new Date(r.at).toISOString(),
-				_id: undefined,
 			})),
 	};
 };

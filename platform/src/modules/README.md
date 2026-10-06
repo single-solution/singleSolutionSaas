@@ -31,7 +31,6 @@ export const exampleModule = defineModule({
 	service: (ctx) => createExampleService(ctx), // built lazily, once
 	routes: (ctx) => exampleRoutes(ctx.service('example')),
 	jobs: (ctx) => ({ 'example.sync': async (payload, { job, signal, deadline, logger }) => {} }),
-	operations: (ctx) => ({ settlement: async ({ deadline, signal, logger, input }) => ({ settled: 12 }) }), // admin buttons
 	ports: (ctx) => ({ appKeys: (appId) => keyResolverFor(appId) }), // infra ports this module implements
 });
 ```
@@ -88,9 +87,6 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
   trigger: tag it with a `group` and run that group's due jobs (`ctx.jobs.runBatch({ groups, maxJobs })`) when the
   thing it concerns is touched again. Use a job `key` to dedupe enqueues. Throw `permanentFailure(message)` for errors
   retries cannot fix.
-- **Operations** are global names (`settlement`, `reconciliation`): bounded, resumable tasks staff run from the admin
-  console (`POST /v1/admin/operations/:name`, `{ after? }`). The built-in `drain` runs due jobs and `audit_verify`
-  verifies the audit chains. Unknown operation names answer 404.
 - **Ports** are infra extension points with a single provider each: `sessionActor(session)` (identity: live roles,
   deactivated users → null), `appKeys(appId)` (catalog: registered app keys as a `KeyResolver`),
   `websiteKeyRevoked(claims, rawKey)` (identity: revocation + `sk_` hash check), `productCalled(appId)` (integration:

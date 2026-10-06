@@ -1,7 +1,7 @@
 /**
  * Staff operations: merchant suspension (with reason; commerce reacts through `onMerchantStatus`), merchant listing,
- * staff users (created without a password — they set one through a mailed or printed setup link; MFA mandatory),
- * the one-time superadmin bootstrap, partners and developers with their grants. Every mutation is audited.
+ * staff users (created without a password — they set one through a mailed setup link; two-factor sign-in once they
+ * enrol), partners and developers with their grants. Every mutation is audited.
  * @module
  */
 import { problem } from '../../infra/http.js';
@@ -298,44 +298,8 @@ export const createAdmin = (deps, hooks) => {
 			await audit(actor, 'staff.mfa_reset', { type: 'staff', id: staffId }, { reason, meta });
 		},
 
-		/** @returns {Promise<boolean>} true once any staff user exists (first-run setup is then closed) */
+		/** @returns {Promise<boolean>} true once any staff user exists (the staff sign-in page then stops offering "Create admin") */
 		hasStaff: async () => (await repo.staff.countDocuments({})) > 0,
-
-		/**
-		 * One-time bootstrap (CLI): create the first superadmin and return a password-setup link. Refused once any
-		 * staff user exists. Never sets a password.
-		 * @param {{ email: string, name?: string }} input
-		 */
-		bootstrapSuperadmin: async ({ email, name }) => {
-			const result = await ctx.locks.withLock('identity.bootstrap', { ttlMs: 60_000, owner: 'bootstrap' }, async () => {
-				if ((await repo.staff.countDocuments({})) > 0)
-					throw problem('conflict', 'Staff users already exist; bootstrap is a one-time operation.');
-				const doc = {
-					_id: repo.id('stf'),
-					email,
-					name: name ?? null,
-					roles: ['superadmin'],
-					status: 'active',
-					passwordHash: null,
-					totp: null,
-					pendingTotp: null,
-					recoveryHashes: [],
-					createdBy: 'bootstrap',
-				};
-				await insertUnique(() => repo.staff.insertOne(doc), 'conflict', 'A staff user with this e-mail exists.');
-				await audit(
-					{ type: 'system', id: 'bootstrap' },
-					'staff.bootstrapped',
-					{ type: 'staff', id: doc._id },
-					{
-						after: { email, roles: doc.roles },
-					},
-				);
-				return { staffId: doc._id, link: await hooks.staffSetupLink(doc._id) };
-			});
-			if (result.locked) throw problem('conflict', 'A bootstrap is already running.');
-			return result.value;
-		},
 
 		// -----------------------------------------------------------------------------------------------------------
 		// Partners and developers

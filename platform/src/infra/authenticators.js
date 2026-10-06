@@ -3,10 +3,10 @@
  *
  * | mode         | credential                                   | verified by                                              |
  * | ------------ | -------------------------------------------- | -------------------------------------------------------- |
- * | `staff`      | `__Host-ss_staff` session cookie, or `Authorization: Bearer sst_…` (staff API token, F.18) | session store; MFA required unless the route says `mfa: false` |
+ * | `staff`      | `__Host-ss_staff` session cookie, or `Authorization: Bearer sst_…` (staff API token, F.18) | session store; MFA required (once enrolled) unless the route says `mfa: false` |
  * | `merchant`   | `__Host-ss_merchant` session cookie          | session store                                            |
  * | `websiteKey` | `Authorization: Bearer pk_…/sk_…`            | `verifyWebsiteKey` (website-key JWKS) + revocation port; `originAllowed` for pk_ |
- * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = Portal URL) |
+ * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = the request origin) |
  *
  * Ports (provided by modules, see `modules/README.md`): `sessionActor(session) → Actor | null` (default: roles stored
  * in the session), `appKeys(appId) → KeyResolver | null` (default: none — every assertion is refused) and
@@ -21,6 +21,7 @@
 import { isProtocolError, originAllowed, verifyAssertion, verifyWebsiteKey } from '@ss/protocol';
 import { actorFromSession, readCookie, sessionCookieName } from './auth.js';
 import { isProblem, problem } from './http.js';
+import { requestOrigin } from './request-scope.js';
 
 /** Staff API tokens (F.18): `sst_` + an opaque session token. */
 const STAFF_TOKEN = /^sst_([A-Za-z0-9_-]{43})$/;
@@ -129,24 +130,14 @@ export const createWebsiteKeyVerifier = ({ keyResolver, revoked, now = Date.now 
 /**
  * @param {{
  *   sessions: Sessions,
- *   cookieSecure: boolean,
  *   verifyWebsiteKey: WebsiteKeyVerifier,
- *   portalUrl: string,
  *   replayStore: ReplayStore,
  *   ports?: AuthPorts,
  *   now?: () => number,
  * }} options
  * @returns {Record<Exclude<AuthMode, 'public'>, Authenticator>}
  */
-export const createAuthenticators = ({
-	sessions,
-	cookieSecure,
-	verifyWebsiteKey: verifyKey,
-	portalUrl,
-	replayStore,
-	ports = {},
-	now = Date.now,
-}) => {
+export const createAuthenticators = ({ sessions, verifyWebsiteKey: verifyKey, replayStore, ports = {}, now = Date.now }) => {
 	const sessionActor = ports.sessionActor ?? actorFromSession;
 
 	/**
@@ -154,7 +145,10 @@ export const createAuthenticators = ({
 	 * @returns {Authenticator}
 	 */
 	const sessionAuth = (kind) => async (request, route) => {
-		const cookieToken = readCookie(request.headers.get('cookie'), sessionCookieName(kind, cookieSecure));
+		const cookieToken = readCookie(
+			request.headers.get('cookie'),
+			sessionCookieName(kind, requestOrigin(request).startsWith('https:')),
+		);
 		const bearer = kind === 'staff' && !cookieToken ? STAFF_TOKEN.exec(bearerOf(request) ?? '')?.[1] : undefined;
 		const token = cookieToken || bearer;
 		if (token === undefined || token === '') return null;
@@ -204,7 +198,13 @@ export const createAuthenticators = ({
 		const appKeys = ports.appKeys;
 		if (!appKeys) return problem('invalid_credentials', 'The client assertion is invalid.');
 		try {
-			const { appId } = await verifyAssertion({ token, keyResolverForApp: appKeys, audience: portalUrl, replayStore, now });
+			const { appId } = await verifyAssertion({
+				token,
+				keyResolverForApp: appKeys,
+				audience: requestOrigin(request),
+				replayStore,
+				now,
+			});
 			return { ok: true, mode: 'product', actor: { type: 'product', id: appId }, app: { appId } };
 		} catch {
 			return problem('invalid_credentials', 'The client assertion is invalid.');

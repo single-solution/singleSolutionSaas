@@ -4,7 +4,7 @@
  * - Service onboarding (Portal side of `@ss/protocol` connect): staff add a product with its URL and the deployer's
  *   connect secret; the Portal calls its `/.well-known/ss-connect` (HMAC both ways) and pins its base URL and key.
  * - Element-pack bundle uploads (signed descriptor: manifest + asset hashes).
- * - Manifest versions: refresh (staff, or the `catalog_refresh` admin operation; the served manifest must carry a valid
+ * - Manifest versions: refresh (staff; the served manifest must carry a valid
  *   `SS-Manifest-Signature` made with a registered app key, otherwise it is stored as `rejected` and alerted), diff,
  *   staff approval / rejection, `manifest.accepted@1`.
  * - Lifecycle (pending → active → deprecated → retired), environments, app keys (rotation overlap, revocation).
@@ -183,7 +183,6 @@ export const createCatalogService = (ctx, options = {}) => {
 	/** @type {SafeFetch} */
 	const safeFetch = options.fetch ?? netFetch;
 	const staleAfterMs = options.staleAfterMs ?? STALE_AFTER_MS;
-	const portalUrl = ctx.config.portalUrl;
 
 	// ------------------------------------------------------------------------------------------------------------
 	// helpers
@@ -446,7 +445,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		const request = createConnectRequest({
 			secret,
 			productUrl: base,
-			portalUrl,
+			portalUrl: ctx.config.portalUrl,
 			jwks: ctx.keys.publishedJwks(),
 			appId,
 			now: ctx.now,
@@ -993,7 +992,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		try {
 			issued = await protocolIssueLaunch({
 				signer: ctx.keys.signer,
-				issuer: portalUrl,
+				issuer: ctx.config.portalUrl,
 				audience: app._id,
 				subject: input.subject,
 				kind: input.kind,
@@ -1205,59 +1204,6 @@ export const createCatalogService = (ctx, options = {}) => {
 		return versionView(doc);
 	};
 
-	// ------------------------------------------------------------------------------------------------------------
-	// admin operation
-
-	/**
-	 * `catalog_refresh` (admin operation, on demand): refresh every live service app in id order from the app after
-	 * `after` (deprecated apps past their sunset are retired as they are read). Apps not reached before the deadline
-	 * count as `skipped`, and `resumeAfter` is the last app handled then (null when the pass completed): run the
-	 * operation again with `{ after: resumeAfter }` to continue.
-	 * @param {{ deadline?: number, signal?: AbortSignal, after?: string | null }} [options]
-	 */
-	const refreshAll = async ({ deadline = Infinity, signal, after: from = null } = {}) => {
-		const stats = {
-			checked: 0,
-			changed: 0,
-			unchanged: 0,
-			rejected: 0,
-			failed: 0,
-			skipped: 0,
-			resumeAfter: /** @type {string | null} */ (null),
-		};
-		let after = from;
-		/** @type {string | null} */
-		let last = from;
-		for (;;) {
-			const page = await repo.listApps({ status: ['pending', 'active', 'deprecated'], after, limit: 100 });
-			for (const app of page) {
-				if (signal?.aborted || ctx.now() >= deadline) {
-					if (stats.skipped === 0) stats.resumeAfter = last;
-					stats.skipped += 1;
-					continue;
-				}
-				last = String(app._id);
-				if (app.kind !== 'service') continue;
-				stats.checked += 1;
-				try {
-					const result = await refreshManifest({ appId: app._id });
-					if (result.changed) stats.changed += 1;
-					else if ('rejected' in result) stats.rejected += 1;
-					else stats.unchanged += 1;
-				} catch (error) {
-					stats.failed += 1;
-					ctx.logger.warn('manifest refresh failed', {
-						appId: app._id,
-						error: isObject(error) && 'code' in error ? { code: error.code, detail: error.detail } : error,
-					});
-				}
-			}
-			if (page.length < 100) break;
-			after = /** @type {AppDoc} */ (page[page.length - 1])._id;
-		}
-		return stats;
-	};
-
 	return {
 		// INTERFACES.md
 		getApp,
@@ -1280,7 +1226,6 @@ export const createCatalogService = (ctx, options = {}) => {
 		appDetail,
 		listVersions,
 		versionDetail,
-		refreshAll,
 		// products
 		recordHeartbeat,
 		rotateKey,

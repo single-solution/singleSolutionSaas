@@ -60,6 +60,10 @@ export const email = (value) => {
 	return okv(v);
 };
 
+/** The staff login name: an e-mail address, or `admin`. @type {Field<string>} */
+export const staffLoginName = (value) =>
+	typeof value === 'string' && value.trim().toLowerCase() === 'admin' ? okv('admin') : email(value);
+
 /**
  * A new password: 12..1024 characters, not only whitespace.
  * @type {Field<string>}
@@ -321,7 +325,14 @@ export const inputs = Object.freeze({
 	login: /** @type {(b: unknown) => Parsed<{ email: string, password: string, merchantId?: string }>} */ (
 		(b) => object(b, { email, password, merchantId: { optional: idOf('mer') } })
 	),
-	staffLogin: /** @type {(b: unknown) => Parsed<{ email: string, password: string }>} */ ((b) => object(b, { email, password })),
+	// staff sign in with their e-mail, or with the login name `admin` (the first admin, which may have no e-mail)
+	staffLogin: /** @type {(b: unknown) => Parsed<{ email: string, password: string }>} */ (
+		(b) => object(b, { email: staffLoginName, password })
+	),
+	firstAdmin: /** @type {(b: unknown) => Parsed<{ password: string }>} */ ((b) => object(b, { password: newPassword })),
+	staffProfile: /** @type {(b: unknown) => Parsed<{ name?: string, email?: string }>} */ (
+		(b) => object(b, { name: { optional: text(120) }, email: { optional: email } })
+	),
 	tokenOnly: /** @type {(b: unknown) => Parsed<{ token: string }>} */ ((b) => object(b, { token })),
 	emailOnly: /** @type {(b: unknown) => Parsed<{ email: string }>} */ ((b) => object(b, { email })),
 	resetConfirm: /** @type {(b: unknown) => Parsed<{ token: string, password: string }>} */ (

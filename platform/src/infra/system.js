@@ -1,13 +1,12 @@
 /**
- * The Portal's own state in its control database (`platform_system`), so that nothing but the database and the asset
- * storage is configured through the environment:
+ * The Portal's own state in its control database (`platform_system`), so that only the database, the first-admin
+ * secret and the asset storage are configured through the environment:
  *
  * - `secrets` — generated on first start and inserted only if absent (`_id` unique), so concurrent cold starts agree on
  *   one set: the Ed25519 Portal signing key(s), the website-key signing key(s), the encryption keys (KEKs), the session
- *   secret, the key pepper and the idempotency secret. Rotation prepends a new key and keeps the old ones published
- *   (signing) or able to open (encryption).
- * - `settings` — recorded at `/setup` and by admins: the Portal URL (issuer/audience, e-mail links, CSRF origin), an
- *   optional preview URL and the mailer (its password sealed with the encryption keys). `version` increases with every
+ *   secret, the key pepper and the idempotency secret. Lists stay lists (first signs or seals; all are published or
+ *   able to open), so older data keeps working.
+ * - `settings` — recorded by admins: the mailer (its password sealed with the encryption keys). `version` increases with every
  *   change so other instances notice and rebuild.
  * - `schema` — the fingerprint of the indexes and migrations last applied (applied once per deploy, under a lock).
  *
@@ -48,10 +47,7 @@ export const SYSTEM_COLLECTION = COLLECTIONS.system;
  * @typedef {object} SettingsDoc
  * @property {'settings'} _id
  * @property {number} version
- * @property {string | null} portalUrl
- * @property {string | null} previewUrl
  * @property {MailSettings | null} mail
- * @property {Date | null} setupAt
  * @property {Date} updatedAt
  */
 
@@ -91,7 +87,7 @@ export const generateSecrets = ({ now = Date.now, randomBytes = (n) => new Uint8
 /**
  * The secrets part of the system state.
  * @param {Omit<SecretsDoc, '_id'>} doc
- * @returns {Omit<SystemState, 'portalUrl' | 'previewUrl' | 'mail'>}
+ * @returns {Omit<SystemState, 'mail'>}
  */
 export const secretsOf = (doc) => ({
 	signingKeys: doc.signingKeys.map((key) => signingKeyFromSeed(key.kid, key.seed)),
@@ -104,13 +100,11 @@ export const secretsOf = (doc) => ({
 
 /**
  * A complete system state for tests and tools: fresh secrets plus the given settings.
- * @param {{ portalUrl?: string | null, previewUrl?: string | null, mail?: SystemState['mail'] }} [settings]
+ * @param {{ mail?: SystemState['mail'] }} [settings]
  * @returns {SystemState}
  */
-export const testSystemState = ({ portalUrl = null, previewUrl = null, mail = null } = {}) => ({
+export const testSystemState = ({ mail = null } = {}) => ({
 	...secretsOf(generateSecrets()),
-	portalUrl,
-	previewUrl,
 	mail,
 });
 
@@ -145,7 +139,7 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 	/** @returns {Promise<SettingsDoc | null>} */
 	const settings = async () => /** @type {SettingsDoc | null} */ (await collection.findOne({ _id: 'settings' }));
 
-	/** @returns {Promise<number>} the settings version (0 before setup), a cheap read for cache checks */
+	/** @returns {Promise<number>} the settings version (0 before the first change), a cheap read for cache checks */
 	const version = async () => {
 		const doc = await collection.findOne({ _id: 'settings' }, { projection: { version: 1 } });
 		return typeof doc?.version === 'number' ? doc.version : 0;
@@ -163,8 +157,6 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 		return {
 			state: {
 				...base,
-				portalUrl: settingsDoc?.portalUrl ?? null,
-				previewUrl: settingsDoc?.previewUrl ?? null,
 				mail: mail
 					? {
 							host: mail.host,
@@ -182,17 +174,14 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 
 	/**
 	 * Change settings (bumps the version). `mail.pass`: a new password (sealed here), `undefined` keeps the stored one,
-	 * `null` removes it. `setup: true` records the first-run setup time.
-	 * @param {{ portalUrl?: string, previewUrl?: string | null, setup?: boolean,
+	 * `null` removes it.
+	 * @param {{
 	 *   mail?: { host: string, port: number, secure: boolean, user: string | null, pass?: string | null, from: string } | null }} patch
 	 * @returns {Promise<SettingsDoc>}
 	 */
 	const update = async (patch) => {
 		/** @type {Record<string, unknown>} */
 		const set = { updatedAt: new Date(now()) };
-		if (patch.portalUrl !== undefined) set.portalUrl = patch.portalUrl;
-		if (patch.previewUrl !== undefined) set.previewUrl = patch.previewUrl;
-		if (patch.setup) set.setupAt = new Date(now());
 		if (patch.mail !== undefined) {
 			if (patch.mail === null) set.mail = null;
 			else {
@@ -219,54 +208,12 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 				$set: set,
 				$inc: { version: 1 },
 				$setOnInsert: {
-					...(set.portalUrl === undefined ? { portalUrl: null } : {}),
-					...(set.previewUrl === undefined ? { previewUrl: null } : {}),
 					...(set.mail === undefined ? { mail: null } : {}),
-					...(set.setupAt === undefined ? { setupAt: null } : {}),
 				},
 			},
 			{ upsert: true, returnDocument: 'after' },
 		);
 		return /** @type {SettingsDoc} */ (doc);
-	};
-
-	/**
-	 * Rotate a key: prepend a new one (it signs or seals from now on) and keep the others published / able to open.
-	 * Bumps the settings version so every instance reloads.
-	 * @param {'signing' | 'website' | 'encryption'} kind
-	 * @returns {Promise<{ kind: string, id: string, count: number }>}
-	 */
-	const rotate = async (kind) => {
-		await secrets();
-		const createdAt = new Date(now()).toISOString();
-		const field = kind === 'signing' ? 'signingKeys' : kind === 'website' ? 'websiteSigningKeys' : 'encryptionKeys';
-		/** @type {Record<string, string>} */
-		const entry =
-			kind === 'encryption'
-				? { id: kidOf('k', now, randomBytes), key: b64url(randomBytes), createdAt }
-				: { kid: kidOf(kind === 'signing' ? 'portal' : 'website', now, randomBytes), seed: b64url(randomBytes), createdAt };
-		const updated = /** @type {Record<string, unknown> | null} */ (
-			await collection.findOneAndUpdate(
-				{ _id: 'secrets' },
-				/** @type {any} */ ({ $push: { [field]: { $each: [entry], $position: 0 } } }),
-				{ returnDocument: 'after' },
-			)
-		);
-		await update({});
-		const list = updated?.[field];
-		return { kind, id: String(entry.kid ?? entry.id), count: Array.isArray(list) ? list.length : 1 };
-	};
-
-	/**
-	 * Public facts about the keys (for the admin settings page): ids and creation dates, never key material.
-	 * @returns {Promise<Record<'signing' | 'website' | 'encryption', Array<{ id: string, createdAt: string, active: boolean }>>>}
-	 */
-	const keyInfo = async () => {
-		const doc = await secrets();
-		/** @param {Array<{ kid?: string, id?: string, createdAt: string }>} keys */
-		const list = (keys) =>
-			keys.map((key, index) => ({ id: String(key.kid ?? key.id), createdAt: key.createdAt, active: index === 0 }));
-		return { signing: list(doc.signingKeys), website: list(doc.websiteSigningKeys), encryption: list(doc.encryptionKeys) };
 	};
 
 	/** @returns {Promise<string | null>} the schema fingerprint last applied */
@@ -279,7 +226,7 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 		await collection.updateOne({ _id: 'schema' }, { $set: { fingerprint, appliedAt: new Date(now()) } }, { upsert: true });
 	};
 
-	return Object.freeze({ secrets, settings, version, load, update, rotate, keyInfo, appliedSchema, recordSchema });
+	return Object.freeze({ secrets, settings, version, load, update, appliedSchema, recordSchema });
 };
 
 /** @typedef {ReturnType<typeof createSystemStore>} SystemStore */

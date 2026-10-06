@@ -1,11 +1,9 @@
 'use client';
 /**
  * Platform health at a glance: event deliveries and dead letters, unhealthy service apps (stale or failing
- * heartbeats), reconciliation runs and finance alerts, the on-demand operations (last run and a Run button each:
- * nothing runs on a schedule), the job queue and the last audit hash-chain verification (`GET /v1/admin/system/health`).
+ * heartbeats), finance alerts and the job queue (`GET /v1/admin/system/health`). Nothing runs on a schedule.
  * @module
  */
-import { useState } from 'react';
 import {
 	Button,
 	ButtonLink,
@@ -19,21 +17,18 @@ import {
 	formatDateTime,
 	formatNumber,
 	humanize,
-	useToast,
 } from '@ss/ui';
 import { Link } from '../../link.js';
-import { adminFetch } from '../client.js';
-import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, IdChip, staffCan } from './common.js';
+import { adminRoutes } from '../paths.js';
+import { AdminProblem, IdChip } from './common.js';
 
 /**
  * @param {any} props loader result of `loadDashboard`
  */
 export function DashboardView(props) {
 	if (!props.ok) return <AdminProblem problem={props.problem} />;
-	const { metrics, deadLetters, unhealthy, alerts, reports, health } = props;
+	const { metrics, deadLetters, unhealthy, alerts, health } = props;
 	const d = metrics?.deliveries ?? {};
-	const latest = reports[0] ?? null;
 	const h = health.data;
 	return (
 		<div className="space-y-6">
@@ -62,7 +57,7 @@ export function DashboardView(props) {
 					label="Finance alerts"
 					value={formatNumber(alerts.length)}
 					tone={alerts.length > 0 ? 'warning' : 'success'}
-					hint={latest ? `Last reconciliation ${formatDateTime(latest.at)}` : 'No reconciliation run yet'}
+					hint={alerts.length > 0 ? 'Review in Finance' : 'None'}
 				/>
 			</div>
 			{props.metricsProblem ? (
@@ -70,8 +65,7 @@ export function DashboardView(props) {
 			) : null}
 
 			<div className="grid gap-6 xl:grid-cols-2">
-				<OperationsCard health={health} canRun={staffCan(props.staff, 'platform.jobs.manage')} />
-				<Card title="Job queue and audit chain">
+				<Card title="Job queue">
 					{health.problem ? (
 						<p className="text-sm text-danger">{describeProblem(health.problem)}</p>
 					) : (
@@ -84,7 +78,6 @@ export function DashboardView(props) {
 									</div>
 								))}
 							</dl>
-							<AuditChainLine verification={h?.audit?.lastVerification ?? null} />
 						</div>
 					)}
 				</Card>
@@ -169,24 +162,14 @@ export function DashboardView(props) {
 			</div>
 
 			<Card
-				title="Reconciliation"
-				subtitle="On-demand comparison of usage, settlement and the ledger."
+				title="Finance alerts"
+				subtitle="Unpriced hours, ledger chain breaks and other money anomalies."
 				actions={
 					<ButtonLink as={Link} href={adminRoutes.finance()} size="sm" variant="ghost">
 						Finance
 					</ButtonLink>
 				}>
-				{latest ? (
-					<p className="text-sm text-fg">
-						Last run {formatDateTime(latest.at)} · {formatNumber(latest.subscriptions)} subscriptions ·{' '}
-						{formatNumber(latest.merchants)} merchants ·{' '}
-						<strong className={(latest.discrepancies ?? []).length > 0 ? 'text-danger' : 'text-success'}>
-							{formatNumber((latest.discrepancies ?? []).length)} discrepancies
-						</strong>
-					</p>
-				) : (
-					<p className="text-sm text-muted">No reconciliation report yet.</p>
-				)}
+				{alerts.length === 0 ? <p className="text-sm text-muted">No finance alert.</p> : null}
 				{alerts.length > 0 ? (
 					<ul className="mt-3 space-y-1 text-sm">
 						{alerts.slice(0, 5).map((/** @type {any} */ a) => (
@@ -206,130 +189,5 @@ export function DashboardView(props) {
 				) : null}
 			</Card>
 		</div>
-	);
-}
-
-/**
- * @param {{ verification: any }} props `{ at, status, scopes, broken[] }`
- */
-export function AuditChainLine({ verification }) {
-	if (!verification) return <p className="text-sm text-muted">The audit chains have not been verified yet.</p>;
-	const broken = /** @type {any[]} */ (verification.broken ?? []);
-	return (
-		<div className="flex flex-wrap items-center gap-2 text-sm">
-			<StatusBadge
-				status={broken.length === 0 && verification.status !== 'failed' ? 'ok' : 'failed'}
-				label={
-					broken.length > 0
-						? 'Audit chain broken'
-						: verification.status === 'failed'
-							? 'Verification run failed'
-							: 'Audit chains intact'
-				}
-			/>
-			<span className="text-muted">
-				{formatNumber(verification.scopes)} scopes verified {formatDateTime(verification.at)}
-			</span>
-			{broken.map((b) => (
-				<Link key={b.scope} href={adminRoutes.audit({ scope: b.scope })} className="font-mono text-xs text-danger underline">
-					{b.scope} (seq {b.seq ?? '?'})
-				</Link>
-			))}
-		</div>
-	);
-}
-
-/**
- * The on-demand admin operations: last run of each, and a Run button (Continue when the last run stopped at its
- * deadline and returned a cursor). Nothing runs on a schedule (PLAN F.19).
- * @param {{ health: { data: any, problem: any }, canRun: boolean }} props
- */
-function OperationsCard({ health, canRun }) {
-	const toast = useToast();
-	const [rows, setRows] = useState(/** @type {any[]} */ (health.data?.operations ?? []));
-	const [running, setRunning] = useState(/** @type {string | null} */ (null));
-	const [error, setError] = useState(/** @type {string | null} */ (null));
-	/** @param {any} op */
-	const run = async (op) => {
-		const after = op.lastRun?.stats?.resumeAfter;
-		setRunning(op.name);
-		setError(null);
-		const result = await adminFetch(adminApi.operation(op.name), {
-			method: 'POST',
-			body: typeof after === 'string' ? { after } : {},
-		});
-		setRunning(null);
-		if (!result.ok) {
-			setError(describeProblem(result.problem));
-			return;
-		}
-		const at = new Date().toISOString();
-		setRows((current) =>
-			current.map((row) =>
-				row.name === op.name
-					? {
-							...row,
-							status: result.data.status,
-							lastRun: { status: result.data.status, finishedAt: at, durationMs: null, stats: result.data.stats ?? null },
-						}
-					: row,
-			),
-		);
-		toast.show({ title: `${humanize(op.name)}: ${humanize(result.data.status)}` });
-	};
-	return (
-		<Card title="Operations" subtitle="Run on demand; nothing runs on a schedule. Long runs continue where they stopped.">
-			{health.problem ? (
-				<p className="text-sm text-danger">{describeProblem(health.problem)}</p>
-			) : (
-				<>
-					{error ? <p className="mb-2 text-sm text-danger">{error}</p> : null}
-					<Table
-						caption="Operations"
-						dense
-						rows={rows}
-						rowKey={(c) => c.name}
-						empty="No operation is registered."
-						columns={[
-							{
-								key: 'name',
-								header: 'Operation',
-								rowHeader: true,
-								render: (c) => <span className="font-mono text-xs">{c.name}</span>,
-							},
-							{
-								key: 'status',
-								header: 'Last run',
-								render: (c) =>
-									c.lastRun ? (
-										<span className="space-y-0.5">
-											<StatusBadge status={c.lastRun.status} />
-											{c.lastRun.error?.message ? (
-												<span className="block max-w-xs truncate text-xs text-danger" title={c.lastRun.error.message}>
-													{c.lastRun.error.message}
-												</span>
-											) : null}
-										</span>
-									) : (
-										<span className="text-muted">Never</span>
-									),
-							},
-							{ key: 'at', header: 'Finished', render: (c) => formatDateTime(c.lastRun?.finishedAt) },
-							{
-								key: 'run',
-								header: '',
-								align: 'right',
-								render: (c) =>
-									canRun ? (
-										<Button size="sm" variant="secondary" loading={running === c.name} onClick={() => void run(c)}>
-											{typeof c.lastRun?.stats?.resumeAfter === 'string' ? 'Continue' : 'Run'}
-										</Button>
-									) : null,
-							},
-						]}
-					/>
-				</>
-			)}
-		</Card>
 	);
 }

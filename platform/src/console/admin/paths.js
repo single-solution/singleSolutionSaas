@@ -41,14 +41,17 @@ export const adminRoutes = Object.freeze({
 	) => `/admin/audit${query(q)}`,
 	staff: () => '/admin/staff',
 	settings: () => '/admin/settings',
+	account: () => '/admin/account',
 });
 
 /** Staff API paths. */
 export const adminApi = Object.freeze({
 	me: () => '/v1/me',
+	mePassword: () => '/v1/me/password',
 	whoami: () => '/v1/system/whoami',
 	logout: () => '/v1/auth/staff/logout',
 	login: () => '/v1/auth/staff/login',
+	firstAdmin: () => '/v1/auth/staff/first-admin',
 	mfaVerify: () => '/v1/auth/staff/mfa/verify',
 	mfaEnrol: () => '/v1/auth/staff/mfa/enrol',
 	mfaConfirm: () => '/v1/auth/staff/mfa/confirm',
@@ -73,10 +76,7 @@ export const adminApi = Object.freeze({
 	staffList: () => '/v1/admin/staff',
 	// system settings (kept in the database; never environment variables)
 	settings: () => '/v1/admin/system/settings',
-	settingsPortalUrl: () => '/v1/admin/system/settings/portal-url',
-	settingsPreviewUrl: () => '/v1/admin/system/settings/preview-url',
 	settingsMail: () => '/v1/admin/system/settings/mail',
-	rotateKey: (/** @type {'signing' | 'website' | 'encryption'} */ kind) => `/v1/admin/system/keys/${e(kind)}/rotate`,
 	staffMember: (/** @type {string} */ s) => `/v1/admin/staff/${e(s)}`,
 	staffMfaReset: (/** @type {string} */ s) => `/v1/admin/staff/${e(s)}/mfa/reset`,
 
@@ -113,10 +113,6 @@ export const adminApi = Object.freeze({
 	ledger: (/** @type {string} */ m, /** @type {{ cursor?: string | null, limit?: number }} */ q = {}) =>
 		`/v1/admin/merchants/${e(m)}/ledger${query(q)}`,
 	ledgerVerification: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/ledger/verification`,
-	settlement: () => '/v1/admin/commerce/settlement',
-	/** On-demand admin operation (`drain`, `audit_verify`, `connectors-health`, `catalog_refresh`, …); body `{ after? }` */
-	operation: (/** @type {string} */ name) => `/v1/admin/operations/${e(name)}`,
-	reconciliation: () => '/v1/admin/commerce/reconciliation',
 	alerts: (/** @type {{ merchantId?: string | null }} */ q = {}) => `/v1/admin/commerce/alerts${query(q)}`,
 
 	// config
@@ -148,7 +144,7 @@ export const adminApi = Object.freeze({
 	) => `/v1/admin/connectors${query(q)}`,
 
 	// observability (system module)
-	/** `{ operations: [{ name, status, lastRun }], jobs: { queued, leased, retrying, dead }, audit: { lastVerification } }` */
+	/** `{ jobs: { queued, leased, retrying, dead } }` */
 	health: () => '/v1/admin/system/health',
 	/** newest-first audit entries `{ items, nextCursor }` */
 	audit: (

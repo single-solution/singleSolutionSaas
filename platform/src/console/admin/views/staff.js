@@ -161,7 +161,7 @@ export function StaffView(props) {
 						render: (s) => (
 							<span className="space-y-0.5">
 								<span className="block font-semibold">
-									{s.email} {s.staffId === me?.staffId ? <Badge tone="info">You</Badge> : null}
+									{s.email ?? s.login} {s.staffId === me?.staffId ? <Badge tone="info">You</Badge> : null}
 								</span>
 								{s.name ? <span className="block text-xs text-muted">{s.name}</span> : null}
 							</span>
@@ -224,7 +224,7 @@ export function StaffView(props) {
 				open={inviting}
 				onClose={() => setInviting(false)}
 				title="Invite a staff member"
-				description="They get a setup link by e-mail, choose a password and enrol an authenticator."
+				description="They get a setup link by e-mail and choose a password; two-factor sign-in is in their Account settings."
 				footer={
 					<>
 						<Button variant="secondary" onClick={() => setInviting(false)}>
@@ -303,7 +303,7 @@ export function StaffView(props) {
 				error={problem ? describeProblem(problem) : null}>
 				<p className="text-sm text-muted">
 					{confirm?.kind === 'mfa'
-						? 'Their authenticator and recovery codes are removed and every session is signed out. They must enrol again at the next sign-in. Verify their identity out of band first.'
+						? 'Their authenticator and recovery codes are removed and every session is signed out. They can turn two-factor sign-in on again in Account settings. Verify their identity out of band first.'
 						: confirm?.kind === 'disable'
 							? 'They are signed out everywhere and can no longer sign in.'
 							: 'They can sign in again with their password and authenticator.'}

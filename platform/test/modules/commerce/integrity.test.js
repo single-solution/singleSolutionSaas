@@ -151,7 +151,7 @@ describe('ledger integrity', () => {
 		expect(await h.service.verifyChain(M1)).toMatchObject({ ok: true, balance: 2250 });
 	});
 
-	it('detects tampering, deletion and cache drift; reconciliation raises alerts and audit entries', async () => {
+	it('detects tampering, deletion and cache drift', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_tamper', clock });
 		await h.credit(M1, 100_000);
@@ -160,9 +160,7 @@ describe('ledger integrity', () => {
 		await h.service.subscribe({ websiteId: W3, appId: APP2, actor: OWNER2 });
 		clock.set(T0 + 4 * HOUR + 5 * MIN);
 		await h.service.runSettlement();
-		const clean = await h.service.runReconciliation();
-		expect(clean).toMatchObject({ complete: true, discrepancies: 0, subscriptions: 2, merchants: 2 });
-		expect(await h.service.runReconciliation()).toMatchObject({ alreadyDone: true });
+		expect(await h.service.verifyChain(M1)).toMatchObject({ ok: true });
 
 		const ledger = h.db.collection('commerce_ledger');
 		await ledger.updateOne({ periodKey: `${sub.subscriptionId}:2026-10-01T11:00:00Z` }, { $set: { amount: -1 } });
@@ -172,28 +170,6 @@ describe('ledger integrity', () => {
 		expect(new Set(verify.problems.map((p) => p.kind))).toEqual(new Set(['hash', 'gap', 'link', 'account']));
 		await h.db.collection('commerce_accounts').updateOne({ _id: /** @type {any} */ (M2) }, { $inc: { balance: 1 } });
 		expect((await h.service.verifyChain(M2)).problems.map((p) => p.kind)).toEqual(['account']);
-
-		clock.advance(24 * HOUR); // next night
-		const report = await h.service.runReconciliation();
-		expect(report).toMatchObject({ complete: true, discrepancies: 3 });
-		const alerts = await h.service.alerts();
-		expect(alerts.map((a) => a.kind).sort()).toEqual([
-			'ledger_verification_failed',
-			'ledger_verification_failed',
-			'reconciliation_drift',
-		]);
-		const drift = alerts.find((a) => a.kind === 'reconciliation_drift');
-		expect(drift?.details).toMatchObject({
-			missing: [`${sub.subscriptionId}:2026-10-01T12:00:00Z`],
-			mismatched: [{ periodKey: `${sub.subscriptionId}:2026-10-01T11:00:00Z`, expected: 1500, actual: 1 }],
-		});
-		const audit = await h.portal.shared.audit.list({ merchantId: M1 });
-		expect(audit.map((a) => a.action)).toEqual(
-			expect.arrayContaining(['commerce.reconciliation_drift', 'commerce.ledger_verification_failed']),
-		);
-		const reports = await h.service.reconciliationReports();
-		expect(reports[0]).toMatchObject({ phase: 'done', subscriptions: 2, merchants: 2 });
-		expect((await h.service.alerts({ merchantId: M2 })).map((a) => a.kind)).toEqual(['ledger_verification_failed']);
 	});
 
 	it('refuses to append onto a broken pending entry and raises an alert', async () => {
@@ -208,7 +184,7 @@ describe('ledger integrity', () => {
 		expect((await h.service.verifyChain(M1)).ok).toBe(false);
 	});
 
-	it('reconciliation and settlement resume across runs when the deadline is reached', async () => {
+	it('settlement resumes across runs when the deadline is reached', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_deadline', clock });
 		await h.credit(M1, 100_000);
@@ -218,16 +194,7 @@ describe('ledger integrity', () => {
 		const aborted = new AbortController();
 		aborted.abort();
 		expect(await h.service.runSettlement({ signal: aborted.signal })).toMatchObject({ complete: false });
-		expect(await h.service.runReconciliation({ deadline: clock.now() })).toMatchObject({
-			complete: false,
-			phase: 'subscriptions',
-		});
-		const run = await h.portal.operations.run('settlement');
-		expect(run).toMatchObject({ status: 'ok', stats: { subscriptions: 1, entries: 3, complete: true } });
-		expect(await h.portal.operations.run('reconciliation')).toMatchObject({
-			status: 'ok',
-			stats: { complete: true, discrepancies: 0 },
-		});
+		expect(await h.service.runSettlement()).toMatchObject({ subscriptions: 1, entries: 3, complete: true });
 	});
 });
 
@@ -314,8 +281,7 @@ describe('settlement idempotency (property)', () => {
 			}),
 		);
 		const chains = [await h.service.verifyChain(M1), await h.service.verifyChain(M2)];
-		const recon = await h.service.runReconciliation();
-		return { map, chains, recon, count: rows.length };
+		return { map, chains, count: rows.length };
 	};
 
 	it('repeated, overlapping and crashing runs settle every hour exactly once (same ledger as one catch-up run)', async () => {
@@ -331,7 +297,6 @@ describe('settlement idempotency (property)', () => {
 				expect(single.map).toEqual(clean.map);
 				for (const result of [clean, crashy, single]) {
 					expect(result.chains.every((ch) => ch.ok)).toBe(true);
-					expect(result.recon).toMatchObject({ complete: true, discrepancies: 0 });
 				}
 				// B and C never pause: 10 complete hours each (zero amounts included); A skips fully paused hours only
 				const base = Object.keys(clean.map).filter((k) => !k.endsWith(':metered'));

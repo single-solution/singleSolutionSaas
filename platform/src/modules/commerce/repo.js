@@ -12,9 +12,7 @@ import {
 	DOCUMENTS,
 	LEDGER,
 	PAUSES,
-	RECONCILIATIONS,
 	SPEND_POLICIES,
-	STATE,
 	SUBSCRIPTIONS,
 	TIMELINE,
 	USAGE,
@@ -41,8 +39,6 @@ export const createCommerceRepo = (ctx) => {
 	const accounts = tenant(ACCOUNTS);
 	const policies = tenant(SPEND_POLICIES);
 	const alerts = /** @type {ReadOps} */ (ctx.collection(ALERTS));
-	const reports = /** @type {ReadOps} */ (ctx.collection(RECONCILIATIONS));
-	const state = /** @type {MutableOps} */ (ctx.collection(STATE));
 	/** @param {string} m */
 	const subsOf = (m) => /** @type {MutableOps} */ (subscriptions.forMerchant(m));
 
@@ -268,7 +264,7 @@ export const createCommerceRepo = (ctx) => {
 		/** @param {string} merchantId */
 		policyOps: (merchantId) => /** @type {MutableOps} */ (policies.forMerchant(merchantId)),
 
-		// ---- alerts, reports, state
+		// ---- alerts
 		/** @param {Doc} alert */
 		insertAlert: (alert) => alerts.insertOne(alert),
 		/** @param {{ merchantId?: string | null, limit: number }} query @returns {Promise<Doc[]>} */
@@ -278,14 +274,6 @@ export const createCommerceRepo = (ctx) => {
 				.sort({ at: -1, _id: -1 })
 				.limit(limit)
 				.toArray(),
-		/** @param {Doc} report */
-		insertReport: (report) => reports.insertOne(report),
-		/** @param {number} limit @returns {Promise<Doc[]>} */
-		listReports: (limit) => reports.find({}).sort({ at: -1, _id: -1 }).limit(limit).toArray(),
-		/** @param {string} id @returns {Promise<Doc | null>} */
-		getState: (id) => state.findOne({ _id: id }),
-		/** @param {string} id @param {Doc} value */
-		setState: (id, value) => state.updateOne({ _id: id }, { $set: value }, { upsert: true }),
 	});
 };
 /** @typedef {ReturnType<typeof createCommerceRepo>} CommerceRepo */

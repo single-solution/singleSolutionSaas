@@ -19,7 +19,7 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
-import { runInRequestScope } from './request-scope.js';
+import { requestOrigin, runInRequestScope } from './request-scope.js';
 import { hmacHex, isObject, sha256Hex } from './util.js';
 
 /** @typedef {import('./logger.js').Logger} Logger */
@@ -428,11 +428,9 @@ const readBody = async (request, max) => {
  *   idempotency: IdempotencyStore,
  *   idempotencySecret?: Uint8Array,
  *   rateLimits: RateLimitStore,
- *   portalOrigin: string,
  *   now?: () => number,
  *   randomBytes?: (n: number) => Uint8Array,
  *   maxBodyBytes?: number,
- *   trustProxyHeaders?: boolean,
  *   basePath?: string,
  *   afterResponse?: (input: AfterResponse) => void,
  * }} options `afterResponse` schedules the deferred tasks and any background work after each response
@@ -447,11 +445,9 @@ export const createApiHandler = ({
 	idempotency,
 	idempotencySecret,
 	rateLimits,
-	portalOrigin,
 	now = Date.now,
 	randomBytes,
 	maxBodyBytes = 1024 * 1024,
-	trustProxyHeaders = false,
 	basePath = '/api',
 	afterResponse,
 }) => {
@@ -519,9 +515,8 @@ export const createApiHandler = ({
 		let pathname = url.pathname;
 		if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`)))
 			pathname = pathname.slice(basePath.length) || '/';
-		const ip = trustProxyHeaders
-			? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip')?.trim() || null
-			: null;
+		// the client IP as the first hop (the proxy in front of us) saw it: the last X-Forwarded-For entry
+		const ip = request.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || null;
 		const origin = request.headers.get('origin');
 		/** @type {Record<string, string>} */
 		const extra = { 'x-request-id': requestId };
@@ -618,7 +613,7 @@ export const createApiHandler = ({
 
 			// CSRF (cookie sessions only)
 			if (auth.cookie) {
-				const csrf = checkCsrf({ method, headers: request.headers, allowedOrigin: portalOrigin });
+				const csrf = checkCsrf({ method, headers: request.headers, allowedOrigin: requestOrigin(request) });
 				if (!csrf.ok) return fail(problem('forbidden', 'Cross-site request refused.'));
 			}
 

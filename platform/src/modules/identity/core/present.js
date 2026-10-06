@@ -48,7 +48,8 @@ export const presentUser = (u) => ({
 /** @param {Record<string, any>} s */
 export const presentStaff = (s) => ({
 	staffId: String(s._id),
-	email: s.email,
+	login: s.login ?? null,
+	email: s.email ?? null,
 	name: s.name ?? null,
 	roles: [...(s.roles ?? [])],
 	status: s.status,

@@ -3,7 +3,7 @@
  * delivery included), in process, on the test run's MongoMemoryReplSet. An element pack has no server, so instead
  * of a product handshake this test publishes the Product Detail Page pack the way a developer does:
  *
- *   bootstrap staff (password + TOTP) → build the pack (`@ss/product-pdp/pack`: `ss pack build`, minified entries +
+ *   first admin from the sign-in page (password, then TOTP) → build the pack (`@ss/product-pdp/pack`: `ss pack build`, minified entries +
  *   shared chunks) → a staff API token (`POST /v1/admin/api-tokens`) → `ss pack publish` (`@ss/cli/pack`
  *   `publishPack`): sign the `ss-pack-bundle@1` descriptor with a developer key, upload it and every asset (bytes
  *   checked against the signed hashes) and activate → merchant signs up, adds a website, receives credits and subscribes
@@ -32,6 +32,7 @@ import {
 	testSystemState,
 	systemModule,
 	totpCode,
+	SESSIONS,
 } from '@ss/platform/testing';
 import { buildPack } from '@ss/product-pdp/pack';
 import { createClock, mongoUri } from './helpers.js';
@@ -70,12 +71,17 @@ beforeAll(async () => {
 			NODE_ENV: 'test',
 			MONGODB_URI: mongoUri('unused'),
 			STORAGE_DIR: ':memory:',
-			// honest budgets (F.18): the default plan fits, every element at once does not
-			DELIVERY_BUDGET_KB: '45',
-			STAFF_SESSION_IDLE_MINUTES: '720',
 		},
-		// keys and secrets as the Portal generates them on first start; the URL as recorded at /setup
-		testSystemState({ portalUrl: PORTAL_URL }),
+		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
+		testSystemState(),
+		// long staff sessions for the scripted clock; a 45 KB website budget
+		{
+			baseUrl: PORTAL_URL,
+			overrides: {
+				sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } },
+				delivery: { storage: { kind: 'memory' }, budgetKb: 45 },
+			},
+		},
 	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const portalDb = mongo.db(`e2e_pdp_portal_${randomBytes(4).toString('hex')}`);
@@ -150,14 +156,13 @@ afterAll(async () => {
 });
 
 describe('Product Detail Page pack delivered by the real Portal', () => {
-	it('bootstraps the first staff user (password + TOTP)', async () => {
-		const { call, portal, clock, state } = ctx;
-		const { link } = await portal.modules.service('identity').bootstrapSuperadmin({ email: STAFF.email });
-		const token = decodeURIComponent(String(link).split('#token=')[1] ?? '');
-		expect(
-			(await call('POST', '/v1/auth/staff/password-reset/confirm', { body: { token, password: STAFF.password } })).status,
-		).toBe(204);
+	it('creates the first admin from the sign-in page, then signs in and turns on TOTP', async () => {
+		const { call, clock, state } = ctx;
+		const created = await call('POST', '/v1/auth/staff/first-admin', { body: { password: STAFF.password } });
+		expect(created.status, JSON.stringify(created.json)).toBe(201);
+		expect((await call('PATCH', '/v1/me', { cookie: created.cookie ?? '', body: { email: STAFF.email } })).status).toBe(200);
 		const login = await call('POST', '/v1/auth/staff/login', { body: STAFF });
+		expect(login.json.status).toBe('ok');
 		const enrol = await call('POST', '/v1/auth/staff/mfa/enrol', { cookie: login.cookie });
 		clock.advance(30_000);
 		const confirm = await call('POST', '/v1/auth/staff/mfa/confirm', {

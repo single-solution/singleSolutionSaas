@@ -1,9 +1,9 @@
 /**
  * Billing composition (pure): turns `@ss/entitlements` settlement plans into ledger drafts, metered inputs, burn
- * rates, spend-cap decisions and reconciliation findings. All amounts are integer millicredits.
+ * rates and spend-cap decisions. All amounts are integer millicredits.
  * @module
  */
-import { burnRate, findPriceBook, planMeteredSettlement, priceBookResolver, reconcile, spendCapDecision } from '@ss/entitlements';
+import { burnRate, findPriceBook, planMeteredSettlement, priceBookResolver, spendCapDecision } from '@ss/entitlements';
 
 /** @typedef {ReturnType<typeof import('@ss/entitlements').normaliseProduct>} Product */
 /** @typedef {Product['priceBooks'][number]} PriceBook */
@@ -186,36 +186,3 @@ export const spendDecisions = ({ merchantId, policies, entries, burnByWebsite, n
 	}
 	return out;
 };
-
-/**
- * Reconciliation of one subscription window: expected hourly buckets vs settlement entries in the ledger, plus metered
- * entries whose hour was not billable.
- * @param {{ buckets: readonly { periodKey: string, amount: number }[], entries: readonly { type: string, periodKey: string | null,
- *   amount: number }[] }} input
- * @returns {{ missing: string[], duplicates: string[], extra: string[], mismatched: { periodKey: string, expected: number, actual: number }[],
- *   orphanMetered: string[] }}
- */
-export const reconcileWindow = ({ buckets, entries }) => {
-	const settled = entries.filter((e) => e.type === 'settlement' && e.periodKey);
-	const findings = reconcile({
-		expectedBuckets: buckets.map((b) => ({ periodKey: b.periodKey, amount: b.amount })),
-		ledgerKeys: settled.map((e) => ({ periodKey: /** @type {string} */ (e.periodKey), amount: -e.amount || 0 })),
-	});
-	const expected = new Set(buckets.map((b) => b.periodKey));
-	const orphanMetered = entries
-		.filter((e) => e.type === 'metered' && e.periodKey && !expected.has(String(e.periodKey).replace(/:metered$/, '')))
-		.map((e) => /** @type {string} */ (e.periodKey))
-		.sort();
-	return { ...findings, orphanMetered };
-};
-
-/**
- * @param {ReturnType<typeof reconcileWindow>} findings
- */
-export const hasFindings = (findings) =>
-	findings.missing.length +
-		findings.duplicates.length +
-		findings.extra.length +
-		findings.mismatched.length +
-		findings.orphanMetered.length >
-	0;

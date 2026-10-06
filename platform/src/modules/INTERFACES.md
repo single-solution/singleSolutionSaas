@@ -119,8 +119,7 @@ credits, settlement, spend caps.
 - `previewDocument({ subscriptionId, layers })` → the canonical, unsigned document the subscription would get with
   `layers` (config dry runs; nothing stored or emitted)
 - Settlement on read (F.19, no cron): `settleDue(merchantId)` runs before balance, meter and statement reads, product
-  document fetches (`documentFor`), subscription changes, and right after a product's usage batch; admin operations
-  `settlement` and `reconciliation` run on demand.
+  document fetches (`documentFor`), subscription changes, and right after a product's usage batch.
 - Reads configuration layers from `config.layersFor(subscriptionId)`; resource status from
   `connectors.statusFor(websiteId)`; the website's identity issuer from `identity.identityFor(websiteId)` (document
   `identity` section; it extends the content hash, so an issuer change or key rotation bumps the version) and the
@@ -226,7 +225,7 @@ active` subscriptions, whose manifest declares mode A. Packs → their headless 
   (`ss-website-bundle@1`: integrity sha384, sha256, sizes, budget, CSP sources, elements, warnings); version = first 16
   hex of SHA-256 of the bundle (deterministic). The alias flips by compare-and-set on `compiledRequest`.
   Refusals: `delivery_budget_exceeded` (422; `errors[]` lists offenders: `budget` when loader gzip + Σ `budget.js` +
-  Σ product `budget.shared` > `DELIVERY_BUDGET_KB` (default 60), `over_declared` when an element's own entry modules
+  Σ product `budget.shared` > the website budget (60 KB), `over_declared` when an element's own entry modules
   ship more gzip bytes than its `budget.js`, `shared_over_declared` when a product's shared chunks exceed its
   `budget.shared`), `conflict` (one product delivers the same element id twice).
   **Wave-1 (F.18):** sizes come from `@ss/contracts/budget` `measureBundle` over the stored modules (own entry modules
@@ -262,10 +261,8 @@ uploadPath }` (same descriptor = same version). Then `PUT /v1/product/ui-bundles
   `<portal>/w/` and module paths start with `packs/` or `ui/`.
 - `createPreview({ merchantId, websiteId, body: { path?, base?: 'current'|'empty', elements?: [{ appId, key, config?,
 strings?, placement? }] }, actor })` → `{ previewId, url, expiresAt, version, budget, elements, warnings }`;
-  `servePreview({ token, path, search, host })`. With a preview URL setting (F.16) preview URLs use that origin, `/p/*` on
-  the Portal host is refused (`delivery_preview_refused`), and the preview host serves nothing but `/p/*` (404 from
-  `portal.handle` for API and `/w/*` paths; `proxy.js` for console pages). There the page keeps `CSP: sandbox`
-  but adds `allow-same-origin` and admits the merchant's own scripts (`script-src https: 'unsafe-inline'`).
+  `servePreview({ token, path, search })`. Previews are served from the Portal's own origin under `CSP: sandbox`
+  without `allow-same-origin` (opaque origin), scripts by nonce only.
 - Job `delivery.compile` (runs right after the request that asked for it; a failed one is retried when the website's
   loader is next served). Problems `delivery_budget_exceeded`, `delivery_asset_mismatch`, `delivery_preview_refused`.
 

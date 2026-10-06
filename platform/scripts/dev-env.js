@@ -1,6 +1,7 @@
 // Print the development environment for `.env.local`: `node scripts/dev-env.js > .env.local`. Only the database and
 // the asset storage are configured through the environment; keys and secrets are generated in the database on first
-// start, and the Portal URL is recorded at http://localhost:4000/setup.
+// start. Then open http://localhost:4000/admin/login and choose the admin password.
+
 const lines = [
 	'NODE_ENV=development',
 	`MONGODB_URI=${process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27999/ss_portal?replicaSet=testset'}`,

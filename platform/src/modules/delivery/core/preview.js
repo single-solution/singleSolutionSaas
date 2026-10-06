@@ -161,25 +161,20 @@ export const injectPreview = ({ html, pageUrl, script, nonce, label = 'Preview' 
 };
 
 /**
- * Response headers of a preview page (`dedicated`: served from the dedicated preview origin).
- * @param {{ nonce: string, origin: string, portalOrigin: string, connectOrigins?: ReadonlyArray<string>, dedicated?: boolean }} input
+ * Response headers of a preview page: a CSP sandbox without `allow-same-origin` (the page runs in an opaque origin,
+ * away from the Portal's cookies and storage), scripts only by nonce, connections only to the Portal and the products.
+ * @param {{ nonce: string, origin: string, portalOrigin: string, connectOrigins?: ReadonlyArray<string> }} input
  */
-export const previewHeaders = ({ nonce, origin, portalOrigin, connectOrigins = [], dedicated = false }) => {
+export const previewHeaders = ({ nonce, origin, portalOrigin, connectOrigins = [] }) => {
 	const insecure = origin.startsWith('http:') ? ` ${origin}` : '';
 	const csp = [
-		dedicated
-			? 'sandbox allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox'
-			: 'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox',
+		'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox',
 		`default-src https: data: blob:${insecure}`,
-		// a nonce makes browsers ignore 'unsafe-inline': the dedicated origin lists none, so the merchant's inline
-		// scripts run next to the injected bundle
-		dedicated ? `script-src https: 'unsafe-inline' blob:${insecure}` : `script-src 'nonce-${nonce}' 'strict-dynamic'`,
+		`script-src 'nonce-${nonce}' 'strict-dynamic'`,
 		`style-src https: 'unsafe-inline'${insecure}`,
 		`img-src https: data: blob:${insecure}`,
 		`font-src https: data:${insecure}`,
-		dedicated
-			? `connect-src https: wss:${insecure}`
-			: `connect-src ${[...new Set([portalOrigin, ...connectOrigins])].join(' ')}`,
+		`connect-src ${[...new Set([portalOrigin, ...connectOrigins])].join(' ')}`,
 		"object-src 'none'",
 		`base-uri ${origin}`,
 		"form-action 'none'",

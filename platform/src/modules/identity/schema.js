@@ -28,7 +28,8 @@ export const collections = Object.freeze([
 	defineCollection({
 		module: 'identity',
 		name: C.staff,
-		description: 'Staff users (platform roles, mandatory TOTP). `_id` = staffId.',
+		description:
+			'Staff users (platform roles, optional TOTP; the first admin has `login: "admin"` and may have no e-mail). `_id` = staffId.',
 		indexes: [{ keys: { email: 1 }, unique: true }],
 	}),
 	defineCollection({

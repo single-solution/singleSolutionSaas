@@ -13,13 +13,10 @@ export const COLLECTIONS = Object.freeze({
 	replay: 'platform_replay',
 	audit: 'platform_audit',
 	jobs: 'platform_jobs',
-	operationRuns: 'platform_operation_runs',
 	locks: 'platform_locks',
 	migrations: 'platform_migrations',
 	system: 'platform_system',
 });
-
-const DAY = 24 * 60 * 60;
 
 export const INFRA_COLLECTIONS = Object.freeze([
 	defineCollection({
@@ -91,17 +88,8 @@ export const INFRA_COLLECTIONS = Object.freeze([
 	}),
 	defineCollection({
 		module: 'platform',
-		name: COLLECTIONS.operationRuns,
-		description: 'One append-only record per on-demand admin operation run (30 days).',
-		appendOnly: true,
-		timestamps: false,
-		ttl: { field: 'startedAt', afterSeconds: 30 * DAY },
-		indexes: [{ keys: { name: 1, startedAt: -1 } }],
-	}),
-	defineCollection({
-		module: 'platform',
 		name: COLLECTIONS.locks,
-		description: 'Lease locks (migrations, operation runs, ledger appends).',
+		description: 'Lease locks (migrations, ledger appends).',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 3600 },
 	}),
@@ -116,7 +104,7 @@ export const INFRA_COLLECTIONS = Object.freeze([
 		module: 'platform',
 		name: COLLECTIONS.system,
 		description:
-			"The Portal's own state (infra/system.js): generated secrets, the settings recorded at /setup or by admins (mail password sealed), the applied schema fingerprint.",
+			"The Portal's own state (infra/system.js): generated secrets, the settings recorded by admins (mail password sealed), the applied schema fingerprint.",
 		timestamps: false,
 	}),
 ]);

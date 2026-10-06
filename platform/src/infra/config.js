@@ -3,18 +3,20 @@
  * never values), so a misconfigured deployment fails fast and completely.
  *
  * Two sources, both plain:
- * - **Environment** (`loadEnv`): only the database (`MONGODB_URI`) and the asset storage (`STORAGE_*`), plus optional
- *   tuning. The environment comes from `NODE_ENV` (production unless `development` or `test`). Listed in {@link ENV_VARS}.
+ * - **Environment** (`loadEnv`): the database (`MONGODB_URI`) and the optional asset storage (`STORAGE_*`). Everything
+ *   else is a fixed constant below. The environment comes from `NODE_ENV` (production unless `development` or
+ *   `test`). Listed in {@link ENV_VARS}.
  * - **System state** (`infra/system.js`, the control database): the secrets generated on first start (signing keys,
- *   website-key signing keys, encryption keys, session secret, key pepper, idempotency secret) and the settings recorded
- *   at `/setup` or by an admin (the Portal URL, the preview URL, the mailer). The Portal URL is never read from request
- *   headers.
+ *   website-key signing keys, encryption keys, session secret, key pepper, idempotency secret) and the mailer an admin
+ *   sets.
+ * The Portal's own address is never stored: `portalUrl`, `portalOrigin` and `cookieSecure` read the current request's
+ * origin (`request-scope.js`), and fall back to `baseUrl` outside a request (scripts, tests).
  * `buildConfig(env, system)` joins them into the {@link PortalConfig} every module reads.
  * @module
  */
 import { hkdfSync } from 'node:crypto';
-import { canonicalUrl } from '@ss/protocol';
 import { platformError } from './errors.js';
+import { currentOrigin } from './request-scope.js';
 
 /** @typedef {import('@ss/protocol').PrivateJwk} PrivateJwk */
 /** @typedef {'production' | 'development' | 'test'} PortalEnv */
@@ -32,9 +34,7 @@ import { platformError } from './errors.js';
  * @property {string} version
  * @property {{ uri: string, dbName: string, maxPoolSize: number }} mongo control-plane database only
  * @property {string} logLevel
- * @property {boolean} trustProxyHeaders use `X-Forwarded-For` for the client IP (only behind a trusted proxy)
  * @property {number} maxBodyBytes default JSON body cap
- * @property {number} operationDeadlineMs time budget of one on-demand admin operation (bounded, resumable)
  * @property {{ staff: SessionPolicy, merchant: SessionPolicy }} sessions
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound hosts outbound calls may reach although private or
  *   plain http (`OUTBOUND_DEV_ALLOW_HOSTS`; always empty in production)
@@ -45,8 +45,6 @@ import { platformError } from './errors.js';
 /**
  * The generated secrets and the recorded settings (see `infra/system.js`).
  * @typedef {object} SystemState
- * @property {string | null} portalUrl recorded at `/setup` (null before setup)
- * @property {string | null} previewUrl dedicated cookie-less preview origin (F.16), set by an admin
  * @property {{ host: string, port: number, secure: boolean, user: string | null, pass: string | null, from: string } | null} mail
  * @property {ReadonlyArray<PrivateJwk>} signingKeys first signs; all are published
  * @property {ReadonlyArray<PrivateJwk>} websiteKeySigningKeys first signs; all are published
@@ -61,11 +59,12 @@ import { platformError } from './errors.js';
  * @property {PortalEnv} env
  * @property {boolean} isProduction
  * @property {string} version
- * @property {boolean} setUp false until `/setup` recorded the Portal URL (then everything but setup is refused)
- * @property {string} portalUrl canonical Portal URL (no trailing slash) — issuer of launches, audience of assertions
- * @property {string} portalOrigin
- * @property {boolean} cookieSecure true unless the Portal runs on plain-http localhost
+ * @property {string} portalUrl the current request's origin (no trailing slash) — issuer of launches, audience of
+ *   assertions, base of links
+ * @property {string} portalOrigin same as `portalUrl`
+ * @property {boolean} cookieSecure true unless the request came over plain http
  * @property {{ uri: string, dbName: string, maxPoolSize: number }} mongo control-plane database only
+
  * @property {ReadonlyArray<PrivateJwk>} signingKeys first = active signer; all are published in the JWKS
  * @property {ReadonlyArray<PrivateJwk>} websiteKeySigningKeys dedicated website-key signers (first signs; all published)
  * @property {ReadonlyArray<{ id: string, key: Buffer }>} keks key-encryption keys; first = active (wraps new data keys)
@@ -74,14 +73,12 @@ import { platformError } from './errors.js';
  * @property {Buffer} idempotencySecret HMAC key of idempotency fingerprints
  * @property {string} problemBaseUri RFC 9457 type base (`<url>/problems/`)
  * @property {string} logLevel
- * @property {boolean} trustProxyHeaders use `X-Forwarded-For` for the client IP (only behind a trusted proxy)
  * @property {number} maxBodyBytes default JSON body cap
- * @property {number} operationDeadlineMs time budget of one on-demand admin operation (bounded, resumable)
  * @property {{ staff: SessionPolicy, merchant: SessionPolicy }} sessions
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound
  * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify e-mail, resets, invites)
- * @property {{ storage: AssetStorageConfig | null, budgetKb: number, previewOrigin: string | null }} delivery
- *   artefact storage, the default website budget, and the dedicated cookie-less preview origin (F.16) or null
+ * @property {{ storage: AssetStorageConfig | null, budgetKb: number }} delivery artefact storage and the default
+ *   website budget
  */
 
 /**
@@ -100,32 +97,35 @@ import { platformError } from './errors.js';
  * @property {string | null} pass
  */
 
+/** Version reported by /healthz, /readyz and /v1/system/info. */
+export const PORTAL_VERSION = '0.1.0';
+/** Control-plane connection pool per instance. */
+export const MONGO_POOL_SIZE = 5;
+/** Default request body cap (1 MiB). */
+export const MAX_BODY_BYTES = 1024 * 1024;
+/** Default per-website bundle budget (KB gzip). */
+export const DELIVERY_BUDGET_KB = 60;
+/** Session lifetimes: idle timeout and absolute lifetime. */
+export const SESSIONS = Object.freeze({
+	staff: Object.freeze({ idleMs: 30 * 60_000, absoluteMs: 12 * 3_600_000 }),
+	merchant: Object.freeze({ idleMs: 1440 * 60_000, absoluteMs: 336 * 3_600_000 }),
+});
+
 /** Documented environment variables: `[name, required, description]`. Nothing else is read. */
 export const ENV_VARS = Object.freeze([
 	['MONGODB_URI', true, 'Control-plane MongoDB connection string (never a client database).'],
 	[
 		'STORAGE_ENDPOINT',
-		true,
+		false,
 		'Asset storage (pack assets, compiled website bundles): S3-compatible endpoint origin, e.g. https://<account>.r2.cloudflarestorage.com.',
 	],
-	['STORAGE_BUCKET', true, 'Bucket name.'],
-	['STORAGE_ACCESS_KEY_ID', true, 'Access key id, limited to the bucket.'],
-	['STORAGE_SECRET_ACCESS_KEY', true, 'Secret access key.'],
+	['STORAGE_BUCKET', false, 'Bucket name.'],
+	['STORAGE_ACCESS_KEY_ID', false, 'Access key id, limited to the bucket.'],
+	['STORAGE_SECRET_ACCESS_KEY', false, 'Secret access key.'],
 	['STORAGE_REGION', false, 'Bucket region (default `auto`).'],
 	['STORAGE_PREFIX', false, 'Key prefix inside the bucket, e.g. `portal/`.'],
 	['STORAGE_PATH_STYLE', false, '`true` for path-style bucket URLs.'],
 	['STORAGE_DIR', false, 'Development only, instead of a bucket: a local directory (e.g. `.data/assets`) or `:memory:`.'],
-	['APP_VERSION', false, 'Version reported by /healthz and /v1/system/info (default `dev`).'],
-	['MONGODB_DB', false, 'Database name; defaults to the path of MONGODB_URI, else `ss_portal`.'],
-	['MONGODB_MAX_POOL_SIZE', false, 'Connection pool size per instance (default 5).'],
-	['DELIVERY_BUDGET_KB', false, 'Default per-website bundle budget in KB gzip (default 60).'],
-	['TRUST_PROXY_HEADERS', false, '`true` behind a proxy that sets X-Forwarded-For.'],
-	['MAX_BODY_BYTES', false, 'Default request body cap in bytes (default 1048576).'],
-	['OPERATION_DEADLINE_MS', false, 'Time budget of one on-demand admin operation in ms (default 50000).'],
-	['STAFF_SESSION_IDLE_MINUTES', false, 'Staff idle timeout (default 30).'],
-	['STAFF_SESSION_MAX_HOURS', false, 'Staff absolute session lifetime (default 12).'],
-	['MERCHANT_SESSION_IDLE_MINUTES', false, 'Merchant idle timeout (default 1440).'],
-	['MERCHANT_SESSION_MAX_HOURS', false, 'Merchant absolute session lifetime (default 336).'],
 	[
 		'OUTBOUND_DEV_ALLOW_HOSTS',
 		false,
@@ -133,7 +133,6 @@ export const ENV_VARS = Object.freeze([
 	],
 ]);
 
-const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]']);
 const LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
 const HOST_ENTRY = /^(?:\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]{1,253}|[0-9a-fA-F:]{2,39})$/;
 /** `Name <address>` or `address`. */
@@ -233,68 +232,6 @@ export const parseAssetStorage = (read) => {
 };
 
 /**
- * @param {string | undefined} text
- * @param {number} fallback
- * @param {{ min?: number, max?: number }} [bounds]
- * @returns {number | null}
- */
-const intOf = (text, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {}) => {
-	if (text === undefined || text === '') return fallback;
-	if (!/^\d{1,15}$/.test(text)) return null;
-	const n = Number(text);
-	return n >= min && n <= max ? n : null;
-};
-
-/**
- * @param {URL} url
- * @returns {boolean}
- */
-const isLocal = (url) => LOCAL.has(url.hostname) || url.hostname.endsWith('.localhost');
-
-/**
- * Check a Portal URL candidate (setup, admin settings): an absolute origin-like URL, https unless localhost outside
- * production. Returns the canonical form or an error message.
- * @param {unknown} value
- * @param {{ production: boolean }} options
- * @returns {{ ok: true, url: string } | { ok: false, message: string }}
- */
-export const checkPortalUrl = (value, { production }) => {
-	try {
-		const url = new URL(canonicalUrl(value));
-		if (url.pathname !== '/' && url.pathname !== '') return { ok: false, message: 'Enter an origin, without a path.' };
-		if (url.protocol !== 'https:' && (production || !isLocal(url)))
-			return { ok: false, message: 'The Portal URL must use https (http only for localhost in development).' };
-		return { ok: true, url: url.origin };
-	} catch {
-		return { ok: false, message: 'Enter an absolute https URL without query, fragment or credentials.' };
-	}
-};
-
-/**
- * Check a preview origin candidate: https (http only for localhost in development), origin only, another host than the
- * Portal's.
- * @param {unknown} value
- * @param {{ production: boolean, portalUrl: string | null }} options
- * @returns {{ ok: true, url: string } | { ok: false, message: string }}
- */
-export const checkPreviewUrl = (value, { production, portalUrl }) => {
-	try {
-		const url = new URL(String(value));
-		if (url.username || url.password || url.search || url.hash || (url.pathname !== '/' && url.pathname !== ''))
-			throw new Error('not an origin');
-		if (url.protocol !== 'https:' && (production || !isLocal(url) || url.protocol !== 'http:')) throw new Error('scheme');
-		if (portalUrl && new URL(portalUrl).host === url.host)
-			return { ok: false, message: 'The preview URL must be a different host from the Portal URL.' };
-		return { ok: true, url: url.origin };
-	} catch {
-		return {
-			ok: false,
-			message: 'The preview URL must be an https origin (scheme and host only; http only for localhost in development).',
-		};
-	}
-};
-
-/**
  * Read and validate the environment. Throws `config_invalid` listing every offending variable (never values).
  * @param {Record<string, string | undefined>} [env]
  * @returns {Readonly<EnvConfig>}
@@ -313,14 +250,12 @@ export const loadEnv = (env = process.env) => {
 	const portalEnv = env.NODE_ENV === 'development' || env.NODE_ENV === 'test' ? env.NODE_ENV : 'production';
 	const strict = portalEnv === 'production';
 
-	// Mongo
+	// Mongo (the database is the path of MONGODB_URI, else `ss_portal`)
 	const mongoUri = read('MONGODB_URI') ?? '';
 	if (!mongoUri) problems.push('MONGODB_URI is required');
 	else if (!/^mongodb(\+srv)?:\/\//.test(mongoUri)) problems.push('MONGODB_URI must be a mongodb:// or mongodb+srv:// URI');
-	const dbName = read('MONGODB_DB') ?? (mongoUri ? dbNameFromUri(mongoUri) : null) ?? 'ss_portal';
-	if (!/^[A-Za-z0-9_-]{1,63}$/.test(dbName)) problems.push('MONGODB_DB is not a valid database name');
-	const maxPoolSize = intOf(read('MONGODB_MAX_POOL_SIZE'), 5, { max: 500 });
-	if (maxPoolSize === null) problems.push('MONGODB_MAX_POOL_SIZE must be an integer 1..500');
+	const dbName = (mongoUri ? dbNameFromUri(mongoUri) : null) ?? 'ss_portal';
+	if (!/^[A-Za-z0-9_-]{1,63}$/.test(dbName)) problems.push('MONGODB_URI names an invalid database');
 
 	// Outbound development allowlist (never in production)
 	const allowText = read('OUTBOUND_DEV_ALLOW_HOSTS');
@@ -347,89 +282,39 @@ export const loadEnv = (env = process.env) => {
 		problems.push('STORAGE_DIR is for development: use an S3-compatible bucket (STORAGE_BUCKET) in production');
 	if (assetStorage?.kind === 's3' && assetStorage.endpoint?.startsWith('http:') && strict)
 		problems.push('STORAGE_ENDPOINT must use https in production');
-	const budgetKb = intOf(read('DELIVERY_BUDGET_KB'), 60, { min: 1, max: 1024 });
-	if (budgetKb === null) problems.push('DELIVERY_BUDGET_KB must be an integer 1..1024');
-
 	// Log level: info in production, debug in development (LOG_LEVEL overrides, undocumented)
 	const logLevel = read('LOG_LEVEL') ?? (portalEnv === 'development' ? 'debug' : 'info');
 	if (!LEVELS.has(logLevel)) problems.push('LOG_LEVEL must be debug, info, warn, error or silent');
-	const trustText = read('TRUST_PROXY_HEADERS') ?? 'false';
-	if (trustText !== 'true' && trustText !== 'false') problems.push('TRUST_PROXY_HEADERS must be true or false');
-	const maxBodyBytes = intOf(read('MAX_BODY_BYTES'), 1024 * 1024, { min: 1024, max: 50 * 1024 * 1024 });
-	if (maxBodyBytes === null) problems.push('MAX_BODY_BYTES must be an integer 1024..52428800');
-	const operationDeadlineMs = intOf(read('OPERATION_DEADLINE_MS'), 50_000, { min: 1000, max: 900_000 });
-	if (operationDeadlineMs === null) problems.push('OPERATION_DEADLINE_MS must be an integer 1000..900000');
-
-	/**
-	 * @param {string} name
-	 * @param {number} fallback
-	 * @param {number} unitMs
-	 */
-	const duration = (name, fallback, unitMs) => {
-		const n = intOf(read(name), fallback, { max: 100_000 });
-		if (n === null) problems.push(`${name} must be a positive integer`);
-		return (n ?? fallback) * unitMs;
-	};
-	const sessions = {
-		staff: {
-			idleMs: duration('STAFF_SESSION_IDLE_MINUTES', 30, 60_000),
-			absoluteMs: duration('STAFF_SESSION_MAX_HOURS', 12, 3_600_000),
-		},
-		merchant: {
-			idleMs: duration('MERCHANT_SESSION_IDLE_MINUTES', 1440, 60_000),
-			absoluteMs: duration('MERCHANT_SESSION_MAX_HOURS', 336, 3_600_000),
-		},
-	};
-	for (const [who, policy] of Object.entries(sessions)) {
-		if (policy.idleMs > policy.absoluteMs)
-			problems.push(`${who.toUpperCase()} session idle timeout must not exceed the absolute lifetime`);
-	}
-
 	if (problems.length > 0) {
 		throw platformError('config_invalid', `Invalid Portal configuration: ${problems.join('; ')}`, { problems });
 	}
 	return Object.freeze({
 		env: portalEnv,
 		isProduction: portalEnv === 'production',
-		version: read('APP_VERSION') ?? 'dev',
-		mongo: Object.freeze({ uri: mongoUri, dbName, maxPoolSize: /** @type {number} */ (maxPoolSize) }),
+		version: PORTAL_VERSION,
+		mongo: Object.freeze({ uri: mongoUri, dbName, maxPoolSize: MONGO_POOL_SIZE }),
 		logLevel,
-		trustProxyHeaders: trustText === 'true',
-		maxBodyBytes: /** @type {number} */ (maxBodyBytes),
-		operationDeadlineMs: /** @type {number} */ (operationDeadlineMs),
-		sessions: Object.freeze(sessions),
+		maxBodyBytes: MAX_BODY_BYTES,
+		sessions: SESSIONS,
 		outbound: Object.freeze({ allowHosts: Object.freeze(allowHosts) }),
 		delivery: Object.freeze({
 			storage: assetStorage ? Object.freeze(assetStorage) : null,
-			budgetKb: /** @type {number} */ (budgetKb),
+			budgetKb: DELIVERY_BUDGET_KB,
 		}),
 	});
 };
 
 /**
- * Join the environment and the system state into the Portal configuration. Before setup (`portalUrl` null) the
- * configuration carries `setUp: false` and a placeholder URL: the runtime then serves only `/setup`.
+ * Join the environment and the system state into the Portal configuration. `portalUrl`, `portalOrigin` and
+ * `cookieSecure` are read per request (the request's own origin); `baseUrl` answers outside a request.
  * @param {Readonly<EnvConfig>} envConfig
  * @param {SystemState} system
+ * @param {{ baseUrl?: string, overrides?: Partial<EnvConfig> }} [options] `overrides`: fixed values replaced (tests)
  * @returns {Readonly<PortalConfig>}
  */
-export const buildConfig = (envConfig, system) => {
+export const buildConfig = (envConfig, system, { baseUrl = 'http://localhost', overrides = {} } = {}) => {
 	/** @type {string[]} */
 	const problems = [];
-	const production = envConfig.isProduction;
-	let portalUrl = 'http://localhost';
-	if (system.portalUrl) {
-		const checked = checkPortalUrl(system.portalUrl, { production });
-		if (checked.ok) portalUrl = checked.url;
-		else problems.push(`Portal URL: ${checked.message}`);
-	}
-	/** @type {string | null} */
-	let previewOrigin = null;
-	if (system.previewUrl) {
-		const checked = checkPreviewUrl(system.previewUrl, { production, portalUrl: system.portalUrl });
-		if (checked.ok) previewOrigin = checked.url;
-		else problems.push(`Preview URL: ${checked.message}`);
-	}
 	const mail = system.mail;
 	if (mail && !MAIL_FROM.test(mail.from)) problems.push('Mail sender must be `Name <address>` or an address');
 	if (system.signingKeys.length === 0 || system.websiteKeySigningKeys.length === 0 || system.keks.length === 0)
@@ -437,20 +322,17 @@ export const buildConfig = (envConfig, system) => {
 	if (problems.length > 0) {
 		throw platformError('config_invalid', `Invalid Portal configuration: ${problems.join('; ')}`, { problems });
 	}
-	const url = new URL(portalUrl);
-	return Object.freeze({
+	const fallback = new URL(baseUrl).origin;
+	const origin = () => currentOrigin() ?? fallback;
+	const config = {
 		...envConfig,
-		setUp: Boolean(system.portalUrl),
-		portalUrl,
-		portalOrigin: url.origin,
-		cookieSecure: url.protocol === 'https:',
 		signingKeys: Object.freeze([...system.signingKeys]),
 		websiteKeySigningKeys: Object.freeze([...system.websiteKeySigningKeys]),
 		keks: Object.freeze([...system.keks]),
 		sessionSecret: system.sessionSecret,
 		websiteKeyPepper: system.websiteKeyPepper,
 		idempotencySecret: system.idempotencySecret,
-		problemBaseUri: `${portalUrl}/problems/`,
+		problemBaseUri: `${fallback}/problems/`,
 		mail: Object.freeze(
 			mail
 				? {
@@ -465,14 +347,22 @@ export const buildConfig = (envConfig, system) => {
 					}
 				: { smtp: null, from: null },
 		),
-		delivery: Object.freeze({ ...envConfig.delivery, previewOrigin }),
+		delivery: envConfig.delivery,
+		...overrides,
+	};
+	Object.defineProperties(config, {
+		portalUrl: { get: origin, enumerable: true },
+		portalOrigin: { get: origin, enumerable: true },
+		cookieSecure: { get: () => origin().startsWith('https:'), enumerable: true },
 	});
+	return /** @type {Readonly<PortalConfig>} */ (Object.freeze(config));
 };
 
 /**
  * `buildConfig(loadEnv(env), system)` in one call (tests, scripts).
  * @param {Record<string, string | undefined>} env
  * @param {SystemState} system
+ * @param {{ baseUrl?: string, overrides?: Partial<EnvConfig> }} [options]
  * @returns {Readonly<PortalConfig>}
  */
-export const loadConfig = (env, system) => buildConfig(loadEnv(env), system);
+export const loadConfig = (env, system, options) => buildConfig(loadEnv(env), system, options);

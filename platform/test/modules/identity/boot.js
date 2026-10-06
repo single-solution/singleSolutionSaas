@@ -161,7 +161,7 @@ export const boot = async (options = {}) => {
 	};
 
 	/**
-	 * Bootstrap or create a staff user with a password and enrolled TOTP; returns the signed-in client.
+	 * Create the first admin or another staff user with a password and enrolled TOTP; returns the signed-in client.
 	 * @param {string} email
 	 * @param {string[]} [roles]
 	 * @param {{ creator?: any }} [input]
@@ -169,9 +169,12 @@ export const boot = async (options = {}) => {
 	const staffUser = async (email, roles = ['superadmin'], { creator } = {}) => {
 		const password = 'staff password 123!';
 		if (!creator) {
-			const { link } = await service.bootstrapSuperadmin({ email });
-			const token = decodeURIComponent(link.split('#token=')[1] ?? '');
-			await call('POST', '/v1/auth/staff/password-reset/confirm', { body: { token, password } });
+			// the first admin: created from the sign-in page, then given an e-mail in Account settings
+			const first = client();
+			const created = await first.post('/v1/auth/staff/first-admin', { password });
+			if (created.status !== 201) throw new Error(`first admin ${created.status} ${JSON.stringify(created.json)}`);
+			const named = await first.send('PATCH', '/v1/me', { email });
+			if (named.status !== 200) throw new Error(`profile ${named.status} ${JSON.stringify(named.json)}`);
 		} else {
 			const created = await creator.post('/v1/admin/staff', { email, roles });
 			if (created.status !== 201) throw new Error(`staff create ${created.status} ${JSON.stringify(created.json)}`);

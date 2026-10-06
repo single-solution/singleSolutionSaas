@@ -729,7 +729,7 @@ describe('connectors: sealing', () => {
 });
 
 describe('connectors: health checks on demand and on resolve', () => {
-	it('re-tests connectors, emits status changes, purges rollback copies and rewraps under the active KEK', async () => {
+	it('re-tests a stale connector on resolve, emits status changes and purges expired rollback copies on rotate', async () => {
 		const { call, merchant, portal, clock, state, db } = await boot('cn_health');
 		const owner = await merchant(MERCHANT);
 		const flaky = await startFakeApi({ header: 'authorization', value: `Bearer ${AI_KEY}` });
@@ -747,65 +747,23 @@ describe('connectors: health checks on demand and on resolve', () => {
 		).json.connector.connectorId;
 		await call('POST', `${base}/${pay}/rotate`, { headers: owner, body: { credentials: { secretKey: `${PAY_SECRET}2` } } });
 		await flaky.close();
-		const runHealth = () => portal.operations.run('connectors-health');
+		const svc = /** @type {any} */ (portal.modules.service('connectors'));
 
-		// nothing is due within the interval
-		expect(await runHealth()).toMatchObject({
-			status: 'ok',
-			stats: { checked: 0, remaining: false },
-		});
-		expect((await db.collection('connectors_connectors').findOne({ _id: id }))?.status).toBe('connected');
-
+		// a later rotation drops expired rollback copies of every connector
 		clock.advance(25 * 3600_000);
-		state.emitted.length = 0;
-		// the admin operation checks inline (no job): what is due is checked within its deadline
-		const health = /** @type {any} */ (await runHealth());
-		expect(health.stats).toMatchObject({ checked: 2, changed: 1, remaining: false });
-		const doc = await db.collection('connectors_connectors').findOne({ _id: id });
-		expect(doc).toMatchObject({
-			status: 'failing',
-			lastCheckReport: { ok: false, checks: [{ name: 'reachability', ok: false, code: 'unreachable' }] },
+		const later = await merchant(MERCHANT);
+		const created = await call('POST', base, {
+			headers: later,
+			body: { kind: 'payments', provider: 'stripe', credentials: { secretKey: PAY_SECRET }, websiteIds: [WEB_B] },
 		});
-		expect(state.emitted).toEqual([
-			{
-				type: 'resource.changed@1',
-				data: { websiteId: WEB_A, kind: 'ai', status: 'failing', ref: id },
-				options: { websiteId: WEB_A },
-			},
-		]);
+		if (!created.json.connector) throw new Error(JSON.stringify(created.json));
+		const other = created.json.connector.connectorId;
+		await call('POST', `${base}/${other}/rotate`, { headers: later, body: { credentials: { secretKey: `${PAY_SECRET}3` } } });
 		expect((await db.collection('connectors_connectors').findOne({ _id: pay }))?.previous).toBeNull(); // expired rollback copy purged
-		expect(
-			await db.collection('platform_audit').countDocuments({ action: 'connectors.status_changed', 'actor.type': 'system' }),
-		).toBe(1);
 
-		// KEK rotation: a Portal with a new active KEK re-wraps on the next run
-		const rotated = await boot('cn_health', {
-			system: {
-				keks: [
-					{ id: 'kek-3', key: Buffer.alloc(32, 9) },
-					{ id: 'kek-2', key: Buffer.alloc(32, 2) },
-					{ id: 'kek-1', key: Buffer.alloc(32, 1) },
-				],
-			},
-		});
-		rotated.clock.set(clock.now() + 2 * 3600_000);
-		const svc = /** @type {any} */ (rotated.portal.modules.service('connectors'));
-		const result = await svc.healthCheck({ deadline: rotated.clock.now() + 60_000 });
-		expect(result).toMatchObject({ checked: 2, rewrapped: 2, remaining: false });
-		expect(String((await db.collection('connectors_connectors').findOne({ _id: id }))?.sealed)).toMatch(/^ssenc1\.kek-3\./);
-		expect(await svc.healthCheck({ deadline: rotated.clock.now() + 60_000 })).toMatchObject({ checked: 0, remaining: false });
-		rotated.clock.advance(2 * 3600_000);
-		expect(await svc.healthCheck({ deadline: rotated.clock.now() + 5_000 })).toMatchObject({ checked: 0, remaining: true }); // deadline too close
-		// what is left stays due: the next run of the admin operation continues (no job, no timer)
-		expect(await rotated.portal.operations.run('connectors-health')).toMatchObject({
-			status: 'ok',
-			stats: { checked: 2, remaining: false },
-		});
-		expect(await rotated.portal.shared.jobs.stats()).toMatchObject({ queued: 0 });
-
-		// a resolve is a natural moment to re-check a connector whose last check is old: after the response
-		rotated.clock.advance(2 * 3600_000);
-		rotated.state.subscriptions.set(WEB_A, [{ subscriptionId: 'sub_a', appId: APP, websiteId: WEB_A, status: 'active' }]);
+		// a resolve is the moment to re-check a connector whose last check is old: after the response
+		state.emitted.length = 0;
+		state.subscriptions.set(WEB_A, [{ subscriptionId: 'sub_a', appId: APP, websiteId: WEB_A, status: 'active' }]);
 		/** @type {Array<() => Promise<unknown>>} */
 		const deferred = [];
 		const resolved = await runInRequestScope({ defer: (task) => void deferred.push(task) }, () =>
@@ -814,8 +772,19 @@ describe('connectors: health checks on demand and on resolve', () => {
 		expect(resolved.kind).toBe('ai');
 		expect(deferred).toHaveLength(1);
 		await deferred[0]?.();
-		const checkedAt = (await db.collection('connectors_connectors').findOne({ _id: id }))?.lastCheckAt;
-		expect(checkedAt?.getTime()).toBe(rotated.clock.now());
+		const doc = await db.collection('connectors_connectors').findOne({ _id: id });
+		expect(doc).toMatchObject({
+			status: 'failing',
+			lastCheckReport: { ok: false, checks: [{ name: 'reachability', ok: false, code: 'unreachable' }] },
+		});
+		expect(doc?.lastCheckAt?.getTime()).toBe(clock.now());
+		expect(state.emitted).toEqual([
+			{
+				type: 'resource.changed@1',
+				data: { websiteId: WEB_A, kind: 'ai', status: 'failing', ref: id },
+				options: { websiteId: WEB_A },
+			},
+		]);
 		// checked recently: the next resolve defers nothing
 		await runInRequestScope({ defer: (task) => void deferred.push(task) }, () =>
 			svc.resolve({ appId: APP, websiteId: WEB_A, kind: 'ai' }),

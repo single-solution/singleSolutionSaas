@@ -76,6 +76,8 @@ export const IMMEDIATE_DELIVERY_MS = 8_000;
 export const DUE_RETRIES_PER_TRIGGER = 5;
 /** Due deliveries retried when staff press "Retry now" for a product, at most. */
 export const DUE_RETRIES_PER_REQUEST = 100;
+/** Time budget of a staff "Retry now" (bounded; what is left stays due). */
+const RETRY_NOW_BUDGET_MS = 50_000;
 
 /**
  * Job group of a product's deliveries (its due deliveries are retried together).
@@ -867,7 +869,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 	 */
 	const retryNow = async (appId, { actor, requestId = null, ip = null }) => {
 		const made = await ctx.jobs.makeDue({ name: DELIVER_JOB, group: deliveryGroup(appId), limit: DUE_RETRIES_PER_REQUEST });
-		const stats = await deliverDueFor(appId, { limit: DUE_RETRIES_PER_REQUEST, deadlineMs: ctx.config.operationDeadlineMs });
+		const stats = await deliverDueFor(appId, { limit: DUE_RETRIES_PER_REQUEST, deadlineMs: RETRY_NOW_BUDGET_MS });
 		await ctx.audit.record({
 			actor: /** @type {any} */ (actor),
 			action: 'integration.deliveries_retried',

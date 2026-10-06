@@ -3,7 +3,7 @@
  * delivery), in process, on the test run's MongoMemoryReplSet. Storefront Blocks is an element pack (no backend), so
  * instead of a product server this test drives the delivery plane end to end:
  *
- *   bootstrap staff (password + TOTP) → upload the pack as a signed `ss-pack-bundle@1` (developer key) and every
+ *   first admin from the sign-in page (password, then TOTP) → upload the pack as a signed `ss-pack-bundle@1` (developer key) and every
  *   asset (bytes = the signed sha256/size) → activate → listed in the catalog with its 13 elements → merchant signs up,
  *   adds a website, gets credits, subscribes (pro) → compile the website bundle → the immutable loader holds the
  *   plan's default elements within the 60 KB budget, the pack modules are served byte for byte → the compiled loader
@@ -32,6 +32,7 @@ import {
 	testSystemState,
 	systemModule,
 	totpCode,
+	SESSIONS,
 } from '@ss/platform/testing';
 import { buildPack, descriptorOf } from '@ss/product-storefront/pack';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -79,12 +80,17 @@ beforeAll(async () => {
 			NODE_ENV: 'test',
 			MONGODB_URI: mongoUri('unused'),
 			STORAGE_DIR: ':memory:',
-			// honest budgets (F.18): the pro defaults fit, every add-on at once does not
-			DELIVERY_BUDGET_KB: '55',
-			STAFF_SESSION_IDLE_MINUTES: '720',
 		},
-		// keys and secrets as the Portal generates them on first start; the URL as recorded at /setup
-		testSystemState({ portalUrl: PORTAL_URL }),
+		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
+		testSystemState(),
+		// long staff sessions for the scripted clock; a 55 KB website budget
+		{
+			baseUrl: PORTAL_URL,
+			overrides: {
+				sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } },
+				delivery: { storage: { kind: 'memory' }, budgetKb: 55 },
+			},
+		},
 	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const portalDb = mongo.db(`e2e_portal_${randomBytes(4).toString('hex')}`);
@@ -151,14 +157,13 @@ afterAll(async () => {
 });
 
 describe('Storefront Blocks delivered by the real Portal', () => {
-	it('bootstraps the first staff user (password + TOTP)', async () => {
-		const { call, portal, clock, state } = ctx;
-		const { link } = await portal.modules.service('identity').bootstrapSuperadmin({ email: STAFF.email });
-		const token = decodeURIComponent(String(link).split('#token=')[1] ?? '');
-		expect(
-			(await call('POST', '/v1/auth/staff/password-reset/confirm', { body: { token, password: STAFF.password } })).status,
-		).toBe(204);
+	it('creates the first admin from the sign-in page, then signs in and turns on TOTP', async () => {
+		const { call, clock, state } = ctx;
+		const created = await call('POST', '/v1/auth/staff/first-admin', { body: { password: STAFF.password } });
+		expect(created.status, JSON.stringify(created.json)).toBe(201);
+		expect((await call('PATCH', '/v1/me', { cookie: created.cookie ?? '', body: { email: STAFF.email } })).status).toBe(200);
 		const login = await call('POST', '/v1/auth/staff/login', { body: STAFF });
+		expect(login.json.status).toBe('ok');
 		const enrol = await call('POST', '/v1/auth/staff/mfa/enrol', { cookie: login.cookie });
 		clock.advance(30_000);
 		const confirm = await call('POST', '/v1/auth/staff/mfa/confirm', {

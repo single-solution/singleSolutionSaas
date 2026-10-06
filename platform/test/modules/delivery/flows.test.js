@@ -266,7 +266,7 @@ describe('compile, serve, rollback', () => {
 	});
 
 	it('refuses a compile over the website budget and keeps the current alias', async () => {
-		const t = await boot({ env: { DELIVERY_BUDGET_KB: '40' } });
+		const t = await boot({ budgetKb: 40 });
 		await t.uploadAll(PACK);
 		await t.uploadAll(BIG);
 		const owner = await t.cookie();
@@ -307,8 +307,8 @@ describe('compile, serve, rollback', () => {
 		expect(queued.length).toBeGreaterThan(0);
 		t.world.layers.set(pack.subscriptionId, { website: { features: { 'bar.message': { value: 'v2' } } } });
 		await t.commerce.invalidate(pack.subscriptionId); // second bump
-		const run = await t.portal.operations.run('drain');
-		expect(run?.status).toBe('ok');
+		// the compile job runs right after the request that asked for it; outside a request, the next loader fetch does
+		await t.portal.shared.jobs.runBatch({ handlers: t.portal.modules.jobs, deadlineMs: 10_000, owner: 'test' });
 		const alias = await t.db.collection('delivery_aliases').findOne({ websiteId: W1 });
 		expect(alias).toMatchObject({ compiledRequest: alias?.requested });
 		expect((await t.request('GET', `/w/${W1}/loader.js`)).text).toContain('"message":"v2"');

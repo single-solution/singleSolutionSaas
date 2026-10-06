@@ -171,7 +171,6 @@ export const createIdentityService = (ctx, options = {}) => {
 		getPartner: admin.partners.get,
 		getDeveloper: admin.developers.get,
 		getStaff: admin.getStaff,
-		bootstrapSuperadmin: admin.bootstrapSuperadmin,
 		hasStaff: admin.hasStaff,
 		/** Public keys that verify website keys (published by the infra in the Portal JWKS). */
 		websiteKeyJwks: () => signing.jwks(),

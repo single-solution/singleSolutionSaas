@@ -98,19 +98,17 @@ export const loadStaffSession = async (api) => {
 };
 
 /**
- * Platform health: queues and dead letters, unhealthy service apps, reconciliation and finance alerts, operation runs,
- * the job queue and the last audit-chain verification (each section degrades on its own, e.g. for roles without
- * `platform.jobs.read`).
+ * Platform health: queues and dead letters, unhealthy service apps, finance alerts and the job queue (each section
+ * degrades on its own, e.g. for roles without `platform.jobs.read`).
  * @param {ConsoleApi} api
  */
 export const loadDashboard = async (api) => {
-	const [health, metrics, deadLetters, apps, alerts, reports] = await Promise.all([
+	const [health, metrics, deadLetters, apps, alerts] = await Promise.all([
 		api.get(paths.health()),
 		api.get(paths.metrics()),
 		api.get(`${paths.deadLetters()}?limit=5`),
 		api.get(paths.apps({ limit: 100 })),
 		api.get(paths.alerts()),
-		api.get(paths.reconciliation()),
 	]);
 	const appItems = itemsOf(apps);
 	return {
@@ -122,7 +120,6 @@ export const loadDashboard = async (api) => {
 		apps: appItems,
 		unhealthy: unhealthyApps(appItems),
 		alerts: itemsOf(alerts),
-		reports: itemsOf(reports),
 	};
 };
 
@@ -363,14 +360,14 @@ export const loadSubscription = async (api, subscriptionId) => {
 };
 
 /**
- * Finance overview: reconciliation reports and alerts.
+ * Finance overview: alerts.
  * @param {ConsoleApi} api
  */
 export const loadFinance = async (api) => {
-	const [reports, alerts] = await Promise.all([api.get(paths.reconciliation()), api.get(paths.alerts())]);
-	const failed = firstFailure(reports);
+	const alerts = await api.get(paths.alerts());
+	const failed = firstFailure(alerts);
 	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), reports: itemsOf(reports), alerts: itemsOf(alerts) };
+	return { ok: /** @type {const} */ (true), alerts: itemsOf(alerts) };
 };
 
 /**
@@ -466,7 +463,8 @@ export const loadAudit = async (api, filter = {}) => {
 };
 
 /**
- * Portal settings (needs `platform.settings.write`): the Portal URL, the preview URL, the mailer and the key ids.
+ * Portal settings (needs `platform.settings.write`): the Portal URL (the request's origin), the preview URL, the
+ * mailer and the key ids.
  * @param {ConsoleApi} api
  * @param {any} staff the signed-in staff member
  */

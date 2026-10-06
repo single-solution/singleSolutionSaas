@@ -290,14 +290,10 @@ export const createWorld = async ({ db }) => {
 
 	// staff (signed in with MFA) for seeding
 	const staff = browserOf(portal);
-	const { link } = await /** @type {any} */ (portal.modules.service('identity')).bootstrapSuperadmin({
-		email: 'staff@ss.test',
-	});
+	// the first admin (created from the sign-in page), given an e-mail in Account settings
 	const staffPassword = 'staff password 123!';
-	await staff.api.post('/v1/auth/staff/password-reset/confirm', {
-		token: decodeURIComponent(String(link).split('#token=')[1] ?? ''),
-		password: staffPassword,
-	});
+	await staff.api.post('/v1/auth/staff/first-admin', { password: staffPassword });
+	await staff.api.request('PATCH', '/v1/me', { email: 'staff@ss.test' });
 	await staff.api.post('/v1/auth/staff/login', { email: 'staff@ss.test', password: staffPassword });
 	const enrol = await staff.api.post('/v1/auth/staff/mfa/enrol');
 	await staff.api.post('/v1/auth/staff/mfa/confirm', { code: totpCode(enrol.ok ? enrol.data.secret : '', Date.now()) });

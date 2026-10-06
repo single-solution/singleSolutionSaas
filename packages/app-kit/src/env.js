@@ -3,14 +3,8 @@
  * @module
  */
 
-/** Default pool of the product's control-database client per instance (many instances share one Atlas M0 cluster). */
+/** Pool of the product's control-database client per instance (many instances share one Atlas M0 cluster). */
 export const CONTROL_DB_POOL_SIZE = 5;
-
-/** @param {string | undefined} value */
-const poolSizeOf = (value) => {
-	const n = Number(value);
-	return Number.isInteger(n) && n >= 1 && n <= 100 ? n : CONTROL_DB_POOL_SIZE;
-};
 
 /**
  * The product's environment: its own control database (`DATABASE_URI`) and the deployer's `CONNECT_SECRET` (≥ 32
@@ -18,7 +12,7 @@ const poolSizeOf = (value) => {
  * with that secret; the Portal URL, the appId, the signing key and generated secrets are kept in the database.
  * @param {Record<string, string | undefined>} [env] defaults to `process.env`
  * @returns {{ productDbUri: string | undefined, connectSecret: string | undefined, productDbOptions: { maxPoolSize: number, minPoolSize: number, maxIdleTimeMS: number, serverSelectionTimeoutMS: number }, logLevel: string, outboundAllowHosts: string[] }}
- *   `productDbOptions`: a small pool for serverless (optional `DATABASE_MAX_POOL_SIZE`, default {@link CONTROL_DB_POOL_SIZE}),
+ *   `productDbOptions`: a small pool for serverless ({@link CONTROL_DB_POOL_SIZE} connections),
  *   idle connections closed after a minute; `outboundAllowHosts` from the optional development-only
  *   `OUTBOUND_DEV_ALLOW_HOSTS` (ignored in production); `logLevel` is `info` in production, `debug` elsewhere
  */
@@ -35,7 +29,7 @@ const configOf = (env) => ({
 	productDbUri: env.DATABASE_URI,
 	connectSecret: env.CONNECT_SECRET || undefined,
 	productDbOptions: {
-		maxPoolSize: poolSizeOf(env.DATABASE_MAX_POOL_SIZE),
+		maxPoolSize: CONTROL_DB_POOL_SIZE,
 		minPoolSize: 0,
 		maxIdleTimeMS: 60_000,
 		serverSelectionTimeoutMS: 5_000,

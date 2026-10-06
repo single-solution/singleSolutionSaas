@@ -16,7 +16,6 @@ import { createCatalogService } from './service.js';
 /** @typedef {import('./service.js').CatalogService} CatalogService */
 
 /** Admin operation that re-fetches every listed app's manifest (on demand; resumable with `after`). */
-export const REFRESH_OPERATION = 'catalog_refresh';
 
 /**
  * @param {CatalogOptions} [options]
@@ -36,16 +35,6 @@ export const createCatalogModule = (options = {}) =>
 			catalogRoutes(/** @type {CatalogService} */ (ctx.service('catalog')), {
 				commerce: () => (ctx.moduleNames().includes('commerce') ? ctx.service('commerce') : null),
 			}),
-		operations: (ctx) => ({
-			// on demand (admin console): refresh within the deadline; a cut run returns `resumeAfter`, and running it
-			// again with `{ after: resumeAfter }` continues (F.19: no timer, no continuation jobs)
-			[REFRESH_OPERATION]: async ({ deadline, signal, input }) =>
-				/** @type {CatalogService} */ (ctx.service('catalog')).refreshAll({
-					deadline,
-					signal,
-					after: typeof input.after === 'string' ? input.after : null,
-				}),
-		}),
 		ports: (ctx) => ({
 			appKeys: (appId) => /** @type {CatalogService} */ (ctx.service('catalog')).appKeys(appId),
 		}),

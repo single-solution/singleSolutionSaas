@@ -1,24 +1,21 @@
 // Server-side Admin Console context: the in-process API client bound to the request's cookies (the staff session
-// cookie is separate from merchant sessions), the staff session, and the redirects of signed-out or half-signed
-// (password only, MFA pending) staff. Thin adapter over src/console/admin (no business logic here).
+// cookie is separate from merchant sessions), the staff session, the redirects of signed-out or half-signed
+// (password only, MFA pending) staff, and the first-run check of the sign-in page. Thin adapter over src/console/admin (no business logic here).
 import { cache } from 'react';
 import { headers } from 'next/headers';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { createConsoleApi } from '../../../src/console/api.js';
 import { loadStaffSession } from '../../../src/console/admin/loaders.js';
+import { originFromHeaders } from '../../../src/infra/request-scope.js';
 import { getPortal } from '../../../src/runtime.js';
 
 /** The request's API client (one per request). */
 export const adminApiClient = cache(async () => {
 	const h = await headers(); // first: makes the page dynamic before the Portal (environment) is touched
 	const portal = await getPortal();
-	if (!portal.config.setUp) redirect('/setup'); // first run: nothing but /setup until it is done
-	// the dedicated preview origin serves previews only, never a console page
-	const preview = portal.config.delivery.previewOrigin;
-	if (preview && new URL(preview).host === h.get('host')) notFound();
 	return createConsoleApi({
 		handle: portal.handle,
-		baseUrl: portal.config.portalUrl,
+		baseUrl: originFromHeaders(h, 'http://localhost'), // the Portal's address is the request's own origin
 		cookie: h.get('cookie'),
 		forwardedFor: h.get('x-forwarded-for'),
 		userAgent: h.get('user-agent'),
@@ -45,6 +42,12 @@ export const staffContext = async (next) => {
 export const redirectIfStaff = async () => {
 	const session = await staffSession();
 	if (session.ok) redirect('/admin');
+};
+
+/** First run: no staff user exists yet, so the sign-in page offers "Create admin". */
+export const isFirstRun = async () => {
+	const identity = /** @type {{ hasStaff: () => Promise<boolean> }} */ ((await getPortal()).modules.service('identity'));
+	return !(await identity.hasStaff());
 };
 
 /** @param {unknown} value */

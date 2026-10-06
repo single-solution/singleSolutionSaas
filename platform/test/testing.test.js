@@ -5,6 +5,7 @@ import { modules } from '../src/modules/index.js';
 describe('@ss/platform/testing', () => {
 	it('exposes the composition root, the module list and the module factories for system tests', () => {
 		expect(Object.keys(testing).sort()).toEqual([
+			'SESSIONS',
 			'closeMongoClients',
 			'commerceModule',
 			'configModule',

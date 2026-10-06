@@ -96,8 +96,8 @@ pnpm db:memory
 pnpm env:dev > .env.local && pnpm dev
 ```
 
-The Portal runs on http://localhost:4000. Open http://localhost:4000/setup: confirm the URL and create the first admin
-(then set a password and enrol two-factor sign-in). Keys and secrets are generated in the database on first start.
+The Portal runs on http://localhost:4000. Open the staff login, http://localhost:4000/admin/login, and choose a password:
+you become the admin (login name `admin`). Keys and secrets are generated in the database on first start.
 
 ## Building a product
 
@@ -251,9 +251,8 @@ pnpm --filter @ss/e2e test
 
 The Portal and every service product run on **any Node 22 host** that runs Next.js (a server with `next build` +
 `next start`, a container, or a serverless platform), on any domain. The environment holds only database and storage
-connections; every other key and secret is generated inside the apps (a product also gets its `CONNECT_SECRET`). The Portal URL is
-recorded at the Portal's `/setup`. One
-MongoDB Atlas cluster (M0 works) serves all of them. Each deployable is one folder:
+connections; every other key and secret is generated inside the apps (a product also gets its `CONNECT_SECRET`). The Portal's
+address is simply the one it is opened at. One MongoDB Atlas cluster (M0 works) serves all of them. Each deployable is one folder:
 
 | Deployable              | Folder                                | What it is                                                                                                                                |
 | ----------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -274,11 +273,11 @@ Directory**.
   statement is read, a product fetches an entitlement document or reports usage for one of its websites, or a
   subscription changes — so low-balance and spend-limit holds reach the products' entitlement documents. Products
   treat expiries on read, clean up when rows are touched (or by TTL indexes) and put merchant-started work behind
-  dashboard buttons. Reconciliation, audit verification, connector checks and manifest refreshes are admin buttons.
+  dashboard buttons. Connectors are checked when saved or resolved; audit chains are verified per scope from the audit log.
 - **Offline documents.** A product holding a still-valid entitlement document (10 minutes, plus its cache) may keep
   serving until it next refreshes it; a hold therefore takes effect within minutes, without any timer.
-- **Small connection pools.** About 15 deployments share M0's ~500 connections, so pools are 5 per instance (Portal
-  `MONGODB_MAX_POOL_SIZE`, products `DATABASE_MAX_POOL_SIZE`), merchant databases 3, and clients are cached on
+- **Small connection pools.** About 15 deployments share M0's ~500 connections, so pools are a fixed 5 per instance (Portal
+  and products), merchant databases 3, and clients are cached on
   `globalThis` and reused across requests.
 
 ### 1. Atlas
@@ -296,7 +295,10 @@ variables are set, only the website-script and pack routes answer 503.
 
 ### 3. Portal
 
-Set these and deploy (`NODE_ENV=production` where the host does not set it):
+Set `MONGODB_URI` → deploy → open the staff login, `https://<your domain>/admin/login` → **choose a password**. You
+are now the admin (login name `admin`); add your e-mail, name and two-factor sign-in whenever you like in **Account
+settings**. Do it right after deploying: until an admin exists, whoever opens the staff login first becomes the admin.
+Set `NODE_ENV=production` where the host does not set it, and the storage variables when you want website scripts:
 
 | Variable                    | Value                                                                       |
 | --------------------------- | --------------------------------------------------------------------------- |
@@ -307,9 +309,7 @@ Set these and deploy (`NODE_ENV=production` where the host does not set it):
 | `STORAGE_ACCESS_KEY_ID`     | the bucket's access key                                                     |
 | `STORAGE_SECRET_ACCESS_KEY` | its secret                                                                  |
 
-Then open `https://<your domain>/setup` **right away** (until it is done, whoever opens it first becomes the
-administrator): confirm the Portal URL, create the first admin, set a password and enrol two-factor sign-in. Mail and
-an optional preview URL are set later in Admin → Settings. Indexes and migrations run by themselves.
+Mail is set later in Admin → Settings. Indexes and migrations run by themselves.
 
 ### 4. Each service product
 

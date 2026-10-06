@@ -247,7 +247,6 @@ export const deliveryRoutes = (delivery) => [
 					token: ctx.params.token ?? '',
 					path: `/${Array.from({ length: depth }, (_, i) => encodeURIComponent(ctx.params[`p${i}`] ?? '')).join('/')}`,
 					search: new URL(ctx.request.url).search,
-					host: new URL(ctx.request.url).host,
 				}),
 		}),
 	),

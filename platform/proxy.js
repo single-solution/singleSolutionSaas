@@ -1,7 +1,5 @@
 // Next.js proxy (formerly middleware): per-request CSP nonce for HTML pages. Logic lives in src/infra/security-headers.js.
 // Delivery responses (/w/*, /p/*) set their own policies (cross-origin scripts; sandboxed previews) and are excluded.
-// On the dedicated preview origin no console page is served: the console layouts answer 404 there (the origin is a
-// Portal setting), and API routes refuse it in portal.handle.
 import { NextResponse } from 'next/server';
 import { createNonce, pageCsp } from './src/infra/security-headers.js';
 
@@ -21,7 +19,7 @@ export function proxy(request) {
 export const config = {
 	matcher: [
 		{
-			source: '/((?!api|v1|w/|p/|setup|healthz|readyz|\\.well-known|_next/static|_next/image|favicon.ico).*)',
+			source: '/((?!api|v1|w/|p/|healthz|readyz|\\.well-known|_next/static|_next/image|favicon.ico).*)',
 			missing: [
 				{ type: 'header', key: 'next-router-prefetch' },
 				{ type: 'header', key: 'purpose', value: 'prefetch' },

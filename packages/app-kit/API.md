@@ -296,7 +296,7 @@ as expired when read and cleaned up when touched (or by a MongoDB TTL index: `en
 it relevant, or from a dashboard button.
 
 **Connection budget.** `configFromEnv().productDbOptions` are the control-database `MongoClient` options: pool
-`DATABASE_MAX_POOL_SIZE` (default `CONTROL_DB_POOL_SIZE` = 5), `minPoolSize` 0, idle connections closed after
+a fixed pool (`CONTROL_DB_POOL_SIZE` = 5), `minPoolSize` 0, idle connections closed after
 60 s. Create the client once per instance (in the composition root that is cached on `globalThis`), never per
 request. Merchant database pools are `CLIENT_DB_POOL_SIZE` (3) per instance, cached on `globalThis` and closed when
 idle (checked when the next website is served; no timer).
@@ -376,8 +376,7 @@ Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces ar
 
 `configFromEnv(env = process.env)` → `{ productDbUri, productDbOptions, connectSecret, logLevel, outboundAllowHosts }`.
 It reads `DATABASE_URI` (the product's own control DB) and `CONNECT_SECRET` (the connect secret) — the two variables a
-deployment needs — and optionally
-`DATABASE_MAX_POOL_SIZE` (its pool, default 5) and `OUTBOUND_DEV_ALLOW_HOSTS` (comma-separated development allowlist
+deployment needs — and optionally `OUTBOUND_DEV_ALLOW_HOSTS` (comma-separated development allowlist
 for `outbound.allowHosts`; ignored in production). `logLevel` is `info` in production and `debug` elsewhere. No value
 is JSON, and no URL, key or other secret is read from the environment.
 

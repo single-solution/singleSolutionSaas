@@ -22,7 +22,6 @@
 		"db:migrate:dry": "node --env-file-if-exists=.env.local scripts/db.js migrate --dry-run",
 		"db:memory": "node scripts/dev-mongo.js",
 		"env:dev": "node scripts/dev-env.js",
-		"admin:bootstrap": "node --env-file-if-exists=.env.local scripts/bootstrap-admin.js",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm runtime:check && pnpm test",
 		"test": "vitest run --coverage",
 		"test:watch": "vitest",

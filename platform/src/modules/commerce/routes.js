@@ -4,7 +4,7 @@
  * - Product (F.9, `auth: 'product'`): `GET /v1/product/entitlements`, `POST /v1/product/usage`.
  * - Merchant console (`merchant` or `staff`): subscriptions, element switches, plan, pause/resume/cancel, balance,
  *   meter, statement, spend policies. Subscription routes authorise after the lookup with the subscription's website.
- * - Admin (`staff`): credits, adjustments, refunds, ledger + verification, force settlement, reconciliation, alerts.
+ * - Admin (`staff`): credits, adjustments, refunds, ledger + verification, alerts.
  * @module
  */
 import { defineRoute, ok, created, noContent, paginate, problem } from '../../infra/http.js';
@@ -280,31 +280,6 @@ export const commerceRoutes = (service) => {
 			auth: 'staff',
 			permission: 'platform.finance.read',
 			handler: async (c) => service.verifyChain(c.params.merchantId ?? ''),
-		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/admin/commerce/settlement',
-			auth: 'staff',
-			permission: 'platform.jobs.manage',
-			handler: async (c) => {
-				const body = /** @type {Record<string, unknown> | undefined} */ (c.body);
-				const merchantId = typeof body?.merchantId === 'string' ? body.merchantId : null;
-				return ok({ stats: await service.runSettlement({ merchantId }) });
-			},
-		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/admin/commerce/reconciliation',
-			auth: 'staff',
-			permission: 'platform.jobs.manage',
-			handler: async () => ok({ stats: await service.runReconciliation() }),
-		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/admin/commerce/reconciliation',
-			auth: 'staff',
-			permission: 'platform.finance.read',
-			handler: async () => ({ items: await service.reconciliationReports() }),
 		}),
 		defineRoute({
 			method: 'GET',

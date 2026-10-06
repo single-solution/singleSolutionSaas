@@ -14,8 +14,6 @@ export const LEDGER = 'commerce_ledger';
 export const ACCOUNTS = 'commerce_accounts';
 export const SPEND_POLICIES = 'commerce_spend_policies';
 export const ALERTS = 'commerce_alerts';
-export const RECONCILIATIONS = 'commerce_reconciliations';
-export const STATE = 'commerce_state';
 
 const DAY_S = 86_400;
 
@@ -117,22 +115,10 @@ export const collections = Object.freeze([
 		module: 'commerce',
 		name: ALERTS,
 		appendOnly: true,
-		description: 'Money alerts (reconciliation drift, chain breaks, unpriced hours) for staff review.',
+		description: 'Money alerts (chain breaks, unpriced hours) for staff review.',
 		indexes: [
 			{ keys: { at: -1 }, name: 'by_at' },
 			{ keys: { merchantId: 1, at: -1 }, name: 'by_merchant_at' },
 		],
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: RECONCILIATIONS,
-		appendOnly: true,
-		description: 'Reconciliation reports (per run chunk): checked counts and discrepancies.',
-		indexes: [{ keys: { runKey: 1, at: 1 }, name: 'by_run' }],
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: STATE,
-		description: 'Operation cursors (reconciliation progress).',
 	}),
 ]);

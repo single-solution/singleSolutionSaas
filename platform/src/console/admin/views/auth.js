@@ -1,10 +1,11 @@
 'use client';
 /**
- * Staff sign-in: password, then the mandatory second factor — a TOTP / recovery code, or (first sign-in, or after
- * an authenticator reset) enrolment: the secret and `otpauth://` link are shown once, the first code confirms it,
- * and the recovery codes are shown once. The staff session cookie (`__Host-ss_staff`) is separate from merchant
- * sessions and only reaches the MFA routes until the second factor is done (infra auth). Also: password reset
- * request and the setup / reset link page (tokens arrive in the URL fragment, never in logs).
+ * First run (no staff user yet): "Choose a password" and "Create admin" make the visitor the superadmin `admin`.
+ * Afterwards: staff sign-in by e-mail or as `admin`, then a
+ * TOTP / recovery code for staff who turned two-factor sign-in on. The enrolment (secret and `otpauth://` link shown
+ * once, the first code confirms it, recovery codes shown once) lives in Account settings. The staff session cookie
+ * (`__Host-ss_staff`) is separate from merchant sessions. Also: password reset request and the setup / reset link page
+ * (tokens arrive in the URL fragment, never in logs).
  * @module
  */
 import { useEffect, useState } from 'react';
@@ -137,7 +138,7 @@ export function StaffMfaVerify({ onDone, onRestart }) {
 }
 
 /**
- * Mandatory enrolment of an authenticator (first staff sign-in or after a reset).
+ * Enrolment of an authenticator (Account settings).
  * @param {{ onDone: () => void, onRestart: () => void }} props
  */
 export function StaffMfaEnrol({ onDone, onRestart }) {
@@ -188,8 +189,8 @@ export function StaffMfaEnrol({ onDone, onRestart }) {
 			/>
 			{step === 'start' ? (
 				<>
-					<Callout tone="info" live={false} title="Two-factor authentication is mandatory for staff">
-						Set up an authenticator app (TOTP) to finish signing in.
+					<Callout tone="info" live={false} title="Turn on two-factor sign-in">
+						Set up an authenticator app (TOTP). From then on, signing in asks for its code.
 					</Callout>
 					<FormError problem={problem} />
 					{problem && problemCode(problem) === 'unauthorized' ? (
@@ -237,7 +238,7 @@ export function StaffMfaEnrol({ onDone, onRestart }) {
 						recovery codes safely
 					</label>
 					<Button block disabled={!saved} onClick={onDone}>
-						Continue to the console
+						Done
 					</Button>
 				</div>
 			) : null}
@@ -246,15 +247,69 @@ export function StaffMfaEnrol({ onDone, onRestart }) {
 }
 
 /**
+ * First run: the visitor chooses a password and becomes the superadmin `admin` (signed in at once).
+ * @param {{ next?: string | null }} props
+ */
+export function FirstAdminView({ next = null }) {
+	const [password, setPassword] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	const [error, setError] = useState(/** @type {string | null} */ (null));
+	const submit = async () => {
+		if (password.length < STAFF_PASSWORD_MIN) {
+			setError(`Use at least ${STAFF_PASSWORD_MIN} characters.`);
+			return;
+		}
+		setBusy(true);
+		setError(null);
+		setProblem(null);
+		const result = await adminFetch(adminApi.firstAdmin(), { method: 'POST', body: { password }, redirectOn401: false });
+		setBusy(false);
+		if (!result.ok) return setProblem(result.problem);
+		window.location.assign(safeAdminNext(next));
+	};
+	return (
+		<StaffAuthFrame title="Create admin" subtitle="No admin exists yet. You become the admin, with the login name admin.">
+			<Form onSubmit={submit} busy={busy} aria-label="Create admin">
+				<Input
+					label="Choose a password"
+					type="password"
+					autoComplete="new-password"
+					value={password}
+					onChange={(e) => setPassword(e.currentTarget.value)}
+					error={error ?? fieldErrors(problem).password}
+					help={`At least ${STAFF_PASSWORD_MIN} characters. E-mail, name and two-factor sign-in are in Account settings.`}
+					autoFocus
+					required
+				/>
+				<FormError problem={problem} fields={['password']} />
+				<Button type="submit" block loading={busy}>
+					Create admin
+				</Button>
+			</Form>
+		</StaffAuthFrame>
+	);
+}
+
+/**
+ * @param {{ next?: string | null, expired?: boolean, reset?: boolean, firstRun?: boolean }} props `firstRun`: no
+ *   staff user exists yet (the page offers "Create admin" instead)
+ */
+export function StaffLoginView({ next = null, expired = false, reset = false, firstRun = false }) {
+	if (firstRun) return <FirstAdminView next={next} />;
+	return <StaffLogin next={next} expired={expired} reset={reset} />;
+}
+
+/**
  * @param {{ next?: string | null, expired?: boolean, reset?: boolean }} props
  */
-export function StaffLoginView({ next = null, expired = false, reset = false }) {
+function StaffLogin({ next = null, expired = false, reset = false }) {
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
-	const [stage, setStage] = useState(/** @type {'password' | 'verify' | 'enrol'} */ ('password'));
+	const [stage, setStage] = useState(/** @type {'password' | 'verify'} */ ('password'));
 	const done = () => window.location.assign(safeAdminNext(next));
 	const restart = () => {
 		setStage('password');
@@ -263,8 +318,8 @@ export function StaffLoginView({ next = null, expired = false, reset = false }) 
 	const submit = async () => {
 		/** @type {Record<string, string>} */
 		const local = {};
-		const e1 = emailProblem(email);
-		if (e1) local.email = e1;
+		const e1 = email.trim().toLowerCase() === 'admin' ? null : emailProblem(email);
+		if (e1) local.email = 'Enter your e-mail address, or admin.';
 		if (!password) local.password = 'Enter your password.';
 		setErrors(local);
 		if (Object.keys(local).length > 0) return;
@@ -282,7 +337,8 @@ export function StaffLoginView({ next = null, expired = false, reset = false }) 
 			return;
 		}
 		setPassword('');
-		setStage(result.data?.status === 'mfa_enrolment_required' ? 'enrol' : 'verify');
+		if (result.data?.status === 'mfa_required') setStage('verify');
+		else done();
 	};
 	if (stage === 'verify')
 		return (
@@ -290,16 +346,10 @@ export function StaffLoginView({ next = null, expired = false, reset = false }) 
 				<StaffMfaVerify onDone={done} onRestart={restart} />
 			</StaffAuthFrame>
 		);
-	if (stage === 'enrol')
-		return (
-			<StaffAuthFrame title="Set up two-factor authentication" subtitle={email}>
-				<StaffMfaEnrol onDone={done} onRestart={restart} />
-			</StaffAuthFrame>
-		);
 	return (
 		<StaffAuthFrame
 			title="Staff sign in"
-			subtitle="Platform operations. Two-factor authentication is required."
+			subtitle="Platform operations. Sign in with your e-mail, or as admin."
 			footer={
 				<Link href={adminRoutes.forgotPassword()} className="font-semibold text-primary hover:underline">
 					Forgot your password?
@@ -311,10 +361,11 @@ export function StaffLoginView({ next = null, expired = false, reset = false }) 
 				</Callout>
 			) : null}
 			{reset ? <Callout tone="success">Your password is set. Sign in with it now.</Callout> : null}
+
 			<Form onSubmit={submit} busy={busy} aria-label="Staff sign in">
 				<Input
-					label="E-mail"
-					type="email"
+					label="E-mail or admin"
+					type="text"
 					autoComplete="username"
 					value={email}
 					onChange={(e) => setEmail(e.currentTarget.value)}

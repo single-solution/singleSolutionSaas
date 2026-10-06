@@ -151,11 +151,7 @@ describe('commerce routes and tenant isolation', () => {
 		clock.set(T0 + 2 * HOUR + 5 * 60_000); // staff sessions idle out after 30 min: sign in again
 		admin = await h.login({ kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
 		const support = await staffLogin();
-		const forced = await h.call('POST', '/v1/admin/commerce/settlement', {
-			headers: { ...admin, ...idem() },
-			body: { merchantId: M1 },
-		});
-		expect([forced.status, forced.json]).toMatchObject([200, { stats: { merchants: 1 } }]);
+		// settlement happens on read: the balance below settles M1's complete hours first
 		const balance = await h.call('GET', `/v1/merchants/${M1}/balance`, { headers: billing1 });
 		expect(balance.json.balanceMillicredits).toBeLessThan(100_000);
 		const meter = await h.call('GET', `/v1/merchants/${M1}/meter`, { headers: owner1 });
@@ -222,11 +218,10 @@ describe('commerce routes and tenant isolation', () => {
 		expect((await h.call('GET', `/v1/admin/merchants/${M1}/ledger/verification`, { headers: finance })).json).toMatchObject({
 			ok: true,
 		});
-		const recon = await h.call('POST', '/v1/admin/commerce/reconciliation', { headers: { ...admin, ...idem() } });
-		expect(recon.json.stats).toMatchObject({ complete: true, discrepancies: 0 });
-		expect((await h.call('GET', '/v1/admin/commerce/reconciliation', { headers: finance })).json.items).toHaveLength(1);
+		// no on-demand settlement or reconciliation routes: settlement happens on read
+		expect((await h.call('POST', '/v1/admin/commerce/reconciliation', { headers: { ...admin, ...idem() } })).status).toBe(404);
 		expect((await h.call('GET', '/v1/admin/commerce/alerts', { headers: finance })).json.items).toEqual([]);
-		expect((await h.call('POST', '/v1/admin/commerce/settlement', { headers: { ...finance, ...idem() } })).status).toBe(403);
+		expect((await h.call('POST', '/v1/admin/commerce/settlement', { headers: { ...finance, ...idem() } })).status).toBe(404);
 
 		// product routes: only the app's own subscription
 		const app1 = await h.productAuth(APP);

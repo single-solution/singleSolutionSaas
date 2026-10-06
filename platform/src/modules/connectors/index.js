@@ -15,7 +15,6 @@ import { collections } from './schema.js';
 import { createConnectorsService } from './service.js';
 
 /** Admin operation that checks every connector not checked recently (bounded; what is left stays due). */
-export const HEALTH_OPERATION = 'connectors-health';
 /** Response bodies of connection checks are read up to this size. */
 export const CHECK_MAX_BYTES = 64 * 1024;
 
@@ -48,11 +47,6 @@ export const createConnectorsModule = (options = {}) =>
 			return createConnectorsService(ctx, { policy, probes });
 		},
 		routes: (ctx) => connectorsRoutes(ctx.service('connectors')),
-		operations: (ctx) => ({
-			// on demand (admin console): connectors are otherwise checked when saved (create, rotate, update, assign,
-			// test) and when a product resolves one whose last check is old (F.19: no timer)
-			[HEALTH_OPERATION]: async ({ deadline, signal }) => ctx.service('connectors').healthCheck({ deadline, signal }),
-		}),
 	});
 
 export const connectorsModule = createConnectorsModule();

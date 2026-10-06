@@ -107,9 +107,7 @@ const build = (routes, overrides = {}) => {
 		can,
 		idempotency: stores.idempotency,
 		rateLimits: stores.rateLimits,
-		portalOrigin: ORIGIN,
 		now: clock.now,
-		trustProxyHeaders: true,
 		maxBodyBytes: 64,
 		...overrides,
 	});
@@ -600,14 +598,15 @@ describe('request pipeline', () => {
 			},
 		];
 		const trusted = build(routes);
-		expect((await trusted.call('GET', '/v1/items/a1?t=1&t=2&x=y', { headers: { 'x-real-ip': '192.0.2.4' } })).json).toEqual({
+		// the client IP is the last X-Forwarded-For entry: what the first hop (our proxy) saw
+		const headers = { 'x-forwarded-for': '10.9.9.9, 192.0.2.4' };
+		expect((await trusted.call('GET', '/v1/items/a1?t=1&t=2&x=y', { headers })).json).toEqual({
 			id: 'a1',
 			q: { t: '1', x: 'y' },
 			all: ['1', '2'],
 			ip: '192.0.2.4',
 		});
-		const untrusted = build(routes, { trustProxyHeaders: false });
-		expect((await untrusted.call('GET', '/v1/items/a1', { headers: { 'x-forwarded-for': '192.0.2.4' } })).json.ip).toBeNull();
+		expect((await trusted.call('GET', '/v1/items/a1')).json.ip).toBeNull();
 	});
 
 	it('toNextRoute exposes every method', async () => {

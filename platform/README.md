@@ -3,7 +3,7 @@
 The Portal holds **control-plane data only** (accounts, websites, subscriptions, entitlements, credits, ledger,
 audit, keys, delivery metadata — PLAN §1a). Client data lives in the client's own resources. This package is the
 foundation every control-plane module builds on: configuration, database access with tenant and append-only
-guards, the HTTP layer with all auth modes, cryptography, sessions, RBAC, audit, jobs and on-demand operations. Nothing
+guards, the HTTP layer with all auth modes, cryptography, sessions, RBAC, audit and jobs. Nothing
 runs on a schedule (PLAN F.19: event-driven only).
 
 Next.js 16 (App Router) · React 19 · MongoDB driver 6 · Tailwind 4 · JavaScript ESM, functional, JSDoc-typed.
@@ -23,7 +23,6 @@ next.config.js               security headers, /v1/* → /api/v1/* rewrite
 src/
   portal.js                  composition root: createPortal({ config, db, modules, logger, now, randomBytes })
   runtime.js                 getPortal(): lazy, cached; env + system state (secrets, settings), schema prepared
-  setup.js                   /setup: records the Portal URL and creates the first admin (first run only)
   infra/
     config.js                env → typed, frozen config (fails listing every bad variable)
     db.js                    Mongo client cache, collection registry, ensureIndexes, guarded repositories,
@@ -37,7 +36,7 @@ src/
     rbac.js                  permissions, role bundles, website-scoped grants, can()
     audit.js                 append-only, hash-chained audit log (per-scope chains, verification)
     mailer.js                platform mailer (SMTP via nodemailer; templates)
-    jobs.js                  job queue (leases, retries, dead letters) and the on-demand operation runner
+    jobs.js                  job queue (leases, retries, dead letters)
     background.js            work right after a response, for that request only (deferred tasks, product calls)
     request-scope.js         the request a piece of work belongs to (`afterResponse(task)` from anywhere)
     logger.js                JSON logger with redaction
@@ -68,10 +67,10 @@ the original status) instead of executing twice or re-sending a secret. Use a ne
 
 | mode         | credential                                 | verification                                                                                                                             |
 | ------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `staff`      | `__Host-ss_staff` cookie                   | session store; **MFA required** (routes opt out with `mfa: false` only for the second-factor step)                                       |
+| `staff`      | `__Host-ss_staff` cookie                   | session store; **MFA required once enrolled** (routes opt out with `mfa: false` only for the second-factor step)                         |
 | `merchant`   | `__Host-ss_merchant` cookie                | session store                                                                                                                            |
 | `websiteKey` | `Authorization: Bearer pk_…` / `sk_…`      | `@ss/protocol` `verifyWebsiteKey` with the website-key keys, `websiteKeyRevoked(claims, rawKey)` port, `originAllowed` for `pk_`, scopes |
-| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = the Portal URL, shared replay store                                                          |
+| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = the request origin, shared replay store                                                      |
 | `public`     | none                                       | —                                                                                                                                        |
 
 A route may list several modes; the first credential present decides (an invalid one fails — it never falls through).
@@ -79,7 +78,7 @@ Modules that receive a website key elsewhere (e.g. a `sendBeacon` body) call `ct
 referer, keyKind?, scopes?, env? })` — the same implementation as the authenticator (claims, or an infra problem).
 
 **CSRF** (cookie sessions only): mutations must carry `Sec-Fetch-Site: same-origin` when the browser sends it, and an
-`Origin` exactly equal to the Portal URL origin when sent; a mutation with neither is refused. Together with
+`Origin` exactly equal to the request's own origin when sent; a mutation with neither is refused. Together with
 `SameSite=Lax` cookies and JSON-only bodies (form posts get 415), no CSRF token is needed. Bearer-authenticated calls
 (products, website keys) are not subject to CSRF.
 
@@ -113,9 +112,8 @@ dummy hash. **TOTP**: RFC 6238 SHA-1, 6 digits, 30 s, ±1 step, single use (stor
   its domain claim and grants in one.
 - **Audit chain**: `platform_audit` entries are chained per scope (`global` for staff/platform actions,
   `merchant:<id>` per merchant): `seq`, `prevHash`, `hash = sha256(prevHash ‖ canonical JSON)`, appended under a
-  per-scope lease lock (unique `{ scope, seq }`). `audit.verifyChain(scope)` recomputes a scope; the admin operation
-  `audit_verify` (on demand, resumable with `after`) verifies every scope and logs `audit chain broken` errors with the first
-  broken link (`seq_gap`, `prev_hash`, `hash`).
+  per-scope lease lock (unique `{ scope, seq }`). `audit.verifyChain(scope)` recomputes a scope (Audit log → Verify)
+  and reports the first broken link (`seq_gap`, `prev_hash`, `hash`).
 
 ### Jobs and operations (event-driven only)
 
@@ -148,21 +146,8 @@ payload is a sealed event. Every request runs in a request scope (`infra/request
 Deferred work runs through Next `after()` (`toNextRoute(handler, { after })` in `app/api` and `app/w`).
 `createPortal({ background: { mode: 'off' } })` (the default when `NODE_ENV=test`) runs none of it.
 
-**Operations** are bounded, resumable maintenance tasks that staff run on demand from the admin console (Platform
-health → Operations, `POST /v1/admin/operations/:name` with `platform.jobs.manage`, body `{ after? }` to continue a
-cut run). Each run holds a lease lock (no overlaps), gets `OPERATION_DEADLINE_MS`, and appends a
-`platform_operation_runs` record.
-
-| operation           | owner                     | resumes from                                        |
-| ------------------- | ------------------------- | --------------------------------------------------- |
-| `settlement`        | commerce                  | each subscription's `settledThrough` cursor         |
-| `reconciliation`    | commerce                  | the saved run (phase and cursor), even the next day |
-| `connectors-health` | connectors                | connectors not checked within 50 minutes stay due   |
-| `catalog_refresh`   | catalog                   | `after`: the `resumeAfter` app of the last run      |
-| `audit_verify`      | infra (audit hash chains) | `after`: the `resumeAfter` scope of the last run    |
-| `drain`             | infra (runs due jobs)     | the queue                                           |
-
-`drain` and `audit_verify` are reserved: a module registering them is a boot error.
+There are no on-demand maintenance operations: settlement runs on read, connectors are checked on save and
+resolve, manifests refresh when staff ask for one app, and failed jobs retry when their item is next touched.
 
 ## Environment
 
@@ -171,31 +156,34 @@ Portal. All variables are validated together at start (names only are reported, 
 string, and nothing depends on the hosting provider. The environment comes from `NODE_ENV` (production unless
 `development` or `test`); logs are `info` in production and `debug` in development.
 
-| Variable                                                                                                                      | Description                                                                                                                                 |
-| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                                                                                                                 | Control-plane MongoDB (never a client database).                                                                                            |
-| `STORAGE_ENDPOINT`, `STORAGE_REGION` (default `auto`), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | Asset storage for pack files and compiled website bundles: Cloudflare R2 or any S3-compatible service (a bucket is required in production). |
+| Variable                                                                                                                      | Description                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`                                                                                                                 | Control-plane MongoDB (never a client database).                                                                                          |
+| `STORAGE_ENDPOINT`, `STORAGE_REGION` (default `auto`), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | Asset storage for pack files and compiled website bundles: Cloudflare R2 or any S3-compatible service (optional; a bucket in production). |
 
 Optional, never needed: `STORAGE_PREFIX`, `STORAGE_PATH_STYLE`, `STORAGE_DIR` (development only, instead of a bucket:
-a directory or `:memory:`), `APP_VERSION`, `MONGODB_DB`, `MONGODB_MAX_POOL_SIZE`, `DELIVERY_BUDGET_KB`,
-`TRUST_PROXY_HEADERS`, `MAX_BODY_BYTES`, `OPERATION_DEADLINE_MS`, the four `*_SESSION_*` lifetimes and
-`OUTBOUND_DEV_ALLOW_HOSTS` (development only). The full list is `ENV_VARS` in `src/infra/config.js`.
+a directory or `:memory:`) and `OUTBOUND_DEV_ALLOW_HOSTS` (development only, ignored in production). The full list is
+`ENV_VARS` in `src/infra/config.js`. Everything else is a fixed constant there: database = the path of `MONGODB_URI`
+(else `ss_portal`), pool 5, 1 MiB body cap, 60 KB website budget, staff sessions 30 min idle / 12 h, merchant sessions
+24 h idle / 14 days. Proxies: `X-Forwarded-For` and `X-Forwarded-Proto` are read as the first hop (the proxy in front of
+the Portal) set them — their last entry.
 
 ### Kept in the database (`platform_system`, `src/infra/system.js`)
 
 - **Generated on first start**, inserted only if absent so concurrent cold starts agree: the Ed25519 Portal signing
   key, the website-key signing key, the encryption key (KEK), the session secret, the key pepper and the idempotency
   secret. Loaded once per instance and cached.
-- **Recorded at `/setup`**: the Portal URL — the issuer and audience of every token, the base of e-mail links and the
-  consoles' CSRF origin. It is never read from request headers after setup. `/setup` exists only until the first staff
-  user exists: it shows the origin you are visiting from (editable), records it and creates the first superadmin, then
-  sends you to set a password and enrol two-factor sign-in. **Do it right after deploying**: until then, whoever opens
-  `/setup` first becomes the administrator. Before setup the API answers 503 to everything. `node scripts/bootstrap-admin.js
-<email> --url <portal url>` is the command-line alternative.
-- **Admin → Settings** (`/v1/admin/system/settings…`, audited): the Portal URL (superadmins, typed twice), the optional
-  preview URL (a cookie-less origin on another host serving only `/p/*`), the mailer (host, port, TLS, user, password
-  sealed with the encryption key, sender) and key rotation. Every instance applies a change within 5 seconds (a cheap
-  read of the settings version).
+- **No Portal URL setting**: the Portal's address is each request's origin (`Host` plus `X-Forwarded-Proto` behind a
+  proxy) — the issuer and audience of the tokens it signs, the base of e-mail and launch links and the CSRF origin.
+  Products pin it at connect time (sent in the connect call, signed with their `CONNECT_SECRET`).
+- **First admin**: while no staff user exists, the staff login (`/admin/login`) shows **Choose a password** and
+  **Create admin** (`POST /v1/auth/staff/first-admin`): the visitor becomes the superadmin `admin` (no e-mail) and is
+  signed in. Afterwards staff sign in with `admin` or their e-mail. E-mail, name, password and two-factor sign-in are
+  in Account settings (`/admin/account`, two-factor under Security); the code is asked at sign-in once enrolled. **Do it right after deploying**: until then, whoever opens the staff login
+  first becomes the admin.
+- **Admin → Settings** (`/v1/admin/system/settings…`, audited): the mailer (host, port, TLS, user, password sealed
+  with the encryption key, sender). Every instance applies a change within 5 seconds (a cheap read of the settings
+  version). Previews (`/p/*`) are served from the Portal's own origin inside a CSP sandbox (opaque origin).
 - **Indexes and migrations** run automatically on the first request after a deploy, once per schema version, under a
   lock (`scripts/db.js` stays for developers: dry runs, applying ahead of time).
 
@@ -231,31 +219,30 @@ Staff console at **`/admin`** (`app/(admin)/` adapters over `src/console/admin/`
 empty and error states, and destructive actions sit behind a typed confirmation (`TypedConfirmDialog`). Navigation
 is filtered by the staff member's permissions (`infra/rbac.js`).
 
-- **Sign-in:** `/admin/login` (password, then the mandatory TOTP — enrolment with one-time recovery codes on the first
-  sign-in, verification afterwards), `/admin/forgot-password`, and `/staff/reset-password` (target of the staff setup
-  and reset e-mails). The staff session is the `__Host-ss_staff` cookie, separate from merchant sessions; a session
-  without its second factor only reaches the MFA routes.
-- **Pages:** dashboard (deliveries, dead letters, unhealthy service apps, operations with Run buttons, job queue, last audit verification,
-  reconciliation, alerts) · merchants (search, detail, suspend/resume, notes, impersonation) · websites (lookup,
+- **Sign-in:** `/admin/login` ("Create admin" while no staff user exists; then `admin` or e-mail + password, and the
+  TOTP code for staff who enrolled), `/admin/account` (e-mail, name, password, two-factor enrolment with one-time
+  recovery codes), `/admin/forgot-password`, and `/staff/reset-password` (target of the staff setup and reset e-mails).
+  The staff session is the `__Host-ss_staff` cookie, separate from merchant sessions; a session awaiting its second
+  factor only reaches the MFA routes.
+- **Pages:** dashboard (deliveries, dead letters, unhealthy service apps, job queue, finance alerts) · merchants (search, detail, suspend/resume, notes, impersonation) · websites (lookup,
   transfer) · apps (add product with its URL and connect secret, pack upload, versions with manifest diff and breaking flags, review, lifecycle,
   environments, keys, health, admin launch per merchant or app-wide) · subscriptions (admin overrides and locks,
   history, rollback) · platform policies per app · finance (credits/adjustments/refunds, ledger and chain
-  verification, settlement, reconciliation, alerts) · integration (delivery log, dead letters, replay, metrics) ·
+  verification, alerts) · integration (delivery log, dead letters, replay, metrics) ·
   connectors (status only) · audit log (search, chain verification) · staff (invite, roles, MFA reset, deactivate) ·
-  settings (Portal URL, preview URL, mail, key rotation).
+  settings (mail) · Account settings (e-mail, name, password, Security: two-factor sign-in).
 
-| Route (staff)                                                                         | Permission                | Notes                                                                                                                                           |
-| ------------------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/admin/merchants?q=`                                                          | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix                                                                    |
-| `GET\|POST /v1/admin/merchants/:merchantId/notes`                                     | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)                                                                       |
-| `POST /v1/admin/merchants/:merchantId/impersonate`                                    | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)                                                                             |
-| `POST /v1/auth/impersonation/exchange`                                                | staff session             | `{ token }` → merchant session cookie with `via`                                                                                                |
-| `GET /v1/admin/system/health`                                                         | `platform.jobs.read`      | `{ operations: [{ name, status, lastRun }], jobs, audit: { lastVerification } }`                                                                |
-| `GET /v1/admin/audit?scope&actorId&targetId&action`                                   | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses                                                                      |
-| `GET /v1/admin/audit/verification?scope=`                                             | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited                                                                                |
-| `POST /v1/admin/apps/connect`                                                         | `platform.apps.manage`    | add a product `{ url, secret }`: HMAC-signed call to its `/.well-known/ss-connect`; pins base URL and key; again = rebind (secret never stored) |
-| `GET /v1/admin/system/settings` (`PUT …/mail`, `…/preview-url`)                       | `platform.settings.write` | Portal settings (never key material or the mail password)                                                                                       |
-| `PUT /v1/admin/system/settings/portal-url`, `POST /v1/admin/system/keys/:kind/rotate` | `platform.staff.manage`   | Portal URL (typed twice) and key rotation, audited                                                                                              |
+| Route (staff)                                       | Permission                | Notes                                                                                                                                           |
+| --------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/admin/merchants?q=`                        | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix                                                                    |
+| `GET\|POST /v1/admin/merchants/:merchantId/notes`   | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)                                                                       |
+| `POST /v1/admin/merchants/:merchantId/impersonate`  | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)                                                                             |
+| `POST /v1/auth/impersonation/exchange`              | staff session             | `{ token }` → merchant session cookie with `via`                                                                                                |
+| `GET /v1/admin/system/health`                       | `platform.jobs.read`      | `{ jobs: { queued, leased, retrying, dead } }`                                                                                                  |
+| `GET /v1/admin/audit?scope&actorId&targetId&action` | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses                                                                      |
+| `GET /v1/admin/audit/verification?scope=`           | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited                                                                                |
+| `POST /v1/admin/apps/connect`                       | `platform.apps.manage`    | add a product `{ url, secret }`: HMAC-signed call to its `/.well-known/ss-connect`; pins base URL and key; again = rebind (secret never stored) |
+| `GET /v1/admin/system/settings` (`PUT …/mail`)      | `platform.settings.write` | Portal settings (never key material or the mail password)                                                                                       |
 
 **Impersonation.** Starting one mints a single-use token bound to the staff member (only its HMAC is stored; an
 attempt by anyone else does not burn it). The staff member's own browser exchanges it within 60 s for a merchant
@@ -273,7 +260,7 @@ chains (`*.impersonation_ended`). Product impersonation stays a separate `impers
 pnpm install                                   # from the repo root (or this folder, once split)
 pnpm --filter @ss/platform db:memory           # terminal 1: docker-free MongoDB (in-memory replica set, port 27999)
 cd platform && pnpm env:dev > .env.local       # NODE_ENV, MONGODB_URI, STORAGE_DIR (local files), dev allowlist
-pnpm --filter @ss/platform dev                 # http://localhost:4000 — then open http://localhost:4000/setup
+pnpm --filter @ss/platform dev                 # http://localhost:4000 — then open /admin/login, choose a password
 ```
 
 The first request generates the keys and secrets in the database and applies indexes and migrations. A local `mongod`
@@ -282,8 +269,9 @@ The first request generates the keys and secrets in the database and applies ind
 ## Deployment
 
 Any Node 22 host that runs Next.js (`pnpm --filter @ss/platform build` then `start`, a container, or a serverless
-platform), one database and database user on the shared Atlas cluster (PLAN §13, F.19). Set `NODE_ENV=production`,
-`MONGODB_URI` and the `STORAGE_*` variables, deploy, then open `https://<your domain>/setup` at once. The `MongoClient`
+platform), one database and database user on the shared Atlas cluster (PLAN §13, F.19). Set `NODE_ENV=production`
+and `MONGODB_URI` (plus `STORAGE_*` for website scripts), deploy, then open `https://<your domain>/admin/login` at once
+and choose the admin password. The `MongoClient`
 is created once per instance and cached on `globalThis`. There is nothing to schedule and nothing to run by hand.
 
 ## Checks

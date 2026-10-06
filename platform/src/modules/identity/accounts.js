@@ -1,7 +1,10 @@
 /**
  * Console accounts: merchant self-signup with e-mail verification, staff and merchant login/logout, TOTP
- * enrolment/verification/disable with recovery codes (mandatory for staff), password reset and change, sessions,
- * merchant switching and invite acceptance. Mechanisms (scrypt, TOTP, sessions, throttling) are the infra's.
+ * enrolment/verification/disable with recovery codes (required at sign-in once enrolled), password reset and change,
+ * sessions, merchant switching and invite acceptance.
+ *
+ * First admin: while no staff user exists, the staff sign-in page offers "Create admin": the visitor chooses a password
+ * and becomes the superadmin `admin` (no e-mail). Afterwards `admin` (or an e-mail) signs in with a password. Mechanisms (scrypt, TOTP, sessions, throttling) are the infra's.
  *
  * Anti-enumeration: signup and reset requests answer the same whether the account exists; login failures are one
  * generic 401; unknown accounts burn a dummy scrypt verification.
@@ -17,6 +20,7 @@ import {
 	verifyTotp,
 } from '../../infra/auth.js';
 import { problem } from '../../infra/http.js';
+import { isDuplicateKey } from '../../infra/util.js';
 import { nameKey } from './core/search.js';
 import { newPassword } from './core/inputs.js';
 import { linkFor } from './core/links.js';
@@ -33,8 +37,11 @@ const BAD_CODE = 'The verification code is incorrect.';
 const ISSUER = 'Single Solution';
 const STAFF_WELCOME_TTL_MS = 24 * 60 * 60_000;
 
-/** @param {Kind} kind @param {string} email */
-const accountKey = (kind, email) => `${kind}:${email}`;
+/** @param {Kind} kind @param {string | null | undefined} email (the first admin may have none) */
+const accountKey = (kind, email) => `${kind}:${email ?? 'admin'}`;
+
+/** The first admin's login name. */
+export const ADMIN_LOGIN = 'admin';
 
 /**
  * @param {Deps} deps
@@ -248,15 +255,16 @@ export const createAccounts = (deps) => {
 		},
 
 		/**
-		 * Staff login: password first; the session is created with `mfa: false` and only reaches the MFA routes
-		 * (`mfa: false` routes) until the second factor is verified or enrolled.
+		 * Staff login by e-mail or as `admin`. Staff with an authenticator get a session with `mfa: false` that only
+		 * reaches the MFA routes until the code is verified; staff without one are signed in (the console then asks
+		 * them to turn two-factor sign-in on).
 		 * @param {{ email: string, password: string }} input
 		 * @param {Meta} meta
 		 */
 		staffLogin: async ({ email, password }, meta) => {
 			const account = accountKey('staff', email);
 			await throttleGate(ctx, account, meta);
-			const staff = await repo.staff.findOne({ email });
+			const staff = await repo.staff.findOne(email === ADMIN_LOGIN ? { login: ADMIN_LOGIN } : { email });
 			const ok = await verifyPassword(password, staff?.passwordHash);
 			if (!ok || !staff || staff.status !== 'active') return failAttempt(ctx, account, meta, BAD_LOGIN);
 			await maybeRehash('staff', staff, password);
@@ -264,15 +272,90 @@ export const createAccounts = (deps) => {
 				kind: 'staff',
 				subject: String(staff._id),
 				roles: staff.roles,
-				mfa: false,
+				mfa: !staff.totp,
+				ip: meta.ip ?? null,
+				userAgent: meta.userAgent ?? null,
+			});
+			if (!staff.totp) await ctx.loginThrottle.recordSuccess({ account });
+			return {
+				status: staff.totp ? 'mfa_required' : 'ok',
+				staff: presentStaff(staff),
+				cookie: cookie('staff', token),
+			};
+		},
+
+		/**
+		 * Create the first admin and sign it in: only while no staff user exists (then `conflict`). The visitor
+		 * chooses the password; the account is the superadmin `admin`, without an e-mail.
+		 * @param {{ password: string }} input
+		 * @param {Meta} meta
+		 */
+		createFirstAdmin: async ({ password }, meta) => {
+			if ((await repo.staff.countDocuments({})) > 0) throw problem('conflict', 'An admin already exists. Sign in.');
+			const doc = {
+				_id: repo.id('stf'),
+				login: ADMIN_LOGIN,
+				email: null,
+				name: null,
+				roles: ['superadmin'],
+				status: 'active',
+				passwordHash: await hash(password),
+				totp: null,
+				pendingTotp: null,
+				recoveryHashes: [],
+				createdBy: 'first_admin',
+			};
+			// concurrent attempts agree: the e-mail index admits a single account without an e-mail
+			await insertUnique(() => repo.staff.insertOne(doc), 'conflict', 'An admin already exists. Sign in.');
+			await audit(
+				{ type: 'system', id: 'first_admin' },
+				'staff.bootstrapped',
+				{ type: 'staff', id: doc._id },
+				{
+					after: { login: ADMIN_LOGIN, roles: doc.roles },
+					meta,
+				},
+			);
+			const { token } = await ctx.sessions.create({
+				kind: 'staff',
+				subject: doc._id,
+				roles: doc.roles,
+				mfa: true,
 				ip: meta.ip ?? null,
 				userAgent: meta.userAgent ?? null,
 			});
 			return {
-				status: staff.totp ? 'mfa_required' : 'mfa_enrolment_required',
-				staff: presentStaff(staff),
+				status: 'ok',
+				staff: presentStaff({ ...doc, createdAt: new Date(ctx.now()) }),
 				cookie: cookie('staff', token),
 			};
+		},
+
+		/**
+		 * Change the signed-in staff member's name or e-mail (both optional).
+		 * @param {{ id: string, name?: string, email?: string }} input
+		 * @param {Meta} meta
+		 */
+		updateStaffProfile: async ({ id, name, email }, meta) => {
+			const staff = await loadAccount('staff', id);
+			const next = { ...(name === undefined ? {} : { name }), ...(email === undefined ? {} : { email }) };
+			try {
+				await repo.staff.updateOne({ _id: staff._id }, { $set: next });
+			} catch (error) {
+				if (isDuplicateKey(error)) throw problem('conflict', 'A staff user with this e-mail exists.');
+				throw error;
+			}
+			await audit(
+				{ type: 'staff', id },
+				'staff.profile_updated',
+				{ type: 'staff', id },
+				{
+					before: { name: staff.name ?? null, email: staff.email ?? null },
+					after: next,
+					meta,
+				},
+			);
+			return presentStaff({ ...staff, ...next });
 		},
 
 		/**
@@ -323,7 +406,7 @@ export const createAccounts = (deps) => {
 				{ _id: account._id },
 				{ $set: { pendingTotp: { secret: ctx.envelope.seal(secret, { aad: totpAad(id) }), at: new Date(ctx.now()) } } },
 			);
-			return { secret, uri: totpUri({ secret, issuer: ISSUER, account: account.email }) };
+			return { secret, uri: totpUri({ secret, issuer: ISSUER, account: account.email ?? account.login ?? ADMIN_LOGIN }) };
 		},
 
 		/**
@@ -441,7 +524,7 @@ export const createAccounts = (deps) => {
 		},
 
 		/**
-		 * Mint a staff password-setup link without mailing it (bootstrap CLI, staff creation).
+		 * Mint a staff password-setup link without mailing it (staff creation).
 		 * @param {string} staffId
 		 * @param {{ ttlMs?: number }} [options]
 		 */

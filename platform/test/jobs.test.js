@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createLocks, createRegistry, createRepositories } from '../src/infra/db.js';
-import { backoffDelay, createJobs, createOperationRunner, permanentFailure } from '../src/infra/jobs.js';
+import { backoffDelay, createJobs, permanentFailure } from '../src/infra/jobs.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from '../src/infra/schema.js';
 import { createClock, createTestLogger, startMongo } from './helpers.js';
 import { ensureIndexes } from '../src/infra/db.js';
@@ -207,47 +207,5 @@ describe('payload dropping', () => {
 		expect(job.dropPayload).toBe(false);
 		expect(await jobs.complete(job, { dropPayload: true })).toBe(true);
 		expect(await raw.findOne({ _id: /** @type {any} */ (manual.id) })).not.toHaveProperty('payload');
-	});
-});
-
-describe('operation runner', () => {
-	it('runs known operations under a lock with their input and records every run', async () => {
-		const { r, locks, logger, clock } = await setup();
-		const runs = r.appendOnly(COLLECTIONS.operationRuns);
-		let release = () => {};
-		const runner = createOperationRunner({
-			operations: {
-				ok: async ({ deadline, trigger, input }) => ({ deadline, trigger, input }),
-				empty: async () => undefined,
-				boom: async () => Promise.reject(Object.assign(new Error('exploded'), { code: 'E_BOOM' })),
-				slow: () => new Promise((resolve) => (release = () => resolve({ done: true }))),
-			},
-			locks,
-			runs,
-			logger,
-			deadlineMs: 10_000,
-			now: clock.now,
-		});
-		expect(runner.names()).toEqual(['ok', 'empty', 'boom', 'slow']);
-		expect(runner.has('ok')).toBe(true);
-		expect(await runner.run('missing')).toBeNull();
-		const okRun = await runner.run('ok', { trigger: 'staff:stf_1', input: { after: 'x' } });
-		expect(okRun).toMatchObject({
-			status: 'ok',
-			stats: { deadline: clock.now() + 10_000, trigger: 'staff:stf_1', input: { after: 'x' } },
-		});
-		expect(await runner.run('empty')).toMatchObject({ status: 'ok' });
-		expect(await runner.run('boom')).toMatchObject({ status: 'failed' });
-		const pending = runner.run('slow');
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		expect(await runner.run('slow')).toMatchObject({ status: 'locked' });
-		release();
-		expect(await pending).toMatchObject({ status: 'ok', stats: { done: true } });
-		const records = await runs.find({}).sort({ startedAt: 1, _id: 1 }).toArray();
-		expect(records.map((x) => x.status).sort()).toEqual(['failed', 'locked', 'ok', 'ok', 'ok']);
-		expect(records.find((x) => x.name === 'boom')?.error).toEqual({ message: 'exploded', code: 'E_BOOM' });
-		expect(() =>
-			createOperationRunner({ operations: { 'Bad Name': async () => {} }, locks, runs, logger, deadlineMs: 1 }),
-		).toThrow();
 	});
 });

@@ -20,7 +20,13 @@ import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi, adminRoutes } from '../../src/console/admin/paths.js';
 import { adminFetch, staffSignInAgain, useAdminResource } from '../../src/console/admin/client.js';
 import { AdminShell } from '../../src/console/admin/views/shell.js';
-import { StaffForgotPasswordView, StaffLoginView, StaffResetPasswordView } from '../../src/console/admin/views/auth.js';
+import {
+	StaffForgotPasswordView,
+	StaffLoginView,
+	StaffMfaEnrol,
+	StaffResetPasswordView,
+} from '../../src/console/admin/views/auth.js';
+import { AccountView } from '../../src/console/admin/views/account.js';
 import { DashboardView } from '../../src/console/admin/views/dashboard.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { WebsitesView } from '../../src/console/admin/views/websites.js';
@@ -32,6 +38,7 @@ import { AuditView, ConnectorsAdminView } from '../../src/console/admin/views/op
 import { StaffView } from '../../src/console/admin/views/staff.js';
 import { ImpersonationBanner } from '../../src/console/admin/views/impersonation.js';
 import { IdChip } from '../../src/console/admin/views/common.js';
+import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
@@ -251,10 +258,42 @@ describe('admin console interactions (jsdom)', () => {
 		// ---------------------------------------------------------------- staff sign-in in the browser
 		const staff = browserOf(portal);
 		staff.use();
-		const { link } = await /** @type {any} */ (portal.modules.service('identity')).bootstrapSuperadmin({
-			email: 'root@ss.test',
-		});
-		window.location.hash = `#token=${encodeURIComponent(String(link).split('#token=')[1] ?? '')}`;
+		// first run: the sign-in page offers "Create admin"
+		render(<StaffLoginView firstRun />);
+		fill('Choose a password', 'short');
+		await press('Create admin');
+		expect(shows('Use at least 12 characters.')).toBe(true);
+		fill('Choose a password', 'first password 123!');
+		await press('Create admin');
+		await until(() => staff.calls.some((c) => c.path === adminApi.firstAdmin() && c.status === 201));
+		cleanup();
+
+		// Account settings: e-mail and name (optional), password, two-factor sign-in
+		const firstMe = await admin.loadStaffSession(staff.api);
+		if (!firstMe.ok) throw new Error('first admin session');
+		render(
+			<ToastProvider>
+				<AccountView staff={firstMe.staff} />
+			</ToastProvider>,
+		);
+		fill('E-mail', 'root@ss.test');
+		await press('Save profile');
+		await until(() => staff.calls.some((c) => c.path === adminApi.me() && c.status === 200 && c.body?.email));
+		fill('Current password', 'first password 123!');
+		fill('New password', 'root password 123!');
+		await press('Change password');
+		await until(() => staff.calls.some((c) => c.path === adminApi.mePassword() && c.status === 204));
+		cleanup();
+
+		// password reset by e-mail (now that the admin has one)
+		render(<StaffForgotPasswordView />);
+		await press('Send the link');
+		expect(shows('Enter your e-mail address.')).toBe(true);
+		fill('E-mail', 'root@ss.test');
+		await press('Send the link');
+		await until(() => shows('Check your inbox'));
+		cleanup();
+		window.location.hash = `#token=${encodeURIComponent(tokenOf('root@ss.test', 'password_reset'))}`;
 		render(<StaffResetPasswordView />);
 		await until(() => shows('New password'));
 		fill('New password', 'short');
@@ -269,24 +308,21 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('This link is incomplete'));
 		cleanup();
 
-		render(<StaffForgotPasswordView />);
-		await press('Send the link');
-		expect(shows('Enter your e-mail address.')).toBe(true);
-		fill('E-mail', 'root@ss.test');
-		await press('Send the link');
-		await until(() => shows('Check your inbox'));
-		cleanup();
-
 		render(<StaffLoginView next="/admin/staff" />);
 		await press('Continue');
-		expect(shows('Enter your e-mail address.')).toBe(true);
-		fill('E-mail', 'root@ss.test');
+		expect(shows('Enter your e-mail address, or admin.')).toBe(true);
+		fill('E-mail or admin', 'admin');
 		fill('Password', 'wrong password!!');
 		await press('Continue');
 		await until(() => staff.calls.some((c) => c.path === adminApi.login() && c.status >= 400));
 		fill('Password', 'root password 123!');
 		await press('Continue');
-		await until(() => shows('Set up the authenticator'));
+		await until(() => staff.calls.some((c) => c.path === adminApi.login() && c.status === 200));
+		cleanup();
+
+		// two-factor sign-in is optional until enrolled
+		const onEnrolled = vi.fn();
+		render(<StaffMfaEnrol onDone={onEnrolled} onRestart={() => undefined} />);
 		await press('Set up the authenticator');
 		const secret = String(
 			await until(() => staff.calls.find((c) => c.path === adminApi.mfaEnrol() && c.status === 200)?.body.secret),
@@ -298,16 +334,17 @@ describe('admin console interactions (jsdom)', () => {
 		fill('Code from the app', totpCode(secret, Date.now()));
 		await press('Confirm');
 		await until(() => shows('Save your recovery codes now'));
-		expect(button('Continue to the console').disabled).toBe(true);
+		expect(button('Done').disabled).toBe(true);
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (document.querySelector('input[type="checkbox"]')).click();
 		});
-		await press('Continue to the console');
+		await press('Done');
+		expect(onEnrolled).toHaveBeenCalled();
 		cleanup();
 		// sign in again: TOTP verification (and the recovery-code toggle)
 		await staff.api.post(adminApi.logout());
 		render(<StaffLoginView />);
-		fill('E-mail', 'root@ss.test');
+		fill('E-mail or admin', 'root@ss.test');
 		fill('Password', 'root password 123!');
 		await press('Continue');
 		await until(() => shows('Authentication code'));
@@ -645,17 +682,7 @@ describe('admin console interactions (jsdom)', () => {
 		expect(shows('Enter a merchant id (mer_…).')).toBe(true);
 		fill('Merchant id', merchantId);
 		await press('Open');
-		await press('Force settlement');
-		fill('Only this merchant (optional)', 'bad');
-		await press('Settle');
-		expect(shows('Invalid merchant id') || shows('Enter a merchant id (mer_…) or leave empty')).toBe(true);
-		fill('Only this merchant (optional)', merchantId);
-		await press('Settle');
-		await until(() => staff.calls.some((c) => c.path === adminApi.settlement() && c.status === 200));
-		await press('Run reconciliation');
-		await press('Run');
-		await until(() => staff.calls.some((c) => c.path === adminApi.reconciliation() && c.method === 'POST' && c.status === 200));
-		await settle(2);
+		expect(shows('Force settlement') || shows('Run reconciliation')).toBe(false);
 		cleanup();
 
 		render(<LedgerView {...await admin.loadLedger(staff.api, merchantId)} staff={me} />);
@@ -810,14 +837,7 @@ describe('admin console interactions (jsdom)', () => {
 				health={{
 					available: true,
 					problem: null,
-					data: {
-						operations: [
-							{ name: 'drain', lastRun: { status: 'ok', finishedAt: new Date().toISOString(), durationMs: 12 } },
-							{ name: 'settlement', lastRun: null },
-						],
-						jobs: { queued: 1, leased: 0, retrying: 2, dead: 0 },
-						audit: { lastVerification: { at: new Date().toISOString(), scopes: 4, broken: [] } },
-					},
+					data: { jobs: { queued: 1, leased: 0, retrying: 2, dead: 0 } },
 				}}
 				metrics={{ deliveries: { pending: 1, retrying: 2, delivered: 3, dead: 1 }, deadLetters: 1 }}
 				metricsProblem={{ status: 403, title: 'Forbidden' }}
@@ -825,21 +845,10 @@ describe('admin console interactions (jsdom)', () => {
 				apps={[]}
 				unhealthy={[{ ...serviceApp, health: { ...serviceApp.health, stale: true } }]}
 				alerts={[{ alertId: 'alr_1', kind: 'unpriced', at: new Date().toISOString(), merchantId, subscriptionId: null }]}
-				reports={[
-					{
-						reportId: 'rec_1',
-						at: new Date().toISOString(),
-						subscriptions: 1,
-						merchants: 1,
-						discrepancies: [{ kind: 'x' }],
-					},
-				]}
 			/>,
 		);
-		expect(shows('Audit chains intact')).toBe(true);
-		expect(shows('drain')).toBe(true);
-		await press('Run');
-		await until(() => staff.calls.some((c) => c.path.includes('/v1/admin/operations/') && c.status === 200));
+		expect(shows('Job queue')).toBe(true);
+		expect(shows('unpriced') || shows('Unpriced')).toBe(true);
 		cleanup();
 		render(
 			<DashboardView
@@ -851,10 +860,9 @@ describe('admin console interactions (jsdom)', () => {
 				apps={[]}
 				unhealthy={[]}
 				alerts={[]}
-				reports={[]}
 			/>,
 		);
-		expect(shows('No reconciliation report yet.')).toBe(true);
+		expect(shows('No finance alert.')).toBe(true);
 		cleanup();
 
 		// ---------------------------------------------------------------- staff management

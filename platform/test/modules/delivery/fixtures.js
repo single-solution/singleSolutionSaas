@@ -281,12 +281,13 @@ export const fakeModules = (world) => [
 
 /**
  * Boot a Portal with real commerce + delivery and the fakes.
- * @param {{ db: import('mongodb').Db, clock?: ReturnType<typeof createClock>, env?: Record<string, string>,
+ * @param {{ db: import('mongodb').Db, clock?: ReturnType<typeof createClock>, env?: Record<string, string>, budgetKb?: number,
  *   system?: Partial<import('../../../src/infra/config.js').SystemState>, delivery?: import('../../../src/modules/delivery/service.js').DeliveryOptions }} input
  */
-export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, system = {}, delivery = {} }) => {
+export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, budgetKb, system = {}, delivery = {} }) => {
 	const world = createWorld();
-	const config = await testConfig(env, system);
+	const base = await testConfig(env, system);
+	const config = budgetKb === undefined ? base : await testConfig(env, system, { delivery: { ...base.delivery, budgetKb } });
 	const { logger, entries } = createTestLogger();
 	const storage = delivery.storage === undefined ? createMemoryStorage() : delivery.storage;
 	const portal = createPortal({

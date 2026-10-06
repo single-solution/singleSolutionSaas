@@ -359,30 +359,34 @@ describe('merchant accounts', () => {
 });
 
 describe('staff accounts', () => {
-	it('bootstrap → setup link → login → mandatory MFA enrolment → verify on next login', async () => {
+	it('first admin from the sign-in page → optional profile and MFA → MFA required once enrolled', async () => {
 		const h = await boot();
-		const { staffId, link } = await h.service.bootstrapSuperadmin({ email: 'root@example.com', name: 'Root' });
-		expect(link).toMatch(/^https:\/\/portal\.test\/staff\/reset-password#token=[A-Za-z0-9_-]{43}$/);
-		await expect(h.service.bootstrapSuperadmin({ email: 'again@example.com' })).rejects.toMatchObject({ code: 'conflict' });
+		const first = h.client();
+		expect((await first.post('/v1/auth/staff/first-admin', { password: 'short' })).status).toBe(422);
+		const created = await first.post('/v1/auth/staff/first-admin', { password: 'root password 123' });
+		expect(created.status).toBe(201);
+		expect(created.json).toMatchObject({ status: 'ok', staff: { login: 'admin', email: null, roles: ['superadmin'] } });
+		const staffId = created.json.staff.staffId;
+		expect(first.cookie).toMatch(/^__Host-ss_staff=/);
+		// only once: afterwards the page is a normal sign-in
+		expect((await h.client().post('/v1/auth/staff/first-admin', { password: 'another password 1' })).status).toBe(409);
+		expect(await h.service.hasStaff()).toBe(true);
 
-		// no password until the link is used
-		expect(
-			(await h.call('POST', '/v1/auth/staff/login', { body: { email: 'root@example.com', password: 'anything at all' } }))
-				.status,
-		).toBe(401);
-		const token = decodeURIComponent(link.split('#token=')[1] ?? '');
-		expect(
-			(await h.call('POST', '/v1/auth/staff/password-reset/confirm', { body: { token, password: 'root password 123' } }))
-				.status,
-		).toBe(204);
-
+		// no MFA until enrolled: the admin works at once; sign-in by the name `admin`
+		expect((await first.get('/v1/admin/merchants')).status).toBe(200);
 		const root = h.client();
-		const login = await root.post('/v1/auth/staff/login', { email: 'root@example.com', password: 'root password 123' });
-		expect(login.json).toMatchObject({ status: 'mfa_enrolment_required', staff: { staffId, roles: ['superadmin'] } });
-		expect(root.cookie).toMatch(/^__Host-ss_staff=/);
-		// MFA is enforced by the staff authenticator on every other route
-		expect((await root.get('/v1/me')).status).toBe(403);
-		expect((await root.get('/v1/admin/merchants')).status).toBe(403);
+		const login = await root.post('/v1/auth/staff/login', { email: 'admin', password: 'root password 123' });
+		expect(login.json).toMatchObject({ status: 'ok', staff: { staffId } });
+		expect((await root.post('/v1/auth/staff/login', { email: 'admin', password: 'wrong password 12' })).status).toBe(401);
+
+		// e-mail and name are optional, added whenever; then the e-mail signs in too
+		const named = await root.send('PATCH', '/v1/me', { email: 'root@example.com', name: 'Root' });
+		expect(named.json).toMatchObject({ login: 'admin', email: 'root@example.com', name: 'Root' });
+		expect(
+			(await h.call('POST', '/v1/auth/staff/login', { body: { email: 'root@example.com', password: 'root password 123' } }))
+				.json.status,
+		).toBe('ok');
+
 		expect((await root.post('/v1/auth/staff/mfa/verify', { code: '123456' })).status).toBe(409);
 		expect((await root.post('/v1/auth/staff/mfa/confirm', { code: '123456' })).status).toBe(409);
 		const enrol = await root.post('/v1/auth/staff/mfa/enrol');
@@ -410,7 +414,7 @@ describe('staff accounts', () => {
 
 		const audit = await h.portal.shared.audit.list({ targetId: staffId });
 		expect(audit.map((e) => e.action)).toEqual(
-			expect.arrayContaining(['staff.bootstrapped', 'staff.password_reset', 'staff.mfa_enabled', 'staff.recovery_code_used']),
+			expect.arrayContaining(['staff.bootstrapped', 'staff.profile_updated', 'staff.mfa_enabled', 'staff.recovery_code_used']),
 		);
 		// MFA codes are throttled like passwords
 		const brute = h.client();
@@ -446,7 +450,7 @@ describe('staff accounts', () => {
 		expect((await support.client.get('/v1/me')).status).toBe(401);
 		const relogin = h.client();
 		const again = await relogin.post('/v1/auth/staff/login', { email: 'support@example.com', password: support.password });
-		expect(again.json.status).toBe('mfa_enrolment_required');
+		expect(again.json.status).toBe('ok'); // no authenticator any more: MFA is no longer asked
 
 		expect((await root.client.patch(`/v1/admin/staff/${support.staffId}`, { status: 'disabled' })).status).toBe(200);
 		expect((await relogin.post('/v1/auth/staff/mfa/enrol')).status).toBe(401);

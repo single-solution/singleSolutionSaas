@@ -168,7 +168,6 @@ describe('manifest versions: refresh, diff, review', () => {
 		expect(await t.service().getApp(appId)).toMatchObject({ currentVersion: 1, pendingVersion: null });
 		expect(t.entries.filter((e) => e.msg === 'catalog alert: refreshed manifest refused')).toHaveLength(cases.length);
 		expect((await t.audit(appId)).filter((a) => a.action === 'catalog.manifest_signature_rejected')).toHaveLength(cases.length);
-		expect(await t.service().refreshAll()).toMatchObject({ checked: 1, rejected: 1 });
 		// revoked app keys cannot sign either
 		p.tamper.signature = undefined;
 		await t.staff('POST', `/v1/admin/apps/${appId}/keys/product-k1/revoke`, { body: { reason: 'leaked' } });
@@ -209,28 +208,6 @@ describe('manifest versions: refresh, diff, review', () => {
 	it('works without an integration module', async () => {
 		const { t, appId } = await setup({ integration: null });
 		expect((await lifecycle(t, appId, { action: 'activate' })).json.status).toBe('active');
-	});
-
-	it('refreshes with the catalog_refresh admin operation, resumable with `after`', async () => {
-		const { t, p, appId } = await setup();
-		await lifecycle(t, appId, { action: 'activate' });
-		const changed = serviceManifest();
-		changed.trialHours = 72;
-		p.setManifest(changed);
-		const run = await t.staff('POST', '/v1/admin/operations/catalog_refresh');
-		expect(run.json).toMatchObject({ status: 'ok', stats: { checked: 1, changed: 1, resumeAfter: null } });
-		expect((await t.service().getApp(appId)).pendingVersion).toBe(2);
-		// a pass cut by its deadline resumes after the last app it handled: the operation again with `after`
-		expect(await t.service().refreshAll({ after: appId })).toMatchObject({ checked: 0, resumeAfter: null });
-		const resumed = await /** @type {any} */ (t).portal.operations.run('catalog_refresh', { input: { after: '' } });
-		expect(resumed.stats).toMatchObject({ checked: 1 });
-
-		// failures are counted, not thrown; an exhausted deadline skips the rest
-		p.setManifest({ ...changed, elements: [] });
-		expect(await t.service().refreshAll()).toMatchObject({ checked: 1, failed: 1 });
-		expect(await t.service().refreshAll({ deadline: 0 })).toMatchObject({ checked: 0, skipped: 1 });
-		p.setManifest(changed);
-		expect(await t.service().refreshAll()).toMatchObject({ checked: 1, unchanged: 1 });
 	});
 });
 

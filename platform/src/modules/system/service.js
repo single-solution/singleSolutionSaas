@@ -2,7 +2,7 @@
  * Public service of the `system` module (other modules reach it with `ctx.service('system')`).
  * @module
  */
-import { MAIL_FROM, checkPortalUrl, checkPreviewUrl } from '../../infra/config.js';
+import { MAIL_FROM } from '../../infra/config.js';
 import { problem } from '../../infra/http.js';
 import { buildInfo } from './core/info.js';
 import { createOps } from './ops.js';
@@ -39,12 +39,11 @@ export const createSystemService = (ctx) => {
 			ip,
 		});
 
-	/** The settings as the admin console shows them (never the mail password or key material). */
+	/** The settings as the admin console shows them (never the mail password). */
 	const settings = async () => {
 		const doc = await system().settings();
 		return {
-			portalUrl: doc?.portalUrl ?? null,
-			previewUrl: doc?.previewUrl ?? null,
+			portalUrl: ctx.config.portalUrl,
 			mail: doc?.mail
 				? {
 						host: doc.mail.host,
@@ -55,7 +54,6 @@ export const createSystemService = (ctx) => {
 						hasPassword: Boolean(doc.mail.passSealed),
 					}
 				: null,
-			keys: await system().keyInfo(),
 			version: doc?.version ?? 0,
 			appliesWithinSeconds: 5,
 		};
@@ -63,45 +61,6 @@ export const createSystemService = (ctx) => {
 
 	return {
 		settings,
-		/**
-		 * Change the Portal URL (superadmin; re-confirmed and audited). It is the issuer/audience of every token and the
-		 * consoles' CSRF origin: products keep working because they verify keys, not the URL — but launches and e-mail
-		 * links use the new address from now on.
-		 * @param {{ portalUrl: unknown, confirmation: unknown, actor: Actor, requestId: string, ip: string | null }} input
-		 */
-		setPortalUrl: async ({ portalUrl, confirmation, actor, requestId, ip }) => {
-			const checked = checkPortalUrl(portalUrl, { production: ctx.config.isProduction });
-			if (!checked.ok)
-				throw problem('validation_failed', checked.message, { errors: [{ path: '/portalUrl', message: checked.message }] });
-			if (confirmation !== portalUrl)
-				throw problem('validation_failed', 'Type the new Portal URL again to confirm it.', {
-					errors: [{ path: '/confirmation', message: 'must repeat portalUrl' }],
-				});
-			const before = (await system().settings())?.portalUrl ?? null;
-			await system().update({ portalUrl: checked.url });
-			await record(actor, 'system.portal_url_changed', { before, after: checked.url, requestId, ip });
-			return settings();
-		},
-		/**
-		 * Set or clear the dedicated preview origin (F.16).
-		 * @param {{ previewUrl: unknown, actor: Actor, requestId: string, ip: string | null }} input
-		 */
-		setPreviewUrl: async ({ previewUrl, actor, requestId, ip }) => {
-			/** @type {string | null} */
-			let value = null;
-			if (previewUrl !== null && previewUrl !== '') {
-				const checked = checkPreviewUrl(previewUrl, { production: ctx.config.isProduction, portalUrl: ctx.config.portalUrl });
-				if (!checked.ok)
-					throw problem('validation_failed', checked.message, {
-						errors: [{ path: '/previewUrl', message: checked.message }],
-					});
-				value = checked.url;
-			}
-			const before = (await system().settings())?.previewUrl ?? null;
-			await system().update({ previewUrl: value });
-			await record(actor, 'system.preview_url_set', { before, after: value, requestId, ip });
-			return settings();
-		},
 		/**
 		 * Set or clear the mailer. The password is sealed with the Portal's encryption key; omit it to keep the stored one.
 		 * @param {{ mail: unknown, actor: Actor, requestId: string, ip: string | null }} input
@@ -138,17 +97,6 @@ export const createSystemService = (ctx) => {
 				ip,
 			});
 			return settings();
-		},
-		/**
-		 * Rotate a generated key: a new one signs or seals from now on; the old ones stay published / able to open.
-		 * @param {{ kind: string, actor: Actor, requestId: string, ip: string | null }} input
-		 */
-		rotateKey: async ({ kind, actor, requestId, ip }) => {
-			if (kind !== 'signing' && kind !== 'website' && kind !== 'encryption')
-				throw problem('not_found', 'Key kinds are signing, website and encryption.');
-			const result = await system().rotate(kind);
-			await record(actor, 'system.key_rotated', { after: result, requestId, ip });
-			return result;
 		},
 		...createOps(ctx),
 		info: async () =>

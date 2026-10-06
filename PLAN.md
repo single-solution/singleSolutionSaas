@@ -1255,9 +1255,9 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 - **Artefacts** (our software, platform asset storage, never client data): pack assets `packs/<appId>/<version>/<path>` (bytes must equal the signed descriptor's sha256 and size; js/mjs/css/json/svg/png/woff2 with per-type caps); website bundles `w/<websiteId>/<env>/<version>/loader.js` + `manifest.json` (`ss-website-bundle@1`: sri sha384, sha256, sizes, budget report, CSP sources, elements, warnings). `version` = first 16 hex of SHA-256 of the bundle (deterministic); the alias flips by compare-and-set on the compile request counter, so bursts coalesce and an older compile never wins.
 - **Serving:** `/w/<websiteId>/loader.js` (alias, 60 s + stale-while-revalidate), `/w/<websiteId>/<version>/…` and `/w/packs/…` immutable; one `pk_` key per website (`events.write elements.read`) issued by the system actor.
-- **Budgets:** Loader gzip + Σ element `budget.js` + Σ product `budget.shared` (F.18) ≤ `DELIVERY_BUDGET_KB` (60 by default) and no element may ship more gzip bytes than it declares (measured as F.18 describes); a refusal (`delivery_budget_exceeded`, offenders listed) keeps the current alias.
+- **Budgets:** Loader gzip + Σ element `budget.js` + Σ product `budget.shared` (F.18) ≤ the website budget (a fixed 60 KB) and no element may ship more gzip bytes than it declares (measured as F.18 describes); a refusal (`delivery_budget_exceeded`, offenders listed) keeps the current alias.
 - **Service-product elements** run through the product's signed UI bundle when it has one (F.16), else the element stub `ss-element-stub@1` (now `@2`, F.16; no product code in the bundle): the stub calls `GET <base>/v1/elements/<key>/view` and `POST …/actions/<action>` with the website's `pk_` (+ `SS-Identity` when federated); view models are text only (`title ≤ 200, body ≤ 2000, items ≤ 50, actions ≤ 10`), rendered with the Loader's safe `h()` and design tokens; it emits `<key>.action@1` and exposes `refresh()` / `invoke()`.
-- **Preview proxy** (`/p/<token>/<path>`, signed 10-minute sessions): fetches the merchant's public page via `@ss/net` (website origin only, GET, no cookies, HTML ≤ 2 MB), injects the candidate bundle and a ribbon, stores nothing. **Trade-off:** it is served from the Portal origin, so it must be `CSP: sandbox` (opaque origin, no Portal cookies) and the merchant's own scripts do not run — previews are faithful for layout and our elements, not for site behaviour. **Recommendation:** move previews to a dedicated cookie-less preview origin (e.g. `preview.<platform domain>`, per-preview subdomain) so the sandbox can allow same-origin scripts and the merchant's scripts can run, without ever sharing an origin with the consoles — implemented as the preview URL setting (F.16).
+- **Preview proxy** (`/p/<token>/<path>`, signed 10-minute sessions): fetches the merchant's public page via `@ss/net` (website origin only, GET, no cookies, HTML ≤ 2 MB), injects the candidate bundle and a ribbon, stores nothing. **Trade-off:** it is served from the Portal origin, so it must be `CSP: sandbox` (opaque origin, no Portal cookies) and the merchant's own scripts do not run — previews are faithful for layout and our elements, not for site behaviour. (A dedicated preview origin was implemented in F.16 and later dropped for simplicity.)
 
 ## F.14 First-product learnings (Loyalty)
 
@@ -1292,7 +1292,7 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 - **Product-requested identity issuer:** `PUT /v1/product/websites/:websiteId/identity` (product auth, active subscription, manifest `capabilities.identityIssuer: true`) stores a **pending** request; the merchant is notified (mail + console banner + Website → Identity) and approves or rejects; approval makes it the active issuer with `managedBy` the product. Identical requests are idempotent (`active`), so Signups can call it on every start.
 - **Key scope vocabulary:** `elements.read`, `events.write`, `<product>.read|write` per listed service product, `<group>.*`; empty = `['elements.read','events.write']`; validated on every issue; the console key form shows checkboxes per product (`GET …/keys/scopes`).
 - **Service UI bundles + stub v2:** service products upload their own signed `ss-pack-bundle@1` UI bundle (`POST /v1/product/ui-bundles`, `PUT /v1/product/ui-bundles/:version/assets/*`, signed with a registered product key); once complete it replaces the element stub (Mode A with the product's real headless + renderer, served from `/w/ui/…`). The stub is `ss-element-stub@2`: page context `?ctx=` (`path`, `itemId`, `pageType` from `data-ss-*`) and input `fields` posted with actions; v1 data still runs.
-- **Dedicated preview origin** (implements the F.13 recommendation): the preview URL setting (a cookie-less host, ideally another registrable domain, serving only `/p/*`); preview links use it, the Portal host refuses `/p/*`, and previews there stay sandboxed but with `allow-same-origin` and the merchant's own scripts.
+- **Dedicated preview origin:** dropped (F.19 simplification): previews are served from the Portal's own origin under `CSP: sandbox` (opaque origin, scripts by nonce only).
 - **Tests:** the test `mongod` runs with the TTL monitor off — documents expire by the injected clock, never by wall time (a TTL pass deleted impersonation tokens whose injected expiry lay in the real past).
 - **SMTP descriptors:** implicit TLS only on port 465; other ports STARTTLS.
 
@@ -1322,7 +1322,7 @@ for packs.
   from the measurement (≈ ceil(measured × 1.1)); the CLI templates too. Service-product elements delivered through the
   element stub ship no product code, so they take **0 KB** of the website budget (their `budget.js` applies to their UI
   bundle).
-- **Website budget (`DELIVERY_BUDGET_KB`, default 60, unchanged).** Before, declarations were unminified source
+- **Website budget (fixed 60 KB, unchanged).** Before, declarations were unminified source
   closures — 2–5× the real gzip — so the 60 KB ceiling held perhaps 20 KB of real element code next to the ≈ 13–15 KB
   Loader. Measured honestly, the same 60 KB now admits ≈ 45 KB of real gzip element code (≈ 35 KB with the audience
   evaluator), which is what a third-party embed should cost at most: about a third of a ~170 KB mobile JS budget, as a
@@ -1412,9 +1412,8 @@ that request created or touched. Running nothing costs nothing.
      loader is next served.
    - **Connectors** are checked when saved or resolved (if the last check is older than 50 minutes), plus "Test" for
      merchants.
-   - **Operations** (admin console, `POST /v1/admin/operations/:name`): `settlement`, `reconciliation`,
-     `connectors-health`, `catalog_refresh`, `audit_verify`, `drain` — bounded by `OPERATION_DEADLINE_MS`, resumable
-     (cursors, `{ after }`), recorded in `platform_operation_runs`. Never on a timer.
+   - **No admin operations or Run buttons:** settlement only on read, connectors on save/resolve, manifests refreshed
+     per app by staff, audit chains verified per scope from the audit log. Never on a timer.
 - **Products.** app-kit sends the usage and events a request produced right after it; a failed send retries on the
   next request of that product for that website. `product.background.every` and the leases store no longer exist.
   Expiry is judged on read (holds, COD orders, coupon reservations, price locks, loyalty points, alert subscriptions,
@@ -1424,20 +1423,24 @@ that request created or touched. Running nothing costs nothing.
   re-crawl on `item.*`, review requests on `order.completed@1` — a delayed send would need a timer, so requests are
   sent on completion) or is a merchant dashboard button ("Crawl now", "Send due now", "Process expired now", …).
 - **Connection budget.** One database and one database user per deployable on the one cluster. Mongo clients are
-  created once per instance and cached on `globalThis`; pools are small (Portal `MONGODB_MAX_POOL_SIZE` 5, products'
-  control DB `DATABASE_MAX_POOL_SIZE` 5, merchant databases 3) and idle merchant pools are closed when the next
+  created once per instance and cached on `globalThis`; pools are small and fixed (Portal 5, products'
+  control DB 5, merchant databases 3) and idle merchant pools are closed when the next
   website is served.
 - **Templates.** `ss app init` generates `vercel.json` without crons and a `jobs/` folder with only a README; the notes
   sample's soft-deleted notes are removed by a TTL index.
 - **Environment and onboarding.** Every deployable runs on any Node 22 host and any domain; nothing reads
   host-specific variables, and the environment holds only database and storage connections (plain strings, neutral
-  names). The Portal: `MONGODB_URI` and `STORAGE_ENDPOINT` / `STORAGE_REGION` (default `auto`) / `STORAGE_BUCKET` /
+  names). The Portal: `MONGODB_URI`, plus optional `STORAGE_ENDPOINT` / `STORAGE_REGION` (default `auto`) / `STORAGE_BUCKET` /
   `STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY` (Cloudflare R2 or any S3-compatible service); its signing keys,
   website-key signing key, encryption key, session secret, key pepper and idempotency secret are generated on first
-  start into `platform_system` (insert-if-absent; rotation in Admin → Settings keeps old keys published). The Portal URL
-  (issuer/audience, e-mail links, CSRF origin) is recorded at `/setup`, which exists only until the first staff user
-  and creates that superadmin; afterwards only a superadmin changes it (re-confirmed, audited); it is never read from
-  request headers. Mail and the preview URL are admin settings; indexes and migrations apply once per schema version
+  start into `platform_system` (insert-if-absent; never shown, no rotation screen). There is no
+  setup page and no stored Portal URL: the Portal's address is each request's origin (`Host` plus `X-Forwarded-Proto`
+  behind a proxy) — the issuer and audience of the tokens it signs, the base of its links and the CSRF origin; products
+  pin it at connect time. While no staff user exists the staff login offers "Choose a password" / "Create admin": the
+  visitor becomes the superadmin `admin` (no e-mail; the deployer accepts that the first visitor wins). E-mail, name,
+  password and two-factor sign-in (Account → Security) are optional; two-factor is required at sign-in once
+  enrolled. Mail is the only admin setting; there is no preview URL setting and no tuning variable (pools, body cap,
+  budget and session lifetimes are constants; `X-Forwarded-*` are read as the first hop set them); indexes and migrations apply once per schema version
   under a lock. A product: `DATABASE_URI` and `CONNECT_SECRET` (random, ≥ 32 chars). Staff add it in Admin → Apps → Add product
   (product URL + that secret): the Portal calls the product's `/.well-known/ss-connect` HMAC-signed with the secret
   (never sent, never stored by the Portal); the product generates its key, pins the Portal URL and keys in its control

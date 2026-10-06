@@ -1,7 +1,7 @@
 'use client';
 /**
- * The signed-in Admin Console frame: navigation filtered by the staff member's permissions, the staff identity
- * and sign out. Every staff action is audited; the frame says so.
+ * The signed-in Admin Console frame: navigation filtered by the staff member's permissions, the staff identity,
+ * Account settings and sign out. Every staff action is audited; the frame says so.
  * @module
  */
 import { usePathname } from 'next/navigation.js';
@@ -112,8 +112,11 @@ export function AdminShell({ staff, children }) {
 				}
 				sidebarFooter={
 					<div className="space-y-1.5 rounded-xl border border-line bg-surface-2 p-3 text-xs">
-						<p className="truncate font-semibold text-fg">{staff?.email}</p>
+						<p className="truncate font-semibold text-fg">{staff?.email ?? staff?.login}</p>
 						<Roles roles={staff?.roles ?? []} />
+						<Link href={adminRoutes.account()} className="block font-semibold text-primary hover:underline">
+							Account settings
+						</Link>
 					</div>
 				}>
 				{children}

@@ -1,13 +1,10 @@
 /**
- * Staff operations reads of the `system` module: platform health (last operation runs, job queue, last audit-chain
- * verification) and the audit log (search and per-scope chain verification). Read only; nothing is stored here.
+ * Staff operations reads of the `system` module: platform health (the job queue) and the audit log (search and per-scope chain verification). Read only; nothing is stored here.
  * @module
  */
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 
-/** The infra's audit-chain verification operation (`portal.js` `AUDIT_VERIFY_OPERATION`, run from the admin console). */
-export const AUDIT_VERIFY_OPERATION = 'audit_verify';
 export const AUDIT_SCOPE = /^(global|merchant:mer_[0-9a-z]{10,64})$/;
 const AUDIT_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const AUDIT_ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(\.\*)?$/;
@@ -62,32 +59,8 @@ export const presentAuditEntry = (doc) => ({
  */
 export const createOps = (ctx) =>
 	Object.freeze({
-		/** Platform health for the admin dashboard. */
-		health: async () => {
-			const [operations, jobs, verification] = await Promise.all([
-				ctx.operationRuns.latest(),
-				ctx.jobs.queueHealth(),
-				ctx.operationRuns.last(AUDIT_VERIFY_OPERATION),
-			]);
-			const stats = /** @type {Record<string, any> | null} */ (verification?.stats ?? null);
-			return {
-				operations,
-				jobs,
-				audit: {
-					lastVerification: verification
-						? {
-								at: new Date(verification.finishedAt ?? verification.startedAt).toISOString(),
-								status: String(verification.status),
-								scopes: stats?.scopes ?? null,
-								verified: stats?.verified ?? null,
-								skipped: stats?.skipped ?? null,
-								entries: stats?.entries ?? null,
-								broken: Array.isArray(stats?.broken) ? stats.broken : [],
-							}
-						: null,
-				},
-			};
-		},
+		/** Platform health for the admin dashboard: the job queue. */
+		health: async () => ({ jobs: await ctx.jobs.queueHealth() }),
 		/**
 		 * Newest-first audit entries.
 		 * @param {{ scope?: string, actorId?: string, targetId?: string, action?: string,

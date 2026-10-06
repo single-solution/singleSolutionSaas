@@ -1,8 +1,7 @@
 'use client';
 /**
  * Finance: credits, adjustments and refunds (reference + note, confirmation dialog; idempotent by reference),
- * the hash-chained ledger of a merchant with chain verification, forced settlement, reconciliation runs and
- * reports, and finance alerts. Amounts are integer millicredits on the wire (PLAN F.1), credits on screen.
+ * the hash-chained ledger of a merchant with chain verification, and finance alerts. Amounts are integer millicredits on the wire (PLAN F.1), credits on screen.
  * @module
  */
 import { useState } from 'react';
@@ -34,7 +33,7 @@ import {
 import { Link } from '../../link.js';
 import { adminFetch, useAdminResource, usePagedList } from '../client.js';
 import { ID, adminApi, adminRoutes } from '../paths.js';
-import { ActionProblem, AdminProblem, Crumbs, IdChip, localProblem, parseSignedCredits, staffCan } from './common.js';
+import { ActionProblem, AdminProblem, Crumbs, IdChip, parseSignedCredits, staffCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -49,44 +48,12 @@ export const CREDIT_KINDS = Object.freeze({
  * @param {any} props loader result of `loadFinance` plus `staff`
  */
 export function FinanceView(props) {
-	const toast = useToast();
-	const ok = props.ok === true;
-	const reports = useAdminResource(ok ? adminApi.reconciliation() : null, { items: ok ? props.reports : [] });
 	const [merchantId, setMerchantId] = useState('');
 	const [lookupError, setLookupError] = useState(/** @type {string | null} */ (null));
-	const [confirm, setConfirm] = useState(/** @type {null | 'settlement' | 'reconciliation'} */ (null));
-	const [settleScope, setSettleScope] = useState('');
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [stats, setStats] = useState(/** @type {any} */ (null));
-	if (!ok) return <AdminProblem problem={props.problem} />;
-	const { staff, alerts } = props;
-	const canRun = staffCan(staff, 'platform.jobs.manage');
-	const items = /** @type {any[]} */ (reports.data?.items ?? []);
-	const run = async () => {
-		if (confirm === 'settlement' && settleScope.trim() && !ID.merchant.test(settleScope.trim())) {
-			setProblem(localProblem('Invalid merchant id', 'Enter a merchant id (mer_…) or leave empty for every merchant.'));
-			return;
-		}
-		setBusy(true);
-		setProblem(null);
-		const result = await adminFetch(confirm === 'settlement' ? adminApi.settlement() : adminApi.reconciliation(), {
-			method: 'POST',
-			body: confirm === 'settlement' && settleScope.trim() ? { merchantId: settleScope.trim() } : {},
-		});
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setStats({ kind: confirm, stats: result.data?.stats ?? null });
-		toast.show({ title: confirm === 'settlement' ? 'Settlement ran' : 'Reconciliation ran' });
-		setConfirm(null);
-		await reports.reload();
-	};
+	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
 	return (
 		<div className="space-y-6">
-			<PageHeader title="Finance" subtitle="Credits, ledgers, settlement and reconciliation." />
+			<PageHeader title="Finance" subtitle="Credits, ledgers and alerts. Settlement happens whenever a balance is read." />
 			<Card
 				title="Merchant ledger and credits"
 				subtitle="Credit operations and the ledger live on the merchant's finance page.">
@@ -112,112 +79,15 @@ export function FinanceView(props) {
 					</Button>
 				</form>
 			</Card>
-			<div className="grid gap-6 lg:grid-cols-2">
-				<Card title="Settlement" subtitle="Settles every complete UTC hour that is due (idempotent per hour).">
-					<p className="text-sm text-muted">
-						A merchant settles whenever its balance is read or its products report; settle everyone now after an incident or
-						before reconciliation.
-					</p>
-					{canRun ? (
-						<Button className="mt-3" variant="secondary" onClick={() => setConfirm('settlement')}>
-							Force settlement
-						</Button>
-					) : null}
-					{stats?.kind === 'settlement' && stats.stats ? <StatsLine stats={stats.stats} /> : null}
-				</Card>
-				<Card title="Reconciliation" subtitle="Compares usage, settlement and the ledger; discrepancies raise alerts.">
-					<p className="text-sm text-muted">Runs on demand; a run resumes where the previous chunk stopped.</p>
-					{canRun ? (
-						<Button className="mt-3" variant="secondary" onClick={() => setConfirm('reconciliation')}>
-							Run reconciliation
-						</Button>
-					) : null}
-					{stats?.kind === 'reconciliation' && stats.stats ? <StatsLine stats={stats.stats} /> : null}
-				</Card>
-			</div>
-			<Card title="Reconciliation reports">
-				<Table
-					caption="Reconciliation reports"
-					dense
-					rows={items}
-					rowKey={(r) => r.reportId}
-					empty="No reconciliation report yet."
-					columns={[
-						{ key: 'at', header: 'Run', rowHeader: true, render: (r) => formatDateTime(r.at) },
-						{
-							key: 'phase',
-							header: 'Phase',
-							render: (r) => <StatusBadge status={r.phase === 'done' ? 'ok' : 'running'} label={humanize(r.phase)} />,
-						},
-						{ key: 'subscriptions', header: 'Subscriptions', align: 'right', render: (r) => formatNumber(r.subscriptions) },
-						{ key: 'merchants', header: 'Merchants', align: 'right', render: (r) => formatNumber(r.merchants) },
-						{
-							key: 'discrepancies',
-							header: 'Discrepancies',
-							render: (r) => {
-								const list = /** @type {any[]} */ (r.discrepancies ?? []);
-								if (list.length === 0) return <Badge tone="success">None</Badge>;
-								return (
-									<details>
-										<summary className="cursor-pointer text-sm font-semibold text-danger">{list.length} found</summary>
-										<ul className="mt-2 space-y-1 text-xs">
-											{list.slice(0, 50).map((d, i) => (
-												<li key={i} className="font-mono">
-													{d.kind ?? 'discrepancy'} {d.merchantId ?? ''} {d.subscriptionId ?? ''} {d.message ?? ''}
-												</li>
-											))}
-										</ul>
-									</details>
-								);
-							},
-						},
-					]}
-				/>
-			</Card>
-			<AlertsCard alerts={alerts} />
-			<ConfirmDialog
-				open={confirm !== null}
-				onClose={() => setConfirm(null)}
-				onConfirm={() => void run()}
-				busy={busy}
-				title={confirm === 'settlement' ? 'Force settlement now?' : 'Run reconciliation now?'}
-				confirmLabel={confirm === 'settlement' ? 'Settle' : 'Run'}
-				error={problem ? describeProblem(problem) : null}>
-				{confirm === 'settlement' ? (
-					<Input
-						label="Only this merchant (optional)"
-						value={settleScope}
-						onChange={(e) => setSettleScope(e.currentTarget.value)}
-						className="font-mono"
-						placeholder="mer_… (empty = every merchant)"
-					/>
-				) : (
-					<p className="text-sm text-muted">It can take a while on large fleets; it never moves money.</p>
-				)}
-			</ConfirmDialog>
+			<AlertsCard alerts={props.alerts} />
 		</div>
-	);
-}
-
-/** @param {{ stats: Record<string, unknown> }} props */
-function StatsLine({ stats }) {
-	return (
-		<p className="mt-3 flex flex-wrap gap-2 text-xs text-muted">
-			{Object.entries(stats)
-				.filter(([, v]) => typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string')
-				.map(([k, v]) => (
-					<span key={k} className="rounded bg-surface-2 px-1.5 py-0.5">
-						{humanize(k)}: <strong className="text-fg">{String(v)}</strong>
-					</span>
-				))}
-		</p>
 	);
 }
 
 /** @param {{ alerts: any[] }} props */
 export function AlertsCard({ alerts }) {
 	return (
-		<Card title="Finance alerts" subtitle="Unpriced hours, reconciliation discrepancies and other money anomalies.">
+		<Card title="Finance alerts" subtitle="Unpriced hours, ledger chain breaks and other money anomalies.">
 			<Table
 				caption="Finance alerts"
 				dense

@@ -2,7 +2,7 @@
  * End to end against the REAL Portal (`@ss/platform/testing`: `createPortal` with every production module), in process, on the test
  * run's MongoMemoryReplSet:
  *
- *   bootstrap staff (password + TOTP) → register this product through the real catalog handshake → activate →
+ *   first admin from the sign-in page (password, then TOTP) → register this product through the real catalog handshake → activate →
  *   merchant signs up (e-mail verification) → adds a website → staff adds credits → merchant subscribes (starter) →
  *   connects a database connector and an AI connector (a fake OpenAI-compatible provider on local https, dev
  *   allowlist; the Portal's connection check calls its /models) → issues a pk_ key → a guest opens a conversation
@@ -39,6 +39,7 @@ import {
 	testSystemState,
 	systemModule,
 	totpCode,
+	SESSIONS,
 } from '@ss/platform/testing';
 import { ROOT, loadManifest, startServer } from '@ss/product-chatbot/serve';
 import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
@@ -139,10 +140,14 @@ beforeAll(async () => {
 			NODE_ENV: 'test',
 			MONGODB_URI: mongoUri('unused'),
 			OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
-			STAFF_SESSION_IDLE_MINUTES: '720',
 		},
-		// keys and secrets as the Portal generates them on first start; the URL as recorded at /setup
-		testSystemState({ portalUrl: PORTAL_URL }),
+		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
+		testSystemState(),
+		// long staff sessions for the scripted clock
+		{
+			baseUrl: PORTAL_URL,
+			overrides: { sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } } },
+		},
 	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const suffix = randomBytes(4).toString('hex');
@@ -324,15 +329,13 @@ afterAll(async () => {
 });
 
 describe.skipIf(!hasOpenssl)('Chatbot & Support on the real Portal', () => {
-	it('bootstraps the first staff user (password + TOTP)', async () => {
-		const { call, portal, clock, state } = ctx;
-		const { link } = await portal.modules.service('identity').bootstrapSuperadmin({ email: STAFF.email });
-		const token = decodeURIComponent(String(link).split('#token=')[1] ?? '');
-		expect(
-			(await call('POST', '/v1/auth/staff/password-reset/confirm', { body: { token, password: STAFF.password } })).status,
-		).toBe(204);
+	it('creates the first admin from the sign-in page, then signs in and turns on TOTP', async () => {
+		const { call, clock, state } = ctx;
+		const created = await call('POST', '/v1/auth/staff/first-admin', { body: { password: STAFF.password } });
+		expect(created.status, JSON.stringify(created.json)).toBe(201);
+		expect((await call('PATCH', '/v1/me', { cookie: created.cookie ?? '', body: { email: STAFF.email } })).status).toBe(200);
 		const login = await call('POST', '/v1/auth/staff/login', { body: STAFF });
-		expect(login.json.status).toBe('mfa_enrolment_required');
+		expect(login.json.status).toBe('ok');
 		const enrol = await call('POST', '/v1/auth/staff/mfa/enrol', { cookie: login.cookie });
 		clock.advance(30_000);
 		const confirm = await call('POST', '/v1/auth/staff/mfa/confirm', {

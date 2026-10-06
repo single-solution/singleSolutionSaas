@@ -66,10 +66,6 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 		jobs: (ctx) => ({
 			'probe.add': async (payload) => void (await ctx.service('probe').add(payload.merchantId, payload.name)),
 		}),
-		operations: () => ({
-			settlement: async () => ({ settled: 0 }),
-			broken: async () => Promise.reject(new Error('operation exploded')),
-		}),
 		routes: (ctx) => [
 			defineRoute({
 				method: 'POST',
@@ -392,31 +388,13 @@ describe('Portal end to end', () => {
 		expect([res.status, res.headers.get('retry-after')]).toEqual([503, '30']);
 	});
 
-	it('admin operations: staff only, built-in drain, module operations, failures and run records', async () => {
+	it('no admin operations: jobs run after the request that enqueued them, the operations routes are gone', async () => {
 		const { portal, call } = await boot({ dbName: 'it_operations' });
 		await portal.ensureIndexes();
-		// enqueued outside a request: nothing runs it until something touches it (here: the drain operation)
-		await portal.shared.jobs.enqueue({ name: 'probe.add', payload: { merchantId: MERCHANT, name: 'from-job' } });
-		expect((await call('POST', '/v1/admin/operations/drain')).status).toBe(401);
 		const staff = await login(portal, { kind: 'staff', subject: 'stf_1', roles: ['superadmin'], mfa: true });
 		const headers = { cookie: staff.cookie, ...SAME_ORIGIN };
-		const drained = await call('POST', '/v1/admin/operations/drain', { headers });
-		expect(drained.status).toBe(200);
-		expect(drained.json).toMatchObject({ status: 'ok', stats: { leased: 1, succeeded: 1 } });
-		expect(await /** @type {any} */ (portal.modules.service('probe')).count(MERCHANT)).toBe(1);
-		expect((await call('POST', '/v1/admin/operations/settlement', { headers })).json).toMatchObject({
-			status: 'ok',
-			stats: { settled: 0 },
-		});
-		expect((await call('POST', '/v1/admin/operations/nope', { headers })).status).toBe(404);
-		expect((await call('POST', '/v1/admin/operations/broken', { headers })).status).toBe(500);
-		expect(portal.operations.names()).toEqual(['drain', 'audit_verify', 'settlement', 'broken']);
-		const runs = await mongo.db('it_operations').collection(COLLECTIONS.operationRuns).find({}).toArray();
-		expect(runs.map((r) => `${r.name}:${r.status}`).sort()).toEqual(['broken:failed', 'drain:ok', 'settlement:ok']);
-		const listed = await call('GET', '/v1/admin/operations', { headers });
-		expect(listed.json.items.map((/** @type {any} */ o) => o.name)).toEqual(['audit_verify', 'broken', 'drain', 'settlement']);
-		// a product credential cannot run operations
-		expect((await call('POST', '/v1/admin/operations/drain', { headers: { authorization: 'Bearer x' } })).status).toBe(401);
+		expect((await call('POST', '/v1/admin/operations/drain', { headers })).status).toBe(404);
+		expect((await call('GET', '/v1/admin/operations', { headers })).status).toBe(404);
 	});
 
 	it('work after responses: a job enqueued by a request runs right after it, and only that job (F.19)', async () => {
@@ -680,10 +658,9 @@ describe('login throttle (Mongo)', () => {
 });
 
 describe('admin settings (stored in the database, never in the environment)', () => {
-	it('changes the Portal URL (superadmin, re-confirmed), the preview URL and the mailer; rotates keys; audited', async () => {
+	it('shows the request origin as the Portal URL and sets the mailer, audited', async () => {
 		const db = mongo.db('it_settings');
 		const system = createSystemStore(db);
-		await system.update({ portalUrl: PORTAL_URL, setup: true });
 		const { portal, call } = await boot({ dbName: 'it_settings', db, system });
 		const admin = await login(portal, { kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
 		const superadmin = await login(portal, { kind: 'staff', subject: 'stf_root', roles: ['superadmin'], mfa: true });
@@ -692,43 +669,15 @@ describe('admin settings (stored in the database, never in the environment)', ()
 
 		const read = await call('GET', '/v1/admin/system/settings', { headers: as(admin) });
 		expect(read.status).toBe(200);
-		expect(read.json).toMatchObject({ portalUrl: PORTAL_URL, previewUrl: null, mail: null });
-		expect(read.json.keys.signing).toEqual([expect.objectContaining({ active: true })]);
-		expect(JSON.stringify(read.json)).not.toMatch(/seed/);
+		expect(read.json).toMatchObject({ portalUrl: PORTAL_URL, mail: null });
+		expect(JSON.stringify(read.json)).not.toMatch(/seed|keys/);
 
-		// the Portal URL: superadmins only, typed twice
-		const url = { portalUrl: 'https://portal2.example.test', confirmation: 'https://portal2.example.test' };
-		expect((await call('PUT', '/v1/admin/system/settings/portal-url', { headers: as(admin), body: url })).status).toBe(403);
-		const mismatch = await call('PUT', '/v1/admin/system/settings/portal-url', {
-			headers: as(superadmin),
-			body: { ...url, confirmation: 'https://other.test' },
-		});
-		expect(mismatch.status).toBe(422);
-		expect(
-			(
-				await call('PUT', '/v1/admin/system/settings/portal-url', {
-					headers: as(superadmin),
-					body: { portalUrl: 'http://x.test', confirmation: 'http://x.test' },
-				})
-			).status,
-		).toBe(422);
-		const changed = await call('PUT', '/v1/admin/system/settings/portal-url', { headers: as(superadmin), body: url });
-		expect(changed.json.portalUrl).toBe('https://portal2.example.test');
+		// no stored Portal URL: the route to change it is gone
+		expect((await call('PUT', '/v1/admin/system/settings/portal-url', { headers: as(superadmin), body: {} })).status).toBe(404);
 
-		// preview URL and mailer (the password is sealed, never returned)
-		expect(
-			(
-				await call('PUT', '/v1/admin/system/settings/preview-url', {
-					headers: as(admin),
-					body: { previewUrl: 'https://p.test/x' },
-				})
-			).status,
-		).toBe(422);
-		const preview = await call('PUT', '/v1/admin/system/settings/preview-url', {
-			headers: as(admin),
-			body: { previewUrl: 'https://preview.example-previews.test' },
-		});
-		expect(preview.json.previewUrl).toBe('https://preview.example-previews.test');
+		// no preview URL setting and no key rotation; the mailer (the password is sealed, never returned)
+		expect((await call('PUT', '/v1/admin/system/settings/preview-url', { headers: as(admin), body: {} })).status).toBe(404);
+		expect((await call('POST', '/v1/admin/system/keys/signing/rotate', { headers: as(superadmin) })).status).toBe(404);
 		const mail = {
 			host: 'smtp.example.com',
 			port: 587,
@@ -756,17 +705,8 @@ describe('admin settings (stored in the database, never in the environment)', ()
 			(await call('PUT', '/v1/admin/system/settings/mail', { headers: as(admin), body: { mail: null } })).json.mail,
 		).toBeNull();
 
-		// key rotation: superadmins only; the old key stays published
-		expect((await call('POST', '/v1/admin/system/keys/signing/rotate', { headers: as(admin) })).status).toBe(403);
-		expect((await call('POST', '/v1/admin/system/keys/nope/rotate', { headers: as(superadmin) })).status).toBe(404);
-		const rotated = await call('POST', '/v1/admin/system/keys/signing/rotate', { headers: as(superadmin) });
-		expect(rotated.json).toMatchObject({ kind: 'signing', count: 2 });
-		expect((await system.load()).state.signingKeys).toHaveLength(2);
-
 		const actions = (await db.collection('platform_audit').find({}).toArray()).map((a) => a.action);
-		expect(actions).toEqual(
-			expect.arrayContaining(['system.portal_url_changed', 'system.preview_url_set', 'system.mail_set', 'system.key_rotated']),
-		);
+		expect(actions).toEqual(expect.arrayContaining(['system.mail_set']));
 	});
 
 	it('without a settings store the settings API answers 503', async () => {
@@ -779,7 +719,7 @@ describe('admin settings (stored in the database, never in the environment)', ()
 });
 
 describe('runtime', () => {
-	it('builds one cached Portal: secrets generated on first start, schema prepared, /setup, then the API', async () => {
+	it('builds one cached Portal: secrets generated on first start, schema prepared, the API at once', async () => {
 		resetPortal();
 		await expect(getPortal({ env: {} })).rejects.toThrow(/Invalid Portal configuration/);
 		/** @type {string[]} */
@@ -788,51 +728,21 @@ describe('runtime', () => {
 		const env = await testEnv({ MONGODB_URI: `${mongo.uri.replace(/\/?(\?|$)/, `/${runtimeDb}$1`)}`, LOG_LEVEL: 'info' });
 		const before = await getPortal({ env, write: (line) => lines.push(line) });
 		expect(await getPortal()).toBe(before);
-		expect(before.config.setUp).toBe(false);
 		expect(before.config.mongo.dbName).toBe(runtimeDb);
 		const db = mongo.client.db(runtimeDb);
 		expect(await db.collection('platform_system').countDocuments({ _id: /** @type {any} */ ('secrets') })).toBe(1);
 		expect(await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('schema') })).toMatchObject({
 			fingerprint: expect.any(String),
 		});
-		// before setup the API refuses everything
-		const refused = await before.handle(new Request(`${PORTAL_URL}/v1/system/info`));
-		expect(refused.status).toBe(503);
-		expect((await refused.json()).detail).toMatch(/\/setup/);
-
-		// first-run setup: the visited origin is suggested, the owner confirms it and becomes the first admin
-		const setup = await import('../app/setup/route.js');
-		const form = await setup.GET(new Request('https://portal.example.test/setup'));
-		expect(form.status).toBe(200);
-		expect(await form.text()).toContain('value="https://portal.example.test"');
-		/** @param {Record<string, string>} fields */
-		const post = (fields) =>
-			setup.POST(
-				new Request('https://portal.example.test/setup', {
-					method: 'POST',
-					headers: { 'content-type': 'application/x-www-form-urlencoded' },
-					body: new URLSearchParams(fields).toString(),
-				}),
-			);
-		expect((await post({ portalUrl: 'http://portal.example.test', email: 'owner@example.com', confirm: 'yes' })).status).toBe(
-			400,
+		// no setup step: the API answers at once, and the Portal URL is the request's origin
+		const portal = before;
+		const info = await portal.handle(
+			new Request('http://internal/v1/system/info', {
+				headers: { host: 'portal.example.test', 'x-forwarded-proto': 'https' },
+			}),
 		);
-		expect((await post({ portalUrl: 'https://portal.example.test', email: 'nope', confirm: 'yes' })).status).toBe(400);
-		expect((await post({ portalUrl: 'https://portal.example.test', email: 'owner@example.com' })).status).toBe(400);
-		const done = await post({
-			portalUrl: 'https://portal.example.test',
-			email: 'owner@example.com',
-			name: 'Owner',
-			confirm: 'yes',
-		});
-		expect(done.status).toBe(303);
-		expect(done.headers.get('location')).toMatch(/^https:\/\/portal\.example\.test\//);
-		const portal = await getPortal();
-		expect(portal).not.toBe(before);
-		expect(portal.config).toMatchObject({ setUp: true, portalUrl: 'https://portal.example.test' });
-		expect(portal.config.signingKeys[0]?.kid).toBe(before.config.signingKeys[0]?.kid);
-		expect((await setup.GET(new Request('https://portal.example.test/setup'))).status).toBe(404);
-		expect((await post({ portalUrl: 'https://evil.test', email: 'x@example.com', confirm: 'yes' })).status).toBe(404);
+		expect((await info.json()).portalUrl).toBe('https://portal.example.test');
+		expect((await import('node:fs')).existsSync(new URL('../app/setup/route.js', import.meta.url))).toBe(false);
 
 		const res = await portal.handle(new Request('https://portal.example.test/v1/system/info'));
 		expect(res.status).toBe(200);
@@ -913,7 +823,7 @@ describe('infra hardening (Mongo)', () => {
 		).toBe('unavailable');
 	});
 
-	it('hash-chains audit entries and verifies them with the audit_verify operation (resumable)', async () => {
+	it('hash-chains audit entries and verifies them per scope', async () => {
 		const { portal, call } = await boot({ dbName: 'it_audit_chain' });
 		await portal.ensureIndexes();
 		const audit = portal.shared.audit;
@@ -923,16 +833,15 @@ describe('infra hardening (Mongo)', () => {
 		await audit.record({ actor, action: 'credits.adjusted', target: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT } });
 		const staff = await login(portal, { kind: 'staff', subject: 'stf_9', roles: ['superadmin'], mfa: true });
 		const headers = { cookie: staff.cookie, ...SAME_ORIGIN };
-		const run = await call('POST', '/v1/admin/operations/audit_verify', { headers });
-		expect(run.json).toMatchObject({ status: 'ok', stats: { verified: 2, entries: 3, broken: [] } });
+		const scope = encodeURIComponent(`merchant:${MERCHANT}`);
+		const verified = await call('GET', `/v1/admin/audit/verification?scope=${scope}`, { headers });
+		expect(verified.json).toMatchObject({ ok: true, entries: 2 });
 		const raw = mongo.db('it_audit_chain').collection(COLLECTIONS.audit);
 		await raw.updateOne({ merchantId: MERCHANT, seq: 1 }, { $set: { action: 'credits.refunded' } });
-		expect((await call('POST', '/v1/admin/operations/audit_verify', { headers })).json.stats.broken).toEqual([
-			{ scope: `merchant:${MERCHANT}`, seq: 1, id: expect.stringMatching(/^aud_/), reason: 'hash' },
-		]);
-		// resumable: `after` skips the scopes up to the cursor
-		const resumed = await portal.operations.run('audit_verify', { input: { after: `merchant:${MERCHANT}` } });
-		expect(resumed?.stats).toMatchObject({ broken: [] });
+		expect((await call('GET', `/v1/admin/audit/verification?scope=${scope}`, { headers })).json).toMatchObject({
+			ok: false,
+			broken: { seq: 1, reason: 'hash' },
+		});
 	});
 
 	it("idempotent 'no-store' routes keep only the status in the shared store", async () => {
@@ -989,8 +898,6 @@ describe('infra hardening (Mongo)', () => {
 		const { logger } = createTestLogger();
 		const build = (/** @type {any} */ definition) =>
 			createPortal({ config, db: mongo.db('it_reserved'), modules: [defineModule({ name: 'clash', ...definition })], logger });
-		expect(() => build({ operations: () => ({ audit_verify: async () => ({}) }) })).toThrow(/reserved/);
-		expect(() => build({ operations: () => ({ drain: async () => ({}) }) })).toThrow(/reserved/);
 		// periodic module work no longer exists (F.19)
 		expect(() => build({ background: () => ({}) })).not.toThrow();
 		expect(() => build({ problems: { idempotency_replay_no_body: { status: 409, title: 'x' } } })).toThrow(/reserved/);
