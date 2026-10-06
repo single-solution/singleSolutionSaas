@@ -1,7 +1,7 @@
 /**
  * Sealing of the one secret Checkout keeps for a website: the merchant's `sk_` server key it uses to call the merchant's
  * other products (Coupons, Deals, Loyalty, Catalog) server to server. It is stored in the merchant's own database,
- * sealed with AES-256-GCM (AAD = website id) under a key derived with HKDF from `SS_CHECKOUT_SEAL_KEY`, or — when that
+ * sealed with AES-256-GCM (AAD = website id) under a key derived with HKDF from `CHECKOUT_SEAL_KEY`, or — when that
  * is not set — from the product signing key. It is never returned by any API (only a masked preview).
  *
  * GAP: the Portal has no product-to-product credential (a short-lived token for "Checkout calls Coupons for website W"),

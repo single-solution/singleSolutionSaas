@@ -2,15 +2,15 @@
  * Portal cryptography. Signatures, JWKS and secret-key hashing come from `@ss/protocol` (never re-implemented);
  * this module only adds envelope encryption for stored client credentials (PLAN §1a "credentials custody").
  *
- * Signing keys (`PORTAL_SIGNING_KEYS`): the first key signs; every configured key is published in the JWKS so
+ * Signing keys (`SIGNING_KEYS`): the first key signs; every configured key is published in the JWKS so
  * tokens signed by the previous key keep verifying during the overlap. Rotation: prepend the new key (optionally
  * with `nbf`), keep the old one (with `exp` = end of overlap), then remove it. Website keys are signed by the
- * dedicated website-key signer (`WEBSITE_KEY_SIGNING_KEYS`), so rotating the Portal key never touches them; retiring
+ * dedicated website-key signer (`WEBSITE_SIGNING_KEYS`), so rotating the Portal key never touches them; retiring
  * a website-key signing key requires re-issuing the website keys it signed (F.5).
  *
  * Envelope encryption: each record gets a fresh 256-bit data key; the plaintext is sealed with AES-256-GCM under
  * that data key with the caller's AAD (e.g. `{ merchantId, connectorId }`), and the data key is wrapped with
- * AES-256-GCM under the active KEK (`SECRETS_KEK`, first entry). The sealed string names the KEK id, so old records
+ * AES-256-GCM under the active KEK (`ENCRYPTION_KEYS`, first entry). The sealed string names the KEK id, so old records
  * open with older KEKs and `rewrap` moves a record to the active KEK without touching its ciphertext.
  *
  * Format: `ssenc1.<kekId>.<b64url(wrapIv ‖ wrappedKey ‖ wrapTag)>.<b64url(iv ‖ ciphertext ‖ tag)>`.
@@ -33,7 +33,7 @@ const KEY = 32;
 /**
  * Portal signing keys: active signer, all signers (for dual-signing events during rotation), the Portal JWKS and a
  * resolver over our own public keys (to verify tokens the Portal issued, such as launches). Website keys have a
- * **dedicated** signer (`WEBSITE_KEY_SIGNING_KEYS`, F.5) with its own resolver: a token signed by the Portal key is
+ * **dedicated** signer (`WEBSITE_SIGNING_KEYS`, F.5) with its own resolver: a token signed by the Portal key is
  * never accepted as a website key, and the other way round. Both key sets are published together
  * (`publishedJwks()`, served at `/.well-known/jwks.json`) with distinct kids, so products verify website keys offline.
  * @param {ReadonlyArray<PrivateJwk>} signingKeys
@@ -230,7 +230,7 @@ export const createEnvelope = ({ keks, randomBytes = defaultRandomBytes }) => {
 /** @typedef {ReturnType<typeof createEnvelope>} Envelope */
 
 /**
- * Website secret keys at rest: HMAC-SHA-256 with the pepper (`WEBSITE_KEY_PEPPER`), compared in constant time.
+ * Website secret keys at rest: HMAC-SHA-256 with the pepper (`KEY_PEPPER`), compared in constant time.
  * @param {Uint8Array} pepper
  */
 export const createSecretHasher = (pepper) => {

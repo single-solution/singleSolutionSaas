@@ -101,15 +101,9 @@ describe('ss app init → validate (integration)', () => {
 		expect(JSON.parse(await readFile(path.join(dir, 'vercel.json'), 'utf8')).crons).toBeUndefined();
 		expect(files.some((file) => file.startsWith('app/cron/'))).toBe(false);
 		const env = await readFile(path.join(dir, '.env.example'), 'utf8');
-		for (const name of [
-			'SS_PORTAL_URL',
-			'SS_APP_ID',
-			'SS_APP_SIGNING_KEY',
-			'SS_REGISTRATION_TOKEN_HASH',
-			'SS_PRODUCT_DB_URI',
-			'SS_LOG_LEVEL',
-		])
+		for (const name of ['PORTAL_URL', 'APP_ID', 'SIGNING_KEY', 'REGISTRATION_TOKEN_HASH', 'DATABASE_URI'])
 			expect(env).toContain(`${name}=`);
+		expect(env).not.toMatch(/\bSS_|LOG_LEVEL/);
 		expect(await readFile(path.join(dir, 'app/_lib/product.js'), 'utf8')).toContain('toNextRoute');
 		expect(await readFile(path.join(dir, 'app/api/v1/[...route]/route.js'), 'utf8')).toContain("forward('POST')");
 		expect(files).toContain('serve.js');

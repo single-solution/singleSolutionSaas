@@ -53,7 +53,7 @@ test/                        vitest; integration tests on one shared MongoMemory
 Request pipeline (`src/infra/http.js`): request id → route match (404/405, CORS preflight) → body cap (413) → auth →
 CSRF for cookie sessions (403) → RBAC permission (403) → rate limit (429 + `RateLimit-*`) → JSON (415/400) →
 `Idempotency-Key` on POST (428 / 409 / replay with `Idempotent-Replayed: true`) → handler → RFC 9457 problems
-(`@ss/contracts` factory, type base `PROBLEM_BASE_URI`). API responses default to `Cache-Control: no-store`.
+(`@ss/contracts` factory, type base `<PUBLIC_URL>/problems/`). API responses default to `Cache-Control: no-store`.
 
 **Idempotency.** The request fingerprint is `HMAC-SHA-256(IDEMPOTENCY_SECRET, method ‖ path ‖ query ‖ body)` (the
 key defaults to an HKDF derivation of `SESSION_SECRET`), so a stored fingerprint of a body holding a password or a
@@ -70,7 +70,7 @@ the original status) instead of executing twice or re-sending a secret. Use a ne
 | `staff`      | `__Host-ss_staff` cookie                   | session store; **MFA required** (routes opt out with `mfa: false` only for the second-factor step)                                       |
 | `merchant`   | `__Host-ss_merchant` cookie                | session store                                                                                                                            |
 | `websiteKey` | `Authorization: Bearer pk_…` / `sk_…`      | `@ss/protocol` `verifyWebsiteKey` with the website-key keys, `websiteKeyRevoked(claims, rawKey)` port, `originAllowed` for `pk_`, scopes |
-| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = `PORTAL_URL`, shared replay store                                                            |
+| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = `PUBLIC_URL`, shared replay store                                                            |
 | `public`     | none                                       | —                                                                                                                                        |
 
 A route may list several modes; the first credential present decides (an invalid one fails — it never falls through).
@@ -78,7 +78,7 @@ Modules that receive a website key elsewhere (e.g. a `sendBeacon` body) call `ct
 referer, keyKind?, scopes?, env? })` — the same implementation as the authenticator (claims, or an infra problem).
 
 **CSRF** (cookie sessions only): mutations must carry `Sec-Fetch-Site: same-origin` when the browser sends it, and an
-`Origin` exactly equal to the `PORTAL_URL` origin when sent; a mutation with neither is refused. Together with
+`Origin` exactly equal to the `PUBLIC_URL` origin when sent; a mutation with neither is refused. Together with
 `SameSite=Lax` cookies and JSON-only bodies (form posts get 415), no CSRF token is needed. Bearer-authenticated calls
 (products, website keys) are not subject to CSRF.
 
@@ -145,7 +145,7 @@ payload is a sealed event. Every request runs in a request scope (`infra/request
   last check is older than 50 minutes (after the response).
 
 Deferred work runs through Next `after()` (`toNextRoute(handler, { after })` in `app/api` and `app/w`).
-`createPortal({ background: { mode: 'off' } })` (the default when `PORTAL_ENV=test`) runs none of it.
+`createPortal({ background: { mode: 'off' } })` (the default when `NODE_ENV=test`) runs none of it.
 
 **Operations** are bounded, resumable maintenance tasks that staff run on demand from the admin console (Platform
 health → Operations, `POST /v1/admin/operations/:name` with `platform.jobs.manage`, body `{ after? }` to continue a
@@ -165,37 +165,39 @@ cut run). Each run holds a lease lock (no overlaps), gets `OPERATION_DEADLINE_MS
 
 ## Environment
 
-All variables are validated together at start (names only are reported, never values). No host is hardcoded.
+All variables are validated together at start (names only are reported, never values). Every value is a plain string
+(no JSON), no host is hardcoded and nothing depends on the hosting provider. The environment comes from `NODE_ENV`
+only: production unless `development` or `test`. Logs are `info` in production and `debug` in development.
 
-| Variable                        | Required | Description                                                                                                                                                                                                                                                                                                                                                         |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                   | yes      | Control-plane MongoDB connection string (never a client database).                                                                                                                                                                                                                                                                                                  |
-| `MONGODB_DB`                    |          | Database name; default: path of `MONGODB_URI`, else `ss_portal`.                                                                                                                                                                                                                                                                                                    |
-| `MONGODB_MAX_POOL_SIZE`         |          | Pool size per instance (default 5: one Atlas M0 cluster allows ~500 connections across every deployment and instance).                                                                                                                                                                                                                                              |
-| `PORTAL_URL`                    | yes      | Canonical Portal URL (issuer of launches, audience of assertions, CSRF origin). https unless localhost in development.                                                                                                                                                                                                                                              |
-| `PORTAL_SIGNING_KEYS`           | yes      | JSON array of private Ed25519 JWKs with unique `kid`s. The first signs; all are published in the JWKS.                                                                                                                                                                                                                                                              |
-| `SECRETS_KEK`                   | yes      | `kid:base64(32 bytes)[,kid:base64…]`, first = active (one bare base64 key is accepted as `k1`).                                                                                                                                                                                                                                                                     |
-| `SESSION_SECRET`                | yes      | ≥ 32 bytes (base64 or text). HMAC key for session ids, recovery codes, throttle keys.                                                                                                                                                                                                                                                                               |
-| `WEBSITE_KEY_PEPPER`            | yes      | ≥ 32 bytes, different from `SESSION_SECRET`. HMAC pepper for website secret keys at rest.                                                                                                                                                                                                                                                                           |
-| `WEBSITE_KEY_SIGNING_KEYS`      | prod     | JSON array of private Ed25519 JWKs that sign website keys only (first signs, all published; kids ≠ Portal kids). Outside production a key is derived from `SESSION_SECRET`.                                                                                                                                                                                         |
-| `IDEMPOTENCY_SECRET`            |          | ≥ 32 bytes. HMAC key of idempotency fingerprints (default: HKDF of `SESSION_SECRET`).                                                                                                                                                                                                                                                                               |
-| `OUTBOUND_DEV_ALLOW_HOSTS`      |          | Comma-separated hosts/IPs outbound calls (event deliveries, registrations, identity-issuer JWKS, connector checks) may reach although private or plain http (`ctx.config.outbound.allowHosts`); ignored in production.                                                                                                                                              |
-| `PLATFORM_SMTP_URL`             |          | Platform mailer `smtp(s)://user:pass@host:port` (percent-encode the credentials).                                                                                                                                                                                                                                                                                   |
-| `PLATFORM_MAIL_FROM`            |          | Sender, `Name <address>` or `address`; required with `PLATFORM_SMTP_URL`.                                                                                                                                                                                                                                                                                           |
-| `PLATFORM_ASSET_STORAGE`        |          | Platform-owned artefact storage (pack assets, compiled website bundles — our software, never client data): JSON `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }` (S3-compatible, https in production), or `memory` / `file:<dir>` outside production. Without it the delivery routes answer 503.              |
-| `DELIVERY_BUDGET_KB`            |          | Website bundle budget in KB gzip: Loader + Σ element `budget.js` + Σ product `budget.shared`, all measured minified and gzipped (default 60; PLAN F.18 has the reasoning).                                                                                                                                                                                          |
-| `PREVIEW_ORIGIN`                |          | Dedicated cookie-less preview origin (https, host ≠ `PORTAL_URL`'s, ideally another registrable domain) pointed at the same deployment. Preview links use it, the Portal host refuses `/p/*`, and that host serves only `/p/*` (API, `/w/*` and console pages answer 404). Previews there stay `CSP: sandbox` + `allow-same-origin` and run the merchant's scripts. |
-| `PROBLEM_BASE_URI`              |          | RFC 9457 type base (default `<PORTAL_URL>/problems/`).                                                                                                                                                                                                                                                                                                              |
-| `PORTAL_ENV`                    |          | `production` · `preview` · `development` · `test` (default from `NODE_ENV`).                                                                                                                                                                                                                                                                                        |
-| `PORTAL_VERSION`                |          | Reported by `/healthz` and `/v1/system/info` (default `dev`).                                                                                                                                                                                                                                                                                                       |
-| `LOG_LEVEL`                     |          | `debug` · `info` (default) · `warn` · `error` · `silent`.                                                                                                                                                                                                                                                                                                           |
-| `TRUST_PROXY_HEADERS`           |          | `true` behind a proxy that sets `X-Forwarded-For` (needed for per-IP limits).                                                                                                                                                                                                                                                                                       |
-| `MAX_BODY_BYTES`                |          | Default body cap (1 MiB).                                                                                                                                                                                                                                                                                                                                           |
-| `OPERATION_DEADLINE_MS`         |          | Time budget of one admin operation (50 000; keep below the function time limit, 60 s on Vercel Hobby).                                                                                                                                                                                                                                                              |
-| `STAFF_SESSION_IDLE_MINUTES`    |          | Default 30.                                                                                                                                                                                                                                                                                                                                                         |
-| `STAFF_SESSION_MAX_HOURS`       |          | Default 12.                                                                                                                                                                                                                                                                                                                                                         |
-| `MERCHANT_SESSION_IDLE_MINUTES` |          | Default 1440.                                                                                                                                                                                                                                                                                                                                                       |
-| `MERCHANT_SESSION_MAX_HOURS`    |          | Default 336.                                                                                                                                                                                                                                                                                                                                                        |
+**Required**
+
+| Variable               | Description                                                                                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`          | Control-plane MongoDB connection string (never a client database).                                                                                                                          |
+| `PUBLIC_URL`           | The Portal's address, e.g. `https://portal.example.com`: token issuer/audience, e-mail links, CSRF origin. Development default `http://localhost:4000`; never derived from request headers. |
+| `SIGNING_KEYS`         | `kid:seed[,kid:seed…]` (seed = base64url of a 32-byte Ed25519 key). The first signs; all are published in the JWKS.                                                                         |
+| `WEBSITE_SIGNING_KEYS` | Same form; signs website keys (`pk_`/`sk_`) only, kids and keys distinct from `SIGNING_KEYS`. Outside production derived from `SESSION_SECRET`.                                             |
+| `ENCRYPTION_KEYS`      | `kid:base64(32 bytes)[,kid:base64…]`, first = active.                                                                                                                                       |
+| `SESSION_SECRET`       | ≥ 32 bytes (base64 or text). HMAC key for session ids, recovery codes, throttle keys.                                                                                                       |
+| `KEY_PEPPER`           | ≥ 32 bytes, different from `SESSION_SECRET`. HMAC pepper for website secret keys at rest.                                                                                                   |
+
+**Optional**
+
+| Variable                                                                                                               | Description                                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SMTP_URL`, `MAIL_FROM`                                                                                                | Mailer `smtp(s)://user:pass@host:port` (percent-encode the credentials) and its sender (`Name <address>` or `address`). Without them production sends no mail; development logs it.                                                      |
+| `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`                                                 | Asset storage (pack assets, compiled website bundles — our software, never client data) in an S3-compatible bucket. Without storage the delivery routes answer 503.                                                                      |
+| `STORAGE_ENDPOINT`, `STORAGE_REGION`, `STORAGE_PREFIX`, `STORAGE_PATH_STYLE`                                           | Endpoint origin (https in production; default AWS), region (default `auto`), key prefix (`a/b/`), `true` for path-style URLs.                                                                                                            |
+| `STORAGE_DIR`                                                                                                          | Development only: a local directory (e.g. `.data/assets`) or `:memory:` instead of a bucket.                                                                                                                                             |
+| `PREVIEW_URL`                                                                                                          | Dedicated cookie-less preview origin (https, another host than `PUBLIC_URL`, ideally another registrable domain) pointed at the same deployment. Preview links use it, the Portal host refuses `/p/*`, and that host serves only `/p/*`. |
+| `APP_VERSION`                                                                                                          | Reported by `/healthz` and `/v1/system/info` (default `dev`).                                                                                                                                                                            |
+| `IDEMPOTENCY_SECRET`                                                                                                   | ≥ 32 bytes. HMAC key of idempotency fingerprints (default: HKDF of `SESSION_SECRET`).                                                                                                                                                    |
+| `MONGODB_DB`, `MONGODB_MAX_POOL_SIZE`                                                                                  | Database name (default: path of `MONGODB_URI`, else `ss_portal`); pool per instance (default 5).                                                                                                                                         |
+| `DELIVERY_BUDGET_KB`                                                                                                   | Website bundle budget in KB gzip (default 60; PLAN F.18 has the reasoning).                                                                                                                                                              |
+| `TRUST_PROXY_HEADERS`                                                                                                  | `true` behind a proxy that sets `X-Forwarded-For` (needed for per-IP limits).                                                                                                                                                            |
+| `MAX_BODY_BYTES`, `OPERATION_DEADLINE_MS`                                                                              | Default body cap (1 MiB); time budget of one admin operation (50 000; keep below the host's function time limit).                                                                                                                        |
+| `STAFF_SESSION_IDLE_MINUTES`, `STAFF_SESSION_MAX_HOURS`, `MERCHANT_SESSION_IDLE_MINUTES`, `MERCHANT_SESSION_MAX_HOURS` | Session lifetimes (defaults 30 min, 12 h, 1440 min, 336 h).                                                                                                                                                                              |
+| `OUTBOUND_DEV_ALLOW_HOSTS`                                                                                             | Development only: comma-separated hosts/IPs outbound calls may reach although private or plain http; ignored in production.                                                                                                              |
 
 `instrumentation.js` loads the configuration when a server instance starts: an invalid configuration is logged as
 `Failed to prepare server … Invalid Portal configuration: …` and every request (including `/healthz`) fails, so a
@@ -203,26 +205,26 @@ bad deployment is visible immediately. `next build` never needs the environment 
 
 ### Key management
 
-- **Signing key rotation**: generate a new key, deploy `PORTAL_SIGNING_KEYS=[new, old]` (both published; the new one
-  signs), wait for the overlap (product JWKS caches refresh within 5 min; launch and assertion lifetimes are minutes),
+- **Signing key rotation**: generate a new key, deploy `SIGNING_KEYS=new-kid:seed,old-kid:seed` (both published; the new
+  one signs), wait for the overlap (product JWKS caches refresh within 5 min; launch and assertion lifetimes are minutes),
   then remove the old key. Website keys are not affected: they have their own signer.
-- **Website-key signer** (`WEBSITE_KEY_SIGNING_KEYS`, `ctx.keys.websiteKeySigner`): signs `pk_`/`sk_` keys only and
+- **Website-key signer** (`WEBSITE_SIGNING_KEYS`, `ctx.keys.websiteKeySigner`): signs `pk_`/`sk_` keys only and
   verifies them through `ctx.keys.websiteKeyResolver` (a Portal-signed token is never a website key). Its public keys
   are published in the same JWKS with distinct kids. Rotation: prepend a new key (new keys are signed with it, old
   ones keep verifying), **re-issue the website keys signed by the old key, then remove it** (F.5). Compromise: remove
   the key at once and re-issue.
-- **KEK rotation**: prepend a new KEK (`SECRETS_KEK=k2:…,k1:…`). New secrets are sealed with `k2`; old ones still open
+- **KEK rotation**: prepend a new KEK (`ENCRYPTION_KEYS=k2:…,k1:…`). New secrets are sealed with `k2`; old ones still open
   with `k1`; `envelope.rewrap(sealed)` moves a record to `k2` without touching its ciphertext. Remove `k1` only after
   every record is rewrapped.
 - Generate values: `node scripts/dev-env.js` (development only) or, for production, fresh keys from
-  `generateSigningKey` (`@ss/protocol`) for `PORTAL_SIGNING_KEYS` and `WEBSITE_KEY_SIGNING_KEYS` (distinct kids) and
+  `generateSigningKey` (`@ss/protocol`) for `SIGNING_KEYS` and `WEBSITE_SIGNING_KEYS` (distinct kids) and
   `openssl rand -base64 32` for the secrets.
 
 ### Mail
 
 `ctx.mailer` sends the Portal's own mail (templates `verify_email`, `account_exists`, `password_reset`, `invite`,
 `staff_welcome`, `issuer_request`: plain text + simple inline-styled HTML, no external assets, escaped variables, http(s) links only).
-With `PLATFORM_SMTP_URL` it is a pooled nodemailer transport (10 s connection/greeting/socket timeouts, TLS ≥ 1.2 with
+With `SMTP_URL` it is a pooled nodemailer transport (10 s connection/greeting/socket timeouts, TLS ≥ 1.2 with
 certificate checks; in production `smtp://` must upgrade with STARTTLS). Without it: development/test log the message
 (including the link — never in production); production and preview refuse (503, `available: false`). The identity
 module uses `ctx.mailer` unless given its own `mailer`.
@@ -289,10 +291,11 @@ by itself. A local `mongod` (`mongodb://127.0.0.1:27017/ss_portal`) works the sa
 
 ## Deployment
 
-One Vercel project (Hobby works), one database and database user on the shared Atlas M0 cluster (PLAN §13, F.19). The
-`MongoClient` is created once per instance and cached on `globalThis` (`getMongoClient`). Set the variables above (`TRUST_PROXY_HEADERS=true` behind the
-hosting edge). The deploy pipeline runs `db:indexes` and `db:migrate` before traffic moves (migration gate).
-There is nothing to schedule: `vercel.json` has no crons and no `CRON_SECRET` exists.
+Any Node 22 host that runs Next.js (`pnpm --filter @ss/platform build` then `start`, or a serverless platform), one
+database and database user on the shared Atlas M0 cluster (PLAN §13, F.19). The `MongoClient` is created once per
+instance and cached on `globalThis` (`getMongoClient`). Set the required variables above with `NODE_ENV=production`
+(`TRUST_PROXY_HEADERS=true` behind a proxy that sets `X-Forwarded-For`). Run `db:indexes` and `db:migrate` before
+traffic moves (migration gate). There is nothing to schedule: no crons and no `CRON_SECRET` exist.
 
 ## Checks
 
@@ -310,7 +313,7 @@ public testing entry `@ss/platform/testing` (`createPortal`, the module list and
 `closeMongoClients`); nothing else of `src/` is imported from outside this folder.
 
 Tests: the `@ss/config` Mongo global setup (`defineUnitConfig({ mongo: true })`) starts **one** single-node `MongoMemoryReplSet` for
-the whole run and exposes it as `SS_TEST_MONGO_URI`; for speed it acknowledges majority writes without waiting for a
+the whole run and exposes it as `TEST_MONGODB_URI`; for speed it acknowledges majority writes without waiting for a
 journal flush (test-only), and its **TTL monitor is off**: tests run on an injected clock (`createClock`, fixed T0), so
 TTL indexes (tokens, sessions) must never delete by wall-clock time — expiry is asserted through `now()`. `startMongo()` (`test/helpers.js`) gives each test file its own databases
 (`t_<random>_<n>`), recycles a database opened inside a test when the test ends (documents deleted, collections and

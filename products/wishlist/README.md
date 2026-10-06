@@ -90,7 +90,7 @@ pnpm dev                            # product on :3000
 ```
 
 The environment variables are those of app-kit (`.env.example`), plus `WISHLIST_TOKEN_SECRET`. When it is empty, the
-guest-token secret is derived from `SS_APP_SIGNING_KEY`.
+guest-token secret is derived from `SIGNING_KEY`.
 
 `pnpm check` runs format, lint, typecheck and tests with coverage. `pnpm validate` runs `ss app validate`.
 `tests/certify.test.js` runs `ss certify`. The Portal system test is `e2e/tests/wishlist-portal.test.js`.

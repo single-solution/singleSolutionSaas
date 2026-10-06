@@ -104,14 +104,13 @@ subscription → database connector → single-use code created through the API 
 one wins) → `order.completed@1` through the Event Hub → redeemed in the merchant DB → usage → hourly settlement
 (elements charged, metered hour booked).
 
-## Deploy to Vercel
+## Deploy
 
-1. Create a Vercel project with this directory as root (framework: Next.js). In the monorepo, `next.config.js` sets the
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
    workspace root automatically.
-2. Environment variables (Production): `SS_PORTAL_URL` (pinned Portal), `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one
-   line), `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional; recorded by the handshake), `SS_PRODUCT_DB_URI` (the
-   product's own small MongoDB — required in production), `SS_PRODUCT_DB_MAX_POOL_SIZE` (optional, default 5),
-   `SS_LOG_LEVEL` (optional).
+2. Environment variables (Production): `PORTAL_URL` (pinned Portal), `SIGNING_KEY` (`kid:seed`, Ed25519 seed in
+   base64url), `REGISTRATION_TOKEN_HASH`, `APP_ID` (optional; recorded by the handshake), `DATABASE_URI` (the
+   product's own small MongoDB — required in production), `DATABASE_MAX_POOL_SIZE` (optional, default 5).
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.

@@ -27,7 +27,7 @@ currency, createdAt }` — the **website settings** (F.16) are `null` when unset
   `['elements.read', 'events.write']`. `GET /v1/merchants/:merchantId/websites/:websiteId/keys/scopes` →
   `{ defaults, items: [{ scope, group, label, description, product? }] }` (the console key form: one checkbox group
   per product).
-- Website keys are signed with a **dedicated website-key signing key** (`WEBSITE_KEY_SIGNING_KEYS`), not the launch key.
+- Website keys are signed with a **dedicated website-key signing key** (`WEBSITE_SIGNING_KEYS`), not the launch key.
 - **Staff API tokens** (F.18): `POST /v1/admin/api-tokens` (`platform.apps.manage`, `{ minutes: 5..720, label? }`) →
   201 `{ token: 'sst_…', sessionId, expiresAt }` — a staff session flagged `api` with the member's roles and MFA
   satisfied, accepted only as `Authorization: Bearer sst_…` (no cookie, so no CSRF check; a cookie carrying it and a
@@ -203,8 +203,8 @@ Client-owned resources (§1a): database, storage, ai, messaging, payments, analy
 
 Delivery plane (PLAN §4): pack asset storage, the per-website bundle compiler, serving, rollback, preview proxy.
 Artefacts (pack assets, compiled bundles) are **our software** and live in platform asset storage
-(`PLATFORM_ASSET_STORAGE`, an S3-compatible bucket signed with `@ss/net` `signV4`; `memory` / `file:<dir>` outside
-production). Collections hold metadata only; fetched merchant pages are never stored.
+(`STORAGE_*`, an S3-compatible bucket signed with `@ss/net` `signV4`; `STORAGE_DIR` (a directory or `:memory:`)
+outside production). Collections hold metadata only; fetched merchant pages are never stored.
 
 - `requestCompile(websiteId, { reason? })` → `{ websiteId, request, jobId }` — called by **commerce** whenever a
   document version is bumped and when a subscription is cancelled; increments `delivery_aliases.requested` and
@@ -258,7 +258,7 @@ uploadPath }` (same descriptor = same version). Then `PUT /v1/product/ui-bundles
   `<portal>/w/` and module paths start with `packs/` or `ui/`.
 - `createPreview({ merchantId, websiteId, body: { path?, base?: 'current'|'empty', elements?: [{ appId, key, config?,
 strings?, placement? }] }, actor })` → `{ previewId, url, expiresAt, version, budget, elements, warnings }`;
-  `servePreview({ token, path, search, host })`. With `PREVIEW_ORIGIN` (F.16) preview URLs use that origin, `/p/*` on
+  `servePreview({ token, path, search, host })`. With `PREVIEW_URL` (F.16) preview URLs use that origin, `/p/*` on
   the Portal host is refused (`delivery_preview_refused`), and the preview host serves nothing but `/p/*` (404 from
   `portal.handle` for API and `/w/*` paths; `proxy.js` for console pages). There the page keeps `CSP: sandbox`
   but adds `allow-same-origin` and admits the merchant's own scripts (`script-src https: 'unsafe-inline'`).

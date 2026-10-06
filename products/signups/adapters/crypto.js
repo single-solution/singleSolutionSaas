@@ -3,7 +3,7 @@
  *
  * - **Sealing.** Per-website secrets (the HMAC pepper and the issuer's Ed25519 private keys) are stored in the
  *   merchant's own database, sealed with AES-256-GCM. The sealing key is derived per website with HKDF-SHA-256 from the
- *   product's own secret (`SIGNUPS_SEAL_SECRET`, ≥ 32 characters; without it, derived from `SS_APP_SIGNING_KEY`) with the
+ *   product's own secret (`SIGNUPS_SEAL_SECRET`, ≥ 32 characters; without it, derived from `SIGNING_KEY`) with the
  *   website id as `info`; the AAD binds website, purpose and key id, so a sealed record copied to another website, slot
  *   or key does not open. The merchant's database alone never reveals a key; this deployment alone holds no key.
  *   `SIGNUPS_SEAL_SECRET_PREVIOUS` opens records sealed before a rotation of the secret (they are re-sealed on use).
@@ -69,9 +69,9 @@ export const safeEqual = (a, b) => {
  */
 export const sealSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
-	const jwk = typeof signingKey === 'string' ? JSON.parse(signingKey) : signingKey;
+	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('SIGNUPS_SEAL_SECRET (≥ 32 chars) or SS_APP_SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('SIGNUPS_SEAL_SECRET (≥ 32 chars) or SIGNING_KEY is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-signups', 'seal-secret/v1', 32));
 };
 

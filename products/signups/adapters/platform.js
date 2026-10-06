@@ -1,6 +1,6 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
- * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: PORTAL_URL, APP_ID,
+ * SIGNING_KEY, REGISTRATION_TOKEN_HASH, DATABASE_URI, OUTBOUND_DEV_ALLOW_HOSTS; plus
  * SIGNUPS_SEAL_SECRET and SIGNUPS_SEAL_SECRET_PREVIOUS) and the project files (manifest with feature
  * schemas inlined, string catalogs). This is the only place that reads the environment.
  */
@@ -93,9 +93,9 @@ export const PROBLEM_CODES = Object.freeze({
 export const createPlatform = async ({ env = process.env, root = process.cwd(), overrides = {} } = {}) => {
 	const config = configFromEnv(env);
 	const missing = [
-		['SS_PORTAL_URL', config.portalUrl],
-		['SS_APP_SIGNING_KEY', config.signingKey],
-		['SS_REGISTRATION_TOKEN_HASH', config.registrationTokenHash],
+		['PORTAL_URL', config.portalUrl],
+		['SIGNING_KEY', config.signingKey],
+		['REGISTRATION_TOKEN_HASH', config.registrationTokenHash],
 	].filter(([, value]) => !value);
 	if (missing.length > 0)
 		throw new Error(`Missing environment variables: ${missing.map(([name]) => name).join(', ')} (run \`ss dev env\`)`);

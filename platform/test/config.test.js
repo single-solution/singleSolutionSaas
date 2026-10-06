@@ -52,17 +52,16 @@ describe('loadConfig', () => {
 	});
 
 	it('reports every missing variable at once, without values', () => {
-		const problems = problemsOf({});
-		for (const name of [
-			'PORTAL_URL',
-			'MONGODB_URI',
-			'PORTAL_SIGNING_KEYS',
-			'SECRETS_KEK',
-			'SESSION_SECRET',
-			'WEBSITE_KEY_PEPPER',
-		]) {
+		const problems = problemsOf({ NODE_ENV: 'development' });
+		for (const name of ['MONGODB_URI', 'SIGNING_KEYS', 'ENCRYPTION_KEYS', 'SESSION_SECRET', 'KEY_PEPPER']) {
 			expect(problems).toContain(`${name} is required`);
 		}
+		expect(problemsOf({})).toEqual(
+			expect.arrayContaining([
+				expect.stringMatching(/^PUBLIC_URL is required/),
+				'WEBSITE_SIGNING_KEYS is required in production',
+			]),
+		);
 		try {
 			loadConfig({});
 		} catch (error) {
@@ -72,16 +71,14 @@ describe('loadConfig', () => {
 
 	it('rejects invalid values', async () => {
 		const env = await testEnv({
-			PORTAL_ENV: 'staging',
-			PORTAL_URL: 'https://portal.test/?x=1',
+			PUBLIC_URL: 'https://portal.test/?x=1',
 			MONGODB_URI: 'postgres://x',
 			MONGODB_DB: 'bad name!',
 			MONGODB_MAX_POOL_SIZE: '0',
-			PORTAL_SIGNING_KEYS: '[{"kty":"OKP"}]',
-			SECRETS_KEK: 'k1:short',
+			SIGNING_KEYS: 'k1:short',
+			ENCRYPTION_KEYS: 'k1:short',
 			SESSION_SECRET: 'short',
-			WEBSITE_KEY_PEPPER: 'short',
-			PROBLEM_BASE_URI: 'not a uri',
+			KEY_PEPPER: 'short',
 			LOG_LEVEL: 'loud',
 			TRUST_PROXY_HEADERS: 'yes',
 			MAX_BODY_BYTES: '12',
@@ -91,16 +88,14 @@ describe('loadConfig', () => {
 		const problems = problemsOf(env);
 		expect(problems).toEqual(
 			expect.arrayContaining([
-				expect.stringContaining('PORTAL_ENV'),
-				expect.stringContaining('PORTAL_URL'),
+				expect.stringContaining('PUBLIC_URL'),
 				expect.stringContaining('MONGODB_URI'),
 				expect.stringContaining('MONGODB_DB'),
 				expect.stringContaining('MONGODB_MAX_POOL_SIZE'),
-				expect.stringContaining('PORTAL_SIGNING_KEYS'),
-				expect.stringContaining('SECRETS_KEK'),
+				expect.stringContaining('SIGNING_KEYS'),
+				expect.stringContaining('ENCRYPTION_KEYS'),
 				expect.stringContaining('SESSION_SECRET'),
-				expect.stringContaining('WEBSITE_KEY_PEPPER'),
-				expect.stringContaining('PROBLEM_BASE_URI'),
+				expect.stringContaining('KEY_PEPPER'),
 				expect.stringContaining('LOG_LEVEL'),
 				expect.stringContaining('TRUST_PROXY_HEADERS'),
 				expect.stringContaining('MAX_BODY_BYTES'),
@@ -111,40 +106,55 @@ describe('loadConfig', () => {
 	});
 
 	it('requires https outside local development', async () => {
-		expect(problemsOf(await testEnv({ PORTAL_URL: 'http://portal.test' }))).toEqual([expect.stringContaining('https')]);
-		expect(problemsOf(await testEnv({ PORTAL_URL: 'http://localhost:4000', NODE_ENV: 'production' }))).toEqual([
+		expect(problemsOf(await testEnv({ PUBLIC_URL: 'http://portal.test' }))).toEqual([expect.stringContaining('https')]);
+		expect(problemsOf(await testEnv({ PUBLIC_URL: 'http://localhost:4000', NODE_ENV: 'production' }))).toEqual([
 			expect.stringContaining('https'),
 		]);
-		const local = loadConfig(await testEnv({ PORTAL_URL: 'http://localhost:4000/', NODE_ENV: 'development' }));
+		const local = loadConfig(await testEnv({ PUBLIC_URL: 'http://localhost:4000/', NODE_ENV: 'development' }));
 		expect(local.env).toBe('development');
 		expect(local.portalUrl).toBe('http://localhost:4000');
 		expect(local.cookieSecure).toBe(false);
 		const prod = loadConfig(await testEnv({ NODE_ENV: 'production' }));
 		expect(prod.isProduction).toBe(true);
-		expect(problemsOf(await testEnv({ PORTAL_URL: 'not a url' }))).toEqual([expect.stringContaining('PORTAL_URL')]);
+		expect(problemsOf(await testEnv({ PUBLIC_URL: 'not a url' }))).toEqual([expect.stringContaining('PUBLIC_URL')]);
+	});
+
+	it('derives the environment from NODE_ENV only and requires PUBLIC_URL in production', async () => {
+		const dev = loadConfig(await testEnv({ NODE_ENV: 'development', PUBLIC_URL: undefined }));
+		expect([dev.env, dev.portalUrl, dev.logLevel]).toEqual(['development', 'http://localhost:4000', 'debug']);
+		const prod = loadConfig(await testEnv({ NODE_ENV: 'production' }));
+		expect([prod.env, prod.isProduction, prod.logLevel, prod.problemBaseUri]).toEqual([
+			'production',
+			true,
+			'info',
+			'https://portal.test/problems/',
+		]);
+		expect(loadConfig(await testEnv({ NODE_ENV: undefined })).env).toBe('production');
+		expect(loadConfig(await testEnv({ NODE_ENV: 'staging' })).env).toBe('production');
+		expect(problemsOf(await testEnv({ NODE_ENV: 'production', PUBLIC_URL: undefined }))).toEqual([
+			expect.stringMatching(/^PUBLIC_URL is required in production/),
+		]);
 	});
 
 	it('derives the database name and honours optional settings', async () => {
 		const config = loadConfig(
 			await testEnv({
 				MONGODB_URI: 'mongodb+srv://user:pass@cluster.example.net/?retryWrites=true',
-				PROBLEM_BASE_URI: 'https://errors.example.dev/portal',
 				LOG_LEVEL: 'debug',
 				TRUST_PROXY_HEADERS: 'true',
 				MAX_BODY_BYTES: '2048',
 				OPERATION_DEADLINE_MS: '20000',
-				PORTAL_VERSION: '1.2.3',
-				PORTAL_ENV: 'preview',
+				APP_VERSION: '1a2b3c4d',
 				MERCHANT_SESSION_IDLE_MINUTES: '60',
 				MERCHANT_SESSION_MAX_HOURS: '2',
 			}),
 		);
 		expect(config.mongo.dbName).toBe('ss_portal');
-		expect(config.problemBaseUri).toBe('https://errors.example.dev/portal/');
+		expect(config.problemBaseUri).toBe('https://portal.test/problems/');
 		expect(config.trustProxyHeaders).toBe(true);
 		expect(config.maxBodyBytes).toBe(2048);
-		expect(config.version).toBe('1.2.3');
-		expect(config.env).toBe('preview');
+		expect(config.version).toBe('1a2b3c4d');
+		expect(config.env).toBe('test');
 		expect(config.sessions.merchant).toEqual({ idleMs: 3_600_000, absoluteMs: 7_200_000 });
 		expect(loadConfig(await testEnv({ MONGODB_DB: 'explicit' })).mongo.dbName).toBe('explicit');
 	});
@@ -153,17 +163,17 @@ describe('loadConfig', () => {
 		expect(problemsOf(await testEnv({ STAFF_SESSION_IDLE_MINUTES: '1000', STAFF_SESSION_MAX_HOURS: '1' }))).toEqual([
 			expect.stringContaining('STAFF session idle timeout'),
 		]);
-		expect(problemsOf(await testEnv({ WEBSITE_KEY_PEPPER: b64(32, 3) }))).toEqual([expect.stringContaining('must differ')]);
+		expect(problemsOf(await testEnv({ KEY_PEPPER: b64(32, 3) }))).toEqual([expect.stringContaining('must differ')]);
 	});
 
 	it('accepts raw-text secrets of sufficient length', async () => {
-		const config = loadConfig(await testEnv({ SESSION_SECRET: 'x!'.repeat(20), WEBSITE_KEY_PEPPER: 'y#'.repeat(20) }));
+		const config = loadConfig(await testEnv({ SESSION_SECRET: 'x!'.repeat(20), KEY_PEPPER: 'y#'.repeat(20) }));
 		expect(config.sessionSecret.toString()).toBe('x!'.repeat(20));
 	});
 
 	it('documents every variable', () => {
 		const names = ENV_VARS.map(([name]) => name);
-		expect(names).toContain('PORTAL_SIGNING_KEYS');
+		expect(names).toContain('SIGNING_KEYS');
 		expect(new Set(names).size).toBe(names.length);
 	});
 });
@@ -173,27 +183,25 @@ describe('website-key signer, idempotency secret, outbound allowlist and mail', 
 		const config = loadConfig(await testEnv());
 		expect(config.websiteKeySigningKeys.map((k) => k.kid)).toEqual(['website-2026-10']);
 		expect(config.websiteKeySigningDerived).toBe(false);
-		expect(problemsOf(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: undefined, PORTAL_ENV: 'production' }))).toEqual([
-			'WEBSITE_KEY_SIGNING_KEYS is required in production',
+		expect(problemsOf(await testEnv({ WEBSITE_SIGNING_KEYS: undefined, NODE_ENV: 'production' }))).toEqual([
+			'WEBSITE_SIGNING_KEYS is required in production',
 		]);
-		const dev = loadConfig(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: undefined }));
+		const dev = loadConfig(await testEnv({ WEBSITE_SIGNING_KEYS: undefined }));
 		expect(dev.websiteKeySigningDerived).toBe(true);
 		expect(dev.websiteKeySigningKeys[0]?.kid).toMatch(/^website-dev-/);
 		// deterministic per SESSION_SECRET, distinct from it otherwise
-		const again = loadConfig(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: undefined }));
+		const again = loadConfig(await testEnv({ WEBSITE_SIGNING_KEYS: undefined }));
 		expect(again.websiteKeySigningKeys[0]?.x).toBe(dev.websiteKeySigningKeys[0]?.x);
 		expect(deriveSigningKey(Buffer.alloc(32, 1), 'a').x).not.toBe(deriveSigningKey(Buffer.alloc(32, 2), 'a').x);
-		expect(problemsOf(await testEnv({ WEBSITE_KEY_SIGNING_KEYS: '[1]' }))).toEqual([
-			expect.stringContaining('WEBSITE_KEY_SIGNING_KEYS must be a JSON array'),
+		expect(problemsOf(await testEnv({ WEBSITE_SIGNING_KEYS: '[1]' }))).toEqual([
+			expect.stringContaining('WEBSITE_SIGNING_KEYS must be `kid:seed`'),
 		]);
 		// never the Portal's keys (by kid or by key)
 		const env = await testEnv();
-		const [portal] = JSON.parse(/** @type {string} */ (env.PORTAL_SIGNING_KEYS));
-		expect(problemsOf({ ...env, WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([{ ...portal, kid: 'other' }]) })).toEqual([
-			expect.stringContaining('distinct'),
-		]);
+		const portal = /** @type {import('@ss/protocol').PrivateJwk} */ (parseSigningKeys(String(env.SIGNING_KEYS))?.[0]);
+		expect(problemsOf({ ...env, WEBSITE_SIGNING_KEYS: `other:${portal.d}` })).toEqual([expect.stringContaining('distinct')]);
 		const { privateJwk: sameKid } = await generateSigningKey({ kid: portal.kid });
-		expect(problemsOf({ ...env, WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([sameKid]) })).toEqual([
+		expect(problemsOf({ ...env, WEBSITE_SIGNING_KEYS: `${sameKid.kid}:${sameKid.d}` })).toEqual([
 			expect.stringContaining('distinct'),
 		]);
 	});
@@ -214,7 +222,7 @@ describe('website-key signer, idempotency secret, outbound allowlist and mail', 
 		const dev = loadConfig(await testEnv({ OUTBOUND_DEV_ALLOW_HOSTS: ' Localhost, 127.0.0.1 ,[::1],, ' }));
 		expect(dev.outbound.allowHosts).toEqual(['localhost', '127.0.0.1', '[::1]']);
 		expect(
-			loadConfig(await testEnv({ OUTBOUND_DEV_ALLOW_HOSTS: 'localhost', PORTAL_ENV: 'production' })).outbound.allowHosts,
+			loadConfig(await testEnv({ OUTBOUND_DEV_ALLOW_HOSTS: 'localhost', NODE_ENV: 'production' })).outbound.allowHosts,
 		).toEqual([]);
 		expect(problemsOf(await testEnv({ OUTBOUND_DEV_ALLOW_HOSTS: 'http://x/y' }))).toEqual([
 			expect.stringContaining('OUTBOUND_DEV_ALLOW_HOSTS'),
@@ -224,8 +232,8 @@ describe('website-key signer, idempotency secret, outbound allowlist and mail', 
 	it('parses the platform SMTP URL and sender', async () => {
 		const config = loadConfig(
 			await testEnv({
-				PLATFORM_SMTP_URL: 'smtps://mailer%40x:p%40ss@smtp.example.com',
-				PLATFORM_MAIL_FROM: 'Portal <no-reply@example.com>',
+				SMTP_URL: 'smtps://mailer%40x:p%40ss@smtp.example.com',
+				MAIL_FROM: 'Portal <no-reply@example.com>',
 			}),
 		);
 		expect(config.mail).toEqual({
@@ -243,14 +251,12 @@ describe('website-key signer, idempotency secret, outbound allowlist and mail', 
 		expect(parseSmtpUrl('smtp://[::1]:2525')).toMatchObject({ host: '::1', port: 2525 });
 		for (const bad of ['nope', 'http://smtp.example.com', 'smtp://h/path', 'smtp://h?x=1', 'smtp://u:%zz@h'])
 			expect(parseSmtpUrl(bad)).toBeNull();
-		expect(problemsOf(await testEnv({ PLATFORM_SMTP_URL: 'smtp://smtp.example.com' }))).toEqual([
-			'PLATFORM_MAIL_FROM is required with PLATFORM_SMTP_URL',
+		expect(problemsOf(await testEnv({ SMTP_URL: 'smtp://smtp.example.com' }))).toEqual(['MAIL_FROM is required with SMTP_URL']);
+		expect(problemsOf(await testEnv({ SMTP_URL: 'ftp://x', MAIL_FROM: 'bad\r\nBcc: x@y.z' }))).toEqual([
+			expect.stringContaining('SMTP_URL'),
+			expect.stringContaining('MAIL_FROM'),
 		]);
-		expect(problemsOf(await testEnv({ PLATFORM_SMTP_URL: 'ftp://x', PLATFORM_MAIL_FROM: 'bad\r\nBcc: x@y.z' }))).toEqual([
-			expect.stringContaining('PLATFORM_SMTP_URL'),
-			expect.stringContaining('PLATFORM_MAIL_FROM'),
-		]);
-		expect(loadConfig(await testEnv({ PLATFORM_MAIL_FROM: 'ops@example.com' })).mail.from).toBe('ops@example.com');
+		expect(loadConfig(await testEnv({ MAIL_FROM: 'ops@example.com' })).mail.from).toBe('ops@example.com');
 	});
 });
 
@@ -271,14 +277,15 @@ describe('parseKeks', () => {
 });
 
 describe('parseSigningKeys', () => {
-	it('rejects non-arrays, public keys, invalid JWKs and duplicate kids', async () => {
+	it('parses kid:seed lists; rejects JSON, malformed seeds and duplicates', async () => {
 		const env = await testEnv();
-		const [first] = JSON.parse(/** @type {string} */ (env.PORTAL_SIGNING_KEYS));
+		const first = /** @type {import('@ss/protocol').PrivateJwk} */ (parseSigningKeys(String(env.SIGNING_KEYS))?.[0]);
+		expect(first.kid).toBe('portal-2026-10');
 		expect(parseSigningKeys('nope')).toBeNull();
-		expect(parseSigningKeys('[]')).toBeNull();
-		expect(parseSigningKeys(JSON.stringify([{ ...first, d: undefined }]))).toBeNull();
-		expect(parseSigningKeys(JSON.stringify([{ ...first, crv: 'P-256' }]))).toBeNull();
-		expect(parseSigningKeys(JSON.stringify([first, first]))).toBeNull();
-		expect(parseSigningKeys(JSON.stringify([first]))?.[0]?.d).toBe(first.d);
+		expect(parseSigningKeys('')).toBeNull();
+		expect(parseSigningKeys(JSON.stringify([first]))).toBeNull();
+		expect(parseSigningKeys(`${first.kid}:short`)).toBeNull();
+		expect(parseSigningKeys(`${first.kid}:${first.d},${first.kid}:${first.d}`)).toBeNull();
+		expect(parseSigningKeys(`${first.kid}:${first.d}`)?.[0]).toEqual(first);
 	});
 });

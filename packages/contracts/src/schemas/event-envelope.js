@@ -438,15 +438,15 @@ export const CONTROL_EVENT_DATA = deepFreeze({
 });
 
 /** Catalogued event types that are platform-scoped (envelope `scope: 'platform'`, no `websiteId`). */
-export const PLATFORM_SCOPED_EVENTS = Object.freeze(/** @type {const} */ (['manifest.accepted@1']));
+export const CORE_SCOPED_EVENTS = Object.freeze(/** @type {const} */ (['manifest.accepted@1']));
 
 /**
- * The envelope scope an event type requires: `platform` for {@link PLATFORM_SCOPED_EVENTS}, else `website`.
+ * The envelope scope an event type requires: `platform` for {@link CORE_SCOPED_EVENTS}, else `website`.
  * @param {string} type `name@version`
  * @returns {typeof EVENT_SCOPES[number]}
  */
 export const eventScopeOf = (type) =>
-	/** @type {readonly string[]} */ (PLATFORM_SCOPED_EVENTS).includes(type) ? 'platform' : 'website';
+	/** @type {readonly string[]} */ (CORE_SCOPED_EVENTS).includes(type) ? 'platform' : 'website';
 
 /** Loader events (website → Portal), emitted by the web SDK only. */
 export const LOADER_EVENT_DATA = deepFreeze({

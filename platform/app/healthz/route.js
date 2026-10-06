@@ -3,4 +3,4 @@ import { healthz } from '../../src/portal.js';
 
 export const dynamic = 'force-dynamic';
 
-export const GET = () => healthz({ version: process.env.PORTAL_VERSION ?? 'dev' });
+export const GET = () => healthz({ version: process.env.APP_VERSION ?? 'dev' });

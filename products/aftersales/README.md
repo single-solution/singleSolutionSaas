@@ -49,8 +49,8 @@ Every integration is optional: without Orders, register purchases with `POST /v1
 
 ## Environment
 
-The app-kit variables (`SS_PORTAL_URL`, `SS_APP_ID`, `SS_APP_SIGNING_KEY`, `SS_REGISTRATION_TOKEN_HASH`,
-`SS_PRODUCT_DB_URI`, `SS_LOG_LEVEL`, `SS_OUTBOUND_ALLOW_HOSTS`) and optionally `AFTERSALES_TOKEN_SECRET` (≥ 32
+The app-kit variables (`PORTAL_URL`, `APP_ID`, `SIGNING_KEY`, `REGISTRATION_TOKEN_HASH`,
+`DATABASE_URI`, `OUTBOUND_DEV_ALLOW_HOSTS`) and optionally `AFTERSALES_TOKEN_SECRET` (≥ 32
 characters; guest claim tokens — derived from the signing key when unset). See `.env.example`.
 
 ## Commands

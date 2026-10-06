@@ -88,10 +88,10 @@ import { createFakePortal, createTestIdentityIssuer, entitlementPayload } from '
 ```js
 createProduct({
   manifest,                 // validated SSPS manifest (service product, features inline) — throws AppKitError invalid_manifest
-  portalUrl,                // pinned Portal URL (SS_PORTAL_URL)
+  portalUrl,                // pinned Portal URL (PORTAL_URL)
   appId,                    // assigned at registration; null → the appId recorded by the registration handshake is used
-  signingKey,               // product private Ed25519 JWK (object or JSON string, SS_APP_SIGNING_KEY)
-  registrationTokenHash,    // sha256 hex of the one-time registration token (SS_REGISTRATION_TOKEN_HASH); absent → register always 401
+  signingKey,               // product private key: a JWK object, or `kid:seed` (SIGNING_KEY)
+  registrationTokenHash,    // sha256 hex of the one-time registration token (REGISTRATION_TOKEN_HASH); absent → register always 401
   stores,                   // Partial<Stores>; default in-memory (dev only); production: createMongoStores({ db })
   fetch, now, randomBytes, logger,
   strings,                  // { [lang]: { key: text } } or async (lang) => catalog | null — served at GET /v1/strings
@@ -288,7 +288,7 @@ as expired when read and cleaned up when touched (or by a MongoDB TTL index: `en
 it relevant, or from a dashboard button.
 
 **Connection budget.** `configFromEnv().productDbOptions` are the control-database `MongoClient` options: pool
-`SS_PRODUCT_DB_MAX_POOL_SIZE` (default `CONTROL_DB_POOL_SIZE` = 5), `minPoolSize` 0, idle connections closed after
+`DATABASE_MAX_POOL_SIZE` (default `CONTROL_DB_POOL_SIZE` = 5), `minPoolSize` 0, idle connections closed after
 60 s. Create the client once per instance (in the composition root that is cached on `globalThis`), never per
 request. Merchant database pools are `CLIENT_DB_POOL_SIZE` (3) per instance, cached on `globalThis` and closed when
 idle (checked when the next website is served; no timer).
@@ -366,9 +366,9 @@ Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces ar
 ### Environment
 
 `configFromEnv(env = process.env)` → `{ portalUrl, appId, signingKey, registrationTokenHash, productDbUri, productDbOptions, logLevel, outboundAllowHosts }`. It reads
-`SS_PORTAL_URL`, `SS_APP_ID`, `SS_APP_SIGNING_KEY` (private JWK JSON), `SS_REGISTRATION_TOKEN_HASH`, `SS_PRODUCT_DB_URI`
-(the product's own control DB), `SS_PRODUCT_DB_MAX_POOL_SIZE` (its pool, default 5), `SS_LOG_LEVEL` and `SS_OUTBOUND_ALLOW_HOSTS` (comma-separated development allowlist for
-`outbound.allowHosts`; ignored in production).
+`PORTAL_URL`, `APP_ID`, `SIGNING_KEY` (`kid:seed`, seed = base64url of the 32-byte Ed25519 key), `REGISTRATION_TOKEN_HASH`, `DATABASE_URI`
+(the product's own control DB), `DATABASE_MAX_POOL_SIZE` (its pool, default 5) and `OUTBOUND_DEV_ALLOW_HOSTS` (comma-separated development allowlist for
+`outbound.allowHosts`; ignored in production). `logLevel` is `info` in production and `debug` elsewhere. No value is JSON.
 
 The merchant database is vetted with `@ss/net` `isSafeMongoUri` under the `outbound` policy before connecting (refused →
 `resource_invalid`), and the `MongoClient` dials every host through `guardedLookup` (the `lookup` option cannot be

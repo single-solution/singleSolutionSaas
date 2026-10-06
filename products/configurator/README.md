@@ -63,8 +63,8 @@ app/        Next.js wiring and the merchant dashboard (overview, editor, live pr
 
 ## Environment
 
-Only the app-kit variables (see `.env.example`): `SS_PORTAL_URL`, `SS_APP_ID`, `SS_APP_SIGNING_KEY`,
-`SS_REGISTRATION_TOKEN_HASH`, `SS_PRODUCT_DB_URI`, `SS_LOG_LEVEL`, `SS_OUTBOUND_ALLOW_HOSTS`. No crons.
+Only the app-kit variables (see `.env.example`): `PORTAL_URL`, `APP_ID`, `SIGNING_KEY`,
+`REGISTRATION_TOKEN_HASH`, `DATABASE_URI`, `OUTBOUND_DEV_ALLOW_HOSTS`. No crons.
 
 ## Commands
 

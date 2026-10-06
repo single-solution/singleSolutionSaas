@@ -4,7 +4,7 @@
  * @module
  */
 import { isDuplicateKey } from '../../infra/util.js';
-import { EXPERIMENTS, LAYERS, PLATFORM_LAYERS, PLATFORM_VERSIONS, SCHEDULES, TEMPLATES, VERSIONS } from './schema.js';
+import { EXPERIMENTS, LAYERS, GLOBAL_LAYERS, GLOBAL_VERSIONS, SCHEDULES, TEMPLATES, VERSIONS } from './schema.js';
 
 /** @typedef {import('../../infra/db.js').MutableOps} MutableOps */
 /** @typedef {import('../../infra/db.js').ReadOps} ReadOps */
@@ -25,9 +25,9 @@ export const createConfigRepo = (ctx) => {
 	/** @type {TenantRepository} */
 	const versions = ctx.collection(VERSIONS);
 	/** @type {MutableOps} */
-	const platformLayers = ctx.collection(PLATFORM_LAYERS);
+	const platformLayers = ctx.collection(GLOBAL_LAYERS);
 	/** @type {ReadOps} */
-	const platformVersions = ctx.collection(PLATFORM_VERSIONS);
+	const platformVersions = ctx.collection(GLOBAL_VERSIONS);
 	/** @type {TenantRepository} */
 	const templates = ctx.collection(TEMPLATES);
 	/** @type {TenantRepository} */

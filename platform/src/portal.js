@@ -261,7 +261,7 @@ export const createPortal = ({
 		trustProxyHeaders: config.trustProxyHeaders,
 		afterResponse: background.afterResponse,
 	});
-	// a dedicated preview origin (`PREVIEW_ORIGIN`, F.16) serves the preview proxy and nothing else: no API, no
+	// a dedicated preview origin (`PREVIEW_URL`, F.16) serves the preview proxy and nothing else: no API, no
 	// console, no delivery artefacts — the delivery module in turn refuses `/p/*` on the Portal host
 	const previewHost = config.delivery?.previewOrigin ? new URL(config.delivery.previewOrigin).host : null;
 	/** @param {Request} request */

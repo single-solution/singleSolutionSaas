@@ -702,10 +702,10 @@ describe('runtime', () => {
 		const health = await import('../app/healthz/route.js');
 		expect((await health.GET()).status).toBe(200);
 		resetPortal();
-		const prev = process.env.PORTAL_URL;
-		delete process.env.PORTAL_URL;
+		const prev = process.env.SIGNING_KEYS;
+		delete process.env.SIGNING_KEYS;
 		expect((await ready.GET()).status).toBe(503); // config invalid
-		if (prev !== undefined) process.env.PORTAL_URL = prev;
+		if (prev !== undefined) process.env.SIGNING_KEYS = prev;
 	});
 });
 

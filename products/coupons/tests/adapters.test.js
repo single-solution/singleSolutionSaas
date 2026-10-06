@@ -68,19 +68,17 @@ describe('adapters/repositories', () => {
 describe('adapters/platform', () => {
 	it('loads string catalogs and refuses to start without the required environment', async () => {
 		expect((await loadStrings(ROOT)).en?.['apply_box.title']).toBe('Coupon code');
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 	});
 
-	it('uses the product control database when SS_PRODUCT_DB_URI is set', async () => {
+	it('uses the product control database when DATABASE_URI is set', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k' });
 		const app = await createPlatform({
 			env: {
-				SS_PORTAL_URL: 'https://portal.test',
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_x_0123456789abcdef'),
-				SS_PRODUCT_DB_URI: mongoUri('coupons_control_test'),
+				PORTAL_URL: 'https://portal.test',
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_x_0123456789abcdef'),
+				DATABASE_URI: mongoUri('coupons_control_test'),
 			},
 			root: ROOT,
 		});

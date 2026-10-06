@@ -112,7 +112,7 @@ describe('adapters', () => {
 		const [, , signature] = token.split('.');
 		expect(forged.verify(`fd1.${Buffer.from('not json').toString('base64url')}.${signature}`)).toBeNull();
 		expect(feedSecret({ secret: 's'.repeat(32) }).toString()).toBe('s'.repeat(32));
-		expect(feedSecret({ signingKey: JSON.stringify({ d: Buffer.alloc(32, 3).toString('base64url') }) })).toHaveLength(32);
+		expect(feedSecret({ signingKey: `k:${Buffer.alloc(32, 3).toString('base64url')}` })).toHaveLength(32);
 		expect(() => feedSecret({ signingKey: {} })).toThrow(/CATALOG_FEED_SECRET/);
 		expect(stableId('a')).toHaveLength(26);
 		expect(stableId('a')).toBe(stableId('a'));
@@ -126,7 +126,7 @@ describe('adapters', () => {
 		expect(secret).toHaveLength(32);
 		expect(secret.equals(feedSecret({ secret: 's'.repeat(32) }))).toBe(false); // its own derived key
 		expect(exportSecret({ signingKey: { d: Buffer.alloc(32, 3).toString('base64url') } })).toHaveLength(32);
-		expect(() => exportSecret({ signingKey: JSON.stringify({}) })).toThrow(/CATALOG_FEED_SECRET/);
+		expect(() => exportSecret({ signingKey: 'k:' })).toThrow(/CATALOG_FEED_SECRET/);
 		const links = createExportLinks({ secret, now: () => now, ttlMs: 60 * 60_000 });
 		const { token, expiresAt } = links.issue({ websiteId: 'web_1', kind: 'items', params: { q: 'shirt' } });
 		expect(Date.parse(expiresAt) - now).toBe(EXPORT_LINK_MAX_MS); // clamped to five minutes
@@ -175,16 +175,14 @@ describe('adapters', () => {
 	});
 
 	it('builds the platform from the environment (control database optional) and refuses missing variables', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 		const { privateJwk } = await generateSigningKey({ kid: 'catalog-platform-1' });
 		const app = await createPlatform({
 			env: {
-				SS_PORTAL_URL: 'https://portal.test',
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_catalog_platform_test_000000'),
-				SS_PRODUCT_DB_URI: mongoUri(`control_${Date.now()}`),
+				PORTAL_URL: 'https://portal.test',
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_catalog_platform_test_000000'),
+				DATABASE_URI: mongoUri(`control_${Date.now()}`),
 				CATALOG_FEED_SECRET: 'f'.repeat(40),
 			},
 			root: ROOT,

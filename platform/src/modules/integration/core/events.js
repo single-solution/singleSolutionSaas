@@ -126,7 +126,7 @@ const firstErrors = (problems) => problems.slice(0, 5).map(({ path, message }) =
 /** @param {string} type `type@v` */
 export const isControlEvent = (type) => Object.hasOwn(CONTROL_EVENT_DATA, type);
 
-const PLATFORM_NAMESPACES = new Set(
+const RESERVED_NAMESPACES = new Set(
 	[...Object.keys(CONTROL_EVENT_DATA), ...Object.keys(LOADER_EVENT_DATA)].map((type) => type.split('.')[0]),
 );
 const CONTROL_NAMESPACES = new Set(Object.keys(CONTROL_EVENT_DATA).map((type) => type.split('.')[0]));
@@ -203,7 +203,7 @@ export const checkProductEvent = (input, manifest) => {
 	const namespace = `${eventNamespace(manifest.product.slug)}.`;
 	const checked = validateEvent(raw);
 	const type = isObject(raw) ? /** @type {Record<string, unknown>} */ (raw).type : undefined;
-	if (typeof type === 'string' && PLATFORM_NAMESPACES.has(type.split('.')[0])) return { ok: false, reason: 'control_event' };
+	if (typeof type === 'string' && RESERVED_NAMESPACES.has(type.split('.')[0])) return { ok: false, reason: 'control_event' };
 	const ownUnknown =
 		!checked.ok &&
 		checked.problems.length === 1 &&

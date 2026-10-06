@@ -4,6 +4,7 @@
  * All signatures in the App Protocol are EdDSA over Ed25519 (RFC 8037). Keys are identified by `kid`. Private keys are
  * wrapped in a `Signer` whose only capability is `sign(bytes)`, so a KMS/HSM-backed signer can be dropped in.
  */
+import { createPrivateKey } from 'node:crypto';
 import { calculateJwkThumbprint, exportJWK, generateKeyPair, importJWK } from 'jose';
 import { createProtocolError } from './errors.js';
 
@@ -85,6 +86,68 @@ export const generateSigningKey = async ({ kid } = {}) => {
 	const finalKid = kid ?? (await thumbprint(/** @type {{ kty: string, crv: string, x: string }} */ (exportedPublic)));
 	const publicJwk = toPublicJwk({ ...exportedPublic, kid: finalKid });
 	return { privateJwk: { ...publicJwk, d: /** @type {string} */ (exportedPrivate.d) }, publicJwk };
+};
+
+/** PKCS#8 DER prefix of an Ed25519 private key (RFC 8410); the 32-byte seed follows. */
+const ED25519_PKCS8_PREFIX = Buffer.from('302e020100300506032b657004220420', 'hex');
+const SEED_TEXT = /^[A-Za-z0-9+/_-]{43}=?$/;
+
+/**
+ * Private Ed25519 JWK from its 32-byte seed (the RFC 8032 private key; the JWK `d`). This is the form keys take in
+ * environment variables, so no JSON is ever needed there.
+ * @param {string} kid
+ * @param {Uint8Array | string} seed 32 bytes, or their base64url (base64 accepted)
+ * @returns {PrivateJwk}
+ */
+export const signingKeyFromSeed = (kid, seed) => {
+	const bytes =
+		typeof seed === 'string'
+			? SEED_TEXT.test(seed.trim())
+				? Buffer.from(seed.trim().replace(/\+/g, '-').replace(/\//g, '_').replace(/=$/, ''), 'base64url')
+				: null
+			: Buffer.from(seed);
+	if (!bytes || bytes.length !== 32) throw createProtocolError('invalid_argument', 'Ed25519 seed must be 32 bytes (base64url)');
+	const jwk = createPrivateKey({ key: Buffer.concat([ED25519_PKCS8_PREFIX, bytes]), format: 'der', type: 'pkcs8' }).export({
+		format: 'jwk',
+	});
+	return { ...toPublicJwk({ ...jwk, kid }), d: /** @type {string} */ (jwk.d) };
+};
+
+/**
+ * Parse a key list `kid:seed[,kid:seed…]` (seed = base64url of 32 bytes). Order is kept (the first signs); kids must
+ * be unique. Throws `invalid_argument` on any malformed entry.
+ * @param {string} text
+ * @returns {PrivateJwk[]}
+ */
+export const parseSigningKeys = (text) => {
+	const entries = String(text)
+		.split(',')
+		.map((entry) => entry.trim())
+		.filter(Boolean);
+	if (entries.length === 0) throw createProtocolError('invalid_argument', 'no signing key given');
+	/** @type {PrivateJwk[]} */
+	const keys = [];
+	for (const entry of entries) {
+		const colon = entry.lastIndexOf(':');
+		if (colon <= 0) throw createProtocolError('invalid_argument', 'signing key must be kid:seed');
+		const key = signingKeyFromSeed(entry.slice(0, colon), entry.slice(colon + 1));
+		if (keys.some((k) => k.kid === key.kid || k.x === key.x))
+			throw createProtocolError('invalid_argument', 'signing keys must have unique kids and keys');
+		keys.push(key);
+	}
+	return keys;
+};
+
+/**
+ * The environment form of a private key: `kid:seed` (inverse of {@link signingKeyFromSeed}).
+ * @param {{ kid?: unknown, d?: unknown }} privateJwk
+ * @returns {string}
+ */
+export const formatSigningKey = (privateJwk) => {
+	const { kid } = toPublicJwk(privateJwk);
+	if (typeof privateJwk.d !== 'string' || !SEED_TEXT.test(privateJwk.d))
+		throw createProtocolError('invalid_argument', 'JWK d is invalid');
+	return `${kid}:${privateJwk.d}`;
 };
 
 /**

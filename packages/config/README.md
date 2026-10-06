@@ -10,7 +10,7 @@ works on its own and can move to a repository of its own unchanged.
 | `@ss/config/tsconfig.base.json` | `tsc --checkJs --strict --noUncheckedIndexedAccess` over JSDoc-typed JavaScript, no emit                                                                                                     |
 | `@ss/config/prettier.json`      | tabs, width 130, single quotes                                                                                                                                                               |
 | `@ss/config/vitest`             | `defineUnitConfig({ dir, include?, coverageInclude?, coverageExclude?, jsx?, mongo? })`: thresholds 90 % lines, 90 % functions, 85 % branches                                                |
-| `@ss/config/mongo-setup`        | Vitest global setup: one MongoMemoryReplSet for the run, exposed as `SS_TEST_MONGO_URI` (TTL monitor off)                                                                                    |
+| `@ss/config/mongo-setup`        | Vitest global setup: one MongoMemoryReplSet for the run, exposed as `TEST_MONGODB_URI` (TTL monitor off)                                                                                     |
 
 ## Use
 
@@ -41,7 +41,7 @@ export default defineUnitConfig({ dir: import.meta.dirname, coverageInclude: ['s
 `jsx` lists the unit's folders whose `.js` files contain JSX; `@ss/ui` sources are always transformed (also when the
 package comes from `node_modules`, where Vitest inlines it). `mongo: true` adds the Mongo global setup: one
 single-node replica set per run, reference-counted across Vitest projects (the root `pnpm test:all` shares one between
-every unit) and skipped when `SS_TEST_MONGO_URI` is already set. Test helpers give each test file its own databases
+every unit) and skipped when `TEST_MONGODB_URI` is already set. Test helpers give each test file its own databases
 on it. Its TTL monitor is off because tests run on an injected clock: documents must never expire by wall time.
 
 The tools themselves are peer dependencies (`eslint`, `prettier`, `typescript`, `vitest`, `@vitest/coverage-v8`, and

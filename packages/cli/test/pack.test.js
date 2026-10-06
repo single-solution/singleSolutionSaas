@@ -185,7 +185,7 @@ describe('ss pack publish', () => {
 		expect(published.out).toContain('Published app_1 version 3');
 		const viaEnv = await ss(['pack', 'publish', dir, '--activate'], {
 			fetch: fakePortal().fetch,
-			env: { SS_PORTAL_URL: 'https://portal.test', SS_ADMIN_TOKEN: 'sst_z', SS_PACK_SIGNING_KEY: JSON.stringify(privateJwk) },
+			env: { PORTAL_URL: 'https://portal.test', ADMIN_TOKEN: 'sst_z', PACK_SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}` },
 		});
 		expect(viaEnv.out).toContain('active');
 		expect((await ss(['pack', 'publish', dir])).code).toBe(2);

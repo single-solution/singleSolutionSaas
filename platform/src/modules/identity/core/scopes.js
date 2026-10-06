@@ -26,7 +26,7 @@ export const DEFAULT_SCOPES = Object.freeze(['elements.read', 'events.write']);
  */
 
 /** @type {ReadonlyArray<ScopeEntry>} */
-export const PLATFORM_SCOPES = Object.freeze([
+export const CORE_SCOPES = Object.freeze([
 	Object.freeze({
 		scope: 'elements.read',
 		group: 'platform',
@@ -47,9 +47,9 @@ export const PLATFORM_SCOPES = Object.freeze([
  * @returns {ScopeEntry[]}
  */
 export const scopeCatalogue = (products) => {
-	const seen = new Set(PLATFORM_SCOPES.map((entry) => entry.scope.split('.')[0]));
+	const seen = new Set(CORE_SCOPES.map((entry) => entry.scope.split('.')[0]));
 	/** @type {ScopeEntry[]} */
-	const out = [...PLATFORM_SCOPES];
+	const out = [...CORE_SCOPES];
 	for (const product of [...products].sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))) {
 		if (typeof product.slug !== 'string' || seen.has(product.slug)) continue;
 		seen.add(product.slug);

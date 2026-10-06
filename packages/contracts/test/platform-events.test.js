@@ -14,7 +14,7 @@ import {
 	STANDARD_EVENT_DATA,
 	validateEvent,
 } from '../src/index.js';
-import { EVENT_SCOPES, PLATFORM_SCOPED_EVENTS, eventScopeOf } from '../src/index.js';
+import { EVENT_SCOPES, CORE_SCOPED_EVENTS, eventScopeOf } from '../src/index.js';
 import { SUBSCRIPTION, WEBSITE, event, manifest } from '../src/testing.js';
 import { expectProblem, expectRule } from './helpers.js';
 
@@ -98,7 +98,7 @@ describe('event scopes', () => {
 
 	it('declares the scopes and which events are platform-scoped', () => {
 		expect(EVENT_SCOPES).toEqual(['website', 'platform']);
-		expect(PLATFORM_SCOPED_EVENTS).toEqual(['manifest.accepted@1']);
+		expect(CORE_SCOPED_EVENTS).toEqual(['manifest.accepted@1']);
 		expect(eventScopeOf('manifest.accepted@1')).toBe('platform');
 		expect(eventScopeOf('order.completed@1')).toBe('website');
 	});

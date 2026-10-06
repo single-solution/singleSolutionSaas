@@ -31,14 +31,14 @@ import { MongoClient } from 'mongodb';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import manifest from '../manifest.json' with { type: 'json' };
 
-const env = configFromEnv(); // SS_PORTAL_URL, SS_APP_ID, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL
+const env = configFromEnv(); // PORTAL_URL, APP_ID, SIGNING_KEY, REGISTRATION_TOKEN_HASH, DATABASE_URI
 const controlDb = new MongoClient(env.productDbUri, { maxPoolSize: 5 }).db(); // the product's OWN small DB
 
 export const product = createProduct({
 	manifest,
 	portalUrl: env.portalUrl,
 	appId: env.appId, // may be null: the id recorded at registration is used
-	signingKey: env.signingKey, // private Ed25519 JWK (JSON)
+	signingKey: env.signingKey, // `kid:seed` (Ed25519 seed, base64url)
 	registrationTokenHash: env.registrationTokenHash,
 	stores: createMongoStores({ db: controlDb }), // omit in development → in-memory stores
 	logger: createLogger({ level: env.logLevel }),
@@ -123,7 +123,7 @@ request's website — a send that failed is retried by the next request of this 
 Products have no crons and no periodic work: anything with an expiry is treated as expired when read and cleaned up
 when touched (or by a MongoDB TTL index), and work that must be started without a customer request runs on the event
 that makes it relevant or from a dashboard button. The control-database client takes `configFromEnv().productDbOptions`
-(pool `SS_PRODUCT_DB_MAX_POOL_SIZE`, default 5); merchant database pools hold 3 connections per instance and are closed
+(pool `DATABASE_MAX_POOL_SIZE`, default 5); merchant database pools hold 3 connections per instance and are closed
 when idle (checked when the next website is served).
 
 Route handlers receive `ctx = { website, websiteId, query, searchParams, body, params, idempotencyKey, request, session,
@@ -161,7 +161,7 @@ A request without `aud` is rejected (generic 401, reason `audience_missing`).
 
 | Part                                   | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `registration.handle({headers, body})` | `@ss/protocol` `createRegistrationHandler`: the signer comes from `SS_APP_SIGNING_KEY`, token burns and nonces live in the stores, and the Portal JWKS is fetched only from the pinned URL. The appId from the handshake is recorded, so other instances pick it up.                                                                                                                                                                                                                                                                                                                                                                                               |
+| `registration.handle({headers, body})` | `@ss/protocol` `createRegistrationHandler`: the signer comes from `SIGNING_KEY`, token burns and nonces live in the stores, and the Portal JWKS is fetched only from the pinned URL. The appId from the handshake is recorded, so other instances pick it up.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `events.handle({headers, rawBody})`    | Verifies the raw bytes (`verifyEvent`, ±300 s, replay store), validates the envelope, deduplicates on the event `id` and dispatches to `events.on(type, fn)` handlers (`name@v`, `name` or `*`). A failing handler answers 500 and the id is forgotten, so the retry runs. Built in: `entitlement.changed` → refresh, `key.revoked` → revoke, `resource.changed` → drop cached credentials.                                                                                                                                                                                                                                                                        |
 | `launch.verify / exchange / session`   | `verifyLaunch` (single use via the shared replay store; optional Portal-side burn). Kinds map to roles `merchant, demo, platform_admin, impersonate, partner, developer`. `exchange` creates an opaque session (`ses_…`); impersonation sessions end at `impExp`.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `keys.verify(auth, opts)`              | Offline `verifyWebsiteKey` plus the revocation list (refreshed by a verification when older than ≤ 5 min, pushed by events, shared through the store), `originAllowed` for `pk_`, and required scopes (`coupons.*` globs). It **fails closed** (`unavailable`) when revocations could not be synced for longer than the offline grace; concurrent cold requests await the single in-flight sync.                                                                                                                                                                                                                                                                   |

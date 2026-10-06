@@ -39,7 +39,7 @@ describe('tokens', () => {
 
 	it('derives the secret from the signing key, or takes a configured one', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k1' });
-		const derived = linkSecret({ signingKey: JSON.stringify(privateJwk) });
+		const derived = linkSecret({ signingKey: `${privateJwk.kid}:${privateJwk.d}` });
 		expect(derived).toHaveLength(32);
 		expect(linkSecret({ secret: 'short', signingKey: privateJwk }).equals(derived)).toBe(true);
 		expect(linkSecret({ secret: 'c'.repeat(40) }).toString()).toBe('c'.repeat(40));
@@ -52,20 +52,18 @@ describe('tokens', () => {
 
 describe('platform', () => {
 	it('refuses to start without the required environment', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 	});
 
 	it('uses the product control database when configured and reads retention from the manifest', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k2' });
 		const app = await createPlatform({
 			env: {
-				SS_PORTAL_URL: 'https://portal.test',
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_reviews_adapter_0123456789'),
-				SS_PRODUCT_DB_URI: mongoUri(`reviews_ctrl_${nodeRandomBytes(4).toString('hex')}`),
-				SS_OUTBOUND_ALLOW_HOSTS: 'localhost',
+				PORTAL_URL: 'https://portal.test',
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_reviews_adapter_0123456789'),
+				DATABASE_URI: mongoUri(`reviews_ctrl_${nodeRandomBytes(4).toString('hex')}`),
+				OUTBOUND_DEV_ALLOW_HOSTS: 'localhost',
 				REVIEWS_LINK_SECRET: 'l'.repeat(40),
 			},
 			root: ROOT,

@@ -77,7 +77,7 @@ read, gzip? }) → { elements: [{ key, modules, gzipBytes, kb }], shared: { modu
 - **Event scopes**: the envelope has an optional `scope`, either `'website'` (the default) or `'platform'`.
   Website-scoped events require `websiteId`. Platform-scoped events concern a product or the platform as a whole and
   must not carry one. Each catalogued type has a fixed scope (`eventScopeOf(type)`), and `validateEvent` refuses a
-  mismatch at `/scope` (rule `eventScope`). `PLATFORM_SCOPED_EVENTS` is currently `['manifest.accepted@1']`, so it is
+  mismatch at `/scope` (rule `eventScope`). `CORE_SCOPED_EVENTS` is currently `['manifest.accepted@1']`, so it is
   sent with `scope: 'platform'` and no `websiteId`. A sentinel website id is refused. JSDoc types:
   `EventEnvelope` (website), `PlatformEventEnvelope` and `AnyEventEnvelope`.
 - **Catalogue additions (v1, additive):** order lifecycle events accept an optional `customer` identity reference

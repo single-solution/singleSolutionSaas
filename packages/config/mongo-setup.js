@@ -1,7 +1,7 @@
 /**
  * Vitest global setup (`defineUnitConfig({ mongo: true })`): ONE single-node MongoMemoryReplSet for the whole run,
- * shared by every test file. Its URI is exposed as `SS_TEST_MONGO_URI` (inherited by the test workers); test helpers
- * give each test file its own databases on it. When `SS_TEST_MONGO_URI` is already set (an outer run, or a real
+ * shared by every test file. Its URI is exposed as `TEST_MONGODB_URI` (inherited by the test workers); test helpers
+ * give each test file its own databases on it. When `TEST_MONGODB_URI` is already set (an outer run, or a real
  * server), nothing is started. Needs the optional peers `mongodb` and `mongodb-memory-server`.
  * @module
  */
@@ -50,10 +50,10 @@ const shared = /** @type {any} */ (globalThis);
 
 export const setup = async () => {
 	// an outer run (or a real server) already provides the database
-	if (process.env.SS_TEST_MONGO_URI && shared[KEY] === undefined) return;
+	if (process.env.TEST_MONGODB_URI && shared[KEY] === undefined) return;
 	const state = (shared[KEY] ??= { users: 0, ready: start() });
 	state.users += 1;
-	process.env.SS_TEST_MONGO_URI = (await state.ready).uri;
+	process.env.TEST_MONGODB_URI = (await state.ready).uri;
 };
 
 export const teardown = async () => {
@@ -62,6 +62,6 @@ export const teardown = async () => {
 	state.users -= 1;
 	if (state.users > 0) return;
 	shared[KEY] = undefined;
-	delete process.env.SS_TEST_MONGO_URI;
+	delete process.env.TEST_MONGODB_URI;
 	await (await state.ready).replSet.stop();
 };

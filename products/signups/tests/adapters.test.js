@@ -48,7 +48,7 @@ describe('sealing', () => {
 	it('derives the sealing secret from SIGNUPS_SEAL_SECRET or the product signing key', async () => {
 		expect(sealSecret({ secret: 's'.repeat(32), signingKey: null }).toString()).toBe('s'.repeat(32));
 		const { privateJwk } = await generateSigningKey({ kid: 'x' });
-		const derived = sealSecret({ secret: 'short', signingKey: JSON.stringify(privateJwk) });
+		const derived = sealSecret({ secret: 'short', signingKey: `${privateJwk.kid}:${privateJwk.d}` });
 		expect(derived).toHaveLength(32);
 		expect(sealSecret({ signingKey: /** @type {any} */ (privateJwk) }).equals(derived)).toBe(true);
 		expect(() => sealSecret({ signingKey: '{}' })).toThrow(/SIGNUPS_SEAL_SECRET/);
@@ -186,16 +186,14 @@ describe('messaging', () => {
 
 describe('platform', () => {
 	it('refuses to start without the required environment and wires a control database when configured', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 		const { privateJwk } = await generateSigningKey({ kid: 'p' });
 		const app = await createPlatform({
 			env: {
-				SS_PORTAL_URL: 'https://portal.test',
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: 'a'.repeat(64),
-				SS_PRODUCT_DB_URI: mongoUri('signups_control_test'),
+				PORTAL_URL: 'https://portal.test',
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: 'a'.repeat(64),
+				DATABASE_URI: mongoUri('signups_control_test'),
 				SIGNUPS_SEAL_SECRET_PREVIOUS: 'p'.repeat(40),
 			},
 			root: ROOT,

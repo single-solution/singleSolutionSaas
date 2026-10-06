@@ -69,18 +69,18 @@ beforeAll(async () => {
 	const config = loadConfig({
 		NODE_ENV: 'test',
 		MONGODB_URI: mongoUri('unused'),
-		PORTAL_URL,
-		PORTAL_SIGNING_KEYS: JSON.stringify([portalKey]),
-		WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([websiteKeySigner]),
-		SECRETS_KEK: `kek-1:${randomBytes(32).toString('base64')}`,
+		PUBLIC_URL: PORTAL_URL,
+		SIGNING_KEYS: `${portalKey.kid}:${portalKey.d}`,
+		WEBSITE_SIGNING_KEYS: `${websiteKeySigner.kid}:${websiteKeySigner.d}`,
+		ENCRYPTION_KEYS: `kek-1:${randomBytes(32).toString('base64')}`,
 		SESSION_SECRET: randomBytes(32).toString('base64'),
-		WEBSITE_KEY_PEPPER: randomBytes(32).toString('base64'),
-		PLATFORM_ASSET_STORAGE: 'memory',
+		KEY_PEPPER: randomBytes(32).toString('base64'),
+		STORAGE_DIR: ':memory:',
 		// honest budgets (F.18): the default plan fits, every element at once does not
 		DELIVERY_BUDGET_KB: '45',
 		STAFF_SESSION_IDLE_MINUTES: '720',
 	});
-	const mongo = await new MongoClient(/** @type {string} */ (process.env.SS_TEST_MONGO_URI)).connect();
+	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const portalDb = mongo.db(`e2e_pdp_portal_${randomBytes(4).toString('hex')}`);
 	const mailer = createMailer();
 	/** @type {Array<() => Promise<unknown>>} work the Portal runs right after each response (F.19: no cron) */

@@ -13,6 +13,7 @@ import {
 	createRegistrationHandler,
 	createSigner,
 	isProtocolError,
+	parseSigningKeys,
 	signManifest,
 	toPublicJwk,
 	verifyRequest,
@@ -50,9 +51,10 @@ const MANIFEST_RESIGN_MS = 3_600_000;
 /**
  * @typedef {object} ProductOptions
  * @property {Manifest} manifest validated SSPS manifest (service product, features inline)
- * @property {string} portalUrl pinned Portal URL (`SS_PORTAL_URL`)
+ * @property {string} portalUrl pinned Portal URL (`PORTAL_URL`)
  * @property {string | null} [appId] assigned at registration; when null the id recorded by the registration is used
- * @property {Record<string, unknown> | string} signingKey product private Ed25519 JWK (object or JSON)
+ * @property {Record<string, unknown> | string} signingKey product private Ed25519 key: a private JWK, or `kid:seed`
+ *   (`SIGNING_KEY`; seed = base64url of 32 bytes)
  * @property {string | null} [registrationTokenHash] SHA-256 hex of the one-time registration token
  * @property {Partial<Stores>} [stores] defaults: in-memory (development only)
  * @property {typeof globalThis.fetch} [fetch]
@@ -100,13 +102,13 @@ const parseKey = (value) => {
 	if (isObject(value)) return value;
 	if (typeof value === 'string') {
 		try {
-			const parsed = JSON.parse(value);
-			if (isObject(parsed)) return parsed;
+			const [key] = parseSigningKeys(value);
+			if (key) return key;
 		} catch {
 			// fall through
 		}
 	}
-	throw kitError('invalid_config', 'signingKey must be a private Ed25519 JWK (object or JSON string)');
+	throw kitError('invalid_config', 'signingKey must be a private Ed25519 JWK or `kid:seed` (seed = base64url of 32 bytes)');
 };
 
 /**

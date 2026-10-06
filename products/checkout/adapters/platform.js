@@ -1,7 +1,7 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
- * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
- * SS_CHECKOUT_SEAL_KEY) and the project files (manifest with feature schemas inlined, string catalogs).
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: PORTAL_URL, APP_ID,
+ * SIGNING_KEY, REGISTRATION_TOKEN_HASH, DATABASE_URI, OUTBOUND_DEV_ALLOW_HOSTS; plus
+ * CHECKOUT_SEAL_KEY) and the project files (manifest with feature schemas inlined, string catalogs).
  * This is the only place that reads the environment.
  */
 import { createHash, randomBytes as nodeRandomBytes } from 'node:crypto';
@@ -107,9 +107,9 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const { portalUrl, signingKey, registrationTokenHash } = config;
 	if (!portalUrl || !signingKey || !registrationTokenHash) {
 		const missing = [
-			['SS_PORTAL_URL', portalUrl],
-			['SS_APP_SIGNING_KEY', signingKey],
-			['SS_REGISTRATION_TOKEN_HASH', registrationTokenHash],
+			['PORTAL_URL', portalUrl],
+			['SIGNING_KEY', signingKey],
+			['REGISTRATION_TOKEN_HASH', registrationTokenHash],
 		]
 			.filter(([, value]) => !value)
 			.map(([name]) => name);
@@ -131,8 +131,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
 	/** @type {(n: number) => Uint8Array} */
 	const bytes = typeof overrides.randomBytes === 'function' ? overrides.randomBytes : (n) => new Uint8Array(nodeRandomBytes(n));
-	const sealSecret =
-		env.SS_CHECKOUT_SEAL_KEY && env.SS_CHECKOUT_SEAL_KEY.length >= 32 ? env.SS_CHECKOUT_SEAL_KEY : String(signingKey);
+	const sealSecret = env.CHECKOUT_SEAL_KEY && env.CHECKOUT_SEAL_KEY.length >= 32 ? env.CHECKOUT_SEAL_KEY : String(signingKey);
 	const product = createProduct(
 		/** @type {any} */ ({
 			manifest,

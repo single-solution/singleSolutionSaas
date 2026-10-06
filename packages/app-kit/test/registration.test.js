@@ -53,7 +53,7 @@ describe('registration', () => {
 		const sibling = createProduct({
 			manifest: manifest(),
 			portalUrl: PORTAL_URL,
-			signingKey: JSON.stringify(privateJwk),
+			signingKey: `${privateJwk.kid}:${privateJwk.d}`,
 			registrationTokenHash: hashRegistrationToken(TOKEN),
 			stores,
 			fetch: portal.fetch,

@@ -42,7 +42,7 @@ describe('identity service wiring', () => {
 			template: 'verify_email',
 		});
 
-		const prod = await boot({ identity: { mailer: undefined }, env: { PORTAL_ENV: 'production' } });
+		const prod = await boot({ identity: { mailer: undefined }, env: { NODE_ENV: 'production' } });
 		expect(
 			(
 				await prod.call('POST', '/v1/auth/merchant/signup', {

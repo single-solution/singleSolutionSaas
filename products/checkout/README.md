@@ -68,7 +68,7 @@ pnpm check                # format, lint, typecheck, tests with coverage
 pnpm validate             # ss app validate
 ```
 
-Environment: the app-kit variables (`.env.example`) and `SS_CHECKOUT_SEAL_KEY`. Nothing runs on a timer (no crons, no
+Environment: the app-kit variables (`.env.example`) and `CHECKOUT_SEAL_KEY`. Nothing runs on a timer (no crons, no
 background loops): an expired hold is cancelled when the order is read, listed or confirmed (and released when a
 placement needs the stock); a cart is reported abandoned when the merchant's server reads it; the dashboard's "Process
 expired now" button (`POST /v1/dashboard/expiry:run`) does both for the website at once. Guest carts disappear through a

@@ -47,7 +47,7 @@ describe('tokens', () => {
 	it('derives the secret from the signing key unless one is configured', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k' });
 		expect(tokenSecret({ secret: 's'.repeat(32), signingKey: null }).toString()).toBe('s'.repeat(32));
-		const derived = tokenSecret({ secret: 'short', signingKey: JSON.stringify(privateJwk) });
+		const derived = tokenSecret({ secret: 'short', signingKey: `${privateJwk.kid}:${privateJwk.d}` });
 		expect(derived).toHaveLength(32);
 		expect(tokenSecret({ signingKey: privateJwk }).equals(derived)).toBe(true);
 		expect(() => tokenSecret({ signingKey: { kty: 'OKP' } })).toThrow(/WISHLIST_TOKEN_SECRET/);

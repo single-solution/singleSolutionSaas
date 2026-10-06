@@ -22,7 +22,7 @@ export const MAX_SCOPES = 32;
 export const MAX_GRANTS = 100;
 export const MERCHANT_ROLE_NAMES = Object.freeze(['owner', 'admin', 'billing', 'developer', 'editor']);
 export const ASSIGNABLE_MERCHANT_ROLES = Object.freeze(['admin', 'billing', 'developer', 'editor']);
-export const PLATFORM_ROLE_NAMES = Object.freeze(['superadmin', 'admin', 'support', 'finance']);
+export const STAFF_ROLE_NAMES = Object.freeze(['superadmin', 'admin', 'support', 'finance']);
 export const MAX_GRACE_SECONDS = 7 * 24 * 3600;
 export const DEFAULT_GRACE_SECONDS = 24 * 3600;
 
@@ -397,12 +397,12 @@ export const inputs = Object.freeze({
 		(b) => object(b, { toMerchantId: idOf('mer'), reason: text(500) })
 	),
 	staffCreate: /** @type {(b: unknown) => Parsed<{ email: string, roles: string[], name?: string }>} */ (
-		(b) => object(b, { email, roles: roles(PLATFORM_ROLE_NAMES), name: { optional: text(120) } })
+		(b) => object(b, { email, roles: roles(STAFF_ROLE_NAMES), name: { optional: text(120) } })
 	),
 	staffUpdate: /** @type {(b: unknown) => Parsed<{ roles?: string[], status?: 'active' | 'disabled' }>} */ (
 		(b) =>
 			object(b, {
-				roles: { optional: roles(PLATFORM_ROLE_NAMES) },
+				roles: { optional: roles(STAFF_ROLE_NAMES) },
 				status: { optional: oneOf(/** @type {const} */ (['active', 'disabled'])) },
 			})
 	),

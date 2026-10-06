@@ -101,9 +101,7 @@ describe('platform', () => {
 	});
 
 	it('refuses to start without the Portal variables', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 	});
 
 	it('serves over plain http and https-less hosts through serve.js', async () => {
@@ -112,9 +110,9 @@ describe('platform', () => {
 			port: 0,
 			root: ROOT,
 			env: {
-				SS_PORTAL_URL: 'http://127.0.0.1:9',
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_grades_serve_0123456789abcdef'),
+				PORTAL_URL: 'http://127.0.0.1:9',
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_grades_serve_0123456789abcdef'),
 			},
 			overrides: { logger: noopLogger },
 		});

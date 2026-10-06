@@ -12,7 +12,7 @@ describe('adapters/tokens', () => {
 		const configured = walletSecret({ secret: 'x'.repeat(MIN_SECRET_LENGTH) });
 		expect(configured.toString()).toBe('x'.repeat(MIN_SECRET_LENGTH));
 		const { privateJwk } = await generateSigningKey({ kid: 'k' });
-		const derived = walletSecret({ secret: 'short', signingKey: JSON.stringify(privateJwk) });
+		const derived = walletSecret({ secret: 'short', signingKey: `${privateJwk.kid}:${privateJwk.d}` });
 		expect(derived).toHaveLength(32);
 		expect(walletSecret({ signingKey: /** @type {any} */ (privateJwk) }).equals(derived)).toBe(true);
 		expect(() => walletSecret({ signingKey: null })).toThrow(/LOYALTY_WALLET_SECRET/);
@@ -40,21 +40,19 @@ describe('adapters/tokens', () => {
 
 describe('adapters/platform', () => {
 	it('refuses to start without the required environment', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 	});
 
-	it('uses the product control database when SS_PRODUCT_DB_URI is set', async () => {
+	it('uses the product control database when DATABASE_URI is set', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k' });
 		const app = await createPlatform({
 			root: ROOT,
 			env: {
-				SS_PORTAL_URL: 'https://portal.test',
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_0123456789abcdef0123'),
-				SS_PRODUCT_DB_URI: mongoUri(`loyalty_control_${Date.now()}`),
-				SS_OUTBOUND_ALLOW_HOSTS: '127.0.0.1',
+				PORTAL_URL: 'https://portal.test',
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_0123456789abcdef0123'),
+				DATABASE_URI: mongoUri(`loyalty_control_${Date.now()}`),
+				OUTBOUND_DEV_ALLOW_HOSTS: '127.0.0.1',
 			},
 		});
 		expect(app.strings.en?.['wallet.title']).toBe('Your rewards');

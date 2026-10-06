@@ -35,7 +35,7 @@ describe('createProduct', () => {
 		expect(() => createProduct({ ...base, manifest: manifest(), signingKey: /** @type {any} */ (publicJwk) })).toThrow(
 			/private member/,
 		);
-		const product = createProduct({ ...base, manifest: manifest(), signingKey: JSON.stringify(privateJwk) });
+		const product = createProduct({ ...base, manifest: manifest(), signingKey: `${privateJwk.kid}:${privateJwk.d}` });
 		// before registration (no appId) the manifest is served unsigned
 		expect(await product.manifestRoute()).toEqual({
 			status: 200,

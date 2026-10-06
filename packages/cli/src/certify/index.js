@@ -468,7 +468,7 @@ export const runCertification = async ({
 			skip(
 				'registration.handshake',
 				'handshake completes and the proof of possession verifies',
-				'no --token (or SS_REGISTRATION_TOKEN) and no ss dev state',
+				'no --token (or REGISTRATION_TOKEN) and no ss dev state',
 			);
 		}
 		if (!registered) {

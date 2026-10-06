@@ -20,7 +20,7 @@ Exit codes: `0` ok, `1` failed validation/certification or command error, `2` us
 
 ```sh
 ss pack build [dir] [--out <dir>] [--json]
-ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <private JWK | @file>] [--activate]
+ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <kid:seed | @file>] [--activate]
 ```
 
 - **build** bundles every module the manifest names (`headless` / `renderer`, `file.js#export`) with esbuild —
@@ -31,7 +31,7 @@ sha256, size, contentType }] }`). It prints each element's measured size and the
 - **publish** builds, signs the descriptor with the developer key (`@ss/protocol` `signBundle`), `POST /v1/admin/packs`
   `{ descriptor, signature, publicJwk }`, `PUT /v1/admin/packs/:appId/versions/:version/assets/<path>` per asset and,
   with `--activate`, activates the app. It authenticates with a **staff API token** (`sst_…`, minted by
-  `POST /v1/admin/api-tokens`). Environment fallbacks: `SS_PORTAL_URL`, `SS_ADMIN_TOKEN`, `SS_PACK_SIGNING_KEY`.
+  `POST /v1/admin/api-tokens`). Environment fallbacks: `PORTAL_URL`, `ADMIN_TOKEN`, `PACK_SIGNING_KEY`.
 - Programmatic: `@ss/cli/pack` — `buildPack(dir)`, `descriptorOf(pack)`, `measurePack(pack)`, `writePack(pack, out)`,
   `publishPack({ pack, portalUrl, token, signingKey, fetch, activate })`, `bundleModules`, `moduleEntries`,
   `elementModules`, `loadManifest` (also re-exported from `@ss/cli`).

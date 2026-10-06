@@ -1,17 +1,18 @@
 /**
  * Typed Portal configuration from environment variables, validated once at boot. Every problem is collected and
  * reported together (names only, never values), so a misconfigured deployment fails fast and completely.
- * Nothing here has a default host: every URL comes from the environment. The variables are documented in
- * `platform/README.md` and listed in {@link ENV_VARS}.
+ * Every value is a plain string (no JSON) and nothing depends on the host. The environment comes from `NODE_ENV` only
+ * (production unless `development` or `test`); the canonical URL from `PUBLIC_URL` (development default
+ * `http://localhost:4000`) — never from request headers. The variables are documented in `platform/README.md` and listed
+ * in {@link ENV_VARS}.
  * @module
  */
-import { createPrivateKey, hkdfSync } from 'node:crypto';
-import { canonicalUrl, toPublicJwk } from '@ss/protocol';
+import { hkdfSync } from 'node:crypto';
+import { canonicalUrl, parseSigningKeys as parseKeyList, signingKeyFromSeed } from '@ss/protocol';
 import { platformError } from './errors.js';
-import { isObject } from './util.js';
 
 /** @typedef {import('@ss/protocol').PrivateJwk} PrivateJwk */
-/** @typedef {'production' | 'preview' | 'development' | 'test'} PortalEnv */
+/** @typedef {'production' | 'development' | 'test'} PortalEnv */
 
 /**
  * @typedef {object} SessionPolicy
@@ -30,13 +31,13 @@ import { isObject } from './util.js';
  * @property {{ uri: string, dbName: string, maxPoolSize: number }} mongo control-plane database only
  * @property {ReadonlyArray<PrivateJwk>} signingKeys first = active signer; all are published in the JWKS
  * @property {ReadonlyArray<PrivateJwk>} websiteKeySigningKeys dedicated website-key signers (first signs; all published)
- * @property {boolean} websiteKeySigningDerived true when no `WEBSITE_KEY_SIGNING_KEYS` was given outside production and
+ * @property {boolean} websiteKeySigningDerived true when no `WEBSITE_SIGNING_KEYS` was given outside production and
  *   the key was derived from `SESSION_SECRET` (development convenience only)
  * @property {ReadonlyArray<{ id: string, key: Buffer }>} keks key-encryption keys; first = active (wraps new data keys)
  * @property {Buffer} sessionSecret HMAC key for session ids, recovery codes and throttle keys at rest
  * @property {Buffer} websiteKeyPepper HMAC pepper for website secret keys at rest
  * @property {Buffer} idempotencySecret HMAC key of idempotency fingerprints (`IDEMPOTENCY_SECRET` or derived)
- * @property {string} problemBaseUri RFC 9457 type base
+ * @property {string} problemBaseUri RFC 9457 type base (`<url>/problems/`)
  * @property {string} logLevel
  * @property {boolean} trustProxyHeaders use `X-Forwarded-For` for the client IP (only behind a trusted proxy)
  * @property {number} maxBodyBytes default JSON body cap
@@ -47,11 +48,11 @@ import { isObject } from './util.js';
  * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify e-mail, resets, invites)
  * @property {{ storage: AssetStorageConfig | null, budgetKb: number, previewOrigin: string | null }} delivery
  *   platform-owned artefact storage (our software only: pack assets and compiled website bundles — never client data),
- *   the default website budget, and the dedicated cookie-less preview origin (`PREVIEW_ORIGIN`, F.16) or null
+ *   the default website budget, and the dedicated cookie-less preview origin (`PREVIEW_URL`, F.16) or null
  */
 
 /**
- * Platform asset storage (`PLATFORM_ASSET_STORAGE`): an S3-compatible bucket we own, or a development store.
+ * Asset storage (`STORAGE_*`): an S3-compatible bucket we own, or a development store (`STORAGE_DIR`).
  * @typedef {{ kind: 'memory' } | { kind: 'file', dir: string } | { kind: 's3', endpoint: string | null, region: string,
  *   bucket: string, accessKeyId: string, secretAccessKey: string, sessionToken: string | null, forcePathStyle: boolean | null,
  *   prefix: string }} AssetStorageConfig
@@ -69,65 +70,68 @@ import { isObject } from './util.js';
 /** Documented environment variables: `[name, required, description]`. */
 export const ENV_VARS = Object.freeze([
 	['MONGODB_URI', true, 'Control-plane MongoDB connection string (never a client database).'],
-	['MONGODB_DB', false, 'Database name; defaults to the path of MONGODB_URI, else `ss_portal`.'],
 	[
-		'MONGODB_MAX_POOL_SIZE',
-		false,
-		'Connection pool size per instance (default 5: many serverless instances share one Atlas M0 cluster).',
+		'SIGNING_KEYS',
+		true,
+		'Portal signing keys `kid:seed[,kid:seed…]` (seed = base64url of 32 bytes, Ed25519); the first signs, all are published.',
 	],
-	['PORTAL_URL', true, 'Canonical Portal URL, e.g. https://portal.example.com (https unless localhost in development).'],
-	['PORTAL_SIGNING_KEYS', true, 'JSON array of private Ed25519 JWKs with unique kids; the first signs, all are published.'],
 	[
-		'WEBSITE_KEY_SIGNING_KEYS',
-		false,
-		'JSON array of private Ed25519 JWKs that sign website keys only (first signs, all published; kids distinct from the Portal keys). Required in production; derived from SESSION_SECRET elsewhere.',
+		'WEBSITE_SIGNING_KEYS',
+		true,
+		'Website-key signing keys, same `kid:seed` form, kids and keys distinct from SIGNING_KEYS (derived from SESSION_SECRET outside production).',
 	],
-	['SECRETS_KEK', true, 'Key-encryption keys: `kid:base64(32 bytes)[,kid:base64…]`, first = active; or one bare base64 key.'],
+	['ENCRYPTION_KEYS', true, 'Key-encryption keys `kid:base64(32 bytes)[,kid:base64…]`, first = active.'],
 	['SESSION_SECRET', true, 'At least 32 bytes (base64 or text): HMAC key for session ids and recovery codes at rest.'],
-	['WEBSITE_KEY_PEPPER', true, 'At least 32 bytes (base64 or text): HMAC pepper for website secret keys at rest.'],
-	['IDEMPOTENCY_SECRET', false, 'At least 32 bytes: HMAC key of idempotency fingerprints (default: HKDF of SESSION_SECRET).'],
 	[
-		'OUTBOUND_DEV_ALLOW_HOSTS',
-		false,
-		'Comma-separated hosts/IPs outbound calls may reach although private or plain http (ignored in production).',
+		'KEY_PEPPER',
+		true,
+		'At least 32 bytes (base64 or text), different from SESSION_SECRET: HMAC pepper for website secret keys.',
 	],
 	[
-		'PLATFORM_SMTP_URL',
-		false,
-		'Platform mailer: `smtp(s)://user:pass@host:port` (STARTTLS required in production for smtp://).',
+		'PUBLIC_URL',
+		true,
+		'The Portal address, e.g. https://portal.example.com: token issuer/audience, e-mail links, CSRF origin (development default http://localhost:4000).',
 	],
-	['PLATFORM_MAIL_FROM', false, 'Sender of platform mail, `Name <address>` or `address` (required with PLATFORM_SMTP_URL).'],
+	['SMTP_URL', false, 'Mailer `smtp(s)://user:pass@host:port` (STARTTLS required in production for smtp://).'],
+	['MAIL_FROM', false, 'Sender of Portal mail, `Name <address>` or `address` (required with SMTP_URL).'],
+	['STORAGE_BUCKET', false, 'Asset storage (pack assets, compiled website bundles): S3-compatible bucket name.'],
+	['STORAGE_ENDPOINT', false, 'S3-compatible endpoint origin, e.g. https://<account>.r2.cloudflarestorage.com (default AWS).'],
+	['STORAGE_REGION', false, 'Bucket region (default `auto`).'],
+	['STORAGE_ACCESS_KEY_ID', false, 'Bucket access key id (required with STORAGE_BUCKET).'],
+	['STORAGE_SECRET_ACCESS_KEY', false, 'Bucket secret access key (required with STORAGE_BUCKET).'],
+	['STORAGE_PREFIX', false, 'Key prefix inside the bucket, e.g. `portal/`.'],
+	['STORAGE_PATH_STYLE', false, '`true` for path-style bucket URLs (default: virtual-hosted on AWS, path-style elsewhere).'],
+	['STORAGE_DIR', false, 'Development only: a local directory for assets (e.g. `.data/assets`), or `:memory:`.'],
 	[
-		'PLATFORM_ASSET_STORAGE',
+		'PREVIEW_URL',
 		false,
-		'Platform-owned artefact storage (pack assets, compiled website bundles): JSON `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }` for an S3-compatible bucket, or `memory` / `file:<dir>` outside production.',
+		'Dedicated cookie-less origin serving only the preview proxy (`/p/*`), on another host than the Portal (ideally another registrable domain).',
 	],
-	['DELIVERY_BUDGET_KB', false, 'Default per-website bundle budget in KB gzip (default 60): Loader + Σ element budget.js.'],
+	['APP_VERSION', false, 'Version reported by /healthz and /v1/system/info (default `dev`).'],
 	[
-		'PREVIEW_ORIGIN',
+		'IDEMPOTENCY_SECRET',
 		false,
-		'Dedicated cookie-less origin that serves only the preview proxy (`/p/*`), e.g. https://preview.example-previews.com — a host that is not the Portal host (ideally another registrable domain). When set, preview links use it and the Portal host refuses `/p/*`.',
+		'At least 32 bytes: HMAC key of idempotency fingerprints (default: derived from SESSION_SECRET).',
 	],
-	['PROBLEM_BASE_URI', false, 'RFC 9457 problem type base URI (default `<PORTAL_URL>/problems/`).'],
-	['PORTAL_ENV', false, 'production | preview | development | test (default from NODE_ENV).'],
-	['PORTAL_VERSION', false, 'Version string reported by /healthz and /v1/system/info (default `dev`).'],
-	['LOG_LEVEL', false, 'debug | info | warn | error | silent (default info).'],
+	['MONGODB_DB', false, 'Database name; defaults to the path of MONGODB_URI, else `ss_portal`.'],
+	['MONGODB_MAX_POOL_SIZE', false, 'Connection pool size per instance (default 5).'],
+	['DELIVERY_BUDGET_KB', false, 'Default per-website bundle budget in KB gzip (default 60).'],
 	['TRUST_PROXY_HEADERS', false, '`true` behind a proxy that sets X-Forwarded-For (e.g. the hosting edge).'],
 	['MAX_BODY_BYTES', false, 'Default request body cap in bytes (default 1048576).'],
-	[
-		'OPERATION_DEADLINE_MS',
-		false,
-		'Time budget of one on-demand admin operation in ms (default 50000; keep below the function limit).',
-	],
+	['OPERATION_DEADLINE_MS', false, 'Time budget of one on-demand admin operation in ms (default 50000).'],
 	['STAFF_SESSION_IDLE_MINUTES', false, 'Staff idle timeout (default 30).'],
 	['STAFF_SESSION_MAX_HOURS', false, 'Staff absolute session lifetime (default 12).'],
 	['MERCHANT_SESSION_IDLE_MINUTES', false, 'Merchant idle timeout (default 1440).'],
 	['MERCHANT_SESSION_MAX_HOURS', false, 'Merchant absolute session lifetime (default 336).'],
+	[
+		'OUTBOUND_DEV_ALLOW_HOSTS',
+		false,
+		'Development only: comma-separated hosts/IPs outbound calls may reach although private or plain http.',
+	],
 ]);
 
 const KID = /^[A-Za-z0-9._-]{1,64}$/;
 const LOCAL = new Set(['localhost', '127.0.0.1', '[::1]']);
-const ENVS = new Set(['production', 'preview', 'development', 'test']);
 const LEVELS = new Set(['debug', 'info', 'warn', 'error', 'silent']);
 
 /**
@@ -166,7 +170,7 @@ const dbNameFromUri = (uri) => {
 };
 
 /**
- * Parse `SECRETS_KEK`.
+ * Parse `ENCRYPTION_KEYS`.
  * @param {string} text
  * @returns {Array<{ id: string, key: Buffer }> | null}
  */
@@ -189,51 +193,29 @@ export const parseKeks = (text) => {
 };
 
 /**
- * Parse `PORTAL_SIGNING_KEYS`.
+ * Parse `SIGNING_KEYS` / `WEBSITE_SIGNING_KEYS` (`kid:seed[,kid:seed…]`); null when invalid.
  * @param {string} text
  * @returns {PrivateJwk[] | null}
  */
 export const parseSigningKeys = (text) => {
-	/** @type {unknown} */
-	let parsed;
 	try {
-		parsed = JSON.parse(text);
+		return parseKeyList(text);
 	} catch {
 		return null;
 	}
-	if (!Array.isArray(parsed) || parsed.length === 0) return null;
-	/** @type {PrivateJwk[]} */
-	const keys = [];
-	for (const jwk of parsed) {
-		if (!isObject(jwk) || typeof jwk.d !== 'string' || jwk.d.length === 0) return null;
-		try {
-			const pub = toPublicJwk(jwk);
-			if (keys.some((k) => k.kid === pub.kid)) return null;
-			keys.push({ ...pub, d: jwk.d });
-		} catch {
-			return null;
-		}
-	}
-	return keys;
 };
-
-/** PKCS#8 DER prefix of an Ed25519 private key (RFC 8410); the 32-byte seed follows. */
-const ED25519_PKCS8 = Buffer.from('302e020100300506032b657004220420', 'hex');
 
 /**
  * Deterministic Ed25519 key from a secret (HKDF-SHA-256, labelled), for development website-key signing when
- * `WEBSITE_KEY_SIGNING_KEYS` is not set. Never used in production.
+ * `WEBSITE_SIGNING_KEYS` is not set. Never used in production.
  * @param {Uint8Array} secret
  * @param {string} label
  * @returns {PrivateJwk}
  */
 export const deriveSigningKey = (secret, label) => {
 	const seed = Buffer.from(hkdfSync('sha256', secret, Buffer.alloc(0), `ss-derived-ed25519.v1|${label}`, 32));
-	const jwk = createPrivateKey({ key: Buffer.concat([ED25519_PKCS8, seed]), format: 'der', type: 'pkcs8' }).export({
-		format: 'jwk',
-	});
-	const pub = toPublicJwk({ ...jwk, kid: `${label}-${String(jwk.x).slice(0, 8)}` });
-	return { ...pub, d: /** @type {string} */ (jwk.d) };
+	const key = signingKeyFromSeed(label, seed);
+	return signingKeyFromSeed(`${label}-${key.x.slice(0, 8)}`, seed);
 };
 
 /**
@@ -249,7 +231,7 @@ const MAIL_FROM = /^(?:[^<>\r\n]{1,100} <[^\s@<>]{1,64}@[^\s@<>]{1,255}>|[^\s@<>
 const HOST_ENTRY = /^(?:\[[0-9a-fA-F:.]+\]|[A-Za-z0-9.-]{1,253}|[0-9a-fA-F:]{2,39})$/;
 
 /**
- * Parse `PLATFORM_SMTP_URL`.
+ * Parse `SMTP_URL`.
  * @param {string} text
  * @returns {SmtpConfig | null}
  */
@@ -282,54 +264,72 @@ const REGION = /^[a-z0-9-]{1,40}$/;
 const PREFIX = /^(?:[A-Za-z0-9_-]+\/)*$/;
 
 /**
- * Parse `PLATFORM_ASSET_STORAGE` (null when invalid).
- * @param {string} text
+ * Read asset storage from `STORAGE_*` (null when none is configured). Throws a message naming the variable when invalid.
+ * @param {(name: string) => string | undefined} read
  * @returns {AssetStorageConfig | null}
  */
-export const parseAssetStorage = (text) => {
-	if (text === 'memory') return { kind: 'memory' };
-	if (text.startsWith('file:')) {
-		const dir = text.slice(5).trim();
-		return dir.length > 0 && !dir.includes('\0') ? { kind: 'file', dir } : null;
+export const parseAssetStorage = (read) => {
+	const dir = read('STORAGE_DIR');
+	const bucket = read('STORAGE_BUCKET');
+	if (dir !== undefined && bucket !== undefined) throw new Error('set either STORAGE_DIR or STORAGE_BUCKET, not both');
+	if (dir !== undefined) {
+		if (dir === ':memory:') return { kind: 'memory' };
+		if (dir.includes('\0')) throw new Error('STORAGE_DIR is not a valid directory');
+		return { kind: 'file', dir };
 	}
-	/** @type {unknown} */
-	let parsed;
-	try {
-		parsed = JSON.parse(text);
-	} catch {
+	if (bucket === undefined) {
+		const stray = ['STORAGE_ENDPOINT', 'STORAGE_ACCESS_KEY_ID', 'STORAGE_SECRET_ACCESS_KEY', 'STORAGE_PREFIX'].find(
+			(name) => read(name) !== undefined,
+		);
+		if (stray) throw new Error(`${stray} needs STORAGE_BUCKET`);
 		return null;
 	}
-	if (!isObject(parsed)) return null;
-	const { endpoint, region, bucket, accessKeyId, secretAccessKey, sessionToken, forcePathStyle, prefix, ...rest } = parsed;
-	if (Object.keys(rest).length > 0) return null;
-	/** @param {unknown} v */
-	const str = (v) => typeof v === 'string' && v.length > 0 && v.length <= 2048;
-	if (!str(region) || !REGION.test(/** @type {string} */ (region))) return null;
-	if (!str(bucket) || !BUCKET.test(/** @type {string} */ (bucket))) return null;
-	if (!str(accessKeyId) || !str(secretAccessKey)) return null;
-	if (sessionToken !== undefined && !str(sessionToken)) return null;
-	if (forcePathStyle !== undefined && typeof forcePathStyle !== 'boolean') return null;
-	if (prefix !== undefined && (typeof prefix !== 'string' || prefix.length > 200 || !PREFIX.test(prefix))) return null;
-	if (endpoint !== undefined) {
+	if (!BUCKET.test(bucket)) throw new Error('STORAGE_BUCKET is not a valid bucket name');
+	const region = read('STORAGE_REGION') ?? 'auto';
+	if (!REGION.test(region)) throw new Error('STORAGE_REGION is not a valid region');
+	const accessKeyId = read('STORAGE_ACCESS_KEY_ID');
+	const secretAccessKey = read('STORAGE_SECRET_ACCESS_KEY');
+	if (!accessKeyId || accessKeyId.length > 2048) throw new Error('STORAGE_ACCESS_KEY_ID is required with STORAGE_BUCKET');
+	if (!secretAccessKey || secretAccessKey.length > 2048)
+		throw new Error('STORAGE_SECRET_ACCESS_KEY is required with STORAGE_BUCKET');
+	const prefix = read('STORAGE_PREFIX') ?? '';
+	if (prefix.length > 200 || !PREFIX.test(prefix)) throw new Error('STORAGE_PREFIX must be path segments ending in /');
+	const pathStyle = read('STORAGE_PATH_STYLE');
+	if (pathStyle !== undefined && pathStyle !== 'true' && pathStyle !== 'false')
+		throw new Error('STORAGE_PATH_STYLE must be true or false');
+	const endpointText = read('STORAGE_ENDPOINT');
+	/** @type {string | null} */
+	let endpoint = null;
+	if (endpointText !== undefined) {
+		/** @type {URL | null} */
+		let url = null;
 		try {
-			const url = new URL(/** @type {string} */ (endpoint));
-			if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password || url.search || url.hash)
-				return null;
-			if (url.pathname !== '/' && url.pathname !== '') return null;
+			url = new URL(endpointText);
 		} catch {
-			return null;
+			// reported below
 		}
+		if (
+			!url ||
+			(url.protocol !== 'https:' && url.protocol !== 'http:') ||
+			url.username ||
+			url.password ||
+			url.search ||
+			url.hash ||
+			(url.pathname !== '/' && url.pathname !== '')
+		)
+			throw new Error('STORAGE_ENDPOINT must be an http(s) origin');
+		endpoint = url.origin;
 	}
 	return {
 		kind: 's3',
-		endpoint: endpoint === undefined ? null : new URL(/** @type {string} */ (endpoint)).origin,
-		region: /** @type {string} */ (region),
-		bucket: /** @type {string} */ (bucket),
-		accessKeyId: /** @type {string} */ (accessKeyId),
-		secretAccessKey: /** @type {string} */ (secretAccessKey),
-		sessionToken: sessionToken === undefined ? null : /** @type {string} */ (sessionToken),
-		forcePathStyle: forcePathStyle === undefined ? null : /** @type {boolean} */ (forcePathStyle),
-		prefix: prefix === undefined ? '' : /** @type {string} */ (prefix),
+		endpoint,
+		region,
+		bucket,
+		accessKeyId,
+		secretAccessKey,
+		sessionToken: null,
+		forcePathStyle: pathStyle === undefined ? null : pathStyle === 'true',
+		prefix,
 	};
 };
 
@@ -369,14 +369,14 @@ export const loadConfig = (env = process.env) => {
 		return value ?? '';
 	};
 
-	const portalEnvText =
-		read('PORTAL_ENV') ?? (env.NODE_ENV === 'production' ? 'production' : env.NODE_ENV === 'test' ? 'test' : 'development');
-	if (!ENVS.has(portalEnvText)) problems.push('PORTAL_ENV must be production, preview, development or test');
-	const portalEnv = /** @type {PortalEnv} */ (ENVS.has(portalEnvText) ? portalEnvText : 'production');
-	const strict = portalEnv === 'production' || portalEnv === 'preview';
+	// Environment: NODE_ENV only — production unless `development` or `test`
+	/** @type {PortalEnv} */
+	const portalEnv = env.NODE_ENV === 'development' || env.NODE_ENV === 'test' ? env.NODE_ENV : 'production';
+	const strict = portalEnv === 'production';
 
-	// Portal URL
-	const portalUrlText = required('PORTAL_URL');
+	// Canonical URL: PUBLIC_URL (development default localhost); never derived from request headers
+	const portalUrlText = read('PUBLIC_URL') ?? (strict ? undefined : 'http://localhost:4000');
+	if (portalUrlText === undefined) problems.push('PUBLIC_URL is required in production (e.g. https://portal.example.com)');
 	let portalUrl = '';
 	let portalOrigin = '';
 	let cookieSecure = true;
@@ -387,10 +387,10 @@ export const loadConfig = (env = process.env) => {
 			portalOrigin = url.origin;
 			const local = LOCAL.has(url.hostname) || url.hostname.endsWith('.localhost');
 			if (url.protocol !== 'https:' && (strict || !local))
-				problems.push('PORTAL_URL must use https (http only for localhost in development)');
+				problems.push('PUBLIC_URL must use https (http only for localhost in development)');
 			cookieSecure = url.protocol === 'https:';
 		} catch {
-			problems.push('PORTAL_URL must be an absolute http(s) URL without query, fragment or credentials');
+			problems.push('PUBLIC_URL must be an absolute http(s) URL without query, fragment or credentials');
 		}
 	}
 
@@ -404,45 +404,39 @@ export const loadConfig = (env = process.env) => {
 	if (maxPoolSize === null) problems.push('MONGODB_MAX_POOL_SIZE must be an integer 1..500');
 
 	// Keys and secrets
-	const signingText = required('PORTAL_SIGNING_KEYS');
+	const signingText = required('SIGNING_KEYS');
 	const signingKeys = signingText ? parseSigningKeys(signingText) : null;
-	if (signingText && !signingKeys) {
-		problems.push(
-			'PORTAL_SIGNING_KEYS must be a JSON array of private Ed25519 JWKs (kty OKP, crv Ed25519, x, d, kid) with unique kids',
-		);
-	}
-	const kekText = required('SECRETS_KEK');
+	if (signingText && !signingKeys)
+		problems.push('SIGNING_KEYS must be `kid:seed` entries (seed = base64url of 32 bytes) with unique kids');
+	const kekText = required('ENCRYPTION_KEYS');
 	const keks = kekText ? parseKeks(kekText) : null;
 	if (kekText && !keks)
-		problems.push('SECRETS_KEK must be `kid:base64` entries of exactly 32 bytes with unique kids (or one bare base64 key)');
+		problems.push('ENCRYPTION_KEYS must be `kid:base64` entries of exactly 32 bytes with unique kids (or one bare base64 key)');
 	const sessionText = required('SESSION_SECRET');
 	const sessionSecret = sessionText ? secretBytes(sessionText, 32) : null;
 	if (sessionText && !sessionSecret) problems.push('SESSION_SECRET must be at least 32 bytes');
-	const pepperText = required('WEBSITE_KEY_PEPPER');
+	const pepperText = required('KEY_PEPPER');
 	const websiteKeyPepper = pepperText ? secretBytes(pepperText, 32) : null;
-	if (pepperText && !websiteKeyPepper) problems.push('WEBSITE_KEY_PEPPER must be at least 32 bytes');
+	if (pepperText && !websiteKeyPepper) problems.push('KEY_PEPPER must be at least 32 bytes');
 	if (sessionSecret && websiteKeyPepper && sessionSecret.equals(websiteKeyPepper)) {
-		problems.push('SESSION_SECRET and WEBSITE_KEY_PEPPER must differ');
+		problems.push('SESSION_SECRET and KEY_PEPPER must differ');
 	}
 
 	// Website-key signer (dedicated: never the Portal launch/document key)
-	const websiteText = read('WEBSITE_KEY_SIGNING_KEYS');
+	const websiteText = read('WEBSITE_SIGNING_KEYS');
 	/** @type {PrivateJwk[] | null} */
 	let websiteKeySigningKeys = null;
 	if (websiteText) {
 		websiteKeySigningKeys = parseSigningKeys(websiteText);
-		if (!websiteKeySigningKeys) {
-			problems.push(
-				'WEBSITE_KEY_SIGNING_KEYS must be a JSON array of private Ed25519 JWKs (kty OKP, crv Ed25519, x, d, kid) with unique kids',
-			);
-		}
-	} else if (portalEnv === 'production') problems.push('WEBSITE_KEY_SIGNING_KEYS is required in production');
+		if (!websiteKeySigningKeys)
+			problems.push('WEBSITE_SIGNING_KEYS must be `kid:seed` entries (seed = base64url of 32 bytes) with unique kids');
+	} else if (portalEnv === 'production') problems.push('WEBSITE_SIGNING_KEYS is required in production');
 	else if (sessionSecret) websiteKeySigningKeys = [deriveSigningKey(sessionSecret, 'website-dev')];
 	if (websiteKeySigningKeys && signingKeys) {
 		const portalKids = new Set(signingKeys.map((k) => k.kid));
 		const portalXs = new Set(signingKeys.map((k) => k.x));
 		if (websiteKeySigningKeys.some((k) => portalKids.has(k.kid) || portalXs.has(k.x)))
-			problems.push('WEBSITE_KEY_SIGNING_KEYS must use keys and kids distinct from PORTAL_SIGNING_KEYS');
+			problems.push('WEBSITE_SIGNING_KEYS must use keys and kids distinct from SIGNING_KEYS');
 	}
 
 	// Idempotency fingerprints
@@ -467,27 +461,28 @@ export const loadConfig = (env = process.env) => {
 		problems.push('OUTBOUND_DEV_ALLOW_HOSTS must be comma-separated host names or IP addresses');
 
 	// Platform mailer
-	const smtpText = read('PLATFORM_SMTP_URL');
+	const smtpText = read('SMTP_URL');
 	const smtp = smtpText ? parseSmtpUrl(smtpText) : null;
-	if (smtpText && !smtp) problems.push('PLATFORM_SMTP_URL must be smtp://user:pass@host:port or smtps://user:pass@host:port');
-	const mailFrom = read('PLATFORM_MAIL_FROM') ?? null;
-	if (mailFrom !== null && !MAIL_FROM.test(mailFrom)) problems.push('PLATFORM_MAIL_FROM must be `Name <address>` or an address');
-	if (smtpText && mailFrom === null) problems.push('PLATFORM_MAIL_FROM is required with PLATFORM_SMTP_URL');
+	if (smtpText && !smtp) problems.push('SMTP_URL must be smtp://user:pass@host:port or smtps://user:pass@host:port');
+	const mailFrom = read('MAIL_FROM') ?? null;
+	if (mailFrom !== null && !MAIL_FROM.test(mailFrom)) problems.push('MAIL_FROM must be `Name <address>` or an address');
+	if (smtpText && mailFrom === null) problems.push('MAIL_FROM is required with SMTP_URL');
 
 	// Delivery: platform-owned artefact storage (never a client connector) and the default website budget
-	const storageText = read('PLATFORM_ASSET_STORAGE');
-	const assetStorage = storageText ? parseAssetStorage(storageText) : null;
-	if (storageText && !assetStorage)
-		problems.push(
-			'PLATFORM_ASSET_STORAGE must be `memory`, `file:<dir>` or JSON { endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }',
-		);
+	/** @type {AssetStorageConfig | null} */
+	let assetStorage = null;
+	try {
+		assetStorage = parseAssetStorage(read);
+	} catch (error) {
+		problems.push(/** @type {Error} */ (error).message);
+	}
 	if (assetStorage && assetStorage.kind !== 's3' && strict)
-		problems.push('PLATFORM_ASSET_STORAGE must be an S3-compatible bucket in production and preview');
+		problems.push('STORAGE_DIR is for development: use an S3-compatible bucket (STORAGE_BUCKET) in production');
 	if (assetStorage?.kind === 's3' && assetStorage.endpoint?.startsWith('http:') && strict)
-		problems.push('PLATFORM_ASSET_STORAGE endpoint must use https in production and preview');
+		problems.push('STORAGE_ENDPOINT must use https in production');
 	const budgetKb = intOf(read('DELIVERY_BUDGET_KB'), 60, { min: 1, max: 1024 });
 	if (budgetKb === null) problems.push('DELIVERY_BUDGET_KB must be an integer 1..1024');
-	const previewText = read('PREVIEW_ORIGIN');
+	const previewText = read('PREVIEW_URL');
 	/** @type {string | null} */
 	let previewOrigin = null;
 	if (previewText) {
@@ -499,25 +494,17 @@ export const loadConfig = (env = process.env) => {
 			if (url.protocol !== 'https:' && (strict || !local || url.protocol !== 'http:')) throw new Error('scheme');
 			previewOrigin = url.origin;
 			if (portalOrigin && new URL(portalOrigin).host === url.host)
-				problems.push('PREVIEW_ORIGIN must be a different host from PORTAL_URL');
+				problems.push('PREVIEW_URL must be a different host from PUBLIC_URL');
 		} catch {
-			problems.push('PREVIEW_ORIGIN must be an https origin (scheme and host only; http only for localhost in development)');
+			problems.push('PREVIEW_URL must be an https origin (scheme and host only; http only for localhost in development)');
 		}
 	}
 
-	// Problems base
-	let problemBaseUri = read('PROBLEM_BASE_URI') ?? (portalUrl ? `${portalUrl}/problems/` : '');
-	try {
-		if (problemBaseUri) {
-			const url = new URL(problemBaseUri);
-			if (url.search || url.hash) throw new Error('query');
-			problemBaseUri = url.href.endsWith('/') ? url.href : `${url.href}/`;
-		}
-	} catch {
-		problems.push('PROBLEM_BASE_URI must be an absolute URI without query or fragment');
-	}
+	// Problems base, from the canonical URL
+	const problemBaseUri = portalUrl ? `${portalUrl}/problems/` : '';
 
-	const logLevel = read('LOG_LEVEL') ?? 'info';
+	// Log level: info in production, debug in development (LOG_LEVEL overrides, undocumented)
+	const logLevel = read('LOG_LEVEL') ?? (portalEnv === 'development' ? 'debug' : 'info');
 	if (!LEVELS.has(logLevel)) problems.push('LOG_LEVEL must be debug, info, warn, error or silent');
 	const trustText = read('TRUST_PROXY_HEADERS') ?? 'false';
 	if (trustText !== 'true' && trustText !== 'false') problems.push('TRUST_PROXY_HEADERS must be true or false');
@@ -557,7 +544,7 @@ export const loadConfig = (env = process.env) => {
 	return Object.freeze({
 		env: portalEnv,
 		isProduction: portalEnv === 'production',
-		version: read('PORTAL_VERSION') ?? 'dev',
+		version: read('APP_VERSION') ?? 'dev',
 		portalUrl,
 		portalOrigin,
 		cookieSecure,

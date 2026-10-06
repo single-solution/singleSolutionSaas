@@ -55,9 +55,9 @@ export const newId = (prefix) => `${prefix}_${base32(randomBytes(17))}`;
  */
 export const feedSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
-	const jwk = typeof signingKey === 'string' ? JSON.parse(signingKey) : signingKey;
+	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('CATALOG_FEED_SECRET (≥ 32 chars) or SS_APP_SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('CATALOG_FEED_SECRET (≥ 32 chars) or SIGNING_KEY is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-catalog', 'feed-token/v1', 32));
 };
 
@@ -114,9 +114,9 @@ export const EXPORT_LINK_MAX_MS = 5 * 60_000;
 export const exportSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH)
 		return Buffer.from(hkdfSync('sha256', Buffer.from(secret, 'utf8'), 'ss-catalog', 'export-link/v1', 32));
-	const jwk = typeof signingKey === 'string' ? JSON.parse(signingKey) : signingKey;
+	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0) throw new Error('CATALOG_FEED_SECRET (≥ 32 chars) or SS_APP_SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('CATALOG_FEED_SECRET (≥ 32 chars) or SIGNING_KEY is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-catalog', 'export-link/v1', 32));
 };
 

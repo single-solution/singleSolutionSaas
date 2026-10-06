@@ -58,7 +58,7 @@ export const MERCHANT_PERMISSIONS = Object.freeze([
 ]);
 
 /** Platform (staff-only) permissions. */
-export const PLATFORM_PERMISSIONS = Object.freeze([
+export const STAFF_PERMISSIONS = Object.freeze([
 	'platform.merchants.read',
 	'platform.merchants.write',
 	'platform.impersonate',
@@ -76,14 +76,14 @@ export const PLATFORM_PERMISSIONS = Object.freeze([
 	'platform.staff.manage',
 ]);
 
-export const ALL_PERMISSIONS = Object.freeze([...PLATFORM_PERMISSIONS, ...MERCHANT_PERMISSIONS]);
+export const ALL_PERMISSIONS = Object.freeze([...STAFF_PERMISSIONS, ...MERCHANT_PERMISSIONS]);
 
 const READ_ONLY_MERCHANT = Object.freeze(MERCHANT_PERMISSIONS.filter((p) => p.endsWith('.read')));
 
 /** Staff role bundles. */
-export const PLATFORM_ROLES = Object.freeze({
+export const STAFF_ROLE_BUNDLES = Object.freeze({
 	superadmin: Object.freeze(['*']),
-	admin: Object.freeze([...PLATFORM_PERMISSIONS.filter((p) => p !== 'platform.staff.manage'), ...MERCHANT_PERMISSIONS]),
+	admin: Object.freeze([...STAFF_PERMISSIONS.filter((p) => p !== 'platform.staff.manage'), ...MERCHANT_PERMISSIONS]),
 	support: Object.freeze([
 		'platform.merchants.read',
 		'platform.launch.admin',
@@ -169,7 +169,7 @@ export const permissionsFor = (actor, resource = {}) => {
 		case 'system':
 			return ['*'];
 		case 'staff':
-			return [...expand(PLATFORM_ROLES, actor.roles), ...extra];
+			return [...expand(STAFF_ROLE_BUNDLES, actor.roles), ...extra];
 		case 'merchant_user': {
 			if (!actor.merchantId) return [];
 			if (resource.merchantId !== undefined && resource.merchantId !== null && resource.merchantId !== actor.merchantId)
@@ -229,7 +229,7 @@ export const websitesVisible = (actor, permission) => {
  * @returns {roles is string[]}
  */
 export const validRoles = (family, roles) => {
-	const bundles = family === 'platform' ? PLATFORM_ROLES : MERCHANT_ROLES;
+	const bundles = family === 'platform' ? STAFF_ROLE_BUNDLES : MERCHANT_ROLES;
 	return (
 		Array.isArray(roles) && roles.length > 0 && roles.every((role) => typeof role === 'string' && Object.hasOwn(bundles, role))
 	);

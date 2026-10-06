@@ -1,6 +1,6 @@
 /**
  * API test harness: the real product (app-kit `createRequestHandler` over this product's routes) against app-kit's fake
- * Portal, with the merchant database on the test run's MongoMemoryReplSet (`SS_TEST_MONGO_URI`, started by the
+ * Portal, with the merchant database on the test run's MongoMemoryReplSet (`TEST_MONGODB_URI`, started by the
  * @ss/config vitest global setup), and the merchant's S3-compatible storage replaced by an in-memory `outboundSend`.
  */
 import { randomBytes as nodeRandomBytes } from 'node:crypto';
@@ -48,8 +48,8 @@ export const createClock = (start = T0) => {
 
 /** MongoDB URI of a fresh database on the shared replica set. @param {string} name */
 export const mongoUri = (name) => {
-	const base = process.env.SS_TEST_MONGO_URI;
-	if (!base) throw new Error('SS_TEST_MONGO_URI is not set (run through this product vitest config)');
+	const base = process.env.TEST_MONGODB_URI;
+	if (!base) throw new Error('TEST_MONGODB_URI is not set (run through this product vitest config)');
 	const url = new URL(base);
 	url.pathname = `/${name}`;
 	return url.toString();
@@ -113,10 +113,10 @@ export const createHarness = async ({ config = {}, elements = {}, storage = true
 	const bucket = createStorage();
 	const app = await createPlatform({
 		env: {
-			SS_PORTAL_URL: PORTAL_URL,
-			SS_APP_ID: APP_ID,
-			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_grades_api_tests_0123456789'),
+			PORTAL_URL,
+			APP_ID,
+			SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+			REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_grades_api_tests_0123456789'),
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: bucket.send },

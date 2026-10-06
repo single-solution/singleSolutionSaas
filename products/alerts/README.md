@@ -121,15 +121,15 @@ shopper subscribes with the `pk_` key → `inventory.changed@1` (0 → 5) throug
 message at the provider → unsubscribe (GET changes nothing, POST stops) → usage once → hourly settlement (850 base +
 1 metered).
 
-## Deploy to Vercel
+## Deploy
 
-1. Create a Vercel project with this directory as root (framework: Next.js). In the monorepo, `next.config.js` sets
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets
    the workspace root automatically.
 2. Environment variables (Production):
-   - `SS_PORTAL_URL` — the Portal URL this product trusts (pinned).
-   - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
-     registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
-   - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required.
+   - `PORTAL_URL` — the Portal URL this product trusts (pinned).
+   - `SIGNING_KEY` — `kid:seed` (Ed25519 seed, base64url; `ss dev env` prints one); `REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
+     registration token issued by Portal staff; `APP_ID` — after registration (optional; recorded by the handshake).
+   - `DATABASE_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required.
    - No cron and no cron secret: the product schedules nothing (see "No timers" above).
    - `ALERTS_TOKEN_SECRET` — optional (≥ 32 chars) secret of unsubscribe / confirm links and contact hashes; derived
      from the signing key when empty (rotating the key then invalidates outstanding links and re-keys contact hashes).

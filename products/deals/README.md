@@ -128,12 +128,12 @@ Portal in process: staff bootstrap → catalog handshake → activation → merc
 subscription → database connector → weekday-evening deal in Asia/Karachi → quotes outside / inside the overnight
 window → price lock honoured after the window closed → commit (uses in the merchant DB) → metered usage → settlement.
 
-## Deploy to Vercel
+## Deploy
 
-1. Create a Vercel project with this directory as root (framework: Next.js); `next.config.js` sets the monorepo root.
-2. Environment (Production): `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY`, `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID`
-   (optional), `SS_PRODUCT_DB_URI` (required in production),
-   `SS_PRODUCT_DB_MAX_POOL_SIZE` (optional, default 5), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars), `SS_LOG_LEVEL` (optional).
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder); `next.config.js` sets the monorepo root.
+2. Environment (Production): `PORTAL_URL`, `SIGNING_KEY`, `REGISTRATION_TOKEN_HASH`, `APP_ID`
+   (optional), `DATABASE_URI` (required in production),
+   `DATABASE_MAX_POOL_SIZE` (optional, default 5), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars).
 3. Deploy, register from the Portal admin with the deployment URL and token, review and activate; `endpoints.base` in
    `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.

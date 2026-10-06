@@ -203,7 +203,7 @@ describe('platform mailer', () => {
 		expect(sent).toHaveLength(1);
 		expect(createPlatformMailer({ config: smtpConfig, logger }).available).toBe(true);
 
-		for (const env of /** @type {const} */ (['production', 'preview'])) {
+		for (const env of /** @type {const} */ (['production'])) {
 			const none = createPlatformMailer({
 				config: { env, isProduction: env === 'production', mail: { smtp: null, from: null } },
 				logger,

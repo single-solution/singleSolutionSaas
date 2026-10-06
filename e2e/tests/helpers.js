@@ -1,6 +1,6 @@
 /**
  * Shared helpers of the system tests: a controllable clock and databases on the run's MongoMemoryReplSet
- * (`SS_TEST_MONGO_URI`, started by the `@ss/config` Mongo global setup).
+ * (`TEST_MONGODB_URI`, started by the `@ss/config` Mongo global setup).
  * @module
  */
 
@@ -28,8 +28,8 @@ export const createClock = (start) => {
  * @param {string} name
  */
 export const mongoUri = (name) => {
-	const base = process.env.SS_TEST_MONGO_URI;
-	if (!base) throw new Error('SS_TEST_MONGO_URI is not set (run through vitest with the @ss/config Mongo setup)');
+	const base = process.env.TEST_MONGODB_URI;
+	if (!base) throw new Error('TEST_MONGODB_URI is not set (run through vitest with the @ss/config Mongo setup)');
 	const url = new URL(base);
 	url.pathname = `/${name}`;
 	return url.toString();

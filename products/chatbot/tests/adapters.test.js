@@ -44,7 +44,7 @@ describe('tokens and platform', () => {
 	it('derives secrets, signs markers per website and expires them', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 't' });
 		expect(rootSecret({ secret: 'x'.repeat(32) }).toString()).toBe('x'.repeat(32));
-		expect(rootSecret({ signingKey: JSON.stringify(privateJwk) })).toHaveLength(32);
+		expect(rootSecret({ signingKey: `${privateJwk.kid}:${privateJwk.d}` })).toHaveLength(32);
 		expect(() => rootSecret({ signingKey: {} })).toThrow(/CHATBOT_TOKEN_SECRET/);
 		let now = 0;
 		const tokens = createTokens({ secret: Buffer.alloc(32, 1), now: () => now });
@@ -67,9 +67,7 @@ describe('tokens and platform', () => {
 		expect(retentionDays('P1Y')).toBe(30);
 	});
 	it('refuses to start without the required environment and loads the string catalogs', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 		expect(Object.keys(await loadStrings(ROOT))).toContain('en');
 	});
 });

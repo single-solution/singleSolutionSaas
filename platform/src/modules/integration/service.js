@@ -66,7 +66,7 @@ import { DEAD_LETTERS, DELIVERIES, EVENTS } from './schema.js';
  * Label of platform-scoped events (no website) in internal keys: the sealed-payload AAD and delivery job keys.
  * Never placed in an event envelope.
  */
-const PLATFORM_SCOPE = 'platform';
+const GLOBAL_AAD_SCOPE = 'platform';
 
 /** Job name of a delivery attempt. */
 export const DELIVER_JOB = 'integration.deliver';
@@ -249,7 +249,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 	const fanout = async (record, event, targets, kind) => {
 		if (targets.length > 0) {
 			const sealed = ctx.envelope.seal(JSON.stringify(event), {
-				aad: { websiteId: record.websiteId ?? PLATFORM_SCOPE, eventId: record.eventId },
+				aad: { websiteId: record.websiteId ?? GLOBAL_AAD_SCOPE, eventId: record.eventId },
 			});
 			for (const appId of targets) {
 				const { deliveryId } = await repo.ensureDelivery({
@@ -262,7 +262,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 					merchantId: record.merchantId,
 					appId,
 				});
-				const key = jobKey(record.websiteId ?? PLATFORM_SCOPE, record.eventId, appId);
+				const key = jobKey(record.websiteId ?? GLOBAL_AAD_SCOPE, record.eventId, appId);
 				// runs right after this request (job queue); then the product's older due deliveries get a retry too
 				await ctx.jobs.enqueue({
 					name: DELIVER_JOB,
@@ -561,7 +561,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		let body;
 		try {
 			body = ctx.envelope.openText(sealed, {
-				aad: { websiteId: delivery.websiteId ?? PLATFORM_SCOPE, eventId: delivery.eventId },
+				aad: { websiteId: delivery.websiteId ?? GLOBAL_AAD_SCOPE, eventId: delivery.eventId },
 			});
 		} catch {
 			return { ok: false, code: 'payload_unavailable', permanent: true };
@@ -779,7 +779,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		if (!changed) throw problem('conflict', 'The delivery is being replayed.');
 		await ctx.jobs.enqueue({
 			name: DELIVER_JOB,
-			key: jobKey(delivery.websiteId ?? PLATFORM_SCOPE, delivery.eventId, delivery.appId, replays),
+			key: jobKey(delivery.websiteId ?? GLOBAL_AAD_SCOPE, delivery.eventId, delivery.appId, replays),
 			payload: { deliveryId, sealed: letter.sealed },
 			maxAttempts,
 			dropPayload: true,

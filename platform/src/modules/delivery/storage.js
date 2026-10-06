@@ -2,7 +2,7 @@
  * Platform asset storage — **our** software artefacts only (pack assets, compiled website bundles; PLAN §1a: our
  * artefacts may live on our infrastructure, client data may not). Three adapters behind one interface:
  *
- * - `s3`: an S3-compatible bucket we own (`PLATFORM_ASSET_STORAGE`), signed with `@ss/net` `signV4`, reached with
+ * - `s3`: an S3-compatible bucket we own (`STORAGE_*`), signed with `@ss/net` `signV4`, reached with
  *   `safeFetch` under the module's outbound policy (development allowlist only outside production).
  * - `file`: a directory (development).
  * - `memory`: a process-local map (tests, quick local runs).

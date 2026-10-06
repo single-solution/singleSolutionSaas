@@ -48,10 +48,10 @@ const serveGenerated = async (slug, { minimal = false } = {}) => {
 		port: 0,
 		root: dir,
 		env: {
-			SS_PORTAL_URL: portalUrl,
-			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken(TOKEN),
-			SS_LOG_LEVEL: 'error',
+			PORTAL_URL: portalUrl,
+			SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+			REGISTRATION_TOKEN_HASH: hashRegistrationToken(TOKEN),
+			LOG_LEVEL: 'error',
 		},
 		overrides: {
 			logger: (await import(pathToFileURL(path.join(dir, 'node_modules/@ss/app-kit/src/index.js')).href)).noopLogger,

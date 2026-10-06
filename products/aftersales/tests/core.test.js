@@ -298,7 +298,7 @@ describe('adapters', () => {
 		now = 2 * 86_400_000;
 		expect(tokens.verify(token, 'w')).toBeNull();
 		expect(() => tokenSecret({ signingKey: null })).toThrow();
-		expect(tokenSecret({ signingKey: JSON.stringify({ d: Buffer.from('k').toString('base64url') }) })).toHaveLength(32);
+		expect(tokenSecret({ signingKey: `k:${Buffer.from('k').toString('base64url')}` })).toHaveLength(32);
 		expect(
 			createClaimTokens({ secret: Buffer.from('x') }).issue({ websiteId: 'w', purchaseId: 'p', ttlDays: 0 }).token,
 		).toMatch(/^ct1\./);

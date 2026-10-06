@@ -7,7 +7,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { parseArgs } from 'node:util';
-import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
+import { formatSigningKey, generateSigningKey, hashRegistrationToken, parseSigningKeys } from '@ss/protocol';
 import { initApp, INIT_KINDS } from './init.js';
 import { formatValidation, validateProject } from './validate/index.js';
 import { loadManifest } from './manifest.js';
@@ -39,9 +39,9 @@ Usage:
   ss app init <dir> --kind service|pack --slug <slug> --name <name> [--sdk-version <range>] [--minimal]
   ss app validate [dir] [--json]
   ss pack build [dir] [--out <dir>] [--json]   bundle (minified ESM, shared chunks), hash, write descriptor.json (default dist/pack)
-  ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <private JWK|@file>] [--activate]
+  ss pack publish [dir] --portal <url> [--token <sst_…>] [--key <kid:seed|@file>] [--activate]
                                                sign the descriptor (signBundle) and upload it to the Portal admin pack API
-                                               (token: SS_ADMIN_TOKEN, key: SS_PACK_SIGNING_KEY)
+                                               (token: ADMIN_TOKEN, key: PACK_SIGNING_KEY)
   ss dev [--dir <dir>] [--port <n>] [--fixture ss.dev.json] [--state <file>] [--mongo-uri <uri>]
   ss dev env                                   development env values (signing key, registration token + hash)
   ss dev register --url <product url> --token <registration token> [--audience <aud>]
@@ -170,17 +170,29 @@ const readData = async (value, cwd) => {
 };
 
 /**
- * A private JWK given inline or as `@file`.
+ * A private key given as `kid:seed` (the environment form) or as `@file` (`kid:seed`, or a private JWK file).
  * @param {string} value
  * @param {string} cwd
  * @returns {Promise<Record<string, unknown>>}
  */
 const readKey = async (value, cwd) => {
-	const text = value.startsWith('@') ? await readFile(path.resolve(cwd, value.slice(1)), 'utf8') : value;
-	const parsed = JSON.parse(text);
-	if (!isObject(parsed) || typeof parsed.d !== 'string' || typeof parsed.kid !== 'string')
-		throw Object.assign(new Error('--key must be a private Ed25519 JWK with a kid'), { code: 'invalid_key' });
-	return parsed;
+	const text = (value.startsWith('@') ? await readFile(path.resolve(cwd, value.slice(1)), 'utf8') : value).trim();
+	const invalid = () =>
+		Object.assign(new Error('--key must be kid:seed (seed = base64url of 32 bytes) or a private Ed25519 JWK file'), {
+			code: 'invalid_key',
+		});
+	if (text.startsWith('{')) {
+		const parsed = JSON.parse(text);
+		if (!isObject(parsed) || typeof parsed.d !== 'string' || typeof parsed.kid !== 'string') throw invalid();
+		return parsed;
+	}
+	try {
+		const [key] = parseSigningKeys(text);
+		if (key) return key;
+	} catch {
+		// reported below
+	}
+	throw invalid();
 };
 
 /**
@@ -221,12 +233,12 @@ const pack = async (args, deps) => {
 			key: { type: 'string' },
 			activate: { type: 'boolean' },
 		});
-		const portalUrl = typeof values.portal === 'string' ? values.portal : env.SS_PORTAL_URL;
-		const token = typeof values.token === 'string' ? values.token : env.SS_ADMIN_TOKEN;
-		const key = typeof values.key === 'string' ? values.key : env.SS_PACK_SIGNING_KEY;
-		if (!portalUrl) return usageError(io, 'pack publish needs --portal <url> (or SS_PORTAL_URL)');
-		if (!token) return usageError(io, 'pack publish needs --token <staff API token> (or SS_ADMIN_TOKEN)');
-		if (!key) return usageError(io, 'pack publish needs --key <private JWK|@file> (or SS_PACK_SIGNING_KEY)');
+		const portalUrl = typeof values.portal === 'string' ? values.portal : env.PORTAL_URL;
+		const token = typeof values.token === 'string' ? values.token : env.ADMIN_TOKEN;
+		const key = typeof values.key === 'string' ? values.key : env.PACK_SIGNING_KEY;
+		if (!portalUrl) return usageError(io, 'pack publish needs --portal <url> (or PORTAL_URL)');
+		if (!token) return usageError(io, 'pack publish needs --token <staff API token> (or ADMIN_TOKEN)');
+		if (!key) return usageError(io, 'pack publish needs --key <kid:seed|@file> (or PACK_SIGNING_KEY)');
 		const dir = path.resolve(cwd, positionals[0] ?? '.');
 		const result = await publishPack({
 			pack: await buildPack(dir),
@@ -267,12 +279,11 @@ const dev = async (args, deps) => {
 			[
 				`# Development values — keep the registration token out of the product env:`,
 				`#   ss dev register --url http://localhost:3000 --token ${token}`,
-				`SS_PORTAL_URL=${typeof values['portal-url'] === 'string' ? values['portal-url'] : 'http://localhost:4400'}`,
-				'SS_APP_ID=',
-				`SS_APP_SIGNING_KEY=${JSON.stringify(privateJwk)}`,
-				`SS_REGISTRATION_TOKEN_HASH=${hashRegistrationToken(token)}`,
-				'SS_PRODUCT_DB_URI=',
-				'SS_LOG_LEVEL=debug',
+				`PORTAL_URL=${typeof values['portal-url'] === 'string' ? values['portal-url'] : 'http://localhost:4400'}`,
+				'APP_ID=',
+				`SIGNING_KEY=${formatSigningKey(privateJwk)}`,
+				`REGISTRATION_TOKEN_HASH=${hashRegistrationToken(token)}`,
+				'DATABASE_URI=',
 				'',
 			].join('\n'),
 		);
@@ -294,7 +305,7 @@ const dev = async (args, deps) => {
 		const saved = statePath ? await readJson(statePath) : null;
 		const snapshot = saved?.ok && isObject(saved.value) ? saved.value : undefined;
 		const database = createDatabaseResolver({
-			uri: typeof values['mongo-uri'] === 'string' ? values['mongo-uri'] : (deps.env.SS_DEV_MONGO_URI ?? null),
+			uri: typeof values['mongo-uri'] === 'string' ? values['mongo-uri'] : (deps.env.DEV_MONGODB_URI ?? null),
 		});
 		/** @type {Promise<void>} */
 		let saving = Promise.resolve();
@@ -389,16 +400,16 @@ const dev = async (args, deps) => {
 				token: { type: 'string' },
 				audience: { type: 'string' },
 			});
-			const token = typeof values.token === 'string' ? values.token : deps.env.SS_REGISTRATION_TOKEN;
+			const token = typeof values.token === 'string' ? values.token : deps.env.REGISTRATION_TOKEN;
 			if (typeof values.url !== 'string' || !token)
-				return usageError(io, 'dev register needs --url and --token (or SS_REGISTRATION_TOKEN)');
+				return usageError(io, 'dev register needs --url and --token (or REGISTRATION_TOKEN)');
 			const result = await call(values, 'register', {
 				url: values.url,
 				token,
 				...(typeof values.audience === 'string' ? { audience: values.audience } : {}),
 			});
 			io.out(
-				`Registered ${result.manifest.product.slug} as ${result.appId}\n  product key ${result.kid} (jkt ${result.thumbprint}) — proof of possession verified\n  set SS_APP_ID=${result.appId} if your product does not persist it\n`,
+				`Registered ${result.manifest.product.slug} as ${result.appId}\n  product key ${result.kid} (jkt ${result.thumbprint}) — proof of possession verified\n  set APP_ID=${result.appId} if your product does not persist it\n`,
 			);
 			return 0;
 		}
@@ -673,7 +684,7 @@ export const main = async (argv, deps) => {
 				json: { type: 'boolean' },
 			});
 			const dir = path.resolve(full.cwd, positionals[0] ?? '.');
-			const token = typeof values.token === 'string' ? values.token : full.env.SS_REGISTRATION_TOKEN;
+			const token = typeof values.token === 'string' ? values.token : full.env.REGISTRATION_TOKEN;
 			const saved = typeof values.state === 'string' ? await readJson(path.resolve(full.cwd, values.state)) : null;
 			const report = await runCertification({
 				dir,

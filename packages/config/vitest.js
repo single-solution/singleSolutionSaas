@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-/** Global setup that starts one MongoMemoryReplSet per run and exposes it as `SS_TEST_MONGO_URI`. */
+/** Global setup that starts one MongoMemoryReplSet per run and exposes it as `TEST_MONGODB_URI`. */
 export const MONGO_SETUP = fileURLToPath(new URL('./mongo-setup.js', import.meta.url));
 
 /** The coverage standard. */
@@ -40,7 +40,7 @@ export const folderPattern = (dir, folders) =>
  * @property {string[]} [coverageInclude] files measured for coverage (default `src/**`)
  * @property {string[]} [coverageExclude]
  * @property {string[]} [jsx] folders whose `.js` files contain JSX (relative to `dir`)
- * @property {boolean} [mongo] start the shared MongoMemoryReplSet (`SS_TEST_MONGO_URI`)
+ * @property {boolean} [mongo] start the shared MongoMemoryReplSet (`TEST_MONGODB_URI`)
  * @property {{ lines: number, functions: number, branches: number }} [thresholds]
  */
 

@@ -44,8 +44,8 @@ describe('price-lock tokens', () => {
 		expect(tokens.verify(`${notJson}.${forgedSig}`)).toBeNull();
 	});
 	it('derives the secret from the signing key when none is configured', () => {
-		const key = { kty: 'OKP', crv: 'Ed25519', d: Buffer.from('k'.repeat(32)).toString('base64url'), x: 'x' };
-		expect(lockSecret({ signingKey: JSON.stringify(key) })).toEqual(lockSecret({ signingKey: key }));
+		const key = { kid: 'k', kty: 'OKP', crv: 'Ed25519', d: Buffer.from('k'.repeat(32)).toString('base64url'), x: 'x' };
+		expect(lockSecret({ signingKey: `${key.kid}:${key.d}` })).toEqual(lockSecret({ signingKey: key }));
 		expect(lockSecret({ secret: 'short', signingKey: key }).length).toBe(32);
 		expect(() => lockSecret({ signingKey: null })).toThrow(/DEALS_LOCK_SECRET/);
 	});
@@ -53,8 +53,6 @@ describe('price-lock tokens', () => {
 
 describe('platform', () => {
 	it('refuses to start without the required environment', async () => {
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 	});
 });

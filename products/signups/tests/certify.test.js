@@ -28,7 +28,7 @@ const freePort = () =>
 let server;
 /** @type {string} */
 let portalUrl;
-const database = createDatabaseResolver({ uri: process.env.SS_TEST_MONGO_URI ?? null });
+const database = createDatabaseResolver({ uri: process.env.TEST_MONGODB_URI ?? null });
 
 beforeAll(async () => {
 	portalUrl = `http://127.0.0.1:${await freePort()}`;
@@ -37,10 +37,10 @@ beforeAll(async () => {
 		port: 0,
 		root: ROOT,
 		env: {
-			SS_PORTAL_URL: portalUrl,
-			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken(TOKEN),
-			SS_LOG_LEVEL: 'error',
+			PORTAL_URL: portalUrl,
+			SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+			REGISTRATION_TOKEN_HASH: hashRegistrationToken(TOKEN),
+			LOG_LEVEL: 'error',
 		},
 		overrides: { logger: noopLogger },
 	});

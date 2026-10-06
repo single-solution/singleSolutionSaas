@@ -1,6 +1,6 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
- * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: PORTAL_URL, APP_ID,
+ * SIGNING_KEY, REGISTRATION_TOKEN_HASH, DATABASE_URI, OUTBOUND_DEV_ALLOW_HOSTS; plus
  * WISHLIST_TOKEN_SECRET) and the project files (manifest with feature schemas inlined, string catalogs). This is the
  * only place that reads the environment.
  */
@@ -74,9 +74,9 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const { portalUrl, signingKey, registrationTokenHash } = config;
 	if (!portalUrl || !signingKey || !registrationTokenHash) {
 		const missing = [
-			['SS_PORTAL_URL', portalUrl],
-			['SS_APP_SIGNING_KEY', signingKey],
-			['SS_REGISTRATION_TOKEN_HASH', registrationTokenHash],
+			['PORTAL_URL', portalUrl],
+			['SIGNING_KEY', signingKey],
+			['REGISTRATION_TOKEN_HASH', registrationTokenHash],
 		]
 			.filter(([, value]) => !value)
 			.map(([name]) => name);

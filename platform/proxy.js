@@ -1,13 +1,13 @@
 // Next.js proxy (formerly middleware): per-request CSP nonce for HTML pages. Logic lives in src/infra/security-headers.js.
 // Delivery responses (/w/*, /p/*) set their own policies (cross-origin scripts; sandboxed previews) and are excluded.
-// On the dedicated preview origin (PREVIEW_ORIGIN) no console page is served (API routes refuse it in portal.handle).
+// On the dedicated preview origin (PREVIEW_URL) no console page is served (API routes refuse it in portal.handle).
 import { NextResponse } from 'next/server';
 import { createNonce, pageCsp } from './src/infra/security-headers.js';
 
 /** @returns {string | null} */
 const previewHost = () => {
 	try {
-		return process.env.PREVIEW_ORIGIN ? new URL(process.env.PREVIEW_ORIGIN).host : null;
+		return process.env.PREVIEW_URL ? new URL(process.env.PREVIEW_URL).host : null;
 	} catch {
 		return null;
 	}

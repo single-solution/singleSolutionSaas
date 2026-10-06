@@ -6,10 +6,13 @@ import {
 	createSigner,
 	ERROR_CODES,
 	exportPublicJwk,
+	formatSigningKey,
 	generateSigningKey,
 	importPrivateKey,
 	importPublicKey,
 	isProtocolError,
+	parseSigningKeys,
+	signingKeyFromSeed,
 	thumbprint,
 	toPublicJwk,
 } from '../src/index.js';
@@ -79,6 +82,38 @@ describe('keys', () => {
 		expect(isProtocolError(new Error('x'))).toBe(false);
 		expect(error.details).toEqual({ a: 1 });
 		expect(ERROR_CODES).toContain('replay');
+	});
+});
+
+describe('keys from seeds (environment form)', () => {
+	it('rebuilds the private JWK from its seed and round-trips kid:seed', async () => {
+		const { privateJwk } = await generateSigningKey({ kid: 'k-1' });
+		expect(signingKeyFromSeed('k-1', privateJwk.d)).toEqual(privateJwk);
+		expect(signingKeyFromSeed('k-1', Buffer.from(privateJwk.d, 'base64url'))).toEqual(privateJwk);
+		expect(signingKeyFromSeed('k-1', Buffer.from(privateJwk.d, 'base64url').toString('base64'))).toEqual(privateJwk);
+		const text = formatSigningKey(privateJwk);
+		expect(text).toBe(`k-1:${privateJwk.d}`);
+		expect(parseSigningKeys(text)).toEqual([privateJwk]);
+		const signer = createSigner(signingKeyFromSeed('k-1', privateJwk.d));
+		expect(signer.kid).toBe('k-1');
+	});
+
+	it('parses ordered lists and rejects malformed or duplicate entries', async () => {
+		const a = await generateSigningKey({ kid: 'a' });
+		const b = await generateSigningKey({ kid: 'ns:b' });
+		const list = parseSigningKeys(` ${formatSigningKey(a.privateJwk)} , ${formatSigningKey(b.privateJwk)} `);
+		expect(list.map((k) => k.kid)).toEqual(['a', 'ns:b']);
+		for (const bad of [
+			'',
+			'nokid',
+			`:${a.privateJwk.d}`,
+			'a:short',
+			`a:${a.privateJwk.d},a:${b.privateJwk.d}`,
+			`bad kid:${a.privateJwk.d}`,
+		])
+			expectThrowCode(() => parseSigningKeys(bad), 'invalid_argument');
+		expectThrowCode(() => signingKeyFromSeed('k', new Uint8Array(31)), 'invalid_argument');
+		expectThrowCode(() => formatSigningKey({ ...a.privateJwk, d: 'x' }), 'invalid_argument');
 	});
 });
 

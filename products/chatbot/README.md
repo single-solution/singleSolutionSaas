@@ -114,14 +114,14 @@ database and AI connectors (a fake OpenAI-compatible provider on local https; th
 through the Portal and answers → data in the merchant DB → `ai_token` usage → hourly settlement (1 550 mc for the
 elements, 10 mc metered for the tokens above the included amount).
 
-## Deploy to Vercel
+## Deploy
 
-1. Create a Vercel project with this directory as root (framework: Next.js). In the monorepo, `next.config.js` sets the
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
    workspace root automatically.
-2. Environment variables (Production): `SS_PORTAL_URL` (pinned Portal), `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one
-   line), `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional), `SS_PRODUCT_DB_URI` (the product's own small MongoDB:
+2. Environment variables (Production): `PORTAL_URL` (pinned Portal), `SIGNING_KEY` (`kid:seed`, Ed25519 seed in
+   base64url), `REGISTRATION_TOKEN_HASH`, `APP_ID` (optional), `DATABASE_URI` (the product's own small MongoDB:
    sessions, caches, usage queue — required in production), optional `CHATBOT_TOKEN_SECRET` (≥ 32 chars; else derived
-   from the signing key) and `SS_LOG_LEVEL`. There are no crons: nothing runs unless a request arrives (see
+   from the signing key). There are no crons: nothing runs unless a request arrives (see
    [jobs/README.md](jobs/README.md)).
 3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.

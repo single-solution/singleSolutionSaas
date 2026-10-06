@@ -224,7 +224,7 @@ describe('adapters', () => {
 	it('derives secrets, ids and decodes verified claims', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k1' });
 		expect(tokenSecret({ secret: 'x'.repeat(32) })).toEqual(Buffer.from('x'.repeat(32)));
-		expect(tokenSecret({ signingKey: JSON.stringify(privateJwk) })).toHaveLength(32);
+		expect(tokenSecret({ signingKey: `${privateJwk.kid}:${privateJwk.d}` })).toHaveLength(32);
 		expect(() => tokenSecret({ secret: 'short', signingKey: null })).toThrow(/ALERTS_TOKEN_SECRET/);
 		expect(randomId('als')).toMatch(/^als_[0-9a-z]{26}$/);
 		expect(stableId('alm', 'k')).toBe(stableId('alm', 'k'));
@@ -234,9 +234,7 @@ describe('adapters', () => {
 		const manifest = await loadManifest(ROOT);
 		expect(manifest.elements.every((/** @type {any} */ element) => element.features.type === 'object')).toBe(true);
 		expect(Object.keys(await loadStrings(ROOT))).toEqual(['en']);
-		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
-			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
-		);
+		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(/PORTAL_URL, SIGNING_KEY, REGISTRATION_TOKEN_HASH/);
 	});
 
 	it('serves the routes over plain node:http with a control database', async () => {
@@ -245,10 +243,10 @@ describe('adapters', () => {
 			port: 0,
 			root: ROOT,
 			env: {
-				SS_PORTAL_URL: 'https://portal.test',
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_alerts_serve_0123456789abcdef'),
-				SS_PRODUCT_DB_URI: mongoUri(`alerts_control_${Date.now()}`),
+				PORTAL_URL: 'https://portal.test',
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_alerts_serve_0123456789abcdef'),
+				DATABASE_URI: mongoUri(`alerts_control_${Date.now()}`),
 			},
 			overrides: { logger: noopLogger },
 		});

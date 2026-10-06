@@ -58,10 +58,9 @@ export const hashShareToken = (token) => createHash('sha256').update(`wishlist-s
  */
 export const tokenSecret = ({ secret, signingKey }) => {
 	if (typeof secret === 'string' && secret.length >= MIN_SECRET_LENGTH) return Buffer.from(secret, 'utf8');
-	const jwk = typeof signingKey === 'string' ? JSON.parse(signingKey) : signingKey;
+	const jwk = typeof signingKey === 'string' ? { d: signingKey.slice(signingKey.lastIndexOf(':') + 1) } : signingKey; // kid:seed
 	const material = typeof jwk?.d === 'string' ? Buffer.from(jwk.d, 'base64url') : null;
-	if (!material || material.length === 0)
-		throw new Error('WISHLIST_TOKEN_SECRET (≥ 32 chars) or SS_APP_SIGNING_KEY is required');
+	if (!material || material.length === 0) throw new Error('WISHLIST_TOKEN_SECRET (≥ 32 chars) or SIGNING_KEY is required');
 	return Buffer.from(hkdfSync('sha256', material, 'ss-wishlist', 'guest-token/v1', 32));
 };
 

@@ -158,14 +158,14 @@ merchant, website, credits, two subscriptions → database and messaging connect
 browser asks for a code → the gateway receives it → verify → JWT → issuer registered through the Portal API → Loyalty
 accepts the Signups token → `customer.created@1` routed by the Event Hub → usage reported → hourly settlement.
 
-## Deploy to Vercel
+## Deploy
 
-1. Create a Vercel project with this directory as root (framework: Next.js). In the monorepo, `next.config.js` sets the
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
    workspace root automatically.
-2. Environment variables (Production): `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one line),
-   `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional), `SS_PRODUCT_DB_URI` (the product's own small MongoDB —
-   required in production), **`SIGNUPS_SEAL_SECRET`** (≥ 32 random characters; keep it safe), `SS_LOG_LEVEL`
-   (optional). There are no crons: nothing runs unless a request or event arrives (see [jobs/README.md](jobs/README.md)).
+2. Environment variables (Production): `PORTAL_URL`, `SIGNING_KEY` (`kid:seed`, Ed25519 seed in base64url),
+   `REGISTRATION_TOKEN_HASH`, `APP_ID` (optional), `DATABASE_URI` (the product's own small MongoDB —
+   required in production), **`SIGNUPS_SEAL_SECRET`** (≥ 32 random characters; keep it safe).
+   There are no crons: nothing runs unless a request or event arrives (see [jobs/README.md](jobs/README.md)).
 3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin — it is also the
    prefix of every website's issuer, so keep it stable.

@@ -1,6 +1,6 @@
 /**
  * Website keys (`pk_` browser, `sk_` server): signed `@ss/protocol` tokens issued with the dedicated website-key
- * signer, shown once. Stored: metadata, and for `sk_` only `hashSecretKey` (HMAC with `WEBSITE_KEY_PEPPER`).
+ * signer, shown once. Stored: metadata, and for `sk_` only `hashSecretKey` (HMAC with `KEY_PEPPER`).
  * Rotation issues a replacement and stamps the old key's revocation time (`revokeAt`, after a grace period); that
  * revocation takes effect by time on read — the `websiteKeyRevoked` port and `GET /v1/product/revocations` (cursor,
  * F.9; products refresh it when they verify keys) include it once `revokeAt` has passed, with no job (F.19). An

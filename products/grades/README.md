@@ -91,8 +91,8 @@ pnpm --filter @ss/product-grades check
 pnpm --filter @ss/product-grades validate
 ```
 
-Environment: the standard app-kit variables in `.env.example` (`SS_PORTAL_URL`, `SS_APP_ID`, `SS_APP_SIGNING_KEY`,
-`SS_REGISTRATION_TOKEN_HASH`, `SS_PRODUCT_DB_URI`, `SS_LOG_LEVEL`, `SS_OUTBOUND_ALLOW_HOSTS`). There are no crons and no
+Environment: the standard app-kit variables in `.env.example` (`PORTAL_URL`, `APP_ID`, `SIGNING_KEY`,
+`REGISTRATION_TOKEN_HASH`, `DATABASE_URI`, `OUTBOUND_DEV_ALLOW_HOSTS`). There are no crons and no
 background work (see [jobs/README.md](jobs/README.md)).
 
 ## Dashboard

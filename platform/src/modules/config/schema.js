@@ -8,8 +8,8 @@ import { defineCollection } from '../../infra/db.js';
 
 export const LAYERS = 'config_layers';
 export const VERSIONS = 'config_versions';
-export const PLATFORM_LAYERS = 'config_platform_layers';
-export const PLATFORM_VERSIONS = 'config_platform_versions';
+export const GLOBAL_LAYERS = 'config_platform_layers';
+export const GLOBAL_VERSIONS = 'config_platform_versions';
 export const TEMPLATES = 'config_templates';
 export const SCHEDULES = 'config_schedules';
 export const EXPERIMENTS = 'config_experiments';
@@ -43,12 +43,12 @@ export const collections = Object.freeze([
 	}),
 	defineCollection({
 		module: 'config',
-		name: PLATFORM_LAYERS,
+		name: GLOBAL_LAYERS,
 		description: 'Current platform policy layer per app (staff policy across all merchants).',
 	}),
 	defineCollection({
 		module: 'config',
-		name: PLATFORM_VERSIONS,
+		name: GLOBAL_VERSIONS,
 		appendOnly: true,
 		description: 'Immutable version records of platform policies.',
 		indexes: versionIndexes,

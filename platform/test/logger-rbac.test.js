@@ -4,7 +4,7 @@ import {
 	ALL_PERMISSIONS,
 	MERCHANT_PERMISSIONS,
 	MERCHANT_ROLES,
-	PLATFORM_ROLES,
+	STAFF_ROLE_BUNDLES,
 	can,
 	permissionMatches,
 	permissionsFor,
@@ -169,7 +169,7 @@ describe('rbac', () => {
 	});
 
 	it('bundles only reference known permissions; validRoles', () => {
-		for (const bundle of [...Object.values(PLATFORM_ROLES), ...Object.values(MERCHANT_ROLES)]) {
+		for (const bundle of [...Object.values(STAFF_ROLE_BUNDLES), ...Object.values(MERCHANT_ROLES)]) {
 			for (const p of bundle) if (p !== '*') expect(ALL_PERMISSIONS).toContain(p);
 		}
 		for (const p of MERCHANT_ROLES.owner) expect(MERCHANT_PERMISSIONS).toContain(p);

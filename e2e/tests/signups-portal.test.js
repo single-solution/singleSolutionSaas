@@ -170,16 +170,16 @@ beforeAll(async () => {
 	const config = loadConfig({
 		NODE_ENV: 'test',
 		MONGODB_URI: mongoUri('unused'),
-		PORTAL_URL,
-		PORTAL_SIGNING_KEYS: JSON.stringify([portalKey]),
-		WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([websiteKeySigner]),
-		SECRETS_KEK: `kek-1:${randomBytes(32).toString('base64')}`,
+		PUBLIC_URL: PORTAL_URL,
+		SIGNING_KEYS: `${portalKey.kid}:${portalKey.d}`,
+		WEBSITE_SIGNING_KEYS: `${websiteKeySigner.kid}:${websiteKeySigner.d}`,
+		ENCRYPTION_KEYS: `kek-1:${randomBytes(32).toString('base64')}`,
 		SESSION_SECRET: randomBytes(32).toString('base64'),
-		WEBSITE_KEY_PEPPER: randomBytes(32).toString('base64'),
+		KEY_PEPPER: randomBytes(32).toString('base64'),
 		OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
 		STAFF_SESSION_IDLE_MINUTES: '720',
 	});
-	const mongo = await new MongoClient(/** @type {string} */ (process.env.SS_TEST_MONGO_URI)).connect();
+	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
 	const suffix = randomBytes(4).toString('hex');
 	const portalDb = mongo.db(`e2e_portal_${suffix}`);
 	const clientDbName = `e2e_signups_client_${suffix}`;
@@ -244,10 +244,10 @@ beforeAll(async () => {
 			root,
 			tls: { key, cert },
 			env: {
-				SS_PORTAL_URL: PORTAL_URL,
-				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
-				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken(token),
-				SS_LOG_LEVEL: 'error',
+				PORTAL_URL,
+				SIGNING_KEY: `${privateJwk.kid}:${privateJwk.d}`,
+				REGISTRATION_TOKEN_HASH: hashRegistrationToken(token),
+				LOG_LEVEL: 'error',
 				SIGNUPS_SEAL_SECRET: randomBytes(32).toString('hex'),
 			},
 			overrides: {

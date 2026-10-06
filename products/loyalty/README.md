@@ -108,17 +108,17 @@ The test suite includes `tests/certify.test.js` (the full `ss certify` suite, ev
 signup → website → credits → subscription → database connector → Event Hub delivery → points in the merchant DB →
 hourly settlement).
 
-## Deploy to Vercel
+## Deploy
 
-1. Create a Vercel project with this directory as root (framework: Next.js). In the monorepo, `next.config.js` sets the
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the monorepo, `next.config.js` sets the
    workspace root automatically.
 2. Environment variables (Production):
-   - `SS_PORTAL_URL` — the Portal URL this product trusts (pinned).
-   - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
-     registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
-   - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required in production.
-   - `SS_PRODUCT_DB_MAX_POOL_SIZE` — optional pool size of that client (default 5).
-   - `LOYALTY_WALLET_SECRET` — optional (≥ 32 chars); `SS_LOG_LEVEL` — optional.
+   - `PORTAL_URL` — the Portal URL this product trusts (pinned).
+   - `SIGNING_KEY` — `kid:seed` (Ed25519 seed, base64url; `ss dev env` prints one); `REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
+     registration token issued by Portal staff; `APP_ID` — after registration (optional; recorded by the handshake).
+   - `DATABASE_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required in production.
+   - `DATABASE_MAX_POOL_SIZE` — optional pool size of that client (default 5).
+   - `LOYALTY_WALLET_SECRET` — optional (≥ 32 chars).
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.

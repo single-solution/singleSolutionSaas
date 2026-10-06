@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 /**
- * Databases of one test file on the run's shared replica set (`SS_TEST_MONGO_URI`, started once by
+ * Databases of one test file on the run's shared replica set (`TEST_MONGODB_URI`, started once by
  * the `@ss/config` Mongo global setup; a private one is started when the variable is absent, e.g. a run without the global setup).
  *
  * Every name maps to a database of this file (`t_<random>_<n>`), so test files never share data, and `stop()`
@@ -30,7 +30,7 @@ afterEach(async () => {
  * a new database (for tests that inspect index or collection creation).
  */
 export const startMongo = async () => {
-	const shared = process.env.SS_TEST_MONGO_URI;
+	const shared = process.env.TEST_MONGODB_URI;
 	// TTL monitor off, as in the @ss/config Mongo setup: expiry follows the injected clock, never the wall clock
 	const replSet = shared
 		? null
@@ -150,12 +150,12 @@ export const testEnv = async (overrides = {}) => {
 	return {
 		NODE_ENV: 'test',
 		MONGODB_URI: 'mongodb://127.0.0.1:27017/ss_portal_test',
-		PORTAL_URL,
-		PORTAL_SIGNING_KEYS: JSON.stringify([privateJwk, previous]),
-		WEBSITE_KEY_SIGNING_KEYS: JSON.stringify([website]),
-		SECRETS_KEK: `kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}`,
+		PUBLIC_URL: PORTAL_URL,
+		SIGNING_KEYS: `${privateJwk.kid}:${privateJwk.d},${previous.kid}:${previous.d}`,
+		WEBSITE_SIGNING_KEYS: `${website.kid}:${website.d}`,
+		ENCRYPTION_KEYS: `kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}`,
 		SESSION_SECRET: b64(32, 3),
-		WEBSITE_KEY_PEPPER: b64(32, 4),
+		KEY_PEPPER: b64(32, 4),
 		...overrides,
 	};
 };

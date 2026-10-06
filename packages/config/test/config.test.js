@@ -66,8 +66,8 @@ describe('vitest preset', () => {
 });
 
 describe('mongo global setup', () => {
-	it('provides a replica set for the run (SS_TEST_MONGO_URI)', async () => {
-		const uri = process.env.SS_TEST_MONGO_URI;
+	it('provides a replica set for the run (TEST_MONGODB_URI)', async () => {
+		const uri = process.env.TEST_MONGODB_URI;
 		expect(uri).toMatch(/^mongodb:\/\//);
 		const client = await new MongoClient(/** @type {string} */ (uri)).connect();
 		try {
@@ -79,23 +79,23 @@ describe('mongo global setup', () => {
 	});
 
 	it('shares one replica set between setups, stops it after the last teardown and defers to an outer URI', async () => {
-		const outer = process.env.SS_TEST_MONGO_URI;
+		const outer = process.env.TEST_MONGODB_URI;
 		await mongoSetup.setup();
-		expect(process.env.SS_TEST_MONGO_URI).toBe(outer);
+		expect(process.env.TEST_MONGODB_URI).toBe(outer);
 		await mongoSetup.teardown();
-		delete process.env.SS_TEST_MONGO_URI;
+		delete process.env.TEST_MONGODB_URI;
 		try {
 			await Promise.all([mongoSetup.setup(), mongoSetup.setup()]);
-			const own = process.env.SS_TEST_MONGO_URI;
+			const own = process.env.TEST_MONGODB_URI;
 			expect(own).toMatch(/^mongodb:\/\//);
 			expect(own).not.toBe(outer);
 			await mongoSetup.teardown();
-			expect(process.env.SS_TEST_MONGO_URI).toBe(own);
+			expect(process.env.TEST_MONGODB_URI).toBe(own);
 			await mongoSetup.teardown();
-			expect(process.env.SS_TEST_MONGO_URI).toBeUndefined();
+			expect(process.env.TEST_MONGODB_URI).toBeUndefined();
 			await mongoSetup.teardown();
 		} finally {
-			process.env.SS_TEST_MONGO_URI = outer;
+			process.env.TEST_MONGODB_URI = outer;
 		}
 	}, 120_000);
 });

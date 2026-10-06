@@ -780,7 +780,7 @@ describe('connectors: health checks on demand and on resolve', () => {
 
 		// KEK rotation: a Portal with a new active KEK re-wraps on the next run
 		const rotated = await boot('cn_health', {
-			env: { SECRETS_KEK: `kek-3:${b64(32, 9)},kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}` },
+			env: { ENCRYPTION_KEYS: `kek-3:${b64(32, 9)},kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}` },
 		});
 		rotated.clock.set(clock.now() + 2 * 3600_000);
 		const svc = /** @type {any} */ (rotated.portal.modules.service('connectors'));

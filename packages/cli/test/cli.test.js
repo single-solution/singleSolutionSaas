@@ -58,11 +58,9 @@ describe('ss (main)', () => {
 		const result = await ss(['dev', 'env', '--kid', 'my-kid']);
 		expect(result.code).toBe(0);
 		const token = /--token (\S+)/.exec(result.out)?.[1] ?? '';
-		expect(result.out).toContain(`SS_REGISTRATION_TOKEN_HASH=${hashRegistrationToken(token)}`);
-		expect(JSON.parse(/SS_APP_SIGNING_KEY=(.*)/.exec(result.out)?.[1] ?? '{}')).toMatchObject({
-			kid: 'my-kid',
-			crv: 'Ed25519',
-		});
+		expect(result.out).toContain(`REGISTRATION_TOKEN_HASH=${hashRegistrationToken(token)}`);
+		expect(result.out).toMatch(/^SIGNING_KEY=my-kid:[A-Za-z0-9_-]{43}$/m);
+		expect(result.out).not.toContain('{');
 	});
 
 	it('explains that dev subcommands need a running emulator', async () => {

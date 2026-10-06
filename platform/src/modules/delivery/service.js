@@ -18,7 +18,7 @@
  *   bundle modules), both immutable.
  * - **Preview**: a signed 10-minute session with a candidate element set; `/p/<token>/<path>` fetches the merchant's
  *   public page through `@ss/net` `safeFetch` (website origin only, GET, no cookies, HTML ≤ 2 MB), injects the
- *   candidate bundle and a ribbon, and returns it sandboxed — nothing fetched is ever stored. With `PREVIEW_ORIGIN`
+ *   candidate bundle and a ribbon, and returns it sandboxed — nothing fetched is ever stored. With `PREVIEW_URL`
  *   previews are served only from that dedicated cookie-less origin (the merchant's own scripts may run there).
  * @module
  */
@@ -71,7 +71,7 @@ import { createAssetStorage, withImmutableCache } from './storage.js';
 
 /**
  * @typedef {object} DeliveryOptions
- * @property {AssetStorage | null} [storage] asset storage (default: from `PLATFORM_ASSET_STORAGE`)
+ * @property {AssetStorage | null} [storage] asset storage (default: from `STORAGE_*`)
  * @property {SafeFetch} [fetch] outbound HTTP client (preview pages, S3) — default `@ss/net` `safeFetch`
  * @property {import('@ss/net').Resolver} [resolve] DNS resolver of the outbound policies (tests)
  * @property {ReadonlyArray<string>} [allowHosts] development allowlist (default `ctx.config.outbound.allowHosts`;
@@ -167,7 +167,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 	const catalog = () => ctx.service('catalog');
 	const commerce = () => ctx.service('commerce');
 
-	const store = () => storage ?? fail('unavailable', 'Platform asset storage is not configured (PLATFORM_ASSET_STORAGE).');
+	const store = () => storage ?? fail('unavailable', 'Platform asset storage is not configured (STORAGE_BUCKET).');
 
 	/**
 	 * @param {Actor} actor
