@@ -229,9 +229,15 @@ describe('merchant console interactions (jsdom): account, websites, team', () =>
 		await press('Invite');
 		fillDialog('E-mail', 'temp@shop.test');
 		await pressDialog('Send invitation');
-		await until(() => shows('temp@shop.test'));
+		// the "sent" toast names the address before the list refreshes: wait for the invitation's own row
 		const tempRow = /** @type {HTMLElement} */ (
-			[...document.querySelectorAll('li')].find((li) => li.textContent?.includes('temp@shop.test'))
+			await until(() =>
+				[...document.querySelectorAll('li')].find(
+					(li) =>
+						li.textContent?.includes('temp@shop.test') &&
+						[...li.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Revoke'),
+				),
+			)
 		);
 		await clickEl(button('Revoke', tempRow));
 		await pressDialog('Revoke invitation');

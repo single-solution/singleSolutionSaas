@@ -162,11 +162,13 @@ export const browserOf = (portal) => {
 	 * @param {(status: number) => boolean} [status]
 	 */
 	const waitCall = async (method, path, status = () => true) => {
-		const found = await until(() =>
-			calls.find(
-				(c) => c.method === method && (typeof path === 'function' ? path(c.path) : c.path === path) && status(c.status),
-			),
-		);
+		/** @param {(typeof calls)[number]} c */
+		const samePath = (c) => c.method === method && (typeof path === 'function' ? path(c.path) : c.path === path);
+		const found = await until(() => calls.find((c) => samePath(c) && status(c.status))).catch((error) => {
+			// name what did happen, so a timeout is diagnosable
+			const seen = calls.filter(samePath).map((c) => `${c.status} ${JSON.stringify(c.body).slice(0, 160)}`);
+			throw new Error(`${/** @type {Error} */ (error).message}: ${method} ${String(path)} answered [${seen.join(', ')}]`);
+		});
 		// the response is recorded before the view applies it: let the view settle (busy flags, state)
 		await settle(3);
 		return /** @type {(typeof calls)[number]} */ (found);

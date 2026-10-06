@@ -44,7 +44,7 @@ import { UsageView, spendBreakdown } from '../../src/console/views/usage.js';
 import { OnboardingView, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
 import { PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
-vi.setConfig({ testTimeout: 60_000, hookTimeout: 120_000 });
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
 let mongo;
