@@ -127,7 +127,10 @@ describe('configFromEnv', () => {
 			logLevel: 'debug',
 			outboundAllowHosts: ['minio.dev', '127.0.0.1'],
 		});
-		expect(configFromEnv({ NODE_ENV: 'production' })).toMatchObject({ logLevel: 'info', outboundAllowHosts: [] });
+		expect(configFromEnv({ NODE_ENV: 'production', DATABASE_URI: 'mongodb://x' })).toMatchObject({
+			logLevel: 'info',
+			outboundAllowHosts: [],
+		});
 		expect(configFromEnv({ NODE_ENV: 'development' }).logLevel).toBe('debug');
 		expect(configFromEnv()).toHaveProperty('logLevel');
 		expect(configFromEnv({ DATABASE_MAX_POOL_SIZE: '2' }).productDbOptions.maxPoolSize).toBe(2);

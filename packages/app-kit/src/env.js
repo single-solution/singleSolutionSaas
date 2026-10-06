@@ -21,7 +21,16 @@ const poolSizeOf = (value) => {
  *   idle connections closed after a minute; `outboundAllowHosts` from the optional development-only
  *   `OUTBOUND_DEV_ALLOW_HOSTS` (ignored in production); `logLevel` is `info` in production, `debug` elsewhere
  */
-export const configFromEnv = (env = process.env) => ({
+export const configFromEnv = (env = process.env) => {
+	// in production the connection, keys and queues must survive restarts and be shared by instances: no in-memory
+	// fallback (the build itself runs without the database)
+	if (env.NODE_ENV === 'production' && !env.DATABASE_URI && env.NEXT_PHASE !== 'phase-production-build')
+		throw new Error("DATABASE_URI is required in production: set it to this product's own database.");
+	return configOf(env);
+};
+
+/** @param {Record<string, string | undefined>} env */
+const configOf = (env) => ({
 	productDbUri: env.DATABASE_URI,
 	productDbOptions: {
 		maxPoolSize: poolSizeOf(env.DATABASE_MAX_POOL_SIZE),
