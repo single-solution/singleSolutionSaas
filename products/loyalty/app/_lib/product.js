@@ -4,7 +4,7 @@
  * development stores hold the dashboard sessions created by `/sso`).
  */
 import { after } from 'next/server.js';
-import { createRequestHandler, toNextRoute } from '@ss/app-kit';
+import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createLoyalty, wireEvents } from '../../api/routes.js';
 
@@ -30,5 +30,14 @@ export const forward = (method) => async (/** @type {Request} */ request, /** @t
 	state.next ??= getLoyalty().then((instance) =>
 		toNextRoute(createRequestHandler(instance.product, buildRoutes(instance)), { after }),
 	);
-	return /** @type {any} */ ((await state.next)[method])(request, context);
+	/** @type {Record<string, (request: Request, context?: unknown) => Promise<Response>>} */
+	let handlers;
+	try {
+		handlers = await state.next;
+	} catch (error) {
+		// a failed start (database unreachable, …) is retried on the next request and reported instead of a blank 500
+		state.next = undefined;
+		return startupFailedResponse(error);
+	}
+	return /** @type {any} */ (handlers[method])(request, context);
 };

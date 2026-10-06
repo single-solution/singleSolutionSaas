@@ -3,7 +3,7 @@
  */
 export { createProduct } from './product.js';
 export { CONTROL_DB_POOL_SIZE, DATABASE_URI_REQUIRED, configFromEnv, configProblems } from './env.js';
-export { misconfiguredResponse } from './misconfigured.js';
+export { misconfiguredResponse, startupFailedResponse } from './misconfigured.js';
 export { createLogger, noopLogger, redact } from './logger.js';
 export { createMemoryStores } from './stores/memory.js';
 export { createMongoStores } from './stores/mongo.js';

@@ -4,7 +4,7 @@
  * development stores hold the dashboard sessions created by `/sso`).
  */
 import { after } from 'next/server.js';
-import { createRequestHandler, toNextRoute } from '@ss/app-kit';
+import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform, loadStrings } from '../../adapters/platform.js';
 import { buildRoutes, wireEvents } from '../../api/routes.js';
 
@@ -31,5 +31,14 @@ export const getStrings = () => (shared().strings ??= loadStrings(process.cwd())
 export const forward = (method) => async (/** @type {Request} */ request, /** @type {unknown} */ context) => {
 	const state = shared();
 	state.next ??= getProduct().then((instance) => toNextRoute(createRequestHandler(instance, buildRoutes(instance)), { after }));
-	return /** @type {any} */ ((await state.next)[method])(request, context);
+	/** @type {Record<string, (request: Request, context?: unknown) => Promise<Response>>} */
+	let handlers;
+	try {
+		handlers = await state.next;
+	} catch (error) {
+		// a failed start (database unreachable, …) is retried on the next request and reported instead of a blank 500
+		state.next = undefined;
+		return startupFailedResponse(error);
+	}
+	return /** @type {any} */ (handlers[method])(request, context);
 };

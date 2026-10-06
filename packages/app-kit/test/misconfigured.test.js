@@ -91,3 +91,18 @@ describe('@ss/app-kit/proxy', () => {
 		expect(proxy()).toBeUndefined();
 	});
 });
+
+describe('startupFailedResponse', () => {
+	it('answers 503 with a scrubbed reason', async () => {
+		const { startupFailedResponse } = await import('../src/misconfigured.js');
+		const response = startupFailedResponse(
+			new Error('connect failed mongodb+srv://user:pa55@cluster.example.net/x token abcdefghijklmnopqrstuvwxyz0123456789ABCD'),
+		);
+		expect(response.status).toBe(503);
+		const body = await response.json();
+		expect(body.status).toBe('unavailable');
+		expect(body.problems[0]).toMatch(/^Start-up failed: connect failed mongodb\+srv:\/\/\[redacted\]@cluster\.example\.net/);
+		expect(body.problems[0]).not.toMatch(/pa55|abcdefghijklmnop/);
+		expect((await startupFailedResponse('plain').json()).problems[0]).toBe('Start-up failed: plain');
+	});
+});
