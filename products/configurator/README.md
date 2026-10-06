@@ -63,8 +63,8 @@ app/        Next.js wiring and the merchant dashboard (overview, editor, live pr
 
 ## Environment
 
-Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
-`/setup` with a connection code), the product's signing key and its generated secrets live there. No crons.
+`DATABASE_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
+The Portal connection (made from Portal → Admin → Apps → Add product), the product's signing key and its generated secrets live there. No crons.
 
 ## Commands
 

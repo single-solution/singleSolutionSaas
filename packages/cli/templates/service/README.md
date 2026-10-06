@@ -6,28 +6,28 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 
 ## Layout
 
-| Path            | Purpose                                                                                              |
-| --------------- | ---------------------------------------------------------------------------------------------------- |
-| `manifest.json` | SSPS manifest (features referenced from `schemas/`, bundled inline by the tooling)                   |
-| `openapi.json`  | Mode C API (every `api.resources` entry documented)                                                  |
-| `core/`         | pure domain logic (no I/O, no DOM)                                                                   |
-| `headless/`     | Mode B element cores (`createNotes`) built on `core/`                                                |
-| `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                       |
-| `api/`          | thin REST handlers, event consumers, dashboard session view                                          |
-| `adapters/`     | data repositories (every query keyed by `websiteId`) and the app-kit platform wiring                 |
-| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)         |
-| `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                        |
-| `schemas/`      | feature schemas and product event data schemas                                                       |
-| `app/`          | Next.js App Router: `/setup`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
-| `tests/`        | unit tests (Vitest)                                                                                  |
+| Path            | Purpose                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `manifest.json` | SSPS manifest (features referenced from `schemas/`, bundled inline by the tooling)                                   |
+| `openapi.json`  | Mode C API (every `api.resources` entry documented)                                                                  |
+| `core/`         | pure domain logic (no I/O, no DOM)                                                                                   |
+| `headless/`     | Mode B element cores (`createNotes`) built on `core/`                                                                |
+| `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                                       |
+| `api/`          | thin REST handlers, event consumers, dashboard session view                                                          |
+| `adapters/`     | data repositories (every query keyed by `websiteId`) and the app-kit platform wiring                                 |
+| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)                         |
+| `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                        |
+| `schemas/`      | feature schemas and product event data schemas                                                                       |
+| `app/`          | Next.js App Router: `.well-known/ss-connect`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
+| `tests/`        | unit tests (Vitest)                                                                                                  |
 
 ## Develop
 
 ```sh
-ss dev env > .env.local        # only DATABASE_URI (empty = in-memory control store)
+ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 ss dev                         # local Portal emulator on http://localhost:4400 (reads ss.dev.json)
 pnpm dev                       # product on http://localhost:3000 (Next.js), or: node serve.js 3000 (plain node:http)
-ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at http://localhost:3000/setup
+ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
 ss dev keys                    # pk_test_/sk_test_ website keys
 ss dev launch --kind merchant  # prints a launch URL (GET /sso?launch=… → ss_session cookie → /dashboard)
 ss dev emit order.placed --website web_devwebsite01

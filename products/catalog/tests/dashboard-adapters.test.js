@@ -175,7 +175,7 @@ describe('adapters', () => {
 	});
 
 	it('builds the platform from the environment (control database optional) and refuses missing variables', async () => {
-		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		// no environment at all: an unconnected product (in-memory control store) that only serves its connect endpoint
 		const unconnected = await createPlatform({ env: {}, root: ROOT });
 		expect(unconnected.product.connected()).toBe(false);
 		await unconnected.close?.();

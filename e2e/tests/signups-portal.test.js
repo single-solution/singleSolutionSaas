@@ -47,7 +47,7 @@ import {
 	startServer as startLoyalty,
 } from '@ss/product-loyalty/serve';
 import { ROOT, loadManifest, startServer } from '@ss/product-signups/serve';
-import { connectProduct, createClock, mongoUri } from './helpers.js';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -238,6 +238,7 @@ beforeAll(async () => {
 			tls: { key, cert },
 			env: {
 				LOG_LEVEL: 'error',
+				CONNECT_SECRET,
 			},
 			overrides: {
 				now: clock.now,
@@ -380,7 +381,7 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		state.staff = confirm.cookie ?? login.cookie;
 	});
 
-	it('connects and activates Signups and Loyalty with connection codes', async () => {
+	it('connects and activates Signups and Loyalty with their connect secrets', async () => {
 		const { call, state, signups, loyalty } = ctx;
 		for (const [name, product] of /** @type {const} */ ([
 			['signups', signups],

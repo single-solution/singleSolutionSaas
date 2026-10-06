@@ -4,7 +4,7 @@ import path from 'node:path';
 import { generateSigningKey } from '@ss/protocol';
 import { main, SESSION_FILE, USAGE, VERSION } from '../src/cli.js';
 import { exists } from '../src/fsutil.js';
-import { createFakeProduct } from './helpers/fake-product.js';
+import { FAKE_SECRET, createFakeProduct } from './helpers/fake-product.js';
 import { createIo, freePort, removeDir, tempDir } from './helpers/util.js';
 
 /** @type {string} */
@@ -56,7 +56,10 @@ describe('ss (main)', () => {
 	it('prints development env values', async () => {
 		const result = await ss(['dev', 'env']);
 		expect(result.code).toBe(0);
-		expect(result.out.split('\n').filter((line) => /^[A-Z_]+=/.test(line))).toEqual(['DATABASE_URI=']);
+		expect(result.out.split('\n').filter((line) => /^[A-Z_]+=/.test(line))).toEqual([
+			'DATABASE_URI=',
+			expect.stringMatching(/^CONNECT_SECRET=[A-Za-z0-9_-]{43}$/),
+		]);
 		expect(result.out).toContain('ss dev connect');
 	});
 
@@ -128,11 +131,11 @@ describe('ss (main)', () => {
 		expect(await exists(path.join(dir, SESSION_FILE))).toBe(true);
 		const d = ['--dir', 'live'];
 		try {
-			expect(await ss(['dev', 'connect', ...d, '--url', productUrl])).toMatchObject({
+			expect((await ss(['dev', 'connect', ...d, '--url', productUrl])).code).toBe(2);
+			expect(await ss(['dev', 'connect', ...d, '--url', productUrl, '--secret', FAKE_SECRET])).toMatchObject({
 				code: 0,
-				out: expect.stringContaining('proof of possession verified'),
+				out: expect.stringContaining('signed answer verified'),
 			});
-			expect((await ss(['dev', 'code', ...d])).out).toMatch(/^ssc_\S+\n/);
 			const launch = await ss(['dev', 'launch', ...d, '--kind', 'admin', '--scope', 'mer_devmerchant01']);
 			expect(launch.out).toContain(`${productUrl}/sso?launch=`);
 			expect(launch.err).toContain('admin launch');
@@ -201,7 +204,7 @@ describe('ss (main)', () => {
 		// certify reuses the ss dev state (Portal key + connected app) instead of connecting again
 		const cert = await ss(['certify', 'live', '--url', productUrl, '--state', 'live/.ss/state.json', '--json']);
 		const report = JSON.parse(cert.out);
-		expect(report.checks.find((/** @type {any} */ check) => check.id === 'connection.setup').status).toBe('skip');
+		expect(report.checks.find((/** @type {any} */ check) => check.id === 'connection.connect').status).toBe('skip');
 		expect(
 			report.checks.filter((/** @type {any} */ check) => check.status === 'fail').map((/** @type {any} */ check) => check.id),
 		).toEqual([]);

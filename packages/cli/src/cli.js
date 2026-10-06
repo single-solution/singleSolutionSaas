@@ -6,7 +6,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { parseSigningKeys } from '@ss/protocol';
+import { generateConnectSecret, parseSigningKeys } from '@ss/protocol';
 import { initApp, INIT_KINDS } from './init.js';
 import { formatValidation, validateProject } from './validate/index.js';
 import { loadManifest } from './manifest.js';
@@ -32,6 +32,22 @@ export const VERSION = '0.1.0';
  * @property {(server: import('./emulator/server.js').EmulatorServer, portal: import('./emulator/portal.js').Portal) => void} [onServer] test hook
  */
 
+/**
+ * A value from a dotenv file (`NAME=value` lines), or undefined.
+ * @param {string} file
+ * @param {string} name
+ * @returns {Promise<string | undefined>}
+ */
+const envFileValue = async (file, name) => {
+	const text = await readFile(file, 'utf8').catch(() => '');
+	const line = text.split(/\r?\n/).find((entry) => entry.startsWith(`${name}=`));
+	const value = line
+		?.slice(name.length + 1)
+		.trim()
+		.replace(/^(['"])(.*)\1$/, '$2');
+	return value || undefined;
+};
+
 export const USAGE = `ss — Single Solution developer CLI (SSPS v1)
 
 Usage:
@@ -42,9 +58,9 @@ Usage:
                                                sign the descriptor (signBundle) and upload it to the Portal admin pack API
                                                (token: ADMIN_TOKEN, key: PACK_SIGNING_KEY)
   ss dev [--dir <dir>] [--port <n>] [--fixture ss.dev.json] [--state <file>] [--mongo-uri <uri>]
-  ss dev env                                   the product environment (only DATABASE_URI)
-  ss dev code                                  a one-time connection code to paste into the product's /setup
-  ss dev connect --url <product url>           connect a running product (posts a fresh code to its /setup)
+  ss dev env                                   the product environment (DATABASE_URI and CONNECT_SECRET)
+  ss dev connect --url <product url> --secret <connect secret>
+                                               connect a running product to the emulator (default secret: CONNECT_SECRET)
   ss dev launch --kind merchant|demo|admin|impersonate|partner|developer [--scope <merchantId|all>] [--merchant <id>] [--website <id>] [--actor <staff id>]
   ss dev keys [--website <id>] [--rotate] [--revoke <keyId>]
   ss dev emit <type[@v]> [--website <id>] [--data <json|@file>] [--force]
@@ -54,8 +70,8 @@ Usage:
   ss dev identity [--website <id> --decision approve|reject]   list or decide identity-issuer requests
   ss dev settle [--hours <n>]
   ss dev state
-  ss certify [dir] --url <product url> [--portal-url <url>] [--state <file>] [--report <file>] [--json]
-                                               (an unconnected product: certify connects it with a code)
+  ss certify [dir] --url <product url> [--secret <s>] [--portal-url <url>] [--state <file>] [--report <file>] [--json]
+                                               (connects the product itself; secret: --secret, CONNECT_SECRET or .env.local)
 
 Exit codes: 0 ok, 1 validation/certification failed or command error, 2 usage error.
 `;
@@ -275,9 +291,11 @@ const dev = async (args, deps) => {
 		parse(rest, {});
 		io.out(
 			[
-				'# Product environment: only its own control database (empty = in memory, development only).',
+				'# Product environment: its own control database (empty = in memory, development only) and a random',
+				'# connect secret of at least 32 characters (without it the product refuses connections).',
 				'DATABASE_URI=',
-				'# Then connect it at /setup with a connection code: `ss dev code`, or `ss dev connect --url http://localhost:3000`.',
+				`CONNECT_SECRET=${generateConnectSecret()}`,
+				'# Then connect it: `ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>`.',
 				'',
 			].join('\n'),
 		);
@@ -354,7 +372,7 @@ const dev = async (args, deps) => {
 						`  ${key.kind === 'pk' ? 'publishable' : 'secret     '}    ${key.key.slice(0, 24)}…  (${key.websiteId}; full key: ss dev keys)`,
 				),
 				...portal.apps().map((app) => `  connected      ${app.manifest.product.slug} → ${app.baseUrl} (${app.appId})`),
-				`Connect the product: ss dev connect --url ${fixture.product.url ?? 'http://localhost:3000'} (or ss dev code, then open its /setup)`,
+				`Connect the product: ss dev connect --url ${fixture.product.url ?? 'http://localhost:3000'} --secret <its CONNECT_SECRET>`,
 				statePath
 					? `State file: ${path.relative(cwd, statePath)}`
 					: 'State: in memory (pass --state .ss/dev-state.json to persist)',
@@ -387,20 +405,14 @@ const dev = async (args, deps) => {
 		});
 
 	switch (sub) {
-		case 'code': {
-			const { values } = parse(rest, { ...common });
-			const result = await call(values, 'code', {});
-			io.out(
-				`${result.code}\n  one-time connection code for ${result.appId}, valid until ${result.expiresAt}: paste it into the product's /setup\n`,
-			);
-			return 0;
-		}
 		case 'connect': {
-			const { values } = parse(rest, { ...common, url: { type: 'string' } });
-			if (typeof values.url !== 'string') return usageError(io, 'dev connect needs --url <product url>');
-			const result = await call(values, 'connect', { url: values.url });
+			const { values } = parse(rest, { ...common, url: { type: 'string' }, secret: { type: 'string' } });
+			const secret = typeof values.secret === 'string' ? values.secret : deps.env.CONNECT_SECRET;
+			if (typeof values.url !== 'string' || !secret)
+				return usageError(io, 'dev connect needs --url <product url> --secret <connect secret>');
+			const result = await call(values, 'connect', { url: values.url, secret });
 			io.out(
-				`Connected ${result.manifest.product.slug} as ${result.appId}\n  product key ${result.kid} (jkt ${result.thumbprint}) — proof of possession verified\n`,
+				`Connected ${result.manifest.product.slug} as ${result.appId}\n  product key ${result.kid} (jkt ${result.thumbprint}) — signed answer verified\n`,
 			);
 			return 0;
 		}
@@ -668,6 +680,7 @@ export const main = async (argv, deps) => {
 		if (command === 'certify') {
 			const { values, positionals } = parse(rest, {
 				url: { type: 'string' },
+				secret: { type: 'string' },
 				'portal-url': { type: 'string' },
 				state: { type: 'string' },
 				report: { type: 'string' },
@@ -675,8 +688,13 @@ export const main = async (argv, deps) => {
 			});
 			const dir = path.resolve(full.cwd, positionals[0] ?? '.');
 			const saved = typeof values.state === 'string' ? await readJson(path.resolve(full.cwd, values.state)) : null;
+			const secret =
+				(typeof values.secret === 'string' ? values.secret : undefined) ??
+				full.env.CONNECT_SECRET ??
+				(await envFileValue(path.join(dir, '.env.local'), 'CONNECT_SECRET'));
 			const report = await runCertification({
 				dir,
+				...(secret ? { secret } : {}),
 				...(typeof values.url === 'string' ? { url: values.url } : {}),
 				...(typeof values['portal-url'] === 'string' ? { portalUrl: values['portal-url'] } : {}),
 				...(saved?.ok && isObject(saved.value) ? { snapshot: saved.value } : {}),

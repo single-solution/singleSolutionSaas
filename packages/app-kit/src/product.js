@@ -49,8 +49,10 @@ const MANIFEST_RESIGN_MS = 3_600_000;
 /**
  * @typedef {object} ProductOptions
  * @property {Manifest} manifest validated SSPS manifest (service product, features inline)
- * @property {string} [portalUrl] a fixed Portal connection (tests, tools): with `signingKey` and `appId`. Without it the
- *   connection is made at `/setup` with a connection code and kept in the control database (`stores.settings`)
+ * @property {string} [portalUrl] a fixed Portal connection (tests, tools): with `signingKey` and `appId`. Without it a
+ *   Portal connects at `POST /.well-known/ss-connect` with `connectSecret`, and the connection is kept in the control
+ *   database (`stores.settings`)
+ * @property {string} [connectSecret] the deployer's `CONNECT_SECRET` (≥ 32 characters); without it connecting is refused
  * @property {string | null} [appId] with `portalUrl`
  * @property {Record<string, unknown> | string} [signingKey] with `portalUrl`: a private Ed25519 JWK, or `kid:seed`
  * @property {Partial<Stores>} [stores] defaults: in-memory (development only)
@@ -143,12 +145,13 @@ export const createProduct = (options) => {
 	const connection = createConnection({
 		settings: stores.settings,
 		portalKeys: stores.portalKeys,
+		nonces: stores.nonce,
+		...(options.connectSecret ? { connectSecret: options.connectSecret } : {}),
 		manifest,
 		injected:
 			typeof portalUrl === 'string'
 				? { portalUrl: canonicalUrl(portalUrl), appId, privateJwk: parseKey(options.signingKey) }
 				: null,
-		fetch,
 		now,
 		randomBytes,
 		...(nodeEnv ? { nodeEnv } : {}),
@@ -443,7 +446,7 @@ export const createProduct = (options) => {
 		manifest,
 		/** Load the generated secrets and the Portal connection (cached; the request handler awaits it first). */
 		ready: () => connection.ready(),
-		/** This deployment's address: the one recorded at `/setup`, else the manifest's `endpoints.base` (no trailing slash). */
+		/** This deployment's address: the one the Portal connected to, else the manifest's `endpoints.base` (no trailing slash). */
 		baseUrl: () => canonicalUrl(connection.current()?.baseUrl ?? /** @type {{ base: string }} */ (manifest.endpoints).base),
 		/** @returns {boolean} true once connected to a Portal (or with a fixed connection) */
 		connected: () => connection.connected(),
@@ -453,8 +456,8 @@ export const createProduct = (options) => {
 		 * @returns {Buffer}
 		 */
 		secret: (label) => connection.secret(label),
-		/** Connection-code onboarding: `connect({ code, baseUrl })` (the `/setup` page), `disconnect()`, `fixed()`. */
-		setup: Object.freeze({ connect: connection.connect, disconnect: connection.disconnect, fixed: connection.fixed }),
+		/** `POST /.well-known/ss-connect` (a Portal connecting with `CONNECT_SECRET`): `{ status, headers, body }`. */
+		handleConnect: connection.handleConnect,
 		events: Object.freeze({ handle: events.handle, on: events.on, dispatch: events.dispatch, effects: events.effects }),
 		/**
 		 * The manifest as served at `/.well-known/ss-app.json`: once the appId is known (after registration) it carries

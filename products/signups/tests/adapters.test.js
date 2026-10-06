@@ -186,7 +186,7 @@ describe('messaging', () => {
 
 describe('platform', () => {
 	it('refuses to start without the required environment and wires a control database when configured', async () => {
-		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		// no environment at all: an unconnected product (in-memory control store) that only serves its connect endpoint
 		const unconnected = await createPlatform({ env: {}, root: ROOT });
 		expect(unconnected.product.connected()).toBe(false);
 		await unconnected.close?.();

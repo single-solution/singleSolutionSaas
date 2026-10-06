@@ -42,7 +42,7 @@ import {
 	totpCode,
 } from '@ss/platform/testing';
 import { ROOT, loadManifest, startServer } from '@ss/product-catalog/serve';
-import { connectProduct, createClock, mongoUri, postSetup } from './helpers.js';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -201,6 +201,7 @@ beforeAll(async () => {
 		tls: { key, cert },
 		env: {
 			LOG_LEVEL: 'error',
+			CONNECT_SECRET,
 		},
 		overrides: {
 			now: clock.now,
@@ -306,15 +307,15 @@ describe.skipIf(!hasOpenssl)('Catalog & PIM on the real Portal', () => {
 		state.staff = confirm.cookie ?? login.cookie;
 	});
 
-	it('connects the product with a connection code and lists it after activation', async () => {
+	it('connects the product with its connect secret and lists it after activation', async () => {
 		const { call, state, PRODUCT_URL } = ctx;
-		// Admin → Apps → Add product: a one-time code, pasted into the product's /setup
+		// Admin → Apps → Add product: the product URL and its connect secret
 		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
 		expect(registered.json).toMatchObject({ slug: 'catalog', kind: 'service', status: 'pending', currentVersion: 1 });
 		state.appId = registered.json.appId;
-		// the product recorded its appId and the Portal keys; its /setup is closed now
-		expect((await postSetup(PRODUCT_URL, 'ssc_again')).status).toBe(404);
+		// a wrong secret is refused
+		expect((await connectProduct(call, state.staff, PRODUCT_URL, 'w'.repeat(40))).status).toBe(401);
 		const versions = await call('GET', `/v1/admin/apps/${state.appId}/versions`, { cookie: state.staff });
 		expect(versions.json.items[0]).toMatchObject({ version: 1, status: 'accepted' });
 		// approval of the registered version = activation (pending → active, manifest.accepted@1)

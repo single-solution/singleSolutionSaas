@@ -90,7 +90,8 @@ createProduct({
   manifest,                 // validated SSPS manifest (service product, features inline) — throws AppKitError invalid_manifest
   stores,                   // Partial<Stores>; default in-memory (dev only); production: createMongoStores({ db }) — the
                             // product's control database also keeps the Portal connection, its key and generated secrets
-  portalUrl, appId, signingKey,   // optional FIXED connection (tests, tools); omit them: the connection is made at /setup
+  connectSecret,            // CONNECT_SECRET (≥ 32 chars); without it POST /.well-known/ss-connect answers 503
+  portalUrl, appId, signingKey,   // optional FIXED connection (tests, tools); omit them: the Portal connects at /.well-known/ss-connect
   fetch, now, randomBytes, logger,
   strings,                  // { [lang]: { key: text } } or async (lang) => catalog | null — served at GET /v1/strings
   defaultLang,              // 'en'
@@ -116,10 +117,10 @@ createProduct({
 }) → product = {
   manifest,
   ready() → Promise,                                                   // load the generated secrets and the connection (cached; the handler awaits it)
-  connected() → boolean,                                               // false until /setup connected it (routes then answer 503)
+  connected() → boolean,                                               // false until the Portal connected it (routes then answer 503)
   secret(label) → Buffer,                                              // a secret generated once and kept in the control DB, derived per label
-  baseUrl() → string,                                                  // this deployment's address (recorded at /setup)
-  setup: { connect({ code, baseUrl }), disconnect(), fixed() },        // connection-code onboarding (GET/POST /setup, POST /v1/ss/disconnect)
+  baseUrl() → string,                                                  // this deployment's address (recorded at connect)
+  handleConnect({ headers, rawBody }) → { status, headers, body },     // POST /.well-known/ss-connect (shared-secret onboarding)
   events: {
     handle({ headers, rawBody }) → { status, body },                   // POST /.well-known/ss-events (event signatures)
     on(type, handler) → unsubscribe,                                   // type: 'name@v' | 'name' | '*'; handler(event, { source, website? })
@@ -235,16 +236,17 @@ createProduct({
 }
 ```
 
-**Connection (`/setup`).** A product is configured with its control database only. Until it is connected, every route
-except `/setup`, `/healthz`, `/readyz` and `/.well-known/ss-app.json` answers 503. `GET /setup` is a plain HTML form
-(connection code + this product's address, prefilled from the request and editable); `POST /setup` (form or JSON
-`{ code, baseUrl }`) generates the product's Ed25519 key, sends `@ss/protocol` `createConnectRequest` to the Portal named
-in the code (one-time token, proof of possession, manifest hash, base URL), verifies the signed answer
-(`verifyConnectResponse`) and stores `{ portalUrl, appId, baseUrl, privateJwk }` (insert-if-absent) plus the Portal
-JWKS. From then on `/setup` answers 404; the served manifest carries the recorded https address as `endpoints.base`.
-A Portal-signed `POST /v1/ss/disconnect` (Admin → Apps → Reconnect) clears the connection so `/setup` opens again;
-without the old Portal, delete the `setting:connection` document of the `ss_kit_state` collection. Other instances
-pick a new connection up within a second. Generated secrets: one 32-byte root secret (`setting:secrets`), derived per
+**Connection (`/.well-known/ss-connect`).** A product is configured with its control database and `CONNECT_SECRET`
+(`connectSecret`, ≥ 32 chars). Until it is connected, every route except `/.well-known/ss-connect`, `/healthz`,
+`/readyz` and `/.well-known/ss-app.json` answers 503 ("not connected… Portal: Admin → Apps → Add product"). The Portal
+(Admin → Apps → Add product: URL + secret) sends `POST /.well-known/ss-connect` with `{ portalUrl, jwks, appId,
+baseUrl, nonce }`, `SS-Connect-Timestamp` and `SS-Connect-Signature` (HMAC-SHA256 with the secret, `@ss/protocol`
+`createConnectRequest`). `handleConnect` verifies it (`verifyConnectRequest`: constant time, ± 5 min, nonce single-use
+via a TTL record), generates the product's Ed25519 key if none, stores `{ portalUrl, appId, baseUrl }` plus the Portal
+JWKS and answers `{ appId, nonce, publicJwk, manifest }` signed with the same secret (`createConnectResponse`). Without
+a secret it answers 503. The served manifest carries the recorded https address as `endpoints.base`. Connecting again
+with the right secret replaces the binding; to lock a Portal out, change `CONNECT_SECRET` and connect from the right
+Portal. Other instances pick a new connection up within a second. Generated secrets: one 32-byte root secret (`setting:secrets`), derived per
 purpose with `product.secret(label)` (the idempotency HMAC key, product token secrets).
 
 ### Routes
@@ -331,7 +333,7 @@ toNextRoute(handler, { stripPrefix = '/api' | false, after? }?) → { GET, POST,
 - `GET /healthz` and `GET /readyz`.
 - `POST /v1/data:export` and `POST /v1/data:anonymize` (portal; body `{ websiteId, subject?, requestId? }`).
 - `GET /.well-known/ss-app.json` and `POST /.well-known/ss-events`.
-- `GET /setup`, `POST /setup` (only while unconnected) and `POST /v1/ss/disconnect` (portal).
+- `POST /.well-known/ss-connect` (none; HMAC with `CONNECT_SECRET`, also while unconnected).
 - `GET /sso?launch=`, which sets the `ss_session` cookie and redirects with 303 to `endpoints.dashboard`.
 - With `createProduct({ devProbes: true })` (never in production), mounted by `standardRoutes`, website key:
    - `GET /v1/ss-probe/data-guard` → `{ rejected, code }`: runs a query without `websiteId` through the guard.
@@ -372,11 +374,12 @@ Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces ar
 
 ### Environment
 
-`configFromEnv(env = process.env)` → `{ productDbUri, productDbOptions, logLevel, outboundAllowHosts }`. It reads
-`DATABASE_URI` (the product's own control DB — the only variable a deployment needs), and optionally
+`configFromEnv(env = process.env)` → `{ productDbUri, productDbOptions, connectSecret, logLevel, outboundAllowHosts }`.
+It reads `DATABASE_URI` (the product's own control DB) and `CONNECT_SECRET` (the connect secret) — the two variables a
+deployment needs — and optionally
 `DATABASE_MAX_POOL_SIZE` (its pool, default 5) and `OUTBOUND_DEV_ALLOW_HOSTS` (comma-separated development allowlist
 for `outbound.allowHosts`; ignored in production). `logLevel` is `info` in production and `debug` elsewhere. No value
-is JSON, and no URL, key or secret is read from the environment.
+is JSON, and no URL, key or other secret is read from the environment.
 
 The merchant database is vetted with `@ss/net` `isSafeMongoUri` under the `outbound` policy before connecting (refused →
 `resource_invalid`), and the `MongoClient` dials every host through `guardedLookup` (the `lookup` option cannot be

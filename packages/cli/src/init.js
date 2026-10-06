@@ -12,6 +12,7 @@
  * @module
  */
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { generateConnectSecret } from '@ss/protocol';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PATTERNS } from '@ss/contracts';
@@ -146,5 +147,13 @@ export const initApp = async ({
 		await mkdir(path.dirname(out), { recursive: true });
 		await writeFile(out, fill(await readFile(source, 'utf8'), values));
 	}
-	return { dir: target, files: [...plan.keys()].sort() };
+	const files = [...plan.keys()];
+	if (kind === 'service') {
+		// local development secret (git-ignored); deployments set their own CONNECT_SECRET
+		await writeFile(path.join(target, '.env.local'), `DATABASE_URI=\nCONNECT_SECRET=${generateConnectSecret()}\n`, {
+			mode: 0o600,
+		});
+		files.push('.env.local');
+	}
+	return { dir: target, files: files.sort() };
 };

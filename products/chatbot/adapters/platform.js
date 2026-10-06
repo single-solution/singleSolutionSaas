@@ -1,7 +1,7 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: only `DATABASE_URI`, the
- * product's control database, plus optional tuning) and the project files (manifest with feature schemas inlined, string
- * catalogs). The Portal connection is made at `/setup` and, like every secret, kept in the control database. Registers the AI provider adapters (the merchant's own AI connector); knowledge pages and webhook tools
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: `DATABASE_URI`, the product's
+ * control database, `CONNECT_SECRET`, plus optional tuning) and the project files (manifest with feature schemas inlined, string
+ * catalogs). A Portal connects at `/.well-known/ss-connect` with the connect secret; the connection and every generated secret are kept in the control database. Registers the AI provider adapters (the merchant's own AI connector); knowledge pages and webhook tools
  * use app-kit's `product.outbound.fetch`. This is the only place that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
@@ -130,11 +130,12 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			connectors: { ai: AI_ADAPTERS },
 			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
 			outbound,
+			...(config.connectSecret ? { connectSecret: config.connectSecret } : {}),
 			...(stores === undefined ? {} : { stores }),
 			...overrides,
 		}),
 	);
-	// generated secrets and the Portal connection live in the control database (set up at /setup)
+	// generated secrets and the Portal connection live in the control database (made at /.well-known/ss-connect)
 	await product.ready();
 	const tokens = createTokens({ secret: rootSecret({ secret: product.secret('tokens').toString('base64url') }), now });
 	return {

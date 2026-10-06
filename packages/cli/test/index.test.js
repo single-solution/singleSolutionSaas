@@ -15,7 +15,7 @@ describe('@ss/cli public API', () => {
 			'lex',
 		])
 			expect(typeof (/** @type {any} */ (cli)[name])).toBe('function');
-		expect(cli.ANATOMY.service).toContain('app/setup/route.js');
+		expect(cli.ANATOMY.service).toContain('app/.well-known/ss-connect/route.js');
 		expect(cli.IMPORT_POLICY.core?.layers).toEqual(['core']);
 	});
 

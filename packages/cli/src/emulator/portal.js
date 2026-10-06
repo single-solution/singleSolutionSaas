@@ -2,7 +2,8 @@
  * The Portal side of the App Protocol, for local development (`ss dev`) and certification (`ss certify`).
  *
  * HTTP-free: `handleProduct()` implements the `/v1/product/*` API app-kit calls (client-assertion authenticated),
- * `handleConnect()` the connect endpoint products call from their `/setup`, and the admin operations (connection codes, connect, launch, keys, emit, settle, entitlement switches) are plain functions. The
+ * and the admin operations (connect — the connect-secret handshake to a product's `/.well-known/ss-connect` —, launch,
+ * keys, emit, settle, entitlement switches) are plain functions. The
  * node:http glue lives in `server.js`. Everything uses the real primitives: `@ss/protocol` for signatures and the
  * connection handshake, `@ss/entitlements` for resolution and settlement, `@ss/contracts` for validation.
  * @module
@@ -21,8 +22,7 @@ import {
 	canonicalUrl,
 	createJwks,
 	createKeyResolver,
-	createConnectResponse,
-	createConnectionCode,
+	createConnectRequest,
 	createMemoryReplayStore,
 	createSigner,
 	generateSigningKey,
@@ -33,7 +33,7 @@ import {
 	signRequest,
 	toPublicJwk,
 	verifyAssertion,
-	verifyConnectRequest,
+	verifyConnectResponse,
 } from '@ss/protocol';
 import { compile, evaluateCondition } from '@ss/rules';
 import { isObject } from '../fsutil.js';
@@ -716,100 +716,62 @@ export const createPortal = async ({
 		}
 	};
 
-	/** @type {Map<string, { appId: string, used: boolean, expiresAt: number }>} connection-token hashes → pending apps */
-	const connectionCodes = new Map();
-	const connectReplay = createMemoryReplayStore({ now });
-
 	/**
-	 * Add a product: a one-time connection code (24 h) for a pending app, as Portal Admin → Apps → Add product does.
-	 * @param {{ appId?: string }} [input]
-	 * @returns {{ code: string, appId: string, expiresAt: string }}
+	 * Connect a running product as Portal Admin → Apps → Add product does: `POST <url>/.well-known/ss-connect` HMAC-signed
+	 * with the product's `CONNECT_SECRET`; the signed answer carries its public key and manifest. Connecting the same
+	 * address again replaces the binding (same appId).
+	 * @param {{ url: string, secret: string }} input
 	 */
-	const connectionCode = ({ appId = createId('app') } = {}) => {
-		const { code, tokenHash } = createConnectionCode({ portalUrl });
-		const expiresAt = now() + 24 * 3_600_000;
-		connectionCodes.set(tokenHash, { appId, used: false, expiresAt });
-		log(`code        ${appId} (paste it into the product's /setup)`);
-		return { code, appId, expiresAt: new Date(expiresAt).toISOString() };
-	};
-
-	/**
-	 * `POST /v1/apps/connect` — a product's `/setup` connecting with a code: one-time token, proof of possession of the
-	 * product key, pinned base URL. Answers the appId and the signed Portal JWKS.
-	 * @param {{ headers: Record<string, string | undefined>, body: string }} request
-	 * @returns {Promise<PortalResponse>}
-	 */
-	const handleConnect = async ({ headers, body }) => {
-		/** @type {Awaited<ReturnType<typeof verifyConnectRequest>>} */
+	const connect = async ({ url, secret }) => {
+		const baseUrl = canonicalUrl(url);
+		const appId = [...apps.values()].find((existing) => existing.baseUrl === baseUrl)?.appId ?? createId('app');
+		const request = createConnectRequest({ secret, productUrl: baseUrl, portalUrl, jwks: createJwks([publicJwk]), appId, now });
+		const response = await fetch(request.url, { method: 'POST', headers: request.headers, body: request.body });
+		const text = await response.text();
+		if (response.status !== 200) {
+			/** @type {unknown} */
+			let body = text;
+			try {
+				body = JSON.parse(text);
+			} catch {
+				// keep the text
+			}
+			throw portalError('connection_rejected', `the product answered ${response.status}`, { status: response.status, body });
+		}
+		/** @type {Awaited<ReturnType<typeof verifyConnectResponse>>} */
 		let verified;
 		try {
-			verified = await verifyConnectRequest({ headers, body, portalUrl, now });
+			verified = await verifyConnectResponse({
+				secret,
+				headers: response.headers,
+				body: text,
+				nonce: request.nonce,
+				appId,
+				now,
+			});
 		} catch {
-			return fail('unauthorized', 'the connection request was refused');
+			throw portalError('connection_rejected', 'the product answer does not verify', { status: 502 });
 		}
-		const issued = connectionCodes.get(verified.tokenHash);
-		if (!issued || issued.used || issued.expiresAt < now())
-			return fail('unauthorized', 'the connection code is unknown, used or expired');
-		if (await connectReplay.seen(`connect|${verified.nonce}`, now() + 600_000))
-			return fail('unauthorized', 'the connection request was replayed');
 		const checked = validateManifest(verified.manifest);
-		if (!checked.ok) return fail('invalid_manifest', checked.problems.map((p) => `${p.path} ${p.message}`).join('; '));
-		if (checked.value.product.kind !== 'service') return fail('invalid_manifest', 'only service products connect');
-		issued.used = true;
+		if (!checked.ok)
+			throw portalError('connection_rejected', checked.problems.map((p) => `${p.path} ${p.message}`).join('; '), {
+				status: 422,
+			});
+		if (checked.value.product.kind !== 'service')
+			throw portalError('connection_rejected', 'only service products connect', { status: 422 });
 		/** @type {App} */
 		const app = {
-			appId: issued.appId,
-			baseUrl: verified.baseUrl,
+			appId,
+			baseUrl,
 			manifest: checked.value,
 			keys: [verified.publicJwk],
 			thumbprint: verified.thumbprint,
 			registeredAt: iso(),
 		};
-		apps.set(app.appId, app);
+		apps.set(appId, app);
 		onChange();
-		log(`connected   ${checked.value.product.slug} as ${app.appId} at ${app.baseUrl} (key ${verified.publicJwk.kid})`);
-		return json(
-			await createConnectResponse({
-				signer,
-				appId: app.appId,
-				portalUrl,
-				jkt: verified.thumbprint,
-				nonce: verified.nonce,
-				jwks: createJwks([publicJwk]),
-				now,
-			}),
-		);
-	};
-
-	/**
-	 * Connect a running product (as its owner would at `/setup`): issue a code and post it to `<url>/setup`.
-	 * @param {{ url: string }} input
-	 */
-	const connect = async ({ url }) => {
-		const baseUrl = canonicalUrl(url);
-		const { code, appId } = connectionCode();
-		const response = await fetch(`${baseUrl}/setup`, {
-			method: 'POST',
-			headers: { 'content-type': 'application/json', accept: 'application/json' },
-			body: JSON.stringify({ code, baseUrl }),
-		});
-		/** @type {unknown} */
-		let body = null;
-		try {
-			body = await response.json();
-		} catch {
-			// handled below
-		}
-		const app = apps.get(appId);
-		if (response.status !== 200 || !app)
-			throw portalError('connection_rejected', `the product answered ${response.status}`, { status: response.status, body });
-		return {
-			appId,
-			thumbprint: app.thumbprint,
-			kid: /** @type {PublicJwk} */ (app.keys[0]).kid,
-			manifest: app.manifest,
-			status: response.status,
-		};
+		log(`connected   ${checked.value.product.slug} as ${appId} at ${baseUrl} (key ${verified.publicJwk.kid})`);
+		return { appId, thumbprint: app.thumbprint, kid: verified.publicJwk.kid, manifest: app.manifest, status: response.status };
 	};
 
 	/**
@@ -1176,8 +1138,6 @@ export const createPortal = async ({
 		publicJwk,
 		jwks: () => createJwks([publicJwk]),
 		handleProduct,
-		connectionCode,
-		handleConnect,
 		connect,
 		adoptApp,
 		issueKeys,

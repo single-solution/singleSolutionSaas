@@ -60,29 +60,15 @@ import { isDuplicateKey } from '../../infra/util.js';
  * @property {Date} [createdAt]
  */
 
-/**
- * @typedef {object} CodeDoc
- * @property {string} _id code id (`cc_…`)
- * @property {string} tokenHash SHA-256 of the one-time token (the token itself is never stored)
- * @property {string} appId the app this code adds (new id) or reconnects
- * @property {boolean} reconnect
- * @property {string} createdBy
- * @property {Date} expiresAt
- * @property {Date | null} usedAt
- * @property {Date | null} revokedAt
- * @property {Date} expireAt removal (30 days after expiry)
- * @property {Date} [createdAt]
- */
-
 /** @param {string} appId @param {number} version */
 export const versionId = (appId, version) => `${appId}:${version}`;
 /** @param {string} appId @param {string} kid */
 export const keyId = (appId, kid) => `${appId}:${kid}`;
 
 /**
- * @param {{ apps: MutableOps, versions: MutableOps, keys: MutableOps, launches: MutableOps, codes: MutableOps }} collections
+ * @param {{ apps: MutableOps, versions: MutableOps, keys: MutableOps, launches: MutableOps }} collections
  */
-export const createCatalogRepo = ({ apps, versions, keys, launches, codes }) =>
+export const createCatalogRepo = ({ apps, versions, keys, launches }) =>
 	Object.freeze({
 		// --- apps
 		/** @param {string} appId @returns {Promise<AppDoc | null>} */
@@ -204,30 +190,5 @@ export const createCatalogRepo = ({ apps, versions, keys, launches, codes }) =>
 		},
 		/** @param {string} appId @param {string} jti */
 		launch: async (appId, jti) => launches.findOne({ _id: jti, appId }),
-
-		// --- connection codes
-		/** @param {CodeDoc} doc */
-		insertCode: async (doc) => {
-			await codes.insertOne(doc);
-		},
-		/** @param {string} codeId @returns {Promise<CodeDoc | null>} */
-		code: async (codeId) => /** @type {CodeDoc | null} */ (await codes.findOne({ _id: codeId })),
-		/** @param {string} tokenHash @returns {Promise<CodeDoc | null>} */
-		codeByToken: async (tokenHash) => /** @type {CodeDoc | null} */ (await codes.findOne({ tokenHash })),
-		/**
-		 * Burn a code atomically: only an unused, unrevoked, unexpired code is used (once).
-		 * @param {string} codeId
-		 * @param {Date} at
-		 * @returns {Promise<boolean>}
-		 */
-		useCode: async (codeId, at) =>
-			(await codes.updateOne({ _id: codeId, usedAt: null, revokedAt: null, expiresAt: { $gt: at } }, { $set: { usedAt: at } }))
-				.modifiedCount === 1,
-		/** @param {string} codeId @param {Date} at */
-		revokeCode: async (codeId, at) =>
-			(await codes.updateOne({ _id: codeId, usedAt: null, revokedAt: null }, { $set: { revokedAt: at } })).modifiedCount === 1,
-		/** @param {number} limit @returns {Promise<CodeDoc[]>} newest first */
-		listCodes: async (limit) =>
-			/** @type {CodeDoc[]} */ (await codes.find({}, { sort: { createdAt: -1, _id: -1 }, limit }).toArray()),
 	});
 /** @typedef {ReturnType<typeof createCatalogRepo>} CatalogRepo */

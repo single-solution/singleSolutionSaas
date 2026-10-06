@@ -5,7 +5,7 @@ import { generateSigningKey } from '@ss/protocol';
 import { certificationTarget, formatReport, nextCursorOf, problemShapeError, runCertification } from '../src/certify/index.js';
 import { initApp } from '../src/init.js';
 import { loadManifest } from '../src/manifest.js';
-import { createFakeProduct } from './helpers/fake-product.js';
+import { FAKE_SECRET, createFakeProduct } from './helpers/fake-product.js';
 import { freePort, removeDir, tempDir } from './helpers/util.js';
 
 const database = {
@@ -43,7 +43,7 @@ const certify = async (broken = {}, options = {}) => {
 	});
 	const url = await product.start();
 	try {
-		return await runCertification({ dir, url, portalUrl, database, ...options });
+		return await runCertification({ dir, url, portalUrl, database, secret: FAKE_SECRET, ...options });
 	} finally {
 		await product.stop();
 	}
@@ -61,9 +61,9 @@ describe('ss certify (service)', () => {
 		expect(report.ok).toBe(true);
 		const ids = report.checks.map((check) => check.id);
 		for (const id of [
-			'setup.rejects-bad-code',
-			'connection.setup',
-			'connection.setup-closed',
+			'connection.rejects-wrong-secret',
+			'connection.connect',
+			'connection.reconnect',
 			'launch.merchant',
 			'launch.demo',
 			'launch.admin',

@@ -84,13 +84,13 @@ The collections are `ss_wishlist_{lists,stock,notifications,audit,idempotency}`:
 ## Run
 
 ```bash
-pnpm exec ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
+pnpm exec ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 pnpm portal                         # fake Portal on :4400
 pnpm dev                            # product on :3000
 ```
 
-Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
-`/setup` with a connection code), the product's signing key and its generated secrets live there. The guest-token secret is one of them.
+`DATABASE_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
+The Portal connection (made from Portal → Admin → Apps → Add product), the product's signing key and its generated secrets live there. The guest-token secret is one of them.
 
 `pnpm check` runs format, lint, typecheck and tests with coverage. `pnpm validate` runs `ss app validate`.
 `tests/certify.test.js` runs `ss certify`. The Portal system test is `e2e/tests/wishlist-portal.test.js`.

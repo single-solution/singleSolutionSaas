@@ -7,7 +7,7 @@ with rules, show them with drop-in or headless widgets, and publish Product **JS
 MongoDB** and photos in the merchant's own bucket (both connected in the Portal); this deployment keeps only caches,
 queues and website ids.
 
-Built on `@ss/app-kit` (connection-code setup, SSO launches, website keys, entitlements with offline grace, bring-your-own
+Built on `@ss/app-kit` (shared-secret Portal connect, SSO launches, website keys, entitlements with offline grace, bring-your-own
 identity, events, usage, client-owned data, connectors) and `@ss/rules` (moderation conditions). Business rules live only
 in `core/` (pure) and `headless/`. Ported from ibrahimMobiles: the review model and its one-review-per-order-item
 guard, text sanitation, public reviewer names, moderation with replies, the exact approved-review rollup and the
@@ -105,10 +105,10 @@ also get **Send due requests now** (`POST /v1/dashboard/request-flow:run`) and *
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
+ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev connect --url http://localhost:3000   # or: ss dev code, then paste it at /setup
+ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
 ss dev emit order.completed --website web_devwebsite01
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
 ss certify . --url http://localhost:3000   # restart the product first (fresh token)
@@ -116,7 +116,7 @@ pnpm check                     # format, lint, typecheck, tests with coverage: c
 ```
 
 The suite includes `tests/certify.test.js` (the full `ss certify` suite, every check must pass). The system test
-`e2e/tests/reviews-portal.test.js` (monorepo workspace `@ss/e2e`) runs the product against the real Portal in process (staff bootstrap → connection code (/setup) → activation → merchant
+`e2e/tests/reviews-portal.test.js` (monorepo workspace `@ss/e2e`) runs the product against the real Portal in process (staff bootstrap → Add product (URL + connect secret) → activation → merchant
 signup → website + its identity issuer → credits → starter subscription → database connector → `order.completed@1`
 through the Event Hub → review request in the merchant DB → the verified customer reviews with the `pk_` key and their
 own login token → auto-approved by the default rule → summary and JSON-LD reflect it → `review` usage → hourly
@@ -126,12 +126,11 @@ settlement).
 
 1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
    monorepo, `next.config.js` sets the workspace root automatically.
-2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
-   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
-3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
-   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
-   and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
+2. Set two environment variables: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
+3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
+   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
 
 ## Notes and limits
 

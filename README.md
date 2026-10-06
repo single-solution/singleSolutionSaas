@@ -61,7 +61,7 @@ Each folder has its own `README.md` with its reference. `packages/app-kit/API.md
 ## Setup
 
 Needs Node 22+ (`.nvmrc`) and pnpm 11. Each deployable has a short `.env.example`: the Portal needs only its database
-and file storage, a product only its database.
+and file storage, a product its database and `CONNECT_SECRET`.
 
 ```bash
 pnpm install
@@ -105,8 +105,8 @@ The Portal runs on http://localhost:4000. Open http://localhost:4000/setup: conf
 pnpm exec ss app init products/my-app --kind service --slug my_app --name "My App"
 ```
 
-Add `--minimal` to start without the sample feature. A product's only setting is its own database (`DATABASE_URI`;
-empty in development = in memory). Run these two in separate terminals:
+Add `--minimal` to start without the sample feature. A product's settings are its own database (`DATABASE_URI`;
+empty in development = in memory) and `CONNECT_SECRET` (`ss dev env` generates one). Run these two in separate terminals:
 
 ```bash
 pnpm portal
@@ -117,8 +117,8 @@ pnpm dev
 ```
 
 `pnpm portal` runs a fake Portal (`ss dev`) on port 4400 with the merchants, websites and plans from `ss.dev.json`.
-`pnpm dev` runs the product on port 3000. Connect them with `pnpm exec ss dev connect --url http://localhost:3000` (or
-`ss dev code`, then paste the code at http://localhost:3000/setup). Use `ss dev launch`, `ss dev keys` and `ss dev emit`
+`pnpm dev` runs the product on port 3000. Connect them with
+`pnpm exec ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>`. Use `ss dev launch`, `ss dev keys` and `ss dev emit`
 to sign in, get website keys and send events.
 
 Before a product ships:
@@ -251,7 +251,8 @@ pnpm --filter @ss/e2e test
 
 The Portal and every service product run on **any Node 22 host** that runs Next.js (a server with `next build` +
 `next start`, a container, or a serverless platform), on any domain. The environment holds only database and storage
-connections; every key and secret is generated inside the apps, and URLs are recorded at their `/setup` pages. One
+connections; every other key and secret is generated inside the apps (a product also gets its `CONNECT_SECRET`). The Portal URL is
+recorded at the Portal's `/setup`. One
 MongoDB Atlas cluster (M0 works) serves all of them. Each deployable is one folder:
 
 | Deployable              | Folder                                | What it is                                                                                                                                |
@@ -311,9 +312,10 @@ an optional preview URL are set later in Admin → Settings. Indexes and migrati
 
 ### 4. Each service product
 
-Set `DATABASE_URI` (its Atlas database from step 1) and deploy. Then Portal → **Admin → Apps → Add product** → copy the
-connection code → open `https://<product domain>/setup` → paste the code. The product generates its key, proves it
-to the Portal and pins the Portal; review and activate it in the Portal, and merchants can subscribe.
+Set `DATABASE_URI` (its Atlas database from step 1) and `CONNECT_SECRET` (a random string of at least 32 characters,
+e.g. `openssl rand -hex 32`) and deploy. Then Portal → **Admin → Apps → Add product** → the product URL and that
+secret → **Connect**. The product generates its key and pins the Portal; review and activate it in the Portal, and
+merchants can subscribe. The **Portal** deployment is unchanged.
 
 ### 5. Element packs (pdp, storefront)
 
@@ -328,6 +330,7 @@ Repeat for `products/storefront`.
 
 ### After launch
 
-- Indexes and migrations apply themselves on the first request after a deploy. Moving a product: Admin → Apps → the
-  product → Reconnect, then paste the new code at its `/setup`.
+- Indexes and migrations apply themselves on the first request after a deploy. Moving a product or
+  reconnecting: Add product again with its URL and `CONNECT_SECRET` (same URL = same app). To lock a Portal out,
+  change `CONNECT_SECRET` and connect again from the right Portal.
 - There is no cron or worker to set up anywhere, on any host.

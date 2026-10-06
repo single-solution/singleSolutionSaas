@@ -125,7 +125,6 @@ describe('manifest versions: refresh, diff, review', () => {
 
 		const actions = (await t.audit(appId)).map((a) => a.action);
 		expect(actions).toEqual([
-			'catalog.connection_code_created',
 			'catalog.app_connected',
 			'catalog.app_activated',
 			'catalog.manifest_refreshed',
@@ -381,7 +380,6 @@ describe('product calls: heartbeat, key rotation, revocation', () => {
 		problemOf(await t.staff('POST', `/v1/admin/apps/${appId}/keys/product-k2/revoke`, { body: { reason: 'again' } }), 404);
 		problemOf(await t.staff('POST', `/v1/admin/apps/${appId}/keys/product-k2/revoke`, { body: {} }), 422);
 		expect((await t.audit(appId)).map((a) => a.action)).toEqual([
-			'catalog.connection_code_created',
 			'catalog.app_connected',
 			'catalog.key_rotated',
 			'catalog.key_revoked',

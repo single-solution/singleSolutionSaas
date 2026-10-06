@@ -41,7 +41,7 @@ import {
 	totpCode,
 } from '@ss/platform/testing';
 import { ROOT, loadManifest, startServer } from '@ss/product-grades/serve';
-import { connectProduct, createClock, mongoUri } from './helpers.js';
+import { CONNECT_SECRET, connectProduct, createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -200,6 +200,7 @@ beforeAll(async () => {
 		tls: { key, cert },
 		env: {
 			LOG_LEVEL: 'error',
+			CONNECT_SECRET,
 		},
 		overrides: {
 			now: clock.now,
@@ -305,9 +306,9 @@ describe.skipIf(!hasOpenssl)('Grade & Condition System on the real Portal', () =
 		state.staff = confirm.cookie ?? login.cookie;
 	});
 
-	it('connects the product with a connection code and lists it after activation', async () => {
+	it('connects the product with its connect secret and lists it after activation', async () => {
 		const { call, state, PRODUCT_URL } = ctx;
-		// Admin → Apps → Add product: a one-time code, pasted into the product's /setup
+		// Admin → Apps → Add product: the product URL and its connect secret
 		const registered = await connectProduct(call, state.staff, PRODUCT_URL);
 		expect(registered.status, JSON.stringify(registered.json)).toBe(201);
 		expect(registered.json).toMatchObject({ slug: 'grades', kind: 'service', status: 'pending', currentVersion: 1 });

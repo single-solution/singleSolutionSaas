@@ -6,7 +6,7 @@ that every other product accepts offline (bring-your-own identity, PLAN §5.3 / 
 merchant's own MongoDB; every message goes through the merchant's own messaging connector; this deployment keeps only
 caches, queues and website ids.
 
-Built on `@ss/app-kit` (connection-code setup, SSO launches, website keys, entitlements with offline grace, events, usage,
+Built on `@ss/app-kit` (shared-secret Portal connect, SSO launches, website keys, entitlements with offline grace, events, usage,
 client-owned data, connectors). Business rules live only in `core/` (pure) and `headless/`. Ported from ibrahimMobiles:
 the OTP service (atomic attempts, per-identity / IP / global caps, hashed codes — `apps/web/src/lib/otp`), the gateway
 response handling (`packages/shared/src/messaging`) and the phone rules (`packages/shared/src/phone.ts`, generalised to
@@ -143,7 +143,7 @@ data; impersonation shows the audit banner.
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # DATABASE_URI only (empty = in-memory control store)
+ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
 ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
@@ -161,14 +161,13 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
 
 1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
    monorepo, `next.config.js` sets the workspace root automatically.
-2. Set one environment variable: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
-   signing key and generated secrets). Nothing else: no URL, key or secret goes into the environment.
-3. Portal → Admin → Apps → **Add product** → copy the connection code → open `https://<product domain>/setup`, check the
-   address and paste the code. The product generates its key, proves it to the Portal and pins the Portal; then review
-   and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment>` against a fresh (unconnected) deployment before listing.
+2. Set two environment variables: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
+3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
+   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
+4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
 5. Per merchant website: connect a database and a messaging connector; Signups then requests to be the issuer and the
-   merchant approves it in the Portal (above). The address recorded at `/setup` prefixes every website's issuer: keep it
+   merchant approves it in the Portal (above). The address recorded at connect prefixes every website's issuer: keep it
    stable.
 
 ## Changelog

@@ -2,7 +2,8 @@
  * `ss certify [dir] --url <product base url>` — the SSPS certification suite (Part E §12) run against a running
  * product through an in-process Portal emulator bound to the product's pinned Portal URL.
  *
- * Service products: `.well-known` endpoints, connection-code setup (bad code, proof of possession, setup closes),
+ * Service products: `.well-known` endpoints, connect-secret onboarding (a wrong secret is refused, the right one connects
+ * and reconnects),
  * launches of every kind accepted and bad ones rejected, website keys (sk_, pk_ + origin), RFC 9457 errors, element
  * gating, idempotent POST replay, cursor pagination, standard resources, signed events (delivery, replay, tampering,
  * idempotent consumption), data guard, data export/anonymise, entitlement offline grace (the emulator goes down).
@@ -12,7 +13,15 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createId, validateManifest } from '@ss/contracts';
-import { createSigner, generateSigningKey, hashManifest, issueLaunch, issueWebsiteKey, signEvent } from '@ss/protocol';
+import {
+	createSigner,
+	generateConnectSecret,
+	generateSigningKey,
+	hashManifest,
+	issueLaunch,
+	issueWebsiteKey,
+	signEvent,
+} from '@ss/protocol';
 import { validateProject } from '../validate/index.js';
 import { normaliseFixture } from '../emulator/fixture.js';
 import { createPortal } from '../emulator/portal.js';
@@ -204,6 +213,8 @@ export const certificationTarget = (manifest, openapiPaths) => {
  * @property {string} [url] running product base URL (service products)
  * @property {string} [portalUrl] Portal URL the product pins (default: ss.dev.json portal.url or http://localhost:4400)
  * @property {Record<string, any>} [snapshot] `ss dev` state (reuses its Portal key and a connected app instead of connecting)
+ * @property {string} [secret] the product's `CONNECT_SECRET` (the CLI reads it from `--secret`, the environment or the
+ *   project's `.env.local`)
  * @property {typeof fetch} [fetch]
  * @property {() => number} [now]
  * @property {{ resolve: (target: { merchantId: string, websiteId: string }) => Promise<{ uri: string, dbName: string }>, stop?: () => Promise<void> }} [database]
@@ -221,6 +232,7 @@ export const runCertification = async ({
 	url,
 	portalUrl: portalUrlIn,
 	snapshot,
+	secret,
 	fetch = globalThis.fetch,
 	now = Date.now,
 	database,
@@ -412,40 +424,36 @@ export const runCertification = async ({
 		});
 		const eventsPath = manifest.endpoints?.events ?? '/.well-known/ss-events';
 		const snapshotApp = portal.apps().find((app) => app.baseUrl.replace(/\/+$/, '') === base);
-		if (!snapshotApp)
-			await check(
-				'setup.rejects-bad-code',
-				'POST /setup refuses an invalid connection code and stays unconnected',
-				async () => {
-					const result = await call('/setup', { method: 'POST', body: { code: 'ssc_invalid', baseUrl: base } });
-					expect(result.status === 400, `status ${result.status}`);
-					return '400, still unconnected';
-				},
-			);
-
-		// Connection-code onboarding (the product's /setup)
+		// Connect-secret onboarding (POST /.well-known/ss-connect)
 		let registered = Boolean(snapshotApp);
 		if (snapshotApp) {
 			skip(
-				'connection.setup',
-				'/setup connects with a one-time code and the proof of possession verifies',
+				'connection.connect',
+				'the Portal connects with the connect secret',
 				`reusing ${snapshotApp.appId} from the ss dev state`,
 			);
+		} else if (!secret) {
+			skip('connection.connect', 'the Portal connects with the connect secret', 'no CONNECT_SECRET (pass --secret)');
 		} else {
-			registered = await check(
-				'connection.setup',
-				'/setup connects with a one-time code and the proof of possession verifies',
-				async () => {
-					const result = await portal.connect({ url: base });
-					return `appId ${result.appId}, key ${result.kid}, jkt ${result.thumbprint.slice(0, 12)}…`;
-				},
-			);
-			await check('connection.setup-closed', 'once connected, /setup refuses another code', async () => {
-				const { code } = portal.connectionCode();
-				const result = await call('/setup', { method: 'POST', body: { code, baseUrl: base } });
-				expect(result.status === 404, `status ${result.status}`);
-				return '404 after connection';
+			await check('connection.rejects-wrong-secret', 'a connect request with another secret is refused', async () => {
+				try {
+					await portal.connect({ url: base, secret: generateConnectSecret() });
+				} catch (error) {
+					const status = /** @type {{ status?: number }} */ (error).status;
+					expect(status === 401, `status ${status}`);
+					return '401, still unconnected';
+				}
+				throw new Error('the product accepted another secret');
 			});
+			registered = await check('connection.connect', 'the Portal connects with the connect secret', async () => {
+				const result = await portal.connect({ url: base, secret });
+				return `appId ${result.appId}, key ${result.kid}, jkt ${result.thumbprint.slice(0, 12)}…`;
+			});
+			if (registered)
+				await check('connection.reconnect', 'connecting again with the secret replaces the binding', async () => {
+					const result = await portal.connect({ url: base, secret });
+					return `appId ${result.appId}`;
+				});
 		}
 		if (!registered) {
 			skip('live', 'remaining live checks', 'the product is not connected to this emulator');

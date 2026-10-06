@@ -1,7 +1,6 @@
 /**
  * node:http server for the emulated Portal: public JWKS, the `/v1/product/*` API, and a local admin API under
- * `/_dev/*` (loopback only, `x-ss-dev-token` required) used by `ss dev connect|code|launch|keys|emit|settle`, and
- * `POST /v1/apps/connect` (a product's `/setup` connecting with a code).
+ * `/_dev/*` (loopback only, `x-ss-dev-token` required) used by `ss dev connect|launch|keys|emit|settle`.
  * The server can be stopped and started again on the same port (offline-grace certification).
  * @module
  */
@@ -37,9 +36,7 @@ const adminError = (error) => {
 const admin = async (portal, name, input) => {
 	switch (name) {
 		case 'connect':
-			return portal.connect({ url: String(input.url ?? '') });
-		case 'code':
-			return portal.connectionCode(input.appId ? { appId: String(input.appId) } : {});
+			return portal.connect({ url: String(input.url ?? ''), secret: String(input.secret ?? '') });
 		case 'launch':
 			return portal.launch(/** @type {any} */ (input));
 		case 'keys':
@@ -107,10 +104,6 @@ export const createEmulatorServer = ({
 				return sendJson(response, 200, portal.jwks(), { 'cache-control': 'max-age=60' });
 			if (method === 'GET' && url.pathname === '/healthz')
 				return sendJson(response, 200, { ok: true, portalUrl: portal.portalUrl });
-			if (method === 'POST' && url.pathname === '/v1/apps/connect') {
-				const result = await portal.handleConnect({ headers: headerMap(request.headers), body: await readBody(request) });
-				return sendJson(response, result.status, result.body, result.headers);
-			}
 			if (url.pathname.startsWith('/v1/product/')) {
 				const raw = method === 'GET' ? '' : await readBody(request);
 				/** @type {unknown} */

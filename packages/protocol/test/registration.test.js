@@ -4,162 +4,107 @@ import {
 	canonicalUrl,
 	createConnectRequest,
 	createConnectResponse,
-	createConnectionCode,
 	createJwks,
-	hashConnectionToken,
-	hashManifest,
-	parseConnectionCode,
+	generateConnectSecret,
+	isConnectSecret,
 	verifyConnectRequest,
 	verifyConnectResponse,
 } from '../src/index.js';
-import { createClock, expectThrowCode, makeKey, seededRandom } from './helpers.js';
+import { createClock, expectThrowCode, makeKey } from './helpers.js';
 
 const PORTAL = 'https://portal.test';
 const BASE = 'https://coupons.example.com';
+const SECRET = 'a'.repeat(40);
 const manifest = { ssps: '1', product: { slug: 'coupons' }, endpoints: { base: BASE } };
 
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
 let portal;
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
 let product;
-/** @type {Awaited<ReturnType<typeof makeKey>>} */
-let other;
 beforeAll(async () => {
 	portal = await makeKey('portal-1');
 	product = await makeKey('product-1');
-	other = await makeKey('product-1');
 });
 
-/** @param {string} body @param {(value: any) => any} change */
-const edit = (body, change) => JSON.stringify(change(JSON.parse(body)));
-
-describe('connection codes', () => {
-	it('round-trips the Portal URL and a 256-bit token; only the hash is stored', () => {
-		const { code, token, tokenHash } = createConnectionCode({ portalUrl: `${PORTAL}/`, randomBytes: seededRandom(1) });
-		expect(code).toMatch(/^ssc_[A-Za-z0-9_-]+$/);
-		expect(parseConnectionCode(` ${code} `)).toEqual({ portalUrl: PORTAL, token });
-		expect(tokenHash).toBe(hashConnectionToken(token));
-		expect(code).not.toContain(tokenHash);
-	});
-
-	it('rejects anything that is not a connection code', () => {
-		for (const bad of [undefined, '', 'ssc_', 'abc', 'ssc_***', `ssc_${Buffer.from('https://p.test').toString('base64url')}`])
-			expectThrowCode(() => parseConnectionCode(bad), 'invalid_argument');
-		const notUrl = `ssc_${Buffer.from(`ftp://x sct_${'a'.repeat(43)}`).toString('base64url')}`;
-		expectThrowCode(() => parseConnectionCode(notUrl), 'invalid_argument');
+describe('connect secret', () => {
+	it('generates 256-bit secrets and refuses short ones', () => {
+		const secret = generateConnectSecret();
+		expect(isConnectSecret(secret)).toBe(true);
+		expect(isConnectSecret('short')).toBe(false);
+		expectThrowCode(
+			() => createConnectRequest({ secret: 'short', productUrl: BASE, portalUrl: PORTAL, jwks: { keys: [] }, appId: 'app_1' }),
+			'invalid_argument',
+		);
 	});
 });
 
 describe('connect handshake', () => {
 	/** @param {ReturnType<typeof createClock>} clock */
-	const start = async (clock, signer = product.signer, publicJwk = product.publicJwk) => {
-		const { code, tokenHash } = createConnectionCode({ portalUrl: PORTAL });
-		const request = await createConnectRequest({ code, baseUrl: `${BASE}/`, manifest, signer, publicJwk, now: clock.now });
-		return { code, tokenHash, request };
-	};
-
-	it('proves possession of the new key, bound to token, manifest and base URL; the answer is verified', async () => {
-		const clock = createClock();
-		const { tokenHash, request } = await start(clock);
-		expect(request.url).toBe(`${PORTAL}${CONNECT_PATH}`);
-		const verified = await verifyConnectRequest({
-			headers: request.headers,
-			body: request.body,
+	const start = (clock) =>
+		createConnectRequest({
+			secret: SECRET,
+			productUrl: `${BASE}/`,
 			portalUrl: PORTAL,
-			now: clock.now,
-		});
-		expect(verified).toMatchObject({ tokenHash, baseUrl: BASE, nonce: request.nonce, thumbprint: request.jkt });
-		expect(hashManifest(verified.manifest)).toBe(hashManifest(manifest));
-		expect(verified.publicJwk).not.toHaveProperty('d');
-
-		const answer = await createConnectResponse({
-			signer: portal.signer,
-			appId: 'app_1',
-			portalUrl: PORTAL,
-			jkt: verified.thumbprint,
-			nonce: verified.nonce,
 			jwks: createJwks([portal.publicJwk]),
+			appId: 'app_1',
 			now: clock.now,
 		});
-		const parsed = JSON.parse(JSON.stringify(answer));
+
+	it('verifies both directions with the shared secret; the secret is never sent', async () => {
+		const clock = createClock();
+		const request = start(clock);
+		expect(request.url).toBe(`${BASE}${CONNECT_PATH}`);
+		expect(request.body).not.toContain(SECRET);
+		expect(JSON.stringify(request.headers)).not.toContain(SECRET);
+		const verified = verifyConnectRequest({ secret: SECRET, headers: request.headers, body: request.body, now: clock.now });
+		expect(verified).toMatchObject({ portalUrl: PORTAL, appId: 'app_1', baseUrl: BASE, nonce: request.nonce });
+		expect(verified.jwks.keys[0]?.kid).toBe('portal-1');
+
+		const answer = createConnectResponse({
+			secret: SECRET,
+			appId: 'app_1',
+			nonce: verified.nonce,
+			publicJwk: product.publicJwk,
+			manifest,
+			now: clock.now,
+		});
 		const accepted = await verifyConnectResponse({
-			body: parsed,
-			portalUrl: PORTAL,
+			secret: SECRET,
+			headers: answer.headers,
+			body: answer.body,
 			nonce: request.nonce,
-			jkt: request.jkt,
+			appId: 'app_1',
 			now: clock.now,
 		});
-		expect(accepted).toMatchObject({ appId: 'app_1', portalKid: 'portal-1' });
-		await expect(
+		expect(accepted.publicJwk.kid).toBe('product-1');
+		expect(accepted.manifest).toEqual(manifest);
+		const check = (/** @type {Record<string, unknown>} */ change) =>
 			verifyConnectResponse({
-				body: parsed,
-				portalUrl: PORTAL,
-				nonce: 'another-nonce-0123',
-				jkt: request.jkt,
-				now: clock.now,
-			}),
-		).rejects.toMatchObject({ code: 'replay' });
-		await expect(
-			verifyConnectResponse({
-				body: { ...parsed, appId: 'app_2' },
-				portalUrl: PORTAL,
+				secret: SECRET,
+				headers: answer.headers,
+				body: answer.body,
 				nonce: request.nonce,
-				jkt: request.jkt,
+				appId: 'app_1',
 				now: clock.now,
-			}),
-		).rejects.toMatchObject({ code: 'malformed' });
-		await expect(
-			verifyConnectResponse({
-				body: parsed,
-				portalUrl: 'https://evil.test',
-				nonce: request.nonce,
-				jkt: request.jkt,
-				now: clock.now,
-			}),
-		).rejects.toMatchObject({ code: 'audience' });
-		await expect(
-			verifyConnectResponse({ body: parsed, portalUrl: PORTAL, nonce: request.nonce, jkt: 'other', now: clock.now }),
-		).rejects.toMatchObject({ code: 'subject' });
-		await expect(verifyConnectResponse({ body: {}, portalUrl: PORTAL, nonce: 'n', jkt: 'j' })).rejects.toMatchObject({
-			code: 'malformed',
-		});
+				...change,
+			});
+		await expect(check({ nonce: 'another-nonce-0123' })).rejects.toMatchObject({ code: 'replay' });
+		await expect(check({ appId: 'app_2' })).rejects.toMatchObject({ code: 'subject' });
+		await expect(check({ secret: 'b'.repeat(40) })).rejects.toMatchObject({ code: 'signature' });
+		// a request cannot be reflected as an answer
+		await expect(check({ headers: request.headers, body: request.body })).rejects.toMatchObject({ code: 'signature' });
 	});
 
-	it('refuses tampering, other tokens, other Portals, stale requests and foreign keys', async () => {
+	it('refuses tampering, other secrets and stale requests', () => {
 		const clock = createClock();
-		const { request } = await start(clock);
-		/** @param {Partial<{ headers: any, body: string, portalUrl: string }>} change */
-		const verify = (change) =>
-			verifyConnectRequest({ headers: request.headers, body: request.body, portalUrl: PORTAL, now: clock.now, ...change });
-		await expect(verify({ headers: {} })).rejects.toMatchObject({ code: 'malformed' });
-		await expect(verify({ headers: { authorization: `Bearer sct_${'b'.repeat(43)}` } })).rejects.toMatchObject({
-			code: 'signature',
-		});
-		await expect(verify({ portalUrl: 'https://other.test' })).rejects.toMatchObject({ code: 'audience' });
-		await expect(
-			verify({ body: edit(request.body, (b) => ({ ...b, manifest: { ...manifest, x: 1 } })) }),
-		).rejects.toMatchObject({
-			code: 'signature',
-		});
-		await expect(verify({ body: edit(request.body, (b) => ({ ...b, publicJwk: other.publicJwk })) })).rejects.toMatchObject({
-			code: 'signature',
-		});
-		await expect(verify({ body: edit(request.body, (b) => ({ ...b, publicJwk: { kty: 'RSA' } })) })).rejects.toMatchObject({
-			code: 'malformed',
-		});
-		await expect(verify({ body: 'not json' })).rejects.toMatchObject({ code: 'malformed' });
-		await expect(verify({ body: JSON.stringify({ request: 1 }) })).rejects.toMatchObject({ code: 'malformed' });
+		const request = start(clock);
+		const verify = (/** @type {Record<string, unknown>} */ change) => () =>
+			verifyConnectRequest({ secret: SECRET, headers: request.headers, body: request.body, now: clock.now, ...change });
+		expectThrowCode(verify({ headers: {} }), 'malformed');
+		expectThrowCode(verify({ secret: 'b'.repeat(40) }), 'signature');
+		expectThrowCode(verify({ body: request.body.replace('app_1', 'app_2') }), 'signature');
 		clock.advance(301_000);
-		await expect(verify({})).rejects.toMatchObject({ code: 'expired' });
-		await expect(
-			createConnectRequest({
-				code: createConnectionCode({ portalUrl: PORTAL }).code,
-				baseUrl: BASE,
-				manifest,
-				signer: portal.signer,
-				publicJwk: product.publicJwk,
-			}),
-		).rejects.toMatchObject({ code: 'invalid_argument' });
+		expectThrowCode(verify({}), 'expired');
 	});
 
 	it('canonicalises URLs for pinning', () => {

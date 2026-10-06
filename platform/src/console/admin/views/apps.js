@@ -1,7 +1,7 @@
 'use client';
 /**
- * Apps (products): list with status / kind filters; adding a service product (a one-time connection code the owner
- * pastes into the product's /setup; shown once); upload of a signed pack bundle (descriptor + detached signature + key); app detail with
+ * Apps (products): list with status / kind filters; adding a service product (its URL and connect secret; connecting
+ * again replaces the binding); upload of a signed pack bundle (descriptor + detached signature + key); app detail with
  * manifest versions (diff viewer with breaking flags, approve / reject with reason), lifecycle (activate,
  * deprecate with a sunset date, retire), environments, keys (revoke), health and the admin launch (one merchant,
  * or app-wide `all` for superadmins/admins).
@@ -159,80 +159,97 @@ export function AppsView(props) {
 				]}
 			/>
 			<ActionProblem problem={list.problem} />
-			<ConnectionCodeDialog open={dialog === 'add'} onClose={() => setDialog(null)} />
+			<AddProductDialog open={dialog === 'add'} onClose={() => setDialog(null)} />
 			<PackDialog open={dialog === 'pack'} onClose={() => setDialog(null)} />
 		</div>
 	);
 }
 
 /**
- * Add (or reconnect) a service product: a one-time connection code, valid 24 hours, shown once. The owner pastes it into
- * the product's `/setup`; the product then proves possession of its new key and the Portal pins its address.
- * @param {{ open: boolean, onClose: () => void, appId?: string | null }} props `appId`: reconnect that app
+ * Add a service product: its URL and the connect secret its deployer set as `CONNECT_SECRET`. The Portal calls the
+ * product's `/.well-known/ss-connect` (HMAC with the secret, which is never sent nor stored) and pins its address and
+ * key. Connecting an existing product again replaces its binding (new address, new key).
+ * @param {{ open: boolean, onClose: () => void }} props
  */
-export function ConnectionCodeDialog({ open, onClose, appId = null }) {
+export function AddProductDialog({ open, onClose }) {
+	const [url, setUrl] = useState('');
+	const [secret, setSecret] = useState('');
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [busy, setBusy] = useState(false);
-	const [issued, setIssued] = useState(/** @type {any} */ (null));
+	const [done, setDone] = useState(/** @type {any} */ (null));
 	const close = () => {
-		setIssued(null);
+		setDone(null);
 		setProblem(null);
+		setSecret('');
 		onClose();
 	};
-	const create = async () => {
+	const connect = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(appId ? adminApi.reconnect(appId) : adminApi.connectionCodes(), { method: 'POST' });
+		const result = await adminFetch(adminApi.connect(), { method: 'POST', body: { url: url.trim(), secret } });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
 			return;
 		}
-		setIssued(result.data);
+		setSecret('');
+		setDone(result.data);
 	};
+	const errors = fieldErrors(problem);
 	return (
 		<Dialog
 			open={open}
 			onClose={close}
-			title={appId ? 'Reconnect the product' : 'Add a service product'}
+			title={done ? (done.reconnected ? 'Product reconnected' : 'Product connected') : 'Add a service product'}
 			description={
-				issued
+				done
 					? undefined
-					: 'Deploy the product with its DATABASE_URI, then create a one-time connection code and paste it at https://<product address>/setup.'
+					: 'Deploy the product with DATABASE_URI and CONNECT_SECRET (a random string of at least 32 characters), then enter its address and that secret.'
 			}
 			footer={
-				issued ? (
-					<Button variant="secondary" onClick={close}>
-						Done
-					</Button>
+				done ? (
+					<ButtonLink as={Link} href={adminRoutes.app(done.appId)} variant="primary">
+						Open {done.slug}
+					</ButtonLink>
 				) : null
 			}>
-			{issued ? (
-				<div className="space-y-3">
-					<CodeBlock label="Connection code" code={issued.code} />
-					<KeyValueList
-						columns={1}
-						items={[
-							{ label: 'App', value: <IdChip id={issued.appId} label="app id" /> },
-							{ label: 'Valid until', value: formatDateTime(issued.expiresAt) },
-						]}
-					/>
-					<Callout tone="warning" title="Shown once">
-						Copy it now: the Portal keeps only its hash. Open the product's /setup page and paste it there; it works once.
-						{appId && !issued.disconnected
-							? ' The current deployment did not confirm the reset: reset it from its control database if it is still running.'
-							: ''}
-					</Callout>
-				</div>
+			{done ? (
+				<KeyValueList
+					columns={1}
+					items={[
+						{ label: 'App', value: <IdChip id={done.appId} label="app id" /> },
+						{ label: 'Address', value: done.baseUrl },
+						{ label: 'Key', value: done.kid },
+					]}
+				/>
 			) : (
-				<Form onSubmit={create} busy={busy} aria-label={appId ? 'Reconnect the product' : 'Add a service product'}>
+				<Form onSubmit={connect} busy={busy} aria-label="Add a service product">
 					<FormError problem={problem} />
+					<Input
+						label="Product URL"
+						type="url"
+						placeholder="https://product.example.com"
+						value={url}
+						onChange={(e) => setUrl(e.currentTarget.value)}
+						error={errors.url}
+						required
+						autoFocus
+					/>
+					<Input
+						label="Connect secret"
+						type="password"
+						autoComplete="off"
+						value={secret}
+						onChange={(e) => setSecret(e.currentTarget.value)}
+						error={errors.secret}
+						required
+					/>
 					<FormActions>
 						<Button variant="secondary" onClick={close}>
 							Cancel
 						</Button>
 						<Button type="submit" loading={busy}>
-							Create connection code
+							Connect
 						</Button>
 					</FormActions>
 				</Form>
@@ -424,7 +441,6 @@ export function AppView(props) {
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [refreshing, setRefreshing] = useState(false);
 	const [retrying, setRetrying] = useState(false);
-	const [reconnecting, setReconnecting] = useState(false);
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.apps(), label: 'Back to apps' }} />;
 	const { staff } = props;
 	const canReview = staffCan(staff, 'platform.apps.review');
@@ -547,11 +563,6 @@ export function AppView(props) {
 								loading={refreshing}
 								icon={<Icon name="refresh" size={14} />}>
 								Refresh manifest
-							</Button>
-						) : null}
-						{app.kind === 'service' && canManage ? (
-							<Button variant="secondary" onClick={() => setReconnecting(true)} icon={<Icon name="plug" size={14} />}>
-								Reconnect
 							</Button>
 						) : null}
 						{app.kind === 'service' && staffCan(staff, 'platform.jobs.manage') ? (
@@ -697,16 +708,6 @@ export function AppView(props) {
 			</Card>
 
 			{app.kind === 'service' ? <EnvironmentsCard app={app} canManage={canManage} onSaved={reload} /> : null}
-			{app.kind === 'service' ? (
-				<ConnectionCodeDialog
-					open={reconnecting}
-					appId={app.appId}
-					onClose={() => {
-						setReconnecting(false);
-						void reload();
-					}}
-				/>
-			) : null}
 
 			<Card title="Signing keys" subtitle="Keys the product signs client assertions and manifests with.">
 				<Table

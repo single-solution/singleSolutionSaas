@@ -20,17 +20,17 @@ export { DEFAULT_GRACE_MS, ENTITLEMENT_TYP, signEntitlementDocument, verifyEntit
 export * from './events.js';
 export * from './requests.js';
 export {
-	CONNECTED_TYP,
-	CONNECTION_CODE_PREFIX,
 	CONNECT_PATH,
-	CONNECT_TYP,
+	CONNECT_SIGNATURE_HEADER,
+	CONNECT_TIMESTAMP_HEADER,
+	CONNECT_TOLERANCE_SECONDS,
+	MIN_CONNECT_SECRET_LENGTH,
 	canonicalUrl,
 	createConnectRequest,
 	createConnectResponse,
-	createConnectionCode,
-	hashConnectionToken,
+	generateConnectSecret,
 	hashManifest,
-	parseConnectionCode,
+	isConnectSecret,
 	verifyConnectRequest,
 	verifyConnectResponse,
 } from './registration.js';
@@ -52,4 +52,3 @@ export { canonicalJson } from './encoding.js';
 /** @typedef {import('./assertion.js').AssertionClaims} AssertionClaims */
 /** @typedef {import('./website-keys.js').WebsiteKeyClaims} WebsiteKeyClaims */
 /** @typedef {import('./entitlement-doc.js').EntitlementPayload} EntitlementPayload */
-/** @typedef {import('./registration.js').ConnectClaims} ConnectClaims */

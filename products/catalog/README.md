@@ -3,7 +3,7 @@
 SSPS v1 **service product**: headless item data for any website — physical goods, services, digital products,
 rentals or anything else. It follows the Product Standard (PLAN Part E): the manifest is the single source of truth,
 business logic lives in `core/` (pure) and `headless/` (DOM-free), and `@ss/app-kit` implements the App Protocol
-(connection-code setup, launches, website keys, entitlements with offline grace, events, usage, data guard).
+(shared-secret Portal connect, launches, website keys, entitlements with offline grace, events, usage, data guard).
 
 All catalog data lives in the **merchant's own database** (`ss_catalog_*` collections through `data.forWebsite`); files
 stay in the merchant's storage or the Files product. The product's control database holds only kit caches and queues.
@@ -71,8 +71,8 @@ app/        Next.js wiring and the dashboard (overview, items, item detail with 
 
 ## Environment
 
-Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
-`/setup` with a connection code), the product's signing key and its generated secrets live there. The feed-token and export-link secrets are derived from them.
+`DATABASE_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
+The Portal connection (made from Portal → Admin → Apps → Add product), the product's signing key and its generated secrets live there. The feed-token and export-link secrets are derived from them.
 
 ## Commands
 

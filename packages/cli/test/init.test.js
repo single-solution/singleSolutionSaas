@@ -63,7 +63,7 @@ describe('ss app init → validate (integration)', () => {
 			'schemas/notes.features.json',
 			'schemas/events/order_notes.note_created@1.json',
 			'tests/api.test.js',
-			'app/setup/route.js',
+			'app/.well-known/ss-connect/route.js',
 			'app/.well-known/ss-events/route.js',
 			'app/.well-known/ss-app.json/route.js',
 			'app/api/v1/[...route]/route.js',
@@ -101,7 +101,8 @@ describe('ss app init → validate (integration)', () => {
 		expect(JSON.parse(await readFile(path.join(dir, 'vercel.json'), 'utf8')).crons).toBeUndefined();
 		expect(files.some((file) => file.startsWith('app/cron/'))).toBe(false);
 		const env = await readFile(path.join(dir, '.env.example'), 'utf8');
-		expect(env.split('\n').filter((line) => /^[A-Z_]+=/.test(line))).toEqual(['DATABASE_URI=']);
+		expect(env.split('\n').filter((line) => /^[A-Z_]+=/.test(line))).toEqual(['DATABASE_URI=', 'CONNECT_SECRET=']);
+		expect(await readFile(path.join(dir, '.env.local'), 'utf8')).toMatch(/^DATABASE_URI=\nCONNECT_SECRET=[A-Za-z0-9_-]{43}\n$/);
 		expect(env).not.toMatch(/\bSS_|LOG_LEVEL/);
 		expect(await readFile(path.join(dir, 'app/_lib/product.js'), 'utf8')).toContain('toNextRoute');
 		expect(await readFile(path.join(dir, 'app/api/v1/[...route]/route.js'), 'utf8')).toContain("forward('POST')");

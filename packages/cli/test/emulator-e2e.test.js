@@ -6,7 +6,7 @@ import { createEmulatorServer } from '../src/emulator/server.js';
 import { normaliseFixture } from '../src/emulator/fixture.js';
 import { initApp } from '../src/init.js';
 import { loadManifest } from '../src/manifest.js';
-import { createFakeProduct } from './helpers/fake-product.js';
+import { FAKE_SECRET, createFakeProduct } from './helpers/fake-product.js';
 import { freePort, removeDir, tempDir } from './helpers/util.js';
 
 /** @type {string} */
@@ -76,25 +76,20 @@ describe('ss dev emulator end to end (with @ss/protocol verification on the prod
 		expect(bad.status).toBe(400);
 	});
 
-	it('connects the product with a code (proof of possession); setup then closes and codes are single use', async () => {
-		const code = (await admin('code', {})).body.code;
-		const connect = async () =>
-			fetch(`${productUrl}/setup`, {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ code, baseUrl: productUrl }),
-			});
-		const connected = await connect();
+	it('connects the product with its connect secret; a wrong secret is refused; connecting again keeps the app', async () => {
+		const wrong = await admin('connect', { url: productUrl, secret: 'w'.repeat(40) });
+		expect(wrong.status).toBe(502);
+		expect(wrong.body.error).toBe('connection_rejected');
+		expect(product.appId).toBeNull();
+		const connected = await admin('connect', { url: productUrl, secret: FAKE_SECRET });
 		expect(connected.status).toBe(200);
-		expect(product.appId).toBe((await connected.json()).appId);
+		expect(product.appId).toBe(connected.body.appId);
 		expect((await admin('state')).body.apps).toMatchObject([{ kids: ['e2e-app-1'], slug: 'e2e-notes', baseUrl: productUrl }]);
-		expect((await connect()).status).toBe(404);
-		const again = await admin('connect', { url: productUrl });
-		expect(again.status).toBe(502);
-		expect(again.body.error).toBe('connection_rejected');
-		// a used code is refused by the Portal itself
-		const replay = await fetch(`${portalUrl}/v1/apps/connect`, { method: 'POST', body: '{}' });
-		expect(replay.status).toBe(401);
+		const again = await admin('connect', { url: productUrl, secret: FAKE_SECRET });
+		expect(again.body.appId).toBe(connected.body.appId);
+		expect((await admin('state')).body.apps).toHaveLength(1);
+		// the emulator has no product-initiated connect endpoint any more
+		expect((await fetch(`${portalUrl}/v1/apps/connect`, { method: 'POST', body: '{}' })).status).toBe(404);
 	});
 
 	it('issues launches the product verifies, keys the product accepts, and delivers signed events', async () => {

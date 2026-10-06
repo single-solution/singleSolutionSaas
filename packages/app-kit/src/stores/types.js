@@ -14,11 +14,12 @@
 
 /**
  * The product's own settings in its control database: the Portal connection (Portal URL, appId, base URL, the
- * product's private key) and generated secrets. `insert` is insert-if-absent, so concurrent cold starts and
- * concurrent setups agree on one value.
+ * product's private key) and generated secrets. `insert` is insert-if-absent, so concurrent cold starts agree on one
+ * value; `put` replaces.
  * @typedef {object} SettingsStore
  * @property {(id: string) => Promise<Record<string, any> | null>} get
  * @property {(id: string, value: Record<string, any>) => Promise<boolean>} insert false when `id` already exists
+ * @property {(id: string, value: Record<string, any>) => Promise<void>} put insert or replace
  * @property {(id: string) => Promise<void>} delete
  */
 

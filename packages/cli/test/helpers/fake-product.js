@@ -6,15 +6,14 @@
 import { createServer } from 'node:http';
 import { validateEvent } from '@ss/contracts';
 import {
-	createConnectRequest,
+	createConnectResponse,
 	createKeyResolver,
 	createMemoryReplayStore,
 	createSigner,
 	originAllowed,
-	parseConnectionCode,
 	signAssertion,
 	toPublicJwk,
-	verifyConnectResponse,
+	verifyConnectRequest,
 	verifyEntitlementDocument,
 	verifyEvent,
 	verifyLaunch,
@@ -34,10 +33,21 @@ const readBody = (request) =>
 		request.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
 	});
 
+/** The CONNECT_SECRET fake products run with (unless a test passes another). */
+export const FAKE_SECRET = 'fake-product-connect-secret-0123456789abcdef';
+
 /**
- * @param {{ manifest: any, portalUrl: string, signingKey: any, broken?: Record<string, boolean>, fetch?: typeof fetch }} options
+ * @param {{ manifest: any, portalUrl: string, signingKey: any, broken?: Record<string, boolean>, fetch?: typeof fetch,
+ *   secret?: string }} options
  */
-export const createFakeProduct = ({ manifest, portalUrl, signingKey, broken = {}, fetch = globalThis.fetch }) => {
+export const createFakeProduct = ({
+	manifest,
+	portalUrl,
+	signingKey,
+	broken = {},
+	fetch = globalThis.fetch,
+	secret = FAKE_SECRET,
+}) => {
 	const signer = createSigner(signingKey);
 	const publicJwk = toPublicJwk(signingKey);
 	const portalKeys = createKeyResolver({
@@ -47,6 +57,7 @@ export const createFakeProduct = ({ manifest, portalUrl, signingKey, broken = {}
 	const launchStore = createMemoryReplayStore();
 	const eventReplay = createMemoryReplayStore();
 	const portalCallReplay = createMemoryReplayStore();
+	const connectNonces = createMemoryReplayStore();
 	let pkReads = 0;
 	/** @type {string | null} */
 	let appId = null;
@@ -150,31 +161,21 @@ export const createFakeProduct = ({ manifest, portalUrl, signingKey, broken = {}
 		const raw = method === 'GET' ? '' : await readBody(request);
 		const route = `${method} ${url.pathname}`;
 		if (route === 'GET /.well-known/ss-app.json') return send(response, 200, manifest);
-		if (route === 'POST /setup') {
-			if (appId) return send(response, 404, { error: 'not_found' });
-			/** @type {Record<string, any>} */
-			let input = {};
+		if (route === 'POST /.well-known/ss-connect') {
+			/** @type {ReturnType<typeof verifyConnectRequest>} */
+			let connect;
 			try {
-				input = JSON.parse(raw);
+				connect = verifyConnectRequest({ secret, headers: /** @type {any} */ (request.headers), body: raw });
 			} catch {
-				// handled below
+				return send(response, 401, { error: 'unauthorized' });
 			}
-			try {
-				if (parseConnectionCode(input.code).portalUrl !== portalUrl) throw new Error('another Portal');
-			} catch {
-				return send(response, 400, { error: 'bad_request' });
-			}
-			const connect = await createConnectRequest({ code: input.code, baseUrl: input.baseUrl, manifest, signer, publicJwk });
-			const answered = await fetch(connect.url, { method: 'POST', headers: connect.headers, body: connect.body });
-			if (!answered.ok) return send(response, 502, { error: 'refused' });
-			const accepted = await verifyConnectResponse({
-				body: await answered.json(),
-				portalUrl,
-				nonce: connect.nonce,
-				jkt: connect.jkt,
-			});
-			appId = accepted.appId;
-			return send(response, 200, { appId });
+			if (await connectNonces.seen(`ss-connect|${connect.nonce}`, Date.now() + 900_000))
+				return send(response, 401, { error: 'unauthorized' });
+			if (connect.portalUrl !== portalUrl) return send(response, 401, { error: 'unauthorized' });
+			appId = connect.appId;
+			const answer = createConnectResponse({ secret, appId, nonce: connect.nonce, publicJwk, manifest });
+			response.writeHead(200, answer.headers);
+			return void response.end(answer.body);
 		}
 		if (route === 'POST /.well-known/ss-events') {
 			try {

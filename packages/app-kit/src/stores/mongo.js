@@ -116,6 +116,13 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 					throw error;
 				}
 			},
+			put: async (id, value) => {
+				await col(names.state).replaceOne(
+					/** @type {any} */ ({ _id: `setting:${id}` }),
+					/** @type {any} */ ({ value, at: new Date(now()) }),
+					{ upsert: true },
+				);
+			},
 			delete: async (id) => {
 				await col(names.state).deleteOne(/** @type {any} */ ({ _id: `setting:${id}` }));
 			},

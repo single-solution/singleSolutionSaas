@@ -433,14 +433,15 @@ describe('admin console interactions (jsdom)', () => {
 		// and back, so the rest of the flow uses the original owner
 		await staff.api.post(adminApi.transfer(websiteId), { toMerchantId: merchantId, reason: 'undo' });
 
-		// ---------------------------------------------------------------- apps: add (connection code), upload, lifecycle, keys, review
+		// ---------------------------------------------------------------- apps: add (URL + connect secret), upload, lifecycle, keys, review
 		render(<AppsView {...await admin.loadApps(staff.api, {})} staff={me} />);
 		await press('Add product');
-		await press('Create connection code');
-		await until(() => staff.calls.some((c) => c.path === adminApi.connectionCodes() && c.status === 201));
-		expect(shows('Shown once')).toBe(true);
-		expect(document.body.textContent).toMatch(/ssc_[A-Za-z0-9_-]+/);
-		await press('Done');
+		fill('Product URL', 'https://product.example.com');
+		fill('Connect secret', 'too-short');
+		await press('Connect');
+		await until(() => staff.calls.some((c) => c.path === adminApi.connect() && c.status === 422));
+		expect(shows('at least 32 characters')).toBe(true);
+		await press('Cancel');
 		await press('Upload pack');
 		await press('Upload');
 		expect(shows('Paste the JSON here.')).toBe(true);

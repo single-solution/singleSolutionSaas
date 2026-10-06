@@ -67,7 +67,7 @@ describe('tokens and platform', () => {
 		expect(retentionDays('P1Y')).toBe(30);
 	});
 	it('refuses to start without the required environment and loads the string catalogs', async () => {
-		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		// no environment at all: an unconnected product (in-memory control store) that only serves its connect endpoint
 		const unconnected = await createPlatform({ env: {}, root: ROOT });
 		expect(unconnected.product.connected()).toBe(false);
 		await unconnected.close?.();

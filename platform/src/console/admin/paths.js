@@ -84,10 +84,8 @@ export const adminApi = Object.freeze({
 	apps: (/** @type {{ status?: string | null, kind?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
 		`/v1/admin/apps${query(q)}`,
 	app: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}`,
-	/** `POST` → `{ code, codeId, appId, expiresAt }` (one-time connection code, shown once) / `GET` → recent codes */
-	connectionCodes: () => '/v1/admin/apps/connection-codes',
-	connectionCode: (/** @type {string} */ c) => `/v1/admin/apps/connection-codes/${e(c)}`,
-	reconnect: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/reconnect`,
+	/** `POST { url, secret }` → `{ appId, slug, baseUrl, kid, reconnected }` (connect a service product) */
+	connect: () => '/v1/admin/apps/connect',
 	packs: () => '/v1/admin/packs',
 	versions: (/** @type {string} */ a, /** @type {{ cursor?: string | null }} */ q = {}) =>
 		`/v1/admin/apps/${e(a)}/versions${query(q)}`,

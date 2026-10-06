@@ -259,12 +259,14 @@ export const createRequestHandler = (product, routes, options = {}) => {
 			const r = route;
 			if (r.cors === true) extra['access-control-allow-origin'] = '*';
 
-			// generated secrets and the Portal connection (cached per instance); before setup only `connected: false`
-			// routes (setup, health, the manifest) answer
+			// generated secrets and the Portal connection (cached per instance); before a Portal connects only
+			// `connected: false` routes (connect, health, the manifest) answer
 			if (typeof product.ready === 'function') await product.ready();
 			if (r.connected !== false && typeof product.connected === 'function' && !product.connected()) {
 				extra['retry-after'] = '60';
-				return fail(problem('unavailable', 'This product is not connected to a Portal yet: open /setup.'));
+				return fail(
+					problem('unavailable', 'This product is not connected to a Portal yet (Portal: Admin → Apps → Add product).'),
+				);
 			}
 
 			/** @type {RequestContext} */

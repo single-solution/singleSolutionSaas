@@ -11,9 +11,7 @@
 import {
 	createJwks,
 	createKeyResolver,
-	CONNECT_PATH,
-	createConnectResponse,
-	createConnectionCode,
+	createConnectRequest,
 	createMemoryReplayStore,
 	createSigner,
 	generateSigningKey,
@@ -23,7 +21,7 @@ import {
 	signEvent,
 	signRequest,
 	verifyAssertion,
-	verifyConnectRequest,
+	verifyConnectResponse,
 } from '@ss/protocol';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { isObject } from './util.js';
@@ -110,8 +108,6 @@ export const createFakePortal = async ({
 	/** @type {Set<string>} websites whose identity requests are refused (403) */
 	const refuseIdentity = new Set();
 	const state = { down: false };
-	/** @type {Map<string, { used: boolean }>} connection-token hashes issued by `connectionCode()` */
-	const codes = new Map();
 	/** @type {{ baseUrl: string, manifest: unknown } | null} the product bound by the last connect */
 	let connected = null;
 
@@ -160,37 +156,6 @@ export const createFakePortal = async ({
 		if (path === '/.well-known/jwks.json') {
 			calls.push({ method: 'GET', path });
 			return json(200, createJwks(jwksKeys));
-		}
-		if (request.method === 'POST' && path === CONNECT_PATH) {
-			calls.push({ method: 'POST', path });
-			try {
-				const verified = await verifyConnectRequest({
-					headers: request.headers,
-					body: await request.text(),
-					portalUrl: base,
-					now,
-				});
-				const issued = codes.get(verified.tokenHash);
-				if (!issued || issued.used || (await replay.seen(`connect|${verified.nonce}`, now() + 600_000)))
-					throw new Error('token');
-				issued.used = true;
-				productKey = verified.publicJwk;
-				connected = { baseUrl: verified.baseUrl, manifest: verified.manifest };
-				return json(
-					200,
-					await createConnectResponse({
-						signer,
-						appId,
-						portalUrl: base,
-						jkt: verified.thumbprint,
-						nonce: verified.nonce,
-						jwks: createJwks(jwksKeys),
-						now,
-					}),
-				);
-			} catch {
-				return json(401, { type: `${base}/problems/unauthorized`, title: 'Unauthorized', status: 401 });
-			}
 		}
 		const caller = await authenticate(request);
 		calls.push({ method: request.method, path, ...(caller ? { appId: caller } : {}) });
@@ -357,11 +322,30 @@ export const createFakePortal = async ({
 			});
 			return { headers: { ...headers, ...(raw ? { 'content-type': 'application/json' } : {}) }, body: raw };
 		},
-		/** A fresh one-time connection code for this Portal (paste it into the product's `/setup`). */
-		connectionCode: () => {
-			const { code, tokenHash } = createConnectionCode({ portalUrl: base });
-			codes.set(tokenHash, { used: false });
-			return code;
+		/**
+		 * Connect a product the way the Portal does (`POST <productUrl>/.well-known/ss-connect`, HMAC with the connect
+		 * secret): on success the product's key is pinned for client assertions.
+		 * @param {{ productUrl: string, secret: string, fetch: (request: Request) => Promise<Response> }} input `fetch`
+		 *   reaches the product (its request handler in tests)
+		 * @returns {Promise<{ status: number, appId?: string }>}
+		 */
+		connect: async ({ productUrl, secret, fetch: productFetch }) => {
+			const request = createConnectRequest({ secret, productUrl, portalUrl: base, jwks: createJwks(jwksKeys), appId, now });
+			const res = await productFetch(
+				new Request(request.url, { method: 'POST', headers: request.headers, body: request.body }),
+			);
+			if (!res.ok) return { status: res.status };
+			const answer = await verifyConnectResponse({
+				secret,
+				headers: res.headers,
+				body: await res.text(),
+				nonce: request.nonce,
+				appId,
+				now,
+			});
+			productKey = answer.publicJwk;
+			connected = { baseUrl: request.baseUrl, manifest: answer.manifest };
+			return { status: res.status, appId };
 		},
 		/** The product bound by the last successful connect (`{ baseUrl, manifest }`), or null. */
 		connected: () => connected,

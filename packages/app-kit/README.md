@@ -1,6 +1,6 @@
 # @ss/app-kit
 
-Everything a **service product** needs to follow the Product Standard (PLAN.md Part E): connection-code setup, SSO launches,
+Everything a **service product** needs to follow the Product Standard (PLAN.md Part E): shared-secret Portal connect, SSO launches,
 website keys, entitlements with offline grace, exactly-once usage reporting, signed events, client-owned data access,
 connectors that run on the merchant's own credentials, audit, health, and a framework-agnostic HTTP layer with RFC 9457
 problems. The binding API is [`API.md`](./API.md); this file is the quickstart.
@@ -31,12 +31,13 @@ import { MongoClient } from 'mongodb';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import manifest from '../manifest.json' with { type: 'json' };
 
-const env = configFromEnv(); // DATABASE_URI only: the Portal connection is made at /setup and kept in that database
+const env = configFromEnv(); // DATABASE_URI + CONNECT_SECRET: the Portal connects at /.well-known/ss-connect; kept in that database
 const controlDb = new MongoClient(env.productDbUri, { maxPoolSize: 5 }).db(); // the product's OWN small DB
 
 export const product = createProduct({
 	manifest,
 	stores: createMongoStores({ db: controlDb }), // omit in development → in-memory stores
+	connectSecret: env.connectSecret,
 	logger: createLogger({ level: env.logLevel }),
 	data: {
 		indexes: [{ collection: 'coupons', keys: { websiteId: 1, code: 1 }, unique: true }],
@@ -54,7 +55,7 @@ import { product } from './product.js';
 
 const routes = [
 	...standardRoutes(product), // /v1/entitlement, /v1/config, /v1/events, /v1/strings, /healthz, /readyz,
-	//                             /v1/data:export, /v1/data:anonymize, /.well-known/ss-{app.json,events}, /setup, /sso
+	//                             /v1/data:export, /v1/data:anonymize, /.well-known/ss-{app.json,events,connect}, /sso
 	defineRoute({
 		method: 'GET',
 		path: '/v1/coupons',
@@ -150,15 +151,16 @@ Route `rateLimit.limit` may be a function of the request (`(ctx) => feature(ctx.
 - `GET /v1/ss-probe/data-guard` → `{ rejected, code }`
 - `GET /v1/ss-probe/events/:id` → `{ id, effects }`
 
-**Connection**: deploy with `DATABASE_URI` only, then paste a connection code (Portal → Admin → Apps → Add product) at
-`https://<product>/setup`. The product generates its key, proves possession to the Portal and pins the Portal URL and
-keys in its control database; `/setup` then closes. See API.md (Connection).
+**Connection**: deploy with `DATABASE_URI` and `CONNECT_SECRET` (≥ 32 chars), then Portal → Admin → Apps → Add product
+with the product URL and that secret. The Portal calls `POST /.well-known/ss-connect` (HMAC-signed, the secret is never
+sent); the product generates its key and pins the Portal URL and keys in its control database. Connecting again with
+the secret replaces the binding. See API.md (Connection).
 
 ## What each part does
 
 | Part                                 | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `setup.connect({ code, baseUrl })`   | The `/setup` page: generates the product key, `@ss/protocol` `createConnectRequest` to the Portal in the code (one-time token, proof of possession, pinned base URL), verifies the signed answer and stores the connection (insert-if-absent) and the Portal JWKS in the control database. Closed once connected; a Portal-signed `POST /v1/ss/disconnect` reopens it.                                                                                                                                                                                                                                                                                             |
+| `handleConnect({headers, rawBody})`  | `POST /.well-known/ss-connect`: `@ss/protocol` `verifyConnectRequest` (HMAC with `CONNECT_SECRET`, constant time, ±5 min, nonce single-use), generates the product key if none, stores the connection and the Portal JWKS in the control database and answers `createConnectResponse`. 503 without a secret. Connecting again with the secret replaces the binding.                                                                                                                                                                                                                                                                                                |
 | `events.handle({headers, rawBody})`  | Verifies the raw bytes (`verifyEvent`, ±300 s, replay store), validates the envelope, deduplicates on the event `id` and dispatches to `events.on(type, fn)` handlers (`name@v`, `name` or `*`). A failing handler answers 500 and the id is forgotten, so the retry runs. Built in: `entitlement.changed` → refresh, `key.revoked` → revoke, `resource.changed` → drop cached credentials.                                                                                                                                                                                                                                                                        |
 | `launch.verify / exchange / session` | `verifyLaunch` (single use via the shared replay store; optional Portal-side burn). Kinds map to roles `merchant, demo, platform_admin, impersonate, partner, developer`. `exchange` creates an opaque session (`ses_…`); impersonation sessions end at `impExp`.                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `keys.verify(auth, opts)`            | Offline `verifyWebsiteKey` plus the revocation list (refreshed by a verification when older than ≤ 5 min, pushed by events, shared through the store), `originAllowed` for `pk_`, and required scopes (`coupons.*` globs). It **fails closed** (`unavailable`) when revocations could not be synced for longer than the offline grace; concurrent cold requests await the single in-flight sync.                                                                                                                                                                                                                                                                   |
@@ -197,8 +199,8 @@ in-memory stores (the default) are per-process and are for development only.
 `@ss/app-kit/testing` exports `createFakePortal()`: a Portal built from `@ss/protocol` primitives that signs entitlement
 documents, website keys, launches and events, verifies your client assertions, deduplicates usage, serves revocations and
 resource descriptors, records identity-issuer requests (`identityRequests`, `decideIdentityRequest(websiteId,
-'approve' | 'reject')`), and can simulate outages (`setDown(true)`, `failNext(path, status)`). Pass `portal.fetch` as
-`fetch`. Test and development only.
+'approve' | 'reject')`), and can simulate outages (`setDown(true)`, `failNext(path, status)`). `portal.connect({ productUrl, secret, fetch })` connects
+a product to it. Pass `portal.fetch` as `fetch`. Test and development only.
 
 ```
 pnpm check   # in this folder: format, lint, typecheck, vitest with coverage

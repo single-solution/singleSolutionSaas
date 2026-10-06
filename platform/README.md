@@ -237,27 +237,25 @@ is filtered by the staff member's permissions (`infra/rbac.js`).
   without its second factor only reaches the MFA routes.
 - **Pages:** dashboard (deliveries, dead letters, unhealthy service apps, operations with Run buttons, job queue, last audit verification,
   reconciliation, alerts) · merchants (search, detail, suspend/resume, notes, impersonation) · websites (lookup,
-  transfer) · apps (add product with a connection code, reconnect, pack upload, versions with manifest diff and breaking flags, review, lifecycle,
+  transfer) · apps (add product with its URL and connect secret, pack upload, versions with manifest diff and breaking flags, review, lifecycle,
   environments, keys, health, admin launch per merchant or app-wide) · subscriptions (admin overrides and locks,
   history, rollback) · platform policies per app · finance (credits/adjustments/refunds, ledger and chain
   verification, settlement, reconciliation, alerts) · integration (delivery log, dead letters, replay, metrics) ·
   connectors (status only) · audit log (search, chain verification) · staff (invite, roles, MFA reset, deactivate) ·
   settings (Portal URL, preview URL, mail, key rotation).
 
-| Route (staff)                                                                         | Permission                | Notes                                                                            |
-| ------------------------------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
-| `GET /v1/admin/merchants?q=`                                                          | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix     |
-| `GET\|POST /v1/admin/merchants/:merchantId/notes`                                     | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)        |
-| `POST /v1/admin/merchants/:merchantId/impersonate`                                    | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)              |
-| `POST /v1/auth/impersonation/exchange`                                                | staff session             | `{ token }` → merchant session cookie with `via`                                 |
-| `GET /v1/admin/system/health`                                                         | `platform.jobs.read`      | `{ operations: [{ name, status, lastRun }], jobs, audit: { lastVerification } }` |
-| `GET /v1/admin/audit?scope&actorId&targetId&action`                                   | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses       |
-| `GET /v1/admin/audit/verification?scope=`                                             | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited                 |
-| `POST\|GET /v1/admin/apps/connection-codes`                                           | `platform.apps.manage`    | add a product: one-time `ssc_…` code (24 h, shown once; only its hash stored)    |
-| `POST /v1/admin/apps/:appId/reconnect`                                                | `platform.apps.manage`    | new code for the same app; signed disconnect to its current deployment           |
-| `POST /v1/apps/connect`                                                               | public (code)             | a product's /setup: one-time token + proof of possession; pins base URL and key  |
-| `GET /v1/admin/system/settings` (`PUT …/mail`, `…/preview-url`)                       | `platform.settings.write` | Portal settings (never key material or the mail password)                        |
-| `PUT /v1/admin/system/settings/portal-url`, `POST /v1/admin/system/keys/:kind/rotate` | `platform.staff.manage`   | Portal URL (typed twice) and key rotation, audited                               |
+| Route (staff)                                                                         | Permission                | Notes                                                                                                                                           |
+| ------------------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /v1/admin/merchants?q=`                                                          | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix                                                                    |
+| `GET\|POST /v1/admin/merchants/:merchantId/notes`                                     | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)                                                                       |
+| `POST /v1/admin/merchants/:merchantId/impersonate`                                    | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)                                                                             |
+| `POST /v1/auth/impersonation/exchange`                                                | staff session             | `{ token }` → merchant session cookie with `via`                                                                                                |
+| `GET /v1/admin/system/health`                                                         | `platform.jobs.read`      | `{ operations: [{ name, status, lastRun }], jobs, audit: { lastVerification } }`                                                                |
+| `GET /v1/admin/audit?scope&actorId&targetId&action`                                   | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses                                                                      |
+| `GET /v1/admin/audit/verification?scope=`                                             | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited                                                                                |
+| `POST /v1/admin/apps/connect`                                                         | `platform.apps.manage`    | add a product `{ url, secret }`: HMAC-signed call to its `/.well-known/ss-connect`; pins base URL and key; again = rebind (secret never stored) |
+| `GET /v1/admin/system/settings` (`PUT …/mail`, `…/preview-url`)                       | `platform.settings.write` | Portal settings (never key material or the mail password)                                                                                       |
+| `PUT /v1/admin/system/settings/portal-url`, `POST /v1/admin/system/keys/:kind/rotate` | `platform.staff.manage`   | Portal URL (typed twice) and key rotation, audited                                                                                              |
 
 **Impersonation.** Starting one mints a single-use token bound to the staff member (only its HMAC is stored; an
 attempt by anyone else does not burn it). The staff member's own browser exchanges it within 60 s for a merchant

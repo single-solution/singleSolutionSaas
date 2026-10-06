@@ -1,7 +1,7 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: only `DATABASE_URI`, the
- * product's control database, plus optional tuning) and the project files (manifest with feature schemas inlined, string
- * catalogs). The Portal connection is made at `/setup` and, like every secret, kept in the control database. This is the only place that reads the environment.
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: `DATABASE_URI`, the product's
+ * control database, `CONNECT_SECRET`, plus optional tuning) and the project files (manifest with feature schemas inlined, string
+ * catalogs). A Portal connects at `/.well-known/ss-connect` with the connect secret; the connection and every generated secret are kept in the control database. This is the only place that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -133,11 +133,12 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			outbound: {
 				allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],
 			},
+			...(config.connectSecret ? { connectSecret: config.connectSecret } : {}),
 			...(stores === undefined ? {} : { stores }),
 			...overrides,
 		}),
 	);
-	// generated secrets and the Portal connection live in the control database (set up at /setup)
+	// generated secrets and the Portal connection live in the control database (made at /.well-known/ss-connect)
 	await product.ready();
 	const retention = /** @type {Record<string, unknown>} */ (manifest.retention ?? {});
 	return {

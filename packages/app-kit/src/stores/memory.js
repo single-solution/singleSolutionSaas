@@ -92,6 +92,9 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 				settings.set(id, structuredClone(value));
 				return true;
 			},
+			put: async (id, value) => {
+				settings.set(id, structuredClone(value));
+			},
 			delete: async (id) => {
 				settings.delete(id);
 			},

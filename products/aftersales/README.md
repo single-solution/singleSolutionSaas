@@ -49,8 +49,8 @@ Every integration is optional: without Orders, register purchases with `POST /v1
 
 ## Environment
 
-Only `DATABASE_URI` (see `.env.example`): the product's own control database. The Portal connection (made at
-`/setup` with a connection code), the product's signing key and its generated secrets live there. The guest claim-token secret is one of them.
+`DATABASE_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
+The Portal connection (made from Portal → Admin → Apps → Add product), the product's signing key and its generated secrets live there. The guest claim-token secret is one of them.
 
 ## Commands
 

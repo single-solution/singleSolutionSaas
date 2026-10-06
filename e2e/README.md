@@ -1,8 +1,8 @@
 # @ss/e2e — system tests
 
 Tests that need two or more deployables: every product against the **real** Portal, in process, on one
-MongoMemoryReplSet. Each test bootstraps staff (password + TOTP), registers the product through the real catalog
-handshake, activates it, signs a merchant up, adds a website, credits and a subscription, connects the merchant's
+MongoMemoryReplSet. Each test bootstraps staff (password + TOTP), connects the product through Admin → Apps → Add product
+(product URL + connect secret), activates it, signs a merchant up, adds a website, credits and a subscription, connects the merchant's
 resources and drives the product's own flow through the Event Hub, then checks usage and hourly settlement.
 
 | Test                              | Product(s)                                                                                            |

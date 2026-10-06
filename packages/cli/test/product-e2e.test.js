@@ -25,6 +25,7 @@ const packageDir = (name) => path.dirname(require.resolve(`@ss/${name}/package.j
 /** @type {string} */
 let root;
 const database = createDatabaseResolver();
+const SECRET = 'product-e2e-connect-secret-0123456789abcdef';
 
 /**
  * Generate a service product, link `@ss/*` to the workspace and serve it with its own `serve.js`.
@@ -46,6 +47,7 @@ const serveGenerated = async (slug, { minimal = false } = {}) => {
 		root: dir,
 		env: {
 			LOG_LEVEL: 'error',
+			CONNECT_SECRET: SECRET,
 		},
 		overrides: {
 			logger: (await import(pathToFileURL(path.join(dir, 'node_modules/@ss/app-kit/src/index.js')).href)).noopLogger,
@@ -76,6 +78,7 @@ describe('ss certify against a generated app-kit product', () => {
 			url: generated.server.url,
 			portalUrl: generated.portalUrl,
 			database,
+			secret: SECRET,
 		});
 		const table = formatReport(report);
 		expect(
@@ -95,6 +98,7 @@ describe('ss certify against a generated app-kit product', () => {
 			url: generated.server.url,
 			portalUrl: generated.portalUrl,
 			database,
+			secret: SECRET,
 		});
 		const table = formatReport(report);
 		expect(

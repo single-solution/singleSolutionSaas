@@ -67,15 +67,13 @@ _rejected`). A merchant's own PUT clears `managedBy`. Deleting/transferring a we
 
 ## catalog (`modules/catalog`)
 
-Apps (products), onboarding by connection code (Portal side), manifest versions and review, app keys, environments,
-health, launches.
+Apps (products), onboarding with the product's connect secret (Portal side), manifest versions and review, app keys,
+environments, health, launches.
 
-- Onboarding: `createConnectionCode({ appId? })` → `{ code, codeId, appId, expiresAt }` (one-time `ssc_…`, 24 h,
-  only the token hash stored; with `appId` it reconnects that app), `connectService({ headers, rawBody })` (the public
-  `POST /v1/apps/connect` a product's `/setup` calls: `@ss/protocol` `verifyConnectRequest`, manifest and base-URL
-  checks, atomic burn, app + version + key created — or, on reconnect, key replaced and base URL moved — answered with
-  `createConnectResponse`), `reconnect({ appId })` (new code + Portal-signed `POST <base>/v1/ss/disconnect`),
-  `listConnectionCodes()`, `revokeConnectionCode({ codeId })`.
+- Onboarding: `connectProduct({ url, secret })` (staff `POST /v1/admin/apps/connect`) → `{ appId, slug, baseUrl, kid,
+reconnected }`: `@ss/protocol` `createConnectRequest` to `<url>/.well-known/ss-connect` (HMAC with the deployer's
+  `CONNECT_SECRET`, never sent nor stored), `verifyConnectResponse`, manifest and base-URL checks, app + version + key
+  created — or, for a known slug, the binding replaced (key replaced, base URL moved).
 - `getApp(appId)` → `{ appId, slug, kind: service|pack, status: pending|active|deprecated|retired, endpoints, currentVersion }`
 - `appBySlug(slug)`
 - `getManifest(appId, version?)` → validated manifest (features inline)

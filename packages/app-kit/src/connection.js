@@ -4,25 +4,24 @@
  * - **Secrets** (`settings: secrets`): one random 32-byte root secret generated on first start (insert-if-absent, so
  *   concurrent cold starts agree). `secret(label)` derives a purpose key from it (HKDF), e.g. the idempotency HMAC key or
  *   a product's feed-token secret.
- * - **Connection** (`settings: connection`): `{ portalUrl, appId, baseUrl, privateJwk, connectedAt }`, written once by
- *   `connect({ code, baseUrl })` (the `/setup` page): the product generates its Ed25519 key, proves possession to the
- *   Portal named in the connection code (`@ss/protocol` `createConnectRequest`), verifies the signed answer and pins
- *   the Portal URL, its appId and the Portal keys. Cleared only by a Portal-signed `disconnect` (or direct DB access).
+ * - **Signing key** (`settings: signingKey`): the product's Ed25519 key, generated on the first connect and kept.
+ * - **Connection** (`settings: connection`): `{ portalUrl, appId, baseUrl, privateJwk, connectedAt }`, written by
+ *   `handleConnect` (`POST /.well-known/ss-connect`) when a Portal proves it holds the deployer's `CONNECT_SECRET`
+ *   (`@ss/protocol` `verifyConnectRequest`). Connecting again replaces it: whoever holds the secret is the authority.
  *
- * Both are loaded once per instance and cached; while unconnected, the connection is re-read at most once a second so
- * an instance notices a setup completed on another instance.
+ * Both are loaded once per instance and cached; the connection is re-read at most once a second while unconnected and
+ * every 30 seconds once connected, so every instance notices a connect made on another one.
  * @module
  */
 import { hkdfSync } from 'node:crypto';
 import {
 	canonicalUrl,
-	createConnectRequest,
+	createConnectResponse,
 	createSigner,
 	generateSigningKey,
-	isProtocolError,
-	parseConnectionCode,
+	isConnectSecret,
 	toPublicJwk,
-	verifyConnectResponse,
+	verifyConnectRequest,
 } from '@ss/protocol';
 import { kitError } from './util.js';
 
@@ -41,26 +40,31 @@ import { kitError } from './util.js';
  */
 
 const RECHECK_MS = 1000;
+const CONNECTED_RECHECK_MS = 30_000;
+/** A connect nonce is remembered this long (well past the ±5 min window). */
+const NONCE_TTL_MS = 15 * 60_000;
 
 /**
  * @param {{
  *   settings: import('./stores/types.js').SettingsStore,
  *   portalKeys: import('./stores/types.js').PortalKeyStore,
+ *   nonces: import('./stores/types.js').ReplayStore,
+ *   connectSecret?: string,
  *   manifest: { product: { slug: string }, endpoints?: Record<string, any> },
  *   injected?: { portalUrl: string, appId: string | null, privateJwk: Record<string, unknown> } | null,
- *   fetch?: typeof globalThis.fetch,
  *   now?: () => number,
  *   randomBytes: (length: number) => Uint8Array,
  *   nodeEnv?: string,
  *   logger: import('./logger.js').Logger,
- * }} options `injected` fixes the connection (tests, the emulator): setup and disconnect are then unavailable
+ * }} options `injected` fixes the connection (tests, the emulator): connecting is then refused
  */
 export const createConnection = ({
 	settings,
 	portalKeys,
+	nonces,
+	connectSecret,
 	manifest,
 	injected = null,
-	fetch = globalThis.fetch,
 	now = Date.now,
 	randomBytes,
 	nodeEnv,
@@ -101,12 +105,16 @@ export const createConnection = ({
 	};
 
 	const loadConnection = async () => {
-		if (current || injected) return;
+		if (injected) return;
 		const at = now();
-		if (at - checkedAt < RECHECK_MS && checkedAt !== 0) return;
+		if (checkedAt !== 0 && at - checkedAt < (current ? CONNECTED_RECHECK_MS : RECHECK_MS)) return;
 		checkedAt = at;
 		const doc = await settings.get('connection');
-		if (doc) current = toConnection(doc);
+		if (
+			doc &&
+			(!current || doc.appId !== current.appId || doc.portalUrl !== current.portalUrl || doc.baseUrl !== current.baseUrl)
+		)
+			current = toConnection(doc);
 	};
 
 	/** Load secrets and the connection (cached; an unconnected instance re-checks at most once a second). */
@@ -130,109 +138,100 @@ export const createConnection = ({
 
 	/** @returns {Connection} */
 	const active = () => {
-		if (!current) throw kitError('not_connected', 'this product is not connected to a Portal yet (open /setup)');
+		if (!current)
+			throw kitError('not_connected', 'this product is not connected to a Portal yet (Portal: Admin → Apps → Add product)');
 		return current;
 	};
 
 	/**
-	 * Connect with a connection code (the `/setup` page). Refused when already connected.
-	 * @param {{ code: string, baseUrl: string }} input
-	 * @returns {Promise<{ appId: string, portalUrl: string, baseUrl: string }>}
+	 * The signing key kept in the control database (generated on first connect; an older deployment's connection key is
+	 * kept).
+	 * @returns {Promise<Record<string, any>>} private JWK
 	 */
-	const connect = async ({ code, baseUrl }) => {
-		if (injected) throw kitError('conflict', 'this product has a fixed connection');
-		await ready();
-		if (current || (await settings.get('connection'))) throw kitError('conflict', 'this product is already connected');
-		/** @type {string} */
-		let base;
-		try {
-			base = canonicalUrl(baseUrl);
-			parseConnectionCode(code);
-		} catch {
-			throw kitError('invalid_argument', 'enter the connection code and the address this product is reachable at');
+	const signingKey = async () => {
+		const stored = await settings.get('signingKey');
+		if (stored?.privateJwk) return stored.privateJwk;
+		const legacy = (await settings.get('connection'))?.privateJwk;
+		/** @type {Record<string, any>} */
+		let privateJwk = legacy;
+		if (!privateJwk) {
+			const day = new Date(now()).toISOString().slice(0, 10).replace(/-/g, '');
+			const kid = `${manifest.product.slug}-${day}-${Buffer.from(randomBytes(3)).toString('hex')}`;
+			privateJwk = (await generateSigningKey({ kid })).privateJwk;
 		}
-		const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(new URL(base).hostname);
-		if (new URL(base).protocol !== 'https:' && (nodeEnv === 'production' || !local))
-			throw kitError('invalid_argument', 'the product address must use https');
-		const day = new Date(now()).toISOString().slice(0, 10).replace(/-/g, '');
-		const kid = `${manifest.product.slug}-${day}-${Buffer.from(randomBytes(3)).toString('hex')}`;
-		const { privateJwk, publicJwk } = await generateSigningKey({ kid });
-		const signer = createSigner(privateJwk);
-		const request = await createConnectRequest({
-			code,
-			baseUrl: base,
-			manifest: withBase(manifest, base),
-			signer,
-			publicJwk,
-			now,
-			randomBytes,
-		});
-		/** @type {Response} */
-		let response;
-		try {
-			response = await fetch(request.url, {
-				method: 'POST',
-				headers: request.headers,
-				body: request.body,
-				signal: AbortSignal.timeout(15_000),
-				redirect: 'error',
-			});
-		} catch {
-			throw kitError('portal_unreachable', 'the Portal in the connection code could not be reached');
-		}
-		/** @type {unknown} */
-		let body = null;
-		try {
-			body = await response.json();
-		} catch {
-			// handled below
-		}
-		if (!response.ok) {
-			const detail = body && typeof body === 'object' && typeof (/** @type {any} */ (body).detail) === 'string';
-			throw kitError(
-				'portal_error',
-				detail
-					? `the Portal refused the connection: ${/** @type {any} */ (body).detail}`
-					: 'the Portal refused the connection',
-				{ status: response.status },
-			);
-		}
-		/** @type {Awaited<ReturnType<typeof verifyConnectResponse>>} */
-		let accepted;
-		try {
-			accepted = await verifyConnectResponse({
-				body,
-				portalUrl: request.portalUrl,
-				nonce: request.nonce,
-				jkt: request.jkt,
-				now,
-			});
-		} catch (error) {
-			throw kitError('portal_error', `the Portal answer did not verify (${isProtocolError(error) ? error.code : 'invalid'})`);
-		}
-		const doc = { portalUrl: request.portalUrl, appId: accepted.appId, baseUrl: base, privateJwk, connectedAt: now() };
-		if (!(await settings.insert('connection', doc))) throw kitError('conflict', 'this product is already connected');
-		await portalKeys.put(accepted.jwks, now()).catch(() => {});
-		current = toConnection(doc);
-		logger.info('product connected to the Portal', { portalUrl: request.portalUrl, appId: accepted.appId });
-		return { appId: accepted.appId, portalUrl: request.portalUrl, baseUrl: base };
+		await settings.insert('signingKey', { privateJwk });
+		const winner = await settings.get('signingKey');
+		if (!winner?.privateJwk) throw kitError('internal_error', 'the signing key could not be stored');
+		return winner.privateJwk;
 	};
 
-	/** Forget the connection (a Portal-signed disconnect): `/setup` accepts a new code afterwards. */
-	const disconnect = async () => {
-		if (injected) throw kitError('conflict', 'this product has a fixed connection');
-		await settings.delete('connection');
-		current = null;
-		checkedAt = 0;
-		logger.warn('product disconnected from its Portal');
+	/**
+	 * `POST /.well-known/ss-connect`: a Portal connecting with the deployer's `CONNECT_SECRET` (HMAC over the exact body
+	 * and timestamp, ±5 min, single-use nonce). Generates the signing key if there is none, records the Portal URL, the
+	 * appId and this product's address, pins the Portal keys and answers the public key and the manifest, HMAC-signed
+	 * with the same secret. Connecting again replaces the binding: whoever holds the secret is the authority.
+	 * @param {{ headers: Headers, rawBody: string }} input
+	 * @returns {Promise<{ status: number, headers: Record<string, string>, body: string }>}
+	 */
+	const handleConnect = async ({ headers, rawBody }) => {
+		/** @param {number} status @param {string} code @param {string} detail */
+		const refuse = (status, code, detail) => {
+			logger.warn('connection refused', { reason: code });
+			return {
+				status,
+				headers: { 'content-type': 'application/problem+json' },
+				body: JSON.stringify({ type: 'about:blank', title: detail, status, code, detail }),
+			};
+		};
+		if (injected) return refuse(409, 'conflict', 'This product has a fixed connection.');
+		if (!isConnectSecret(connectSecret))
+			return refuse(
+				503,
+				'unavailable',
+				'This product refuses connections: CONNECT_SECRET is not set (at least 32 characters).',
+			);
+		/** @type {ReturnType<typeof verifyConnectRequest>} */
+		let request;
+		try {
+			request = verifyConnectRequest({ secret: connectSecret, headers, body: rawBody, now });
+		} catch {
+			return refuse(401, 'unauthorized', 'The connect request does not verify.');
+		}
+		if (await nonces.seen(`ss-connect|${request.nonce}`, now() + NONCE_TTL_MS))
+			return refuse(401, 'unauthorized', 'The connect request does not verify.');
+		const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(new URL(request.baseUrl).hostname);
+		if (new URL(request.baseUrl).protocol !== 'https:' && (nodeEnv === 'production' || !local))
+			return refuse(400, 'bad_request', 'The product address must use https.');
+		await ready();
+		const privateJwk = await signingKey();
+		const doc = {
+			portalUrl: request.portalUrl,
+			appId: request.appId,
+			baseUrl: request.baseUrl,
+			privateJwk,
+			connectedAt: now(),
+		};
+		await settings.put('connection', doc);
+		await portalKeys.put(request.jwks, now());
+		current = toConnection(doc);
+		checkedAt = now();
+		logger.info('product connected to the Portal', { portalUrl: request.portalUrl, appId: request.appId });
+		const answer = createConnectResponse({
+			secret: connectSecret,
+			appId: request.appId,
+			nonce: request.nonce,
+			publicJwk: current.publicJwk,
+			manifest: withBase(manifest, request.baseUrl),
+			now,
+		});
+		return { status: 200, headers: answer.headers, body: answer.body };
 	};
 
 	return Object.freeze({
 		ready,
 		secret,
 		active,
-		connect,
-		disconnect,
+		handleConnect,
 		/** @returns {Connection | null} */
 		current: () => current,
 		/** @returns {boolean} */

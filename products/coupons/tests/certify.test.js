@@ -25,6 +25,8 @@ const freePort = () =>
 let server;
 /** @type {string} */
 let portalUrl;
+/** The product's CONNECT_SECRET in this test: certify connects it the way the Portal does. */
+const CONNECT_SECRET = 'certify-test-connect-secret-0123456789abcdef';
 const database = createDatabaseResolver({ uri: process.env.TEST_MONGODB_URI ?? null });
 
 beforeAll(async () => {
@@ -34,6 +36,7 @@ beforeAll(async () => {
 		root: ROOT,
 		env: {
 			LOG_LEVEL: 'error',
+			CONNECT_SECRET,
 		},
 		overrides: { logger: noopLogger },
 	});
@@ -52,7 +55,7 @@ describe('ss certify', () => {
 	});
 
 	it('passes every certification check (100 %)', async () => {
-		const report = await runCertification({ dir: ROOT, url: server.url, portalUrl, database });
+		const report = await runCertification({ dir: ROOT, url: server.url, portalUrl, database, secret: CONNECT_SECRET });
 		const table = formatReport(report);
 		expect(
 			report.checks.filter((check) => check.status !== 'pass'),

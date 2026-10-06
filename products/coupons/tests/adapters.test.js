@@ -68,7 +68,7 @@ describe('adapters/repositories', () => {
 describe('adapters/platform', () => {
 	it('loads string catalogs and refuses to start without the required environment', async () => {
 		expect((await loadStrings(ROOT)).en?.['apply_box.title']).toBe('Coupon code');
-		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		// no environment at all: an unconnected product (in-memory control store) that only serves its connect endpoint
 		const unconnected = await createPlatform({ env: {}, root: ROOT });
 		expect(unconnected.product.connected()).toBe(false);
 		await unconnected.close?.();

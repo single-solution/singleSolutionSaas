@@ -234,7 +234,7 @@ describe('adapters', () => {
 		const manifest = await loadManifest(ROOT);
 		expect(manifest.elements.every((/** @type {any} */ element) => element.features.type === 'object')).toBe(true);
 		expect(Object.keys(await loadStrings(ROOT))).toEqual(['en']);
-		// no environment at all: an unconnected product (in-memory control store) that only serves /setup
+		// no environment at all: an unconnected product (in-memory control store) that only serves its connect endpoint
 		const unconnected = await createPlatform({ env: {}, root: ROOT });
 		expect(unconnected.product.connected()).toBe(false);
 		await unconnected.close?.();

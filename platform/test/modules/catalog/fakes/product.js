@@ -1,19 +1,22 @@
 /**
  * A fake service product on a local node:http server, built with `@ss/protocol` exactly as `@ss/app-kit` does:
- * `GET /.well-known/ss-app.json` serves the manifest; `connectRequest(code)` / `accept(answer, request)` are the product
- * side of the connection-code handshake (its `/setup`). Behaviour can be tampered with per test (manifest signature,
- * redirects, oversized bodies).
+ * `GET /.well-known/ss-app.json` serves the manifest; `POST /.well-known/ss-connect` is the product side of the
+ * connect-secret handshake (HMAC-verified request, single-use nonce, HMAC-signed answer). Behaviour can be tampered with
+ * per test (manifest signature, redirects, oversized bodies, the connect answer).
  * @module
  */
 import { createServer } from 'node:http';
 import {
 	MANIFEST_SIGNATURE_HEADER,
-	createConnectRequest,
+	createConnectResponse,
 	createSigner,
 	generateSigningKey,
 	signManifest,
-	verifyConnectResponse,
+	verifyConnectRequest,
 } from '@ss/protocol';
+
+/** The connect secret fake products are deployed with (unless a test passes another). */
+export const PRODUCT_SECRET = 'fake-product-connect-secret-0123456789abcdef';
 
 /**
  * @typedef {object} Tamper
@@ -22,12 +25,13 @@ import {
  * @property {number} [manifestBytes] pad ss-app.json to this many bytes
  * @property {'omit' | 'garbage' | 'other_app' | 'stale' | 'other_manifest' | 'foreign_key'} [signature] how
  *   `SS-Manifest-Signature` is tampered with (default: signed with the registered key once an appId is known)
+ * @property {'bad_signature' | 'other_nonce' | 'other_manifest'} [connect] how the connect answer is tampered with
  */
 
 /**
- * @param {{ manifest: any, portalUrl: string, now?: () => number, kid?: string }} options
+ * @param {{ manifest: any, portalUrl: string, now?: () => number, kid?: string, secret?: string }} options
  */
-export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, kid = 'product-k1' }) => {
+export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, kid = 'product-k1', secret = PRODUCT_SECRET }) => {
 	const { privateJwk, publicJwk } = await generateSigningKey({ kid });
 	const signer = createSigner(privateJwk);
 	const foreign = createSigner((await generateSigningKey({ kid: 'foreign-k9' })).privateJwk);
@@ -36,6 +40,8 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 	/** @type {Tamper} */
 	const tamper = {};
 	let current = manifest;
+	/** @type {Set<string>} */
+	const nonces = new Set();
 
 	const server = createServer((req, res) => {
 		/** @type {Buffer[]} */
@@ -68,6 +74,41 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 				res.writeHead(200, headers);
 				return void res.end(text);
 			}
+			if (req.method === 'POST' && req.url === '/.well-known/ss-connect') {
+				/** @type {ReturnType<typeof verifyConnectRequest>} */
+				let request;
+				try {
+					request = verifyConnectRequest({
+						secret,
+						headers: /** @type {any} */ (req.headers),
+						body: Buffer.concat(chunks).toString('utf8'),
+						now,
+					});
+				} catch {
+					res.writeHead(401, { 'content-type': 'application/json' });
+					return void res.end('{"code":"unauthorized"}');
+				}
+				if (nonces.has(request.nonce)) {
+					res.writeHead(401, { 'content-type': 'application/json' });
+					return void res.end('{"code":"unauthorized"}');
+				}
+				nonces.add(request.nonce);
+				if (request.portalUrl !== portalUrl) throw new Error(`fake product: unexpected Portal ${request.portalUrl}`);
+				registrations.push({ appId: request.appId, portalKid: request.jwks.keys[0]?.kid, baseUrl: request.baseUrl });
+				const answer = createConnectResponse({
+					secret: tamper.connect === 'bad_signature' ? `${secret}-other` : secret,
+					appId: request.appId,
+					nonce: tamper.connect === 'other_nonce' ? 'n'.repeat(22) : request.nonce,
+					publicJwk,
+					manifest:
+						tamper.connect === 'other_manifest'
+							? { ...current, product: { ...current.product, slug: 'someone-else' } }
+							: current,
+					now,
+				});
+				res.writeHead(200, answer.headers);
+				return void res.end(answer.body);
+			}
 			res.writeHead(404);
 			res.end();
 		});
@@ -86,30 +127,7 @@ export const startFakeProduct = async ({ manifest, portalUrl, now = Date.now, ki
 		setManifest: (m) => {
 			current = m;
 		},
-		/**
-		 * The product's connect request for a connection code (as its `/setup` builds it).
-		 * @param {string} code
-		 * @param {{ baseUrl?: string, manifest?: any }} [override]
-		 */
-		connectRequest: (code, override = {}) =>
-			createConnectRequest({
-				code,
-				baseUrl: override.baseUrl ?? url,
-				manifest: override.manifest ?? current,
-				signer,
-				publicJwk,
-				now,
-			}),
-		/**
-		 * Verify the Portal's answer and record the connection (appId, Portal kid).
-		 * @param {unknown} answer
-		 * @param {{ nonce: string, jkt: string }} request
-		 */
-		accept: async (answer, request) => {
-			const accepted = await verifyConnectResponse({ body: answer, portalUrl, nonce: request.nonce, jkt: request.jkt, now });
-			registrations.push({ appId: accepted.appId, portalKid: accepted.portalKid });
-			return accepted;
-		},
+		secret,
 		close: () =>
 			new Promise((resolve) => {
 				server.close(() => resolve(undefined));
