@@ -102,13 +102,15 @@ export const createCatalog = (app) => {
 		return siteOf(websiteId, result.doc);
 	};
 	/**
-	 * Sweep one website: scheduled visibility changes, expired reservations, leftover outbox entries.
+	 * Sweep one website: scheduled visibility changes, expired reservations, leftover outbox entries. Each step takes at
+	 * most `limit` records; the rest is left for the next run.
 	 * @param {Site} site
+	 * @param {{ limit?: number }} [options]
 	 */
-	const sweepSite = async (site) => {
+	const sweepSite = async (site, { limit = SWEEP_BATCH } = {}) => {
 		const now = app.now();
 		let published = 0;
-		for (const item of await site.repos.items.dueTransitions(new Date(now), SWEEP_BATCH)) {
+		for (const item of await site.repos.items.dueTransitions(new Date(now), limit)) {
 			const visible = isPublic(item, { statuses: site.settings.items.statuses, now, scheduled: true });
 			const key = `item.updated:${item.id}:visibility:${item.nextTransitionAt instanceof Date ? item.nextTransitionAt.toISOString() : String(item.nextTransitionAt)}`;
 			const next = {
@@ -123,9 +125,9 @@ export const createCatalog = (app) => {
 				published += 1;
 			}
 		}
-		const expired = site.settings.enabled('variants') ? await variants.expire(site, SWEEP_BATCH) : 0;
+		const expired = site.settings.enabled('variants') ? await variants.expire(site, limit) : 0;
 		let republished = 0;
-		for (const item of await site.repos.items.pendingOutbox(new Date(now - 60_000), SWEEP_BATCH))
+		for (const item of await site.repos.items.pendingOutbox(new Date(now - 60_000), limit))
 			republished += (await flushItem(deps, site, item)).published;
 		return { transitions: published, expiredReservations: expired, republished };
 	};

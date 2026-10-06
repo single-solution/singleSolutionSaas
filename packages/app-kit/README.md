@@ -118,6 +118,13 @@ background of every Nth request or of a request that queued something). `product
 reports `{ version, status, queues }`; `usage.flush()`, `outbox.flush()` and `product.flush()` remain for explicit use.
 Configure with `createProduct({ background: { mode: 'auto' | 'server' | 'serverless' | 'off', intervalMs, everyRequests } })`.
 
+Crons run once a day on the free tier (PLAN F.19), so work that must happen sooner runs after requests:
+`product.background.every(name, intervalMs, ({ websiteId, deadline }) => …, { per: 'website' | 'product', budgetMs })`
+runs at most once per interval per website (or per product) across instances, behind a lease in the control store
+(`ss_kit_leases`); `trigger({ websiteId })` runs it directly. Keep correctness on reads (treat anything past its expiry
+as expired) and let these tasks clean up. The control-database client takes `configFromEnv().productDbOptions` (pool
+`SS_PRODUCT_DB_MAX_POOL_SIZE`, default 5); merchant database pools hold 3 connections per instance.
+
 Route handlers receive `ctx = { website, websiteId, query, searchParams, body, params, idempotencyKey, request, session,
 entitlement, … }`. `query` holds the first value of each parameter; `searchParams` has all of them. `toNextRoute` strips a
 leading `/api`, so routes are declared as `/v1/...` behind the usual `/v1/:path* → /api/v1/:path*` rewrite.

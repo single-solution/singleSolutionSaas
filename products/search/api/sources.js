@@ -1,7 +1,7 @@
 /**
  * Sources service: Catalog item events and scheduled crawls of the website's own public JSON feed or sitemap.
  *
- * Crawls run in steps (the sweep job, or `POST /v1/sources/:key/crawl`): a JSON feed is fetched once per step and up
+ * Crawls run in steps (the background sweep after requests and the daily job, or `POST /v1/sources/:key/crawl`): a JSON feed is fetched once per step and up
  * to a step's worth of records is indexed; a sitemap (or sitemap index) is read once per run, then a step fetches the
  * next `sources.pages_per_run` pages. Every fetch goes through app-kit `outbound.fetch` (public https only, DNS
  * answers vetted at connect time, same-origin redirects, deadline and size cap) and only URLs on the website's own
@@ -307,13 +307,16 @@ export const createSourcesService = ({ documents, fetch, now, newId, userAgent }
 	};
 
 	/**
-	 * The scheduled work of a website: one step per due source.
+	 * The scheduled work of a website: one step per due source (none started after `deadline`, epoch ms; the next run
+	 * continues with the rest).
 	 * @param {Site} site
+	 * @param {{ deadline?: number }} [options]
 	 */
-	const runDue = async (site) => {
+	const runDue = async (site, { deadline = Infinity } = {}) => {
 		if (!site.settings.enabled('sources')) return { crawled: 0 };
 		let crawled = 0;
 		for (const source of await due(site)) {
+			if (now() >= deadline) break;
 			await step(site, source);
 			crawled += 1;
 		}

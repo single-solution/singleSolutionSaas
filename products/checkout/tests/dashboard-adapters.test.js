@@ -8,7 +8,7 @@ import { maskKey, seal, sealingKey, unseal } from '../adapters/secrets.js';
 import { demoDashboard, kpisOf, resolveDashboard } from '../api/dashboard.js';
 import { fail, requesterOf } from '../api/routes.js';
 import { sessionView } from '../api/session.js';
-import { cronAuthorized, runSweepJob } from '../jobs/sweep.js';
+import { cronAuthorized, drain, runSweepJob } from '../jobs/sweep.js';
 import { CONNECTED, MERCHANT, WEBSITE, checkoutBody, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
@@ -75,6 +75,10 @@ describe('dashboard', () => {
 		expect(await live.data.orders({})).toHaveLength(1);
 		expect(await live.data.order(placed.json.id)).toMatchObject({ number: placed.json.number, proofs: [] });
 		expect(await live.data.order('nope')).toBeNull();
+		// expire on read: once the transfer hold passed the dashboard shows the order cancelled, before any sweep
+		await h.collection('orders').updateOne({ id: placed.json.id }, { $set: { expiresAt: new Date(h.clock.now() - 1) } });
+		expect(await live.data.order(placed.json.id)).toMatchObject({ status: 'cancelled' });
+		expect((await live.data.orders({}))[0]).toMatchObject({ status: 'cancelled' });
 		expect((await live.data.integrations()).coupons).toBe(true);
 		expect(
 			kpisOf([
@@ -255,6 +259,17 @@ describe('adapters and jobs', () => {
 			],
 		});
 		expect(errors).toEqual(['c']);
+		// background runs: small pages, stopped by the page budget or the deadline
+		/** @type {number[]} */
+		const pages = [];
+		const full = async (/** @type {string} */ _site, /** @type {{ limit: number }} */ { limit }) => {
+			pages.push(limit);
+			return limit;
+		};
+		expect(await drain(full, 'a', { deadline: 10, now: () => 0, limit: 5, pages: 3 })).toBe(15);
+		expect(await drain(full, 'a', { deadline: 10, now: () => 10 })).toBe(0);
+		expect(await drain(async () => 2, 'a', { deadline: 10, now: () => 0 })).toBe(2);
+		expect(pages).toEqual([5, 5, 5]);
 		expect(cronAuthorized('Bearer abc', 'abc')).toBe(true);
 		expect(cronAuthorized('Bearer abd', 'abc')).toBe(false);
 		expect(cronAuthorized(null, 'abc')).toBe(false);

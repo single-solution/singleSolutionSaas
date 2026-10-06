@@ -69,6 +69,9 @@ pnpm validate             # ss app validate
 ```
 
 Environment: the app-kit variables (`.env.example`), `CRON_SECRET` (`GET /cron/sweep`: expired holds, abandoned carts,
-heartbeat — `vercel.json` runs it every 10 minutes) and `SS_CHECKOUT_SEAL_KEY`.
+heartbeat — `vercel.json` runs it once a day as a catch-up over every website) and `SS_CHECKOUT_SEAL_KEY`. Sooner work
+runs on requests: expired holds are cancelled when the order is read (and released when a placement needs the stock),
+and after a request for a website its expired holds (at most every 5 minutes) and abandoned carts (hourly) are swept
+(`jobs/sweep.js`, `product.background.every`).
 
 See `docs/guide.md` for the integration guide.

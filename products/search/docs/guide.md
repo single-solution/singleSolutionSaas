@@ -72,7 +72,9 @@ assumed contract: there is no `results` alias (Storefront accepts `items`), and 
 - **Crawls**: `sources.crawl_sources` — a JSON feed (records mapped with field paths `a.b|c`) or a sitemap / sitemap
   index of **your own domain** (https only). The scheduler fetches `pages_per_run` pages per run through the
   SSRF-guarded client with a timeout and a size cap; pages with `robots: noindex` are skipped; documents a finished run
-  did not see are removed. `POST /v1/sources/{key}/crawl` (sk_) starts a run now.
+  did not see are removed. Crawl steps run in the background after requests to your website's search (at most every
+  15 minutes) and in a daily catch-up, so a source runs on the first pass after its `every_hours` elapsed and a
+  large sitemap advances one step per pass. `POST /v1/sources/{key}/crawl` (sk_) starts a run now.
 - **API**: `POST /v1/documents` (create or replace; `id` optional), `POST /v1/documents:batch` (≤ 100),
   `DELETE /v1/documents/{id}`, `GET /v1/documents` — `sk_` only, with `sources.api_upserts`.
 

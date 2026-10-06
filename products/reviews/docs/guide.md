@@ -18,7 +18,7 @@ photoIds })` validates like the API and posts the review. Wrap it with `createUs
 1. Send `order.completed@1` to the Portal Event Hub with the customer (`customer.subject` = your login's subject,
    and/or `customer.customerId`, plus `customer.email` / `customer.phone` for requests) and the `lines`. If you do not
    use the Event Hub, call `POST /v1/review-requests` from your server.
-2. The request becomes due `collection.request_delay_hours` later. With `request_flow` on, the hourly job sends it (and
+2. The request becomes due `collection.request_delay_hours` later. With `request_flow` on, the request job (after requests, at most every 15 minutes, plus a daily catch-up) sends it (and
    the reminders) through your messaging connector with a link built from `request_flow.review_url`
    (`https://shop.example.com/review?t={token}`); otherwise get a link with `POST /v1/review-requests/{id}/link` and send
    it yourself.

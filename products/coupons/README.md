@@ -46,8 +46,10 @@ the customer in the cart.
 - **Atomic limits.** A reservation claims one unit of each limit of each code (`code`, `coupon`, `customer`, `device`)
   with a single conditional `$inc` (`taken < max`); a refused claim gives back those already taken. Concurrent
   checkouts can never over-redeem a limited code (tested with four parallel reservations and through the real Portal).
-- **Lifecycle.** `pending → reserved → redeemed | released | expired` by compare-and-set; expired reservations are swept
-  lazily when a code is full and by the job (`/cron/sweep`, every 10 min, which also heartbeats; usage and events are flushed by app-kit itself).
+- **Lifecycle.** `pending → reserved → redeemed | released | expired` by compare-and-set; a lapsed reservation is
+  treated as expired as soon as it is read or touched (its uses go back then, also when its code, customer or device
+  needs the use), a throttled per-website sweep runs after requests (at most every 5 min), and the daily catch-up job
+  (`/cron/sweep`, 03:20 UTC, which also heartbeats) cleans up the rest; usage and events are flushed by app-kit itself.
   A late `order.completed@1` re-claims an expired reservation when `api.confirm_expired` allows and the use is free.
 - **Exactly once.** Reservation ids derive from `reference` or the Idempotency-Key; redemption counters count once per
   code (`counted`); usage records and events carry deterministic idempotency keys.
@@ -107,8 +109,8 @@ one wins) → `order.completed@1` through the Event Hub → redeemed in the merc
    workspace root automatically.
 2. Environment variables (Production): `SS_PORTAL_URL` (pinned Portal), `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one
    line), `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional; recorded by the handshake), `SS_PRODUCT_DB_URI` (the
-   product's own small MongoDB — required in production), `CRON_SECRET` (≥ 16 chars, for `/cron/sweep` in
-   `vercel.json`), `SS_LOG_LEVEL` (optional).
+   product's own small MongoDB — required in production), `CRON_SECRET` (≥ 16 chars, for the daily
+   `/cron/sweep` in `vercel.json`; Vercel Hobby runs it once a day), `SS_PRODUCT_DB_MAX_POOL_SIZE` (optional, default 5), `SS_LOG_LEVEL` (optional).
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.

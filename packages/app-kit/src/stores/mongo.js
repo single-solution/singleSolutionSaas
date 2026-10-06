@@ -36,6 +36,7 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 		sessions: `${prefix}sessions`,
 		idempotency: `${prefix}idempotency`,
 		rateLimits: `${prefix}rate_limits`,
+		leases: `${prefix}leases`,
 	});
 	/** @param {string} name */
 	const col = (name) => db.collection(name);
@@ -59,6 +60,7 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 				col(names.sessions).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.idempotency).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.rateLimits).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
+				col(names.leases).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 			]);
 		})().catch((error) => {
 			ready = undefined;
@@ -404,6 +406,15 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 				);
 			},
 		}),
+		leases: (() => {
+			const held = replayStore(names.leases);
+			return Object.freeze({
+				acquire: async (/** @type {string} */ key, /** @type {number} */ ttlMs) => {
+					await ensureIndexes();
+					return !(await held.seen(key, now() + ttlMs));
+				},
+			});
+		})(),
 		rateLimits: Object.freeze({
 			hit: async (key, windowMs, t) => {
 				await ensureIndexes();

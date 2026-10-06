@@ -12,7 +12,7 @@ Next.js 16 (App Router) · React 19 · MongoDB driver 6 · Tailwind 4 · JavaScr
 ```
 app/                         thin Next.js adapters — no logic
   api/[...path]/route.js     every module route (toNextRoute → portal.handle)
-  api/cron/[job]/route.js    cron triggers (Bearer CRON_SECRET) → cron runner
+  api/cron/[job]/route.js    cron triggers (Bearer CRON_SECRET) → cron runner (`daily` is the scheduled one)
   w/[...path]/ p/[...path]/  delivery plane: bundles, pack and UI-bundle modules (/w/*), preview proxy (/p/*) → portal.handle
   .well-known/jwks.json/     published JWKS: Portal keys (current + previous) + website-key signing keys
   healthz/  readyz/          liveness (no deps) / readiness (config + DB ping)
@@ -37,6 +37,7 @@ src/
     audit.js                 append-only, hash-chained audit log (per-scope chains, verification)
     mailer.js                platform mailer (SMTP via nodemailer; templates)
     jobs.js                  job queue (leases, retries, dead letters) and cron runner
+    background.js            work after responses: deferred tasks, throttled leased tasks (drain, settlement)
     logger.js                JSON logger with redaction
     modules.js               defineModule / composeModules (isolation boundary)
     security-headers.js      CSP and static security headers
@@ -118,22 +119,39 @@ dummy hash. **TOTP**: RFC 6238 SHA-1, 6 digits, 30 s, ±1 step, single use (stor
 ### Jobs and crons
 
 The job queue lives in `platform_jobs`: idempotent enqueue by `key`, atomic leases with a visibility timeout,
-exponential backoff with jitter (5 s → 1 h), dead letters after `maxAttempts` (default 8), replay. There are no
-workers: `vercel.json` schedules `/api/cron/drain` every minute and the drain runs jobs until the queue is empty or
-`CRON_DEADLINE_MS` approaches. Each cron run holds a lease lock (no overlaps) and appends a `platform_cron_runs`
-record. Jobs enqueued with `dropPayload: true` lose their payload when they succeed (`complete(job, { dropPayload:
-true })`), e.g. Event Hub deliveries whose payload is a sealed event.
+exponential backoff with jitter (5 s → 1 h), dead letters after `maxAttempts` (default 8), replay. Jobs enqueued with
+`dropPayload: true` lose their payload when they succeed (`complete(job, { dropPayload: true })`), e.g. Event Hub
+deliveries whose payload is a sealed event. There are no workers, and on Vercel Hobby crons run once a day (PLAN F.19),
+so the queue is drained in three bounded ways:
 
-| cron                | schedule (UTC) | owner                     |
-| ------------------- | -------------- | ------------------------- |
-| `drain`             | every minute   | infra (runs queued jobs)  |
-| `settlement`        | `5 * * * *`    | commerce                  |
-| `connectors-health` | `15 * * * *`   | connectors                |
-| `reconciliation`    | `30 2 * * *`   | commerce                  |
-| `catalog_refresh`   | `15 3 * * *`   | catalog                   |
-| `audit_verify`      | `45 3 * * *`   | infra (audit hash chains) |
+- **right after an ingest**: the Event Hub attempts the deliveries it just enqueued after the response (`ctx.defer`,
+  only those job keys, lease-safe), so cross-product events usually arrive within seconds;
+- **after requests**: a short drain (≤ 10 jobs, 8 s) runs after any response at most every 15 s across instances (an
+  in-memory check, then a lease lock `every:drain` in `platform_locks`); jobs enqueued with `daily: true` (long
+  continuations) are left to the cron;
+- **daily**: `vercel.json` schedules `/api/cron/daily` once a day.
 
-`drain` and `audit_verify` (and the job `audit.verify`) are reserved: a module registering them is a boot error.
+Deferred and background work runs through Next `after()` (`toNextRoute(handler, { after })` in `app/api` and `app/w`).
+Modules add throttled work with `background: (ctx) => ({ '<module>.<task>': { intervalMs, budgetMs, run } })`;
+commerce settles every 5 minutes this way (3 s), so product usage reports, heartbeats and console loads keep billing
+current, and balance and meter reads still settle the merchant first. `createPortal({ background: { mode: 'off' } })`
+(the default when `PORTAL_ENV=test`) runs none of it.
+
+`daily` runs these steps in order. Each step may use the time the later steps do not reserve (their share of
+`CRON_DEADLINE_MS`) and resumes where it stopped on the next run. Each cron also stays callable on its own
+(`/api/cron/<name>`, Bearer `CRON_SECRET`). Every run holds a lease lock (no overlaps) and appends a
+`platform_cron_runs` record with the stats of each step.
+
+| step                | share | owner                     | resumes from                                        |
+| ------------------- | ----- | ------------------------- | --------------------------------------------------- |
+| `settlement`        | 20 %  | commerce                  | each subscription's `settledThrough` cursor         |
+| `drain`             | 16 %  | infra (runs queued jobs)  | the queue (`daily` continuations included)          |
+| `connectors-health` | 30 %  | connectors                | connectors not checked within 50 minutes stay due   |
+| `reconciliation`    | 12 %  | commerce                  | the saved run (phase and cursor), even the next day |
+| `catalog_refresh`   | 12 %  | catalog                   | a `daily` continuation job from the last app        |
+| `audit_verify`      | 10 %  | infra (audit hash chains) | a `daily` `audit.verify` job from the last scope    |
+
+`daily`, `drain` and `audit_verify` (and the job `audit.verify`) are reserved: a module registering them is a boot error.
 
 ## Environment
 
@@ -143,7 +161,7 @@ All variables are validated together at start (names only are reported, never va
 | ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `MONGODB_URI`                   | yes      | Control-plane MongoDB connection string (never a client database).                                                                                                                                                                                                                                                                                                        |
 | `MONGODB_DB`                    |          | Database name; default: path of `MONGODB_URI`, else `ss_portal`.                                                                                                                                                                                                                                                                                                          |
-| `MONGODB_MAX_POOL_SIZE`         |          | Pool size per instance (default 10).                                                                                                                                                                                                                                                                                                                                      |
+| `MONGODB_MAX_POOL_SIZE`         |          | Pool size per instance (default 5: one Atlas M0 cluster allows ~500 connections across every deployment and instance).                                                                                                                                                                                                                                                    |
 | `PORTAL_URL`                    | yes      | Canonical Portal URL (issuer of launches, audience of assertions, CSRF origin). https unless localhost in development.                                                                                                                                                                                                                                                    |
 | `PORTAL_SIGNING_KEYS`           | yes      | JSON array of private Ed25519 JWKs with unique `kid`s. The first signs; all are published in the JWKS.                                                                                                                                                                                                                                                                    |
 | `SECRETS_KEK`                   | yes      | `kid:base64(32 bytes)[,kid:base64…]`, first = active (one bare base64 key is accepted as `k1`).                                                                                                                                                                                                                                                                           |
@@ -262,9 +280,10 @@ by itself. A local `mongod` (`mongodb://127.0.0.1:27017/ss_portal`) works the sa
 
 ## Deployment
 
-One Vercel project, one Atlas database (PLAN §13). Set the variables above (`TRUST_PROXY_HEADERS=true` behind the
+One Vercel project (Hobby works), one database and database user on the shared Atlas M0 cluster (PLAN §13, F.19). The
+`MongoClient` is created once per instance and cached on `globalThis` (`getMongoClient`). Set the variables above (`TRUST_PROXY_HEADERS=true` behind the
 hosting edge). The deploy pipeline runs `db:indexes` and `db:migrate` before traffic moves (migration gate).
-Crons in `vercel.json` call `/api/cron/<job>` with the `CRON_SECRET` bearer.
+The one cron in `vercel.json` calls `/api/cron/daily` with the `CRON_SECRET` bearer.
 
 ## Checks
 

@@ -2,7 +2,7 @@
  * @ss/app-kit — everything a service product needs to follow the Product Standard (SSPS v1). See README.md and API.md.
  */
 export { createProduct } from './product.js';
-export { configFromEnv } from './env.js';
+export { CONTROL_DB_POOL_SIZE, configFromEnv } from './env.js';
 export { createLogger, noopLogger, redact } from './logger.js';
 export { createMemoryStores } from './stores/memory.js';
 export { createMongoStores } from './stores/mongo.js';
@@ -11,7 +11,7 @@ export { can, config, feature, featuresOf, resource, createEntitlements, STOPPED
 export { createWebsiteKeys, scopeGranted } from './keys.js';
 export { createLaunch, ROLE_OF_KIND } from './launch.js';
 export { createUsage, backoffDelay } from './usage.js';
-export { createData, guardFilter, guardPipeline, guardUpdate, planIndexes } from './data.js';
+export { CLIENT_DB_POOL_SIZE, createData, guardFilter, guardPipeline, guardUpdate, planIndexes } from './data.js';
 export { createConnectors, PAYMENTS_METHODS } from './connectors/index.js';
 export { createS3Storage } from './connectors/storage.js';
 export { createHttpConnector, createHttpAi, createHttpMessaging } from './connectors/http.js';

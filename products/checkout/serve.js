@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createApplication, wireEvents } from './api/routes.js';
-import { cronRoutes } from './jobs/sweep.js';
+import { cronRoutes, wireJobs } from './jobs/sweep.js';
 
 export { loadManifest } from './adapters/platform.js';
 
@@ -29,7 +29,7 @@ export const startServer = async ({
 	overrides = {},
 	tls,
 } = {}) => {
-	const application = wireEvents(createApplication(await createPlatform({ env, root, overrides })));
+	const application = wireJobs(wireEvents(createApplication(await createPlatform({ env, root, overrides }))));
 	const { product } = application;
 	const handle = createRequestHandler(product, [...buildRoutes(application), ...cronRoutes(application)]);
 	/** @type {import('node:http').RequestListener} */

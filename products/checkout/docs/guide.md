@@ -32,8 +32,11 @@ expectedTotal? }`. Server keys may add `customer: { subject, email, phone }`. Th
 
 Starting status: bank transfer and COD with an advance → `pending_payment` (held `payment_manual.bank_hold_hours`);
 COD → `awaiting_confirmation` (confirm with `POST /v1/orders/{id}/confirm`, else it expires after
-`cod_confirmation_hours`); pay at pickup → `pending_payment` until collected. Expired holds are cancelled by the
-scheduled sweep (`place_order.expiry_owner = checkout`) and `order.cancelled@1` gives codes and points back.
+`cod_confirmation_hours`); pay at pickup → `pending_payment` until collected. With `place_order.expiry_owner = checkout`
+an order whose hold passed is expired from that moment: it is cancelled (stock released) as soon as it is read, listed or
+confirmed, it no longer counts towards the open-order cap, and a placement short of stock releases expired holds first;
+orders nobody touches are cancelled by the sweep that runs after requests (every few minutes per website) and by the
+daily cron catch-up. `order.cancelled@1` gives codes and points back.
 
 ## 4. After placement
 

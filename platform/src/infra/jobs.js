@@ -1,7 +1,8 @@
 /**
- * Database-backed job queue and cron runner (PLAN §13: "Vercel Cron → signed routes; Atlas-backed queues with
- * leases"). No worker processes: cron invocations drain the queue in bounded batches (`runBatch({ deadlineMs })`)
- * that stop leasing before the function time limit.
+ * Database-backed job queue and cron runner (PLAN §13, F.19: "Vercel Cron → signed routes; Atlas-backed queues with
+ * leases"). No worker processes: the queue is drained in bounded batches (`runBatch({ deadlineMs, maxJobs })`) that
+ * stop leasing before the function time limit — opportunistically after requests (throttled, a few jobs), right after
+ * an ingest for the jobs it enqueued (`keys`), and by the daily cron.
  *
  * Queue semantics (`platform_jobs`):
  * - `enqueue` is idempotent on an optional job `key` (unique while the job document exists: done jobs are kept for
@@ -111,11 +112,22 @@ export const createJobs = ({
 }) => {
 	/**
 	 * Enqueue a job. With a `key`, enqueueing the same key again returns the existing job (`inserted: false`).
-	 * `dropPayload: true` removes the payload once the job succeeds.
-	 * @param {{ name: string, payload?: unknown, key?: string, runAt?: Date | number, maxAttempts?: number, dropPayload?: boolean }} input
+	 * `dropPayload: true` removes the payload once the job succeeds. `daily: true` marks long maintenance work (e.g. the
+	 * continuation of a daily pass that hit its deadline): only the daily cron's drain runs it, never the short drains
+	 * after requests.
+	 * @param {{ name: string, payload?: unknown, key?: string, runAt?: Date | number, maxAttempts?: number,
+	 *   dropPayload?: boolean, daily?: boolean }} input
 	 * @returns {Promise<{ id: string, inserted: boolean }>}
 	 */
-	const enqueue = async ({ name, payload = null, key, runAt, maxAttempts = defaultMaxAttempts, dropPayload = false }) => {
+	const enqueue = async ({
+		name,
+		payload = null,
+		key,
+		runAt,
+		maxAttempts = defaultMaxAttempts,
+		dropPayload = false,
+		daily = false,
+	}) => {
 		if (typeof name !== 'string' || !NAME.test(name)) throw platformError('invalid_argument', `invalid job name: ${name}`);
 		if (key !== undefined && (typeof key !== 'string' || key.length === 0 || key.length > 256))
 			throw platformError('invalid_argument', 'job key must be 1..256 chars');
@@ -130,6 +142,7 @@ export const createJobs = ({
 				...(key === undefined ? {} : { key }),
 				payload,
 				...(dropPayload ? { dropPayload: true } : {}),
+				...(daily ? { daily: true } : {}),
 				status: 'queued',
 				attempts: 0,
 				maxAttempts,
@@ -172,11 +185,11 @@ export const createJobs = ({
 	};
 
 	/**
-	 * Claim one due job.
-	 * @param {{ names?: string[], leaseMs: number, owner?: string }} options
+	 * Claim one due job (`keys`: only jobs enqueued with one of these keys; `skipDaily`: not jobs marked `daily`).
+	 * @param {{ names?: string[], keys?: string[], skipDaily?: boolean, leaseMs: number, owner?: string }} options
 	 * @returns {Promise<Job | null>}
 	 */
-	const lease = async ({ names, leaseMs, owner = 'worker' }) => {
+	const lease = async ({ names, keys, skipDaily = false, leaseMs, owner = 'worker' }) => {
 		for (;;) {
 			const t = new Date(now());
 			const doc = await repo.findOneAndUpdate(
@@ -186,6 +199,8 @@ export const createJobs = ({
 						{ status: 'running', leaseUntil: { $lte: t } },
 					],
 					...(names ? { name: { $in: names } } : {}),
+					...(keys ? { key: { $in: keys } } : {}),
+					...(skipDaily ? { daily: { $ne: true } } : {}),
 				},
 				{
 					$set: {
@@ -256,10 +271,22 @@ export const createJobs = ({
 	};
 
 	/**
-	 * Drain due jobs until the queue is empty or the deadline approaches. Jobs without a handler are not leased.
-	 * @param {{ handlers: Record<string, JobHandler>, deadlineMs: number, owner?: string, concurrency?: number, safetyMs?: number }} options
+	 * Drain due jobs until the queue is empty, `maxJobs` were leased or the deadline approaches. Jobs without a handler
+	 * are not leased; `keys` limits the batch to jobs enqueued with those keys (e.g. the deliveries an ingest created);
+	 * `skipDaily` leaves the jobs marked `daily` to the daily cron.
+	 * @param {{ handlers: Record<string, JobHandler>, deadlineMs: number, owner?: string, concurrency?: number,
+	 *   safetyMs?: number, maxJobs?: number, keys?: string[], skipDaily?: boolean }} options
 	 */
-	const runBatch = async ({ handlers, deadlineMs, owner = 'cron', concurrency = 1, safetyMs = 2_000 }) => {
+	const runBatch = async ({
+		handlers,
+		deadlineMs,
+		owner = 'cron',
+		concurrency = 1,
+		safetyMs = 2_000,
+		maxJobs = Number.POSITIVE_INFINITY,
+		keys,
+		skipDaily = false,
+	}) => {
 		const names = Object.keys(handlers);
 		const deadline = now() + deadlineMs;
 		const stats = {
@@ -268,18 +295,24 @@ export const createJobs = ({
 			retried: 0,
 			dead: 0,
 			lost: 0,
-			stoppedBy: /** @type {'empty' | 'deadline'} */ ('empty'),
+			stoppedBy: /** @type {'empty' | 'deadline' | 'limit'} */ ('empty'),
 		};
-		if (names.length === 0) return stats;
+		if (names.length === 0 || (keys && keys.length === 0)) return stats;
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), Math.max(0, deadlineMs - safetyMs));
+		let claimed = 0;
 		const worker = async () => {
 			for (;;) {
 				if (now() >= deadline - safetyMs) {
 					stats.stoppedBy = 'deadline';
 					return;
 				}
-				const job = await lease({ names, owner, leaseMs: Math.max(deadline - now(), 0) + 30_000 });
+				if (claimed >= maxJobs) {
+					stats.stoppedBy = 'limit';
+					return;
+				}
+				claimed += 1;
+				const job = await lease({ names, keys, skipDaily, owner, leaseMs: Math.max(deadline - now(), 0) + 30_000 });
 				if (!job) return;
 				stats.leased += 1;
 				const handler = /** @type {JobHandler} */ (handlers[job.name]);

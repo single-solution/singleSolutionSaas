@@ -1,4 +1,4 @@
-/** GET /cron/dispatch — recover, resume open triggers and send due messages (Vercel cron, `Authorization: Bearer $CRON_SECRET`). */
+/** GET /cron/dispatch — recover, resume open triggers and send due messages (daily Vercel cron catch-up, `Authorization: Bearer $CRON_SECRET`). */
 import { forward } from '../../_lib/product.js';
 
 export const dynamic = 'force-dynamic';

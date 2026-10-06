@@ -1,4 +1,4 @@
-/** GET /cron/expiry — daily expiry, notices and tier reviews (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
+/** GET /cron/expiry — daily catch-up: expiry, notices and tier reviews (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
 import { forward } from '../../_lib/product.js';
 
 export const dynamic = 'force-dynamic';

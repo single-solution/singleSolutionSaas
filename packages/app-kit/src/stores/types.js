@@ -128,6 +128,14 @@
  */
 
 /**
+ * Throttle leases shared by every instance (background `every` tasks): `acquire` returns true when this caller took
+ * the lease (no live lease existed), false while another holder's lease is live. A lease is never released early;
+ * it simply expires after `ttlMs`.
+ * @typedef {object} LeaseStore
+ * @property {(key: string, ttlMs: number) => Promise<boolean>} acquire
+ */
+
+/**
  * @typedef {object} Stores
  * @property {ReplayStore} replay
  * @property {ReplayStore} nonce
@@ -140,6 +148,7 @@
  * @property {IdempotencyStore} idempotency
  * @property {RateLimitStore} rateLimits
  * @property {PortalKeyStore} portalKeys
+ * @property {LeaseStore} leases
  * @property {() => Promise<void>} [ping] readiness check of the backing database
  */
 

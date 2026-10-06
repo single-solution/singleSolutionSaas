@@ -25,11 +25,13 @@ every element but analytics (add-on); Pro has all, with higher bounds.
 - `adapters/` — repositories over `data.forWebsite` (`db.js`), Atlas Search driver access (`atlas.js`), platform.
 - `api/` — services (documents, engines, search, sources, dashboard) and the route table.
 - `headless/` — `createOverlay`, `createSuggestions`. `ui/` — the overlay renderer.
-- `jobs/sweep.js` — `GET /cron/sweep` (crawl steps, Atlas state, vocabulary cleanup).
+- `jobs/sweep.js` — the sweep (crawl steps, Atlas state, vocabulary cleanup): a background pass after requests (at
+  most every 15 minutes per website, app-kit `background.every`) plus `GET /cron/sweep`, a daily catch-up over every
+  website (`vercel.json`; one daily cron fits the free Vercel Hobby plan).
 
 ## Environment
 
-See `.env.example`: the app-kit variables and `CRON_SECRET` (≥ 16 characters) for the sweep.
+See `.env.example`: the app-kit variables and `CRON_SECRET` (≥ 16 characters) for the daily sweep cron.
 
 ## Notes
 

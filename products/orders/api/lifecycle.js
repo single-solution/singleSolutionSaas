@@ -331,28 +331,52 @@ export const createLifecycle = (deps, outbox) => {
 	};
 
 	/**
-	 * Move orders whose status expired (sweep). An order whose expiry no longer applies (the matrix changed) has its
-	 * expiry cleared so it is not picked again.
+	 * Expire one order whose status expired at `now`: move it where its status expires to, or — when that move no
+	 * longer applies (the matrix changed) — clear its expiry so it is not picked again.
+	 * @param {import('./context.js').Site} site
+	 * @param {Record<string, any>} order
+	 * @param {Date} now
+	 * @returns {Promise<'expired' | 'cleared' | 'changed'>} `changed`: the order changed meanwhile (left as it is)
+	 */
+	const expireOne = async (site, order, now) => {
+		const def = statusOf(site.settings.matrix, order.status);
+		const result = def
+			? await move(site, order, def.expireTo, {
+					actor: { type: 'system', id: 'expiry' },
+					reason: 'expired',
+					expect: { expiresAt: now },
+				})
+			: null;
+		if (result?.ok) return 'expired';
+		if (result && result.reason === 'order_changed') return 'changed';
+		await site.repos.orders.change(order.id, { version: order.version ?? 1 }, { $set: { expiresAt: null } });
+		return 'cleared';
+	};
+
+	/**
+	 * Move orders whose status expired (sweep: the daily cron and the throttled runs after requests).
 	 * @param {import('./context.js').Site} site
 	 * @param {number} limit
 	 */
 	const expireDue = async (site, limit) => {
 		let expired = 0;
 		const now = new Date(deps.now());
-		for (const order of await site.repos.orders.dueExpiry(now, limit)) {
-			const def = statusOf(site.settings.matrix, order.status);
-			const result = def
-				? await move(site, order, def.expireTo, {
-						actor: { type: 'system', id: 'expiry' },
-						reason: 'expired',
-						expect: { expiresAt: now },
-					})
-				: null;
-			if (result?.ok) expired += 1;
-			else if (!result || result.reason !== 'order_changed')
-				await site.repos.orders.change(order.id, { version: order.version ?? 1 }, { $set: { expiresAt: null } });
-		}
+		for (const order of await site.repos.orders.dueExpiry(now, limit))
+			if ((await expireOne(site, order, now)) === 'expired') expired += 1;
 		return expired;
+	};
+
+	/**
+	 * Expire on read: when the order's status has expired, apply the expiry now (before anyone sees or changes the
+	 * order), whether or not a sweep ran. Resolves true when the order was due (read it again).
+	 * @param {import('./context.js').Site} site
+	 * @param {Record<string, any>} order
+	 */
+	const expireIfDue = async (site, order) => {
+		const now = deps.now();
+		if (!order.expiresAt || new Date(order.expiresAt).getTime() > now) return false;
+		await expireOne(site, order, new Date(now));
+		return true;
 	};
 
 	return Object.freeze({
@@ -365,7 +389,32 @@ export const createLifecycle = (deps, outbox) => {
 		setSerials,
 		review,
 		expireDue,
+		expireIfDue,
 	});
 };
 
 /** @typedef {ReturnType<typeof createLifecycle>} Lifecycle */
+
+/**
+ * The orders repository of a site with expiry applied on read: every order returned by `get`, `byNumber`, `page` and
+ * `many` whose status expired is moved (by `expire`) and read again first, so nobody sees or acts on an expired status
+ * that the sweep has not reached yet.
+ * @template {{ get: (id: string) => Promise<any>, byNumber: (number: string) => Promise<any>,
+ *   page: (filter: Record<string, unknown>, page: { after: unknown, limit: number }) => Promise<any[]>,
+ *   many: (ids: string[]) => Promise<any[]> }} R
+ * @param {R} orders
+ * @param {(order: Record<string, any>) => Promise<boolean>} expire
+ * @returns {R}
+ */
+export const expiringOnRead = (orders, expire) => {
+	/** @param {any} order */
+	const settle = async (order) => (order && (await expire(order)) ? orders.get(order.id) : order);
+	return Object.freeze({
+		...orders,
+		get: async (/** @type {string} */ id) => settle(await orders.get(id)),
+		byNumber: async (/** @type {string} */ number) => settle(await orders.byNumber(number)),
+		page: async (/** @type {Record<string, unknown>} */ filter, /** @type {{ after: unknown, limit: number }} */ page) =>
+			Promise.all((await orders.page(filter, page)).map(settle)),
+		many: async (/** @type {string[]} */ ids) => Promise.all((await orders.many(ids)).map(settle)),
+	});
+};

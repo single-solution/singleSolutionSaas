@@ -100,12 +100,17 @@ export const createInspectionService = ({
 		photo.staleAt !== undefined && photo.staleAt !== null && new Date(/** @type {any} */ (photo.staleAt)).getTime() <= now();
 
 	/**
-	 * Delete the objects and records of this website's stale photo slots (cron; bounded and idempotent).
+	 * Delete the objects and records of this website's stale photo slots (jobs; bounded and idempotent).
 	 * @param {Site} site
+	 * @param {{ limit?: number }} [options] slots per run (default: the sweep's)
 	 * @returns {Promise<{ scanned: number, deleted: number, missing: number, failed: number }>}
 	 */
-	const sweepPhotos = (site) =>
-		site.repos.photos.sweepStale({ storage: () => storage(site.websiteId), olderThanMs: SWEEP_GRACE_MS });
+	const sweepPhotos = (site, { limit } = {}) =>
+		site.repos.photos.sweepStale({
+			storage: () => storage(site.websiteId),
+			olderThanMs: SWEEP_GRACE_MS,
+			...(limit === undefined ? {} : { limit }),
+		});
 
 	/** @param {Site} site */
 	const bucketOf = async (site) => {

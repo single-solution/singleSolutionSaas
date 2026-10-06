@@ -11,7 +11,7 @@ import { createFakePortal } from '@ss/app-kit/testing';
 import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
-import { cronRoutes } from '../jobs/sweep.js';
+import { cronRoutes, wireJobs } from '../jobs/sweep.js';
 import { buildRoutes, createGrades, wireEvents } from '../api/routes.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -124,7 +124,7 @@ export const createHarness = async ({ config = {}, elements = {}, storage = true
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: bucket.send },
 	});
-	const grades = wireEvents(createGrades(app));
+	const grades = wireJobs(wireEvents(createGrades(app)));
 	const handle = createRequestHandler(grades.product, [...buildRoutes(grades), ...cronRoutes(grades)]);
 
 	let version = 0;

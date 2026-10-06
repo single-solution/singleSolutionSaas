@@ -4,13 +4,25 @@
  * `order.completed`, `order.cancelled`, `order.refunded`), the success view, and the scheduled sweep (expired holds,
  * abandoned carts).
  *
+ * Expiry is checked on read: an order whose hold passed is cancelled (stock, codes and points released) the moment it is
+ * accessed, confirmed or listed, and it never counts as open — the sweep (daily cron, throttled runs after requests)
+ * only catches up on orders nobody touched.
+ *
  * Every move is a compare-and-set on the status, so a re-delivered event or a double click changes nothing twice. Stock
  * goes back only for orders that were not completed (lesson A21); payments and refunds are recorded on the order with
  * amount, method, reference and actor (lesson A22).
  */
 import { timingSafeEqual } from 'node:crypto';
 import { formatMoney } from '../core/money.js';
-import { TRANSITIONS, customerMayCancel, customerRef, eventLines, orderView, releasesStock } from '../core/orders.js';
+import {
+	TRANSITIONS,
+	customerMayCancel,
+	customerRef,
+	eventLines,
+	holdExpired,
+	orderView,
+	releasesStock,
+} from '../core/orders.js';
 import { UNCONFIRMED } from '../core/payments.js';
 import { eventAmounts } from '../core/pricing.js';
 import { successSteps } from '../core/success.js';
@@ -39,12 +51,12 @@ export const createOrdersService = (checkout) => {
 		if (typeof id !== 'string' || id.length > 64) return null;
 		const order = await site.repos.orders.get(id);
 		if (!order) return null;
-		if (who.kind === 'sk' || who.kind === 'session') return order;
-		if (who.subject && order.customerId === who.subject) return order;
+		if (who.kind === 'sk' || who.kind === 'session') return expireIfDue(site, order);
+		if (who.subject && order.customerId === who.subject) return expireIfDue(site, order);
 		if (typeof token === 'string' && token.length <= 64 && typeof order.accessTokenHash === 'string') {
 			const given = Buffer.from(app.hash(token));
 			const stored = Buffer.from(order.accessTokenHash);
-			if (given.length === stored.length && timingSafeEqual(given, stored)) return order;
+			if (given.length === stored.length && timingSafeEqual(given, stored)) return expireIfDue(site, order);
 		}
 		return null;
 	};
@@ -121,12 +133,33 @@ export const createOrdersService = (checkout) => {
 	};
 
 	/**
+	 * Expire on read: when Checkout owns expiry and the order's hold passed, cancel it now (releasing what it held) and
+	 * return the order as it is after that; any other order is returned unchanged.
+	 * @param {Site} site
+	 * @param {Record<string, any>} order
+	 * @returns {Promise<Record<string, any>>}
+	 */
+	const expireIfDue = async (site, order) => {
+		if (site.settings.place.expiry_owner !== 'checkout' || !holdExpired(order, app.now())) return order;
+		const moved = await cancel(site, order, {
+			reason: 'expired',
+			actor: { type: 'system' },
+			publish: true,
+			from: TRANSITIONS.expire,
+		});
+		// lost a race (paid, confirmed or cancelled meanwhile): the stored order is the truth
+		return moved ?? (await site.repos.orders.get(order.id)) ?? order;
+	};
+
+	/**
 	 * Confirm an unconfirmed order (merchant: COD confirmed by call, transfer seen in the bank).
 	 * @param {Site} site
 	 * @param {Record<string, any>} order
 	 * @param {{ actor: Actor, by: 'merchant' | 'payment' }} options
 	 */
 	const confirm = async (site, order, { actor, by }) => {
+		// a merchant confirming after the hold passed is too late (a payment that arrives late still confirms the order)
+		if (by === 'merchant' && (await expireIfDue(site, order)) !== order) return null;
 		const moved = await site.repos.orders.transition(order.id, TRANSITIONS.confirm, {
 			set: { status: 'confirmed', expiresAt: null, confirmedAt: new Date(app.now()) },
 			push: { timeline: { status: 'confirmed', at: iso(), actor } },
@@ -319,7 +352,19 @@ export const createOrdersService = (checkout) => {
 		return count;
 	};
 
-	return Object.freeze({ access, view, cancel, confirm, recordPayment, onOrderEvent, success, expire, abandon, releaseStock });
+	return Object.freeze({
+		access,
+		view,
+		cancel,
+		expireIfDue,
+		confirm,
+		recordPayment,
+		onOrderEvent,
+		success,
+		expire,
+		abandon,
+		releaseStock,
+	});
 };
 
 /** @typedef {ReturnType<typeof createOrdersService>} OrdersService */

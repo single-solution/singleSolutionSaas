@@ -283,6 +283,12 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 				portalKeys = { jwks, fetchedAt };
 			},
 		}),
+		leases: (() => {
+			const held = memoryReplay(now);
+			return Object.freeze({
+				acquire: async (/** @type {string} */ key, /** @type {number} */ ttlMs) => !(await held.seen(key, now() + ttlMs)),
+			});
+		})(),
 		ping: async () => {},
 		usageRecords: () => [...usage.values()].map((record) => publicUsage(record)),
 	};

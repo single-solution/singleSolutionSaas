@@ -165,11 +165,21 @@ export const createRepositories = (scope, { now }) => {
 			},
 			/** @param {Record<string, unknown>} filter */
 			count: async (filter) => orders.countDocuments(pin(filter)),
-			/** @param {string[]} keys @param {string[]} statuses */
-			countOpen: async (keys, statuses) =>
+			/**
+			 * Orders in an open status for any of these customer keys; an order whose status expired by `now` is not
+			 * counted (swept or not).
+			 * @param {string[]} keys @param {string[]} statuses @param {Date} now
+			 */
+			countOpen: async (keys, statuses, now) =>
 				keys.length === 0 || statuses.length === 0
 					? 0
-					: orders.countDocuments(pin({ customerKeys: { $in: keys }, status: { $in: statuses } })),
+					: orders.countDocuments(
+							pin({
+								customerKeys: { $in: keys },
+								status: { $in: statuses },
+								$or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+							}),
+						),
 			/** @param {Date} before @param {number} limit */
 			dueExpiry: async (before, limit) =>
 				(

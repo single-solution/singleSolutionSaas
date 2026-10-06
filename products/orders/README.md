@@ -47,4 +47,7 @@ cancellation and receipts. Printable views send `Content-Security-Policy: defaul
 
 Standard product layout (see the root README). `pnpm check`, `pnpm validate`, `pnpm build`; `tests/certify.test.js`
 runs `ss certify` against `serve.js`. Environment: the app-kit variables (`.env.example`) and `CRON_SECRET` for
-`GET /cron/sweep` (auto-expiry, outbox redelivery, message retries; every 5 minutes in `vercel.json`).
+`GET /cron/sweep` (auto-expiry, outbox redelivery, message retries; once a day in `vercel.json`, a catch-up over every
+website). Sooner work runs on requests: an order whose status expired is moved as soon as it is read (and no longer
+counts as open), and after a request for a website the same sweep runs for that website at most every 5 minutes
+(`jobs/sweep.js`, `product.background.every`).

@@ -751,17 +751,15 @@ describe('connectors: hourly health check', () => {
 		// nothing is due within the interval
 		expect((await call('GET', '/api/cron/connectors-health', { headers: cron })).json).toMatchObject({
 			status: 'ok',
-			stats: { enqueued: true },
+			stats: { checked: 0, remaining: false },
 		});
-		expect((await call('GET', '/api/cron/connectors-health', { headers: cron })).json.stats).toEqual({ enqueued: false }); // one job per hour
-		await call('GET', '/api/cron/drain', { headers: cron });
 		expect((await db.collection('connectors_connectors').findOne({ _id: id }))?.status).toBe('connected');
 
 		clock.advance(25 * 3600_000);
 		state.emitted.length = 0;
-		await call('GET', '/api/cron/connectors-health', { headers: cron });
-		const drained = await call('GET', '/api/cron/drain', { headers: cron });
-		expect(drained.json.stats).toMatchObject({ succeeded: 1 });
+		// the daily step checks inline (no job): what is due is checked within the step's deadline
+		const health = await call('GET', '/api/cron/connectors-health', { headers: cron });
+		expect(health.json.stats).toMatchObject({ checked: 2, changed: 1, remaining: false });
 		const doc = await db.collection('connectors_connectors').findOne({ _id: id });
 		expect(doc).toMatchObject({
 			status: 'failing',

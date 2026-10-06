@@ -336,6 +336,47 @@ describe('account pages, orders, consent and data rights', () => {
 		expect(fresh.json.created).toBe(true);
 	});
 
+	it('deletes a customer whose cooling-off ended when accessed, before any job, and from the work after requests', async () => {
+		/** @param {string} email @param {string} ip */
+		const requestDeletion = async (email, ip) => {
+			const signedIn = await h.signIn(email, { headers: { 'x-forwarded-for': ip } });
+			const token = signedIn.json.tokens.accessToken;
+			const deletion = await h.call('POST', '/v1/data-requests', { token, body: { type: 'delete' } });
+			expect(deletion.json.status).toBe('pending');
+			return { id: signedIn.json.customer.id, request: deletion.json.id, token };
+		};
+		const read = await requestDeletion('due-read@example.com', '203.0.113.31');
+		const again = await requestDeletion('due-signin@example.com', '203.0.113.32');
+		const cancel = await requestDeletion('due-cancel@example.com', '203.0.113.33');
+		const background = await requestDeletion('due-background@example.com', '203.0.113.34');
+		h.clock.advance(15 * DAY);
+		await h.entitle();
+		/** @param {string} id */
+		const stored = (id) => h.collection('customers').findOne({ websiteId: WEBSITE, id });
+
+		// the merchant's server reads the customer: the due deletion runs first
+		expect((await h.call('GET', `/v1/customers/${read.id}`, { key: h.sk })).json).toMatchObject({ status: 'deleted' });
+		expect(await stored(read.id)).toMatchObject({ status: 'deleted', email: null });
+		expect((await h.collection('data_requests').findOne({ websiteId: WEBSITE, id: read.request }))?.status).toBe('completed');
+		// signing in again: the old account is deleted and a new customer is created
+		const fresh = await h.signIn('due-signin@example.com', { headers: { 'x-forwarded-for': '203.0.113.35' } });
+		expect(fresh.json.created, JSON.stringify(fresh.json)).toBe(true);
+		expect(fresh.json.customer.id).not.toBe(again.id);
+		expect(await stored(again.id)).toMatchObject({ status: 'deleted' });
+		// a due deletion can no longer be cancelled
+		expect((await h.call('DELETE', `/v1/data-requests/${cancel.request}?customerId=${cancel.id}`, { key: h.sk })).status).toBe(
+			404,
+		);
+		expect(await stored(cancel.id)).toMatchObject({ status: 'deleted' });
+
+		// the maintenance after requests (throttled background task) deletes the rest
+		expect((await stored(background.id))?.status).toBe('active');
+		expect(h.signups.maintenance.name).toBe('maintenance');
+		expect(await h.signups.maintenance.trigger({ websiteId: WEBSITE })).toBe(true);
+		expect(await stored(background.id)).toMatchObject({ status: 'deleted', email: null });
+		expect(await h.signups.maintenance.trigger({ websiteId: WEBSITE })).toBe(false);
+	});
+
 	it('honours disabled data rights and immediate deletion', async () => {
 		await h.entitle({ config: { data_rights: { allow_export: false, allow_delete: true, cooling_off_days: 0 } } });
 		const signedIn = await h.signIn('now@example.com');

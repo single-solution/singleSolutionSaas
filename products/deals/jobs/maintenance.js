@@ -1,7 +1,9 @@
 /**
- * Maintenance job (Vercel cron → `GET /cron/maintenance` with `Authorization: Bearer $CRON_SECRET`, every 5 minutes):
+ * Daily catch-up job (Vercel cron, once a day → `GET /cron/maintenance` with `Authorization: Bearer $CRON_SECRET`):
  * flushes the metered `quote` usage queue to the Portal (exactly once: the kit's queue is keyed by idempotency key and
- * the Portal dedupes) and sends the heartbeat. Expired quotes need no job — a TTL index removes them.
+ * the Portal dedupes) and sends the heartbeat. Between runs app-kit flushes after requests and a throttled heartbeat
+ * runs after requests (`wireEvents` in api/routes.js). Nothing expires through a job: price locks and quotes carry
+ * their expiry and are checked when used, and a TTL index removes old quotes.
  */
 import { timingSafeEqual } from 'node:crypto';
 import { defineRoute, ok, problem } from '@ss/app-kit';

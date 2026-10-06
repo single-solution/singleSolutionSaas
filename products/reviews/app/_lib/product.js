@@ -7,7 +7,7 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createReviews, wireEvents } from '../../api/routes.js';
-import { cronRoutes } from '../../jobs/requests.js';
+import { cronRoutes, wireJobs } from '../../jobs/requests.js';
 
 const KEY = Symbol.for('ss.products.reviews');
 
@@ -20,7 +20,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getReviews = () => (shared().reviews ??= createPlatform().then((app) => wireEvents(createReviews(app))));
+export const getReviews = () => (shared().reviews ??= createPlatform().then((app) => wireJobs(wireEvents(createReviews(app)))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

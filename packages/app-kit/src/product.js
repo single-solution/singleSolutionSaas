@@ -269,6 +269,8 @@ export const createProduct = (options) => {
 		],
 		mode: options.background?.mode ?? (nodeEnv === 'test' ? 'off' : 'auto'),
 		logger,
+		leases: stores.leases,
+		now,
 		...(options.background?.intervalMs ? { intervalMs: options.background.intervalMs } : {}),
 		...(options.background?.everyRequests ? { everyRequests: options.background.everyRequests } : {}),
 	});
@@ -546,7 +548,13 @@ export const createProduct = (options) => {
 		}),
 		/** Flush the usage queue and the event outbox now (also run by the background flusher). */
 		flush: () => background.tick(),
-		background: Object.freeze({ mode: background.mode, start: background.start, stop: background.stop }),
+		background: Object.freeze({
+			mode: background.mode,
+			start: background.start,
+			stop: background.stop,
+			/** Throttled work after requests: `every(name, intervalMs, fn, { per: 'product' | 'website', budgetMs })`. */
+			every: background.every,
+		}),
 		portal: Object.freeze({ ...portal, publishEvent }),
 		data,
 		connectors,

@@ -1161,19 +1161,34 @@ export const createCatalogService = (ctx, options = {}) => {
 	// scheduled job
 
 	/**
-	 * `catalog.refresh_manifests`: refresh every live service app and retire deprecated apps past their sunset.
-	 * @param {{ deadline?: number, signal?: AbortSignal }} [options]
+	 * `catalog.refresh_manifests`: refresh every live service app and retire deprecated apps past their sunset, in id
+	 * order from the app after `after`. Apps not reached before the deadline count as `skipped`, and `resumeAfter` is
+	 * the last app handled then (null when the pass completed), where a continuation picks up.
+	 * @param {{ deadline?: number, signal?: AbortSignal, after?: string | null }} [options]
 	 */
-	const refreshAll = async ({ deadline = Infinity, signal } = {}) => {
-		const stats = { checked: 0, changed: 0, unchanged: 0, rejected: 0, failed: 0, retired: 0, skipped: 0 };
-		let after = null;
+	const refreshAll = async ({ deadline = Infinity, signal, after: from = null } = {}) => {
+		const stats = {
+			checked: 0,
+			changed: 0,
+			unchanged: 0,
+			rejected: 0,
+			failed: 0,
+			retired: 0,
+			skipped: 0,
+			resumeAfter: /** @type {string | null} */ (null),
+		};
+		let after = from;
+		/** @type {string | null} */
+		let last = from;
 		for (;;) {
 			const page = await repo.listApps({ status: ['pending', 'active', 'deprecated'], after, limit: 100 });
 			for (const app of page) {
 				if (signal?.aborted || ctx.now() >= deadline) {
+					if (stats.skipped === 0) stats.resumeAfter = last;
 					stats.skipped += 1;
 					continue;
 				}
+				last = String(app._id);
 				if (dueForRetirement(app, ctx.now())) {
 					const retired = await repo.updateApp(app._id, { status: 'deprecated' }, { $set: { status: 'retired' } });
 					if (retired) {

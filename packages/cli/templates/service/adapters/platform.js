@@ -64,7 +64,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	let stores;
 	if (config.productDbUri) {
 		const { MongoClient } = await import('mongodb');
-		const client = new MongoClient(config.productDbUri, { maxPoolSize: 5 });
+		const client = new MongoClient(config.productDbUri, config.productDbOptions);
 		const mongoStores = createMongoStores({ db: client.db() });
 		await mongoStores.ensureIndexes();
 		stores = mongoStores;

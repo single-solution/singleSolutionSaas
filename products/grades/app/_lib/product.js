@@ -7,7 +7,7 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createGrades, wireEvents } from '../../api/routes.js';
-import { cronRoutes } from '../../jobs/sweep.js';
+import { cronRoutes, wireJobs } from '../../jobs/sweep.js';
 
 const KEY = Symbol.for('ss.products.grades');
 
@@ -20,7 +20,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getGrades = () => (shared().grades ??= createPlatform().then((app) => wireEvents(createGrades(app))));
+export const getGrades = () => (shared().grades ??= createPlatform().then((app) => wireJobs(wireEvents(createGrades(app)))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

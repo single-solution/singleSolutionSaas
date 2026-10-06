@@ -5,7 +5,7 @@
 | **Status**       | Direction approved · pre-implementation · greenfield (existing `singleSolutionSaas` code retired; UI look and ideas carry over)                                                                                         |
 | **Date**         | 2026-10-01 · Owner: Bilal (single-solution)                                                                                                                                                                             |
 | **Deliverables** | **A. Control plane** (Portal) · **B. Delivery plane** (Loader, Edge Injection, hosted pages, preview) · **C. Products** (independent) · **D. Contracts & kit**                                                          |
-| **Hosting**      | Vercel Pro + MongoDB Atlas, one project/database per deployable; no vendor-specific code                                                                                                                                |
+| **Hosting**      | Vercel Hobby + MongoDB Atlas M0 ($0, F.19), one project/database per deployable; no vendor-specific code                                                                                                                |
 | **Language**     | JavaScript (ESM), functional, JSDoc-typed, `tsc --checkJs --strict` in CI                                                                                                                                               |
 | **This file**    | The only planning document. Sections 1–16 + Appendices A–C = platform plan · **Part D** = product specifications (every element and what can be modified) · **Part E** = the Product Standard every product must follow |
 
@@ -223,7 +223,7 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 - **Standards**: JS ESM functional core with JSDoc + `checkJs --strict`; adapters injected; ESLint/Prettier; conventional commits; ADRs.
 - **Testing**: unit + property (idempotency, precedence, settlement) → adapter (`mongodb-memory-server`) → contract → isolation → Playwright (consoles, product dashboards, Loader on a sample site, injection on a sample origin) → load (settlement, fan-out, compile).
 - **CI/CD**: per PR all suites + preview deploy + scans; main → production with migration gate; products deploy independently; Portal keeps N-1 contract compatibility.
-- **Hosting**: one Vercel project per deployable; one Atlas DB/user per deployable; Vercel Cron → signed routes; Atlas-backed queues with leases; edge functions for injection/preview; CDN for bundles; Dockerfiles + compose as the portability proof.
+- **Hosting**: one Vercel project per deployable; one Atlas DB/user per deployable (one shared M0 cluster, F.19); one daily Vercel Cron → signed route per deployable, real-time work on requests; Atlas-backed queues with leases; edge functions for injection/preview; CDN for bundles; Dockerfiles + compose as the portability proof.
 - **Porting from ibrahimMobiles**: logic and tests only; constants → element features with schemas and bounds; store data → Graph/Event contracts; providers → shared-service adapters; per-website keys everywhere.
 
 ---
@@ -261,7 +261,7 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 
 **Launch set (decided 2026-10-01):** Chatbot → Coupons → Loyalty → Signups & Identity → Deals → Reviews → Alerts, plus the Consent & Tags and basic Storefront packs. Reasoning: highest demand for any website type, no dependency on a store backend, smallest data footprint, fastest to certify; the commerce set follows once the Loader, Graph and Event Hub are proven.
 
-Greenfield · **clients bring their own database, storage, AI/messaging/payment keys; we provide methods only (§1a)** · four deliverables (control, delivery, products, contracts) · elements as unit of switching/pricing · hourly idempotent settlement from product price books only · merchant credits added by staff, shown only · website = domain, globally unique, no verification, hard-bound · self-service signup, subscribe with ≥ 1 h credits · demo after signup, plus "try on your site" preview · one-time-token + pinned-URL registration → key trust · admin has full powers incl. scoped SSO and impersonation · international, English default, nothing regional in code · initial products ported from ibrahimMobiles and generalised, store repos untouched · JS ESM functional · Vercel Pro + Atlas, one project/DB per deployable, portable.
+Greenfield · **clients bring their own database, storage, AI/messaging/payment keys; we provide methods only (§1a)** · four deliverables (control, delivery, products, contracts) · elements as unit of switching/pricing · hourly idempotent settlement from product price books only · merchant credits added by staff, shown only · website = domain, globally unique, no verification, hard-bound · self-service signup, subscribe with ≥ 1 h credits · demo after signup, plus "try on your site" preview · one-time-token + pinned-URL registration → key trust · admin has full powers incl. scoped SSO and impersonation · international, English default, nothing regional in code · initial products ported from ibrahimMobiles and generalised, store repos untouched · JS ESM functional · Vercel Hobby + Atlas M0 (F.19), one project/DB per deployable, portable.
 
 ---
 
@@ -1382,3 +1382,38 @@ for packs.
   `availability` / `purchasable`, `nextCursor`, no badges or rank); Grades serves the stub's
   `POST /v1/elements/<key>/actions/*`; Catalog's SKU uniqueness is race-free (unique partial index on normalised
   `skuKeys` while the setting is on, lazy backfill) and its CSV export uses short-lived signed download links.
+
+## F.19 Free-tier hosting model
+
+The Portal and every service product run on **Vercel Hobby** with one **MongoDB Atlas M0** cluster, for $0. Hobby runs
+a cron at most once a day (at an imprecise time within the hour), a function for about 60 s, and nothing always-on; M0
+is one shared replica set (transactions work) with 512 MB and about 500 connections across every deployment. Nothing in
+the code is Vercel-specific: a paid host (Vercel's Hobby terms are for non-commercial use) needs no code change.
+
+- **Crons are daily catch-ups; real-time work happens on requests.** Every deployable has one daily cron (at most two;
+  `ss app validate` refuses `vercel.json` entries more frequent than daily, or more than two: `vercel.crons`).
+  Correctness never waits for it: anything with an expiry (stock holds, unconfirmed COD orders, coupon reservations,
+  deal price locks, loyalty points) is treated as expired **when read** and released on access; sweeps only clean up.
+- **Throttled work after requests.** app-kit `product.background.every(name, intervalMs, fn, { per: 'product' |
+'website', budgetMs })`: after a request (a request for that website with `per: 'website'`), a task whose interval
+  passed on this instance takes a lease in the control store (`ss_kit_leases`), and only the holder runs `fn` through
+  Next `after()` with a deadline. Products run their sweeps, dispatch, retries, crawls and maintenance this way; the
+  daily cron covers every website once a day. The usage queue and event outbox already flush after requests.
+- **Portal.** One cron, `/api/cron/daily`, runs in order: settlement catch-up, drain, connectors health,
+  reconciliation, catalog refresh, audit verify. Each step gets the time the later steps do not reserve (their share
+  of `CRON_DEADLINE_MS`) and resumes where it stopped next time (settlement and health cursors, the queue,
+  reconciliation's saved run, catalog and audit continuation jobs marked `daily`). The individual crons stay runnable
+  (`/api/cron/<name>`). After responses (`ctx.defer`, `toNextRoute(handler, { after })`) the Portal runs a short
+  **drain** (at most every 15 s across instances via a lease lock, ≤ 10 jobs, 8 s, never `daily` jobs) and an
+  opportunistic **settlement** pass (module `background`, every 5 min, 3 s) — so product usage reports, heartbeats and
+  console loads all settle; balance and meter reads still settle the merchant lazily. The **Event Hub** attempts the
+  deliveries an ingest enqueued right after its response (only those job keys, lease-safe), so cross-product events
+  usually arrive within seconds; failures retry through the queue. Connectors are checked when used (test, rotate,
+  update, assign) and by the daily pass.
+- **Connection budget.** One database and one database user per deployable on the one cluster. Mongo clients are created
+  once per instance and cached on `globalThis` (Portal `getMongoClient`, products' composition roots, app-kit's merchant
+  pools), never per request. Pools are small: Portal `MONGODB_MAX_POOL_SIZE` default 5, products' control DB
+  `SS_PRODUCT_DB_MAX_POOL_SIZE` default 5 (`configFromEnv().productDbOptions`), merchant databases 3 per instance; idle
+  connections close after a minute.
+- **Templates.** `ss app init` generates `vercel.json` with one daily `/cron/daily` (heartbeat and queue flush) and
+  registers background work in `jobs/index.js` (`wireJobs`); the notes sample purges deleted notes hourly per website.

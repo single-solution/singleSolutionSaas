@@ -378,14 +378,15 @@ export const createDispatcher = (deps) => {
 	/**
 	 * Send the website's due messages (claim before send).
 	 * @param {Site} site
-	 * @param {{ limit?: number, owner?: string }} [options]
+	 * @param {{ limit?: number, owner?: string, deadline?: number }} [options] `deadline` (epoch ms): no new message is
+	 *   claimed after it (background runs after requests have a time budget)
 	 */
-	const run = async (site, { limit = 50, owner = deps.instanceId } = {}) => {
+	const run = async (site, { limit = 50, owner = deps.instanceId, deadline = Infinity } = {}) => {
 		/** @type {Record<string, number>} */
 		const counts = { sent: 0, deferred: 0, cancelled: 0, capped: 0, retry: 0, failed: 0 };
 		if (!site.settings.enabled('dispatch')) return { ...counts, skipped: 'dispatch_disabled' };
 		const repos = site.repos;
-		for (let index = 0; index < limit; index += 1) {
+		for (let index = 0; index < limit && now() < deadline; index += 1) {
 			const message = await repos.messages.claimDue({ owner, leaseMs: site.settings.dispatch.leaseMs });
 			if (!message) break;
 			try {

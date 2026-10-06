@@ -223,7 +223,7 @@ export const createReviewsService = ({
 				customerId,
 				status: 'pending',
 				reviewId: null,
-				// past `staleAt` the hourly job deletes the object and the slot; the TTL on `purgeAt` is only a backstop
+				// past `staleAt` the sweep deletes the object and the slot; the TTL on `purgeAt` is only a backstop
 				staleAt: new Date(now() + retention.photos * DAY_MS),
 				purgeAt: new Date(now() + retention.photos * DAY_MS + STALE_BACKSTOP_MS),
 			});
@@ -247,12 +247,17 @@ export const createReviewsService = ({
 		photo.staleAt !== undefined && photo.staleAt !== null && new Date(/** @type {any} */ (photo.staleAt)).getTime() <= now();
 
 	/**
-	 * Delete the objects and records of this website's stale photo slots (hourly job; bounded and idempotent).
+	 * Delete the objects and records of this website's stale photo slots (jobs; bounded and idempotent).
 	 * @param {Site} site
+	 * @param {{ limit?: number }} [options] slots per run (default: the sweep's)
 	 * @returns {Promise<{ scanned: number, deleted: number, missing: number, failed: number }>}
 	 */
-	const sweepPhotos = (site) =>
-		site.repos.photos.sweepStale({ storage: () => storage(site.websiteId), olderThanMs: SWEEP_GRACE_MS });
+	const sweepPhotos = (site, { limit } = {}) =>
+		site.repos.photos.sweepStale({
+			storage: () => storage(site.websiteId),
+			olderThanMs: SWEEP_GRACE_MS,
+			...(limit === undefined ? {} : { limit }),
+		});
 
 	/**
 	 * Check photos before they are attached: pending, owned by the submitter, uploaded, of an allowed type and exactly the
@@ -767,9 +772,10 @@ export const createReviewsService = ({
 	/**
 	 * The request flow for one website: expire, send and remind due requests (bounded per run, quiet hours honoured).
 	 * @param {Site} site
+	 * @param {{ deadline?: number }} [options] no request is started past `deadline` (the rest waits for the next run)
 	 * @returns {Promise<Record<string, number | boolean>>}
 	 */
-	const runRequests = async (site) => {
+	const runRequests = async (site, { deadline = Infinity } = {}) => {
 		const flow = site.settings.requestFlow;
 		const counts = { due: 0, sent: 0, reminded: 0, failed: 0, expired: 0, skipped: 0, quiet: false };
 		if (!flow) return counts;
@@ -780,6 +786,7 @@ export const createReviewsService = ({
 		/** @type {any} */
 		let adapter = null;
 		for (const request of due) {
+			if (now() >= deadline) break;
 			const step = nextStep(request, { now: at, reminders: flow.reminders, quiet });
 			if (step.action === 'wait') {
 				counts.quiet = true;

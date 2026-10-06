@@ -67,7 +67,8 @@ app/        Next.js wiring and the dashboard (overview, items, item detail with 
 ## Environment
 
 See `.env.example`: the app-kit variables plus `CATALOG_FEED_SECRET` (optional, feed-token HMAC secret) and
-`CRON_SECRET` (the sweep cron, every 5 minutes in `vercel.json`).
+`CRON_SECRET` (the sweep cron in `vercel.json`: a daily catch-up over every website, as the free Vercel Hobby plan
+allows; between runs the sweep runs after requests, at most every 5 minutes per website).
 
 ## Commands
 

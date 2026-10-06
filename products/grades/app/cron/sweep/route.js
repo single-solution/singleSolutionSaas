@@ -1,4 +1,4 @@
-/** GET /cron/sweep — hourly sweep of stale inspection photo slots (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
+/** GET /cron/sweep — daily catch-up sweep of stale inspection photo slots (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
 import { forward } from '../../_lib/product.js';
 
 export const dynamic = 'force-dynamic';

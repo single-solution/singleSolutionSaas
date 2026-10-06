@@ -95,9 +95,10 @@ export const createSearchApp = (app, options = {}) => {
 	/**
 	 * Scheduled work of one website: crawl steps, the Atlas index state, vocabulary cleanup.
 	 * @param {Site} site
+	 * @param {{ deadline?: number }} [options] no crawl step is started after `deadline` (epoch ms)
 	 */
-	const sweepSite = async (site) => {
-		const crawled = await sources.runDue(site);
+	const sweepSite = async (site, { deadline } = {}) => {
+		const crawled = await sources.runDue(site, deadline === undefined ? {} : { deadline });
 		const atlas = site.settings.index.engine === 'portable' ? null : await engines.atlasStatus(site, { refresh: true });
 		const cleaned = await site.repos.vocabulary.cleanup();
 		return { ...crawled, atlas: atlas?.state ?? 'disabled', termsRemoved: cleaned };

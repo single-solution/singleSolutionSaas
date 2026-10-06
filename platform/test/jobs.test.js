@@ -137,6 +137,27 @@ describe('job queue', () => {
 	});
 });
 
+describe('bounded drains (F.19)', () => {
+	it('runBatch leases only the given keys, at most maxJobs, and can leave daily jobs to the cron', async () => {
+		const { jobs } = await setup();
+		/** @type {string[]} */
+		const ran = [];
+		const handlers = { 'demo.x': async (/** @type {any} */ p) => void ran.push(p.n) };
+		for (const n of [1, 2, 3]) await jobs.enqueue({ name: 'demo.x', key: `k${n}`, payload: { n } });
+		await jobs.enqueue({ name: 'demo.x', key: 'k4', payload: { n: 4 }, daily: true });
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, keys: ['k2'] })).toMatchObject({ succeeded: 1 });
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, keys: [] })).toMatchObject({ leased: 0 });
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, maxJobs: 1, skipDaily: true })).toMatchObject({
+			succeeded: 1,
+			stoppedBy: 'limit',
+		});
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, skipDaily: true })).toMatchObject({ succeeded: 1 });
+		expect(ran).toEqual([2, 1, 3]);
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000 })).toMatchObject({ succeeded: 1 });
+		expect(ran).toEqual([2, 1, 3, 4]);
+	});
+});
+
 describe('payload dropping', () => {
 	it('complete(job, { dropPayload }) unsets the payload; runBatch does it for jobs enqueued with dropPayload', async () => {
 		const { jobs, db } = await setup();

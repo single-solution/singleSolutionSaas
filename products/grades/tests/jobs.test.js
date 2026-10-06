@@ -1,4 +1,4 @@
-/** jobs/: the hourly sweep of stale inspection photo slots (GET /cron/sweep) and the slot migration. */
+/** jobs/: the sweep of stale inspection photo slots (after requests and the daily GET /cron/sweep) and the slot migration. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MIGRATIONS, STALE_BACKSTOP_MS } from '../adapters/db.js';
 import { cronAuthorized, runSweepJob } from '../jobs/sweep.js';
@@ -71,6 +71,44 @@ describe('photo slot sweep', () => {
 		// a website without inspection is skipped
 		await h.entitle({ elements: { inspection: false } });
 		expect(rowOf(await cron())).toBeUndefined();
+		await h.entitle();
+	});
+
+	it('sweeps the request website after requests (throttled background task); stale slots never count before it', async () => {
+		const unit = (await h.call('POST', '/v1/units', { body: { itemId: 'itm_background' } })).json;
+		const draft = (await h.call('POST', '/v1/inspections', { body: { unitId: unit.id } })).json;
+		const slot = (
+			await h.call('POST', `/v1/inspections/${draft.id}/photos`, {
+				body: { item: 'appearance', contentType: 'image/jpeg', size: 300 },
+			})
+		).json;
+		const doc = await h.collection('photos').findOne({ websiteId: WEBSITE, id: slot.id });
+		h.bucket.upload(String(doc?.objectKey), 300, 'image/jpeg');
+		h.clock.advance(600_000 + DAY + 1_000);
+		// stale before any sweep: the uploaded photo no longer counts towards the checklist
+		const complete = await h.call('PATCH', `/v1/inspections/${draft.id}`, {
+			body: {
+				results: [
+					{ item: 'appearance', value: 5 },
+					{ item: 'function', value: true },
+					{ item: 'completeness', value: true },
+				],
+				complete: true,
+			},
+		});
+		expect(complete.status).toBe(422);
+		expect(await h.collection('photos').countDocuments({ websiteId: WEBSITE, id: slot.id })).toBe(1);
+
+		h.clock.advance(HOUR);
+		expect(h.grades.sweep.name).toBe('sweep');
+		expect(await h.grades.sweep.trigger({ websiteId: WEBSITE })).toBe(true);
+		expect(await h.collection('photos').countDocuments({ websiteId: WEBSITE, id: slot.id })).toBe(0);
+		expect(h.bucket.objects.has(String(doc?.objectKey))).toBe(false);
+		// throttled within the interval; websites without inspection are left alone
+		expect(await h.grades.sweep.trigger({ websiteId: WEBSITE })).toBe(false);
+		h.clock.advance(HOUR + 1_000);
+		await h.entitle({ elements: { inspection: false } });
+		expect(await h.grades.sweep.trigger({ websiteId: WEBSITE })).toBe(true);
 		await h.entitle();
 	});
 

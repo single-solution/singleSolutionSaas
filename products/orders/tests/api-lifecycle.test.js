@@ -1,6 +1,6 @@
 /** Intake, the lifecycle matrix, fulfilment, serials, the ledger and the events they publish (through the real API). */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createHarness, HOUR, WEBSITE } from './harness.js';
+import { createHarness, HOUR, WEBSITE, WEBSITE_2 } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -205,6 +205,47 @@ describe('lifecycle', () => {
 		expect(after.json.status).toBe('cancelled');
 		expect(after.json.timeline.at(-1)).toMatchObject({ status: 'cancelled', reason: 'expired', actor: { type: 'system' } });
 		expect((await h.call('GET', '/cron/sweep', { key: null })).status).toBe(401);
+	});
+
+	it('treats an expired status as expired on read, before any sweep (free-tier hosting: daily cron)', async () => {
+		await h.entitle({ config: { risk: { open_order_cap: 1, cap_action: 'flag' } } });
+		const customer = { customerId: 'cus_exp', email: 'exp@example.com', phone: '+44 20 7946 1111', name: 'Exp' };
+		const first = await h.order({ customer });
+		const second = await h.order({ customer });
+		expect(second.risk.flags).toContain('open_cap');
+		h.clock.advance(49 * HOUR);
+		// expired orders no longer count as open, though nothing swept them
+		const third = await h.order({ customer });
+		expect(third.risk.flags).not.toContain('open_cap');
+		expect((await h.collection('orders').findOne({ id: first.id })).status).toBe('pending_payment');
+		// reading applies the expiry: the API, the list and the stored order agree
+		const read = await h.call('GET', `/v1/orders/${first.id}`);
+		expect(read.json.status).toBe('cancelled');
+		expect(read.json.timeline.at(-1)).toMatchObject({ status: 'cancelled', reason: 'expired', actor: { type: 'system' } });
+		expect((await h.collection('orders').findOne({ id: first.id })).status).toBe('cancelled');
+		const listed = await h.call('GET', '/v1/orders?limit=100');
+		expect(listed.json.items.find((/** @type {any} */ o) => o.id === second.id)?.status).toBe('cancelled');
+		// a staff move on an order whose status expired starts from the expired status
+		h.clock.advance(49 * HOUR);
+		const late = await h.call('POST', `/v1/orders/${third.id}/transitions`, { body: { status: 'confirmed' } });
+		expect(late.status).not.toBe(200);
+		expect((await h.collection('orders').findOne({ id: third.id })).status).toBe('cancelled');
+		await h.entitle();
+	});
+
+	it('registers the per-website background sweep; its trigger sweeps that website', async () => {
+		const order = await h.order();
+		h.clock.advance(49 * HOUR);
+		const { sweep } = h.orders.jobs;
+		expect(sweep.name).toBe('sweep');
+		expect(await sweep.trigger({})).toBe(false); // per website: nothing to do without one
+		expect(await sweep.trigger({ websiteId: WEBSITE })).toBe(true);
+		expect((await h.collection('orders').findOne({ id: order.id })).status).toBe('cancelled');
+		expect(await sweep.trigger({ websiteId: WEBSITE })).toBe(false); // throttled: at most once per interval
+		expect(await sweep.trigger({ websiteId: WEBSITE_2 })).toBe(true); // not subscribed: nothing to sweep
+		// a run past its deadline leaves the remaining steps for the next one
+		const site = await h.site();
+		expect(await h.orders.sweepSite(site, { limit: 5, deadline: 0 })).toEqual({ expired: 0, redelivered: 0, messages: 0 });
 	});
 
 	it('lists with filters and cursor pages; statuses and carriers are public', async () => {

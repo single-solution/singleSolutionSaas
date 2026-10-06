@@ -36,7 +36,7 @@ describe('loadConfig', () => {
 		expect(config.mongo).toEqual({
 			uri: 'mongodb://127.0.0.1:27017/ss_portal_test',
 			dbName: 'ss_portal_test',
-			maxPoolSize: 10,
+			maxPoolSize: 5,
 		});
 		expect(config.signingKeys.map((k) => k.kid)).toEqual(['portal-2026-10', 'portal-2026-04']);
 		expect(config.keks.map((k) => k.id)).toEqual(['kek-2', 'kek-1']);

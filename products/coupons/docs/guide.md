@@ -17,8 +17,9 @@ context?: { country, device, source, deviceId } }` — integer minor units in on
 
 Concurrency: every limit (uses per code, per coupon, per customer, per device) is an atomic conditional counter in the
 merchant's database. Two checkouts racing for the last use of a code: exactly one reservation is created, the other
-gets `409 exhausted`. Unconfirmed reservations expire after `api.reservation_ttl_minutes` (swept lazily when a code is
-full and by `GET /cron/sweep`).
+gets `409 exhausted`. Unconfirmed reservations expire after `api.reservation_ttl_minutes`: a lapsed reservation is treated as expired
+as soon as it is read or touched (its uses go back then), a throttled sweep runs after requests (at most every 5 minutes
+per website), and the daily `GET /cron/sweep` catches up.
 
 Order events: `order.completed@1` redeems, `order.cancelled@1` releases (`api.release_on_cancel`), `order.refunded@1`
 releases per `api.release_on_refund` (`never`, `full` — refunds summed until they reach the reservation's total —,

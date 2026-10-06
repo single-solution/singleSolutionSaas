@@ -164,7 +164,7 @@ api/             routes: read input, call core, use adapters, return a result
 headless/        UI logic without the DOM, for merchants who build their own UI
 ui/              drop-in UI that renders headless/ with the website's theme
 app/             thin Next.js wiring only (routes call app-kit)
-jobs/            scheduled work (cleanup, retries)
+jobs/            the daily cron route and background work after requests (cleanup, retries)
 tests/           Vitest tests, including certify (the Portal end-to-end test lives in e2e/)
 eslint.config.js, tsconfig.json, vitest.config.js   tooling, built from @ss/config
 docs/guide.md    short guide for developers using the product
@@ -227,6 +227,9 @@ compile. Use `.js` files with JSDoc types; do not add `.ts` files.
 - Prefer static and cacheable responses. API responses that hold private data are `no-store`.
 - Do not poll. Use events (`events.publish`, consumed through `/.well-known/ss-events`) and short-lived caches.
 - Run slow work after the response, with `after()`, or in `jobs/`. Usage and events are flushed automatically.
+- Crons run once a day (free tier). Work that must happen sooner runs after requests with
+  `product.background.every(name, intervalMs, fn, { per: 'website' })`, and anything with an expiry is checked when
+  read.
 - Use one indexed query rather than many. Every query must have an index declared in `adapters/db.js`.
 
 ## Testing
@@ -246,9 +249,11 @@ pnpm --filter @ss/product-my-app test
 pnpm --filter @ss/e2e test
 ```
 
-## Deploying (Vercel + MongoDB Atlas)
+## Deploying (Vercel Hobby + MongoDB Atlas M0, $0)
 
-One GitHub repository feeds many Vercel projects. Each project uses one folder as its **Root Directory**:
+Everything runs on free tiers: **Vercel Hobby** for the Portal and every service product, and **one MongoDB Atlas M0**
+cluster shared by all of them. One GitHub repository feeds many Vercel projects. Each project uses one folder as its
+**Root Directory**:
 
 | Vercel project          | Root Directory                        | What it is                                                                                                                                |
 | ----------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
@@ -256,14 +261,27 @@ One GitHub repository feeds many Vercel projects. Each project uses one folder a
 | One per service product | `products/<name>`                     | aftersales, alerts, catalog, chatbot, checkout, configurator, coupons, deals, grades, loyalty, orders, reviews, search, signups, wishlist |
 | —                       | `products/pdp`, `products/storefront` | **Not deployed.** These are element packs, published into the Portal with `ss pack publish` (step 5)                                      |
 
-**Plan:** the Portal runs a cron every minute and products every 5–15 minutes. That needs **Vercel Pro**; Hobby
-allows only daily crons.
+**How it works on free tiers** (PLAN F.19):
+
+- **Crons are daily catch-ups.** Hobby runs a cron at most once a day, so each deployable has one daily cron in its
+  `vercel.json` (the Portal's `/api/cron/daily` settles, drains the queue, checks connectors, reconciles, refreshes
+  manifests and verifies the audit log, each step time-boxed and resumed the next day).
+- **Real-time work happens on requests.** Event deliveries are attempted right after they are ingested; queued jobs,
+  settlement and product sweeps (expiring holds, retries, dispatch, crawls) run after ordinary requests, throttled by a
+  lease so busy sites do not repeat them; anything that expires is treated as expired when read. A quiet site simply
+  waits for its next request or the daily cron.
+- **Small connection pools.** About 15 deployments share M0's ~500 connections, so pools are 5 per instance (Portal
+  `MONGODB_MAX_POOL_SIZE`, products `SS_PRODUCT_DB_MAX_POOL_SIZE`) and clients are reused across requests.
+- Vercel's Hobby terms are for non-commercial use; moving to a paid plan or another Node 22 host later needs no code
+  change.
 
 ### 1. Atlas
 
-Create one cluster. Give every deployable its own database and its own database user, so a leak in one product
-cannot read another: `ss_portal` for the Portal, and `ss_<product>` (for example `ss_chatbot`) for each product's
-small control database. Client data never goes here; merchants connect their own databases in the Portal.
+Create **one M0 cluster** (it is a replica set, so transactions work). Give every deployable its own database and its
+own database user, so a leak in one product cannot read another: `ss_portal` for the Portal, and `ss_<product>` (for
+example `ss_chatbot`) for each product's small control database. Client data never goes here; merchants connect their
+own databases in the Portal. Under **Network Access** allow `0.0.0.0/0` (Vercel functions have no fixed IPs; every
+user has its own password and only its own database).
 
 ### 2. Storage for the Portal's delivery files
 
@@ -318,7 +336,8 @@ For every folder in the table above:
    not go into Vercel.
 
 3. Also set `SS_PRODUCT_DB_URI` (its Atlas database from step 1), `SS_LOG_LEVEL=info`, `CRON_SECRET` (any random
-   string of 32+ characters), and the product's own variables from `products/<name>/.env.example`.
+   string of 32+ characters; Vercel sends it to the daily cron), and the product's own variables from
+   `products/<name>/.env.example`.
 4. Deploy and add a domain, for example `chatbot.apps.<your-domain>`.
 5. Portal → **Admin → Apps → Register**: enter the product URL and paste the registration token. The Portal checks
    the product proves it holds the key, then lists it. Activate it, and merchants can subscribe.
@@ -338,4 +357,5 @@ Repeat for `products/storefront`.
 
 - Vercel only rebuilds the projects whose folder or `@ss/*` dependencies changed in a push.
 - After a deploy that changes Portal data, run `pnpm db:indexes && pnpm db:migrate` in `platform` again.
-- Nothing is Vercel-specific: any Node 22 host that runs `next start` with the same variables and crons works.
+- Nothing is Vercel-specific: any Node 22 host that runs `next start` with the same variables and calls each
+  deployable's daily cron route with `Authorization: Bearer $CRON_SECRET` works.

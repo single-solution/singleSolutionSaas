@@ -370,8 +370,21 @@ export const matchRoute = (routes, method, pathname) => {
  * @property {{ appId: string } | null} app
  * @property {string | undefined} idempotencyKey
  * @property {(permission: string, resource?: Resource) => void} authorize throws a 403 problem unless allowed
+ * @property {(task: () => Promise<unknown>) => void} defer run `task` after the response (Next.js `after()` when the
+ *   adapter provided it); failures are logged, never seen by the client
  * @property {Logger} log
  */
+
+/** @typedef {(task: () => Promise<unknown>) => void} AfterScheduler */
+
+/**
+ * What the handler hands to `afterResponse` once the response is built: the tasks deferred by the route and the
+ * framework's scheduler for this request (null outside Next.js).
+ * @typedef {{ deferred: ReadonlyArray<() => Promise<unknown>>, schedule: AfterScheduler | null, log: Logger }} AfterResponse
+ */
+
+/** Per-request `after()` schedulers registered by `toNextRoute(handler, { after })`. */
+const SCHEDULERS = new WeakMap();
 
 /**
  * @param {Request} request
@@ -417,7 +430,8 @@ const readBody = async (request, max) => {
  *   maxBodyBytes?: number,
  *   trustProxyHeaders?: boolean,
  *   basePath?: string,
- * }} options
+ *   afterResponse?: (input: AfterResponse) => void,
+ * }} options `afterResponse` schedules the deferred tasks and any background work after each response
  * @returns {(request: Request) => Promise<Response>}
  */
 export const createApiHandler = ({
@@ -435,6 +449,7 @@ export const createApiHandler = ({
 	maxBodyBytes = 1024 * 1024,
 	trustProxyHeaders = false,
 	basePath = '/api',
+	afterResponse,
 }) => {
 	if (!idempotencySecret || idempotencySecret.length < 32)
 		throw new TypeError('idempotencySecret (at least 32 bytes) is required for request fingerprints');
@@ -504,9 +519,18 @@ export const createApiHandler = ({
 		const extra = { 'x-request-id': requestId };
 		/** @type {Actor | null} */
 		let actor = null;
+		/** @type {Array<() => Promise<unknown>>} */
+		const deferred = [];
 
 		/** @param {StoredResponse & { cookies?: string[] }} rendered */
 		const finish = (rendered) => {
+			if (afterResponse) {
+				try {
+					afterResponse({ deferred, schedule: SCHEDULERS.get(request) ?? null, log });
+				} catch (error) {
+					log.warn('after-response scheduling failed', { error });
+				}
+			}
 			const headers = new Headers();
 			for (const [name, value] of rendered.headers) headers.set(name, value);
 			for (const [name, value] of Object.entries(extra)) headers.set(name, value);
@@ -613,6 +637,9 @@ export const createApiHandler = ({
 				idempotencyKey: undefined,
 				authorize: (permission, resource) => {
 					if (!can(actor, permission, resource)) throw problem('forbidden', `Missing permission ${permission}.`);
+				},
+				defer: (task) => {
+					deferred.push(task);
 				},
 				log,
 			};
@@ -738,12 +765,17 @@ export const createApiHandler = ({
 /**
  * Next.js App Router adapter: `export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(handler)`.
  * The handler strips its own `basePath` (`/api`), so routes are declared as `/v1/...` whether they are reached at
- * `/api/v1/...` or through the `/v1/:path*` rewrite.
+ * `/api/v1/...` or through the `/v1/:path*` rewrite. Pass Next's `after` (`import { after } from 'next/server.js'`)
+ * so deferred work and the throttled background work (F.19) run after the response on serverless hosts.
  * @param {(request: Request) => Promise<Response>} handler
+ * @param {{ after?: AfterScheduler }} [options]
  * @returns {Readonly<Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS', (request: Request) => Promise<Response>>>}
  */
-export const toNextRoute = (handler) => {
+export const toNextRoute = (handler, { after } = {}) => {
 	/** @param {Request} request */
-	const route = (request) => handler(request);
+	const route = (request) => {
+		if (typeof after === 'function') SCHEDULERS.set(request, after);
+		return handler(request);
+	};
 	return Object.freeze({ GET: route, POST: route, PUT: route, PATCH: route, DELETE: route, HEAD: route, OPTIONS: route });
 };

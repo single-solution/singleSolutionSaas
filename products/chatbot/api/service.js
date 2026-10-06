@@ -1371,13 +1371,15 @@ export const createChatbotService = (deps) => {
 		/**
 		 * Periodic work for one website: knowledge refresh, SLA breaches, snooze wake-ups, auto-close.
 		 * @param {Site} site
-		 * @param {{ maxSources?: number, batch?: number }} [options]
+		 * @param {{ maxSources?: number, batch?: number, deadline?: number }} [options] no knowledge refresh starts past
+		 *   `deadline` (the rest is bounded by `batch`)
 		 */
-		maintain: async (site, { maxSources = 5, batch = 200 } = {}) => {
+		maintain: async (site, { maxSources = 5, batch = 200, deadline = Infinity } = {}) => {
 			const at = now();
 			const result = { refreshed: 0, failed: 0, breaches: 0, woken: 0, closed: 0 };
 			if (site.settings.knowledge) {
 				for (const source of (await knowledge.dueSources(site)).slice(0, maxSources)) {
+					if (now() >= deadline) break;
 					const refreshed = await knowledge.refreshSource(site, source);
 					if (refreshed.ok) result.refreshed += 1;
 					else result.failed += 1;

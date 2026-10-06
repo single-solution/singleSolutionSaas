@@ -305,17 +305,22 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			byOrder: async (orderId) =>
 				(await reservations.find({ websiteId, orderId }, { sort: { createdAt: 1 }, limit: 50 }).toArray()).map(strip),
 			/**
-			 * Open reservations past their expiry (optionally holding one code).
+			 * Open reservations past their expiry (optionally holding one code, or of one customer / device).
 			 * @param {string} at ISO
-			 * @param {{ code?: string, limit: number }} options
+			 * @param {{ code?: string, customerId?: string, deviceId?: string, limit: number }} options
 			 */
-			expired: async (at, { code, limit }) =>
+			expired: async (at, { code, customerId, deviceId, limit }) =>
 				(
 					await reservations
 						.find(
 							{
 								websiteId,
 								...(code ? { codes: code } : {}),
+								...(customerId || deviceId
+									? {
+											$or: [...(customerId ? [{ customerId }] : []), ...(deviceId ? [{ deviceId }] : [])],
+										}
+									: {}),
 								status: { $in: ['pending', 'reserved'] },
 								expiresAt: { $lt: at },
 							},
@@ -351,7 +356,8 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				return strip(await reservations.findOne({ websiteId, id }));
 			},
 			/** Open (reserved) reservations. */
-			countOpen: () => reservations.countDocuments({ websiteId, status: 'reserved' }),
+			/** Reservations still holding uses at `at` (lapsed ones count as expired before any sweep). @param {string} at ISO */
+			countOpen: (at) => reservations.countDocuments({ websiteId, status: 'reserved', expiresAt: { $gte: at } }),
 			/**
 			 * Redeemed reservations per currency in a window (report).
 			 * @param {string} from ISO

@@ -24,7 +24,7 @@ import { createDocuments } from './documents.js';
 import { createEventHandlers } from './events.js';
 import { createIntake } from './intake.js';
 import { createLedger } from './ledger.js';
-import { createLifecycle } from './lifecycle.js';
+import { createLifecycle, expiringOnRead } from './lifecycle.js';
 import { createNotifier } from './notify.js';
 import { createOutbox } from './outbox.js';
 import { createBlocklist, entryView } from './risk.js';
@@ -88,11 +88,12 @@ export const createOrders = (app) => {
 	 */
 	const siteOf = async (websiteId, doc) => {
 		await app.registry.remember(websiteId);
-		return {
-			websiteId,
-			settings: settingsForDoc(product, doc),
-			repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
-		};
+		const repos = await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env });
+		/** @type {Site} */
+		const site = { websiteId, settings: settingsForDoc(product, doc), repos };
+		// expire on read: an order whose status expired is moved before it is returned (the sweep only catches up)
+		site.repos = { ...repos, orders: expiringOnRead(repos.orders, (order) => lifecycle.expireIfDue(site, order)) };
+		return site;
 	};
 	/**
 	 * Site of a website from its entitlement (null without an active subscription or with the lifecycle off).
@@ -105,14 +106,20 @@ export const createOrders = (app) => {
 		return siteOf(websiteId, result.doc);
 	};
 	/**
-	 * Sweep one website: auto-expiry, the order outbox, message retries.
+	 * Sweep one website: auto-expiry, the order outbox, message retries — `limit` items each; a step that would start
+	 * after `deadline` is left for the next run.
 	 * @param {Site} site
+	 * @param {{ limit?: number, deadline?: number }} [options]
 	 */
-	const sweepSite = async (site) => ({
-		expired: await lifecycle.expireDue(site, SWEEP_BATCH),
-		redelivered: await outbox.retry(site, SWEEP_BATCH),
-		messages: site.settings.enabled('customer_updates') ? await notifier.retryDue(site, SWEEP_BATCH) : 0,
-	});
+	const sweepSite = async (site, { limit = SWEEP_BATCH, deadline = Infinity } = {}) => {
+		/** @param {() => Promise<number>} step */
+		const within = async (step) => (app.now() < deadline ? step() : 0);
+		return {
+			expired: await within(() => lifecycle.expireDue(site, limit)),
+			redelivered: await within(() => outbox.retry(site, limit)),
+			messages: site.settings.enabled('customer_updates') ? await within(() => notifier.retryDue(site, limit)) : 0,
+		};
+	};
 	return {
 		app,
 		product,

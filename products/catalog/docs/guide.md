@@ -39,8 +39,10 @@ single-variant item can be created with `price`, `sku`, `quantity` at item level
 
 - `POST /v1/variants/{id}/stock { delta | quantity, expectedQuantity?, reason? }` adjusts stock.
 - `POST /v1/stock-reservations { lines: [{ variantId | sku, quantity }], orderId? }` takes stock for a checkout: all
-  lines or none (`insufficient_stock`). Send `order.placed@1` with the same `orderId` to convert it; otherwise it is
-  released after `variants.reservation_ttl_minutes`.
+  lines or none (`insufficient_stock`). Send `order.placed@1` with the same `orderId` to convert it; otherwise it
+  expires after `variants.reservation_ttl_minutes`: from then on it reads as `expired`, and its stock is given back
+  when it is read, when a new reservation is taken, or by the background sweep (after requests, at most every
+  5 minutes per website) — whichever comes first (the daily cron catches up on quiet websites).
 - Without a reservation, `order.placed@1` takes the stock (lines matched by `variantId`, `sku`, or the single variant
   of `itemId`), once per order; `order.cancelled@1` gives it back. Overselling is recorded (negative stock).
 

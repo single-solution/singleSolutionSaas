@@ -1,9 +1,16 @@
 /**
- * Sweep job (Vercel cron → `GET /cron/sweep` with `Authorization: Bearer $CRON_SECRET`, every few minutes): for every
- * website this deployment serves, move orders whose status expired (auto-expiry),
- * redeliver order outbox entries a crashed request left behind and retry customer messages. Each website
- * is independent: one failing website never stops the others. The per-website work is passed in by the composition
- * root (serve.js, app/_lib/product.js), so this layer depends on no handler code.
+ * Scheduled work (PLAN F.19, free-tier hosting: one daily cron per deployment).
+ *
+ * - **Daily catch-up** (Vercel cron, once a day → `GET /cron/sweep` with `Authorization: Bearer $CRON_SECRET`): for
+ *   every website this deployment serves, move orders whose status expired (auto-expiry), redeliver order outbox
+ *   entries a crashed request left behind and retry customer messages — a bounded batch per website; what is left is
+ *   picked up by the next run. Each website is independent: one failing website never stops the others.
+ * - **On requests** (`wireJobs`, `product.background.every`): after a request for a website, the same sweep runs for
+ *   that one website at most every {@link SWEEP_INTERVAL_MS}, in a small batch within the run's deadline.
+ *
+ * Correctness never waits for either: an order whose status expired is moved when it is read (api/lifecycle.js
+ * `expiringOnRead`) and is not counted as open. The per-website work is passed in by the composition root
+ * (serve.js, app/_lib/product.js), so this layer depends on no handler code.
  */
 import { timingSafeEqual } from 'node:crypto';
 import { defineRoute, ok, problem } from '@ss/app-kit';
@@ -27,6 +34,36 @@ export const runSweep = async ({ websiteIds, siteFor, run, onError = () => {} })
 		}
 	}
 	return { websites: results.length, results };
+};
+
+/** Per-website sweep after requests: at most one run per website per 5 minutes. */
+export const SWEEP_INTERVAL_MS = 5 * 60_000;
+/** Items per step of a background run. */
+const BACKGROUND_LIMIT = 50;
+
+/** @typedef {{ name: string, trigger: (input?: { websiteId?: string | null }) => Promise<boolean> }} EveryTask */
+
+/**
+ * Register the throttled per-website sweep that runs after requests (once per application instance, from the
+ * composition root: app/_lib/product.js, serve.js).
+ * @template {{ product: { background: { every: Function } }, siteFor: (websiteId: string) => Promise<any>,
+ *   sweepSite: (site: any, options?: { limit?: number, deadline?: number }) => Promise<Record<string, number>> }} O
+ * @param {O} orders
+ * @returns {O & { jobs: { sweep: EveryTask } }}
+ */
+export const wireJobs = (orders) => {
+	const { product, siteFor, sweepSite } = orders;
+	/** @type {EveryTask} */
+	const sweep = product.background.every(
+		'sweep',
+		SWEEP_INTERVAL_MS,
+		async (/** @type {{ websiteId: string, deadline: number }} */ { websiteId, deadline }) => {
+			const site = await siteFor(websiteId);
+			return site ? sweepSite(site, { limit: BACKGROUND_LIMIT, deadline }) : null;
+		},
+		{ per: 'website' },
+	);
+	return { ...orders, jobs: { sweep } };
 };
 
 /**

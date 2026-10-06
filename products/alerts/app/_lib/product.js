@@ -7,7 +7,7 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createAlerts, wireEvents } from '../../api/routes.js';
-import { cronRoutes } from '../../jobs/dispatch.js';
+import { cronRoutes, scheduleDispatch } from '../../jobs/dispatch.js';
 
 const KEY = Symbol.for('ss.products.alerts');
 
@@ -20,7 +20,8 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getAlerts = () => (shared().alerts ??= createPlatform().then((app) => wireEvents(createAlerts(app))));
+export const getAlerts = () =>
+	(shared().alerts ??= createPlatform().then((app) => scheduleDispatch(wireEvents(createAlerts(app)))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

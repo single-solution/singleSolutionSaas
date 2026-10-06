@@ -371,6 +371,33 @@ describe('Event Hub ingest', () => {
 		expect(await drain()).toMatchObject({ leased: 0 });
 	});
 
+	it('attempts the deliveries of an ingest right after the response (F.19)', async () => {
+		const { world, receiver, drain, key, svc } = await boot('int_immediate');
+		seedApps(world, receiver.base);
+		const pk = await key('pk');
+		/** @type {Array<() => Promise<unknown>>} */
+		const deferred = [];
+		const a = pageViewed();
+		const { body } = await svc().ingestRequest({
+			rawBody: JSON.stringify({ events: [a] }),
+			headers: new Headers({ authorization: `Bearer ${pk}`, origin: SHOP, 'content-type': 'application/json' }),
+			defer: (task) => void deferred.push(task),
+		});
+		expect(body.accepted).toBe(1);
+		expect(deferred).toHaveLength(1);
+		expect(receiver.received).toHaveLength(0);
+		expect(await deferred[0]?.()).toMatchObject({ succeeded: 2 });
+		expect(receiver.received).toHaveLength(2);
+		expect(await drain()).toMatchObject({ leased: 0 }); // nothing left for the queue
+		// a duplicate enqueues nothing, so nothing is deferred
+		await svc().ingestRequest({
+			rawBody: JSON.stringify({ events: [a] }),
+			headers: new Headers({ authorization: `Bearer ${pk}`, origin: SHOP, 'content-type': 'application/json' }),
+			defer: (task) => void deferred.push(task),
+		});
+		expect(deferred).toHaveLength(1);
+	});
+
 	it('accepts body authentication (sendBeacon text/plain) and enforces the origin for pk_', async () => {
 		const { world, receiver, call, key } = await boot('int_beacon');
 		seedApps(world, receiver.base);

@@ -11,7 +11,8 @@
  *   back exactly the steps that completed when a later one fails.
  * - **Compensated reservations elsewhere.** Coupon codes are reserved, points redeemed, deals committed (and Catalog
  *   stock reserved when it is the stock source) before the local transaction; any failure releases what was taken.
- * - **Holds expire.** Unpaid / unconfirmed orders carry `expiresAt` (jobs/ cancels them and gives everything back).
+ * - **Holds expire.** Unpaid / unconfirmed orders carry `expiresAt`; once it passes the order is cancelled and gives
+ *   everything back — when it is read, when a placement needs its stock, or by the sweep (jobs/), whichever comes first.
  * - **Safety** (lesson A12): blocklist, open-order cap counting cash-on-delivery orders, COD caps and confirmation.
  */
 import { createHash } from 'node:crypto';
@@ -31,15 +32,20 @@ import { isTransactionUnsupported, isDuplicateKey } from '../adapters/db.js';
  *   | { ok: false, code: string, detail?: string, errors?: Array<{ path: string, code: string }>, extensions?: Record<string, unknown> }} PlaceResult
  */
 
+/** Expired holds released (oldest first) when a placement finds too little stock. */
+const RELEASE_LIMIT = 50;
+
 /** A business-rule refusal raised inside the local transaction (aborts it). */
 const refusal = (/** @type {string} */ code, /** @type {Record<string, unknown>} */ extra = {}) =>
 	Object.assign(new Error(code), { refusal: code, extra });
 
 /**
  * @param {Checkout} checkout
- * @param {{ items: import('./items.js').ItemsService, carts: import('./carts.js').CartsService, pricing: import('./pricing.js').Pricing }} services
+ * @param {{ items: import('./items.js').ItemsService, carts: import('./carts.js').CartsService, pricing: import('./pricing.js').Pricing,
+ *   releaseExpired: (site: Site, options: { limit: number }) => Promise<number> }} services
+ *   `releaseExpired` cancels orders whose hold passed (the orders service's `expire`)
  */
-export const createPlacement = (checkout, { items, carts, pricing }) => {
+export const createPlacement = (checkout, { items, carts, pricing, releaseExpired }) => {
 	const { app, integrations, product } = checkout;
 
 	/**
@@ -140,7 +146,18 @@ export const createPlacement = (checkout, { items, carts, pricing }) => {
 				quantity: line.quantity,
 			}));
 		} else wants = /** @type {NonNullable<typeof input.lines>} */ (input.lines);
-		const priced = await items.price(site, wants);
+		let priced = await items.price(site, wants);
+		// expired holds still count against stock until they are cancelled: release them (expire on access) and re-price
+		if (
+			settings.place.stock_source === 'checkout' &&
+			priced.some((result) =>
+				result.ok
+					? result.line.available !== null && result.line.quantity > result.line.available
+					: result.reason === 'out_of_stock',
+			) &&
+			(await releaseExpired(site, { limit: RELEASE_LIMIT })) > 0
+		)
+			priced = await items.price(site, wants);
 		const failed = priced.map((result, index) => ({ result, index })).filter(({ result }) => !result.ok);
 		if (failed.length > 0)
 			return {
@@ -239,7 +256,7 @@ export const createPlacement = (checkout, { items, carts, pricing }) => {
 		if (mustMatch && input.expectedTotal !== q.totals.total)
 			return { ok: false, code: 'total_changed', extensions: { totals: q.totals } };
 		if (settings.enabled('payment_manual') && settings.manual.max_open_orders > 0) {
-			const open = await repos.orders.countOpen(customer, UNCONFIRMED);
+			const open = await repos.orders.countOpen(customer, UNCONFIRMED, new Date(app.now()));
 			if (open >= settings.manual.max_open_orders) return { ok: false, code: 'open_orders_limit' };
 		}
 

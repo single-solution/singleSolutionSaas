@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createChatbot, wireEvents } from './api/routes.js';
-import { cronRoutes } from './jobs/maintenance.js';
+import { cronRoutes, wireJobs } from './jobs/maintenance.js';
 
 export { loadManifest } from './adapters/platform.js';
 
@@ -29,7 +29,7 @@ export const startServer = async ({
 	overrides = {},
 	tls,
 } = {}) => {
-	const chatbot = wireEvents(createChatbot(await createPlatform({ env, root, overrides })));
+	const chatbot = wireJobs(wireEvents(createChatbot(await createPlatform({ env, root, overrides }))));
 	const { product } = chatbot;
 	const handle = createRequestHandler(product, [...buildRoutes(chatbot), ...cronRoutes(chatbot)]);
 	/** @type {import('node:http').RequestListener} */

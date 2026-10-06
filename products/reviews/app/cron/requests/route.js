@@ -1,4 +1,4 @@
-/** GET /cron/requests — hourly review requests and reminders (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
+/** GET /cron/requests — daily catch-up of review requests, reminders and the photo sweep (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
 import { forward } from '../../_lib/product.js';
 
 export const dynamic = 'force-dynamic';

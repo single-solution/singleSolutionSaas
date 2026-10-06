@@ -19,6 +19,31 @@ export const REFRESH_JOB = 'catalog.refresh_manifests';
 export const REFRESH_CRON = 'catalog_refresh';
 
 /**
+ * Refresh the manifests from `after` on; when the deadline cuts the pass, enqueue its continuation as a `daily` job
+ * (run by the next daily drain).
+ * @param {import('../../infra/modules.js').ModuleContext} ctx
+ * @param {{ deadline: number, signal?: AbortSignal, after?: string | null }} options
+ */
+const refresh = async (ctx, { deadline, signal, after = null }) => {
+	const stats = await /** @type {CatalogService} */ (ctx.service('catalog')).refreshAll({
+		deadline,
+		...(signal ? { signal } : {}),
+		after,
+	});
+	if (stats.resumeAfter !== null) {
+		const day = new Date(ctx.now()).toISOString().slice(0, 10);
+		await ctx.jobs.enqueue({
+			name: REFRESH_JOB,
+			key: `${REFRESH_JOB}:${day}:${stats.resumeAfter}`,
+			payload: { after: stats.resumeAfter },
+			maxAttempts: 3,
+			daily: true,
+		});
+	}
+	return stats;
+};
+
+/**
  * @param {CatalogOptions} [options]
  */
 export const createCatalogModule = (options = {}) =>
@@ -37,16 +62,13 @@ export const createCatalogModule = (options = {}) =>
 				commerce: () => (ctx.moduleNames().includes('commerce') ? ctx.service('commerce') : null),
 			}),
 		jobs: (ctx) => ({
-			[REFRESH_JOB]: async (_payload, { deadline, signal }) =>
-				/** @type {CatalogService} */ (ctx.service('catalog')).refreshAll({ deadline, signal }),
+			// on demand, or the continuation of a daily pass that hit its deadline
+			[REFRESH_JOB]: async (payload, { deadline, signal }) =>
+				refresh(ctx, { deadline, signal, after: typeof payload?.after === 'string' ? payload.after : null }),
 		}),
 		crons: (ctx) => ({
-			// daily: enqueue the refresh job (deduplicated per UTC day); the drain cron runs it with retries
-			[REFRESH_CRON]: async () => {
-				const day = new Date(ctx.now()).toISOString().slice(0, 10);
-				const { id, inserted } = await ctx.jobs.enqueue({ name: REFRESH_JOB, key: `${REFRESH_JOB}:${day}`, maxAttempts: 3 });
-				return { jobId: id, enqueued: inserted };
-			},
+			// a step of the daily cron: refresh within its deadline; the rest continues in a `daily` job
+			[REFRESH_CRON]: async ({ deadline, signal }) => refresh(ctx, { deadline, signal }),
 		}),
 		ports: (ctx) => ({
 			appKeys: (appId) => /** @type {CatalogService} */ (ctx.service('catalog')).appKeys(appId),

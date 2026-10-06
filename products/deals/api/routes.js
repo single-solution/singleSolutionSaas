@@ -608,13 +608,23 @@ export const buildRoutes = (deals) => {
  */
 const cursorOf = (value) => Buffer.from(JSON.stringify({ k: value })).toString('base64url');
 
+/** Interval of the heartbeat sent after requests (the daily cron sends one too). */
+export const HEARTBEAT_EVERY_MS = 60 * 60_000;
+
 /**
- * Register the event consumers (app-kit dedupes deliveries on the event id).
+ * Register the event consumers (app-kit dedupes deliveries on the event id) and the throttled maintenance that runs
+ * after requests (`product.background.every`, once per HEARTBEAT_EVERY_MS for the deployment): the heartbeat (app-kit
+ * flushes usage and events first). Nothing else is periodic: price locks and quotes carry their expiry and are checked
+ * when used, and a TTL index purges old quotes. Called once per product by the composition roots.
  * @param {Deals} deals
  */
 export const wireEvents = (deals) => {
 	const log = deals.product.context?.logger;
 	for (const [type, handler] of Object.entries(createEventHandlers({ ...deals, ...(log ? { log } : {}) })))
 		deals.product.events.on(type, handler);
-	return deals;
+	const maintenance = deals.product.background.every('maintenance', HEARTBEAT_EVERY_MS, () => deals.product.heartbeat(), {
+		per: 'product',
+		budgetMs: 10_000,
+	});
+	return { ...deals, tasks: { maintenance } };
 };

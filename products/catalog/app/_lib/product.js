@@ -7,7 +7,7 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createCatalog, wireEvents } from '../../api/routes.js';
-import { cronRoutes } from '../../jobs/sweep.js';
+import { cronRoutes, scheduleSweep } from '../../jobs/sweep.js';
 
 const KEY = Symbol.for('ss.products.catalog');
 
@@ -20,7 +20,8 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getCatalog = () => (shared().catalog ??= createPlatform().then((app) => wireEvents(createCatalog(app))));
+export const getCatalog = () =>
+	(shared().catalog ??= createPlatform().then((app) => scheduleSweep(wireEvents(createCatalog(app)))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).

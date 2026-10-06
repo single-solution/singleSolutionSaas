@@ -11,6 +11,7 @@
  */
 import { createProblemFactory } from '@ss/contracts';
 import { createAudit } from './infra/audit.js';
+import { createBackground } from './infra/background.js';
 import { clearCookie, createLoginThrottle, createSessions, serializeCookie, sessionCookieName } from './infra/auth.js';
 import { createAuthenticators, createWebsiteKeyVerifier } from './infra/authenticators.js';
 import { createEnvelope, createPortalKeys, createSecretHasher } from './infra/crypto.js';
@@ -34,10 +35,29 @@ import { defaultRandomBytes } from './infra/util.js';
 
 /** @typedef {import('./infra/config.js').PortalConfig} PortalConfig */
 
-/** Built-in cron that verifies the audit hash chains (scheduled nightly in `vercel.json`). */
+/** Built-in cron that verifies the audit hash chains (a step of the daily cron). */
 export const AUDIT_VERIFY_CRON = 'audit_verify';
-/** Built-in job doing the same verification on demand. */
+/** Built-in job doing the same verification on demand (and continuing a pass that hit its deadline). */
 export const AUDIT_VERIFY_JOB = 'audit.verify';
+/** The one scheduled cron (`vercel.json`, Vercel Hobby: daily): runs {@link DAILY_STEPS} in order (F.19). */
+export const DAILY_CRON = 'daily';
+/**
+ * The daily cron's steps, in order, with their share of its time budget. A step may use all the time the later
+ * steps do not reserve (their shares), so an early finish leaves more to the rest; every step resumes where it
+ * stopped on the next run (cursors, the job queue, continuation jobs).
+ */
+export const DAILY_STEPS = Object.freeze([
+	{ cron: 'settlement', share: 0.2 },
+	{ cron: 'drain', share: 0.16 },
+	{ cron: 'connectors-health', share: 0.3 },
+	{ cron: 'reconciliation', share: 0.12 },
+	{ cron: 'catalog_refresh', share: 0.12 },
+	{ cron: AUDIT_VERIFY_CRON, share: 0.1 },
+]);
+/** Opportunistic drain after requests: at most once per interval across instances, a few jobs, a short budget. */
+export const REQUEST_DRAIN = Object.freeze({ intervalMs: 15_000, budgetMs: 8_000, maxJobs: 10 });
+/** The deliveries an ingest enqueued are attempted right after the response, within this budget. */
+export const IMMEDIATE_DELIVERY_BUDGET_MS = 8_000;
 /** @typedef {import('./infra/modules.js').ModuleDefinition} ModuleDefinition */
 /** @typedef {import('./infra/modules.js').SharedContext} SharedContext */
 /** @typedef {import('./infra/logger.js').Logger} Logger */
@@ -55,7 +75,10 @@ export const healthz = ({ version = 'dev', now = Date.now } = {}) =>
 /**
  * @param {{ config: Readonly<PortalConfig>, db: import('mongodb').Db, modules: ReadonlyArray<Readonly<ModuleDefinition>>,
  *   logger: Logger, now?: () => number, randomBytes?: (n: number) => Uint8Array, random?: () => number,
- *   pingTimeoutMs?: number, mailer?: import('./infra/mailer.js').Mailer }} options
+ *   pingTimeoutMs?: number, mailer?: import('./infra/mailer.js').Mailer,
+ *   background?: { mode?: 'on' | 'off', fallback?: import('./infra/http.js').AfterScheduler } }} options
+ *   `background`: work after responses (default `off` when `config.env` is `test`); `fallback` runs it when the
+ *   adapter gave no `after()` (default: in the background of the request)
  */
 export const createPortal = ({
 	config,
@@ -67,6 +90,7 @@ export const createPortal = ({
 	random = Math.random,
 	pingTimeoutMs = 2_000,
 	mailer,
+	background: backgroundOptions = {},
 }) => {
 	const registry = createRegistry([...INFRA_COLLECTIONS, ...modules.flatMap((m) => m.collections ?? [])]);
 	const repos = createRepositories(db, registry, { now });
@@ -151,24 +175,77 @@ export const createPortal = ({
 	ports = composed.ports;
 
 	if (Object.hasOwn(composed.jobs, AUDIT_VERIFY_JOB)) throw new TypeError(`job ${AUDIT_VERIFY_JOB} is reserved`);
-	for (const name of ['drain', AUDIT_VERIFY_CRON])
+	for (const name of ['drain', AUDIT_VERIFY_CRON, DAILY_CRON])
 		if (Object.hasOwn(composed.crons, name)) throw new TypeError(`cron ${name} is reserved`);
+
+	/**
+	 * Verify the audit chains from `after` on; a pass cut by its deadline continues in a `daily` job from the first
+	 * scope it skipped (the next daily drain runs it).
+	 * @param {{ deadline: number, signal?: AbortSignal, after?: string | null }} input
+	 */
+	const verifyAudit = async ({ deadline, signal, after = null }) => {
+		const report = await audit.verifyAll({ deadline, ...(signal ? { signal } : {}), after });
+		if (report.resumeAfter !== null) {
+			const day = new Date(now()).toISOString().slice(0, 10);
+			await jobs.enqueue({
+				name: AUDIT_VERIFY_JOB,
+				key: `${AUDIT_VERIFY_JOB}:${day}:${report.resumeAfter}`,
+				payload: { after: report.resumeAfter },
+				maxAttempts: 3,
+				daily: true,
+			});
+		}
+		return report;
+	};
+
 	/** @type {Record<string, import('./infra/jobs.js').JobHandler>} */
 	const jobHandlers = {
 		...composed.jobs,
-		// built-in: the same verification on demand (`jobs.enqueue({ name: 'audit.verify' })`)
-		[AUDIT_VERIFY_JOB]: async (_payload, { deadline, signal }) => audit.verifyAll({ deadline, signal }),
+		// built-in: the same verification on demand (`jobs.enqueue({ name: 'audit.verify' })`), or its continuation
+		[AUDIT_VERIFY_JOB]: async (payload, { deadline, signal }) =>
+			verifyAudit({ deadline, signal, after: typeof payload?.after === 'string' ? payload.after : null }),
+	};
+
+	/** @type {Record<string, import('./infra/jobs.js').CronHandler>} */
+	const crons = {
+		// built-in: drain the job queue within the cron time budget
+		drain: async ({ deadline }) =>
+			jobs.runBatch({ handlers: jobHandlers, deadlineMs: Math.max(0, deadline - now()), owner: 'cron:drain' }),
+		// built-in: recompute every audit hash chain
+		[AUDIT_VERIFY_CRON]: async ({ deadline, signal }) => verifyAudit({ deadline, signal }),
+		...composed.crons,
+	};
+	/**
+	 * Built-in: the daily cron (the only one `vercel.json` schedules). Each step gets the time the later steps do not
+	 * reserve; a failing step is recorded and the next one runs.
+	 * @type {import('./infra/jobs.js').CronHandler}
+	 */
+	const daily = async ({ deadline, signal, logger: log, trigger }) => {
+		const total = Math.max(0, deadline - now());
+		const steps = DAILY_STEPS.filter((step) => Object.hasOwn(crons, step.cron));
+		/** @type {Record<string, unknown>} */
+		const stats = {};
+		for (const [index, step] of steps.entries()) {
+			const reserved = steps.slice(index + 1).reduce((sum, later) => sum + later.share * total, 0);
+			const stepDeadline = Math.floor(deadline - reserved);
+			if (signal.aborted || stepDeadline <= now()) {
+				stats[step.cron] = { skipped: true };
+				continue;
+			}
+			try {
+				const handler = /** @type {import('./infra/jobs.js').CronHandler} */ (crons[step.cron]);
+				stats[step.cron] =
+					(await handler({ deadline: stepDeadline, signal, logger: log.child({ step: step.cron }), trigger })) ?? {};
+			} catch (error) {
+				log.error('daily cron step failed', { step: step.cron, error });
+				stats[step.cron] = { failed: true };
+			}
+		}
+		return stats;
 	};
 
 	const cron = createCronRunner({
-		crons: {
-			// built-in: drain the job queue within the cron time budget
-			drain: async ({ deadline }) =>
-				jobs.runBatch({ handlers: jobHandlers, deadlineMs: Math.max(0, deadline - now()), owner: 'cron:drain' }),
-			// built-in: recompute every audit hash chain (nightly)
-			[AUDIT_VERIFY_CRON]: async ({ deadline, signal }) => audit.verifyAll({ deadline, signal }),
-			...composed.crons,
-		},
+		crons: { ...crons, [DAILY_CRON]: daily },
 		locks,
 		runs: repos.appendOnly(COLLECTIONS.cronRuns),
 		logger: logger.child({ component: 'cron' }),
@@ -184,6 +261,35 @@ export const createPortal = ({
 		if (result.status === 'failed') return problem('internal_error', `Cron run ${result.id} failed.`);
 		return ok(result);
 	};
+
+	const background = createBackground({
+		locks,
+		logger: logger.child({ component: 'background' }),
+		now,
+		mode: backgroundOptions.mode ?? (config.env === 'test' ? 'off' : 'on'),
+		...(backgroundOptions.fallback ? { fallback: backgroundOptions.fallback } : {}),
+	});
+	// built-in: a short, bounded drain after requests (deliveries, mails, retries); `daily` jobs wait for the cron
+	const requestDrain = background.every(
+		'drain',
+		REQUEST_DRAIN.intervalMs,
+		async ({ deadline }) =>
+			jobs.runBatch({
+				handlers: jobHandlers,
+				deadlineMs: Math.max(0, deadline - now()),
+				owner: 'request:drain',
+				maxJobs: REQUEST_DRAIN.maxJobs,
+				skipDaily: true,
+				safetyMs: 1_000,
+			}),
+		{ budgetMs: REQUEST_DRAIN.budgetMs },
+	);
+	const moduleTasks = Object.fromEntries(
+		Object.entries(composed.background).map(([name, task]) => [
+			name,
+			background.every(name, task.intervalMs, task.run, task.budgetMs ? { budgetMs: task.budgetMs } : {}),
+		]),
+	);
 
 	const infraRoutes = [
 		defineRoute({ method: 'GET', path: '/cron/:job', auth: 'cron', handler: cronRoute }),
@@ -213,6 +319,7 @@ export const createPortal = ({
 		randomBytes,
 		maxBodyBytes: config.maxBodyBytes,
 		trustProxyHeaders: config.trustProxyHeaders,
+		afterResponse: background.afterResponse,
 	});
 	// a dedicated preview origin (`PREVIEW_ORIGIN`, F.16) serves the preview proxy and nothing else: no API, no
 	// console, no delivery artefacts — the delivery module in turn refuses `/p/*` on the Portal host
@@ -241,6 +348,8 @@ export const createPortal = ({
 		shared,
 		modules: composed,
 		cron,
+		/** Work after responses: `tasks.drain` and the modules' tasks can be triggered directly (tests, operations). */
+		background: Object.freeze({ mode: background.mode, tasks: Object.freeze({ drain: requestDrain, ...moduleTasks }) }),
 		handle,
 		/** Published JWKS: Portal keys (current + previous) and website-key signing keys. */
 		jwks: () =>

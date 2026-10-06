@@ -1,8 +1,17 @@
 /**
- * Scheduled job (Vercel cron → `GET /cron/sweep` with `Authorization: Bearer $CRON_SECRET`): for every website this
- * deployment serves, cancel unpaid / unconfirmed orders whose hold expired (stock, codes and points go back through
- * `order.cancelled@1`), publish `checkout.cart_abandoned@1` once for carts left alone, then a heartbeat. Each website is
- * independent: one failing website never stops the others. The per-website work is passed in by the composition root.
+ * Scheduled work (PLAN F.19, free-tier hosting: one daily cron per deployment).
+ *
+ * - **Daily catch-up** (Vercel cron, once a day → `GET /cron/sweep` with `Authorization: Bearer $CRON_SECRET`): for
+ *   every website this deployment serves, cancel unpaid / unconfirmed orders whose hold expired (stock, codes and points
+ *   go back through `order.cancelled@1`), publish `checkout.cart_abandoned@1` once for carts left alone, then a
+ *   heartbeat. Bounded pages per website; what is left is picked up by the next run. Each website is independent: one
+ *   failing website never stops the others.
+ * - **On requests** (`wireJobs`, `product.background.every`): after a request for a website, the same work runs for
+ *   that one website — expired holds at most every {@link HOLDS_INTERVAL_MS}, abandoned carts at most every
+ *   {@link ABANDONED_INTERVAL_MS} — in small pages within the run's deadline.
+ *
+ * Correctness never waits for either: an order whose hold expired is cancelled (and its stock released) when it is read,
+ * is never counted as open, and placement releases expired holds before refusing for stock (api/orders.js).
  */
 import { timingSafeEqual } from 'node:crypto';
 import { defineRoute, ok, problem } from '@ss/app-kit';
@@ -42,6 +51,66 @@ export const runSweepJob = async ({ websiteIds, siteFor, tasks, onError = () => 
 		}
 	}
 	return { websites: results.length, results };
+};
+
+/** Expired holds: at most one run per website per 5 minutes, after a request for that website. */
+export const HOLDS_INTERVAL_MS = 5 * 60_000;
+/** Abandoned carts: at most one run per website per hour. */
+export const ABANDONED_INTERVAL_MS = 60 * 60_000;
+/** Items per page of a background run. */
+const BACKGROUND_PAGE = 50;
+/** Pages per background run (also stopped by the run's deadline). */
+const BACKGROUND_PAGES = 4;
+
+/**
+ * Run one task for one website in small pages until it is done, the page budget is spent or the deadline passed.
+ * @template S
+ * @param {(site: S, options: { limit: number }) => Promise<number>} task
+ * @param {S} site
+ * @param {{ deadline: number, now: () => number, limit?: number, pages?: number }} options
+ */
+export const drain = async (task, site, { deadline, now, limit = BACKGROUND_PAGE, pages = BACKGROUND_PAGES }) => {
+	let done = 0;
+	for (let page = 0; page < pages && now() < deadline; page += 1) {
+		const count = await task(site, { limit });
+		done += count;
+		if (count < limit) break;
+	}
+	return done;
+};
+
+/** @typedef {{ name: string, trigger: (input?: { websiteId?: string | null }) => Promise<boolean> }} EveryTask */
+
+/**
+ * Register the throttled per-website work that runs after requests (once per application instance, from the
+ * composition root: app/_lib/product.js, serve.js).
+ * @template {{ product: { background: { every: Function } }, app: { now: () => number },
+ *   siteFor: (websiteId: string) => Promise<any>, orders: { expire: Function, abandon: Function } }} A
+ * @param {A} application
+ * @returns {A & { jobs: { holds: EveryTask, abandoned: EveryTask } }}
+ */
+export const wireJobs = (application) => {
+	const { product, app, siteFor, orders } = application;
+	/**
+	 * @param {string} name
+	 * @param {number} intervalMs
+	 * @param {(site: any, options: { limit: number }) => Promise<number>} task
+	 */
+	const register = (name, intervalMs, task) =>
+		product.background.every(
+			name,
+			intervalMs,
+			async (/** @type {{ websiteId: string, deadline: number }} */ { websiteId, deadline }) => {
+				const site = await siteFor(websiteId);
+				return site ? drain(task, site, { deadline, now: app.now }) : 0;
+			},
+			{ per: 'website' },
+		);
+	const jobs = {
+		holds: register('holds', HOLDS_INTERVAL_MS, (site, options) => orders.expire(site, options)),
+		abandoned: register('abandoned', ABANDONED_INTERVAL_MS, (site, options) => orders.abandon(site, options)),
+	};
+	return { ...application, jobs };
 };
 
 /**

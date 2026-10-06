@@ -368,7 +368,13 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 				return fail('send_limit', { retryAfter: decision.retryAfter });
 			}
 		}
-		const existing = /** @type {Customer | null} */ (await site.repos.customers.findBy(identifier.kind, identifier.value));
+		// a due deletion runs before the challenge exists (it removes the identity's pending challenges): the address
+		// then signs up as a new customer
+		const found = /** @type {Customer | null} */ (await site.repos.customers.findBy(identifier.kind, identifier.value));
+		const existing =
+			(await settleDeletion(site, found))?.status === 'deleted'
+				? /** @type {Customer | null} */ (await site.repos.customers.findBy(identifier.kind, identifier.value))
+				: found;
 		const decoy =
 			purpose === 'sign_in' && ((!existing && !cfg.allow_signup) || (existing !== null && existing.status !== 'active'));
 		const id = newId(kind === 'otp' ? 'otp' : 'mlk');
@@ -559,7 +565,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		/** @type {Customer | null} */
 		let customer;
 		if (challenge.purpose === 'link') {
-			customer = await site.repos.customers.get(challenge.customerId);
+			customer = await settleDeletion(site, await site.repos.customers.get(challenge.customerId));
 			if (!customer || customer.status !== 'active') {
 				await site.repos.challenges.consume(challenge.id, new Date(now()));
 				return fail('session_ended');
@@ -854,7 +860,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 			return fail('refresh_reused');
 		}
 		if (sessionState(session, now()) !== 'active') return fail('session_ended');
-		const customer = await site.repos.customers.get(session.customerId);
+		const customer = await settleDeletion(site, await site.repos.customers.get(session.customerId));
 		if (!customer || customer.status !== 'active') {
 			await site.repos.sessions.revoke({ id: session.id }, iso(), 'account_inactive');
 			return fail('session_ended');
@@ -924,7 +930,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		const session = /** @type {Session | null} */ (await site.repos.sessions.get(claims.sid));
 		if (!session || session.customerId !== claims.sub || sessionState(session, now()) !== 'active')
 			return { ok: false, code: 'identity_invalid' };
-		const customer = /** @type {Customer | null} */ (await site.repos.customers.get(claims.sub));
+		const customer = await settleDeletion(site, /** @type {Customer | null} */ (await site.repos.customers.get(claims.sub)));
 		if (!customer || customer.status !== 'active' || (customer.sessionVersion ?? 0) !== claims.sv)
 			return { ok: false, code: 'identity_invalid' };
 		return { ok: true, customer, session };
@@ -1290,6 +1296,23 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 	};
 
 	/**
+	 * Expire-on-read: a customer whose deletion's cooling-off has ended is deleted on access, whether or not the
+	 * maintenance job has run yet. Returns the customer as it now is (anonymised when the deletion ran).
+	 * @template {Customer | null} C
+	 * @param {Site} site
+	 * @param {C} customer
+	 * @returns {Promise<C>}
+	 */
+	const settleDeletion = async (site, customer) => {
+		if (!customer || customer.status === 'deleted' || !site.settings.dataRights) return customer;
+		const pending = await site.repos.dataRequests.pendingDeletion(customer.id);
+		if (!pending || !deletionDue(/** @type {any} */ (pending), now())) return customer;
+		await executeDeletion(site, customer, 'self_service');
+		await site.repos.dataRequests.close(pending.id, { status: 'completed', completedAt: iso() });
+		return /** @type {C} */ (await site.repos.customers.get(customer.id));
+	};
+
+	/**
 	 * Execute the deletions whose cooling-off ended.
 	 * @param {Site} site
 	 */
@@ -1603,6 +1626,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		cancelDataRequest,
 		requestView,
 		runDueDeletions,
+		settleDeletion,
 		privacyExport,
 		privacyAnonymize,
 		account,

@@ -168,7 +168,7 @@ export const buildRoutes = (signups) => {
 		if (!token && ctx.website.kind === 'sk') {
 			const id = ctx.query.customerId ?? ctx.body?.customerId;
 			if (typeof id !== 'string' || !id) return { ok: false, result: invalid([{ path: '/customerId', code: 'required' }]) };
-			const customer = await s.repos.customers.get(id);
+			const customer = await service.settleDeletion(s, await s.repos.customers.get(id));
 			return customer && customer.status !== 'deleted'
 				? { ok: true, customer, session: null }
 				: { ok: false, result: problem('not_found', 'No such customer.') };
@@ -284,7 +284,7 @@ export const buildRoutes = (signups) => {
 			...website('profile', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const customer = await s.repos.customers.get(ctx.params.id);
+				const customer = await service.settleDeletion(s, await s.repos.customers.get(ctx.params.id));
 				return customer ? ok(service.viewOf(s, /** @type {any} */ (customer))) : problem('not_found', 'No such customer.');
 			},
 		}),
@@ -296,7 +296,7 @@ export const buildRoutes = (signups) => {
 				const problems = validateCustomerAdminPatch(ctx.body);
 				if (problems.length > 0) return invalid(problems);
 				const s = await site(ctx);
-				const customer = await s.repos.customers.get(ctx.params.id);
+				const customer = await service.settleDeletion(s, await s.repos.customers.get(ctx.params.id));
 				if (!customer || customer.status === 'deleted') return problem('not_found', 'No such customer.');
 				return respond(
 					await service.patchCustomer(s, /** @type {any} */ (customer), ctx.body, { admin: true, actor: actor(ctx) }),
@@ -309,7 +309,7 @@ export const buildRoutes = (signups) => {
 			...website('profile', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const customer = await s.repos.customers.get(ctx.params.id);
+				const customer = await service.settleDeletion(s, await s.repos.customers.get(ctx.params.id));
 				if (!customer || customer.status === 'deleted') return problem('not_found', 'No such customer.');
 				return respond(await service.deleteCustomer(s, /** @type {any} */ (customer), { actor: actor(ctx) }));
 			},

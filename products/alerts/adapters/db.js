@@ -145,6 +145,11 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 	/** @param {Record<string, unknown>} doc */
 	const onInsert = (doc) => ({ ...stamp, createdAt: new Date(now()), schemaVersion: SCHEMA_VERSION, ...doc });
 	const active = { $in: [...ACTIVE_STATUSES] };
+	/**
+	 * Not past `expiresAt` (treated as gone before the TTL monitor deletes it; documents without one never expire).
+	 * @returns {{ expiresAt: { $not: { $lte: Date } } }}
+	 */
+	const unexpired = () => ({ expiresAt: { $not: { $lte: new Date(now()) } } });
 
 	return Object.freeze({
 		websiteId,
@@ -206,7 +211,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				(
 					await subscriptions
 						.find(
-							{ websiteId, targetKey: { $in: targetKeys }, type: { $in: types }, status: 'pending' },
+							{ websiteId, targetKey: { $in: targetKeys }, type: { $in: types }, status: 'pending', ...unexpired() },
 							{ sort: { rank: 1, subscribedAt: 1, id: 1 }, limit },
 						)
 						.toArray()
@@ -272,7 +277,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			confirm: async (id, expiresAt) =>
 				strip(
 					await subscriptions.findOneAndUpdate(
-						{ websiteId, id, status: 'unconfirmed' },
+						{ websiteId, id, status: 'unconfirmed', ...unexpired() },
 						{ $set: { status: 'pending', confirmedAt: new Date(now()).toISOString(), expiresAt } },
 						{ returnDocument: 'after' },
 					),

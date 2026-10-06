@@ -22,14 +22,14 @@ const childEnv = {
 
 /**
  * Run a generated project's own test suite (`vitest run --coverage` with its own vitest.config.js, thresholds
- * included), with the tooling it needs (`@ss/config`, vitest, the coverage provider) linked from this package's own
+ * included), with the tooling it needs (`@ss/config`, `@ss/app-kit`, vitest, the coverage provider) linked from this package's own
  * dev dependencies instead of installed.
  * @param {string} dir
  */
 const runOwnTests = async (dir) => {
 	await mkdir(path.join(dir, 'node_modules', '@ss'), { recursive: true });
 	await mkdir(path.join(dir, 'node_modules', '@vitest'), { recursive: true });
-	for (const name of ['@ss/config', 'vitest', '@vitest/coverage-v8'])
+	for (const name of ['@ss/config', '@ss/app-kit', 'vitest', '@vitest/coverage-v8'])
 		await symlink(packageDir(name), path.join(dir, 'node_modules', name), 'dir');
 	const { stdout } = await run(process.execPath, [VITEST, 'run', '--coverage', '--coverage.reporter=text-summary'], {
 		cwd: dir,
@@ -98,7 +98,10 @@ describe('ss app init → validate (integration)', () => {
 			expect(files).toContain(file);
 		expect(await readFile(path.join(dir, 'vitest.config.js'), 'utf8')).toContain("from '@ss/config/vitest'");
 		expect(JSON.parse(await readFile(path.join(dir, 'tsconfig.json'), 'utf8')).extends).toBe('@ss/config/tsconfig.base.json');
-		expect(JSON.parse(await readFile(path.join(dir, 'vercel.json'), 'utf8')).crons).toEqual([]);
+		expect(JSON.parse(await readFile(path.join(dir, 'vercel.json'), 'utf8')).crons).toEqual([
+			{ path: '/cron/daily', schedule: '0 4 * * *' },
+		]);
+		expect(files).toEqual(expect.arrayContaining(['jobs/daily.js', 'jobs/index.js', 'app/cron/daily/route.js']));
 		const env = await readFile(path.join(dir, '.env.example'), 'utf8');
 		for (const name of [
 			'SS_PORTAL_URL',

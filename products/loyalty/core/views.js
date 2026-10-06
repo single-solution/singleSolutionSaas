@@ -3,7 +3,7 @@
  * lots and cap usage never leave the product.
  * @module
  */
-import { upcomingExpiry } from './lots.js';
+import { expire, upcomingExpiry } from './lots.js';
 import { multiplierOf, nextTier, tierMetric } from './tiers.js';
 import { DAY_MS } from './time.js';
 
@@ -70,20 +70,35 @@ export const expiringView = (member, { now, timeZone, days, expiry }) => {
 };
 
 /**
+ * The member as of `now`: lots past their expiry no longer count (expire-on-read, before any job removes them).
  * @param {Member} member
+ * @param {{ now: number, expiry?: import('./lots.js').ExpiryPolicy | null }} options
+ * @returns {Member}
+ */
+export const memberAsOf = (member, { now, expiry = null }) => {
+	if (!expiry) return member;
+	const lapsed = expire({ lots: member.lots, debt: member.debt }, now, expiry);
+	return lapsed.expired > 0 ? { ...member, lots: lapsed.state.lots, balance: member.balance - lapsed.expired } : member;
+};
+
+/**
+ * @param {Member} stored
  * @param {{ tiers: TierConfig | null, now: number, timeZone: string, expiringWindowDays?: number, expiry?: import('./lots.js').ExpiryPolicy | null }} options
  */
-export const memberView = (member, { tiers, now, timeZone, expiringWindowDays = 0, expiry = null }) => ({
-	customerId: member.customerId,
-	balance: member.balance,
-	lifetime: { earned: member.lifetime.earned, redeemed: member.lifetime.redeemed, spend: member.lifetime.spend },
-	tier: tierView(member, tiers, { now, timeZone }),
-	expiring: expiringView(member, { now, timeZone, days: expiringWindowDays, expiry }),
-	orders: member.orders,
-	joinedAt: member.joinedAt,
-	referralCode: member.referralCode,
-	referredBy: member.referredBy,
-});
+export const memberView = (stored, { tiers, now, timeZone, expiringWindowDays = 0, expiry = null }) => {
+	const member = memberAsOf(stored, { now, expiry });
+	return {
+		customerId: member.customerId,
+		balance: member.balance,
+		lifetime: { earned: member.lifetime.earned, redeemed: member.lifetime.redeemed, spend: member.lifetime.spend },
+		tier: tierView(member, tiers, { now, timeZone }),
+		expiring: expiringView(member, { now, timeZone, days: expiringWindowDays, expiry }),
+		orders: member.orders,
+		joinedAt: member.joinedAt,
+		referralCode: member.referralCode,
+		referredBy: member.referredBy,
+	};
+};
 
 /**
  * @param {Record<string, any>} redemption stored document

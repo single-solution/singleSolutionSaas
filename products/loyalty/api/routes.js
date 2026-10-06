@@ -517,11 +517,35 @@ export const buildRoutes = (loyalty) => {
 	];
 };
 
+/** Interval of the per-website expiry run after requests (the daily cron catches up on quiet websites). */
+export const EXPIRY_EVERY_MS = 60 * 60_000;
+
 /**
- * Register the event consumers (app-kit dedupes deliveries on the event id).
+ * Expiry work of one website within `deadline` (the background task). Readers never wait for it: lapsed points are
+ * expired when the member is read or moves.
+ * @param {Loyalty} loyalty
+ * @param {{ websiteId: string | null, deadline: number }} input
+ * @returns {Promise<Record<string, number> | null>} the run's stats, null when the website has nothing to do
+ */
+export const expireWebsite = async ({ service, siteFor }, { websiteId, deadline }) => {
+	const site = websiteId ? await siteFor(websiteId) : null;
+	if (!site || !(site.settings.expiry || site.settings.tiers)) return null;
+	return service.runExpiry(site, { deadline });
+};
+
+/**
+ * Register the event consumers (app-kit dedupes deliveries on the event id) and the throttled per-website expiry run
+ * after requests (`product.background.every`, at most every EXPIRY_EVERY_MS per website). Called once per product by
+ * the composition roots (app/_lib/product.js, serve.js).
  * @param {Loyalty} loyalty
  */
 export const wireEvents = (loyalty) => {
 	for (const [type, handler] of Object.entries(createEventHandlers(loyalty))) loyalty.product.events.on(type, handler);
-	return loyalty;
+	const expiry = loyalty.product.background.every(
+		'expiry',
+		EXPIRY_EVERY_MS,
+		(/** @type {{ websiteId: string | null, deadline: number }} */ input) => expireWebsite(loyalty, input),
+		{ per: 'website', budgetMs: 10_000 },
+	);
+	return { ...loyalty, tasks: { expiry } };
 };

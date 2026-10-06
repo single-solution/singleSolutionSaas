@@ -1,5 +1,5 @@
 /**
- * Websites this deployment serves, for the sweep job (scheduled publishing, stock reservation expiry, event outbox). It holds website ids only — no
+ * Websites this deployment serves, for the daily sweep job (scheduled publishing, stock reservation expiry, event outbox). It holds website ids only — no
  * merchant data (Part E §7: platform-side storage is limited to ids and caches) — in the product's own control
  * database when one is configured (`ss_catalog_sites`), else in memory.
  */

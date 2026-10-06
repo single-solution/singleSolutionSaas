@@ -5,7 +5,9 @@ import { created, defineRoute, ok } from '../src/infra/http.js';
 import { defineModule } from '../src/infra/modules.js';
 import { COLLECTIONS } from '../src/infra/schema.js';
 import { systemModule } from '../src/modules/system/index.js';
-import { createPortal, healthz } from '../src/portal.js';
+import { DAILY_STEPS, createPortal, healthz } from '../src/portal.js';
+import { createBackground } from '../src/infra/background.js';
+import { toNextRoute } from '../src/infra/http.js';
 import { getPortal, resetPortal } from '../src/runtime.js';
 import { closeMongoClients } from '../src/infra/db.js';
 import {
@@ -93,9 +95,9 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 	});
 
 /**
- * @param {{ dbName: string, modules?: any[], clock?: ReturnType<typeof createClock>, db?: any }} options
+ * @param {{ dbName: string, modules?: any[], clock?: ReturnType<typeof createClock>, db?: any, background?: any }} options
  */
-const boot = async ({ dbName, modules, clock = createClock(), db }) => {
+const boot = async ({ dbName, modules, clock = createClock(), db, background }) => {
 	const config = await testConfig();
 	const { logger, entries } = createTestLogger();
 	const portal = createPortal({
@@ -105,6 +107,7 @@ const boot = async ({ dbName, modules, clock = createClock(), db }) => {
 		logger,
 		now: clock.now,
 		pingTimeoutMs: 200,
+		...(background ? { background } : {}),
 	});
 	/**
 	 * @param {string} method
@@ -403,7 +406,7 @@ describe('Portal end to end', () => {
 		});
 		expect((await call('GET', '/api/cron/nope', { headers: auth })).status).toBe(404);
 		expect((await call('GET', '/api/cron/broken', { headers: auth })).status).toBe(500);
-		expect(portal.cron.names()).toEqual(['drain', 'audit_verify', 'settlement', 'broken']);
+		expect(portal.cron.names()).toEqual(['drain', 'audit_verify', 'settlement', 'broken', 'daily']);
 		const db = mongo.db('it_cron');
 		const runs = await db.collection(COLLECTIONS.cronRuns).find({}).toArray();
 		expect(runs.map((r) => `${r.name}:${r.trigger}:${r.status}`).sort()).toEqual([
@@ -414,6 +417,165 @@ describe('Portal end to end', () => {
 		// a staff or product credential cannot trigger crons
 		const staff = await login(portal, { kind: 'staff', subject: 'stf_1', roles: ['superadmin'], mfa: true });
 		expect((await call('GET', '/api/cron/drain', { headers: { cookie: staff.cookie } })).status).toBe(401);
+	});
+
+	it('daily cron: runs its steps in order within its budget and records each step', async () => {
+		const { portal, call, config } = await boot({ dbName: 'it_daily' });
+		await portal.ensureIndexes();
+		await portal.shared.jobs.enqueue({ name: 'probe.add', payload: { merchantId: MERCHANT, name: 'daily' } });
+		const res = await call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${config.cronSecret}` } });
+		expect(res.status).toBe(200);
+		// the probe module registers `settlement` only; the other steps are skipped by absence, never fail
+		expect(Object.keys(res.json.stats)).toEqual(['settlement', 'drain', 'audit_verify']);
+		expect(res.json.stats).toMatchObject({
+			settlement: { settled: 0 },
+			drain: { leased: 1, succeeded: 1 },
+			audit_verify: { resumeAfter: null },
+		});
+		expect(DAILY_STEPS.map((step) => step.cron)).toEqual([
+			'settlement',
+			'drain',
+			'connectors-health',
+			'reconciliation',
+			'catalog_refresh',
+			'audit_verify',
+		]);
+		expect(DAILY_STEPS.reduce((sum, step) => sum + step.share, 0)).toBeCloseTo(1);
+		expect(portal.cron.names()).toContain('daily');
+	});
+
+	it('daily cron: a failing step is recorded and the next runs; past the deadline the rest is skipped', async () => {
+		const clock = createClock();
+		const steps = defineModule({
+			name: 'steps',
+			crons: () => ({
+				settlement: async () => Promise.reject(new Error('boom')),
+				reconciliation: async () => {
+					clock.advance(10 * 60_000); // overruns the whole budget
+					return { done: true };
+				},
+				catalog_refresh: async () => ({ never: true }),
+			}),
+		});
+		const { call, config, entries } = await boot({ dbName: 'it_daily_fail', modules: [systemModule, steps], clock });
+		const res = await call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${config.cronSecret}` } });
+		expect(res.json.stats).toMatchObject({
+			settlement: { failed: true },
+			drain: { leased: 0 },
+			reconciliation: { done: true },
+			catalog_refresh: { skipped: true },
+			audit_verify: { skipped: true },
+		});
+		expect(entries.some((e) => e.msg === 'daily cron step failed')).toBe(true);
+	});
+
+	it('work after responses: deferred tasks and a throttled, leased drain (F.19)', async () => {
+		/** @type {Array<() => Promise<unknown>>} */
+		const scheduled = [];
+		const clock = createClock();
+		const probe = defineModule({
+			name: 'probe2',
+			jobs: (ctx) => ({
+				'probe2.mark': async (payload) => {
+					await ctx.locks.acquire(`mark:${payload.name}`, { ttlMs: 60_000 });
+				},
+			}),
+			background: () => ({
+				'probe2.tick': { intervalMs: 60_000, run: async () => Promise.reject(new Error('tick failed')) },
+			}),
+			routes: () => [
+				defineRoute({
+					method: 'GET',
+					path: '/v1/probe2/defer',
+					auth: 'public',
+					handler: (c) => {
+						c.defer(async () => Promise.reject(new Error('deferred failed')));
+						return ok({ deferred: true });
+					},
+				}),
+			],
+		});
+		const background = { mode: 'on', fallback: (/** @type {any} */ task) => void scheduled.push(task) };
+		const one = await boot({ dbName: 'it_after', modules: [systemModule, probe], clock, background });
+		await one.portal.ensureIndexes();
+		const jobs = one.portal.shared.jobs;
+		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'a' } });
+		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'later' }, daily: true });
+		expect((await one.call('GET', '/v1/probe2/defer')).status).toBe(200);
+		expect(scheduled).toHaveLength(1);
+		for (const task of scheduled.splice(0)) await task();
+		expect(one.entries.some((e) => e.msg === 'deferred task failed')).toBe(true);
+		expect(one.entries.some((e) => e.msg === 'background task failed')).toBe(true);
+		expect(await jobs.stats()).toMatchObject({ done: 1, queued: 1 }); // the `daily` job waits for the cron
+		// throttled: nothing more to schedule within the interval, and a second instance does not get the lease
+		await one.call('GET', '/v1/probe2/defer');
+		for (const task of scheduled.splice(0)) await task();
+		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'b' } });
+		const two = await boot({ dbName: 'it_after', modules: [systemModule, probe], clock, background });
+		expect(await two.portal.background.tasks.drain.trigger()).toBe(false);
+		clock.advance(15_000);
+		expect(await two.portal.background.tasks.drain.trigger()).toBe(true);
+		expect(await jobs.stats()).toMatchObject({ done: 2, queued: 1 });
+		// Next.js adapter: the request's after() takes precedence over the fallback
+		clock.advance(60_000);
+		/** @type {Array<() => Promise<unknown>>} */
+		const viaAfter = [];
+		const route = toNextRoute((request) => one.portal.handle(request), { after: (task) => void viaAfter.push(task) });
+		await route.GET(new Request(`${ORIGIN}/v1/probe2/defer`));
+		expect([viaAfter.length, scheduled.length]).toEqual([1, 0]);
+		// test mode runs nothing after responses
+		const off = await boot({ dbName: 'it_after', modules: [systemModule, probe], clock });
+		expect(off.portal.background.mode).toBe('off');
+		await off.call('GET', '/v1/probe2/defer');
+		expect(scheduled).toHaveLength(0);
+	});
+});
+
+describe('background (unit)', () => {
+	it('validates tasks, falls back when after() throws and logs failures', async () => {
+		const { logger, entries } = createTestLogger();
+		let held = false;
+		const locks = {
+			acquire: async () => {
+				if (held) return null;
+				held = true;
+				return /** @type {any} */ ({});
+			},
+		};
+		/** @type {Array<() => Promise<unknown>>} */
+		const fallback = [];
+		const bg = createBackground({ locks: /** @type {any} */ (locks), logger, fallback: (task) => void fallback.push(task) });
+		const run = async () => {};
+		expect(() => bg.every('Bad', 1000, run)).toThrow(TypeError);
+		expect(() => bg.every('a', 10, run)).toThrow(RangeError);
+		bg.every('a', 1000, run);
+		expect(() => bg.every('a', 1000, run)).toThrow(TypeError);
+		bg.afterResponse({
+			deferred: [],
+			schedule: () => {
+				throw new Error('outside a request');
+			},
+			log: logger,
+		});
+		expect(fallback).toHaveLength(1);
+		await fallback[0]?.();
+		bg.afterResponse({ deferred: [], schedule: null, log: logger }); // throttled in memory: nothing to do
+		expect(fallback).toHaveLength(1);
+		const failing = createBackground({
+			locks: /** @type {any} */ ({ acquire: async () => Promise.reject(new Error('db down')) }),
+			logger,
+		});
+		expect(await failing.every('b', 1000, run).trigger()).toBe(true);
+		expect(entries.some((e) => e.msg === 'background task failed')).toBe(true);
+		// the default fallback runs the work in the background of the request
+		let ran = false;
+		const plain = createBackground({ locks: /** @type {any} */ ({ acquire: async () => ({}) }), logger });
+		plain.every('c', 1000, async () => {
+			ran = true;
+		});
+		plain.afterResponse({ deferred: [], schedule: null, log: logger });
+		await new Promise((resolve) => setTimeout(resolve, 10));
+		expect(ran).toBe(true);
 	});
 });
 
@@ -716,6 +878,8 @@ describe('infra hardening (Mongo)', () => {
 			createPortal({ config, db: mongo.db('it_reserved'), modules: [defineModule({ name: 'clash', ...definition })], logger });
 		expect(() => build({ crons: () => ({ audit_verify: async () => ({}) }) })).toThrow(/reserved/);
 		expect(() => build({ crons: () => ({ drain: async () => ({}) }) })).toThrow(/reserved/);
+		expect(() => build({ crons: () => ({ daily: async () => ({}) }) })).toThrow(/reserved/);
+		expect(() => build({ background: () => ({ tick: { intervalMs: 1000, run: async () => {} } }) })).toThrow(/clash\./);
 		expect(() => build({ problems: { idempotency_replay_no_body: { status: 409, title: 'x' } } })).toThrow(/reserved/);
 		const auditModule = defineModule({ name: 'audit', jobs: () => ({ 'audit.verify': async () => undefined }) });
 		expect(() => createPortal({ config, db: mongo.db('it_reserved'), modules: [auditModule], logger })).toThrow(/reserved/);

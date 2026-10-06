@@ -1,7 +1,9 @@
 /**
- * Daily job (Vercel cron → `GET /cron/expiry` with `Authorization: Bearer $CRON_SECRET`): for every website this
- * deployment serves, expire points FIFO, publish `loyalty.expiring@1` notices and review tiers. Each website is
- * independent: one failing website never stops the others. The per-website work is the service's `runExpiry`, passed
+ * Daily catch-up job (Vercel cron, once a day → `GET /cron/expiry` with `Authorization: Bearer $CRON_SECRET`): for every
+ * website this deployment serves, expire points FIFO, publish `loyalty.expiring@1` notices and review tiers. Correctness
+ * never waits for it: points past their expiry are expired when the member is read or moves, and a throttled
+ * per-website run happens after requests (`wireEvents` in api/routes.js). Each website is independent: one failing
+ * website never stops the others. The per-website work is the service's `runExpiry`, passed
  * in by the composition root (serve.js, app/_lib/product.js), so this layer depends on no handler code.
  */
 import { timingSafeEqual } from 'node:crypto';

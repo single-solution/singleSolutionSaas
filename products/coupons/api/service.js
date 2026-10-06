@@ -385,15 +385,29 @@ export const createCouponsService = ({
 					defaultPerCustomer: site.settings.limits.default_per_customer,
 					hash,
 				}).filter((claim) => claim.kind === 'customer' || claim.kind === 'device');
-				let limited = null;
-				for (const claim of claims) {
-					const used = await site.repos.usage.get({
-						couponId: coupon.id,
-						kind: claim.kind,
-						key: /** @type {string} */ (parseClaimKey(claim.key).hashed),
-					});
-					if (claim.max !== null && (used?.taken ?? 0) >= claim.max) limited = claimRefusal(claim.kind);
-				}
+				/** @param {typeof claims} list */
+				const limitOf = async (list) => {
+					let refusal = null;
+					for (const claim of list) {
+						const used = await site.repos.usage.get({
+							couponId: coupon.id,
+							kind: claim.kind,
+							key: /** @type {string} */ (parseClaimKey(claim.key).hashed),
+						});
+						if (claim.max !== null && (used?.taken ?? 0) >= claim.max) refusal = claimRefusal(claim.kind);
+					}
+					return refusal;
+				};
+				let limited = await limitOf(claims);
+				// the customer's (or device's) own abandoned checkout may hold the use: expire it, then look again
+				if (
+					limited &&
+					(await sweep(site, {
+						customerId: cart.customer.identified ? cart.customer.id : null,
+						deviceId: cart.context.deviceId,
+					})) > 0
+				)
+					limited = await limitOf(claims);
 				if (limited) {
 					refused.push({ index, code, reason: limited });
 					continue;
@@ -510,28 +524,64 @@ export const createCouponsService = ({
 	};
 
 	/**
-	 * Expire reservations past their TTL (all of a website, or those holding a code / coupon): status first, then the
-	 * claims go back, then `coupons.released@1` (reason `expired`).
+	 * Expire one open reservation (compare-and-set on its status): the claims go back, then `coupons.released@1`
+	 * (reason `expired`).
 	 * @param {Site} site
-	 * @param {{ code?: string, couponId?: string, limit?: number }} [filter]
+	 * @param {Record<string, any>} reservation
+	 * @returns {Promise<boolean>} true for the caller that expired it
+	 */
+	const expireOne = async (site, reservation) => {
+		const at = iso(now());
+		if (
+			!(await site.repos.reservations.transition(reservation.id, ['pending', 'reserved'], {
+				status: 'expired',
+				expiredAt: at,
+			}))
+		)
+			return false;
+		const fresh = (await site.repos.reservations.get(reservation.id)) ?? reservation;
+		for (const key of fresh.claims ?? []) await giveBack(site, reservation.id, key);
+		await releasedEvents(site, reservation, 'expired', false);
+		return true;
+	};
+
+	/**
+	 * Expire-on-read: an open reservation past its TTL is expired (and its uses released) when it is touched, before any
+	 * sweep. Returns the current reservation.
+	 * @param {Site} site
+	 * @param {Record<string, any> | null} reservation
+	 * @returns {Promise<Record<string, any> | null>}
+	 */
+	const settle = async (site, reservation) => {
+		if (!reservation || !['pending', 'reserved'].includes(reservation.status)) return reservation;
+		if (!(typeof reservation.expiresAt === 'string' && reservation.expiresAt < iso(now()))) return reservation;
+		await expireOne(site, reservation);
+		return site.repos.reservations.get(reservation.id);
+	};
+
+	/**
+	 * A reservation as it is now (lapsed ones are expired first).
+	 * @param {Site} site
+	 * @param {string} id
+	 */
+	const reservationOf = async (site, id) => settle(site, await site.repos.reservations.get(id));
+
+	/**
+	 * Expire reservations past their TTL (all of a website, those holding a code, or those of a customer / device).
+	 * @param {Site} site
+	 * @param {{ code?: string, couponId?: string, customerId?: string | null, deviceId?: string | null, limit?: number }} [filter]
 	 * @returns {Promise<number>} reservations expired by this call
 	 */
-	const sweep = async (site, { code, limit = SWEEP_PAGE } = {}) => {
+	const sweep = async (site, { code, customerId, deviceId, limit = SWEEP_PAGE } = {}) => {
 		const at = iso(now());
 		let expired = 0;
-		for (const reservation of await site.repos.reservations.expired(at, { ...(code ? { code } : {}), limit })) {
-			if (
-				!(await site.repos.reservations.transition(reservation.id, ['pending', 'reserved'], {
-					status: 'expired',
-					expiredAt: at,
-				}))
-			)
-				continue;
-			expired += 1;
-			const fresh = (await site.repos.reservations.get(reservation.id)) ?? reservation;
-			for (const key of fresh.claims ?? []) await giveBack(site, reservation.id, key);
-			await releasedEvents(site, reservation, 'expired', false);
-		}
+		const holders = {
+			...(code ? { code } : {}),
+			...(customerId ? { customerId } : {}),
+			...(deviceId ? { deviceId } : {}),
+		};
+		for (const reservation of await site.repos.reservations.expired(at, { ...holders, limit }))
+			if (await expireOne(site, reservation)) expired += 1;
 		return expired;
 	};
 
@@ -646,7 +696,7 @@ export const createCouponsService = ({
 	 */
 	const reserve = async (site, input, requester) => {
 		const id = `rsv_${hash(`${site.websiteId}|${input.reference ? `ref:${input.reference}` : `key:${input.key}`}`)}`;
-		const existing = await site.repos.reservations.get(id);
+		const existing = await reservationOf(site, id);
 		if (existing) return { ok: true, reservation: existing, duplicate: true };
 		const cart = cartFor(site, input.cart, requester);
 		const subject = subjectOf(cart, requester);
@@ -729,7 +779,7 @@ export const createCouponsService = ({
 	 * @returns {Promise<{ ok: true, reservation: Record<string, any> } | { ok: false, reason: string }>}
 	 */
 	const redeem = async (site, id, { orderId = null } = {}) => {
-		const current = await site.repos.reservations.get(id);
+		const current = await reservationOf(site, id);
 		if (!current) return { ok: false, reason: 'not_found' };
 		if (orderId && current.orderId && current.orderId !== orderId) return { ok: false, reason: 'order_mismatch' };
 		const set = { status: 'redeemed', redeemedAt: iso(now()), ...(orderId && !current.orderId ? { orderId } : {}) };
@@ -767,7 +817,7 @@ export const createCouponsService = ({
 	 * @returns {Promise<{ ok: true, reservation: Record<string, any> } | { ok: false, reason: string }>}
 	 */
 	const release = async (site, id, reason) => {
-		const current = await site.repos.reservations.get(id);
+		const current = await reservationOf(site, id);
 		if (!current) return { ok: false, reason: 'not_found' };
 		if (['released', 'expired', 'failed'].includes(current.status)) return { ok: true, reservation: current };
 		const wasRedeemed = current.status === 'redeemed';
@@ -798,7 +848,7 @@ export const createCouponsService = ({
 	 * @returns {Promise<{ ok: true, reservation: Record<string, any> } | Failure>}
 	 */
 	const attach = async (site, id, orderId) => {
-		const current = await site.repos.reservations.get(id);
+		const current = await reservationOf(site, id);
 		if (!current) return { ok: false, reason: 'not_found' };
 		if (current.orderId && current.orderId !== orderId) return { ok: false, reason: 'order_mismatch' };
 		if (!['pending', 'reserved', 'redeemed', 'expired'].includes(current.status))
@@ -817,6 +867,7 @@ export const createCouponsService = ({
 		release,
 		attach,
 		sweep,
+		reservation: reservationOf,
 		velocityAllows,
 		recordFailures,
 		cartFor,
@@ -1131,7 +1182,7 @@ export const createCouponsService = ({
 			const from = iso(now() - site.settings.reporting.default_window_days * 24 * 60 * MINUTE_MS);
 			const [coupons, open, orders, codes] = await Promise.all([
 				site.repos.coupons.countActive(),
-				site.repos.reservations.countOpen(),
+				site.repos.reservations.countOpen(to),
 				site.repos.reservations.ordersBetween(from, to),
 				site.repos.reservations.codesBetween(from, to),
 			]);

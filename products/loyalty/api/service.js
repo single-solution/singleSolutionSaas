@@ -15,7 +15,7 @@ import { collectible, refundedFraction, returnsRedeemed, reversalTarget, spendTa
 import { multiplierOf } from '../core/tiers.js';
 import { hasOrderContext, orderSnapshot } from '../core/orders.js';
 import { DAY_MS, iso, recentMonthKeys, toMs } from '../core/time.js';
-import { memberView, transactionView } from '../core/views.js';
+import { memberAsOf, memberView, transactionView } from '../core/views.js';
 
 /** @typedef {import('../core/member.js').Member} Member */
 /** @typedef {import('../core/member.js').Movement} Movement */
@@ -122,7 +122,47 @@ export const createLoyaltyService = ({
 	};
 
 	/**
-	 * Apply one movement exactly once for `sourceKey`.
+	 * Source key of expiring a member's lapsed lots (shared by the job, the background sweep and expire-on-access, so they
+	 * converge on one transaction).
+	 * @param {string} customerId
+	 * @param {import('../core/lots.js').Slice[]} slices
+	 */
+	const expireKey = (customerId, slices) =>
+		`expire:${customerId}:${slices
+			.map((slice) => slice.lotId)
+			.sort()
+			.join(',')}`;
+
+	/**
+	 * Lots of `member` past their expiry at `at` (none when expiry is off).
+	 * @param {Site} site
+	 * @param {Member} member
+	 * @param {number} at
+	 */
+	const lapsedOf = (site, member, at) =>
+		site.settings.expiry ? expire({ lots: member.lots, debt: member.debt }, at, site.settings.expiry) : null;
+
+	/**
+	 * Expire-on-access: book the expiry of a member's lapsed lots now (the same transaction the job would write), so
+	 * expired points are never spendable or shown, whether or not a job ran. Returns the member as it is now.
+	 * @param {Site} site
+	 * @param {Member | null} member
+	 * @param {number} [at]
+	 * @returns {Promise<Member | null>}
+	 */
+	const settle = async (site, member, at = now()) => {
+		const lapsed = member ? lapsedOf(site, member, at) : null;
+		if (!member || !lapsed || lapsed.expired <= 0) return member;
+		const result = await move(site, {
+			customerId: member.customerId,
+			sourceKey: expireKey(member.customerId, lapsed.slices),
+			build: () => ({ kind: 'expire', points: 0, at, source: { type: 'expiry' }, reason: 'points_expired' }),
+		});
+		return result.ok ? result.member : memberAsOf(member, { now: at, expiry: site.settings.expiry });
+	};
+
+	/**
+	 * Apply one movement exactly once for `sourceKey`. Lots that lapsed are expired first (expire-on-access).
 	 * @param {Site} site
 	 * @param {{ customerId: string, sourceKey: string, build: (member: Member) => (Omit<Movement, 'txId' | 'sourceKey'> & { patch?: Partial<Member> }) | { skip: string } }} input
 	 * @returns {Promise<MoveResult | { ok: false, reason: 'skipped', detail: string }>}
@@ -149,6 +189,10 @@ export const createLoyaltyService = ({
 			}
 			const built = build(member);
 			if ('skip' in built) return { ok: false, reason: 'skipped', detail: built.skip };
+			if (built.kind !== 'expire' && (lapsedOf(site, member, now())?.expired ?? 0) > 0) {
+				await settle(site, member);
+				continue;
+			}
 			const { patch, ...movement } = built;
 			const applied = applyMovement(
 				member,
@@ -502,8 +546,12 @@ export const createLoyaltyService = ({
 		view,
 		move,
 
-		/** @param {Site} site @param {string} customerId */
-		member: async (site, customerId) => site.repos.members.get(customerId),
+		/**
+		 * A member as it is now (lapsed lots are expired on access).
+		 * @param {Site} site
+		 * @param {string} customerId
+		 */
+		member: async (site, customerId) => settle(site, await site.repos.members.get(customerId)),
 
 		/**
 		 * @param {Site} site
@@ -665,7 +713,7 @@ export const createLoyaltyService = ({
 		 * @param {{ customerId: string, amount: number, currency: string, discount?: number }} input
 		 */
 		quote: async (site, { customerId, amount, currency, discount = 0 }) => {
-			const member = await site.repos.members.get(customerId);
+			const member = await settle(site, await site.repos.members.get(customerId));
 			const q = quoteFor({ balance: member?.balance ?? 0, amount, discount, config: site.settings.redeem });
 			return {
 				customerId,
@@ -838,11 +886,13 @@ export const createLoyaltyService = ({
 		attribute,
 
 		/**
-		 * Daily job for one website: expire lots (FIFO), publish expiry notices, review tiers.
+		 * Expiry work for one website (the daily job, and the throttled background task with a `deadline`): expire lots
+		 * (FIFO), publish expiry notices, review tiers. Idempotent, so a run cut short by its deadline is simply continued
+		 * by the next one.
 		 * @param {Site} site
-		 * @param {{ at?: number }} [options]
+		 * @param {{ at?: number, deadline?: number }} [options]
 		 */
-		runExpiry: async (site, { at = now() } = {}) => {
+		runExpiry: async (site, { at = now(), deadline = Infinity } = {}) => {
 			const { settings, repos } = site;
 			const stats = { expired: 0, members: 0, notices: 0, tierReviews: 0 };
 			if (settings.expiry) {
@@ -858,10 +908,7 @@ export const createLoyaltyService = ({
 						if (expired.expired > 0) {
 							const result = await move(site, {
 								customerId: member.customerId,
-								sourceKey: `expire:${member.customerId}:${expired.slices
-									.map((slice) => slice.lotId)
-									.sort()
-									.join(',')}`,
+								sourceKey: expireKey(member.customerId, expired.slices),
 								build: () => ({ kind: 'expire', points: 0, at, source: { type: 'expiry' }, reason: 'points_expired' }),
 							});
 							if (result.ok && !result.duplicate) {
@@ -905,7 +952,7 @@ export const createLoyaltyService = ({
 							}
 						}
 					}
-					if (page.length < JOB_PAGE) break;
+					if (page.length < JOB_PAGE || now() >= deadline) break;
 					after = /** @type {Member} */ (page.at(-1)).customerId;
 				}
 			}
@@ -927,7 +974,7 @@ export const createLoyaltyService = ({
 								data: { customerId: member.customerId, ...tiered.change, reviewAt: tiered.member.tier?.reviewAt ?? null },
 							});
 					}
-					if (page.length < JOB_PAGE) break;
+					if (page.length < JOB_PAGE || now() >= deadline) break;
 					after = /** @type {Member} */ (page.at(-1)).customerId;
 				}
 			}

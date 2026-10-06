@@ -1,4 +1,4 @@
-/** GET /cron/sweep — scheduled publishing, reservation expiry, outbox retries (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
+/** GET /cron/sweep — scheduled publishing, reservation expiry, outbox retries (daily Vercel cron catch-up with `Authorization: Bearer $CRON_SECRET`). */
 import { forward } from '../../_lib/product.js';
 
 export const dynamic = 'force-dynamic';

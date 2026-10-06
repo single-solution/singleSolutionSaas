@@ -76,7 +76,7 @@ const CROSS_STAGES = new Set([
  * @param {{ uri: string, maxPoolSize?: number, appName?: string, createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => MongoClient }} options
  * @returns {MongoClient}
  */
-export const getMongoClient = ({ uri, maxPoolSize = 10, appName = 'ss-portal', createClient }) => {
+export const getMongoClient = ({ uri, maxPoolSize = 5, appName = 'ss-portal', createClient }) => {
 	const store = /** @type {any} */ (globalThis);
 	/** @type {Map<string, MongoClient>} */
 	const cache = (store[CLIENTS] ??= new Map());

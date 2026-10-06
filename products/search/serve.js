@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createSearchApp, wireEvents } from './api/routes.js';
-import { cronRoutes } from './jobs/sweep.js';
+import { cronRoutes, scheduleSweep } from './jobs/sweep.js';
 
 export { loadManifest } from './adapters/platform.js';
 
@@ -30,7 +30,7 @@ export const startServer = async ({
 	tls,
 	atlas = {},
 } = {}) => {
-	const search = wireEvents(createSearchApp(await createPlatform({ env, root, overrides }), atlas));
+	const search = scheduleSweep(wireEvents(createSearchApp(await createPlatform({ env, root, overrides }), atlas)));
 	const { product } = search;
 	const handle = createRequestHandler(product, [...buildRoutes(search), ...cronRoutes(search)], { maxBodyBytes: 8_000_000 });
 	/** @type {import('node:http').RequestListener} */

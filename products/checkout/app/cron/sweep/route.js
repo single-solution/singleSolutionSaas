@@ -1,4 +1,4 @@
-/** GET /cron/sweep — expire holds, abandoned carts, heartbeat (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
+/** GET /cron/sweep — daily catch-up: expire holds, abandoned carts, heartbeat (Vercel cron with `Authorization: Bearer $CRON_SECRET`). */
 import { forward } from '../../_lib/product.js';
 
 export const dynamic = 'force-dynamic';

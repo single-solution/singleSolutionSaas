@@ -36,7 +36,7 @@ export const createApplication = (app) => {
 	const carts = createCartsService(checkout, items);
 	const pricing = createPricing(checkout);
 	const orders = createOrdersService(checkout);
-	const placement = createPlacement(checkout, { items, carts, pricing });
+	const placement = createPlacement(checkout, { items, carts, pricing, releaseExpired: orders.expire });
 	const payments = createPaymentsService(checkout, orders);
 	const lines = createLines({ items, carts });
 	return { ...checkout, items, carts, pricing, orders, placement, payments, lines };
@@ -356,8 +356,9 @@ export const buildRoutes = (application) => {
 					subject: cleanText(ctx.query.customerId, 255),
 				});
 				const who = requesterOf(ctx);
+				const current = await Promise.all(list.map((/** @type {any} */ order) => orders.expireIfDue(s, order)));
 				return p.respond(
-					list.map((/** @type {any} */ order) => orders.view(s, order, who)),
+					current.map((order) => orders.view(s, order, who)),
 					(/** @type {{ placedAt: string, id: string }} */ order) => [order.placedAt, order.id],
 				);
 			},

@@ -129,7 +129,8 @@ export const customerRequestView = (request, now) => ({
 	id: request.id,
 	orderId: request.orderId,
 	number: request.number,
-	status: request.status,
+	// an open request past its `expiresAt` is expired, whether or not the request job has marked it yet
+	status: request.status === 'open' && Date.parse(request.expiresAt) <= now ? 'expired' : request.status,
 	open: request.status === 'open' && Date.parse(request.expiresAt) > now,
 	completedAt: request.completedAt,
 	expiresAt: request.expiresAt,

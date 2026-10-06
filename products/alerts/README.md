@@ -120,8 +120,9 @@ message at the provider → unsubscribe (GET changes nothing, POST stops) → us
    - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
      registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
    - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue, website ids). Required.
-   - `CRON_SECRET` (≥ 16 chars) — for `vercel.json`'s `/cron/dispatch` (every 5 minutes; deferred, batched and
-     retried messages, open waitlists).
+   - `CRON_SECRET` (≥ 16 chars) — for `vercel.json`'s `/cron/dispatch`, the daily catch-up over every website.
+     Deferred, batched and retried messages and open waitlists are otherwise sent by a short background pass after
+     requests (at most every 5 minutes per website), so the free Vercel Hobby plan (one daily cron) is enough.
    - `ALERTS_TOKEN_SECRET` — optional (≥ 32 chars) secret of unsubscribe / confirm links and contact hashes; derived
      from the signing key when empty (rotating the key then invalidates outstanding links and re-keys contact hashes).
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register`), review and activate. `endpoints.base`

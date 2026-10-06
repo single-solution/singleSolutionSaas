@@ -1,9 +1,10 @@
 /**
- * Scheduled job (Vercel cron → `GET /cron/sweep` with `Authorization: Bearer $CRON_SECRET`): for every website this
- * deployment serves, expire reservations whose TTL passed (their uses go back, `coupons.released@1` reason `expired`),
- * then send queued usage records (`redemption`) to the Portal and a heartbeat. Expired reservations are also swept
- * lazily whenever a code is full, so the job only bounds how long an abandoned checkout can hold a use. Each website is
- * independent: one failing website never stops the others. The per-website work (`sweep`) is passed in by the
+ * Daily catch-up job (Vercel cron, once a day → `GET /cron/sweep` with `Authorization: Bearer $CRON_SECRET`): for every
+ * website this deployment serves, expire reservations whose TTL passed (their uses go back, `coupons.released@1` reason
+ * `expired`), then send queued usage records (`redemption`) to the Portal and a heartbeat. Correctness never waits for
+ * it: a lapsed reservation is expired when it is read or touched (and when its code, customer or device needs the use),
+ * and a throttled per-website sweep runs after requests (`wireEvents` in api/routes.js). Bounded pages per website; what
+ * is left is picked up by the next run. Each website is independent: one failing website never stops the others. The per-website work (`sweep`) is passed in by the
  * composition root (serve.js, app/_lib/product.js), so this layer depends on no handler code.
  */
 import { timingSafeEqual } from 'node:crypto';

@@ -210,7 +210,7 @@ export const createRequestHandler = (product, routes, options = {}) => {
 		const finish = (rendered) => {
 			const headers = new Headers({ ...rendered.headers, ...extra });
 			try {
-				ctxKit.background?.afterRequest(SCHEDULERS.get(request));
+				ctxKit.background?.afterRequest(SCHEDULERS.get(request), { websiteId });
 			} catch (error) {
 				log.warn('background scheduling failed', { error });
 			}

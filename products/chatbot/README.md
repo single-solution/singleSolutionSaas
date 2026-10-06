@@ -121,7 +121,8 @@ elements, 10 mc metered for the tokens above the included amount).
 2. Environment variables (Production): `SS_PORTAL_URL` (pinned Portal), `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one
    line), `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional), `SS_PRODUCT_DB_URI` (the product's own small MongoDB:
    sessions, caches, usage queue, site registry — required in production), `CRON_SECRET` (≥ 16 chars, for
-   `/cron/maintenance` every 15 minutes in `vercel.json`), optional `CHATBOT_TOKEN_SECRET` (≥ 32 chars; else derived
+   the daily catch-up `/cron/maintenance` in `vercel.json`; per-website maintenance also runs after requests, at most
+   every 15 minutes), optional `CHATBOT_TOKEN_SECRET` (≥ 32 chars; else derived
    from the signing key) and `SS_LOG_LEVEL`.
 3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
@@ -132,6 +133,8 @@ elements, 10 mc metered for the tokens above the included amount).
 - **Unreleased** — knowledge pages and webhook tools use app-kit's `product.outbound.fetch` (the private connector
   workaround is gone); `window.messages_per_minute` is an app-kit dynamic route limit on
   `POST /v1/conversations/{id}/messages` (per customer / guest marker for browsers, per conversation for servers; agent
-  and bot replies are not limited); the maintenance job no longer flushes usage (the kit does).
+  and bot replies are not limited); the maintenance job no longer flushes usage (the kit does); free-tier hosting: the maintenance cron runs once a day as a catch-up; per-website maintenance runs after
+  requests (`product.background.every`, at most every 15 minutes per website), and a snoozed conversation whose time
+  has passed reads as open (and is woken when read) before any job runs.
 - **1.0.0** — first release: thirteen elements, three renderers, six headless cores, REST v1 (45 paths), dashboard,
   maintenance cron.

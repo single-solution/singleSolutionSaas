@@ -12,7 +12,7 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createAlerts, wireEvents } from '../api/routes.js';
-import { cronRoutes } from '../jobs/dispatch.js';
+import { cronRoutes, scheduleDispatch } from '../jobs/dispatch.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -136,7 +136,7 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, iden
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: provider.send },
 	});
-	const alerts = wireEvents(createAlerts(app));
+	const alerts = scheduleDispatch(wireEvents(createAlerts(app)));
 	const handle = createRequestHandler(alerts.product, [...buildRoutes(alerts), ...cronRoutes(alerts)]);
 	const issuer = identity
 		? await createTestIdentityIssuer({

@@ -71,12 +71,21 @@ export const createReconciliation = ({ ctx, repo, ledger, settlement }) => {
 		const runKey = new Date(now).toISOString().slice(0, 10);
 		const timeUp = () => signal?.aborted === true || ctx.now() > deadline - DEADLINE_MARGIN_MS;
 		const saved = await repo.getState(STATE_ID);
+		// an unfinished run (cut by its deadline) continues where it stopped, even on a later day; a new run starts
+		// once the last one is done and the day changed
 		/** @type {{ runKey: string, phase: 'subscriptions' | 'merchants' | 'done', cursor: string | null }} */
 		const state =
-			saved?.runKey === runKey
-				? { runKey, phase: saved.phase, cursor: saved.cursor ?? null }
+			saved && (saved.runKey === runKey || saved.phase !== 'done')
+				? { runKey: String(saved.runKey), phase: saved.phase, cursor: saved.cursor ?? null }
 				: { runKey, phase: 'subscriptions', cursor: null };
-		const stats = { runKey, subscriptions: 0, merchants: 0, discrepancies: 0, complete: true, phase: state.phase };
+		const stats = {
+			runKey: state.runKey,
+			subscriptions: 0,
+			merchants: 0,
+			discrepancies: 0,
+			complete: true,
+			phase: state.phase,
+		};
 		/** @type {unknown[]} */
 		const found = [];
 		if (state.phase === 'done') return { ...stats, alreadyDone: true };
@@ -141,7 +150,7 @@ export const createReconciliation = ({ ctx, repo, ledger, settlement }) => {
 		await repo.insertReport({
 			_id: createId('rec', { randomBytes: ctx.randomBytes }),
 			at: new Date(ctx.now()),
-			runKey,
+			runKey: state.runKey,
 			phase: state.phase,
 			subscriptions: stats.subscriptions,
 			merchants: stats.merchants,

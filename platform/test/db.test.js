@@ -376,7 +376,7 @@ describe('getMongoClient', () => {
 		const a = getMongoClient({ uri: 'mongodb://a/x', createClient });
 		expect(getMongoClient({ uri: 'mongodb://a/x', createClient })).toBe(a);
 		getMongoClient({ uri: 'mongodb://a/x', maxPoolSize: 3, createClient });
-		expect(created).toEqual(['mongodb://a/x|10', 'mongodb://a/x|3']);
+		expect(created).toEqual(['mongodb://a/x|5', 'mongodb://a/x|3']);
 		await closeMongoClients();
 		getMongoClient({ uri: 'mongodb://a/x', createClient });
 		expect(created).toHaveLength(3);

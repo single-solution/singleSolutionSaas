@@ -64,7 +64,7 @@ export const integrationRoutes = (service) => [
 		maxBodyBytes: INGEST_MAX_BODY,
 		rateLimit: { limit: 600, windowMs: 60_000, key: ingestSubject },
 		handler: async (ctx) => {
-			const { body, headers } = await service.ingestRequest({ rawBody: ctx.rawBody, headers: ctx.headers });
+			const { body, headers } = await service.ingestRequest({ rawBody: ctx.rawBody, headers: ctx.headers, defer: ctx.defer });
 			return ok(body, { status: 202, headers });
 		},
 	}),
@@ -80,6 +80,7 @@ export const integrationRoutes = (service) => [
 				await service.publishFromProduct({
 					appId: /** @type {{ appId: string }} */ (ctx.app).appId,
 					events: body && typeof body === 'object' ? body.events : undefined,
+					defer: ctx.defer,
 				}),
 			);
 		},

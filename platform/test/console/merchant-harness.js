@@ -73,6 +73,8 @@ export const button = (label, root = document) => {
 
 /** @param {string} label @param {ParentNode} [root] */
 export const press = async (label, root) => {
+	// a click on a disabled (busy) button is a no-op: wait until the view re-enables it, which is slow under load
+	await until(() => !(/** @type {HTMLButtonElement} */ (button(label, root)).disabled));
 	await act(async () => {
 		button(label, root).click();
 	});

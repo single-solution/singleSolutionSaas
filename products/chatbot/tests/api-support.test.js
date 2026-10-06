@@ -231,6 +231,45 @@ describe('handoff and the inbox', () => {
 		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id: snooze.id }))?.status).toBe('closed');
 	});
 
+	it('reads a passed snooze as open before any job, and wakes it on access', async () => {
+		const snoozed = await guest('snooze until later');
+		const until = new Date(h.clock.now() + 60_000).toISOString();
+		await h.call('PATCH', `/v1/conversations/${snoozed.id}`, { body: { status: 'snoozed', snoozedUntil: until } });
+		/** @param {string} status */
+		const ids = async (status) =>
+			(await h.call('GET', `/v1/conversations?status=${status}&limit=100`)).json.items.map((/** @type {any} */ c) => c.id);
+		expect(await ids('snoozed')).toContain(snoozed.id);
+		expect(await ids('open')).not.toContain(snoozed.id);
+		h.clock.advance(61_000);
+		// no maintenance ran: listings already see it as open
+		expect(await ids('snoozed')).not.toContain(snoozed.id);
+		expect(await ids('open,pending')).toContain(snoozed.id);
+		expect(await ids('snoozed,closed')).not.toContain(snoozed.id);
+		expect(await ids('open,snoozed')).toContain(snoozed.id);
+		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id: snoozed.id }))?.status).toBe('snoozed');
+		// reading it ends the snooze
+		const read = await h.call('GET', `/v1/conversations/${snoozed.id}`);
+		expect(read.json.status).toBe('open');
+		const stored = await h.collection('conversations').findOne({ websiteId: WEBSITE, id: snoozed.id });
+		expect(stored?.status).toBe('open');
+		expect(stored?.snoozedUntil).toBeNull();
+	});
+
+	it('runs the per-website maintenance after requests (throttled background task)', async () => {
+		const snoozed = await guest('wake me by the background task');
+		await h.call('PATCH', `/v1/conversations/${snoozed.id}`, {
+			body: { status: 'snoozed', snoozedUntil: new Date(h.clock.now() + 60_000).toISOString() },
+		});
+		h.clock.advance(20 * 60_000);
+		await h.entitle();
+		expect(h.chatbot.maintenance.name).toBe('maintenance');
+		expect(await h.chatbot.maintenance.trigger({ websiteId: WEBSITE })).toBe(true);
+		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id: snoozed.id }))?.status).toBe('open');
+		// throttled: a second run within the interval is skipped; a website without a subscription does nothing
+		expect(await h.chatbot.maintenance.trigger({ websiteId: WEBSITE })).toBe(false);
+		expect(await h.chatbot.maintenance.trigger({ websiteId: 'web_9123456789abcdefghjkmnpq' })).toBe(true);
+	});
+
 	it('goes offline with a lead form when the team is closed', async () => {
 		await h.entitle({
 			config: {

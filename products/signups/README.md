@@ -27,7 +27,7 @@ a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — no
 | `widget`        | A, B    |        0 | Sign-in UI (`modal` / `inline`): identifier → code or link → terms → signed in; one-time-code autofill, remembered device                                                                                                                                      |
 | `risk`          | C       |      150 | Disposable / blocked e-mail domains, distinct identities and failed verifications per IP per hour, new-device notices, risk event log                                                                                                                          |
 | `consent`       | C       |       50 | Versioned terms / privacy documents, captured at sign-up, asked again when a required version changes; append-only acceptance records                                                                                                                          |
-| `data_rights`   | C       |       50 | Self-service export (download window) and deletion after a cooling-off period (cancellable), executed by the daily job                                                                                                                                         |
+| `data_rights`   | C       |       50 | Self-service export (download window) and deletion after a cooling-off period (cancellable), executed when the customer is next accessed or by the maintenance job                                                                                             |
 
 Plans: **starter** = profile, sessions, otp, widget, account_pages (+ add-ons magic_link, risk, consent, data_rights) —
 900 mc/h; **pro** = everything. Trial 48 h.
@@ -163,7 +163,8 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
 2. Environment variables (Production): `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one line),
    `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional), `SS_PRODUCT_DB_URI` (the product's own small MongoDB —
    required in production), **`SIGNUPS_SEAL_SECRET`** (≥ 32 random characters; keep it safe), `CRON_SECRET` (daily
-   `/cron/maintenance`, 03:40 UTC in `vercel.json`), `SS_LOG_LEVEL` (optional).
+   catch-up `/cron/maintenance`, 03:40 UTC in `vercel.json`; the same maintenance runs after requests, at most hourly
+   per website), `SS_LOG_LEVEL` (optional).
 3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin — it is also the
    prefix of every website's issuer, so keep it stable.
@@ -175,6 +176,7 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
 
 - **Unreleased** — problems carry RFC 9457 extension members (`attemptsRemaining`, `retryAfterSeconds`); messaging
   uses app-kit's built-in `generic-http` / `smtp` adapters; Signups requests to be the website's identity issuer
-  (`capabilities.identityIssuer`, `POST /v1/issuer:register`, daily job, dashboard button; the merchant approves).
+  (`capabilities.identityIssuer`, `POST /v1/issuer:register`, daily job, dashboard button; the merchant approves). Free-tier hosting: the cron is a daily catch-up, maintenance
+  also runs after requests (at most hourly per website), and a due deletion runs when the customer is next accessed.
 - **1.0.0** — first release: nine elements, sign-in and account renderers with headless cores, REST v1, issuer (JWKS,
   discovery, rotation), dashboard, daily job.

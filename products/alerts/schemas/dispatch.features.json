@@ -117,7 +117,7 @@
 		"inline_dispatch": {
 			"type": "boolean",
 			"title": "Send right after the trigger",
-			"description": "Off: messages wait for the scheduled run (cron) only.",
+			"description": "Off: messages wait for the next background pass (after requests, at most every 5 minutes) or the daily run.",
 			"default": true,
 			"x-kind": "flag",
 			"x-ui": { "widget": "switch", "group": "Delivery", "order": 13 }

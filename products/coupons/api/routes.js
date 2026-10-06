@@ -444,7 +444,7 @@ export const buildRoutes = (coupons) => {
 			path: '/v1/reservations/:id',
 			...website('api'),
 			handler: async (ctx) => {
-				const reservation = await (await site(ctx)).repos.reservations.get(ctx.params.id);
+				const reservation = await service.reservation(await site(ctx), ctx.params.id);
 				return reservation ? ok(reservationView(reservation)) : problem('not_found', 'No such reservation.');
 			},
 		}),
@@ -732,11 +732,48 @@ export const buildRoutes = (coupons) => {
 	];
 };
 
+/** Interval of the per-website sweep run after requests (the daily cron catches up on quiet websites). */
+export const SWEEP_EVERY_MS = 5 * 60_000;
+/** Reservations expired per page of the background sweep. */
+const SWEEP_BATCH = 50;
+/** Pages per background run (bounded; the deadline usually stops it first). */
+const SWEEP_PAGES = 10;
+
 /**
- * Register the event consumers (app-kit dedupes deliveries on the event id).
+ * Expire lapsed reservations of one website within `deadline` (the background task; readers never wait for it, an
+ * expired reservation is treated as expired when touched).
+ * @param {Coupons} coupons
+ * @param {{ websiteId: string | null, deadline: number }} input
+ * @returns {Promise<number>} reservations expired
+ */
+export const sweepWebsite = async ({ app, service, siteFor }, { websiteId, deadline }) => {
+	const site = websiteId ? await siteFor(websiteId) : null;
+	if (!site) return 0;
+	let expired = 0;
+	for (let page = 0; page < SWEEP_PAGES && app.now() < deadline; page += 1) {
+		const count = await service.sweep(site, { limit: SWEEP_BATCH });
+		expired += count;
+		if (count < SWEEP_BATCH) break;
+	}
+	return expired;
+};
+
+/**
+ * Register the event consumers (app-kit dedupes deliveries on the event id) and the throttled per-website sweep that
+ * runs after requests (`product.background.every`, at most every SWEEP_EVERY_MS per website). Called once per product
+ * by the composition roots (app/_lib/product.js, serve.js).
  * @param {Coupons} coupons
  */
 export const wireEvents = (coupons) => {
 	for (const [type, handler] of Object.entries(createEventHandlers(coupons))) coupons.product.events.on(type, handler);
-	return coupons;
+	const sweepTask = coupons.product.background.every(
+		'sweep',
+		SWEEP_EVERY_MS,
+		(/** @type {any} */ input) => sweepWebsite(coupons, input),
+		{
+			per: 'website',
+			budgetMs: 10_000,
+		},
+	);
+	return { ...coupons, tasks: { sweep: sweepTask } };
 };

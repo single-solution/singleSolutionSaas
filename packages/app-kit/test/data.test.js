@@ -401,7 +401,7 @@ describe('data.forWebsite (MongoDB)', () => {
 		await data.forWebsite(WEBSITE);
 		await data.forWebsite(WEBSITE);
 		await data.forWebsite(WEBSITE_2);
-		expect(created).toEqual([5]);
+		expect(created).toEqual([3]);
 		expect(resolved).toEqual([WEBSITE, WEBSITE_2]);
 		setTtl(1000);
 		clock.advance(61_000);
@@ -414,7 +414,7 @@ describe('data.forWebsite (MongoDB)', () => {
 		// the registry is process-wide (warm serverless reuse), so other idle pools close too
 		expect(await data.closeIdle()).toBeGreaterThanOrEqual(1);
 		await data.forWebsite(WEBSITE);
-		expect(created).toEqual([5, 5]);
+		expect(created).toEqual([3, 3]);
 		await data.closeAll();
 	});
 

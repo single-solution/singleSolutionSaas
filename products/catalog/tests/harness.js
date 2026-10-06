@@ -12,7 +12,7 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createCatalog, wireEvents } from '../api/routes.js';
-import { cronRoutes } from '../jobs/sweep.js';
+import { cronRoutes, scheduleSweep } from '../jobs/sweep.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -118,7 +118,7 @@ export const createHarness = async ({ config = {}, elements = {}, website = { cu
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: providers.send },
 	});
-	const catalog = wireEvents(createCatalog(app));
+	const catalog = scheduleSweep(wireEvents(createCatalog(app)));
 	const handle = createRequestHandler(catalog.product, [...buildRoutes(catalog), ...cronRoutes(catalog)], {
 		maxBodyBytes: 16_000_000,
 	});

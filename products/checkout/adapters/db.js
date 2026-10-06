@@ -244,18 +244,28 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				return strip(doc);
 			},
 			/**
-			 * Unconfirmed orders held by any of these identifiers.
+			 * Unconfirmed orders held by any of these identifiers whose hold has not passed at `now` (an expired hold is
+			 * not open, swept or not).
 			 * @param {{ subject?: string | null, email?: string | null, phone?: string | null }} who
 			 * @param {readonly string[]} statuses
+			 * @param {Date} now
 			 */
-			countOpen: async (who, statuses) => {
+			countOpen: async (who, statuses, now) => {
 				const keys = /** @type {const} */ (['subject', 'email', 'phone']);
 				let max = 0;
 				for (const key of keys) {
 					const value = who[key];
 					if (!value) continue;
 					const field = key === 'subject' ? 'customerId' : `customer.${key}`;
-					max = Math.max(max, await orders.countDocuments({ websiteId, [field]: value, status: { $in: [...statuses] } }));
+					max = Math.max(
+						max,
+						await orders.countDocuments({
+							websiteId,
+							[field]: value,
+							status: { $in: [...statuses] },
+							$or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
+						}),
+					);
 				}
 				return max;
 			},

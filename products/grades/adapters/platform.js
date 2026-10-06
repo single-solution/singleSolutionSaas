@@ -120,7 +120,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	/* v8 ignore start -- production control database (tests use the in-memory stores) */
 	if (config.productDbUri) {
 		const { MongoClient } = await import('mongodb');
-		const client = new MongoClient(config.productDbUri, { maxPoolSize: 5 });
+		const client = new MongoClient(config.productDbUri, config.productDbOptions);
 		controlClient = client;
 		const mongoStores = createMongoStores({ db: client.db() });
 		await mongoStores.ensureIndexes();

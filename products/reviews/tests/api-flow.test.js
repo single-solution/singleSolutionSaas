@@ -1,6 +1,6 @@
 /**
  * Request flow (messaging connector), photos (storage connector), Q&A, CSV import, analytics, order lifecycle events,
- * the hourly cron, the dashboard API and Portal-signed privacy operations.
+ * the daily cron and the work after requests, the dashboard API and Portal-signed privacy operations.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createId } from '@ss/contracts';
@@ -94,7 +94,7 @@ describe('request flow', () => {
 		h.clock.set(T0);
 	});
 
-	it('expires requests, waits for a review URL, and runs from the hourly cron for every website', async () => {
+	it('expires requests, waits for a review URL, and runs from the daily cron for every website', async () => {
 		await h.entitle({ config: { request_flow: { review_url: '' } } });
 		const { orderId } = await h.completeOrder({ customerId: 'cus_nourl', items: ['itm_n1'] });
 		h.clock.advance(7 * DAY + HOUR);
@@ -119,6 +119,32 @@ describe('request flow', () => {
 		const row = skipped.json.results.find((/** @type {any} */ entry) => entry.websiteId === WEBSITE);
 		expect(row).toEqual({ websiteId: WEBSITE, photos: { scanned: 0, deleted: 0, missing: 0, failed: 0 } });
 		await h.entitle();
+	});
+
+	it('runs the flow after requests (throttled background task) and reads a request past expiry as expired before any job', async () => {
+		const { orderId } = await h.completeOrder({ customerId: 'cus_bg', items: ['itm_bg1'] });
+		const stored = await h.collection('requests').findOne({ websiteId: WEBSITE, orderId });
+		h.clock.advance(7 * DAY + HOUR); // due, 11:00 UTC
+		const before = h.providers.messages.length;
+		expect(h.reviews.work.name).toBe('requests');
+		expect(await h.reviews.work.trigger({ websiteId: WEBSITE })).toBe(true);
+		expect(h.providers.messages.length).toBe(before + 1);
+		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.delivery.sends).toBe(1);
+		expect(await h.reviews.work.trigger({ websiteId: WEBSITE })).toBe(false); // throttled within the interval
+
+		h.clock.advance(400 * DAY);
+		const read = await h.call('GET', `/v1/review-requests/${stored?.id}`);
+		expect(read.json).toMatchObject({ status: 'expired', open: false });
+		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.status).toBe('open');
+		/** @param {string} status */
+		const ids = async (status) =>
+			(await h.call('GET', `/v1/review-requests?filter[status]=${status}&limit=100`)).json.items.map(
+				(/** @type {any} */ r) => r.id,
+			);
+		expect(await ids('expired')).toContain(stored?.id);
+		expect(await ids('open')).not.toContain(stored?.id);
+		expect(await ids('completed')).not.toContain(stored?.id);
+		h.clock.set(T0);
 	});
 
 	it('lets the merchant open, read, link and cancel requests through the API, and order events close them', async () => {

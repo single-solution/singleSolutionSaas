@@ -207,19 +207,22 @@ export const createAudit = ({
 	};
 
 	/**
-	 * Verify every scope (nightly). Broken chains are logged as errors; scopes not reached before the deadline are
-	 * reported as `skipped`.
-	 * @param {{ deadline?: number, signal?: AbortSignal }} [options]
+	 * Verify every scope in order, from the first scope after `after` (a pass cut by its deadline resumes there).
+	 * Broken chains are logged as errors; scopes not reached before the deadline are reported as `skipped`, and
+	 * `resumeAfter` is the last scope verified then (null when the pass completed).
+	 * @param {{ deadline?: number, signal?: AbortSignal, after?: string | null }} [options]
 	 */
-	const verifyAll = async ({ deadline = Number.POSITIVE_INFINITY, signal } = {}) => {
+	const verifyAll = async ({ deadline = Number.POSITIVE_INFINITY, signal, after = null } = {}) => {
 		const scopes = (await repo.aggregate([{ $group: { _id: '$scope' } }, { $sort: { _id: 1 } }]).toArray())
 			.map((row) => row._id)
-			.filter((scope) => typeof scope === 'string');
+			.filter((scope) => typeof scope === 'string' && (after === null || scope > after));
 		/** @type {ChainReport[]} */
 		const broken = [];
 		let verified = 0;
 		let entries = 0;
 		let skipped = 0;
+		/** @type {string | null} */
+		let last = after;
 		for (const scope of scopes) {
 			if (now() >= deadline || signal?.aborted) {
 				skipped += 1;
@@ -228,12 +231,20 @@ export const createAudit = ({
 			const report = await verifyChain(scope, signal ? { signal } : {});
 			verified += 1;
 			entries += report.entries;
+			last = scope;
 			if (!report.ok) {
 				broken.push(report);
 				logger?.error('audit chain broken', { scope, broken: report.broken });
 			}
 		}
-		return { scopes: scopes.length, verified, skipped, entries, broken: broken.map((r) => ({ scope: r.scope, ...r.broken })) };
+		return {
+			scopes: scopes.length,
+			verified,
+			skipped,
+			entries,
+			broken: broken.map((r) => ({ scope: r.scope, ...r.broken })),
+			resumeAfter: skipped > 0 ? last : null,
+		};
 	};
 
 	/**

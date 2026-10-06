@@ -1,5 +1,5 @@
 /**
- * Websites this deployment serves, for the daily job (knowledge refresh, SLA breaches, auto-close, usage flush). It holds website ids only — no
+ * Websites this deployment serves, for the daily catch-up job (knowledge refresh, SLA breaches, auto-close, purge). It holds website ids only — no
  * merchant data (Part E §7: platform-side storage is limited to ids and caches) — in the product's own control
  * database when one is configured (`ss_chatbot_sites`), else in memory.
  */

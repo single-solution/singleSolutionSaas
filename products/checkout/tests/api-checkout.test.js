@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestIdentityIssuer } from '@ss/app-kit/testing';
-import { CONNECTED, CRON_SECRET, HOUR, URLS, WEBSITE, checkoutBody, createHarness } from './harness.js';
+import { CONNECTED, CRON_SECRET, HOUR, URLS, WEBSITE, WEBSITE_2, checkoutBody, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -710,5 +710,86 @@ describe('after placement', () => {
 			h.published('checkout.cart_abandoned@1').filter((e) => e.data.cartId === id),
 			`${first.text} ${JSON.stringify(cart)}`,
 		).toHaveLength(1);
+	});
+});
+
+describe('expiry without a sweep (free-tier hosting: daily cron + work on requests)', () => {
+	it('treats an expired hold as expired on read and releases it on access', async () => {
+		await entitle({ payment_manual: { ...CONNECTED.payment_manual, max_open_orders: 1 } });
+		await h.item('itm_hold', { variants: [{ variantId: 'v', price: 2000, available: 1 }] });
+		/** @param {string} phone */
+		const body = (phone) =>
+			checkoutBody({ lines: [{ itemId: 'itm_hold', quantity: 1 }], paymentMethod: 'cod', contact: { name: 'Hold', phone } });
+		const first = await h.call('POST', '/v1/orders', { key: h.pk, body: body('+447700900111') });
+		expect(first.json.status).toBe('awaiting_confirmation');
+		const capped = await h.call('POST', '/v1/orders', {
+			key: h.pk,
+			body: checkoutBody({
+				lines: [{ itemId: 'itm_b', quantity: 1 }],
+				paymentMethod: 'cod',
+				contact: { name: 'Hold', phone: '+447700900111' },
+			}),
+		});
+		expect(capped.json.type).toMatch(/open_orders_limit$/);
+		const soldOut = await h.call('POST', '/v1/orders', { key: h.pk, body: body('+447700900112') });
+		expect(soldOut.json.type).toMatch(/cart_unavailable_lines$/);
+
+		// the confirmation hold passes; no sweep runs: the expired order is not open and its unit is released on access
+		h.clock.advance(25 * HOUR);
+		const second = await h.call('POST', '/v1/orders', { key: h.pk, body: body('+447700900111') });
+		expect(second.status, second.text).toBe(201);
+		expect((await h.collection('orders').findOne({ id: first.json.id }))?.status).toBe('cancelled');
+		expect(h.published('order.cancelled@1').some((e) => e.data.orderId === first.json.id && e.data.reason === 'expired')).toBe(
+			true,
+		);
+
+		// reading an expired order cancels it and gives the stock back
+		h.clock.advance(25 * HOUR);
+		await entitle({ payment_manual: { ...CONNECTED.payment_manual, max_open_orders: 1 } });
+		expect((await h.collection('orders').findOne({ id: second.json.id }))?.status).toBe('awaiting_confirmation');
+		expect((await h.call('GET', `/v1/orders/${second.json.id}`)).json).toMatchObject({ status: 'cancelled' });
+		expect((await h.call('GET', '/v1/items/itm_hold')).json.variants[0].available).toBe(1);
+
+		// a merchant cannot confirm after the hold passed; a listed expired order shows as cancelled
+		const third = await h.call('POST', '/v1/orders', { key: h.pk, body: body('+447700900113') });
+		const fourth = await h.call('POST', '/v1/orders', {
+			key: h.pk,
+			body: checkoutBody({
+				lines: [{ itemId: 'itm_b', quantity: 1 }],
+				paymentMethod: 'cod',
+				contact: { name: 'L', phone: '+447700900114' },
+			}),
+		});
+		h.clock.advance(25 * HOUR);
+		await entitle();
+		expect((await h.call('POST', `/v1/orders/${third.json.id}/confirm`)).status).toBe(409);
+		expect((await h.collection('orders').findOne({ id: third.json.id }))?.status).toBe('cancelled');
+		const listed = await h.call('GET', '/v1/orders?status=awaiting_confirmation&limit=100');
+		expect(listed.json.items.find((/** @type {any} */ o) => o.id === fourth.json.id)).toMatchObject({ status: 'cancelled' });
+		await entitle();
+	});
+
+	it('registers the per-website background work; its trigger sweeps that website', async () => {
+		await entitle();
+		const placed = await h.call('POST', '/v1/orders', {
+			key: h.pk,
+			body: checkoutBody({
+				lines: [{ itemId: 'itm_b', quantity: 1 }],
+				paymentMethod: 'cod',
+				contact: { name: 'B', phone: '+447700900221' },
+			}),
+		});
+		const cartId = await h.cartWith([{ itemId: 'itm_b', quantity: 1 }]);
+		h.clock.advance(31 * HOUR);
+		await entitle();
+		const { holds, abandoned } = h.application.jobs;
+		expect([holds.name, abandoned.name]).toEqual(['holds', 'abandoned']);
+		expect(await holds.trigger({})).toBe(false); // per website: nothing to do without one
+		expect(await holds.trigger({ websiteId: WEBSITE })).toBe(true);
+		expect((await h.collection('orders').findOne({ id: placed.json.id }))?.status).toBe('cancelled');
+		expect(await holds.trigger({ websiteId: WEBSITE })).toBe(false); // throttled: at most once per interval
+		expect(await abandoned.trigger({ websiteId: WEBSITE })).toBe(true);
+		expect(h.published('checkout.cart_abandoned@1').some((e) => e.data.cartId === cartId)).toBe(true);
+		expect(await abandoned.trigger({ websiteId: WEBSITE_2 })).toBe(true); // not subscribed: nothing to sweep
 	});
 });

@@ -15,7 +15,7 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 | `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                                        |
 | `api/`          | thin REST handlers, event consumers, dashboard session view                                                           |
 | `adapters/`     | data repositories (every query keyed by `websiteId`) and the app-kit platform wiring                                  |
-| `jobs/`         | scheduled handlers (no crons by default)                                                                              |
+| `jobs/`         | daily cron route (`/cron/daily`) and throttled background work after requests (`product.background.every`)            |
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                         |
 | `schemas/`      | feature schemas and product event data schemas                                                                        |
 | `app/`          | Next.js App Router: `.well-known/ss-register`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
@@ -57,6 +57,8 @@ ss certify . --url http://localhost:3000 --token <fresh token>   # certification
 3. `openapi.json`: remove `/v1/notes` and `/v1/notes/{id}` and document your element's `api.resources` (mark the one
    `ss certify` should exercise with `"x-ss-certify": true`).
 4. `api/routes.js`: drop the notes routes and handlers; `wireEvents` registers nothing until you consume events.
+   `jobs/index.js`: drop the `purge` background task (`wireJobs` returns the product unchanged) and `tests/jobs.test.js`'s
+   purge test.
 5. `adapters/privacy.js`: list your own personal-data collections; when you store none, pass `export` /
    `anonymize` handlers that answer empty results (as `--minimal` does) so the Portal's data requests succeed.
 6. `strings/en.json`: remove the `notes.*` keys (keep `dashboard.*`).

@@ -5,8 +5,9 @@
  * Flow: website/product/Portal event → checks (`core/events.js`) → routing metadata in `integration_events`
  * (unique `(websiteId, idempotencyKey)` = dedupe) → fan-out at ingest to the products that consume the type →
  * one delivery record + one job `integration.deliver` per (event, product) carrying the payload **sealed** with
- * `ctx.envelope` (aad websiteId + eventId) → signed POST to the product's events endpoint → retries with the job
- * queue's backoff for ~24 h → DLQ (sealed, ≤ 7 days) → replay. Payloads never reach a collection in clear text.
+ * `ctx.envelope` (aad websiteId + eventId) → signed POST to the product's events endpoint, attempted right after the
+ * ingest response (`ctx.defer`, F.19) → retries with the job queue's backoff for ~24 h (drained after requests and by
+ * the daily cron) → DLQ (sealed, ≤ 7 days) → replay. Payloads never reach a collection in clear text.
  * @module
  */
 import { createHash } from 'node:crypto';
@@ -62,6 +63,10 @@ const PLATFORM_SCOPE = 'platform';
 
 /** Job name of a delivery attempt. */
 export const DELIVER_JOB = 'integration.deliver';
+/** Time budget of the delivery attempt right after an ingest (F.19: events usually arrive within seconds). */
+export const IMMEDIATE_DELIVERY_MS = 8_000;
+
+/** @typedef {(task: () => Promise<unknown>) => void} Defer */
 
 /**
  * @typedef {object} IntegrationOptions
@@ -225,8 +230,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 	 * @param {EventEnvelope} event
 	 * @param {string[]} targets
 	 * @param {'event' | 'control'} kind
+	 * @param {string[]} [enqueued] collects the delivery job keys (for the immediate attempt after the response)
 	 */
-	const fanout = async (record, event, targets, kind) => {
+	const fanout = async (record, event, targets, kind, enqueued = []) => {
 		if (targets.length > 0) {
 			const sealed = ctx.envelope.seal(JSON.stringify(event), {
 				aad: { websiteId: record.websiteId ?? PLATFORM_SCOPE, eventId: record.eventId },
@@ -242,13 +248,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 					merchantId: record.merchantId,
 					appId,
 				});
-				await ctx.jobs.enqueue({
-					name: DELIVER_JOB,
-					key: jobKey(record.websiteId ?? PLATFORM_SCOPE, record.eventId, appId),
-					payload: { deliveryId, sealed },
-					maxAttempts,
-					dropPayload: true,
-				});
+				const key = jobKey(record.websiteId ?? PLATFORM_SCOPE, record.eventId, appId);
+				await ctx.jobs.enqueue({ name: DELIVER_JOB, key, payload: { deliveryId, sealed }, maxAttempts, dropPayload: true });
+				enqueued.push(key);
 			}
 		}
 		await repo.fanoutDone(record._id, targets.length);
@@ -258,10 +260,10 @@ export const createIntegrationService = (ctx, options = {}) => {
 	 * Record an event (dedupe) and fan it out. A duplicate whose fan-out never finished (crash, concurrent request)
 	 * resumes it; job keys keep deliveries single.
 	 * @param {{ event: EventEnvelope, merchantId: string | null, source: EventRecord['source'], publisherAppId: string | null,
-	 *   targets: string[], kind: 'event' | 'control' }} input
+	 *   targets: string[], kind: 'event' | 'control', enqueued?: string[] }} input
 	 * @returns {Promise<'accepted' | 'duplicate'>}
 	 */
-	const accept = async ({ event, merchantId, source, publisherAppId, targets, kind }) => {
+	const accept = async ({ event, merchantId, source, publisherAppId, targets, kind, enqueued = [] }) => {
 		/** @type {EventRecord} */
 		const record = {
 			_id: createId('iev', { randomBytes: ctx.randomBytes }),
@@ -278,12 +280,12 @@ export const createIntegrationService = (ctx, options = {}) => {
 			deliveries: { total: 0, delivered: 0, dead: 0 },
 		};
 		if (await repo.insertEvent(record)) {
-			await fanout(record, event, targets, kind);
+			await fanout(record, event, targets, kind, enqueued);
 			return 'accepted';
 		}
 		const existing = await repo.eventByKey(event.websiteId ?? null, event.idempotencyKey);
 		if (existing && existing.fanout === 'pending' && existing.eventId === event.id)
-			await fanout(existing, event, targets, kind);
+			await fanout(existing, event, targets, kind, enqueued);
 		return 'duplicate';
 	};
 
@@ -309,10 +311,11 @@ export const createIntegrationService = (ctx, options = {}) => {
 
 	/**
 	 * Ingest website events (already authenticated key claims). Consent and end-customer identity are the site's
-	 * concern: events arrive consented; identity tokens are not stored.
-	 * @param {{ website: WebsiteClaims, events: unknown }} input
+	 * concern: events arrive consented; identity tokens are not stored. `defer` (the request's `ctx.defer`) gets the
+	 * immediate delivery attempt of what was enqueued, run after the response.
+	 * @param {{ website: WebsiteClaims, events: unknown, defer?: Defer }} input
 	 */
-	const ingest = async ({ website, events }) => {
+	const ingest = async ({ website, events, defer }) => {
 		const batch = checkBatch(events);
 		if (!batch.ok) throw problem(batch.code, batch.detail);
 		const { table } = await routingFor(website.websiteId);
@@ -320,6 +323,8 @@ export const createIntegrationService = (ctx, options = {}) => {
 		const results = [];
 		/** @type {Set<string>} */
 		const seen = new Set();
+		/** @type {string[]} */
+		const enqueued = [];
 		for (const raw of batch.events) {
 			const checked = checkWebsiteEvent(raw, website);
 			if (!checked.ok) {
@@ -340,18 +345,20 @@ export const createIntegrationService = (ctx, options = {}) => {
 				publisherAppId: null,
 				targets: consumersOf(event.type, table),
 				kind: 'event',
+				enqueued,
 			});
 			results.push({ ...ids, status });
 		}
+		deliverSoon(enqueued, defer);
 		return summary(results);
 	};
 
 	/**
 	 * `POST /v1/events`: header (`Authorization: Bearer`) or body (`{ key, identity?, events }`, sendBeacon) auth.
-	 * @param {{ rawBody: string, headers: Headers }} input
+	 * @param {{ rawBody: string, headers: Headers, defer?: Defer }} input
 	 * @returns {Promise<{ body: ReturnType<typeof summary>, headers: Record<string, string> }>}
 	 */
-	const ingestRequest = async ({ rawBody, headers }) => {
+	const ingestRequest = async ({ rawBody, headers, defer }) => {
 		const parsed = parseIngestRequest({
 			rawBody,
 			contentType: headers.get('content-type'),
@@ -364,7 +371,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		/** @type {Record<string, string>} */
 		const cors = website.kind === 'pk' && origin ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {};
 		try {
-			return { body: await ingest({ website, events: parsed.events }), headers: cors };
+			return { body: await ingest({ website, events: parsed.events, ...(defer ? { defer } : {}) }), headers: cors };
 		} catch (error) {
 			if (isProblem(error)) throw { ...error, headers: { ...error.headers, ...cors } };
 			throw error;
@@ -377,9 +384,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 	/**
 	 * Events published by a product (`POST /v1/product/events`, F.9): manifest namespace + publish-scope rules,
 	 * active subscription on the event's website, fan-out to the other subscribed products.
-	 * @param {{ appId: string, events: unknown }} input
+	 * @param {{ appId: string, events: unknown, defer?: Defer }} input
 	 */
-	const publishFromProduct = async ({ appId, events }) => {
+	const publishFromProduct = async ({ appId, events, defer }) => {
 		const batch = checkBatch(events);
 		if (!batch.ok) throw problem(batch.code, batch.detail);
 		const catalog = ctx.service('catalog');
@@ -415,6 +422,8 @@ export const createIntegrationService = (ctx, options = {}) => {
 		const results = [];
 		/** @type {Set<string>} */
 		const seen = new Set();
+		/** @type {string[]} */
+		const enqueued = [];
 		for (const raw of batch.events) {
 			const checked = checkProductEvent(raw, manifest);
 			if (!checked.ok) {
@@ -450,9 +459,11 @@ export const createIntegrationService = (ctx, options = {}) => {
 				publisherAppId: appId,
 				targets: consumersOf(event.type, table, { exclude: appId }),
 				kind: 'event',
+				enqueued,
 			});
 			results.push({ ...ids, status });
 		}
+		deliverSoon(enqueued, defer);
 		return summary(results);
 	};
 
@@ -783,6 +794,31 @@ export const createIntegrationService = (ctx, options = {}) => {
 		return { deliveries, deadLetters: await repo.countDeadLetters(match) };
 	};
 
+	/**
+	 * Attempt the deliveries of these jobs now (lease-safe: only due jobs with these keys are leased, so a concurrent
+	 * drain never runs one twice); what fails is retried by the queue as usual.
+	 * @param {string[]} keys
+	 * @param {{ deadlineMs?: number }} [options]
+	 */
+	const deliverNow = (keys, { deadlineMs = IMMEDIATE_DELIVERY_MS } = {}) =>
+		ctx.jobs.runBatch({
+			handlers: { [DELIVER_JOB]: (payload, jobCtx) => runDelivery(payload, jobCtx) },
+			keys,
+			deadlineMs,
+			maxJobs: keys.length,
+			owner: 'ingest',
+			safetyMs: 1_000,
+		});
+
+	/**
+	 * Hand the immediate delivery attempt of an ingest to the request's `defer` (after the response).
+	 * @param {string[]} keys
+	 * @param {Defer | undefined} defer
+	 */
+	const deliverSoon = (keys, defer) => {
+		if (defer && keys.length > 0) defer(() => deliverNow(keys));
+	};
+
 	return {
 		verifyKey,
 		ingest,
@@ -790,6 +826,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		publishFromProduct,
 		emitControl,
 		runDelivery,
+		deliverNow,
 		deliveryLog,
 		deadLetters,
 		replay,

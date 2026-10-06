@@ -170,7 +170,13 @@ describe('audit hash chain (MongoDB)', () => {
 			headHash: genesisHashOf('merchant:mer_none'),
 		});
 		const all = await audit.verifyAll();
-		expect(all).toEqual({ scopes: 3, verified: 3, skipped: 0, entries: 12, broken: [] });
+		expect(all).toEqual({ scopes: 3, verified: 3, skipped: 0, entries: 12, broken: [], resumeAfter: null });
+		// a pass cut by its deadline reports where to resume, and resumes there
+		const cut = await audit.verifyAll({ deadline: 0 });
+		expect(cut).toMatchObject({ verified: 0, skipped: 3, resumeAfter: null });
+		const chainScopes = (await raw.distinct('scope')).sort();
+		const resumed = await audit.verifyAll({ after: chainScopes[0] });
+		expect(resumed).toMatchObject({ scopes: 2, verified: 2, resumeAfter: null });
 		// stored values are JSON-normalised (dates as ISO, undefined members dropped)
 		const one = await raw.findOne({ 'target.id': 't_1' });
 		expect(one?.after).toEqual({ i: 1, nested: { at: '1970-01-01T00:00:00.000Z' } });

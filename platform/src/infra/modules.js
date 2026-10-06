@@ -1,7 +1,7 @@
 /**
  * Module definitions and their isolation boundary. A module is a plain object (see `modules/README.md`):
  *
- *   defineModule({ name, collections, migrations, problems, service, routes, jobs, crons, ports })
+ *   defineModule({ name, collections, migrations, problems, service, routes, jobs, crons, background, ports })
  *
  * Every factory receives a {@link ModuleContext}. A module reaches **only its own collections** through
  * `ctx.collection(name)`; another module's data is reached through that module's public `service` via
@@ -65,7 +65,16 @@ import { platformError } from './errors.js';
  * @property {(ctx: ModuleContext) => RouteDefinition[]} [routes]
  * @property {(ctx: ModuleContext) => Record<string, JobHandler>} [jobs]
  * @property {(ctx: ModuleContext) => Record<string, CronHandler>} [crons]
+ * @property {(ctx: ModuleContext) => Record<string, BackgroundTask>} [background] throttled work after requests
+ *   (F.19): each task runs at most once per `intervalMs` across instances, with a `deadline` of `budgetMs`
  * @property {(ctx: ModuleContext) => AuthPorts} [ports] implementations of infra ports (one provider per port)
+ */
+
+/**
+ * @typedef {object} BackgroundTask
+ * @property {number} intervalMs
+ * @property {number} [budgetMs]
+ * @property {(input: { deadline: number }) => Promise<unknown>} run
  */
 
 const NAME = /^[a-z][a-z0-9]*$/;
@@ -87,7 +96,7 @@ export const defineModule = (definition) => {
 		if (!String(migration.id).includes(`-${name}-`))
 			throw new TypeError(`migration ${migration.id} must be named YYYYMMDDHHMM-${name}-<slug>`);
 	}
-	for (const key of ['service', 'routes', 'jobs', 'crons', 'ports']) {
+	for (const key of ['service', 'routes', 'jobs', 'crons', 'background', 'ports']) {
 		const value = /** @type {Record<string, unknown>} */ (definition)[key];
 		if (value !== undefined && typeof value !== 'function')
 			throw new TypeError(`module ${name}: ${key} must be a factory function`);
@@ -162,6 +171,8 @@ export const composeModules = (modules, { shared, collection }) => {
 	const jobs = {};
 	/** @type {Record<string, CronHandler>} */
 	const crons = {};
+	/** @type {Record<string, BackgroundTask>} */
+	const background = {};
 	/** @type {AuthPorts & Record<string, unknown>} */
 	const ports = {};
 	/** @type {Record<string, string>} */
@@ -179,6 +190,11 @@ export const composeModules = (modules, { shared, collection }) => {
 			if (Object.hasOwn(crons, cronName)) throw new TypeError(`cron ${cronName} is registered twice`);
 			crons[cronName] = handler;
 		}
+		for (const [taskName, task] of Object.entries(m.background?.(ctx) ?? {})) {
+			if (!taskName.startsWith(`${m.name}.`))
+				throw new TypeError(`background task ${taskName} of module ${m.name} must be named ${m.name}.<task>`);
+			background[taskName] = task;
+		}
 		for (const [port, impl] of Object.entries(m.ports?.(ctx) ?? {})) {
 			if (Object.hasOwn(ports, port)) throw new TypeError(`port ${port} is provided by ${portOwners[port]} and ${m.name}`);
 			ports[port] = impl;
@@ -191,6 +207,7 @@ export const composeModules = (modules, { shared, collection }) => {
 		routes,
 		jobs,
 		crons,
+		background,
 		/** @type {AuthPorts} */
 		ports,
 		service: serviceOf,

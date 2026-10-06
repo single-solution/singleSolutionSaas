@@ -129,8 +129,10 @@ window → price lock honoured after the window closed → commit (uses in the m
 
 1. Create a Vercel project with this directory as root (framework: Next.js); `next.config.js` sets the monorepo root.
 2. Environment (Production): `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY`, `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID`
-   (optional), `SS_PRODUCT_DB_URI` (required in production), `CRON_SECRET` (maintenance cron in `vercel.json`,
-   every 5 minutes: heartbeat — app-kit flushes usage and events itself, after requests), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars), `SS_LOG_LEVEL` (optional).
+   (optional), `SS_PRODUCT_DB_URI` (required in production), `CRON_SECRET` (daily catch-up cron in `vercel.json`,
+   03:40 UTC: heartbeat — app-kit flushes usage and events itself after requests, and sends a throttled heartbeat at
+   most hourly after requests; price locks and quotes are checked against their expiry when used),
+   `SS_PRODUCT_DB_MAX_POOL_SIZE` (optional, default 5), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars), `SS_LOG_LEVEL` (optional).
 3. Deploy, register from the Portal admin with the deployment URL and token, review and activate; `endpoints.base` in
    `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.

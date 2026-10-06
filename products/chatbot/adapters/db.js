@@ -114,6 +114,36 @@ const INTERNAL = new Set([
  */
 const strip = (doc) => (doc ? Object.fromEntries(Object.entries(doc).filter(([key]) => !INTERNAL.has(key))) : null);
 
+/**
+ * A snoozed conversation whose `snoozedUntil` has passed reads as open even before the maintenance wakes it.
+ * @param {any} conversation
+ * @param {string} at ISO instant
+ */
+export const awake = (conversation, at) =>
+	conversation?.status === 'snoozed' && typeof conversation.snoozedUntil === 'string' && conversation.snoozedUntil <= at
+		? { ...conversation, status: 'open', snoozedUntil: null }
+		: conversation;
+
+/**
+ * Status filter that sees through expired snoozes: `open` includes snoozed conversations that are due, `snoozed`
+ * excludes them.
+ * @param {string[]} statuses
+ * @param {string} at ISO instant
+ * @returns {Record<string, unknown>}
+ */
+export const statusFilter = (statuses, at) => {
+	const open = statuses.includes('open');
+	const snoozed = statuses.includes('snoozed');
+	if (open === snoozed) return { status: { $in: statuses } };
+	const others = statuses.filter((status) => status !== 'snoozed');
+	return {
+		$or: [
+			...(others.length > 0 ? [{ status: { $in: others } }] : []),
+			{ status: 'snoozed', snoozedUntil: open ? { $lte: at } : { $gt: at } },
+		],
+	};
+};
+
 /** @param {unknown} error */
 export const isDuplicateKey = (error) => /** @type {{ code?: number }} */ (error)?.code === 11000;
 
@@ -162,8 +192,21 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				);
 				return (result.upsertedCount ?? 0) > 0;
 			},
-			/** @param {string} id */
-			get: async (id) => strip(await c.conversations.findOne({ websiteId, id })),
+			/**
+			 * A conversation; a snooze that has passed is ended on access (and reads as open if that write loses a race).
+			 * @param {string} id
+			 */
+			get: async (id) => {
+				const doc = strip(await c.conversations.findOne({ websiteId, id }));
+				const at = new Date(now()).toISOString();
+				if (awake(doc, at) === doc) return doc;
+				const woken = await c.conversations.findOneAndUpdate(
+					{ websiteId, id, status: 'snoozed', snoozedUntil: { $lte: at } },
+					{ $set: { status: 'open', snoozedUntil: null } },
+					{ returnDocument: 'after' },
+				);
+				return awake(strip(woken) ?? doc, at);
+			},
 			/**
 			 * Apply a summary change atomically (`$set` + `$inc`), optionally only from given statuses.
 			 * @param {string} id
@@ -191,14 +234,19 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				if (owners) filter.$and = [{ $or: owners }];
 				if (customerId) filter.customerId = customerId;
 				if (visitorId) filter.visitorId = visitorId;
-				if (status) filter.status = Array.isArray(status) ? { $in: status } : status;
+				const at = new Date(now()).toISOString();
+				if (status)
+					filter.$and = [
+						.../** @type {any[]} */ (filter.$and ?? []),
+						statusFilter(Array.isArray(status) ? status : [status], at),
+					];
 				if (assignee !== undefined && assignee !== null) filter.assignee = assignee === 'none' ? null : assignee;
 				if (team) filter.team = team;
 				if (waiting) Object.assign(filter, { 'handoff.at': { $type: 'string' }, assignee: null, status: { $in: ['open'] } });
 				const page = keyset(after, 'last.at', 'desc');
 				if (page.$or) filter.$and = [.../** @type {any[]} */ (filter.$and ?? []), page];
 				const docs = await c.conversations.find(filter, { sort: { 'last.at': -1, id: -1 }, limit: fetchLimit }).toArray();
-				return docs.map(strip);
+				return docs.map((/** @type {any} */ doc) => awake(strip(doc), at));
 			},
 			/** Open conversations of an owner. @param {Array<Record<string, string>>} owners */
 			countOpen: async (owners) =>

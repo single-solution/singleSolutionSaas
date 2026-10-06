@@ -53,7 +53,7 @@ export const createConnectorsModule = (options = {}) =>
 			[HEALTH_JOB]: async (payload, { deadline, signal }) => {
 				const result = await ctx.service('connectors').healthCheck({ deadline, signal });
 				const round = Number(payload?.round ?? 0) + 1;
-				// continue in a later drain (never spin inside this one), at most MAX_ROUNDS times per hour
+				// continue in the next daily drain (never spin inside this one), at most MAX_ROUNDS times per run
 				if (result.remaining && round <= MAX_ROUNDS) {
 					await ctx.jobs.enqueue({
 						name: HEALTH_JOB,
@@ -61,22 +61,16 @@ export const createConnectorsModule = (options = {}) =>
 						payload: { hour: payload?.hour ?? 'manual', round },
 						runAt: ctx.now() + 60_000,
 						maxAttempts: 3,
+						daily: true,
 					});
 				}
 				return result;
 			},
 		}),
 		crons: (ctx) => ({
-			[HEALTH_CRON]: async () => {
-				const hour = new Date(ctx.now()).toISOString().slice(0, 13);
-				const { inserted } = await ctx.jobs.enqueue({
-					name: HEALTH_JOB,
-					key: `${HEALTH_JOB}:${hour}:0`,
-					payload: { hour, round: 0 },
-					maxAttempts: 3,
-				});
-				return { enqueued: inserted };
-			},
+			// a step of the daily cron: check what is due within its deadline; what is left stays due for the next run
+			// (connectors are also checked on demand: test, rotate, update, assign)
+			[HEALTH_CRON]: async ({ deadline, signal }) => ctx.service('connectors').healthCheck({ deadline, signal }),
 		}),
 	});
 

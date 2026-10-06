@@ -7,6 +7,7 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform, loadStrings } from '../../adapters/platform.js';
 import { buildRoutes, wireEvents } from '../../api/routes.js';
+import { jobRoutes, wireJobs } from '../../jobs/index.js';
 
 const KEY = Symbol.for('ss.products.{{slug}}');
 
@@ -19,7 +20,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getProduct = () => (shared().product ??= createPlatform().then(wireEvents));
+export const getProduct = () => (shared().product ??= createPlatform().then((product) => wireJobs(wireEvents(product))));
 export const getStrings = () => (shared().strings ??= loadStrings(process.cwd()));
 
 /**
@@ -30,6 +31,14 @@ export const getStrings = () => (shared().strings ??= loadStrings(process.cwd())
  */
 export const forward = (method) => async (/** @type {Request} */ request, /** @type {unknown} */ context) => {
 	const state = shared();
-	state.next ??= getProduct().then((instance) => toNextRoute(createRequestHandler(instance, buildRoutes(instance)), { after }));
+	state.next ??= getProduct().then((instance) =>
+		toNextRoute(
+			createRequestHandler(instance, [
+				...buildRoutes(instance),
+				...jobRoutes(instance, { cronSecret: process.env.CRON_SECRET }),
+			]),
+			{ after },
+		),
+	);
 	return /** @type {any} */ ((await state.next)[method])(request, context);
 };

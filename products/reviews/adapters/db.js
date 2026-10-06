@@ -8,7 +8,7 @@
  * - `items`: per item the approved-review rollup (recomputed exactly from approved reviews) and display metadata.
  * - `requests`: one review request per completed order (eligibility + request flow delivery state).
  * - `orders`: order snapshots from `order.placed@1` (items, customer) until completion.
- * - `photos`: upload slots in the merchant's bucket; a pending slot past its `staleAt` is swept by the hourly job
+ * - `photos`: upload slots in the merchant's bucket; a pending slot past its `staleAt` is swept by the jobs
  *   (object and record deleted), with a later TTL (`purgeAt`) as a backstop.
  * - `questions`: Q&A, answers embedded.
  * @module
@@ -136,6 +136,31 @@ export const isDuplicateKey = (error) => /** @type {{ code?: number }} */ (error
 const beforePair = (field, after) => {
 	const [value, id, extra] = typeof after === 'string' ? after.split('|') : [];
 	return value && id && extra === undefined ? { $or: [{ [field]: { $lt: value } }, { [field]: value, id: { $lt: id } }] } : {};
+};
+
+/**
+ * Query terms of one request status at an instant (see `requestStatusFilter`).
+ * @param {string} status
+ * @param {string} at
+ * @returns {Array<Record<string, unknown>>}
+ */
+const termsOf = (status, at) => {
+	if (status === 'open') return [{ status: 'open', expiresAt: { $gt: at } }];
+	if (status === 'expired') return [{ status: 'expired' }, { status: 'open', expiresAt: { $lte: at } }];
+	return [{ status }];
+};
+
+/**
+ * Request status filter that sees through expiry: an `open` request past its `expiresAt` matches `expired`, not `open`,
+ * even before the request job marks it.
+ * @param {string[] | undefined} statuses
+ * @param {string} at ISO instant
+ * @returns {Record<string, unknown>}
+ */
+export const requestStatusFilter = (statuses, at) => {
+	if (!statuses) return {};
+	const terms = statuses.flatMap((status) => termsOf(status, at));
+	return { $and: [{ $or: terms }] };
 };
 
 /**
@@ -493,7 +518,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 							{
 								websiteId,
 								customerKeys: { $in: keys },
-								...(statuses ? { status: { $in: statuses } } : {}),
+								...requestStatusFilter(statuses, new Date(now()).toISOString()),
 								...(itemId ? { 'items.itemId': itemId } : {}),
 								...beforePair('completedAt', after),
 							},
@@ -509,7 +534,11 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				(
 					await requests
 						.find(
-							{ websiteId, ...(statuses ? { status: { $in: statuses } } : {}), ...beforePair('completedAt', after) },
+							{
+								websiteId,
+								...requestStatusFilter(statuses, new Date(now()).toISOString()),
+								...beforePair('completedAt', after),
+							},
 							{ sort: { completedAt: -1, id: -1 }, limit: fetchLimit },
 						)
 						.toArray()

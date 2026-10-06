@@ -12,7 +12,7 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createChatbot, wireEvents } from '../api/routes.js';
-import { cronRoutes } from '../jobs/maintenance.js';
+import { cronRoutes, wireJobs } from '../jobs/maintenance.js';
 import { createNetwork } from './helpers.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -105,7 +105,7 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, ai =
 			outboundSend: network.send,
 		},
 	});
-	const chatbot = wireEvents(createChatbot(app));
+	const chatbot = wireJobs(wireEvents(createChatbot(app)));
 	const handle = createRequestHandler(chatbot.product, [...buildRoutes(chatbot), ...cronRoutes(chatbot)]);
 
 	let version = 0;

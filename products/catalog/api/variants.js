@@ -4,6 +4,8 @@
  * taken, the lines already taken are given back), and the order consumers (`order.placed@1` takes stock once per
  * order — or converts the order's reservation —, `order.cancelled@1` gives it back, `order.refunded@1` gives refunded
  * lines back). Every quantity change publishes `inventory.changed@1`, every price change `price.changed@1`.
+ * A held reservation past its `expiresAt` is expired at read time and released on access (read, replay, or before a new
+ * reservation takes stock); the background sweep and the daily job release the rest.
  */
 import { EVENT_TYPES, inventoryData, priceChanges, stockChanges } from '../core/events.js';
 import { canTake, checkVariantSet, validateStockLines, validateVariant } from '../core/variants.js';
@@ -16,6 +18,8 @@ import { optionPools, skuConflicts } from './items.js';
 /** @typedef {import('./catalog.js').Failure} Failure */
 
 const REASON = /^[a-z][a-z0-9_.:-]{0,63}$/;
+/** Expired reservations released before a new one is taken (the rest wait for the background sweep). */
+const EXPIRE_ON_ACCESS = 20;
 
 /**
  * Stock lines grouped per item (insertion order).
@@ -360,11 +364,13 @@ export const createVariantsService = (deps) => {
 		if (checked.problems.length > 0) return invalid(checked.problems);
 		const id = `res_${deps.stableId(`${site.websiteId}|reservation|${key}`)}`;
 		const existing = await site.repos.moves.get(id);
-		if (existing) return { ok: /** @type {const} */ (true), reservation: moveView(existing), created: false };
+		if (existing) return { ok: /** @type {const} */ (true), reservation: await current(site, existing), created: false };
 		if (orderId && (await site.repos.moves.byOrder(orderId))) return fail('conflict', 'This order already has stock taken.');
 		const resolved = await resolveLines(site, checked.lines);
 		if (resolved.missing.length > 0)
 			return invalid(resolved.missing.map((index) => issue(`/lines/${index}`, 'variant_unknown')));
+		// stock held by reservations that already expired is given back first (release on access, before any sweep)
+		await expire(site, EXPIRE_ON_ACCESS);
 		const taken = await take(site, resolved.lines, { guard: true, reason: 'reservation', key: id });
 		if (!taken.ok) return taken;
 		const move = {
@@ -396,18 +402,39 @@ export const createVariantsService = (deps) => {
 		const move = await site.repos.moves.get(id);
 		if (!move || move.kind !== 'reservation') return fail('not_found', 'No such reservation.');
 		if (move.status !== 'held') return { ok: /** @type {const} */ (true), reservation: moveView(move) };
-		if (await site.repos.moves.transition(id, 'held', { status }))
+		return { ok: /** @type {const} */ (true), reservation: await settle(site, move, status) };
+	};
+
+	/**
+	 * End a held reservation (compare-and-set) and give its stock back.
+	 * @param {Site} site
+	 * @param {Record<string, any>} move
+	 * @param {'released' | 'expired'} status
+	 */
+	const settle = async (site, move, status) => {
+		if (await site.repos.moves.transition(move.id, 'held', { status }))
 			await giveBack(site, move.lines, {
 				reason: status === 'expired' ? 'reservation_expired' : 'reservation_released',
-				key: `${id}:release`,
+				key: `${move.id}:release`,
 			});
-		return { ok: /** @type {const} */ (true), reservation: moveView({ ...move, status }) };
+		return moveView({ ...move, status });
+	};
+
+	/**
+	 * The view of a stored reservation as of now: a held reservation past `expiresAt` is expired even before the sweep
+	 * ran, and is released on access (its stock given back).
+	 * @param {Site} site
+	 * @param {Record<string, any>} move
+	 */
+	const current = async (site, move) => {
+		if (move.status !== 'held' || new Date(move.expiresAt).getTime() > deps.now()) return moveView(move);
+		return settle(site, move, 'expired');
 	};
 
 	/** @param {Site} site @param {string} id */
 	const getReservation = async (site, id) => {
 		const move = await site.repos.moves.get(id);
-		return move && move.kind === 'reservation' ? moveView(move) : null;
+		return move && move.kind === 'reservation' ? current(site, move) : null;
 	};
 
 	/**

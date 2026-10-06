@@ -61,11 +61,16 @@ export const liveDashboard = ({ application, site, canWrite }) => ({
 	overview: async () =>
 		kpisOf(/** @type {any} */ (await site.repos.orders.summary(new Date(application.app.now() - 30 * 86_400_000)))),
 	orders: async ({ status = null }) =>
-		(await site.repos.orders.list({ after: null, fetchLimit: DASHBOARD_PAGE, status })).map((/** @type {any} */ order) =>
-			orderView(order),
-		),
+		(
+			await Promise.all(
+				(await site.repos.orders.list({ after: null, fetchLimit: DASHBOARD_PAGE, status })).map((/** @type {any} */ order) =>
+					application.orders.expireIfDue(site, order),
+				),
+			)
+		).map((order) => orderView(order)),
 	order: async (id) => {
-		const order = await site.repos.orders.get(id);
+		const stored = await site.repos.orders.get(id);
+		const order = stored ? await application.orders.expireIfDue(site, stored) : null;
 		return order
 			? {
 					...orderView(order),

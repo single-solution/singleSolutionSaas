@@ -1,7 +1,10 @@
 // Portal API catch-all: every module route, mounted through the framework-agnostic handler.
+import { after } from 'next/server.js';
 import { toNextRoute } from '../../../src/infra/http.js';
 import { getPortal } from '../../../src/runtime.js';
 
 export const dynamic = 'force-dynamic';
 
-export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute((request) => getPortal().handle(request));
+export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute((request) => getPortal().handle(request), {
+	after,
+});

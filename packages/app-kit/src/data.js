@@ -4,7 +4,7 @@
  * `expiresAt`) and opened with a pooled `MongoClient`:
  *
  * - pools are keyed by a hash of the URI and kept on `globalThis` so warm serverless invocations reuse them; they
- *   are small (`maxPoolSize` 5 by default) and closed after `idleMs` without use;
+ *   are small (`maxPoolSize` 3 by default, {@link CLIENT_DB_POOL_SIZE}) and closed after `idleMs` without use;
  * - collections are namespaced `ss_<slug with - → _>_<name>`;
  * - a tenant guard rejects any read/update/delete/aggregate whose filter (or first `$match`) does not pin
  *   `websiteId` to this website, refuses cross-collection aggregation stages, forbids changing `websiteId`, and stamps
@@ -17,6 +17,9 @@
 import { createOutboundPolicy, guardedLookup, isSafeMongoUri } from '@ss/net';
 import { MongoClient } from 'mongodb';
 import { collectionPrefix, createSingleFlight, isObject, kitError, randomToken, sha256Hex } from './util.js';
+
+/** Connections per merchant database per instance (serverless instances multiply it; clusters may be free tiers). */
+export const CLIENT_DB_POOL_SIZE = 3;
 
 /** @typedef {import('./logger.js').Logger} Logger */
 /** @typedef {import('mongodb').Document} Document */
@@ -452,7 +455,7 @@ export const createData = ({
 		let entry = pools.get(key);
 		if (!entry) {
 			const options = {
-				maxPoolSize: 5,
+				maxPoolSize: CLIENT_DB_POOL_SIZE,
 				minPoolSize: 0,
 				maxIdleTimeMS: 60_000,
 				serverSelectionTimeoutMS: 5_000,

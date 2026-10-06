@@ -211,20 +211,21 @@ describe('manifest versions: refresh, diff, review', () => {
 		expect((await lifecycle(t, appId, { action: 'activate' })).json.status).toBe('active');
 	});
 
-	it('runs the daily refresh job through the cron and drain', async () => {
+	it('refreshes in the daily cron step and continues a cut pass in a daily job', async () => {
 		const { t, p, appId } = await setup();
 		await lifecycle(t, appId, { action: 'activate' });
 		const changed = serviceManifest();
 		changed.trialHours = 72;
 		p.setManifest(changed);
 		const cron = await t.call('POST', '/cron/catalog_refresh', { bearer: CRON, idempotencyKey: null });
-		expect(cron.json).toMatchObject({ status: 'ok', stats: { enqueued: true } });
-		expect((await t.call('POST', '/cron/catalog_refresh', { bearer: CRON, idempotencyKey: null })).json.stats.enqueued).toBe(
-			false,
-		);
-		const drained = await t.call('POST', '/cron/drain', { bearer: CRON, idempotencyKey: null });
-		expect(drained.status).toBe(200);
+		expect(cron.json).toMatchObject({ status: 'ok', stats: { checked: 1, changed: 1, resumeAfter: null } });
 		expect((await t.service().getApp(appId)).pendingVersion).toBe(2);
+		// a pass cut by its deadline resumes after the last app it handled, in a `daily` continuation job
+		expect(await t.service().refreshAll({ after: appId })).toMatchObject({ checked: 0, resumeAfter: null });
+		const jobs = /** @type {any} */ (t).portal.shared.jobs;
+		await jobs.enqueue({ name: 'catalog.refresh_manifests', key: 'refresh-from', payload: { after: '' } });
+		const drained = await t.call('POST', '/cron/drain', { bearer: CRON, idempotencyKey: null });
+		expect(drained.json.stats).toMatchObject({ succeeded: 1 });
 
 		// failures are counted, not thrown; an exhausted deadline skips the rest
 		p.tamper.registerStatus = 0;

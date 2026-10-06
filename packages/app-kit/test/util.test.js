@@ -131,10 +131,13 @@ describe('configFromEnv', () => {
 			signingKey: '{}',
 			registrationTokenHash: 'h',
 			productDbUri: 'mongodb://x',
+			productDbOptions: { maxPoolSize: 5, minPoolSize: 0, maxIdleTimeMS: 60_000, serverSelectionTimeoutMS: 5_000 },
 			logLevel: 'debug',
 			outboundAllowHosts: ['minio.dev', '127.0.0.1'],
 		});
 		expect(configFromEnv({ SS_APP_ID: '' })).toMatchObject({ appId: null, logLevel: 'info', outboundAllowHosts: [] });
 		expect(configFromEnv()).toHaveProperty('logLevel');
+		expect(configFromEnv({ SS_PRODUCT_DB_MAX_POOL_SIZE: '2' }).productDbOptions.maxPoolSize).toBe(2);
+		expect(configFromEnv({ SS_PRODUCT_DB_MAX_POOL_SIZE: 'lots' }).productDbOptions.maxPoolSize).toBe(5);
 	});
 });

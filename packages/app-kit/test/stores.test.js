@@ -186,6 +186,16 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect((await rateLimits.hit('k', 1000, clock.now())).count).toBe(1);
 	});
 
+	it('leases are taken once per ttl and expire', async () => {
+		const clock = createClock();
+		const { leases } = factory(clock.now);
+		expect(await leases.acquire('every:sweep', 1000)).toBe(true);
+		expect(await leases.acquire('every:sweep', 1000)).toBe(false);
+		expect(await leases.acquire('every:other', 1000)).toBe(true);
+		clock.advance(1000);
+		expect(await leases.acquire('every:sweep', 1000)).toBe(true);
+	});
+
 	it('portal keys keep the last JWKS', async () => {
 		const { portalKeys } = factory(Date.now);
 		expect(await portalKeys.get()).toBeNull();

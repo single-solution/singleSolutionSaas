@@ -1,6 +1,6 @@
 /**
  * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
- * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
+ * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_PRODUCT_DB_MAX_POOL_SIZE, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
  * LOYALTY_WALLET_SECRET and CRON_SECRET) and the project files (manifest with feature schemas inlined, string
  * catalogs). This is the only place that reads the environment.
  */
@@ -119,7 +119,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	let controlClient = null;
 	if (config.productDbUri) {
 		const { MongoClient } = await import('mongodb');
-		const client = new MongoClient(config.productDbUri, { maxPoolSize: 5 });
+		const client = new MongoClient(config.productDbUri, config.productDbOptions);
 		controlClient = client;
 		const mongoStores = createMongoStores({ db: client.db() });
 		await mongoStores.ensureIndexes();

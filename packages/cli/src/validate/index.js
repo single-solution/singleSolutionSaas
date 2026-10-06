@@ -779,6 +779,59 @@ export const checkEventSchemas = (files, manifest) => {
  * @property {{ errors: number, warnings: number, files: number }} summary
  */
 
+/** Most cron entries a deployable may declare (Vercel Hobby: daily crons; PLAN F.19 keeps one, at most two). */
+export const MAX_CRONS = 2;
+
+/**
+ * Whether a cron expression runs at most once a day: a fixed minute and a fixed hour (`m h * * *`, or narrower days).
+ * @param {unknown} schedule
+ */
+export const isDailyOrRarer = (schedule) => {
+	if (typeof schedule !== 'string') return false;
+	const fields = schedule.trim().split(/\s+/);
+	return (
+		fields.length === 5 &&
+		/^\d{1,2}$/.test(/** @type {string} */ (fields[0])) &&
+		/^\d{1,2}$/.test(/** @type {string} */ (fields[1]))
+	);
+};
+
+/**
+ * `vercel.json` crons fit the free-tier hosting model (F.19): at most {@link MAX_CRONS} entries, none more frequent
+ * than daily. Work that must happen sooner runs on requests (`product.background.every`).
+ * @param {ProjectFiles} files
+ * @returns {Promise<Problem[]>}
+ */
+export const checkCrons = async (files) => {
+	if (!files.set.has('vercel.json')) return [];
+	const parsed = parseJson(await files.read('vercel.json'));
+	const config = parsed.ok ? parsed.value : null;
+	const crons = isObject(config) && Array.isArray(config.crons) ? config.crons : [];
+	/** @type {Problem[]} */
+	const problems = [];
+	if (crons.length > MAX_CRONS)
+		problems.push(
+			problemOf({
+				rule: 'vercel.crons',
+				file: 'vercel.json',
+				pointer: '/crons',
+				message: `${crons.length} cron entries; keep at most ${MAX_CRONS} (one daily catch-up; sooner work runs after requests)`,
+			}),
+		);
+	for (const [index, cron] of crons.entries())
+		if (!isDailyOrRarer(isObject(cron) ? cron.schedule : null))
+			problems.push(
+				problemOf({
+					rule: 'vercel.crons',
+					file: 'vercel.json',
+					pointer: `/crons/${index}/schedule`,
+					message:
+						'crons run at most once a day (a fixed minute and hour, e.g. "15 3 * * *"); run sooner work after requests with product.background.every',
+				}),
+			);
+	return problems;
+};
+
 /**
  * Validate a project directory.
  * @param {string} dir
@@ -826,6 +879,7 @@ export const validateProject = async (dir) => {
 		...(await checkColours(files)),
 		...catalogs.problems,
 		...(await checkStringKeys(files, catalogs, defaultCatalogs)),
+		...(await checkCrons(files)),
 	);
 	if (manifest !== null && Array.isArray(manifest.elements)) {
 		problems.push(

@@ -71,7 +71,11 @@ import { isObject } from './util.js';
 export const ENV_VARS = Object.freeze([
 	['MONGODB_URI', true, 'Control-plane MongoDB connection string (never a client database).'],
 	['MONGODB_DB', false, 'Database name; defaults to the path of MONGODB_URI, else `ss_portal`.'],
-	['MONGODB_MAX_POOL_SIZE', false, 'Connection pool size per instance (default 10).'],
+	[
+		'MONGODB_MAX_POOL_SIZE',
+		false,
+		'Connection pool size per instance (default 5: many serverless instances share one Atlas M0 cluster).',
+	],
 	['PORTAL_URL', true, 'Canonical Portal URL, e.g. https://portal.example.com (https unless localhost in development).'],
 	['PORTAL_SIGNING_KEYS', true, 'JSON array of private Ed25519 JWKs with unique kids; the first signs, all are published.'],
 	[
@@ -394,7 +398,7 @@ export const loadConfig = (env = process.env) => {
 		problems.push('MONGODB_URI must be a mongodb:// or mongodb+srv:// URI');
 	const dbName = read('MONGODB_DB') ?? (mongoUri ? dbNameFromUri(mongoUri) : null) ?? 'ss_portal';
 	if (!/^[A-Za-z0-9_-]{1,63}$/.test(dbName)) problems.push('MONGODB_DB is not a valid database name');
-	const maxPoolSize = intOf(read('MONGODB_MAX_POOL_SIZE'), 10, { max: 500 });
+	const maxPoolSize = intOf(read('MONGODB_MAX_POOL_SIZE'), 5, { max: 500 });
 	if (maxPoolSize === null) problems.push('MONGODB_MAX_POOL_SIZE must be an integer 1..500');
 
 	// Keys and secrets

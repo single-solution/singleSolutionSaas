@@ -13,7 +13,7 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createApplication, wireEvents } from '../api/routes.js';
-import { cronRoutes } from '../jobs/sweep.js';
+import { cronRoutes, wireJobs } from '../jobs/sweep.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -156,7 +156,7 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, webs
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: remote.send },
 	});
-	const application = wireEvents(createApplication(app));
+	const application = wireJobs(wireEvents(createApplication(app)));
 	const handle = createRequestHandler(application.product, [...buildRoutes(application), ...cronRoutes(application)]);
 
 	let version = 0;

@@ -27,7 +27,7 @@ export const createIntake = (deps, outbox) => {
 			return { flags: [], decision: /** @type {const} */ ('accept'), advance: 0, rtoCount: 0 };
 		const [profiles, openCount] = await Promise.all([
 			site.repos.profiles.byKeys(keys),
-			site.repos.orders.countOpen(keys, openStatuses(site.settings.matrix)),
+			site.repos.orders.countOpen(keys, openStatuses(site.settings.matrix), new Date(deps.now())),
 		]);
 		return evaluateRisk({ total, currency, cod, profiles, openCount }, site.settings.risk);
 	};

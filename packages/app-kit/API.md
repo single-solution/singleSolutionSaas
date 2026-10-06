@@ -45,6 +45,8 @@ import {
 	createOutbox,
 	createBackground,
 	detectRuntime,
+	CONTROL_DB_POOL_SIZE,
+	CLIENT_DB_POOL_SIZE,
 	REPLAY_COLLECTION,
 	REPLAY_HEADERS,
 	RESERVED_PROBLEM_MEMBERS,
@@ -191,7 +193,9 @@ createProduct({
     policy,                                                        // public https only, DNS answers vetted at connect time,
   },                                                               // same-origin GET/HEAD redirects, deadline, size cap
   flush() → Promise<void>,           // flush the usage queue and the event outbox now (single-flight)
-  background: { mode: 'server'|'serverless'|'off', start(), stop() },
+  background: { mode: 'server'|'serverless'|'off', start(), stop(),
+    every(name, intervalMs, fn({ websiteId, deadline }), { per: 'product'|'website' = 'product', budgetMs = 10_000 })
+      → { name, trigger({ websiteId? }) → Promise<boolean> } },   // throttled work after requests (below)
   data: {
     forWebsite(websiteId, { merchantId?, env? }?) → {
       websiteId, prefix,                                               // 'ss_<slug with - → _>_'
@@ -283,6 +287,29 @@ request, the flush is scheduled with the framework's `after()` when the adapter 
 request. `heartbeat()` flushes too. Explicit `usage.flush()` / `outbox.flush()` / `product.flush()` remain; a product
 cron is no longer needed for delivery.
 
+**Throttled work after requests** (PLAN F.19, free-tier hosting: one daily cron per deployment). Work that must happen
+sooner than the daily cron (expiring holds, retries, dispatch, crawls) is registered once in the composition root:
+
+```js
+product.background.every('sweep', 10 * 60_000, async ({ websiteId, deadline }) => sweep(websiteId, { deadline }), {
+	per: 'website', // or 'product' (one run per interval for the whole deployment)
+	budgetMs: 10_000, // deadline = now + budgetMs; keep it far below the function limit
+});
+```
+
+After a request (any route; `per: 'website'` only after requests that carry a website), a task whose interval has
+passed on this instance takes a lease in the control store (`ss_kit_leases`, `leases.acquire(key, intervalMs)`); only
+the instance that gets it runs `fn`, through `after()` when available. Failures are logged, never thrown. Active in the
+`server` and `serverless` modes (not `off`, the test default); `trigger({ websiteId })` runs a task directly under the
+same throttle and lease. Correctness never depends on it: anything with an expiry is treated as expired when read, the
+sweep only cleans up and releases, and the daily cron catches up.
+
+**Connection budget.** `configFromEnv().productDbOptions` are the control-database `MongoClient` options: pool
+`SS_PRODUCT_DB_MAX_POOL_SIZE` (default `CONTROL_DB_POOL_SIZE` = 5), `minPoolSize` 0, idle connections closed after
+60 s. Create the client once per instance (in the composition root that is cached on `globalThis`), never per
+request. Merchant database pools are `CLIENT_DB_POOL_SIZE` (3) per instance, cached on `globalThis` and closed when
+idle.
+
 ```js
 
 ```
@@ -348,16 +375,16 @@ later date as a backstop, and refuses to confirm a slot past its stale date (so 
 `createMongoStores({ db, prefix = 'ss_kit_', now? })` and `createMemoryStores({ now? })` return:
 
 ```
-{ replay, nonce, burnedTokens, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, ping }
+{ replay, nonce, burnedTokens, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, leases, ping }
 ```
 
 Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces are in `src/stores/types.js`.
 
 ### Environment
 
-`configFromEnv(env = process.env)` → `{ portalUrl, appId, signingKey, registrationTokenHash, productDbUri, logLevel, outboundAllowHosts }`. It reads
+`configFromEnv(env = process.env)` → `{ portalUrl, appId, signingKey, registrationTokenHash, productDbUri, productDbOptions, logLevel, outboundAllowHosts }`. It reads
 `SS_PORTAL_URL`, `SS_APP_ID`, `SS_APP_SIGNING_KEY` (private JWK JSON), `SS_REGISTRATION_TOKEN_HASH`, `SS_PRODUCT_DB_URI`
-(the product's own control DB), `SS_LOG_LEVEL` and `SS_OUTBOUND_ALLOW_HOSTS` (comma-separated development allowlist for
+(the product's own control DB), `SS_PRODUCT_DB_MAX_POOL_SIZE` (its pool, default 5), `SS_LOG_LEVEL` and `SS_OUTBOUND_ALLOW_HOSTS` (comma-separated development allowlist for
 `outbound.allowHosts`; ignored in production).
 
 The merchant database is vetted with `@ss/net` `isSafeMongoUri` under the `outbound` policy before connecting (refused →

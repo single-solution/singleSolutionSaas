@@ -8,8 +8,10 @@
  *    (`core/types.js`), and **claim** each one (pending → claimed, compare-and-set on its cycle) before queueing its
  *    alert — a subscription is claimed by at most one run, so it is told once per change even with duplicate deliveries
  *    and concurrent instances.
- * 4. A run that hit the fan-out limit stays `open`; the scheduled job resumes it until every waiter was told.
- * 5. With `dispatch.inline_dispatch` the outbox is run right away (best effort; the cron run catches up).
+ * 4. A run that hit the fan-out limit stays `open`; the background pass and the daily job resume it
+ *    until every waiter was told.
+ * 5. With `dispatch.inline_dispatch` the outbox is run right away (best effort; the background pass after
+ *    requests and the daily run catch up).
  * Nothing is claimed while the `dispatch` element is off (e.g. messaging not connected): subscriptions keep waiting.
  */
 import { conditionMatches } from '../core/rules.js';

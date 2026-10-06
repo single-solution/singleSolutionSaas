@@ -136,6 +136,17 @@ export const customerMayCancel = (order, customerCancellable) =>
 	customerCancellable && /** @type {readonly string[]} */ (UNCONFIRMED).includes(order.status);
 
 /**
+ * Has the order's hold (payment or confirmation deadline) passed? An expired hold counts as expired from that moment,
+ * whether or not a sweep has cancelled the order yet.
+ * @param {Record<string, any>} order
+ * @param {number} now
+ */
+export const holdExpired = (order, now) =>
+	/** @type {readonly string[]} */ (UNCONFIRMED).includes(order.status) &&
+	Boolean(order.expiresAt) &&
+	new Date(order.expiresAt).getTime() <= now;
+
+/**
  * Does moving to `cancelled` give the stock back? Only while the order is not completed and the stock is still held.
  * @param {Record<string, any>} order
  */

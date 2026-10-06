@@ -648,8 +648,9 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	};
 
 	/**
-	 * Hourly health check: purge expired rollback copies, re-wrap sealed values under the active KEK, re-test every
-	 * live connector not checked within the interval (until the deadline).
+	 * Health check (a step of the daily cron): purge expired rollback copies, re-wrap sealed values under the active KEK,
+	 * re-test every live connector not checked within the interval (until 10 s before the deadline, a margin for the
+	 * check in flight). What is left stays due for the next run.
 	 * @param {{ deadline?: number, signal?: AbortSignal, batchSize?: number }} [options]
 	 */
 	const healthCheck = async ({ deadline = Number.POSITIVE_INFINITY, signal, batchSize = 25 } = {}) => {

@@ -1,6 +1,6 @@
 /**
- * Scheduled job: hard-delete soft-deleted notes after the retention window. Wire it to a signed cron route when needed
- * (vercel.json ships with no crons by default).
+ * Background job: hard-delete soft-deleted notes after the retention window. Registered in `jobs/index.js` to run at
+ * most hourly per website, after a request for that website (`product.background.every`).
  */
 
 /** Retention of soft-deleted notes before they are purged. */
