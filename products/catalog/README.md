@@ -71,7 +71,7 @@ app/        Next.js wiring and the dashboard (overview, items, item detail with 
 
 ## Environment
 
-`DATABASE_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
+`MONGODB_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
 The Portal connection (made from Portal → Admin → Apps → Add product), the product's signing key and its generated secrets live there. The feed-token and export-link secrets are derived from them.
 
 ## Commands

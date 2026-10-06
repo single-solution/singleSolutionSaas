@@ -1,5 +1,5 @@
 /**
- * Next.js proxy for products: while the environment is misconfigured (e.g. `DATABASE_URI` missing in production)
+ * Next.js proxy for products: while the environment is misconfigured (e.g. `MONGODB_URI` missing in production)
  * every request — pages included — answers 503 with `{ status: 'misconfigured', problems }`; otherwise the request
  * continues. A product's `proxy.js` re-exports it: `export { proxy } from '@ss/app-kit/proxy';`.
  * @module

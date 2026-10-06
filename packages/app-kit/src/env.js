@@ -8,7 +8,7 @@
 export const CONTROL_DB_POOL_SIZE = 5;
 
 /**
- * The product's environment: its own control database (`DATABASE_URI`) and the deployer's `CONNECT_SECRET` (≥ 32
+ * The product's environment: its own control database (`MONGODB_URI`) and the deployer's `CONNECT_SECRET` (≥ 32
  * characters; without it the product refuses connection attempts). A Portal connects at `POST /.well-known/ss-connect`
  * with that secret; the Portal URL, the appId, the signing key and generated secrets are kept in the database.
  * @param {Record<string, string | undefined>} [env] defaults to `process.env`
@@ -20,7 +20,7 @@ export const CONTROL_DB_POOL_SIZE = 5;
 export const configFromEnv = (env = process.env) => ({ ...configOf(env), problems: configProblems(env) });
 
 /** Problem reported when a production deployment has no control database. */
-export const DATABASE_URI_REQUIRED = "DATABASE_URI is required in production: set it to this product's own database.";
+export const MONGODB_URI_REQUIRED = "MONGODB_URI is required in production: set it to this product's own database.";
 
 /**
  * Why this environment cannot serve: one sentence per problem, naming variables, never their values. A product with
@@ -33,14 +33,14 @@ export const configProblems = (env = process.env) => {
 	const problems = [];
 	// in production the connection, keys and queues must survive restarts and be shared by instances: no in-memory
 	// fallback (the build itself runs without the database)
-	if (env.NODE_ENV === 'production' && !env.DATABASE_URI && env.NEXT_PHASE !== 'phase-production-build')
-		problems.push(DATABASE_URI_REQUIRED);
+	if (env.NODE_ENV === 'production' && !env.MONGODB_URI && env.NEXT_PHASE !== 'phase-production-build')
+		problems.push(MONGODB_URI_REQUIRED);
 	return problems;
 };
 
 /** @param {Record<string, string | undefined>} env */
 const configOf = (env) => ({
-	productDbUri: env.DATABASE_URI,
+	productDbUri: env.MONGODB_URI,
 	connectSecret: env.CONNECT_SECRET || undefined,
 	productDbOptions: {
 		maxPoolSize: CONTROL_DB_POOL_SIZE,

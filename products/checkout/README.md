@@ -58,7 +58,7 @@ base URLs from the settings and the merchant's own `sk_` key (Dashboard → Sett
 ## Develop
 
 ```sh
-ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
+ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 pnpm portal               # Portal emulator on :4400 (ss.dev.json)
 pnpm dev                  # product on :3000 (or node serve.js 3000)
 ```
@@ -68,7 +68,7 @@ pnpm check                # format, lint, typecheck, tests with coverage
 pnpm validate             # ss app validate
 ```
 
-Environment: `DATABASE_URI` and `CONNECT_SECRET` (`.env.example`); the sealing key of merchants' integration keys is generated and kept
+Environment: `MONGODB_URI` and `CONNECT_SECRET` (`.env.example`); the sealing key of merchants' integration keys is generated and kept
 in the control database. Nothing runs on a timer (no crons, no
 background loops): an expired hold is cancelled when the order is read, listed or confirmed (and released when a
 placement needs the stock); a cart is reported abandoned when the merchant's server reads it; the dashboard's "Process

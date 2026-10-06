@@ -105,7 +105,7 @@ you become the admin (login name `admin`). Keys and secrets are generated in the
 pnpm exec ss app init products/my-app --kind service --slug my_app --name "My App"
 ```
 
-Add `--minimal` to start without the sample feature. A product's settings are its own database (`DATABASE_URI`;
+Add `--minimal` to start without the sample feature. A product's settings are its own database (`MONGODB_URI`;
 empty in development = in memory) and `CONNECT_SECRET` (`ss dev env` generates one). Run these two in separate terminals:
 
 ```bash
@@ -313,7 +313,7 @@ Mail is set later in Admin → Settings. Indexes and migrations run by themselve
 
 ### 4. Each service product
 
-Set `DATABASE_URI` (its Atlas database from step 1) and `CONNECT_SECRET` (a random string of at least 32 characters,
+Set `MONGODB_URI` (its Atlas database from step 1) and `CONNECT_SECRET` (a random string of at least 32 characters,
 e.g. `openssl rand -hex 32`) and deploy. Then Portal → **Admin → Apps → Add product** → the product URL and that
 secret → **Connect**. The product generates its key and pins the Portal; review and activate it in the Portal, and
 merchants can subscribe. The **Portal** deployment is unchanged.

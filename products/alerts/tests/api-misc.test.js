@@ -246,7 +246,7 @@ describe('adapters', () => {
 			port: 0,
 			root: ROOT,
 			env: {
-				DATABASE_URI: mongoUri(`alerts_control_${Date.now()}`),
+				MONGODB_URI: mongoUri(`alerts_control_${Date.now()}`),
 			},
 			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}`, logger: noopLogger },
 		});

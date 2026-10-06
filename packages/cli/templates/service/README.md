@@ -24,7 +24,7 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 ## Develop
 
 ```sh
-ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
+ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 ss dev                         # local Portal emulator on http://localhost:4400 (reads ss.dev.json)
 pnpm dev                       # product on http://localhost:3000 (Next.js), or: node serve.js 3000 (plain node:http)
 ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local

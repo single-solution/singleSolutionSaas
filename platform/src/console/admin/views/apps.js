@@ -204,7 +204,7 @@ export function AddProductDialog({ open, onClose }) {
 			description={
 				done
 					? undefined
-					: 'Deploy the product with DATABASE_URI and CONNECT_SECRET (a random string of at least 32 characters), then enter its address and that secret.'
+					: 'Deploy the product with MONGODB_URI and CONNECT_SECRET (a random string of at least 32 characters), then enter its address and that secret.'
 			}
 			footer={
 				done ? (

@@ -74,11 +74,11 @@ describe('adapters/platform', () => {
 		await unconnected.close?.();
 	});
 
-	it('uses the product control database when DATABASE_URI is set', async () => {
+	it('uses the product control database when MONGODB_URI is set', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'k' });
 		const app = await createPlatform({
 			env: {
-				DATABASE_URI: mongoUri('coupons_control_test'),
+				MONGODB_URI: mongoUri('coupons_control_test'),
 			},
 			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}` },
 			root: ROOT,

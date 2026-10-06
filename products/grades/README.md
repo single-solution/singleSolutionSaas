@@ -78,7 +78,7 @@ gated by the element, optional `Idempotency-Key`, answers the next view model wi
 ## Run
 
 ```bash
-pnpm exec ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
+pnpm exec ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 pnpm portal                          # the local Portal emulator (port 4400)
 pnpm dev                             # the product (port 3000)
 ```
@@ -91,7 +91,7 @@ pnpm --filter @ss/product-grades check
 pnpm --filter @ss/product-grades validate
 ```
 
-Environment: `DATABASE_URI` and `CONNECT_SECRET` (`.env.example`); the Portal connection, the key and the secrets live in that
+Environment: `MONGODB_URI` and `CONNECT_SECRET` (`.env.example`); the Portal connection, the key and the secrets live in that
 database. There are no crons and no
 background work (see [jobs/README.md](jobs/README.md)).
 

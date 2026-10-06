@@ -193,7 +193,7 @@ describe('platform', () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'p' });
 		const app = await createPlatform({
 			env: {
-				DATABASE_URI: mongoUri('signups_control_test'),
+				MONGODB_URI: mongoUri('signups_control_test'),
 			},
 			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}` },
 			root: ROOT,

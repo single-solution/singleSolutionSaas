@@ -105,7 +105,7 @@ describe('onboarding with the connect secret (Portal side)', () => {
 	it("shows a misconfigured product's own reason", async () => {
 		const t = await boot();
 		const p = await product(t, { manifest: renamedService('alerts') });
-		const reason = "DATABASE_URI is required in production: set it to this product's own database.";
+		const reason = "MONGODB_URI is required in production: set it to this product's own database.";
 		p.tamper.misconfigured = [reason];
 		const down = problemOf(await connect(t, { url: p.url }), 502, 'upstream_error');
 		expect(down.detail).toContain(reason);

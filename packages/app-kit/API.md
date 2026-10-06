@@ -375,13 +375,13 @@ Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces ar
 ### Environment
 
 `configFromEnv(env = process.env)` → `{ productDbUri, productDbOptions, connectSecret, logLevel, outboundAllowHosts, problems }`.
-It reads `DATABASE_URI` (the product's own control DB) and `CONNECT_SECRET` (the connect secret) — the two variables a
+It reads `MONGODB_URI` (the product's own control DB) and `CONNECT_SECRET` (the connect secret) — the two variables a
 deployment needs — and optionally `OUTBOUND_DEV_ALLOW_HOSTS` (comma-separated development allowlist
 for `outbound.allowHosts`; ignored in production). `logLevel` is `info` in production and `debug` elsewhere. No value
 is JSON, and no URL, key or other secret is read from the environment.
 
 **Misconfiguration.** `problems` (`configProblems(env)`) lists what keeps the deployment from serving, one sentence per
-problem naming the variable, never its value (today: `DATABASE_URI` missing in production). Pass them to
+problem naming the variable, never its value (today: `MONGODB_URI` missing in production). Pass them to
 `createProduct({ problems })`: the product still starts, and every route — `/healthz` and `/.well-known/ss-app.json`
 included — answers `503 { status: 'misconfigured', problems }` (`misconfiguredResponse`), so the deployer and the
 Portal's Add product dialog see the reason. A product's `proxy.js` re-exports `@ss/app-kit/proxy` so Next.js pages answer

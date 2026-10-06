@@ -31,7 +31,7 @@ import { MongoClient } from 'mongodb';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import manifest from '../manifest.json' with { type: 'json' };
 
-const env = configFromEnv(); // DATABASE_URI + CONNECT_SECRET: the Portal connects at /.well-known/ss-connect; kept in that database
+const env = configFromEnv(); // MONGODB_URI + CONNECT_SECRET: the Portal connects at /.well-known/ss-connect; kept in that database
 const controlDb = new MongoClient(env.productDbUri, { maxPoolSize: 5 }).db(); // the product's OWN small DB
 
 export const product = createProduct({
@@ -151,7 +151,7 @@ Route `rateLimit.limit` may be a function of the request (`(ctx) => feature(ctx.
 - `GET /v1/ss-probe/data-guard` → `{ rejected, code }`
 - `GET /v1/ss-probe/events/:id` → `{ id, effects }`
 
-**Connection**: deploy with `DATABASE_URI` and `CONNECT_SECRET` (≥ 32 chars), then Portal → Admin → Apps → Add product
+**Connection**: deploy with `MONGODB_URI` and `CONNECT_SECRET` (≥ 32 chars), then Portal → Admin → Apps → Add product
 with the product URL and that secret. The Portal calls `POST /.well-known/ss-connect` (HMAC-signed, the secret is never
 sent); the product generates its key and pins the Portal URL and keys in its control database. Connecting again with
 the secret replaces the binding. See API.md (Connection).

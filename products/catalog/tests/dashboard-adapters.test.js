@@ -182,7 +182,7 @@ describe('adapters', () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'catalog-platform-1' });
 		const app = await createPlatform({
 			env: {
-				DATABASE_URI: mongoUri(`control_${Date.now()}`),
+				MONGODB_URI: mongoUri(`control_${Date.now()}`),
 			},
 			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}` },
 			root: ROOT,

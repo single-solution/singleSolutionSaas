@@ -245,7 +245,7 @@ Portal                                                      Product
 ## Connect (shared secret + pinned URLs)
 
 ```
-Deployer / staff       Portal                                              Product (DATABASE_URI + CONNECT_SECRET)
+Deployer / staff       Portal                                              Product (MONGODB_URI + CONNECT_SECRET)
   │ Add product: URL + secret ─▶│                                           │
   │                     │ createConnectRequest({ secret, portalUrl, jwks,   │
   │                     │   appId, baseUrl })                               │

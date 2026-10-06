@@ -1441,7 +1441,7 @@ that request created or touched. Running nothing costs nothing.
   password and two-factor sign-in (Account → Security) are optional; two-factor is required at sign-in once
   enrolled. Mail is the only admin setting; there is no preview URL setting and no tuning variable (pools, body cap,
   budget and session lifetimes are constants; `X-Forwarded-*` are read as the first hop set them); indexes and migrations apply once per schema version
-  under a lock. A product: `DATABASE_URI` and `CONNECT_SECRET` (random, ≥ 32 chars). Staff add it in Admin → Apps → Add product
+  under a lock. A product: `MONGODB_URI` and `CONNECT_SECRET` (random, ≥ 32 chars). Staff add it in Admin → Apps → Add product
   (product URL + that secret): the Portal calls the product's `/.well-known/ss-connect` HMAC-signed with the secret
   (never sent, never stored by the Portal); the product generates its key, pins the Portal URL and keys in its control
   database and answers signed the same way; the Portal pins the base URL and key. Product secrets are generated there

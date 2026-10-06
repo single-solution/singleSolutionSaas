@@ -98,7 +98,7 @@ impersonation shows the audit banner; replies by dashboard users create their ag
 ## Develop and certify
 
 ```sh
-ss dev env > .env.local        # DATABASE_URI (empty = in-memory control store) + a generated CONNECT_SECRET
+ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
 ss dev                         # local Portal emulator (ss.dev.json)
 pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
 ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
@@ -118,7 +118,7 @@ elements, 10 mc metered for the tokens above the included amount).
 
 1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
    monorepo, `next.config.js` sets the workspace root automatically.
-2. Set two environment variables: `DATABASE_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
    its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.

@@ -1,5 +1,5 @@
 /**
- * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: `DATABASE_URI`, the product's
+ * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: `MONGODB_URI`, the product's
  * control database, `CONNECT_SECRET`, plus optional tuning) and the project files (manifest with feature schemas inlined, string
  * catalogs). A Portal connects at `/.well-known/ss-connect` with the connect secret; the connection and every generated secret are kept in the control database. Registers the AI provider adapters (the merchant's own AI connector); knowledge pages and webhook tools
  * use app-kit's `product.outbound.fetch`. This is the only place that reads the environment.

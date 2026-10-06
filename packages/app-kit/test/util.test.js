@@ -117,7 +117,7 @@ describe('configFromEnv', () => {
 	it('reads the documented variables', () => {
 		expect(
 			configFromEnv({
-				DATABASE_URI: 'mongodb://x',
+				MONGODB_URI: 'mongodb://x',
 				LOG_LEVEL: 'debug',
 				OUTBOUND_DEV_ALLOW_HOSTS: ' minio.dev , 127.0.0.1,,',
 			}),
@@ -128,7 +128,7 @@ describe('configFromEnv', () => {
 			outboundAllowHosts: ['minio.dev', '127.0.0.1'],
 			problems: [],
 		});
-		expect(configFromEnv({ NODE_ENV: 'production', DATABASE_URI: 'mongodb://x' })).toMatchObject({
+		expect(configFromEnv({ NODE_ENV: 'production', MONGODB_URI: 'mongodb://x' })).toMatchObject({
 			logLevel: 'info',
 			outboundAllowHosts: [],
 		});

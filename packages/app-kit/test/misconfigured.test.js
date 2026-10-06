@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-	DATABASE_URI_REQUIRED,
+	MONGODB_URI_REQUIRED,
 	configFromEnv,
 	configProblems,
 	createProduct,
@@ -30,27 +30,27 @@ afterEach(() => {
 });
 
 describe('configuration problems', () => {
-	it('names DATABASE_URI in production (not during the build), never values', () => {
-		expect(configProblems({ NODE_ENV: 'production' })).toEqual([DATABASE_URI_REQUIRED]);
+	it('names MONGODB_URI in production (not during the build), never values', () => {
+		expect(configProblems({ NODE_ENV: 'production' })).toEqual([MONGODB_URI_REQUIRED]);
 		expect(configProblems({ NODE_ENV: 'production', NEXT_PHASE: 'phase-production-build' })).toEqual([]);
-		expect(configProblems({ NODE_ENV: 'production', DATABASE_URI: 'mongodb://db/x' })).toEqual([]);
+		expect(configProblems({ NODE_ENV: 'production', MONGODB_URI: 'mongodb://db/x' })).toEqual([]);
 		expect(configProblems({ NODE_ENV: 'development' })).toEqual([]);
 		expect(configFromEnv({ NODE_ENV: 'production' })).toMatchObject({
 			productDbUri: undefined,
-			problems: [DATABASE_URI_REQUIRED],
+			problems: [MONGODB_URI_REQUIRED],
 		});
 	});
 
 	it('a misconfigured product starts and answers every route 503 with the problems', async () => {
-		const { product, handle, logs } = productWith({ problems: [DATABASE_URI_REQUIRED, DATABASE_URI_REQUIRED, ''] });
-		expect(product.problems).toEqual([DATABASE_URI_REQUIRED]);
+		const { product, handle, logs } = productWith({ problems: [MONGODB_URI_REQUIRED, MONGODB_URI_REQUIRED, ''] });
+		expect(product.problems).toEqual([MONGODB_URI_REQUIRED]);
 		expect(logs.some((entry) => entry.level === 'error')).toBe(true);
 		for (const path of ['/healthz', '/readyz', '/.well-known/ss-app.json', '/v1/entitlement', '/nope']) {
 			const res = await handle(new Request(`${BASE}${path}`));
 			expect(res.status).toBe(503);
 			expect(res.headers.get('content-type')).toBe('application/json');
 			expect(res.headers.get('cache-control')).toBe('no-store');
-			expect(await res.json()).toEqual({ status: 'misconfigured', problems: [DATABASE_URI_REQUIRED] });
+			expect(await res.json()).toEqual({ status: 'misconfigured', problems: [MONGODB_URI_REQUIRED] });
 		}
 		const connect = await handle(new Request(`${BASE}/.well-known/ss-connect`, { method: 'POST', body: '{}' }));
 		expect(connect.status).toBe(503);
@@ -83,11 +83,11 @@ describe('configuration problems', () => {
 describe('@ss/app-kit/proxy', () => {
 	it('answers 503 with the problems while misconfigured, and lets requests through otherwise', async () => {
 		vi.stubEnv('NODE_ENV', 'production');
-		vi.stubEnv('DATABASE_URI', '');
+		vi.stubEnv('MONGODB_URI', '');
 		const res = /** @type {Response} */ (proxy());
 		expect(res.status).toBe(503);
-		expect(await res.json()).toEqual({ status: 'misconfigured', problems: [DATABASE_URI_REQUIRED] });
-		vi.stubEnv('DATABASE_URI', 'mongodb://db/x');
+		expect(await res.json()).toEqual({ status: 'misconfigured', problems: [MONGODB_URI_REQUIRED] });
+		vi.stubEnv('MONGODB_URI', 'mongodb://db/x');
 		expect(proxy()).toBeUndefined();
 	});
 });

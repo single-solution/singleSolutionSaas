@@ -49,7 +49,7 @@ Every integration is optional: without Orders, register purchases with `POST /v1
 
 ## Environment
 
-`DATABASE_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
+`MONGODB_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
 The Portal connection (made from Portal → Admin → Apps → Add product), the product's signing key and its generated secrets live there. The guest claim-token secret is one of them.
 
 ## Commands

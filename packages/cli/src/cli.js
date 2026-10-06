@@ -58,7 +58,7 @@ Usage:
                                                sign the descriptor (signBundle) and upload it to the Portal admin pack API
                                                (token: ADMIN_TOKEN, key: PACK_SIGNING_KEY)
   ss dev [--dir <dir>] [--port <n>] [--fixture ss.dev.json] [--state <file>] [--mongo-uri <uri>]
-  ss dev env                                   the product environment (DATABASE_URI and CONNECT_SECRET)
+  ss dev env                                   the product environment (MONGODB_URI and CONNECT_SECRET)
   ss dev connect --url <product url> --secret <connect secret>
                                                connect a running product to the emulator (default secret: CONNECT_SECRET)
   ss dev launch --kind merchant|demo|admin|impersonate|partner|developer [--scope <merchantId|all>] [--merchant <id>] [--website <id>] [--actor <staff id>]
@@ -293,7 +293,7 @@ const dev = async (args, deps) => {
 			[
 				'# Product environment: its own control database (empty = in memory, development only) and a random',
 				'# connect secret of at least 32 characters (without it the product refuses connections).',
-				'DATABASE_URI=',
+				'MONGODB_URI=',
 				`CONNECT_SECRET=${generateConnectSecret()}`,
 				'# Then connect it: `ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>`.',
 				'',

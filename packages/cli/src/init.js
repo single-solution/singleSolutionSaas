@@ -150,7 +150,7 @@ export const initApp = async ({
 	const files = [...plan.keys()];
 	if (kind === 'service') {
 		// local development secret (git-ignored); deployments set their own CONNECT_SECRET
-		await writeFile(path.join(target, '.env.local'), `DATABASE_URI=\nCONNECT_SECRET=${generateConnectSecret()}\n`, {
+		await writeFile(path.join(target, '.env.local'), `MONGODB_URI=\nCONNECT_SECRET=${generateConnectSecret()}\n`, {
 			mode: 0o600,
 		});
 		files.push('.env.local');

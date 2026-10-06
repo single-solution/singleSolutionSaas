@@ -57,7 +57,7 @@ describe('ss (main)', () => {
 		const result = await ss(['dev', 'env']);
 		expect(result.code).toBe(0);
 		expect(result.out.split('\n').filter((line) => /^[A-Z_]+=/.test(line))).toEqual([
-			'DATABASE_URI=',
+			'MONGODB_URI=',
 			expect.stringMatching(/^CONNECT_SECRET=[A-Za-z0-9_-]{43}$/),
 		]);
 		expect(result.out).toContain('ss dev connect');
