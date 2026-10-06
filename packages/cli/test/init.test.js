@@ -58,7 +58,7 @@ describe('ss app init → validate (integration)', () => {
 			'ui/notes.js',
 			'api/routes.js',
 			'adapters/db.js',
-			'jobs/purge-deleted.js',
+			'jobs/README.md',
 			'strings/en.json',
 			'schemas/notes.features.json',
 			'schemas/events/order_notes.note_created@1.json',
@@ -98,10 +98,8 @@ describe('ss app init → validate (integration)', () => {
 			expect(files).toContain(file);
 		expect(await readFile(path.join(dir, 'vitest.config.js'), 'utf8')).toContain("from '@ss/config/vitest'");
 		expect(JSON.parse(await readFile(path.join(dir, 'tsconfig.json'), 'utf8')).extends).toBe('@ss/config/tsconfig.base.json');
-		expect(JSON.parse(await readFile(path.join(dir, 'vercel.json'), 'utf8')).crons).toEqual([
-			{ path: '/cron/daily', schedule: '0 4 * * *' },
-		]);
-		expect(files).toEqual(expect.arrayContaining(['jobs/daily.js', 'jobs/index.js', 'app/cron/daily/route.js']));
+		expect(JSON.parse(await readFile(path.join(dir, 'vercel.json'), 'utf8')).crons).toBeUndefined();
+		expect(files.some((file) => file.startsWith('app/cron/'))).toBe(false);
 		const env = await readFile(path.join(dir, '.env.example'), 'utf8');
 		for (const name of [
 			'SS_PORTAL_URL',

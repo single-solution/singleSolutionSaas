@@ -137,7 +137,7 @@ export const customerMayCancel = (order, customerCancellable) =>
 
 /**
  * Has the order's hold (payment or confirmation deadline) passed? An expired hold counts as expired from that moment,
- * whether or not a sweep has cancelled the order yet.
+ * whether or not it has been cancelled yet (that happens when it is next touched).
  * @param {Record<string, any>} order
  * @param {number} now
  */

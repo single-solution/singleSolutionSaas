@@ -206,6 +206,18 @@ export const createDashboardApi = (catalog) => {
 		}),
 		defineRoute({
 			method: 'POST',
+			path: '/v1/dashboard/due-work',
+			auth: 'launch',
+			element: 'items',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: 'optional',
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				return s ? ok(await catalog.due.runDue(s)) : noWebsite();
+			},
+		}),
+		defineRoute({
+			method: 'POST',
 			path: '/v1/dashboard/variants/:id/stock',
 			auth: 'launch',
 			element: 'variants',
@@ -369,6 +381,7 @@ export const liveDashboard = ({ catalog, site, canWrite }) => {
 			const result = await catalog.items.list(site, query, { owner: true, after: page.after, fetchLimit: page.fetchLimit });
 			if (!result.ok) return { items: [], nextCursor: null };
 			const body = page.page(result.items, (item) => catalog.items.cursorKey(item, result.spec));
+			await catalog.due.settle(site, body.items);
 			return {
 				items: await Promise.all(body.items.map((item) => catalog.items.owner(site, item, { exposeCost: true }))),
 				nextCursor: body.nextCursor,
@@ -376,7 +389,9 @@ export const liveDashboard = ({ catalog, site, canWrite }) => {
 		},
 		item: async (id) => {
 			const item = isId(id) ? await site.repos.items.get(id) : null;
-			return item ? catalog.items.owner(site, item, { exposeCost: true }) : null;
+			if (!item) return null;
+			await catalog.due.settle(site, [item]);
+			return catalog.items.owner(site, item, { exposeCost: true });
 		},
 		feeds: async () => catalog.feeds.list(site),
 	};

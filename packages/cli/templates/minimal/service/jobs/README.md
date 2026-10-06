@@ -1,6 +1,7 @@
 # jobs/
 
-Scheduled work (`core` + `adapters` only). `daily.js` is the one daily cron (`GET /cron/daily` in `vercel.json`, Bearer
-`CRON_SECRET`): a catch-up that flushes the queues and sends the heartbeat. Work that must happen sooner runs when data
-is read and as throttled background work after requests, registered in `index.js` (`wireJobs`) with
-`product.background.every(name, intervalMs, fn, { per: 'website' })`.
+Nothing here runs on a schedule: the product has no crons, no timers and no background passes (PLAN F.19,
+event-driven only). Work happens on the request or event that causes it (app-kit sends usage and events after the
+request), anything with an expiry is treated as expired when read, data that can simply disappear gets a MongoDB TTL
+index, and work a merchant must start goes
+behind a dashboard button. Put such trigger-run handlers here (`core` + `adapters` only).

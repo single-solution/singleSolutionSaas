@@ -9,7 +9,7 @@ Guide for website developers: [docs/guide.md](docs/guide.md). API: [openapi.json
 | Element       | Modes | Hourly | What it does                                                                                     |
 | ------------- | ----- | ------ | ------------------------------------------------------------------------------------------------ |
 | `index`       | C     | 200    | documents of merchant-defined types; search (`pk_`/`sk_`); limit + daily indexing quota; metered |
-| `sources`     | C     | 100    | Catalog `item.*@1` events, scheduled JSON / sitemap crawls, `sk_` document upserts               |
+| `sources`     | C     | 100    | Catalog `item.*@1` events, on-demand JSON / sitemap crawls, `sk_` document upserts               |
 | `ranking`     | C     | 50     | field boosts, synonyms, typo tolerance, prefix, match mode, document boost, pinned results       |
 | `suggestions` | B, C  | 50     | popular queries (minimum count), completions, recent documents, browser-only history             |
 | `overlay`     | A, B  | 100    | ARIA combobox search dialog / inline box, keyboard, debounced, theme tokens only                 |
@@ -25,13 +25,23 @@ every element but analytics (add-on); Pro has all, with higher bounds.
 - `adapters/` — repositories over `data.forWebsite` (`db.js`), Atlas Search driver access (`atlas.js`), platform.
 - `api/` — services (documents, engines, search, sources, dashboard) and the route table.
 - `headless/` — `createOverlay`, `createSuggestions`. `ui/` — the overlay renderer.
-- `jobs/sweep.js` — the sweep (crawl steps, Atlas state, vocabulary cleanup): a background pass after requests (at
-  most every 15 minutes per website, app-kit `background.every`) plus `GET /cron/sweep`, a daily catch-up over every
-  website (`vercel.json`; one daily cron fits the free Vercel Hobby plan).
+- `jobs/` — none (see `jobs/README.md`).
+
+## No periodic work
+
+There are no crons, timers or background loops; everything happens inside the request that makes it relevant:
+
+- **Crawls** run when asked: the dashboard's **Crawl now** (per source) and **Crawl due sources** (sources never
+  crawled, in progress, or whose `every_hours` passed), or `POST /v1/sources/{key}/crawl` (sk\_). A request crawls step
+  after step for up to 10 seconds; a run cut short is continued by the next press. When a Catalog `item.*@1` event
+  names an item whose page a sitemap source indexed, that one page is fetched again (or removed) right away.
+- **Atlas index state** is probed when a search needs it (at most every 10 minutes per website and instance) and by
+  the dashboard's **Re-check** button.
+- **Vocabulary**: a term no document uses any more is removed in the same write that removed its last use.
 
 ## Environment
 
-See `.env.example`: the app-kit variables and `CRON_SECRET` (≥ 16 characters) for the daily sweep cron.
+See `.env.example`: the app-kit variables.
 
 ## Notes
 

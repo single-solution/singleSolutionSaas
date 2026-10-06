@@ -13,7 +13,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createApplication, wireEvents } from '../api/routes.js';
-import { cronRoutes, wireJobs } from '../jobs/sweep.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -23,7 +22,6 @@ export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = Object.freeze({ origin: `https://${DOMAIN}` });
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const HOUR = 3_600_000;
 export const ELEMENTS = [
@@ -150,14 +148,13 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, webs
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_checkout_api_tests_0123456789'),
-			CRON_SECRET,
 			...env,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: remote.send },
 	});
-	const application = wireJobs(wireEvents(createApplication(app)));
-	const handle = createRequestHandler(application.product, [...buildRoutes(application), ...cronRoutes(application)]);
+	const application = wireEvents(createApplication(app));
+	const handle = createRequestHandler(application.product, buildRoutes(application));
 
 	let version = 0;
 	/**

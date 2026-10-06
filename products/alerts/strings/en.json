@@ -102,5 +102,8 @@
 	"dashboard.column.attempts": "Attempts",
 	"dashboard.empty.subscriptions": "No subscriptions yet.",
 	"dashboard.empty.messages": "No messages yet.",
-	"dashboard.window": "Last {days} days"
+	"dashboard.window": "Last {days} days",
+	"dashboard.send_due.button": "Send due now",
+	"dashboard.send_due.hint": "Sends messages that are due (after quiet hours, batching windows, caps or retries) and continues long waitlists. This also happens on every stock or price change while \"Send right after the trigger\" is on.",
+	"dashboard.send_due.done": "Sent {sent}, deferred {deferred}."
 }

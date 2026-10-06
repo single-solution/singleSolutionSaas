@@ -1,6 +1,6 @@
 /** The outbox: timing, caps, batching, retries, claim-before-send and recovery on MongoDB. */
 import { afterEach, describe, expect, it } from 'vitest';
-import { CRON_SECRET, createHarness, WEBSITE } from './harness.js';
+import { createHarness, WEBSITE } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>> | null} */
 let h = null;
@@ -10,8 +10,6 @@ afterEach(async () => {
 });
 /** @param {Parameters<typeof createHarness>[0]} [options] */
 const harness = async (options) => (h = await createHarness(options));
-const HOUR = 3_600_000;
-const DAY = 24 * HOUR;
 /** @param {Awaited<ReturnType<typeof createHarness>>} t */
 const messages = (t) => t.collection('messages').find({ websiteId: WEBSITE }).sort({ _id: 1 }).toArray();
 /** @param {Awaited<ReturnType<typeof createHarness>>} t @param {string} itemId @param {number} [at] */
@@ -226,7 +224,7 @@ describe('claim before send', () => {
 	});
 });
 
-describe('messages and the cron job', () => {
+describe('messages', () => {
 	it('renders overrides, sms bodies, the store name and item links; lists messages', async () => {
 		const t = await harness({
 			config: {
@@ -274,21 +272,5 @@ describe('messages and the cron job', () => {
 		await t.subscribe({}, { key: t.pk });
 		await restock(t, 'itm_1');
 		expect(t.provider.sent[0].text).toMatch(/https:\/\/shop\.example\.com\/alerts\/stop\?t=us1\./);
-	});
-
-	it('runs the cron job for every known website (bearer secret)', async () => {
-		const t = await harness({ config: { dispatch: { inline_dispatch: false } } });
-		await t.subscribe({}, { key: t.pk });
-		await restock(t, 'itm_1');
-		expect((await t.call('GET', '/cron/dispatch', { key: null })).status).toBe(401);
-		expect((await t.call('GET', '/cron/dispatch', { key: null, headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
-		const cron = await t.call('GET', '/cron/dispatch', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(cron.status).toBe(200);
-		expect(cron.json.results[0]).toMatchObject({ websiteId: WEBSITE, sent: 1 });
-		expect(t.provider.sent).toHaveLength(1);
-		await t.entitle({ elements: { dispatch: false } });
-		const skipped = await t.call('GET', '/cron/dispatch', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(skipped.json.results[0]).toMatchObject({ skipped: 'dispatch_disabled' });
-		expect(DAY).toBeGreaterThan(HOUR);
 	});
 });

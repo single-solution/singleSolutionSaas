@@ -200,7 +200,7 @@ describe('website keys', () => {
 		);
 	});
 
-	it('rotates with a grace period, then revokes the old key (scheduled job)', async () => {
+	it('rotates with a grace period; the old key is revoked by time on read (no job)', async () => {
 		const h = await boot();
 		const s = await site(h);
 		const old = (await s.client.post(s.base, { kind: 'sk', scopes: ['events.write'] })).json;
@@ -220,12 +220,9 @@ describe('website keys', () => {
 		h.clock.advance(3600_000);
 		expect((await whoami(h, old.key)).status).toBe(401);
 		expect((await revocations(h)).json.keyIds).toEqual([old.keyId]);
+		// products learn it from the revocation list they refresh when verifying keys; no job, no event
 		expect(h.integration.events).toEqual([]);
-		const drained = await h.call('POST', '/cron/drain', { headers: { authorization: `Bearer ${h.config.cronSecret}` } });
-		expect(drained.status).toBe(200);
-		expect(h.integration.events).toEqual([
-			expect.objectContaining({ type: 'key.revoked@1', data: expect.objectContaining({ keyIds: [old.keyId] }) }),
-		]);
+		expect(await h.portal.shared.jobs.stats()).toMatchObject({ queued: 0 });
 		const list = (await s.client.get(s.base)).json.items;
 		expect(list.map((/** @type {any} */ k) => [k.keyId, k.status])).toEqual(
 			expect.arrayContaining([
@@ -240,17 +237,6 @@ describe('website keys', () => {
 		expect(h.integration.events.at(-1)?.data.keyIds).toEqual([rotated.json.keyId]);
 		expect((await s.client.post(`${s.base}/${now.json.keyId}/rotate`, { graceSeconds: 99_999_999 })).status).toBe(422);
 
-		// the job tolerates early runs, unknown keys and unscheduled keys
-		await expect(
-			h.service.keys.onScheduledRevocation({ keyId: 'key_00000000000000000000000000', merchantId: s.merchantId }),
-		).resolves.toEqual({ skipped: true });
-		const pending = await s.client.post(`${s.base}/${now.json.keyId}/rotate`, { graceSeconds: 600 });
-		await expect(h.service.keys.onScheduledRevocation({ keyId: now.json.keyId, merchantId: s.merchantId })).rejects.toThrow(
-			/not yet/,
-		);
-		await expect(
-			h.service.keys.onScheduledRevocation({ keyId: pending.json.keyId, merchantId: s.merchantId }),
-		).resolves.toEqual({ skipped: true });
 		// expiry is carried over on rotation when still ahead
 		const expiring = await s.client.post(s.base, {
 			kind: 'pk',

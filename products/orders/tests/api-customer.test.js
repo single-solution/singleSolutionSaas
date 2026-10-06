@@ -193,8 +193,18 @@ describe('customer updates', () => {
 		const full = await h.call('GET', `/v1/customer-updates/${log.json.items[0].id}`);
 		expect(full.json).toMatchObject({ to: { email: 'msg@example.com' } });
 		expect(full.json.text).toContain(order.number);
+		// a due retry is sent when its order is next read (no timer); before its backoff passes nothing is sent
+		h.provider.fail(1, 503);
+		await h.call('GET', `/v1/orders/${order.id}`);
+		expect((await h.call('GET', `/v1/customer-updates/${log.json.items[0].id}`)).json.state).toBe('retry');
+		h.clock.advance(2 * 60_000);
+		await h.call('GET', `/v1/orders/${order.id}`);
+		expect((await h.call('GET', `/v1/customer-updates/${log.json.items[0].id}`)).json.state).toBe('retry');
+		h.clock.advance(5 * 60_000);
+		await h.call('GET', `/v1/orders/${order.id}`);
+		expect((await h.call('GET', `/v1/customer-updates/${log.json.items[0].id}`)).json.state).toBe('sent');
 		const retry = await h.call('POST', `/v1/customer-updates/${log.json.items[0].id}/retry`);
-		expect(retry.json.result).toBe('sent');
+		expect(retry.json.result).toBe('skipped');
 		expect((await h.call('GET', '/v1/customer-updates/msg_none')).status).toBe(404);
 		expect((await h.call('POST', '/v1/customer-updates/msg_none/retry')).status).toBe(404);
 		h.provider.fail(1, 400);

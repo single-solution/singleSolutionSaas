@@ -8,10 +8,11 @@
  *    (`core/types.js`), and **claim** each one (pending → claimed, compare-and-set on its cycle) before queueing its
  *    alert — a subscription is claimed by at most one run, so it is told once per change even with duplicate deliveries
  *    and concurrent instances.
- * 4. A run that hit the fan-out limit stays `open`; the background pass and the daily job resume it
- *    until every waiter was told.
- * 5. With `dispatch.inline_dispatch` the outbox is run right away (best effort; the background pass after
- *    requests and the daily run catch up).
+ * 4. A run that hit the fan-out limit stays `open`; it is resumed (until every waiter was told) by the next trigger of
+ *    the same website, `POST /v1/messages:dispatch` or the dashboard's "Send due now" button — never by a timer.
+ * 5. With `dispatch.inline_dispatch` the website's outbox is run right away, in the request or event that caused the
+ *    trigger (`sendDue`, bounded, best effort): stale claims repaired, open runs resumed, due messages sent — including
+ *    messages deferred earlier (quiet hours, batching windows, caps, retries whose `notBefore` passed).
  * Nothing is claimed while the `dispatch` element is off (e.g. messaging not connected): subscriptions keep waiting.
  */
 import { conditionMatches } from '../core/rules.js';
@@ -22,6 +23,8 @@ import { customType, freeUnits, isId, isTypeEnabled, matchingKeys, shouldFire, t
 
 /** Days a trigger run is kept. */
 const RUN_RETENTION_DAYS = 30;
+/** Messages a catch-up pass (`sendDue`) sends at most, besides the ones the trigger itself queued. */
+export const DUE_LIMIT = 50;
 
 /** @typedef {import('./service.js').Site} Site */
 /** @typedef {import('../core/triggers.js').Change} Change */
@@ -278,13 +281,7 @@ export const createEngine = (deps) => {
 			}
 		}
 		const run = await site.repos.triggers.finish(key, { ...result, change: stored });
-		if (dispatch && Number(result.queued) > 0 && site.settings.dispatch.inline) {
-			try {
-				await dispatcher.run(site, { limit: Math.min(100, Number(result.queued) + 10) });
-			} catch (error) {
-				log('warn', 'inline dispatch failed; the scheduled run retries', { websiteId: site.websiteId, error });
-			}
-		}
+		if (dispatch) await sendAfterTrigger(site, Number(result.queued));
 		return run;
 	};
 
@@ -345,7 +342,35 @@ export const createEngine = (deps) => {
 		return { resumed, queued };
 	};
 
-	return Object.freeze({ process, resume });
+	/**
+	 * One bounded pass over a website's outbox: repair stale claims, resume open trigger runs, send due messages. Run by
+	 * a trigger of that website (inline dispatch), `POST /v1/messages:dispatch` and the dashboard button.
+	 * @param {Site} site
+	 * @param {{ limit?: number }} [options] messages sent at most
+	 */
+	const sendDue = async (site, { limit = DUE_LIMIT } = {}) => {
+		const recovered = await dispatcher.recover(site);
+		const resumed = await resume(site);
+		return { ...(await dispatcher.run(site, { limit })), recovered, resumed };
+	};
+
+	/**
+	 * After a trigger: with inline dispatch on, send this trigger's messages and whatever else of the website is due
+	 * (best effort — a failure leaves the messages queued for the next trigger or a manual run).
+	 * @param {Site} site
+	 * @param {number} queued messages the trigger queued
+	 */
+	const sendAfterTrigger = async (site, queued) => {
+		if (!site.settings.dispatch.inline || !site.settings.enabled('dispatch')) return null;
+		try {
+			return await sendDue(site, { limit: Math.min(200, queued + DUE_LIMIT) });
+		} catch (error) {
+			log('warn', 'inline dispatch failed; the messages stay queued', { websiteId: site.websiteId, error });
+			return null;
+		}
+	};
+
+	return Object.freeze({ process, resume, sendDue, sendAfterTrigger });
 };
 
 /** @typedef {ReturnType<typeof createEngine>} Engine */

@@ -5,7 +5,7 @@
  *   request id → route match (404/405, CORS preflight) → body read with a byte cap (413) → auth (website key /
  *   launch session / Portal signature / none) → entitlement + element gating → JSON parse (415/400) → customer
  *   identity → rate limit (429; limit and key may be functions of the context) → Idempotency-Key (428/409/replay) →
- *   handler → RFC 9457 problems for every error. After the response, the background flusher may run.
+ *   handler → RFC 9457 problems for every error. After the response, the usage and events that request (or this instance) queued, and the website's due retries, are sent.
  * @module
  */
 import { STOPPED_STATES, can } from '../entitlements.js';
@@ -65,7 +65,7 @@ const originalPathOf = (request) => ORIGINAL_PATHS.get(request);
 const SCHEDULERS = new WeakMap();
 
 /**
- * Register the framework's `after(fn)` for a request: the kit's background flush then runs after the response.
+ * Register the framework's `after(fn)` for a request: the kit's queue delivery then runs after the response.
  * @param {Request} request
  * @param {(task: () => Promise<unknown>) => void} after
  */

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { base32, randomBytes, randomId, stableId } from '../adapters/crypto.js';
 import { createPlatform, loadStrings } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import { createRepositories, isDuplicateKey } from '../adapters/repositories.js';
 import { mongoUri, ROOT } from './harness.js';
 
@@ -15,34 +14,6 @@ describe('adapters/crypto', () => {
 		expect(randomBytes(8)).toHaveLength(8);
 		expect(randomId('cpn')).toMatch(/^cpn_[0-9a-hjkmnp-tv-z]{26}$/);
 		expect(randomId('x', (n) => new Uint8Array(n).fill(255))).toBe(`x_${'z'.repeat(26)}`);
-	});
-});
-
-describe('adapters/registry', () => {
-	it('remembers websites in memory or in the control database (ids only)', async () => {
-		const memory = createSiteRegistry();
-		await memory.remember('web_b');
-		await memory.remember('web_a');
-		await memory.remember('web_a');
-		expect(await memory.list()).toEqual(['web_a', 'web_b']);
-		/** @type {any[]} */
-		const writes = [];
-		let fail = true;
-		const collection = {
-			updateOne: async (/** @type {any} */ filter) => {
-				if (fail) {
-					fail = false;
-					throw new Error('down');
-				}
-				writes.push(filter._id);
-			},
-			find: () => ({ toArray: async () => [{ _id: 'web_z' }] }),
-		};
-		const stored = createSiteRegistry({ collection });
-		await stored.remember('web_1');
-		await stored.remember('web_1');
-		expect(writes).toEqual(['web_1']);
-		expect(await stored.list()).toEqual(['web_1', 'web_z']);
 	});
 });
 
@@ -110,13 +81,9 @@ describe('adapters/platform', () => {
 				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_x_0123456789abcdef'),
 				SS_PRODUCT_DB_URI: mongoUri('coupons_control_test'),
-				CRON_SECRET: 'short',
 			},
 			root: ROOT,
 		});
-		expect(app.cronSecret).toBeNull();
-		await app.registry.remember('web_ctrl');
-		expect(await app.registry.list()).toContain('web_ctrl');
 		expect(app.randomId('rsv')).toMatch(/^rsv_/);
 		await app.close();
 	});

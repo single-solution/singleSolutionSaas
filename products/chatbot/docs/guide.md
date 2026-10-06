@@ -13,3 +13,8 @@
 Configuration comes only from the signed entitlement document (`schemas/*.features.json`); turning an element off
 disables all three modes (403 `element_disabled`). Conditions everywhere (handoff, flows, assignment, proactive) are
 rules@1. Webhook tools: verify `ss-chatbot-signature` with the secret from `POST /v1/tools:signing-secret`.
+
+Nothing runs on a timer on the server (no crons, no background passes): snoozes, SLA breaches and auto-close are
+settled when a conversation is read or listed, deleted FAQ entries and agents are removed by a TTL index, and web pages
+with `refresh_hours` are marked due and fetched by the dashboard's "Refresh due pages" button or
+`POST /v1/knowledge-sources/{id}/refresh` (see `jobs/README.md`).

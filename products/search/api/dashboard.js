@@ -4,7 +4,7 @@
  *
  * Dashboards show the same views for a live website (service + merchant database) and for demo launches (sample
  * documents searched in memory with the real core — nothing is stored, nothing can be changed). Actions from the
- * dashboard (crawl now, re-check Atlas) go through the same services as the API and are audited with the session's
+ * dashboard (crawl now, crawl due sources, re-check Atlas) go through the same services as the API and are audited with the session's
  * actor (staff when impersonating or launched as admin).
  */
 import { defineRoute, ok, problem } from '@ss/app-kit';
@@ -118,6 +118,27 @@ export const createDashboardApi = (searchApp) => {
 					})
 					.catch(() => undefined);
 				return ok(result.value);
+			},
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/crawl-due',
+			auth: 'launch',
+			element: 'sources',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				if (!s) return noWebsite();
+				const result = await sources.runDue(s);
+				await product.audit
+					.record({
+						websiteId: s.websiteId,
+						actor: dashboardActor(ctx.session),
+						action: 'sources.crawled_due',
+						target: { crawled: result.crawled },
+					})
+					.catch(() => undefined);
+				return ok(result);
 			},
 		}),
 		defineRoute({

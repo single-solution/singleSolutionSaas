@@ -216,7 +216,7 @@ describe('merchant notes and search', () => {
 });
 
 describe('platform health and audit log', () => {
-	it('reports crons, the job queue and the last audit verification; searches and verifies the audit log', async () => {
+	it('reports operations, the job queue and the last audit verification; searches and verifies the audit log', async () => {
 		const h = await boot();
 		const root = await h.staffUser('root@example.com');
 		const finance = await h.staffUser('fin@example.com', ['finance'], { creator: root.client });
@@ -226,7 +226,7 @@ describe('platform health and audit log', () => {
 		const before = await root.client.get('/v1/admin/system/health');
 		expect(before.status).toBe(200);
 		expect(before.json.jobs).toEqual({ queued: 0, leased: 0, retrying: 0, dead: 0 });
-		expect(before.json.crons.find((/** @type {any} */ c) => c.name === 'audit_verify')).toEqual({
+		expect(before.json.operations.find((/** @type {any} */ c) => c.name === 'audit_verify')).toEqual({
 			name: 'audit_verify',
 			status: 'never_run',
 			lastRun: null,
@@ -253,11 +253,11 @@ describe('platform health and audit log', () => {
 		const dead = await leaseNamed('test.dead');
 		if (dead) await jobs.fail(dead, new Error('boom'));
 		await leaseNamed('test.leased');
-		expect(await h.portal.cron.run('audit_verify')).toMatchObject({ status: 'ok' });
+		expect(await h.portal.operations.run('audit_verify')).toMatchObject({ status: 'ok' });
 		const after = await root.client.get('/v1/admin/system/health');
 		expect(after.json.jobs).toEqual({ queued: 1, leased: 1, retrying: 1, dead: 1 });
-		const verify = after.json.crons.find((/** @type {any} */ c) => c.name === 'audit_verify');
-		expect(verify).toMatchObject({ status: 'ok', lastRun: { status: 'ok', trigger: 'cron' } });
+		const verify = after.json.operations.find((/** @type {any} */ c) => c.name === 'audit_verify');
+		expect(verify).toMatchObject({ status: 'ok', lastRun: { status: 'ok', trigger: 'manual' } });
 		expect(after.json.audit.lastVerification).toMatchObject({ status: 'ok', broken: [] });
 		expect(after.json.audit.lastVerification.scopes).toBeGreaterThan(0);
 

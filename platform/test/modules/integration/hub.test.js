@@ -114,9 +114,10 @@ const startReceiver = async ({ jwks, now }) => {
 
 /**
  * @param {string} dbName
- * @param {{ options?: import('../../../src/modules/integration/service.js').IntegrationOptions, withoutIdentity?: boolean }} [setup]
+ * @param {{ options?: import('../../../src/modules/integration/service.js').IntegrationOptions, withoutIdentity?: boolean,
+ *   background?: any }} [setup]
  */
-const boot = async (dbName, { options = {}, withoutIdentity = false } = {}) => {
+const boot = async (dbName, { options = {}, withoutIdentity = false, background } = {}) => {
 	const world = createWorld();
 	const clock = createClock();
 	const config = await testConfig();
@@ -130,6 +131,7 @@ const boot = async (dbName, { options = {}, withoutIdentity = false } = {}) => {
 		],
 		logger,
 		now: clock.now,
+		...(background ? { background } : {}),
 	});
 	await portal.ensureIndexes();
 	const receiver = await startReceiver({ jwks: portal.shared.keys.jwks(), now: clock.now });
@@ -371,31 +373,80 @@ describe('Event Hub ingest', () => {
 		expect(await drain()).toMatchObject({ leased: 0 });
 	});
 
-	it('attempts the deliveries of an ingest right after the response (F.19)', async () => {
-		const { world, receiver, drain, key, svc } = await boot('int_immediate');
+	it('delivers an ingested event right after the response, without any cron (F.19)', async () => {
+		/** @type {Array<() => Promise<unknown>>} */
+		const after = [];
+		const run = async () => {
+			while (after.length > 0) await after.shift()?.();
+		};
+		const { world, receiver, call, drain, key } = await boot('int_immediate', {
+			background: { mode: 'on', fallback: (/** @type {any} */ task) => void after.push(task) },
+		});
 		seedApps(world, receiver.base);
 		const pk = await key('pk');
-		/** @type {Array<() => Promise<unknown>>} */
-		const deferred = [];
 		const a = pageViewed();
-		const { body } = await svc().ingestRequest({
-			rawBody: JSON.stringify({ events: [a] }),
-			headers: new Headers({ authorization: `Bearer ${pk}`, origin: SHOP, 'content-type': 'application/json' }),
-			defer: (task) => void deferred.push(task),
-		});
-		expect(body.accepted).toBe(1);
-		expect(deferred).toHaveLength(1);
-		expect(receiver.received).toHaveLength(0);
-		expect(await deferred[0]?.()).toMatchObject({ succeeded: 2 });
+		const headers = { authorization: `Bearer ${pk}`, origin: SHOP };
+		expect((await call('POST', '/v1/events', { headers, body: { events: [a] } })).status).toBe(202);
+		expect(receiver.received).toHaveLength(0); // nothing during the request
+		expect(after).toHaveLength(1);
+		await run();
 		expect(receiver.received).toHaveLength(2);
 		expect(await drain()).toMatchObject({ leased: 0 }); // nothing left for the queue
-		// a duplicate enqueues nothing, so nothing is deferred
-		await svc().ingestRequest({
-			rawBody: JSON.stringify({ events: [a] }),
-			headers: new Headers({ authorization: `Bearer ${pk}`, origin: SHOP, 'content-type': 'application/json' }),
-			defer: (task) => void deferred.push(task),
+		// a duplicate enqueues nothing, so nothing is delivered again
+		await call('POST', '/v1/events', { headers, body: { events: [a] } });
+		await run();
+		expect(receiver.received).toHaveLength(2);
+	});
+
+	it('retries a failed delivery when the target product next calls the Portal, or on "Retry now"', async () => {
+		/** @type {Array<() => Promise<unknown>>} */
+		const after = [];
+		const run = async () => {
+			while (after.length > 0) await after.shift()?.();
+		};
+		const { world, receiver, call, key, clock, db, productAuth, login } = await boot('int_natural_retry', {
+			background: { mode: 'on', fallback: (/** @type {any} */ task) => void after.push(task) },
 		});
-		expect(deferred).toHaveLength(1);
+		seedApps(world, receiver.base);
+		receiver.respond((path) => (path.startsWith('/pages') ? 500 : 200));
+		const sk = await key('sk');
+		await call('POST', '/v1/events', { headers: { authorization: `Bearer ${sk}` }, body: { events: [pageViewed()] } });
+		await run();
+		const pagesHits = () => receiver.received.filter((r) => r.path.startsWith('/pages')).length;
+		expect(pagesHits()).toBe(1);
+		expect(await db.collection('integration_deliveries').findOne({ appId: 'app_pages' })).toMatchObject({ status: 'retrying' });
+		// time passing does nothing by itself
+		clock.advance(10 * 60_000);
+		expect(pagesHits()).toBe(1);
+		// another product calling the Portal does not touch app_pages' queue
+		receiver.respond(() => 200);
+		await call('GET', '/v1/product/deliveries', { headers: { authorization: await productAuth('app_orders') } });
+		await run();
+		expect(pagesHits()).toBe(1);
+		// app_pages calls the Portal (any product API): its due delivery is retried right after
+		const res = await call('GET', '/v1/product/deliveries', { headers: { authorization: await productAuth('app_pages') } });
+		expect(res.status).toBe(200);
+		await run();
+		expect(pagesHits()).toBe(2);
+		expect(await db.collection('integration_deliveries').findOne({ appId: 'app_pages' })).toMatchObject({
+			status: 'delivered',
+		});
+
+		// staff "Retry now": a delivery still waiting for its backoff is sent at once
+		receiver.respond((path) => (path.startsWith('/pages') ? 500 : 200));
+		await call('POST', '/v1/events', { headers: { authorization: `Bearer ${sk}` }, body: { events: [pageViewed()] } });
+		await run();
+		expect(pagesHits()).toBe(3);
+		receiver.respond(() => 200);
+		clock.advance(1_000); // a fresh signature timestamp (the receiver refuses replays)
+		const admin = await login({ kind: 'staff', subject: 'stf_admin', roles: ['admin'] });
+		const retried = await call('POST', '/v1/admin/apps/app_pages/deliveries/retry', {
+			headers: { cookie: admin, ...SAME_ORIGIN },
+		});
+		expect(retried.status).toBe(200);
+		expect(retried.json).toMatchObject({ appId: 'app_pages', succeeded: 1 });
+		expect(pagesHits()).toBe(4);
+		expect(await db.collection('platform_audit').countDocuments({ action: 'integration.deliveries_retried' })).toBe(1);
 	});
 
 	it('accepts body authentication (sendBeacon text/plain) and enforces the origin for pk_', async () => {

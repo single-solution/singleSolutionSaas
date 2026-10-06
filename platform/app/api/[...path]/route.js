@@ -4,6 +4,8 @@ import { toNextRoute } from '../../../src/infra/http.js';
 import { getPortal } from '../../../src/runtime.js';
 
 export const dynamic = 'force-dynamic';
+// admin operations get OPERATION_DEADLINE_MS (50 s) and work after a response finishes inside the same invocation
+export const maxDuration = 60;
 
 export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute((request) => getPortal().handle(request), {
 	after,

@@ -1,11 +1,11 @@
 /**
  * Human support on the real router and MongoDB: handoff by phrase (assignment round-robin, SLA, queue), offline
  * fallback (lead form), AI resume after the grace window, agent replies pausing the AI, notes, status changes with
- * CSAT, the agents API, inbox summary, canned replies, maintenance (SLA breaches, snooze wake-up, auto-close) and the
+ * CSAT, the agents API, inbox summary, canned replies, work settled on read (SLA breaches, snooze wake-up, auto-close) and the
  * dashboard API with SSO sessions.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createHarness, CRON_SECRET, MERCHANT, WEBSITE } from './harness.js';
+import { createHarness, MERCHANT, WEBSITE } from './harness.js';
 
 const TEAMS = [{ key: 'support', name: 'Support', hours: [], first_response_minutes: 0, resolution_minutes: 0 }];
 
@@ -202,36 +202,53 @@ describe('handoff and the inbox', () => {
 		expect((await h.call('POST', '/v1/inbox/canned-replies:render', { idempotencyKey: null, body: {} })).status).toBe(422);
 	});
 
-	it('runs maintenance: SLA breaches, snooze wake-ups, auto-close and purge', async () => {
+	it('settles on read: SLA breaches recorded once, deleted agents purged by TTL, idle conversations auto-closed', async () => {
 		const { id } = await guest('please talk to someone now');
-		const snooze = await guest('snooze me');
-		await h.call('PATCH', `/v1/conversations/${snooze.id}`, {
-			body: { status: 'snoozed', snoozedUntil: new Date(h.clock.now() + 60_000).toISOString() },
-		});
 		await h.call('DELETE', `/v1/agents/${agents[1]}`);
 		expect((await h.call('DELETE', `/v1/agents/${agents[1]}`)).status).toBe(404);
+		const deleted = await h.collection('agents').findOne({ websiteId: WEBSITE, id: agents[1] });
+		expect(deleted?.purgeAt.getTime()).toBe(h.clock.now() + 30 * 24 * 3_600_000);
 		h.clock.advance(40 * 24 * 3_600_000);
 		await h.entitle();
-		expect((await h.call('GET', '/cron/maintenance', { key: null })).status).toBe(401);
-		const run = await h.call('GET', '/cron/maintenance', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(run.status, JSON.stringify(run.json)).toBe(200);
-		const mine = run.json.results.find((/** @type {any} */ r) => r.websiteId === WEBSITE);
-		expect(mine, JSON.stringify(run.json)).toBeDefined();
-		expect(mine.breaches).toBeGreaterThanOrEqual(2);
-		expect(mine.woken).toBeGreaterThanOrEqual(1);
-		expect(mine.purged.agents).toBe(1);
+		// nothing ran: the KPI already counts the missed targets, nothing is recorded until the conversation is read
+		expect((await h.call('GET', '/v1/inbox')).json.breaches).toBeGreaterThanOrEqual(1);
+		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id }))?.sla.breached).toEqual([]);
+		const read = await h.call('GET', `/v1/conversations/${id}`);
+		expect(read.json.sla.breached).toEqual(['first_response', 'resolution']);
+		expect((await h.call('GET', `/v1/conversations/${id}`)).json.sla.breached).toEqual(['first_response', 'resolution']);
 		const breached = await h.collection('conversations').findOne({ websiteId: WEBSITE, id });
-		expect(breached?.sla.breached).toEqual(expect.arrayContaining(['first_response', 'resolution']));
-		// a second run closes the woken conversation once it is idle
-		await h.call('PATCH', `/v1/conversations/${snooze.id}`, { body: { status: 'resolved' } });
+		expect(breached?.sla.breached).toEqual(['first_response', 'resolution']);
+		// a resolved conversation idle past auto_close_after_hours is closed when read (single read or listing)
+		const single = await guest('close me when read');
+		const listed = await guest('close me when listed');
+		for (const c of [single, listed]) await h.call('PATCH', `/v1/conversations/${c.id}`, { body: { status: 'resolved' } });
+		expect((await h.call('GET', `/v1/conversations/${single.id}`)).json.status).toBe('resolved');
 		h.clock.advance(2 * 3_600_000);
 		await h.entitle();
-		const again = await h.call('GET', '/cron/maintenance', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(again.json.results.find((/** @type {any} */ r) => r.websiteId === WEBSITE).closed).toBeGreaterThanOrEqual(1);
-		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id: snooze.id }))?.status).toBe('closed');
+		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id: single.id }))?.status).toBe('resolved');
+		expect((await h.call('GET', `/v1/conversations/${single.id}`)).json.status).toBe('closed');
+		const page = await h.call('GET', '/v1/conversations?status=resolved&limit=100');
+		expect(page.json.items.find((/** @type {any} */ c) => c.id === listed.id)?.status).toBe('closed');
+		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id: listed.id }))?.status).toBe('closed');
+		expect(h.published('chatbot.closed@1').filter((e) => e.data.reason === 'inactive').length).toBeGreaterThanOrEqual(2);
 	});
 
-	it('reads a passed snooze as open before any job, and wakes it on access', async () => {
+	it('settles a conversation once when two reads race (the breach write is guarded)', async () => {
+		const { id } = await guest('please talk to someone now');
+		h.clock.advance(40 * 24 * 3_600_000);
+		await h.entitle();
+		const site = /** @type {any} */ (await h.chatbot.siteFor(WEBSITE));
+		const stale = await h.collection('conversations').findOne({ websiteId: WEBSITE, id });
+		const [a, b] = await Promise.all([site.repos.conversations.get(id), site.repos.conversations.get(id)]);
+		expect(a.sla.breached).toEqual(['first_response', 'resolution']);
+		expect(b.sla.breached).toEqual(['first_response', 'resolution']);
+		// a stale copy settled after the write keeps the recorded breaches
+		const again = await h.chatbot.service.settle(site, /** @type {any} */ ({ ...stale, sla: { ...stale?.sla, breached: [] } }));
+		expect(again?.sla?.breached).toEqual(['first_response', 'resolution']);
+		expect(await h.chatbot.service.settle(site, null)).toBeNull();
+	});
+
+	it('reads a passed snooze as open, and wakes it on access', async () => {
 		const snoozed = await guest('snooze until later');
 		const until = new Date(h.clock.now() + 60_000).toISOString();
 		await h.call('PATCH', `/v1/conversations/${snoozed.id}`, { body: { status: 'snoozed', snoozedUntil: until } });
@@ -241,7 +258,7 @@ describe('handoff and the inbox', () => {
 		expect(await ids('snoozed')).toContain(snoozed.id);
 		expect(await ids('open')).not.toContain(snoozed.id);
 		h.clock.advance(61_000);
-		// no maintenance ran: listings already see it as open
+		// nothing ran: listings already see it as open
 		expect(await ids('snoozed')).not.toContain(snoozed.id);
 		expect(await ids('open,pending')).toContain(snoozed.id);
 		expect(await ids('snoozed,closed')).not.toContain(snoozed.id);
@@ -253,21 +270,6 @@ describe('handoff and the inbox', () => {
 		const stored = await h.collection('conversations').findOne({ websiteId: WEBSITE, id: snoozed.id });
 		expect(stored?.status).toBe('open');
 		expect(stored?.snoozedUntil).toBeNull();
-	});
-
-	it('runs the per-website maintenance after requests (throttled background task)', async () => {
-		const snoozed = await guest('wake me by the background task');
-		await h.call('PATCH', `/v1/conversations/${snoozed.id}`, {
-			body: { status: 'snoozed', snoozedUntil: new Date(h.clock.now() + 60_000).toISOString() },
-		});
-		h.clock.advance(20 * 60_000);
-		await h.entitle();
-		expect(h.chatbot.maintenance.name).toBe('maintenance');
-		expect(await h.chatbot.maintenance.trigger({ websiteId: WEBSITE })).toBe(true);
-		expect((await h.collection('conversations').findOne({ websiteId: WEBSITE, id: snoozed.id }))?.status).toBe('open');
-		// throttled: a second run within the interval is skipped; a website without a subscription does nothing
-		expect(await h.chatbot.maintenance.trigger({ websiteId: WEBSITE })).toBe(false);
-		expect(await h.chatbot.maintenance.trigger({ websiteId: 'web_9123456789abcdefghjkmnpq' })).toBe(true);
 	});
 
 	it('goes offline with a lead form when the team is closed', async () => {
@@ -352,6 +354,8 @@ describe('dashboard (SSO)', () => {
 				.status,
 		).toBe(201);
 		expect((await h.call('POST', '/v1/dashboard/knowledge-entries', { ...bearer, body: {} })).status).toBe(422);
+		const refresh = await h.call('POST', '/v1/dashboard/knowledge-sources:refresh', { ...bearer, idempotencyKey: null });
+		expect(refresh.json).toEqual({ refreshed: 0, failed: 0, remaining: 0 });
 		for (const path of [`/v1/dashboard/conversations/cnv_x/messages`, `/v1/dashboard/conversations/cnv_x/notes`])
 			expect((await h.call('POST', path, { ...bearer, body: { text: 'x' } })).status).toBe(404);
 		expect((await h.call('PATCH', '/v1/dashboard/conversations/cnv_x', { ...bearer, body: {} })).status).toBe(404);
@@ -360,6 +364,9 @@ describe('dashboard (SSO)', () => {
 			(await h.call('POST', `/v1/dashboard/conversations/${id}/messages`, { key: demo, body: { text: 'x' } })).status,
 		).toBe(403);
 		expect((await h.call('GET', '/v1/dashboard/overview', { key: demo })).status).toBe(400);
+		expect((await h.call('POST', '/v1/dashboard/knowledge-sources:refresh', { key: demo, idempotencyKey: null })).status).toBe(
+			403,
+		);
 	});
 	it('resolves dashboard contexts (live, demo, pick website, not subscribed)', async () => {
 		const { resolveDashboard } = await import('../api/dashboard.js');

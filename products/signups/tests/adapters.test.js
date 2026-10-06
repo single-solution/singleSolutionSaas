@@ -1,4 +1,4 @@
-/** Adapters: sealing, JWT signing/verification, hashing, message delivery, the site registry, platform wiring, the job. */
+/** Adapters: sealing, JWT signing/verification, hashing, message delivery, platform wiring. */
 import { describe, expect, it, vi } from 'vitest';
 import { generateSigningKey } from '@ss/protocol';
 import {
@@ -15,8 +15,6 @@ import {
 } from '../adapters/crypto.js';
 import { createMessenger, reportsFailure } from '../adapters/messaging.js';
 import { createPlatform } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
-import { cronAuthorized, runMaintenance } from '../jobs/maintenance.js';
 import { ROOT, mongoUri } from './harness.js';
 
 const A = Buffer.from('a'.repeat(32));
@@ -186,29 +184,7 @@ describe('messaging', () => {
 	});
 });
 
-describe('site registry', () => {
-	it('remembers websites in memory or in the control database (and retries failed writes)', async () => {
-		const memory = createSiteRegistry();
-		await memory.remember('web_b');
-		await memory.remember('web_a');
-		await memory.remember('web_a');
-		expect(await memory.list()).toEqual(['web_a', 'web_b']);
-		let fail = true;
-		const updateOne = vi.fn(async () => {
-			if (fail) {
-				fail = false;
-				throw new Error('down');
-			}
-		});
-		const stored = createSiteRegistry({ collection: { updateOne, find: () => ({ toArray: async () => [{ _id: 'web_z' }] }) } });
-		await stored.remember('web_c');
-		await stored.remember('web_c');
-		expect(updateOne).toHaveBeenCalledTimes(2);
-		expect(await stored.list()).toEqual(['web_c', 'web_z']);
-	});
-});
-
-describe('platform and job', () => {
+describe('platform', () => {
 	it('refuses to start without the required environment and wires a control database when configured', async () => {
 		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
 			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
@@ -221,50 +197,10 @@ describe('platform and job', () => {
 				SS_REGISTRATION_TOKEN_HASH: 'a'.repeat(64),
 				SS_PRODUCT_DB_URI: mongoUri('signups_control_test'),
 				SIGNUPS_SEAL_SECRET_PREVIOUS: 'p'.repeat(40),
-				CRON_SECRET: 'short',
 			},
 			root: ROOT,
 		});
-		expect(app.cronSecret).toBeNull();
 		expect(app.base).toBe('https://signups.example.com');
-		await app.registry.remember('web_control');
-		expect(await app.registry.list()).toContain('web_control');
 		await app.close();
-	});
-
-	it('runs maintenance per website, isolating failures, behind a constant-time cron secret', async () => {
-		const onError = vi.fn();
-		const result = await runMaintenance({
-			websiteIds: ['web_a', 'web_b', 'web_c'],
-			siteFor: async (id) => (id === 'web_c' ? null : { id }),
-			run: async (site) => {
-				if (site.id === 'web_b') throw new Error('boom');
-				return { deletions: 1 };
-			},
-			onError,
-		});
-		expect(result).toEqual({
-			websites: 2,
-			results: [
-				{ websiteId: 'web_a', deletions: 1 },
-				{ websiteId: 'web_b', error: 'failed' },
-			],
-		});
-		expect(onError).toHaveBeenCalledWith('web_b', expect.any(Error));
-		expect(
-			(
-				await runMaintenance({
-					websiteIds: ['x'],
-					siteFor: async () => {
-						throw new Error('y');
-					},
-					run: async () => ({}),
-				})
-			).results,
-		).toEqual([{ websiteId: 'x', error: 'failed' }]);
-		expect(cronAuthorized('Bearer secret-value', 'secret-value')).toBe(true);
-		expect(cronAuthorized('Bearer nope', 'secret-value')).toBe(false);
-		expect(cronAuthorized(null, 'secret-value')).toBe(false);
-		expect(cronAuthorized('Bearer x', null)).toBe(false);
 	});
 });

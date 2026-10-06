@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createLocks, createRegistry, createRepositories } from '../src/infra/db.js';
-import { backoffDelay, createCronRunner, createJobs, permanentFailure } from '../src/infra/jobs.js';
+import { backoffDelay, createJobs, createOperationRunner, permanentFailure } from '../src/infra/jobs.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from '../src/infra/schema.js';
 import { createClock, createTestLogger, startMongo } from './helpers.js';
 import { ensureIndexes } from '../src/infra/db.js';
@@ -137,24 +137,45 @@ describe('job queue', () => {
 	});
 });
 
-describe('bounded drains (F.19)', () => {
-	it('runBatch leases only the given keys, at most maxJobs, and can leave daily jobs to the cron', async () => {
-		const { jobs } = await setup();
+describe('targeted runs (F.19: no drains)', () => {
+	it('runBatch runs only the given ids, keys or groups, at most maxJobs; makeDue pulls waiting retries forward', async () => {
+		const { jobs, clock } = await setup();
 		/** @type {string[]} */
 		const ran = [];
 		const handlers = { 'demo.x': async (/** @type {any} */ p) => void ran.push(p.n) };
-		for (const n of [1, 2, 3]) await jobs.enqueue({ name: 'demo.x', key: `k${n}`, payload: { n } });
-		await jobs.enqueue({ name: 'demo.x', key: 'k4', payload: { n: 4 }, daily: true });
-		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, keys: ['k2'] })).toMatchObject({ succeeded: 1 });
+		const one = await jobs.enqueue({ name: 'demo.x', key: 'k1', payload: { n: 1 } });
+		for (const n of [2, 3]) await jobs.enqueue({ name: 'demo.x', key: `k${n}`, payload: { n }, group: 'g' });
+		await jobs.enqueue({ name: 'demo.x', key: 'k4', payload: { n: 4 }, group: 'g', runAt: clock.now() + 60_000 });
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, ids: [one.id] })).toMatchObject({ succeeded: 1 });
 		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, keys: [] })).toMatchObject({ leased: 0 });
-		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, maxJobs: 1, skipDaily: true })).toMatchObject({
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, ids: [] })).toMatchObject({ leased: 0 });
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, groups: ['g'], maxJobs: 1 })).toMatchObject({
 			succeeded: 1,
 			stoppedBy: 'limit',
 		});
-		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, skipDaily: true })).toMatchObject({ succeeded: 1 });
-		expect(ran).toEqual([2, 1, 3]);
-		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000 })).toMatchObject({ succeeded: 1 });
-		expect(ran).toEqual([2, 1, 3, 4]);
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, groups: ['g'] })).toMatchObject({ succeeded: 1 });
+		expect(ran).toEqual([1, 2, 3]); // k4 waits for its time
+		expect(await jobs.makeDue({ group: 'other' })).toBe(0);
+		expect(await jobs.makeDue({ name: 'demo.x', group: 'g' })).toBe(1);
+		expect(await jobs.runBatch({ handlers, deadlineMs: 60_000, groups: ['g'] })).toMatchObject({ succeeded: 1 });
+		expect(ran).toEqual([1, 2, 3, 4]);
+		await expect(jobs.enqueue({ name: 'demo.x', group: '' })).rejects.toThrow(/group/);
+	});
+
+	it('hands a new job that is due now to onEnqueued, never a future one or a duplicate', async () => {
+		const { r, logger, clock } = await setup();
+		/** @type {string[]} */
+		const seen = [];
+		const jobs = createJobs({
+			repo: r.mutable(COLLECTIONS.jobs),
+			now: clock.now,
+			logger,
+			onEnqueued: ({ name }) => void seen.push(name),
+		});
+		await jobs.enqueue({ name: 'demo.now', key: 'n' });
+		await jobs.enqueue({ name: 'demo.now', key: 'n' });
+		await jobs.enqueue({ name: 'demo.later', runAt: clock.now() + 1000 });
+		expect(seen).toEqual(['demo.now']);
 	});
 });
 
@@ -189,14 +210,14 @@ describe('payload dropping', () => {
 	});
 });
 
-describe('cron runner', () => {
-	it('runs known crons under a lock and records every run', async () => {
+describe('operation runner', () => {
+	it('runs known operations under a lock with their input and records every run', async () => {
 		const { r, locks, logger, clock } = await setup();
-		const runs = r.appendOnly(COLLECTIONS.cronRuns);
+		const runs = r.appendOnly(COLLECTIONS.operationRuns);
 		let release = () => {};
-		const cron = createCronRunner({
-			crons: {
-				ok: async ({ deadline, trigger }) => ({ deadline, trigger }),
+		const runner = createOperationRunner({
+			operations: {
+				ok: async ({ deadline, trigger, input }) => ({ deadline, trigger, input }),
 				empty: async () => undefined,
 				boom: async () => Promise.reject(Object.assign(new Error('exploded'), { code: 'E_BOOM' })),
 				slow: () => new Promise((resolve) => (release = () => resolve({ done: true }))),
@@ -207,21 +228,26 @@ describe('cron runner', () => {
 			deadlineMs: 10_000,
 			now: clock.now,
 		});
-		expect(cron.names()).toEqual(['ok', 'empty', 'boom', 'slow']);
-		expect(cron.has('ok')).toBe(true);
-		expect(await cron.run('missing')).toBeNull();
-		const okRun = await cron.run('ok', { trigger: 'manual' });
-		expect(okRun).toMatchObject({ status: 'ok', stats: { deadline: clock.now() + 10_000, trigger: 'manual' } });
-		expect(await cron.run('empty')).toMatchObject({ status: 'ok' });
-		expect(await cron.run('boom')).toMatchObject({ status: 'failed' });
-		const pending = cron.run('slow');
+		expect(runner.names()).toEqual(['ok', 'empty', 'boom', 'slow']);
+		expect(runner.has('ok')).toBe(true);
+		expect(await runner.run('missing')).toBeNull();
+		const okRun = await runner.run('ok', { trigger: 'staff:stf_1', input: { after: 'x' } });
+		expect(okRun).toMatchObject({
+			status: 'ok',
+			stats: { deadline: clock.now() + 10_000, trigger: 'staff:stf_1', input: { after: 'x' } },
+		});
+		expect(await runner.run('empty')).toMatchObject({ status: 'ok' });
+		expect(await runner.run('boom')).toMatchObject({ status: 'failed' });
+		const pending = runner.run('slow');
 		await new Promise((resolve) => setTimeout(resolve, 50));
-		expect(await cron.run('slow')).toMatchObject({ status: 'locked' });
+		expect(await runner.run('slow')).toMatchObject({ status: 'locked' });
 		release();
 		expect(await pending).toMatchObject({ status: 'ok', stats: { done: true } });
 		const records = await runs.find({}).sort({ startedAt: 1, _id: 1 }).toArray();
 		expect(records.map((x) => x.status).sort()).toEqual(['failed', 'locked', 'ok', 'ok', 'ok']);
 		expect(records.find((x) => x.name === 'boom')?.error).toEqual({ message: 'exploded', code: 'E_BOOM' });
-		expect(() => createCronRunner({ crons: { 'Bad Name': async () => {} }, locks, runs, logger, deadlineMs: 1 })).toThrow();
+		expect(() =>
+			createOperationRunner({ operations: { 'Bad Name': async () => {} }, locks, runs, logger, deadlineMs: 1 }),
+		).toThrow();
 	});
 });

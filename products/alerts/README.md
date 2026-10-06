@@ -21,15 +21,15 @@ Every element is switchable per website and priced in millicredits per hour; eve
 a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — nothing is hard-coded, no regional
 defaults (phones are international E.164, the time zone and language are features).
 
-| Element             | Modes   | Price /h | What it does                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------- | ------- | -------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `triggers`          | C       |      100 | `inventory.changed@1`, `price.changed@1`, `custom.*` (Event Hub or `POST /v1/events`), `POST /v1/triggers`, `:batch`, `:import` (CSV). Stock per location (tracked locations, in-stock threshold), price lists, out-of-order protection. Stock and price are trusted only from servers (`merchant`/`staff`/`system` actors, `sk_` keys) unless `accept_customer_events`. Fan-out limit per run; larger waitlists continue in the next run |
-| `types`             | C       |      200 | Back-in-stock; price-drop (minimum drop % and/or minor-unit amount, shopper target price, only while in stock); availability / slot waitlists (free units × notify-per-unit, in waitlist order); custom types (`custom.<name>[@v]`, target field, rules@1 `when`, browser events opt-in, capacity field); expiry, retention, repeat                                                                                                       |
-| `capture`           | A, B, C |      200 | The "Notify me" form: drop-in renderer (`inline`, `button`), headless core, `POST /v1/subscriptions`. Address from the customer's own login token (`SS-Identity`) or a typed e-mail / E.164 phone, consent text (version stored), double opt-in, per-IP-per-hour and per-contact-per-day limits, active caps per contact and website                                                                                                      |
-| `dispatch`          | C       |      300 | Outbox through the merchant's messaging connector: templates per type × channel × language (catalog + merchant overrides), frequency caps per contact (day / ISO week, defer or drop), quiet hours, batching into digests, retries with backoff, claim-before-send. Metered **`alert_send`**: 1 mc per message (pro includes 2 000 / hour)                                                                                                |
-| `waitlist_priority` | C       |      150 | FIFO or tier order from a claim of the customer's login token (`tier_claim`, e.g. `loyalty.tier`), positions for shoppers, ordered waitlists for the merchant                                                                                                                                                                                                                                                                             |
-| `unsubscribe`       | C       |       50 | Signed links (`us1.<payload>.<hmac>`, TTL) in every message, hosted confirm page (`GET /u/{token}` shows a button, `POST` applies), RFC 8058 one-click, scope contact / subscription, suppression list (keyed hashes), your own page via `page_url` + `POST /v1/unsubscribe`                                                                                                                                                              |
-| `analytics`         | C       |      100 | Subscriptions by type and status, messages by channel and status, notified / unsubscribe / delivery rates (basis points), daily series                                                                                                                                                                                                                                                                                                    |
+| Element             | Modes   | Price /h | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------- | ------- | -------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `triggers`          | C       |      100 | `inventory.changed@1`, `price.changed@1`, `custom.*` (Event Hub or `POST /v1/events`), `POST /v1/triggers`, `:batch`, `:import` (CSV). Stock per location (tracked locations, in-stock threshold), price lists, out-of-order protection. Stock and price are trusted only from servers (`merchant`/`staff`/`system` actors, `sk_` keys) unless `accept_customer_events`. Fan-out limit per run; larger waitlists continue on the next trigger / outbox run |
+| `types`             | C       |      200 | Back-in-stock; price-drop (minimum drop % and/or minor-unit amount, shopper target price, only while in stock); availability / slot waitlists (free units × notify-per-unit, in waitlist order); custom types (`custom.<name>[@v]`, target field, rules@1 `when`, browser events opt-in, capacity field); expiry, retention, repeat                                                                                                                        |
+| `capture`           | A, B, C |      200 | The "Notify me" form: drop-in renderer (`inline`, `button`), headless core, `POST /v1/subscriptions`. Address from the customer's own login token (`SS-Identity`) or a typed e-mail / E.164 phone, consent text (version stored), double opt-in, per-IP-per-hour and per-contact-per-day limits, active caps per contact and website                                                                                                                       |
+| `dispatch`          | C       |      300 | Outbox through the merchant's messaging connector: templates per type × channel × language (catalog + merchant overrides), frequency caps per contact (day / ISO week, defer or drop), quiet hours, batching into digests, retries with backoff, claim-before-send. Metered **`alert_send`**: 1 mc per message (pro includes 2 000 / hour)                                                                                                                 |
+| `waitlist_priority` | C       |      150 | FIFO or tier order from a claim of the customer's login token (`tier_claim`, e.g. `loyalty.tier`), positions for shoppers, ordered waitlists for the merchant                                                                                                                                                                                                                                                                                              |
+| `unsubscribe`       | C       |       50 | Signed links (`us1.<payload>.<hmac>`, TTL) in every message, hosted confirm page (`GET /u/{token}` shows a button, `POST` applies), RFC 8058 one-click, scope contact / subscription, suppression list (keyed hashes), your own page via `page_url` + `POST /v1/unsubscribe`                                                                                                                                                                               |
+| `analytics`         | C       |      100 | Subscriptions by type and status, messages by channel and status, notified / unsubscribe / delivery rates (basis points), daily series                                                                                                                                                                                                                                                                                                                     |
 
 Plans: **starter** = triggers, types, capture, dispatch, unsubscribe (850 mc/h; analytics add-on); **pro** = all seven
 (1 100 mc/h, 2 000 sends/h included). `dispatch` depends on `unsubscribe`, so every message has a working opt-out.
@@ -54,6 +54,15 @@ allows it.
   close step was lost. Usage (`alert_send:<message id>`) and `alerts.sent@1` are keyed by the message.
 - **Before a send:** quiet hours (deferred, no attempt spent), suppression (cancelled), still-claimed items only,
   frequency caps (atomic reservations, given back when nothing is sent).
+- **No timers.** Nothing runs on a schedule or in the background. With `dispatch.inline_dispatch` on, every trigger
+  (event, API, batch, CSV) runs that website's outbox in the same request: its own alerts plus whatever became due
+  meanwhile (quiet hours over, batching window closed, cap reset, retry `notBefore` passed), stale claims repaired and
+  open (fan-out-limited) runs resumed — bounded per run. Otherwise `POST /v1/messages:dispatch` (`sk_`) or the
+  dashboard's **Send due now** do the same on demand. A deferred message therefore goes out with the website's next
+  trigger or manual run, not at its exact `notBefore`.
+- **Expiry on read.** A subscription past its `expiresAt` is never claimed, counted against limits, confirmed or
+  placed in a waitlist; it reads as `expired` and is ended (no longer active) when a new sign-up for the same contact,
+  type and target touches it. TTL indexes delete expired subscriptions, messages, trigger runs and counters.
 - **Provider wire format** (generic HTTP connector, `POST <baseUrl><dispatch.send_path>`):
   `{ id, channel, to: { email } | { phone }, lang, subject?, text, headers?: { List-Unsubscribe, List-Unsubscribe-Post },
 metadata: { websiteId, product, kind, types, subscriptionIds } }`, `Authorization` per the connector, `Idempotency-Key`.
@@ -70,7 +79,7 @@ metadata: { websiteId, product, kind, types, subscriptionIds } }`, `Authorizatio
 | Triggers      | `POST /v1/triggers` · `POST /v1/triggers:batch` · `POST /v1/triggers:import` (CSV) · `GET /v1/triggers[/{id}]` (sk) |
 | Types         | `GET /v1/alert-types` (pk/sk — what the widget needs)                                                               |
 | Subscriptions | `POST /v1/subscriptions` · `GET /v1/subscriptions` · `GET`/`DELETE /v1/subscriptions/{id}` · `POST …:confirm`       |
-| Outbox        | `GET /v1/messages[/{id}]` · `POST /v1/messages:dispatch` (sk)                                                       |
+| Outbox        | `GET /v1/messages[/{id}]` · `POST /v1/messages:dispatch` (sk) · `POST /v1/dashboard/messages:dispatch` (session)    |
 | Waitlist      | `GET /v1/waitlist?type=&itemId=` (sk) · `GET /v1/waitlist/position?subscriptionId=`                                 |
 | Unsubscribe   | `GET /v1/unsubscribe/{token}` (preview) · `POST /v1/unsubscribe` · hosted `GET`/`POST /u/{token}`, `/c/{token}`     |
 | Analytics     | `GET /v1/analytics?days=` (sk)                                                                                      |
@@ -89,7 +98,8 @@ tokens only, native controls, polite live region.
 ## Dashboard (SSO)
 
 Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs (active, subscribed, sent, failed, notified and
-unsubscribe rates), latest subscriptions and messages (addresses masked). Demo launches show sandbox data decided by
+unsubscribe rates), latest subscriptions and messages (addresses masked) and, for merchants, **Send due now** on the
+Messages page (`POST /v1/dashboard/messages:dispatch`: the same outbox run as the API). Demo launches show sandbox data decided by
 the real type rules; impersonation shows the audit banner.
 
 ## Develop and certify
@@ -119,10 +129,8 @@ message at the provider → unsubscribe (GET changes nothing, POST stops) → us
    - `SS_PORTAL_URL` — the Portal URL this product trusts (pinned).
    - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
      registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
-   - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue, website ids). Required.
-   - `CRON_SECRET` (≥ 16 chars) — for `vercel.json`'s `/cron/dispatch`, the daily catch-up over every website.
-     Deferred, batched and retried messages and open waitlists are otherwise sent by a short background pass after
-     requests (at most every 5 minutes per website), so the free Vercel Hobby plan (one daily cron) is enough.
+   - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required.
+   - No cron and no cron secret: the product schedules nothing (see "No timers" above).
    - `ALERTS_TOKEN_SECRET` — optional (≥ 32 chars) secret of unsubscribe / confirm links and contact hashes; derived
      from the signing key when empty (rotating the key then invalidates outstanding links and re-keys contact hashes).
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register`), review and activate. `endpoints.base`
@@ -146,4 +154,4 @@ message at the provider → unsubscribe (GET changes nothing, POST stops) → us
 ## Changelog
 
 - **1.0.0** — first release: seven elements, Notify-me renderer and headless core, REST v1, hosted link pages,
-  dashboard, scheduled outbox job.
+  dashboard, event-driven outbox (no scheduled jobs).

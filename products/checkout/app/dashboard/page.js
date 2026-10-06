@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation.js';
 import { Card, Stat } from '@ss/ui';
 import { formatMoney } from '../../core/money.js';
 import { dashboardContext } from '../_lib/dashboard.js';
+import { ExpiryRun } from './_components/ExpiryRun.js';
 import { Shell, t } from './_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -45,5 +46,8 @@ export default async function Overview({ searchParams }) {
 				stats.map(([label, value]) => h(Stat, { key: label, label, value })),
 			),
 		),
+		context.data.canWrite && context.data.websiteId
+			? h(Card, { title: t('dashboard.expiry.title') }, h(ExpiryRun, { websiteId: context.data.websiteId }))
+			: null,
 	);
 }

@@ -5,9 +5,12 @@
  * Pipeline per request:
  *
  *   request id → route match (404 / 405, CORS preflight) → body read with a byte cap (413) → authentication
- *   (`staff` | `merchant` session cookie, `websiteKey`, `product` client assertion, `cron`, `public`) → CSRF for
+ *   (`staff` | `merchant` session cookie, `websiteKey`, `product` client assertion, `public`) → CSRF for
  *   cookie-authenticated mutations (403) → RBAC permission (403) → rate limit (429 + `RateLimit-*`) → JSON body
  *   (415 / 400) → `Idempotency-Key` on POST (428 / 409 / replay) → handler → RFC 9457 problems for every error.
+ *
+ * Every request runs in a request scope (`request-scope.js`): work deferred with `ctx.defer` or `afterResponse()`
+ * runs right after the response, and only then (no timers, PLAN F.19).
  *
  * The result helpers (`ok`, `created`, `problem`, `paginate`, …) mirror `@ss/app-kit`'s so products and the Portal
  * share one wire behaviour (problem documents, cursor pages `{ items, nextCursor, hasMore }` + `Link`, idempotent
@@ -16,6 +19,7 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
+import { runInRequestScope } from './request-scope.js';
 import { hmacHex, isObject, sha256Hex } from './util.js';
 
 /** @typedef {import('./logger.js').Logger} Logger */
@@ -26,12 +30,10 @@ import { hmacHex, isObject, sha256Hex } from './util.js';
 /** @typedef {import('./stores.js').RateLimitStore} RateLimitStore */
 /** @typedef {import('@ss/contracts').ProblemFactory} ProblemFactory */
 
-/** @typedef {'staff' | 'merchant' | 'websiteKey' | 'product' | 'cron' | 'public'} AuthMode */
+/** @typedef {'staff' | 'merchant' | 'websiteKey' | 'product' | 'public'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
 
-export const AUTH_MODES = Object.freeze(
-	/** @type {AuthMode[]} */ (['staff', 'merchant', 'websiteKey', 'product', 'cron', 'public']),
-);
+export const AUTH_MODES = Object.freeze(/** @type {AuthMode[]} */ (['staff', 'merchant', 'websiteKey', 'product', 'public']));
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -247,7 +249,7 @@ export const defineRoute = (definition) => {
 	}
 	if (modes.includes('public') && modes.length > 1)
 		throw new TypeError(`public cannot be combined with other modes (${method} ${path})`);
-	if (definition.permission !== undefined && (modes.includes('public') || modes.includes('cron'))) {
+	if (definition.permission !== undefined && modes.includes('public')) {
 		throw new TypeError(`permission needs an authenticated actor (${method} ${path})`);
 	}
 	if (typeof handler !== 'function') throw new TypeError(`route ${method} ${path} needs a handler`);
@@ -378,9 +380,11 @@ export const matchRoute = (routes, method, pathname) => {
 /** @typedef {(task: () => Promise<unknown>) => void} AfterScheduler */
 
 /**
- * What the handler hands to `afterResponse` once the response is built: the tasks deferred by the route and the
- * framework's scheduler for this request (null outside Next.js).
- * @typedef {{ deferred: ReadonlyArray<() => Promise<unknown>>, schedule: AfterScheduler | null, log: Logger }} AfterResponse
+ * What the handler hands to `afterResponse` once the response is built: the tasks deferred during the request (a
+ * live list: tasks deferred while they run are appended), the framework's scheduler for this request (null outside
+ * Next.js) and the product that called (`product` auth), so its own pending work can follow the request.
+ * @typedef {{ deferred: Array<() => Promise<unknown>>, schedule: AfterScheduler | null, log: Logger,
+ *   app: { appId: string } | null }} AfterResponse
  */
 
 /** Per-request `after()` schedulers registered by `toNextRoute(handler, { after })`. */
@@ -501,7 +505,11 @@ export const createApiHandler = ({
 		};
 	};
 
-	return async (request) => {
+	/**
+	 * @param {Request} request
+	 * @param {Array<() => Promise<unknown>>} deferred the request scope's deferred tasks
+	 */
+	const serve = async (request, deferred) => {
 		const started = now();
 		const url = new URL(request.url);
 		const method = request.method.toUpperCase();
@@ -519,14 +527,14 @@ export const createApiHandler = ({
 		const extra = { 'x-request-id': requestId };
 		/** @type {Actor | null} */
 		let actor = null;
-		/** @type {Array<() => Promise<unknown>>} */
-		const deferred = [];
+		/** @type {{ appId: string } | null} */
+		let app = null;
 
 		/** @param {StoredResponse & { cookies?: string[] }} rendered */
 		const finish = (rendered) => {
 			if (afterResponse) {
 				try {
-					afterResponse({ deferred, schedule: SCHEDULERS.get(request) ?? null, log });
+					afterResponse({ deferred, schedule: SCHEDULERS.get(request) ?? null, log, app });
 				} catch (error) {
 					log.warn('after-response scheduling failed', { error });
 				}
@@ -605,6 +613,7 @@ export const createApiHandler = ({
 				if (!auth) return fail(problem('unauthorized', 'Authentication is required.'));
 			}
 			actor = auth.actor;
+			app = auth.app ?? null;
 			Object.assign(extra, auth.headers ?? {});
 
 			// CSRF (cookie sessions only)
@@ -760,13 +769,19 @@ export const createApiHandler = ({
 			return fail(problem('internal_error'));
 		}
 	};
+
+	return (/** @type {Request} */ request) => {
+		/** @type {Array<() => Promise<unknown>>} */
+		const deferred = [];
+		return runInRequestScope({ defer: (task) => void deferred.push(task) }, () => serve(request, deferred));
+	};
 };
 
 /**
  * Next.js App Router adapter: `export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(handler)`.
  * The handler strips its own `basePath` (`/api`), so routes are declared as `/v1/...` whether they are reached at
  * `/api/v1/...` or through the `/v1/:path*` rewrite. Pass Next's `after` (`import { after } from 'next/server.js'`)
- * so deferred work and the throttled background work (F.19) run after the response on serverless hosts.
+ * so deferred work (the request's own jobs, deliveries, settlement) runs after the response on serverless hosts.
  * @param {(request: Request) => Promise<Response>} handler
  * @param {{ after?: AfterScheduler }} [options]
  * @returns {Readonly<Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS', (request: Request) => Promise<Response>>>}

@@ -13,7 +13,7 @@
  *
  * `product` actors (client assertions) and `website` actors (website keys) have no roles: their routes authorise by
  * protocol (app identity, key scopes), so `can` is false for them unless the actor carries explicit `permissions`.
- * `system` actors (cron, migrations) may do everything.
+ * `system` actors (operations, migrations) may do everything.
  * @module
  */
 

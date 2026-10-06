@@ -9,6 +9,7 @@ import { redirect } from 'next/navigation.js';
 import { Card, EmptyState, Stat } from '@ss/ui';
 import { formatMoney } from '../../core/money.js';
 import { dashboardContext } from '../_lib/dashboard.js';
+import { ExpireReservations } from './_components/ExpireReservations.js';
 import { Shell, t } from './_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -70,5 +71,8 @@ export default async function Overview({ searchParams }) {
 						),
 					),
 		),
+		context.data.canWrite && context.data.websiteId
+			? h(Card, { title: t('dashboard.expire.title') }, h(ExpireReservations, { websiteId: context.data.websiteId }))
+			: null,
 	);
 }

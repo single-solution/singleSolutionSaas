@@ -1,18 +1,20 @@
 /**
  * Request flow (messaging connector), photos (storage connector), Q&A, CSV import, analytics, order lifecycle events,
- * the daily cron and the work after requests, the dashboard API and Portal-signed privacy operations.
+ * sending on order completion (no timers), the dashboard API and Portal-signed privacy operations.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createId } from '@ss/contracts';
 import { MIGRATIONS, STALE_BACKSTOP_MS } from '../adapters/db.js';
 import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
-import { CRON_SECRET, DAY, HOUR, MERCHANT, T0, WEBSITE, WEBSITE_2, createHarness } from './harness.js';
+import { DAY, HOUR, MERCHANT, T0, WEBSITE, WEBSITE_2, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
 beforeAll(async () => {
 	h = await createHarness({
 		config: {
+			// most tests drive the flow with POST /v1/request-flow:run; 'sends on completion' turns it on
+			collection: { send_on_completion: false },
 			request_flow: {
 				review_url: 'https://shop.example.com/review?t={token}&o={orderId}',
 				reminders: [3, 10],
@@ -26,12 +28,23 @@ afterAll(async () => h?.close());
 
 const text = 'Arrived quickly and works perfectly. Would buy again.';
 
+/** A merchant dashboard session of the main website (launch exchanged at /sso). */
+const dashboardSession = async () => {
+	const { token } = await h.portal.issueLaunch({
+		kind: 'merchant',
+		subject: 'usr_merchant',
+		user: { id: 'usr_merchant' },
+		scope: { merchantId: MERCHANT, websiteId: WEBSITE },
+	});
+	const exchanged = await h.reviews.product.launch.exchange(token);
+	if (!exchanged.ok) throw new Error(exchanged.code);
+	return exchanged.session.id;
+};
+
 describe('request flow', () => {
-	it('sends the request when due, then reminders, through the messaging connector, and stops once reviewed', async () => {
+	it('sends the request when run, then reminders, through the messaging connector, and stops once reviewed', async () => {
 		const { orderId } = await h.completeOrder({ customerId: 'cus_flow', items: ['itm_f1', 'itm_f2'], phone: '+4915112345678' });
-		const early = await h.call('POST', '/v1/request-flow:run', { idempotencyKey: null });
-		expect(early.json).toMatchObject({ due: 0, sent: 0 });
-		h.clock.advance(7 * DAY + HOUR); // 11:00 UTC, outside quiet hours
+		// due at completion (no delay); 10:00 UTC is outside quiet hours
 		const run = await h.call('POST', '/v1/request-flow:run', { idempotencyKey: null });
 		expect(run.json).toMatchObject({ due: 1, sent: 1, failed: 0 });
 		const message = h.providers.messages.at(-1);
@@ -94,8 +107,8 @@ describe('request flow', () => {
 		h.clock.set(T0);
 	});
 
-	it('expires requests, waits for a review URL, and runs from the daily cron for every website', async () => {
-		await h.entitle({ config: { request_flow: { review_url: '' } } });
+	it('expires requests and waits for a review URL', async () => {
+		await h.entitle({ config: { collection: { send_on_completion: false }, request_flow: { review_url: '' } } });
 		const { orderId } = await h.completeOrder({ customerId: 'cus_nourl', items: ['itm_n1'] });
 		h.clock.advance(7 * DAY + HOUR);
 		const run = await h.call('POST', '/v1/request-flow:run', { idempotencyKey: null });
@@ -103,34 +116,62 @@ describe('request flow', () => {
 		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.delivery.lastError).toBe(
 			'review_url_missing',
 		);
-		await h.entitle({ config: { request_flow: { review_url: 'https://shop.example.com/r/{token}' } } });
+		await h.entitle({
+			config: {
+				collection: { send_on_completion: false },
+				request_flow: { review_url: 'https://shop.example.com/r/{token}' },
+			},
+		});
 		h.clock.advance(400 * DAY);
-		const cron = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
-		expect(cron.status).toBe(200);
-		expect(cron.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)?.expired).toBeGreaterThanOrEqual(1);
+		const status = await h.call('GET', '/v1/request-flow');
+		expect(status.json.requests.expired).toBeGreaterThanOrEqual(1);
+		expect(status.json.nextDueAt).toBeNull();
+		const expired = await h.call('POST', '/v1/request-flow:run', { idempotencyKey: null });
+		expect(expired.json.expired).toBeGreaterThanOrEqual(1);
 		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.status).toBe('expired');
-		expect((await h.call('GET', '/cron/requests', { key: 'wrong' })).status).toBe(401);
 		h.clock.set(T0);
 		await h.entitle();
-		// without the request flow element the job skips the website and the routes are gated
+		// without the request flow element the routes are gated
 		await h.entitle({ elements: { request_flow: false } });
 		expect((await h.call('GET', '/v1/request-flow')).status).toBe(403);
-		const skipped = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
-		const row = skipped.json.results.find((/** @type {any} */ entry) => entry.websiteId === WEBSITE);
-		expect(row).toEqual({ websiteId: WEBSITE, photos: { scanned: 0, deleted: 0, missing: 0, failed: 0 } });
+		expect((await h.call('POST', '/v1/request-flow:run', { idempotencyKey: null })).status).toBe(403);
 		await h.entitle();
 	});
 
-	it('runs the flow after requests (throttled background task) and reads a request past expiry as expired before any job', async () => {
-		const { orderId } = await h.completeOrder({ customerId: 'cus_bg', items: ['itm_bg1'] });
-		const stored = await h.collection('requests').findOne({ websiteId: WEBSITE, orderId });
-		h.clock.advance(7 * DAY + HOUR); // due, 11:00 UTC
+	it('sends on completion, catches up held requests with the next completion, and reads expiry when read', async () => {
+		await h.entitle({ config: { collection: { send_on_completion: true } } });
 		const before = h.providers.messages.length;
-		expect(h.reviews.work.name).toBe('requests');
-		expect(await h.reviews.work.trigger({ websiteId: WEBSITE })).toBe(true);
+		const { orderId } = await h.completeOrder({ customerId: 'cus_bg', items: ['itm_bg1'] }); // 10:00 UTC
 		expect(h.providers.messages.length).toBe(before + 1);
-		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.delivery.sends).toBe(1);
-		expect(await h.reviews.work.trigger({ websiteId: WEBSITE })).toBe(false); // throttled within the interval
+		const stored = await h.collection('requests').findOne({ websiteId: WEBSITE, orderId });
+		expect(stored?.delivery).toMatchObject({ sends: 1, state: 'sent' });
+		expect(stored?.dueAt).toBe(stored?.completedAt);
+		// an order completed during quiet hours waits; the next completion outside them sends both
+		h.clock.set(T0 + 13 * HOUR); // 23:00 UTC
+		const { orderId: held } = await h.completeOrder({ customerId: 'cus_held', items: ['itm_bg2'] });
+		expect(h.providers.messages.length).toBe(before + 1);
+		h.clock.set(T0 + DAY);
+		const { orderId: next } = await h.completeOrder({ customerId: 'cus_next', items: ['itm_bg3'] });
+		expect(h.providers.messages.length).toBe(before + 3);
+		for (const id of [held, next])
+			expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId: id }))?.delivery.sends).toBe(1);
+		// an order completed "in the future" counts as completed now; a failing flow never fails the completion
+		const future = await h.call('POST', '/v1/review-requests', {
+			body: {
+				orderId: 'ord_future',
+				customerId: 'cus_future',
+				contact: { email: 'future@example.com' },
+				items: [{ itemId: 'itm_future' }],
+				completedAt: new Date(T0 + 5 * DAY).toISOString(),
+			},
+		});
+		expect(future.status).toBe(201);
+		expect(future.json).toMatchObject({ completedAt: new Date(T0 + DAY).toISOString(), delivery: { sends: 1 } });
+		h.providers.failMessaging({ status: 503 });
+		await h.completeOrder({ customerId: 'cus_fail', items: ['itm_bg4'] });
+		h.providers.failMessaging(null);
+		h.clock.set(T0);
+		await h.entitle();
 
 		h.clock.advance(400 * DAY);
 		const read = await h.call('GET', `/v1/review-requests/${stored?.id}`);
@@ -144,6 +185,10 @@ describe('request flow', () => {
 		expect(await ids('expired')).toContain(stored?.id);
 		expect(await ids('open')).not.toContain(stored?.id);
 		expect(await ids('completed')).not.toContain(stored?.id);
+		// opening its link settles it as expired
+		const link = await h.call('POST', `/v1/review-requests/${stored?.id}/link`, { idempotencyKey: null });
+		await h.call('POST', '/v1/review-requests:open', { body: { token: link.json.token }, idempotencyKey: null });
+		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.status).toBe('expired');
 		h.clock.set(T0);
 	});
 
@@ -363,8 +408,8 @@ describe('photos', () => {
 });
 
 describe('stale photo slots', () => {
-	it('sweeps slots never attached from the hourly cron: objects deleted from the bucket, records removed', async () => {
-		await h.entitle({ config: { collection: { who: 'identified' } } });
+	it('sweeps slots never attached on the next upload and from the dashboard: objects deleted, records removed', async () => {
+		await h.entitle({ config: { collection: { who: 'identified', send_on_completion: false } } });
 		const uploaded = await h.call('POST', '/v1/review-photos', {
 			as: 'cus_stale',
 			body: { contentType: 'image/png', size: 10 },
@@ -374,9 +419,10 @@ describe('stale photo slots', () => {
 		expect(doc?.staleAt).toBeInstanceOf(Date);
 		expect(doc?.purgeAt.getTime() - doc?.staleAt.getTime()).toBe(STALE_BACKSTOP_MS);
 		h.providers.upload(String(doc?.objectKey), 10, 'image/png');
+		const session = await dashboardSession();
 		// before the stale date nothing is swept
-		const early = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
-		expect(early.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)?.photos.scanned).toBe(0);
+		const early = await h.call('POST', '/v1/dashboard/photos:sweep', { key: session, idempotencyKey: null, body: {} });
+		expect(early.json.scanned).toBe(0);
 		h.clock.advance(30 * DAY + 1_000);
 		// past the stale date the slot cannot be attached any more
 		const late = await h.call('POST', '/v1/reviews', {
@@ -385,19 +431,80 @@ describe('stale photo slots', () => {
 		});
 		expect(late.status).toBe(422);
 		h.clock.advance(HOUR);
-		const cron = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
-		const swept = cron.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)?.photos;
-		expect(swept.failed).toBe(0);
-		expect(swept.deleted).toBeGreaterThanOrEqual(1); // other tests' slots are swept too
-		expect(swept.missing).toBeGreaterThanOrEqual(1);
+		// the website's next upload sweeps the stale slots: the uploaded object and both records are gone
+		const fresh = await h.call('POST', '/v1/review-photos', { as: 'cus_stale', body: { contentType: 'image/png', size: 30 } });
+		expect(fresh.status).toBe(201);
 		expect(h.providers.objects.has(String(doc?.objectKey))).toBe(false);
 		expect(
 			await h.collection('photos').countDocuments({ websiteId: WEBSITE, id: { $in: [uploaded.json.id, never.json.id] } }),
 		).toBe(0);
-		const again = await h.call('GET', '/cron/requests', { key: CRON_SECRET });
-		expect(again.json.results.find((/** @type {any} */ row) => row.websiteId === WEBSITE)?.photos.scanned).toBe(0);
+		expect(await h.collection('photos').countDocuments({ websiteId: WEBSITE, id: fresh.json.id })).toBe(1);
+		// the dashboard button sweeps too (nothing left that is stale)
+		const again = await h.call('POST', '/v1/dashboard/photos:sweep', {
+			key: await dashboardSession(),
+			idempotencyKey: null,
+			body: {},
+		});
+		expect(again.status).toBe(200);
+		expect(again.json).toMatchObject({ scanned: 0, failed: 0 });
 		h.clock.set(T0);
 		await h.entitle();
+	});
+
+	it('cleans up from the dashboard; an unreachable bucket or a failing sweep never fails a request', async () => {
+		const session = await dashboardSession();
+		await h.collection('photos').insertOne({
+			websiteId: WEBSITE,
+			id: 'rph_old_slot',
+			key: 'photos/rph_old_slot',
+			status: 'pending',
+			staleAt: new Date(T0 - DAY),
+			purgeAt: new Date(T0 + DAY),
+		});
+		const swept = await h.call('POST', '/v1/dashboard/photos:sweep', { key: session, idempotencyKey: null, body: {} });
+		expect(swept.json).toMatchObject({ scanned: 1, missing: 1, failed: 0 });
+		expect(await h.collection('photos').countDocuments({ websiteId: WEBSITE, id: 'rph_old_slot' })).toBe(0);
+		// a failing sweep on upload never fails the upload
+		const site = await h.reviews.siteFor(WEBSITE);
+		if (!site) throw new Error('no site');
+		const failing = /** @type {any} */ ({
+			...site,
+			repos: { ...site.repos, photos: { ...site.repos.photos, sweepStale: async () => Promise.reject(new Error('down')) } },
+		});
+		const upload = await h.reviews.service.createUpload(failing, {
+			contentType: 'image/png',
+			size: 5,
+			customerId: null,
+			key: 'k_sweep_fail',
+		});
+		expect(upload.ok).toBe(true);
+		// a storage connector that cannot be resolved is counted as failed (the slot stays for the next run)
+		h.portal.setResource(WEBSITE_2, 'storage', { bucket: 'x' }, DAY);
+		await h.entitle({ websiteId: WEBSITE_2 });
+		await h.collection('photos').insertOne({
+			websiteId: WEBSITE_2,
+			id: 'rph_old_slot_2',
+			key: 'photos/rph_old_slot_2',
+			status: 'pending',
+			staleAt: new Date(T0 - DAY),
+			purgeAt: new Date(T0 + DAY),
+		});
+		const { token } = await h.portal.issueLaunch({
+			kind: 'merchant',
+			subject: 'usr_merchant',
+			user: { id: 'usr_merchant' },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE_2 },
+		});
+		const exchanged = await h.reviews.product.launch.exchange(token);
+		if (!exchanged.ok) throw new Error(exchanged.code);
+		const broken = await h.call('POST', '/v1/dashboard/photos:sweep', {
+			key: exchanged.session.id,
+			idempotencyKey: null,
+			body: {},
+		});
+		expect(broken.status).toBe(200);
+		expect(broken.json).toMatchObject({ deleted: 0, failed: 1 });
+		await h.collection('photos').deleteOne({ websiteId: WEBSITE_2, id: 'rph_old_slot_2' });
 	});
 
 	it('migrates pending slots written before the sweep (purgeAt → staleAt, TTL moved back)', async () => {
@@ -652,6 +759,31 @@ describe('dashboard', () => {
 		expect((await h.call('GET', '/v1/session', bearer)).json).toMatchObject({ kind: 'merchant', role: 'merchant' });
 		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_1' });
 		expect((await h.call('GET', '/v1/dashboard/overview', { key: admin })).status).toBe(400);
+	});
+
+	it('runs the request flow on demand from merchant sessions ("Send due requests now")', async () => {
+		const { orderId } = await h.completeOrder({ customerId: 'cus_dash_run', items: ['itm_dash_run'] });
+		const session = await launch('merchant');
+		const run = await h.call('POST', '/v1/dashboard/request-flow:run', { key: session, idempotencyKey: null, body: {} });
+		expect(run.status).toBe(200);
+		expect(run.json.sent).toBeGreaterThanOrEqual(1);
+		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.delivery.sends).toBe(1);
+		const demo = await launch('demo');
+		expect((await h.call('POST', '/v1/dashboard/request-flow:run', { key: demo, idempotencyKey: null, body: {} })).status).toBe(
+			403,
+		);
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_1' });
+		expect(
+			(await h.call('POST', '/v1/dashboard/request-flow:run', { key: admin, idempotencyKey: null, body: {} })).status,
+		).toBe(400);
+		expect((await h.call('POST', '/v1/dashboard/photos:sweep', { key: admin, idempotencyKey: null, body: {} })).status).toBe(
+			400,
+		);
+		await h.entitle({ elements: { request_flow: false } });
+		expect(
+			(await h.call('POST', '/v1/dashboard/request-flow:run', { key: session, idempotencyKey: null, body: {} })).status,
+		).toBe(403);
+		await h.entitle();
 	});
 
 	it('resolves what the pages show for every session state, and builds demo data with the real core', async () => {

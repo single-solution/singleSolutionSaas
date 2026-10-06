@@ -38,9 +38,6 @@
 			"name": "dashboard"
 		},
 		{
-			"name": "jobs"
-		},
-		{
 			"name": "standard"
 		}
 	],
@@ -996,7 +993,7 @@
 			"post": {
 				"operationId": "crawlSource",
 				"tags": ["sources"],
-				"summary": "Start a new run of a crawled source now and run its first step (the scheduler continues it).",
+				"summary": "Crawl a source now: continue its run in progress or start a new one, step after step for up to 10 seconds (the next call continues a run cut short; nothing is scheduled).",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/SourceKey"
@@ -1641,7 +1638,7 @@
 			"post": {
 				"operationId": "dashboardCrawl",
 				"tags": ["dashboard"],
-				"summary": "Crawl a source now (dashboard session; audited).",
+				"summary": "Crawl a source now, continuing a run in progress (dashboard session; audited).",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/SourceKey"
@@ -1678,6 +1675,41 @@
 										"finishedAt": "2026-10-01T09:05:00.000Z",
 										"nextRunAt": "2026-10-02T09:05:00.000Z"
 									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/crawl-due": {
+			"post": {
+				"operationId": "dashboardCrawlDue",
+				"tags": ["dashboard"],
+				"summary": "Crawl the website's due sources (never crawled, in progress, or every_hours passed) for up to 10 seconds (dashboard session; audited). Nothing is scheduled.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKey"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"crawled": 2
 								}
 							}
 						}
@@ -1755,44 +1787,6 @@
 				"security": [
 					{
 						"session": []
-					}
-				]
-			}
-		},
-		"/cron/sweep": {
-			"get": {
-				"operationId": "sweep",
-				"tags": ["jobs"],
-				"summary": "Scheduled work for every website: a step of each due crawl, the Atlas index state, vocabulary cleanup.",
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websites": 1,
-									"results": [
-										{
-											"websiteId": "web_1",
-											"crawled": 1,
-											"atlas": "unavailable",
-											"termsRemoved": 0
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				},
-				"security": [
-					{
-						"cron": []
 					}
 				]
 			}
@@ -2052,11 +2046,6 @@
 				"in": "cookie",
 				"name": "ss_session",
 				"description": "dashboard session from GET /sso?launch="
-			},
-			"cron": {
-				"type": "http",
-				"scheme": "bearer",
-				"description": "CRON_SECRET"
 			}
 		},
 		"parameters": {

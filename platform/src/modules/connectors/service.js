@@ -16,6 +16,7 @@
  */
 import { createId, isId } from '@ss/contracts';
 import { problem } from '../../infra/http.js';
+import { afterResponse } from '../../infra/request-scope.js';
 import { decideResolve } from './core/access.js';
 import { DESCRIPTOR_TTL_MS, descriptorOf } from './core/descriptor.js';
 import { previewOf } from './core/mask.js';
@@ -636,6 +637,17 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 		}
 		const descriptor = descriptorOf(String(doc.kind), String(doc.provider), credentials);
 		const expiresAt = new Date(ctx.now() + DESCRIPTOR_TTL_MS).toISOString();
+		// a resolve is a natural moment to re-check a connector whose last check is old (after the response; no timer)
+		const lastCheck = doc.lastCheckAt ? new Date(doc.lastCheckAt).getTime() : 0;
+		if (ctx.now() - lastCheck >= HEALTH_INTERVAL_MS)
+			afterResponse(async () => {
+				const result = await check(doc);
+				if (result.changed)
+					await audit({ actor: SYSTEM }, 'connectors.status_changed', result.doc, {
+						before: { status: doc.status },
+						after: { status: result.doc.status },
+					});
+			});
 		await ctx.audit.record({
 			actor,
 			action: 'connectors.resolved',
@@ -648,9 +660,9 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	};
 
 	/**
-	 * Health check (a step of the daily cron): purge expired rollback copies, re-wrap sealed values under the active KEK,
-	 * re-test every live connector not checked within the interval (until 10 s before the deadline, a margin for the
-	 * check in flight). What is left stays due for the next run.
+	 * Health check (admin operation `connectors-health`, on demand): purge expired rollback copies, re-wrap sealed
+	 * values under the active KEK, re-test every live connector not checked within the interval (until 10 s before the
+	 * deadline, a margin for the check in flight). What is left stays due for the next run.
 	 * @param {{ deadline?: number, signal?: AbortSignal, batchSize?: number }} [options]
 	 */
 	const healthCheck = async ({ deadline = Number.POSITIVE_INFINITY, signal, batchSize = 25 } = {}) => {

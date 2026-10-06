@@ -50,7 +50,6 @@ import { ROOT, loadManifest, startServer } from '@ss/product-signups/serve';
 import { createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
-const CRON_SECRET = 'c'.repeat(40);
 const SIGNUPS_TOKEN = `rt_${randomBytes(24).toString('hex')}`;
 const LOYALTY_TOKEN = `rt_${randomBytes(24).toString('hex')}`;
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
@@ -177,7 +176,6 @@ beforeAll(async () => {
 		SECRETS_KEK: `kek-1:${randomBytes(32).toString('base64')}`,
 		SESSION_SECRET: randomBytes(32).toString('base64'),
 		WEBSITE_KEY_PEPPER: randomBytes(32).toString('base64'),
-		CRON_SECRET,
 		OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
 		STAFF_SESSION_IDLE_MINUTES: '720',
 	});
@@ -186,11 +184,14 @@ beforeAll(async () => {
 	const portalDb = mongo.db(`e2e_portal_${suffix}`);
 	const clientDbName = `e2e_signups_client_${suffix}`;
 	const mailer = createMailer();
+	/** @type {Array<() => Promise<unknown>>} work the Portal runs right after each response (F.19: no cron) */
+	const afterResponseTasks = [];
 	const portal = createPortal({
 		config,
 		db: portalDb,
 		logger: /** @type {any} */ (noopLogger),
 		now: clock.now,
+		background: { mode: 'on', fallback: (task) => void afterResponseTasks.push(task) },
 		mailer,
 		modules: [
 			systemModule,
@@ -322,10 +323,17 @@ beforeAll(async () => {
 		const text = await response.text();
 		return { status: response.status, json: text ? JSON.parse(text) : null };
 	};
+	/** Run what the Portal deferred after its responses (deliveries, retries); returns the job outcome counts. */
 	const drain = async () => {
-		const result = await call('GET', '/cron/drain', { bearer: CRON_SECRET });
-		expect(result.status, JSON.stringify(result.json)).toBe(200);
-		return result.json;
+		const jobs = portalDb.collection('platform_jobs');
+		const count = async () => ({
+			done: await jobs.countDocuments({ status: 'done' }),
+			dead: await jobs.countDocuments({ status: 'dead' }),
+		});
+		const before = await count();
+		while (afterResponseTasks.length > 0) await afterResponseTasks.shift()?.();
+		const after = await count();
+		return { status: 'ok', stats: { succeeded: after.done - before.done, dead: after.dead - before.dead } };
 	};
 	ctx = {
 		clock,
@@ -605,8 +613,7 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		expect(flushed.rejected).toBe(0);
 		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
 		clock.set(hour0 + 2 * HOUR + 5 * 60_000);
-		const settled = await call('GET', '/cron/settlement', { bearer: CRON_SECRET });
-		expect(settled.status, JSON.stringify(settled.json)).toBe(200);
+		// no cron: reading the statement settles the merchant's complete hours first
 		const statement = await call(
 			'GET',
 			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(new Date(hour0 - HOUR).toISOString())}&to=${encodeURIComponent(new Date(clock.now() + HOUR).toISOString())}`,

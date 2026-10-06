@@ -54,7 +54,7 @@ export const applyLifecycle = ({ status, action, now, sunsetAt, currentSunsetAt 
 };
 
 /**
- * Deprecated apps whose sunset has passed are retired by the daily job.
+ * Deprecated apps whose sunset has passed are retired the first time they are read after it (no timer).
  * @param {{ status: string, sunsetAt?: Date | null }} app
  * @param {number} now
  */

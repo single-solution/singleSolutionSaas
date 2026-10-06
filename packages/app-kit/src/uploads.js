@@ -2,7 +2,7 @@
  * Sweeping stale presigned uploads (PLAN item 10e). A product that hands out presigned PUT slots keeps one record per
  * slot in the merchant's database (`data.forWebsite(...).collection(...)`). A slot that is never confirmed would leave
  * its object in the merchant's bucket forever once a TTL index removed the record, so the product marks each pending
- * record with a "stale at" date and a cron calls `sweepStaleUploads` per website: it deletes the object (when present)
+ * record with a "stale at" date and the product calls `sweepStaleUploads` for the website on its next upload (or from a dashboard button): it deletes the object (when present)
  * and then the record (or marks it), bounded per run and safe to repeat.
  *
  * Pure: the collection, the storage connector and the clock are injected. Keys are the storage connector's relative

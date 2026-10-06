@@ -22,7 +22,7 @@ import { checkUsageRecord } from '../core/validate.js';
 export const createUsage = ({ ctx, repo, deps, subscriptions }) => {
 	/**
 	 * @param {{ appId: string, records: readonly unknown[] }} input
-	 * @returns {Promise<{ results: UsageResult[] }>}
+	 * @returns {Promise<{ results: UsageResult[], merchants: string[] }>} `merchants`: whose usage was accepted
 	 */
 	const recordUsage = async ({ appId, records }) => {
 		const now = ctx.now();
@@ -82,9 +82,14 @@ export const createUsage = ({ ctx, repo, deps, subscriptions }) => {
 			units.add(record.unit);
 			touched.set(sub._id, units);
 		}
-		for (const [subscriptionId, units] of touched)
-			await checkQuotas(/** @type {any} */ (await subs.get(subscriptionId)), units, now);
-		return { results };
+		/** @type {Set<string>} */
+		const merchants = new Set();
+		for (const [subscriptionId, units] of touched) {
+			const sub = /** @type {any} */ (await subs.get(subscriptionId));
+			merchants.add(String(sub.merchantId));
+			await checkQuotas(sub, units, now);
+		}
+		return { results, merchants: [...merchants] };
 	};
 
 	/**

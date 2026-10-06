@@ -40,7 +40,7 @@
 		"crawl_sources": {
 			"type": "array",
 			"title": "Crawled sources",
-			"description": "The website's own public JSON feed or sitemap, fetched on a schedule. Only https URLs on the website's domain (or a subdomain) are fetched; JSON records are mapped with field paths (`a.b|c`), sitemap pages give title, description, headings and text.",
+			"description": "The website's own public JSON feed or sitemap, crawled when you start it from the dashboard or the API (no schedule). Only https URLs on the website's domain (or a subdomain) are fetched; JSON records are mapped with field paths (`a.b|c`), sitemap pages give title, description, headings and text.",
 			"default": [],
 			"maxItems": 20,
 			"items": {
@@ -52,7 +52,13 @@
 					"kind": { "type": "string", "title": "Kind", "enum": ["json", "sitemap"] },
 					"url": { "type": "string", "title": "URL", "maxLength": 2000, "format": "uri" },
 					"type": { "type": "string", "title": "Document type", "maxLength": 40, "pattern": "^[a-z][a-z0-9_]{0,39}$" },
-					"every_hours": { "type": "integer", "title": "Crawl every (hours)", "minimum": 1, "maximum": 720 },
+					"every_hours": {
+						"type": "integer",
+						"title": "Due again after (hours)",
+						"description": "Hours after a run until the source is due again; due sources are crawled from the dashboard (no scheduled crawls).",
+						"minimum": 1,
+						"maximum": 720
+					},
 					"records_path": { "type": "string", "title": "Records path (JSON)", "maxLength": 200 },
 					"fields": {
 						"type": "array",
@@ -101,8 +107,8 @@
 		},
 		"pages_per_run": {
 			"type": "integer",
-			"title": "Pages fetched per scheduled run",
-			"description": "A sitemap crawl continues over several runs of the scheduler.",
+			"title": "Pages fetched per crawl step",
+			"description": "A crawl request runs steps for up to 10 seconds; a longer sitemap crawl is continued by the next request.",
 			"default": 40,
 			"minimum": 1,
 			"maximum": 200,

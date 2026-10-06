@@ -1,14 +1,13 @@
 /**
  * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
  * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
- * CATALOG_FEED_SECRET and CRON_SECRET) and the project files (manifest with feature schemas inlined, string
+ * CATALOG_FEED_SECRET) and the project files (manifest with feature schemas inlined, string
  * catalogs). This is the only place that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import { INDEXES, MIGRATIONS } from './db.js';
-import { createSiteRegistry } from './registry.js';
 import { createExportLinks, createFeedTokens, exportSecret, feedSecret, newId, stableId } from './tokens.js';
 
 /**
@@ -82,8 +81,6 @@ export const PROBLEM_CODES = Object.freeze({
  * @property {any} product app-kit product
  * @property {import('./tokens.js').FeedTokens} tokens
  * @property {import('./tokens.js').ExportLinks} exportLinks signed, short-lived CSV download links of the dashboard
- * @property {import('./registry.js').SiteRegistry} registry
- * @property {string | null} cronSecret
  * @property {string} portalUrl
  * @property {() => number} now
  * @property {(text: string) => string} stableId
@@ -114,8 +111,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
 	/** @type {unknown} */
 	let stores;
-	/** @type {any} */
-	let sites = null;
 	/** @type {{ close: () => Promise<void> } | null} */
 	let controlClient = null;
 	if (config.productDbUri) {
@@ -125,7 +120,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		const mongoStores = createMongoStores({ db: client.db() });
 		await mongoStores.ensureIndexes();
 		stores = mongoStores;
-		sites = client.db().collection('ss_catalog_sites');
 	}
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
 	const product = createProduct(
@@ -154,8 +148,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		product,
 		tokens: createFeedTokens({ secret: feedSecret({ secret: env.CATALOG_FEED_SECRET, signingKey }) }),
 		exportLinks: createExportLinks({ secret: exportSecret({ secret: env.CATALOG_FEED_SECRET, signingKey }), now }),
-		registry: createSiteRegistry({ collection: sites }),
-		cronSecret: env.CRON_SECRET && env.CRON_SECRET.length >= 16 ? env.CRON_SECRET : null,
 		portalUrl,
 		now,
 		stableId,

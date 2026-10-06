@@ -18,6 +18,8 @@ import { settingsFrom } from './settings.js';
  * @property {() => Promise<Record<string, any>>} issuer
  * @property {(actor: { type: string, id?: string }) => Promise<import('./service.js').Outcome | null>} registerIssuer ask
  *   the Portal to make Signups the website's identity issuer (null in the demo: nothing can be changed)
+ * @property {() => Promise<number | null>} runDueDeletions execute the deletions whose cooling-off ended (null in the
+ *   demo)
  */
 
 /** Customers listed per dashboard page. */
@@ -36,11 +38,15 @@ export const liveDashboard = ({ service, site }) => ({
 	websiteId: site.websiteId,
 	overview: () => service.overview(site),
 	customers: async ({ email, limit = DASHBOARD_PAGE }) =>
-		(await site.repos.customers.list({ fetchLimit: limit, ...(email ? { email } : {}) })).map((/** @type {any} */ customer) =>
-			service.viewOf(site, /** @type {any} */ (customer)),
-		),
+		(
+			await service.settleDeletions(
+				site,
+				/** @type {any[]} */ (await site.repos.customers.list({ fetchLimit: limit, ...(email ? { email } : {}) })),
+			)
+		).map((customer) => service.viewOf(site, customer)),
 	issuer: () => service.issuer(site),
 	registerIssuer: (actor) => service.registerIssuer(site, { actor }),
+	runDueDeletions: () => service.runDueDeletions(site),
 });
 
 /**
@@ -97,6 +103,7 @@ export const demoDashboard = ({ now, base }) => {
 			request: null,
 		}),
 		registerIssuer: async () => null,
+		runDueDeletions: async () => null,
 	};
 };
 

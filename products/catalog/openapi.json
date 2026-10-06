@@ -47,9 +47,6 @@
 			"name": "dashboard"
 		},
 		{
-			"name": "jobs"
-		},
-		{
 			"name": "standard"
 		}
 	],
@@ -3503,6 +3500,48 @@
 				]
 			}
 		},
+		"/v1/dashboard/due-work": {
+			"post": {
+				"operationId": "dashboardDueWork",
+				"tags": ["dashboard"],
+				"summary": "Process due changes for the website now (writers only): publish passed scheduled visibility changes, release expired stock holds, republish leftover item events. Each step is bounded; nothing runs on a timer.",
+				"parameters": [
+					{
+						"name": "Idempotency-Key",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"transitions": 1,
+									"expiredReservations": 0,
+									"republished": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
 		"/v1/dashboard/variants/{id}/stock": {
 			"post": {
 				"operationId": "dashboardStock",
@@ -3829,44 +3868,6 @@
 				"security": []
 			}
 		},
-		"/cron/sweep": {
-			"get": {
-				"operationId": "sweep",
-				"tags": ["jobs"],
-				"summary": "Scheduled publishing events, reservation expiry, event outbox retries (Authorization: Bearer CRON_SECRET).",
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websites": 1,
-									"results": [
-										{
-											"websiteId": "web_1",
-											"transitions": 0,
-											"expiredReservations": 0,
-											"republished": 0
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				},
-				"security": [
-					{
-						"cron": []
-					}
-				]
-			}
-		},
 		"/v1/entitlement": {
 			"get": {
 				"operationId": "getEntitlement",
@@ -4135,11 +4136,6 @@
 				"in": "cookie",
 				"name": "ss_session",
 				"description": "dashboard session from GET /sso?launch="
-			},
-			"cron": {
-				"type": "http",
-				"scheme": "bearer",
-				"description": "CRON_SECRET"
 			}
 		},
 		"parameters": {

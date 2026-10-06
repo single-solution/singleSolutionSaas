@@ -12,7 +12,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createAlerts, wireEvents } from '../api/routes.js';
-import { cronRoutes, scheduleDispatch } from '../jobs/dispatch.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -21,7 +20,6 @@ export const MERCHANT = 'mer_0123456789abcdefghjkmnpq';
 export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const PROVIDER = 'https://msg.example.com';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const ELEMENTS = ['triggers', 'types', 'capture', 'dispatch', 'waitlist_priority', 'unsubscribe', 'analytics'];
@@ -130,14 +128,13 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, iden
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_alerts_api_tests_0123456789'),
-			CRON_SECRET,
 			...env,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: provider.send },
 	});
-	const alerts = scheduleDispatch(wireEvents(createAlerts(app)));
-	const handle = createRequestHandler(alerts.product, [...buildRoutes(alerts), ...cronRoutes(alerts)]);
+	const alerts = wireEvents(createAlerts(app));
+	const handle = createRequestHandler(alerts.product, [...buildRoutes(alerts)]);
 	const issuer = identity
 		? await createTestIdentityIssuer({
 				issuer: 'https://login.shop.example.com',

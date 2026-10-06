@@ -527,7 +527,7 @@ describe('templates', () => {
 });
 
 describe('scheduled changes', () => {
-	it('applies exactly once (idempotent job and change key) and can be cancelled', async () => {
+	it('is applied on the first read at or after its time, exactly once (change key), and can be cancelled', async () => {
 		const { service, portal, clock } = await fresh();
 		const at = new Date(clock.now() + 3_600_000).toISOString();
 		const change = {
@@ -542,14 +542,16 @@ describe('scheduled changes', () => {
 			change: { config: { codes: { prefix: 'LATER' } } },
 			reason: 'launch',
 		});
-		const drain = () => portal.shared.jobs.runBatch({ handlers: portal.modules.jobs, deadlineMs: 60_000 });
-		expect((await drain()).leased).toBe(0); // not due yet
+		// no job: time passing alone changes nothing, the next read of the configuration applies it
+		expect(await portal.shared.jobs.stats()).toMatchObject({ queued: 0 });
+		await service.layersFor(SUB_A1); // not due yet
+		expect((await service.listSchedules({ target: SUB_A1, level: 'website' })).items[0]?.status).toBe('pending');
 		clock.advance(3_600_000);
-		expect((await drain()).succeeded).toBe(1);
+		expect((await service.layersFor(SUB_A1)).website.features['codes.prefix']).toEqual({ value: 'LATER' });
 		expect((await service.getLayer({ target: SUB_A1, level: 'website' })).state.features['codes.prefix']).toEqual({
 			value: 'LATER',
 		});
-		// the job may run again (retries, replays): no second version
+		// applying again (a concurrent read, a retry): no second version
 		expect(await service.applyScheduled({ scheduleId: scheduled.scheduleId, merchantId: MER_A })).toEqual({
 			status: 'applied',
 		});
@@ -597,7 +599,7 @@ describe('scheduled changes', () => {
 			).code,
 		).toBe('not_found');
 		clock.advance(120_000);
-		expect((await drain()).succeeded).toBe(2); // the second schedule's own job (already applied) and the cancelled one: both no-ops
+		await service.applyDue(MER_A); // the applied and the cancelled one are not due any more: no-ops
 		expect(await service.applyScheduled({ scheduleId: third.scheduleId, merchantId: MER_A })).toEqual({ status: 'cancelled' });
 		expect((await service.history(SUB_A1, { level: 'website' })).items).toHaveLength(2);
 		expect(await service.applyScheduled({ scheduleId: 'cfs_missing', merchantId: MER_A })).toEqual({ status: 'missing' });
@@ -607,7 +609,7 @@ describe('scheduled changes', () => {
 	});
 
 	it('validates at schedule time and fails (without retry) when the change became invalid', async () => {
-		const { service, portal, clock } = await fresh();
+		const { service, clock } = await fresh();
 		const target = { subscriptionId: SUB_A1 };
 		const past = await rejection(
 			service.schedule({ change: { target, level: 'website' }, at: clock.now() - 1, actor: merchantA }),
@@ -645,11 +647,8 @@ describe('scheduled changes', () => {
 			change: { features: { 'codes.prefix': { value: 'NOW', locked: true } } },
 		});
 		clock.advance(2000);
-		const stats = await portal.shared.jobs.runBatch({ handlers: portal.modules.jobs, deadlineMs: 60_000 });
-		expect(stats).toMatchObject({ succeeded: 1, retried: 0 });
 		const [failed] = (await service.listSchedules({ target, level: 'website' })).items;
 		expect(failed).toMatchObject({ status: 'failed', error: { code: 'validation_failed' } });
-		await expect(portal.modules.jobs['config.apply_scheduled']?.({}, /** @type {any} */ ({}))).rejects.toThrow(/scheduleId/);
 		expect(s.status).toBe('pending');
 	});
 });

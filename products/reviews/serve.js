@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createReviews, wireEvents } from './api/routes.js';
-import { cronRoutes, wireJobs } from './jobs/requests.js';
 
 export { loadManifest } from './adapters/platform.js';
 
@@ -29,9 +28,9 @@ export const startServer = async ({
 	overrides = {},
 	tls,
 } = {}) => {
-	const reviews = wireJobs(wireEvents(createReviews(await createPlatform({ env, root, overrides }))));
+	const reviews = wireEvents(createReviews(await createPlatform({ env, root, overrides })));
 	const { product } = reviews;
-	const handle = createRequestHandler(product, [...buildRoutes(reviews), ...cronRoutes(reviews)]);
+	const handle = createRequestHandler(product, [...buildRoutes(reviews)]);
 	/** @type {import('node:http').RequestListener} */
 	const listener = async (incoming, outgoing) => {
 		const scheme = tls ? 'https' : 'http';

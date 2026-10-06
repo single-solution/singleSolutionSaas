@@ -13,7 +13,6 @@ import { identityRoutes } from './routes.js';
 import { nameKey } from './core/search.js';
 import { C, collections } from './schema.js';
 import { createIdentityService } from './service.js';
-import { REVOKE_JOB } from './website-keys.js';
 
 export const IDENTITY_PROBLEMS = Object.freeze({
 	domain_taken: Object.freeze({ status: 409, title: 'Domain already registered' }),
@@ -44,9 +43,6 @@ export const createIdentityModule = (options = {}) =>
 		problems: IDENTITY_PROBLEMS,
 		service: (ctx) => createIdentityService(ctx, options),
 		routes: (ctx) => identityRoutes(ctx, ctx.service('identity')),
-		jobs: (ctx) => ({
-			[REVOKE_JOB]: async (payload) => ctx.service('identity').keys.onScheduledRevocation(payload),
-		}),
 		ports: (ctx) => ({
 			sessionActor: (session) => ctx.service('identity').sessionActor(session),
 			websiteKeyRevoked: (claims, rawKey) => ctx.service('identity').isKeyRevoked(claims, rawKey),

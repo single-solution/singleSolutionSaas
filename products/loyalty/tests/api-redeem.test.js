@@ -1,12 +1,12 @@
 /**
  * Redemption (quote / redeem / release / confirm), wallet tokens and the wallet view, adjustments (audited),
- * referrals (attribution, rewards, fraud caps), expiry (FIFO, notices, cron) and tier reviews, the dashboard API and
+ * referrals (attribution, rewards, fraud caps), expiry (FIFO, notices, on read and on demand) and tier reviews, the dashboard API and
  * data export / anonymisation — through app-kit's request handler with a real MongoDB.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createId } from '@ss/contracts';
 import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
-import { CRON_SECRET, createHarness, MERCHANT, WEBSITE } from './harness.js';
+import { createHarness, MERCHANT, WEBSITE } from './harness.js';
 
 const DAY = 24 * 3_600_000;
 const ORIGIN = { origin: 'https://shop.example.com' };
@@ -254,7 +254,7 @@ describe('referrals', () => {
 });
 
 describe('expiry and tier reviews', () => {
-	it('expires FIFO lots, notices once per expiry day, and reviews tiers (POST /v1/expiry:run and the cron)', async () => {
+	it('expires FIFO lots, notices once per expiry day, and reviews tiers (POST /v1/expiry:run, and on read)', async () => {
 		await earn('cus_exp', 500); // vip (window 1 month)
 		h.clock.advance(20 * DAY);
 		await h.entitle();
@@ -269,16 +269,12 @@ describe('expiry and tier reviews', () => {
 		expect(notice?.data).toMatchObject({ points: 500, balance: 550 });
 		h.clock.advance(30 * DAY);
 		await h.entitle();
-		expect((await h.call('GET', '/cron/expiry', { key: null, headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
-		const cron = await h.call('GET', '/cron/expiry', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(cron.status).toBe(200);
-		const site = cron.json.results.find((/** @type {any} */ result) => result.websiteId === WEBSITE);
-		expect(site.expired).toBeGreaterThanOrEqual(500);
 		expect(await balance('cus_exp')).toBe(50);
 		const member = (await h.call('GET', '/v1/members/cus_exp')).json;
-		expect(member.tier).toMatchObject({ key: 'member' }); // review date passed and the window metric dropped
+		expect(member.tier).toMatchObject({ key: 'member' }); // review date passed and the window metric dropped: on read
 		const history = (await h.call('GET', '/v1/members/cus_exp/history')).json.items;
 		expect(history[0]).toMatchObject({ kind: 'expire', points: -500 });
+		expect((await h.call('POST', '/v1/expiry:run')).status).toBe(200); // other members' lapsed points
 		expect((await h.call('POST', '/v1/expiry:run')).json.expired).toBe(0);
 	});
 });
@@ -368,6 +364,22 @@ describe('dashboard (SSO)', () => {
 		expect((await demo.members({})).length).toBe(4);
 		expect((await demo.member('cus_demo_chloe'))?.member.tier?.key).toBe('gold');
 		expect(await demo.member('nobody')).toBeNull();
+	});
+
+	it('runs the website expiry from the dashboard button (merchant only)', async () => {
+		await earn('cus_btn_exp', 70);
+		h.clock.advance(200 * DAY);
+		await h.entitle();
+		const session = await launch('merchant');
+		const run = await h.call('POST', '/v1/dashboard/expiry:run', { key: session, idempotencyKey: null });
+		expect(run.status).toBe(200);
+		expect(run.json.expired).toBeGreaterThanOrEqual(70);
+		expect((await h.collection('members').findOne({ customerId: 'cus_btn_exp' }))?.balance).toBe(0);
+		expect((await h.call('POST', '/v1/dashboard/expiry:run', { key: await launch('demo'), idempotencyKey: null })).status).toBe(
+			403,
+		);
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_2' });
+		expect((await h.call('POST', '/v1/dashboard/expiry:run', { key: admin, idempotencyKey: null })).status).toBe(400);
 	});
 });
 

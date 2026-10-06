@@ -1,12 +1,12 @@
 /**
  * Orders after placement: access (server key, the shopper's identity, or the order's access token), the lifecycle
  * Checkout owns (confirm, cancel, expire), the Order Manager's lifecycle arriving as standard events (`order.paid`,
- * `order.completed`, `order.cancelled`, `order.refunded`), the success view, and the scheduled sweep (expired holds,
- * abandoned carts).
+ * `order.completed`, `order.cancelled`, `order.refunded`), the success view, expired holds and abandoned carts.
  *
- * Expiry is checked on read: an order whose hold passed is cancelled (stock, codes and points released) the moment it is
- * accessed, confirmed or listed, and it never counts as open — the sweep (daily cron, throttled runs after requests)
- * only catches up on orders nobody touched.
+ * Nothing runs on a timer. Expiry is checked on read: an order whose hold passed is cancelled (stock, codes and points
+ * released) the moment it is accessed, confirmed or listed, and it never counts as open; a placement short of stock and
+ * the dashboard's "Process expired now" button release a website's expired holds in bounded pages. A cart is marked
+ * abandoned (and `checkout.cart_abandoned@1` published once) when the merchant's server reads it, or by that button.
  *
  * Every move is a compare-and-set on the status, so a re-delivered event or a double click changes nothing twice. Stock
  * goes back only for orders that were not completed (lesson A21); payments and refunds are recorded on the order with
@@ -305,7 +305,8 @@ export const createOrdersService = (checkout) => {
 	};
 
 	/**
-	 * Cancel expired holds (when Checkout owns expiry). Returns how many were cancelled.
+	 * Cancel the website's expired holds (when Checkout owns expiry), bounded: placement short of stock and the dashboard
+	 * button. Returns how many were cancelled.
 	 * @param {Site} site
 	 * @param {{ limit: number }} options
 	 */
@@ -320,7 +321,55 @@ export const createOrdersService = (checkout) => {
 	};
 
 	/**
-	 * Publish `checkout.cart_abandoned@1` once for carts untouched long enough.
+	 * Is the cart abandoned now (open, with lines, untouched for `cart.abandoned_after_hours`, not yet marked)?
+	 * @param {Site} site
+	 * @param {Record<string, any>} cart
+	 */
+	const abandonDue = (site, cart) => {
+		const hours = site.settings.cart.abandoned_after_hours;
+		return (
+			hours > 0 &&
+			cart.status === 'open' &&
+			!cart.abandonedAt &&
+			Boolean(cart.currency) &&
+			Array.isArray(cart.lines) &&
+			cart.lines.length > 0 &&
+			new Date(cart.updatedAt).getTime() <= app.now() - hours * 3_600_000
+		);
+	};
+
+	/**
+	 * Mark one cart abandoned when it is due and publish `checkout.cart_abandoned@1` once (compare-and-set on
+	 * `abandonedAt`). Returns the cart as stored after the call.
+	 * @param {Site} site
+	 * @param {Record<string, any>} cart
+	 * @returns {Promise<Record<string, any>>}
+	 */
+	const abandonIfDue = async (site, cart) => {
+		if (!abandonDue(site, cart)) return cart;
+		const at = new Date(app.now());
+		if (!(await site.repos.carts.markAbandoned(cart.id, at))) return cart;
+		const data = cartUpdatedData(/** @type {any} */ (cart));
+		await checkout.publish(
+			site,
+			'checkout.cart_abandoned@1',
+			{
+				cartId: cart.id,
+				...(cart.customerId ? { subject: String(cart.customerId).slice(0, 255) } : {}),
+				currency: cart.currency,
+				lineCount: cart.lines.length,
+				quantity: cart.lines.reduce((/** @type {number} */ sum, /** @type {any} */ line) => sum + line.quantity, 0),
+				subtotalAmount: subtotalOf(cart.lines),
+				itemIds: [...new Set(data.lines.map((line) => line.itemId))].slice(0, 50),
+				updatedAt: new Date(cart.updatedAt).toISOString(),
+			},
+			`${cart.id}:abandoned`,
+		);
+		return { ...cart, abandonedAt: at };
+	};
+
+	/**
+	 * Mark the website's due carts abandoned (bounded; the dashboard button). Returns how many were marked.
 	 * @param {Site} site
 	 * @param {{ limit: number }} options
 	 */
@@ -329,26 +378,7 @@ export const createOrdersService = (checkout) => {
 		if (hours <= 0) return 0;
 		const carts = await site.repos.carts.abandonable(new Date(app.now() - hours * 3_600_000), limit);
 		let count = 0;
-		for (const cart of carts) {
-			if (!cart.currency || !(await site.repos.carts.markAbandoned(cart.id, new Date(app.now())))) continue;
-			const data = cartUpdatedData(cart);
-			await checkout.publish(
-				site,
-				'checkout.cart_abandoned@1',
-				{
-					cartId: cart.id,
-					...(cart.customerId ? { subject: String(cart.customerId).slice(0, 255) } : {}),
-					currency: cart.currency,
-					lineCount: cart.lines.length,
-					quantity: cart.lines.reduce((/** @type {number} */ sum, /** @type {any} */ line) => sum + line.quantity, 0),
-					subtotalAmount: subtotalOf(cart.lines),
-					itemIds: [...new Set(data.lines.map((line) => line.itemId))].slice(0, 50),
-					updatedAt: new Date(cart.updatedAt).toISOString(),
-				},
-				`${cart.id}:abandoned`,
-			);
-			count += 1;
-		}
+		for (const cart of carts) if ((await abandonIfDue(site, cart)) !== cart) count += 1;
 		return count;
 	};
 
@@ -363,6 +393,7 @@ export const createOrdersService = (checkout) => {
 		success,
 		expire,
 		abandon,
+		abandonIfDue,
 		releaseStock,
 	});
 };

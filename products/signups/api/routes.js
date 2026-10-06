@@ -100,7 +100,6 @@ export const createSignups = (app) => {
 	 * @returns {Promise<Site>}
 	 */
 	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
 		return {
 			websiteId,
 			merchantId: doc.merchantId,
@@ -256,12 +255,15 @@ export const buildRoutes = (signups) => {
 				const email = ctx.query.email === undefined ? undefined : normaliseEmail(ctx.query.email);
 				const phone = ctx.query.phone === undefined ? undefined : normalisePhone(ctx.query.phone, service.phoneOptions(s));
 				if (email === null || phone === null) return page.respond([]);
-				const items = await s.repos.customers.list({
-					after: typeof page.after === 'string' ? page.after : null,
-					fetchLimit: page.fetchLimit,
-					...(email ? { email } : {}),
-					...(phone ? { phone } : {}),
-				});
+				const items = await service.settleDeletions(
+					s,
+					await s.repos.customers.list({
+						after: typeof page.after === 'string' ? page.after : null,
+						fetchLimit: page.fetchLimit,
+						...(email ? { email } : {}),
+						...(phone ? { phone } : {}),
+					}),
+				);
 				return page.respond(
 					items.map((/** @type {any} */ c) => service.viewOf(s, c)),
 					(/** @type {{ id: string }} */ c) => c.id,
@@ -638,6 +640,20 @@ export const buildRoutes = (signups) => {
 						: { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' },
 				);
 				return outcome ? respond(outcome) : problem('forbidden', 'The demo cannot change anything.');
+			},
+		}),
+		defineRoute({
+			// the dashboard's "Run due deletions" button (deletions also run whenever a due customer is read)
+			method: 'POST',
+			path: '/v1/dashboard/deletions:run',
+			auth: 'launch',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: false,
+			handler: async (ctx) => {
+				const context = await resolveDashboard({ signups, sessionId: ctx.session.id, website: ctx.websiteId });
+				if (context.state !== 'ready') return problem('bad_request', 'Open the dashboard for a website.');
+				const deleted = await context.data.runDueDeletions();
+				return deleted === null ? problem('forbidden', 'The demo cannot change anything.') : ok({ deleted });
 			},
 		}),
 	];

@@ -22,6 +22,14 @@ POST /v1/redemptions/{id}/release               when the checkout is abandoned (
 Send `order.placed@1` (with `customerId`, lines and amounts) and `order.completed@1` / `order.cancelled@1` /
 `order.refunded@1` to the Portal Event Hub; the product earns and reverses points exactly once per order.
 
+## Expiry, notices and tier reviews
+
+Nothing runs on a schedule. Points past their expiry are never shown or spendable, and the expiry is booked when the
+member is next read or moves. Reading a member (wallet, balance, member, redemption quote) also applies a due tier
+review and publishes a due `loyalty.expiring@1` notice for that member. A member nobody reads gets its notice and
+review when the merchant presses "Run expiry now" on the dashboard overview (or your server calls
+`POST /v1/expiry:run`); runs are idempotent and a run that hit its time budget continues on the next press.
+
 ## Earn rule conditions
 
 Conditions use rules@1 (`@ss/rules`). Context: `event` (`type`, `data`, `occurredAt`), `order` (`total`, `subtotal`,

@@ -106,6 +106,19 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect(retried[0]).toMatchObject({ attempts: 1, lastError: 'x' });
 	});
 
+	it('queues lease only one website’s due records when asked', async () => {
+		const clock = createClock();
+		const { usageQueue, eventOutbox } = factory(clock.now);
+		await usageQueue.enqueue(record('w1'));
+		await usageQueue.enqueue({ ...record('w2'), websiteId: 'web_2' });
+		const only = await usageQueue.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'a', websiteId: 'web_2' });
+		expect(only.map((r) => r.idempotencyKey)).toEqual(['w2']);
+		await eventOutbox.enqueue({ id: 'e1', envelope: { id: 'e1', websiteId: 'web_1' } });
+		await eventOutbox.enqueue({ id: 'e2', envelope: { id: 'e2', websiteId: 'web_2' } });
+		const events = await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'a', websiteId: 'web_1' });
+		expect(events.map((e) => e.id)).toEqual(['e1']);
+	});
+
 	it('event outbox: unique ids, leases, ack drops the envelope, retry, dead letter, retention', async () => {
 		const clock = createClock();
 		const { eventOutbox } = factory(clock.now);
@@ -184,16 +197,6 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect(second.resetAt).toBeGreaterThan(clock.now());
 		clock.advance(1000);
 		expect((await rateLimits.hit('k', 1000, clock.now())).count).toBe(1);
-	});
-
-	it('leases are taken once per ttl and expire', async () => {
-		const clock = createClock();
-		const { leases } = factory(clock.now);
-		expect(await leases.acquire('every:sweep', 1000)).toBe(true);
-		expect(await leases.acquire('every:sweep', 1000)).toBe(false);
-		expect(await leases.acquire('every:other', 1000)).toBe(true);
-		clock.advance(1000);
-		expect(await leases.acquire('every:sweep', 1000)).toBe(true);
 	});
 
 	it('portal keys keep the last JWKS', async () => {

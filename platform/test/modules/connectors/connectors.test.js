@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createJwks, createSigner, generateSigningKey, signAssertion } from '@ss/protocol';
 import { closeMongoClients } from '../../../src/infra/db.js';
+import { runInRequestScope } from '../../../src/infra/request-scope.js';
 import { createPortal } from '../../../src/portal.js';
 import { createConnectorsModule } from '../../../src/modules/connectors/index.js';
 import { MERCHANT, MERCHANT_2, PORTAL_URL, createClock, createTestLogger, startMongo, testConfig, b64 } from '../../helpers.js';
@@ -103,7 +104,7 @@ const boot = async (dbName, { env = {} } = {}) => {
 	 * @param {{ headers?: Record<string, string>, body?: unknown }} [init]
 	 */
 	const call = async (method, path, { headers = {}, body } = {}) => {
-		if (method === 'POST' && !path.startsWith('/api/cron')) headers = { 'idempotency-key': `k-${(keys += 1)}`, ...headers };
+		if (method === 'POST') headers = { 'idempotency-key': `k-${(keys += 1)}`, ...headers };
 		const response = await portal.handle(
 			new Request(`${PORTAL_URL}${path}`, {
 				method,
@@ -727,9 +728,9 @@ describe('connectors: sealing', () => {
 	}, 30_000);
 });
 
-describe('connectors: hourly health check', () => {
+describe('connectors: health checks on demand and on resolve', () => {
 	it('re-tests connectors, emits status changes, purges rollback copies and rewraps under the active KEK', async () => {
-		const { call, merchant, config, clock, state, db } = await boot('cn_health');
+		const { call, merchant, portal, clock, state, db } = await boot('cn_health');
 		const owner = await merchant(MERCHANT);
 		const flaky = await startFakeApi({ header: 'authorization', value: `Bearer ${AI_KEY}` });
 		const id = (
@@ -746,10 +747,10 @@ describe('connectors: hourly health check', () => {
 		).json.connector.connectorId;
 		await call('POST', `${base}/${pay}/rotate`, { headers: owner, body: { credentials: { secretKey: `${PAY_SECRET}2` } } });
 		await flaky.close();
-		const cron = { authorization: `Bearer ${config.cronSecret}` };
+		const runHealth = () => portal.operations.run('connectors-health');
 
 		// nothing is due within the interval
-		expect((await call('GET', '/api/cron/connectors-health', { headers: cron })).json).toMatchObject({
+		expect(await runHealth()).toMatchObject({
 			status: 'ok',
 			stats: { checked: 0, remaining: false },
 		});
@@ -757,9 +758,9 @@ describe('connectors: hourly health check', () => {
 
 		clock.advance(25 * 3600_000);
 		state.emitted.length = 0;
-		// the daily step checks inline (no job): what is due is checked within the step's deadline
-		const health = await call('GET', '/api/cron/connectors-health', { headers: cron });
-		expect(health.json.stats).toMatchObject({ checked: 2, changed: 1, remaining: false });
+		// the admin operation checks inline (no job): what is due is checked within its deadline
+		const health = /** @type {any} */ (await runHealth());
+		expect(health.stats).toMatchObject({ checked: 2, changed: 1, remaining: false });
 		const doc = await db.collection('connectors_connectors').findOne({ _id: id });
 		expect(doc).toMatchObject({
 			status: 'failing',
@@ -789,17 +790,31 @@ describe('connectors: hourly health check', () => {
 		expect(await svc.healthCheck({ deadline: rotated.clock.now() + 60_000 })).toMatchObject({ checked: 0, remaining: false });
 		rotated.clock.advance(2 * 3600_000);
 		expect(await svc.healthCheck({ deadline: rotated.clock.now() + 5_000 })).toMatchObject({ checked: 0, remaining: true }); // deadline too close
-		// the job re-enqueues itself when work remains
-		const jobs = rotated.portal.shared.jobs;
-		const enq = await jobs.enqueue({ name: 'connectors.health_check', key: 'manual-1', payload: {} });
-		expect(enq.inserted).toBe(true);
-		const ran = await jobs.runBatch({ handlers: rotated.portal.modules.jobs, deadlineMs: 5_000, owner: 'test' });
-		expect(ran).toMatchObject({ succeeded: 1 });
-		const next = await db.collection('platform_jobs').findOne({ key: 'connectors.health_check:manual:1' });
-		expect(next?.runAt.getTime()).toBe(rotated.clock.now() + 60_000);
-		await jobs.enqueue({ name: 'connectors.health_check', key: 'manual-last', payload: { hour: 'h', round: 30 } });
-		await jobs.runBatch({ handlers: rotated.portal.modules.jobs, deadlineMs: 5_000, owner: 'test' });
-		expect(await db.collection('platform_jobs').countDocuments({ key: 'connectors.health_check:h:31' })).toBe(0);
+		// what is left stays due: the next run of the admin operation continues (no job, no timer)
+		expect(await rotated.portal.operations.run('connectors-health')).toMatchObject({
+			status: 'ok',
+			stats: { checked: 2, remaining: false },
+		});
+		expect(await rotated.portal.shared.jobs.stats()).toMatchObject({ queued: 0 });
+
+		// a resolve is a natural moment to re-check a connector whose last check is old: after the response
+		rotated.clock.advance(2 * 3600_000);
+		rotated.state.subscriptions.set(WEB_A, [{ subscriptionId: 'sub_a', appId: APP, websiteId: WEB_A, status: 'active' }]);
+		/** @type {Array<() => Promise<unknown>>} */
+		const deferred = [];
+		const resolved = await runInRequestScope({ defer: (task) => void deferred.push(task) }, () =>
+			svc.resolve({ appId: APP, websiteId: WEB_A, kind: 'ai' }),
+		);
+		expect(resolved.kind).toBe('ai');
+		expect(deferred).toHaveLength(1);
+		await deferred[0]?.();
+		const checkedAt = (await db.collection('connectors_connectors').findOne({ _id: id }))?.lastCheckAt;
+		expect(checkedAt?.getTime()).toBe(rotated.clock.now());
+		// checked recently: the next resolve defers nothing
+		await runInRequestScope({ defer: (task) => void deferred.push(task) }, () =>
+			svc.resolve({ appId: APP, websiteId: WEB_A, kind: 'ai' }),
+		);
+		expect(deferred).toHaveLength(1);
 	}, 60_000);
 });
 

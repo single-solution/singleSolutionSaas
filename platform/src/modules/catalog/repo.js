@@ -21,7 +21,7 @@ import { isDuplicateKey } from '../../infra/util.js';
  * @property {number} currentVersion
  * @property {number | null} pendingVersion
  * @property {number} latestVersion highest version number allocated
- * @property {{ lastHeartbeatAt: Date | null, version: string | null, status: string | null, queues: Record<string, number> | null } | null} health
+ * @property {{ lastHeartbeatAt: Date | null, lastSeenAt?: Date | null, version: string | null, status: string | null, queues: Record<string, number> | null } | null} health
  * @property {string} createdBy
  * @property {Date} [createdAt]
  * @property {Date} [updatedAt]

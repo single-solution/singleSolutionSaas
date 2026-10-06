@@ -37,7 +37,6 @@ import { createClock, mongoUri } from './helpers.js';
 
 const HOUR = 3_600_000;
 const PORTAL_URL = 'http://127.0.0.1:4999';
-const CRON_SECRET = 'c'.repeat(40);
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
 const MERCHANT_USER = { email: 'owner@shop.example.com', password: 'merchant password 123!' };
 const DEFAULT_ELEMENTS = ['gallery', 'price_block', 'structured_data'];
@@ -76,7 +75,6 @@ beforeAll(async () => {
 		SECRETS_KEK: `kek-1:${randomBytes(32).toString('base64')}`,
 		SESSION_SECRET: randomBytes(32).toString('base64'),
 		WEBSITE_KEY_PEPPER: randomBytes(32).toString('base64'),
-		CRON_SECRET,
 		PLATFORM_ASSET_STORAGE: 'memory',
 		// honest budgets (F.18): the default plan fits, every element at once does not
 		DELIVERY_BUDGET_KB: '45',
@@ -85,11 +83,14 @@ beforeAll(async () => {
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.SS_TEST_MONGO_URI)).connect();
 	const portalDb = mongo.db(`e2e_pdp_portal_${randomBytes(4).toString('hex')}`);
 	const mailer = createMailer();
+	/** @type {Array<() => Promise<unknown>>} work the Portal runs right after each response (F.19: no cron) */
+	const afterResponseTasks = [];
 	const portal = createPortal({
 		config,
 		db: portalDb,
 		logger: /** @type {any} */ (noopLogger),
 		now: clock.now,
+		background: { mode: 'on', fallback: (task) => void afterResponseTasks.push(task) },
 		mailer,
 		modules: [
 			systemModule,
@@ -321,8 +322,7 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		const { call, clock, state } = ctx;
 		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
 		clock.advance(2 * HOUR);
-		const settled = await call('GET', '/cron/settlement', { bearer: CRON_SECRET });
-		expect(settled.status, settled.text).toBe(200);
+		// no cron: reading the statement settles the merchant's complete hours first
 		const iso = (/** @type {number} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
 		const statement = await call(
 			'GET',

@@ -36,7 +36,7 @@ import { memberAsOf, memberView, transactionView } from '../core/views.js';
 
 /** Optimistic-concurrency attempts before a movement gives up with `conflict`. */
 const MAX_ATTEMPTS = 8;
-/** Members handled per page by the jobs. */
+/** Members handled per page by an expiry run. */
 const JOB_PAGE = 200;
 /** Codes tried before a referral code is given up as colliding. */
 const CODE_ATTEMPTS = 5;
@@ -122,8 +122,8 @@ export const createLoyaltyService = ({
 	};
 
 	/**
-	 * Source key of expiring a member's lapsed lots (shared by the job, the background sweep and expire-on-access, so they
-	 * converge on one transaction).
+	 * Source key of expiring a member's lapsed lots (shared by the expiry run and expire-on-access, so they converge on
+	 * one transaction).
 	 * @param {string} customerId
 	 * @param {import('../core/lots.js').Slice[]} slices
 	 */
@@ -143,8 +143,8 @@ export const createLoyaltyService = ({
 		site.settings.expiry ? expire({ lots: member.lots, debt: member.debt }, at, site.settings.expiry) : null;
 
 	/**
-	 * Expire-on-access: book the expiry of a member's lapsed lots now (the same transaction the job would write), so
-	 * expired points are never spendable or shown, whether or not a job ran. Returns the member as it is now.
+	 * Expire-on-access: book the expiry of a member's lapsed lots now (the same transaction the expiry run would
+	 * write), so expired points are never spendable or shown. Returns the member as it is now.
 	 * @param {Site} site
 	 * @param {Member | null} member
 	 * @param {number} [at]
@@ -159,6 +159,82 @@ export const createLoyaltyService = ({
 			build: () => ({ kind: 'expire', points: 0, at, source: { type: 'expiry' }, reason: 'points_expired' }),
 		});
 		return result.ok ? result.member : memberAsOf(member, { now: at, expiry: site.settings.expiry });
+	};
+
+	/**
+	 * Publish the `loyalty.expiring@1` notice of a member's next expiring lots once per expiry day (none when expiry or
+	 * its notice window is off, or the lots were already noticed for that day). Returns whether a notice was published.
+	 * @param {Site} site
+	 * @param {Member} member
+	 * @param {number} at
+	 */
+	const notice = async (site, member, at) => {
+		const policy = site.settings.expiry;
+		if (!policy || !(policy.noticeDays > 0)) return false;
+		const next = upcomingExpiry(
+			{ lots: member.lots, debt: member.debt },
+			{ now: at, windowMs: policy.noticeDays * DAY_MS, timeZone: site.settings.timeZone, policy },
+		);
+		/** @param {Member} current */
+		const unnoticed = (current) =>
+			Boolean(next) && current.lots.some((lot) => next?.lotIds.includes(lot.id) && lot.noticeFor !== next?.expiresOn);
+		if (!next || !unnoticed(member)) return false;
+		const updated = await mutate(site, member.customerId, (current) =>
+			unnoticed(current) ? markNoticed({ lots: current.lots, debt: current.debt }, next.lotIds, next.expiresOn) : null,
+		);
+		if (!updated) return false;
+		await emit({
+			websiteId: site.websiteId,
+			type: EVENTS.expiring,
+			idempotencyKey: `expiring:${member.customerId}:${next.expiresOn}`,
+			data: {
+				customerId: member.customerId,
+				points: next.points,
+				expiresAt: next.expiresAt,
+				expiresOn: next.expiresOn,
+				balance: updated.balance,
+			},
+		});
+		return true;
+	};
+
+	/**
+	 * Review a member's tier once its review date has passed (none without tiers or before the date). Returns whether
+	 * the member was saved.
+	 * @param {Site} site
+	 * @param {Member} member
+	 * @param {number} at
+	 */
+	const review = async (site, member, at) => {
+		const { tiers, timeZone } = site.settings;
+		if (!tiers || !member.tier?.reviewAt || toMs(member.tier.reviewAt) > at) return false;
+		const tiered = withTier(member, tiers, { now: at, timeZone });
+		if (tiered.member.tier === member.tier) return false;
+		if (!(await site.repos.members.save(member.version, tiered.member))) return false;
+		if (tiered.change)
+			await emit({
+				websiteId: site.websiteId,
+				type: EVENTS.tierChanged,
+				idempotencyKey: `tier:${member.customerId}:review:${iso(at).slice(0, 10)}`,
+				data: { customerId: member.customerId, ...tiered.change, reviewAt: tiered.member.tier?.reviewAt ?? null },
+			});
+		return true;
+	};
+
+	/**
+	 * A member as it is now, for a request that reads it: lapsed lots are expired, a due tier review is applied and a due
+	 * expiry notice is published — for this member only, so nothing waits for a timer.
+	 * @param {Site} site
+	 * @param {Member | null} member
+	 * @param {number} [at]
+	 * @returns {Promise<Member | null>}
+	 */
+	const freshen = async (site, member, at = now()) => {
+		const settled = await settle(site, member, at);
+		if (!settled) return settled;
+		const reviewed = (await review(site, settled, at)) ? await site.repos.members.get(settled.customerId) : settled;
+		const current = reviewed ?? settled;
+		return (await notice(site, current, at)) ? ((await site.repos.members.get(current.customerId)) ?? current) : current;
 	};
 
 	/**
@@ -551,7 +627,7 @@ export const createLoyaltyService = ({
 		 * @param {Site} site
 		 * @param {string} customerId
 		 */
-		member: async (site, customerId) => settle(site, await site.repos.members.get(customerId)),
+		member: async (site, customerId) => freshen(site, await site.repos.members.get(customerId)),
 
 		/**
 		 * @param {Site} site
@@ -713,7 +789,7 @@ export const createLoyaltyService = ({
 		 * @param {{ customerId: string, amount: number, currency: string, discount?: number }} input
 		 */
 		quote: async (site, { customerId, amount, currency, discount = 0 }) => {
-			const member = await settle(site, await site.repos.members.get(customerId));
+			const member = await freshen(site, await site.repos.members.get(customerId));
 			const q = quoteFor({ balance: member?.balance ?? 0, amount, discount, config: site.settings.redeem });
 			return {
 				customerId,
@@ -886,9 +962,9 @@ export const createLoyaltyService = ({
 		attribute,
 
 		/**
-		 * Expiry work for one website (the daily job, and the throttled background task with a `deadline`): expire lots
-		 * (FIFO), publish expiry notices, review tiers. Idempotent, so a run cut short by its deadline is simply continued
-		 * by the next one.
+		 * Expiry work for one website, started by the merchant (`POST /v1/expiry:run`, the dashboard's "Run expiry now"
+		 * button with a `deadline`): expire lots (FIFO), publish expiry notices, review tiers. Idempotent, so a run cut
+		 * short by its deadline is simply continued by the next one. Members are also handled one at a time when read.
 		 * @param {Site} site
 		 * @param {{ at?: number, deadline?: number }} [options]
 		 */
@@ -897,9 +973,8 @@ export const createLoyaltyService = ({
 			const stats = { expired: 0, members: 0, notices: 0, tierReviews: 0 };
 			if (settings.expiry) {
 				const policy = settings.expiry;
-				const noticeMs = policy.noticeDays * DAY_MS;
 				// members holding a lot old enough to expire now, or within the notice window
-				const until = iso(scanCutoff(at + noticeMs, policy));
+				const until = iso(scanCutoff(at + policy.noticeDays * DAY_MS, policy));
 				let after = /** @type {string | null} */ (null);
 				for (;;) {
 					const page = await repos.members.withLotsEarnedBy(until, { after, limit: JOB_PAGE });
@@ -916,41 +991,8 @@ export const createLoyaltyService = ({
 								stats.members += 1;
 							}
 						}
-						if (noticeMs > 0) {
-							const fresh = (await repos.members.get(member.customerId)) ?? member;
-							const next = upcomingExpiry(
-								{ lots: fresh.lots, debt: fresh.debt },
-								{ now: at, windowMs: noticeMs, timeZone: settings.timeZone, policy },
-							);
-							if (
-								next &&
-								fresh.lots.some(
-									(/** @type {import('../core/lots.js').Lot} */ lot) =>
-										next.lotIds.includes(lot.id) && lot.noticeFor !== next.expiresOn,
-								)
-							) {
-								const updated = await mutate(site, member.customerId, (current) => {
-									if (!current.lots.some((lot) => next.lotIds.includes(lot.id) && lot.noticeFor !== next.expiresOn))
-										return null;
-									return markNoticed({ lots: current.lots, debt: current.debt }, next.lotIds, next.expiresOn);
-								});
-								if (updated) {
-									stats.notices += 1;
-									await emit({
-										websiteId: site.websiteId,
-										type: EVENTS.expiring,
-										idempotencyKey: `expiring:${member.customerId}:${next.expiresOn}`,
-										data: {
-											customerId: member.customerId,
-											points: next.points,
-											expiresAt: next.expiresAt,
-											expiresOn: next.expiresOn,
-											balance: updated.balance,
-										},
-									});
-								}
-							}
-						}
+						if (policy.noticeDays > 0 && (await notice(site, (await repos.members.get(member.customerId)) ?? member, at)))
+							stats.notices += 1;
 					}
 					if (page.length < JOB_PAGE || now() >= deadline) break;
 					after = /** @type {Member} */ (page.at(-1)).customerId;
@@ -960,20 +1002,7 @@ export const createLoyaltyService = ({
 				let after = /** @type {string | null} */ (null);
 				for (;;) {
 					const page = await repos.members.dueForTierReview(iso(at), { after, limit: JOB_PAGE });
-					for (const member of page) {
-						const tiered = withTier(member, settings.tiers, { now: at, timeZone: settings.timeZone });
-						if (tiered.member.tier === member.tier) continue;
-						const saved = await repos.members.save(member.version, tiered.member);
-						if (!saved) continue;
-						stats.tierReviews += 1;
-						if (tiered.change)
-							await emit({
-								websiteId: site.websiteId,
-								type: EVENTS.tierChanged,
-								idempotencyKey: `tier:${member.customerId}:review:${iso(at).slice(0, 10)}`,
-								data: { customerId: member.customerId, ...tiered.change, reviewAt: tiered.member.tier?.reviewAt ?? null },
-							});
-					}
+					for (const member of page) if (await review(site, member, at)) stats.tierReviews += 1;
 					if (page.length < JOB_PAGE || now() >= deadline) break;
 					after = /** @type {Member} */ (page.at(-1)).customerId;
 				}

@@ -1,5 +1,5 @@
 /**
- * Nightly reconciliation (cron `reconciliation`), resumable across runs of the same UTC day:
+ * Reconciliation (admin operation `reconciliation`, run on demand), resumable across runs of the same UTC day:
  * 1. per subscription, the expected hourly buckets of the last {@link WINDOW_DAYS} days up to its cursor (recomputed
  *    with `planSettlement` from the immutable timeline, pauses and pins) against the ledger's settlement keys and
  *    amounts (`reconcile`), plus metered entries for hours that were not billable;

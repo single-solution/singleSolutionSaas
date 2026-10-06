@@ -1,9 +1,10 @@
 /**
  * Website keys (`pk_` browser, `sk_` server): signed `@ss/protocol` tokens issued with the dedicated website-key
  * signer, shown once. Stored: metadata, and for `sk_` only `hashSecretKey` (HMAC with `WEBSITE_KEY_PEPPER`).
- * Rotation issues a replacement and schedules the old key's revocation after a grace period; revocation is
- * immediate. Revocations feed `GET /v1/product/revocations` (cursor, F.9), the `websiteKeyRevoked` port and the
- * `key.revoked@1` control event (via the integration module when it is registered).
+ * Rotation issues a replacement and stamps the old key's revocation time (`revokeAt`, after a grace period); that
+ * revocation takes effect by time on read — the `websiteKeyRevoked` port and `GET /v1/product/revocations` (cursor,
+ * F.9; products refresh it when they verify keys) include it once `revokeAt` has passed, with no job (F.19). An
+ * immediate revocation also sends the `key.revoked@1` control event (via the integration module when registered).
  * @module
  */
 import { issueWebsiteKey } from '@ss/protocol';
@@ -19,8 +20,6 @@ import { checkScopes, scopeCatalogue } from './core/scopes.js';
 /** @typedef {import('./repo.js').AuditActor} AuditActor */
 /** @typedef {import('@ss/protocol').Signer} Signer */
 /** @typedef {import('@ss/protocol').WebsiteKeyClaims} WebsiteKeyClaims */
-
-export const REVOKE_JOB = 'identity.key_revoked';
 
 /**
  * @param {Deps} deps
@@ -47,7 +46,7 @@ export const createWebsiteKeys = (deps, hooks) => {
 	};
 
 	/**
-	 * Tell products (best effort; products also poll the revocation list).
+	 * Tell products (best effort; products also refresh the revocation list when they verify keys).
 	 * @param {string[]} keyIds
 	 * @param {Date} revokedAt
 	 * @param {string | undefined} websiteId
@@ -226,14 +225,8 @@ export const createWebsiteKeys = (deps, hooks) => {
 				actor,
 				...(keepExpiry === undefined ? {} : { expiresAtMs: keepExpiry }),
 			});
+			// with a grace period the old key stops by time: the revocation list includes it once revokeAt has passed
 			if (graceSeconds === 0) await emitRevoked([keyId], revokeAt, websiteId);
-			else
-				await ctx.jobs.enqueue({
-					name: REVOKE_JOB,
-					key: `${REVOKE_JOB}:${keyId}`,
-					payload: { keyId, merchantId },
-					runAt: revokeAt.getTime(),
-				});
 			const fresh = presentKey(/** @type {any} */ (record), ctx.now());
 			await audit(
 				actor,
@@ -339,18 +332,6 @@ export const createWebsiteKeys = (deps, hooks) => {
 			if (typeof key === 'string' && claims.kind === 'sk')
 				return !(doc.secretHash && ctx.secretHasher.verify(key, doc.secretHash));
 			return false;
-		},
-
-		/**
-		 * Job: a scheduled (rotation) revocation became effective → emit `key.revoked@1`.
-		 * @param {{ keyId: string, merchantId: string }} payload
-		 */
-		onScheduledRevocation: async ({ keyId, merchantId }) => {
-			const doc = await repo.keys.of(merchantId).findOne({ merchantId, _id: keyId });
-			if (!doc || !doc.revokeAt) return { skipped: true };
-			if (doc.revokeAt.getTime() > ctx.now()) throw new Error('revocation not yet effective');
-			await emitRevoked([keyId], doc.revokeAt, doc.websiteId);
-			return { emitted: true };
 		},
 	});
 };

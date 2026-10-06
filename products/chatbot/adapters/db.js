@@ -8,6 +8,7 @@
  *   Conversations and messages carry `retainUntil` (TTL index) — the transcripts retention.
  * - `entries` (FAQ), `chunks` (retrieval index with term frequencies), `sources` (fetch state of web pages).
  * - `leads`, `ratings`, `agents`, `counters` (round-robin cursors, monthly token budgets).
+ *   Deleted FAQ entries and agents are soft-deleted with a `purgeAt` date (TTL index: the database removes them).
  * - `orders`, `customers` — caches fed by `order.*@1` and `customer.*@1` events (TTL), used by the order lookup tool.
  * - `visitors` — proactive-message frequency memory (TTL).
  * @module
@@ -50,6 +51,7 @@ export const INDEXES = /** @type {any} */ ([
 	{ collection: 'messages', keys: { retainUntil: 1 }, name: 'retain_ttl', expireAfterSeconds: 0 },
 	{ collection: 'entries', keys: { websiteId: 1, id: 1 }, name: 'website_id', unique: true },
 	{ collection: 'entries', keys: { websiteId: 1, updatedAt: -1, id: -1 }, name: 'website_updated' },
+	{ collection: 'entries', keys: { purgeAt: 1 }, name: 'purge_ttl', expireAfterSeconds: 0 },
 	{ collection: 'chunks', keys: { websiteId: 1, id: 1 }, name: 'website_id', unique: true },
 	{ collection: 'chunks', keys: { websiteId: 1, terms: 1 }, name: 'website_terms' },
 	{ collection: 'chunks', keys: { websiteId: 1, sourceType: 1, sourceId: 1 }, name: 'website_source' },
@@ -66,6 +68,7 @@ export const INDEXES = /** @type {any} */ ([
 		unique: true,
 		partialFilterExpression: { userId: { $type: 'string' } },
 	},
+	{ collection: 'agents', keys: { purgeAt: 1 }, name: 'purge_ttl', expireAfterSeconds: 0 },
 	{ collection: 'counters', keys: { websiteId: 1, key: 1 }, name: 'website_key', unique: true },
 	{ collection: 'orders', keys: { websiteId: 1, orderId: 1 }, name: 'website_order', unique: true },
 	{ collection: 'orders', keys: { websiteId: 1, customerId: 1, updatedAt: -1 }, name: 'website_customer' },
@@ -78,6 +81,16 @@ export const INDEXES = /** @type {any} */ ([
 	{ collection: 'visitors', keys: { websiteId: 1, key: 1 }, name: 'website_key', unique: true },
 	{ collection: 'visitors', keys: { expiresAt: 1 }, name: 'expires_ttl', expireAfterSeconds: 0 },
 ]);
+
+/** Default `transcripts.deleted_retention_days`. */
+export const DELETED_RETENTION_DAYS = 30;
+
+/**
+ * When a record soft-deleted at `deletedAt` is purged (TTL index on `purgeAt`).
+ * @param {string} deletedAt ISO instant
+ * @param {number} days
+ */
+export const purgeDate = (deletedAt, days) => new Date(Date.parse(deletedAt) + Math.max(1, days) * 86_400_000);
 
 /** Lazy, versioned migrations (app-kit runs them once per website under a lock). */
 export const MIGRATIONS = [
@@ -93,6 +106,24 @@ export const MIGRATIONS = [
 				);
 		},
 	},
+	{
+		version: 2,
+		name: 'deleted_purge_at',
+		up: async (/** @type {any} */ scope) => {
+			// records soft-deleted before `purgeAt` existed: purged by the TTL index after the default retention
+			for (const name of [COLLECTIONS.entries, COLLECTIONS.agents]) {
+				const collection = scope.collection(name);
+				const docs = await collection
+					.find({ websiteId: scope.websiteId, deletedAt: { $type: 'string' }, purgeAt: { $exists: false } })
+					.toArray();
+				for (const doc of docs)
+					await collection.updateOne(
+						{ websiteId: scope.websiteId, id: doc.id },
+						{ $set: { purgeAt: purgeDate(doc.deletedAt, DELETED_RETENTION_DAYS) } },
+					);
+			}
+		},
+	},
 ];
 
 /** Fields the repositories never return. */
@@ -104,6 +135,7 @@ const INTERNAL = new Set([
 	'schemaVersion',
 	'retainUntil',
 	'expiresAt',
+	'purgeAt',
 	'createdAt',
 	'updatedAt',
 ]);
@@ -115,7 +147,7 @@ const INTERNAL = new Set([
 const strip = (doc) => (doc ? Object.fromEntries(Object.entries(doc).filter(([key]) => !INTERNAL.has(key))) : null);
 
 /**
- * A snoozed conversation whose `snoozedUntil` has passed reads as open even before the maintenance wakes it.
+ * A snoozed conversation whose `snoozedUntil` has passed reads as open (it is woken when the conversation is read).
  * @param {any} conversation
  * @param {string} at ISO instant
  */
@@ -276,39 +308,25 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			/** Waiting conversations handed off before an instant (queue position). @param {string} at */
 			waitingBefore: async (at) =>
 				c.conversations.countDocuments({ websiteId, status: 'open', assignee: null, 'handoff.at': { $lt: at } }),
-			/** Conversations with a running SLA that may have breached. @param {string} at @param {number} limit */
-			slaCandidates: async (at, limit) =>
-				(
-					await c.conversations
-						.find(
-							{
-								websiteId,
-								status: { $nin: ['closed'] },
-								$or: [{ 'sla.firstResponseDueAt': { $lte: at } }, { 'sla.resolutionDueAt': { $lte: at } }],
-							},
-							{ limit },
-						)
-						.toArray()
-				).map(strip),
-			/** Conversations idle in resolved / pending since an instant (auto-close). @param {string} before @param {number} limit */
-			idle: async (before, limit) =>
-				(
-					await c.conversations
-						.find({ websiteId, status: { $in: ['resolved', 'pending'] }, 'last.at': { $lt: before } }, { limit })
-						.toArray()
-				).map(strip),
-			/** Snoozed conversations to wake. @param {string} at @param {number} limit */
-			dueSnoozed: async (at, limit) =>
-				(await c.conversations.find({ websiteId, status: 'snoozed', snoozedUntil: { $lte: at } }, { limit }).toArray()).map(
-					strip,
-				),
-			/** KPI counts. @param {string} since ISO */
-			stats: async (since) => {
+			/**
+			 * KPI counts; `breaches` also counts SLA targets missed by `at` that no read has recorded yet.
+			 * @param {string} since ISO
+			 * @param {string} at ISO
+			 */
+			stats: async (since, at) => {
 				const [open, waiting, recent, breaches] = await Promise.all([
 					c.conversations.countDocuments({ websiteId, status: { $in: ['open', 'pending'] } }),
 					c.conversations.countDocuments({ websiteId, status: 'open', assignee: null, 'handoff.at': { $type: 'string' } }),
 					c.conversations.countDocuments({ websiteId, openedAt: { $gte: since } }),
-					c.conversations.countDocuments({ websiteId, status: { $ne: 'closed' }, 'sla.breached.0': { $exists: true } }),
+					c.conversations.countDocuments({
+						websiteId,
+						status: { $ne: 'closed' },
+						$or: [
+							{ 'sla.breached.0': { $exists: true } },
+							{ 'sla.firstResponseAt': null, 'sla.firstResponseDueAt': { $lte: at } },
+							{ status: { $ne: 'resolved' }, 'sla.resolutionDueAt': { $lte: at } },
+						],
+					}),
 				]);
 				return { open, waiting, recent, breaches };
 			},
@@ -401,11 +419,11 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				strip(
 					await c.entries.findOneAndUpdate({ websiteId, id, deletedAt: null }, { $set: set }, { returnDocument: 'after' }),
 				),
-			/** Soft delete. @param {string} id @param {string} at */
-			remove: async (id, at) => {
+			/** Soft delete, purged by the TTL index at `purgeAt`. @param {string} id @param {string} at @param {Date} purgeAt */
+			remove: async (id, at, purgeAt) => {
 				const result = await c.entries.updateOne(
 					{ websiteId, id, deletedAt: null },
-					{ $set: { deletedAt: at, enabled: false } },
+					{ $set: { deletedAt: at, purgeAt, enabled: false } },
 				);
 				return (result.matchedCount ?? 0) > 0;
 			},
@@ -420,9 +438,6 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 						.toArray()
 				).map(strip),
 			count: async () => c.entries.countDocuments({ websiteId, deletedAt: null }),
-			/** Hard-delete entries soft-deleted before an instant (retention). @param {string} before */
-			purgeDeleted: async (before) =>
-				(await c.entries.deleteMany({ websiteId, deletedAt: { $lt: before } })).deletedCount ?? 0,
 		}),
 		chunks: Object.freeze({
 			/**
@@ -536,11 +551,11 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				strip(
 					await c.agents.findOneAndUpdate({ websiteId, id, deletedAt: null }, { $set: set }, { returnDocument: 'after' }),
 				),
-			/** @param {string} id @param {string} at */
-			remove: async (id, at) => {
+			/** Soft delete, purged by the TTL index at `purgeAt`. @param {string} id @param {string} at @param {Date} purgeAt */
+			remove: async (id, at, purgeAt) => {
 				const result = await c.agents.updateOne(
 					{ websiteId, id, deletedAt: null },
-					{ $set: { deletedAt: at, active: false, status: 'offline' } },
+					{ $set: { deletedAt: at, purgeAt, active: false, status: 'offline' } },
 				);
 				return (result.matchedCount ?? 0) > 0;
 			},
@@ -557,8 +572,6 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 						.toArray()
 				).map(strip),
 			count: async () => c.agents.countDocuments({ websiteId, deletedAt: null }),
-			/** Hard-delete agents removed before an instant (retention). @param {string} before */
-			purgeDeleted: async (before) => (await c.agents.deleteMany({ websiteId, deletedAt: { $lt: before } })).deletedCount ?? 0,
 		}),
 		counters: Object.freeze({
 			/**

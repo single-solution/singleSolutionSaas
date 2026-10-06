@@ -38,3 +38,7 @@ identity issuer in the Portal (Website → Identity; `GET /v1/issuer` gives the 
 
 Configuration comes only from the signed entitlement document (feature schemas in `schemas/`); turning an element off
 disables all three modes (403 `element_disabled`).
+
+Nothing runs on a timer on the server (no crons, no background passes): due deletions run when the customer is read
+or from the dashboard's "Run due deletions" button, signing keys rotate and are pruned when read, and the identity
+issuer request is sent on `entitlement.changed@1` (see `jobs/README.md`).

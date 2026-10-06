@@ -7,7 +7,6 @@ import { Readable } from 'node:stream';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, wireEvents } from './api/routes.js';
-import { jobRoutes, wireJobs } from './jobs/index.js';
 
 /**
  * @param {{ port?: number, host?: string, env?: Record<string, string | undefined>, root?: string, overrides?: Record<string, unknown> }} [options]
@@ -20,11 +19,8 @@ export const startServer = async ({
 	root = process.cwd(),
 	overrides = {},
 } = {}) => {
-	const product = wireJobs(wireEvents(await createPlatform({ env, root, overrides })));
-	const handle = createRequestHandler(product, [
-		...buildRoutes(product),
-		...jobRoutes(product, { cronSecret: env.CRON_SECRET }),
-	]);
+	const product = wireEvents(await createPlatform({ env, root, overrides }));
+	const handle = createRequestHandler(product, buildRoutes(product));
 	const server = createServer(async (incoming, outgoing) => {
 		const url = `http://${incoming.headers.host ?? `${host}:${port}`}${incoming.url ?? '/'}`;
 		const method = incoming.method ?? 'GET';

@@ -1,6 +1,6 @@
 /** Intake, the lifecycle matrix, fulfilment, serials, the ledger and the events they publish (through the real API). */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createHarness, HOUR, WEBSITE, WEBSITE_2 } from './harness.js';
+import { createHarness, HOUR, WEBSITE } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -192,29 +192,25 @@ describe('lifecycle', () => {
 		await h.entitle();
 	});
 
-	it('expires unconfirmed orders through the sweep job and cancels them', async () => {
+	it('expires unconfirmed orders when they are read and cancels them (no timer)', async () => {
 		const order = await h.order();
 		expect(order.expiresAt).toBeTruthy();
 		h.clock.advance(49 * HOUR);
-		const swept = await h.call('GET', '/cron/sweep', {
-			key: null,
-			headers: { authorization: 'Bearer cron-secret-0123456789abcdef' },
-		});
-		expect(swept.status, swept.text).toBe(200);
+		// time passing alone changes nothing stored
+		expect((await h.collection('orders').findOne({ id: order.id })).status).toBe('pending_payment');
 		const after = await h.call('GET', `/v1/orders/${order.id}`);
 		expect(after.json.status).toBe('cancelled');
 		expect(after.json.timeline.at(-1)).toMatchObject({ status: 'cancelled', reason: 'expired', actor: { type: 'system' } });
-		expect((await h.call('GET', '/cron/sweep', { key: null })).status).toBe(401);
 	});
 
-	it('treats an expired status as expired on read, before any sweep (free-tier hosting: daily cron)', async () => {
+	it('treats an expired status as expired on read', async () => {
 		await h.entitle({ config: { risk: { open_order_cap: 1, cap_action: 'flag' } } });
 		const customer = { customerId: 'cus_exp', email: 'exp@example.com', phone: '+44 20 7946 1111', name: 'Exp' };
 		const first = await h.order({ customer });
 		const second = await h.order({ customer });
 		expect(second.risk.flags).toContain('open_cap');
 		h.clock.advance(49 * HOUR);
-		// expired orders no longer count as open, though nothing swept them
+		// expired orders no longer count as open, though nothing moved them yet
 		const third = await h.order({ customer });
 		expect(third.risk.flags).not.toContain('open_cap');
 		expect((await h.collection('orders').findOne({ id: first.id })).status).toBe('pending_payment');
@@ -233,19 +229,73 @@ describe('lifecycle', () => {
 		await h.entitle();
 	});
 
-	it('registers the per-website background sweep; its trigger sweeps that website', async () => {
+	it('redelivers outbox entries a crashed request left behind when the order is read', async () => {
+		const order = await h.order();
+		const entry = {
+			key: `status:${order.id}:left`,
+			kind: 'event',
+			type: 'orders.status_changed@1',
+			data: {
+				orderId: order.id,
+				number: order.number,
+				from: 'placed',
+				to: 'pending_payment',
+				actor: 'system',
+				revenue: false,
+			},
+		};
+		// a fresh entry belongs to a request still delivering it: a read leaves it alone
+		await h
+			.collection('orders')
+			.updateOne({ id: order.id }, { $push: { pending: entry }, $set: { pendingAt: new Date(h.clock.now()) } });
+		await h.call('GET', `/v1/orders/${order.id}`);
+		expect((await h.collection('orders').findOne({ id: order.id })).pending).toHaveLength(1);
+		h.clock.advance(2 * 60_000);
+		await h.call('GET', `/v1/orders/${order.id}`);
+		const stored = await h.collection('orders').findOne({ id: order.id });
+		expect(stored.pending).toEqual([]);
+		expect(stored.pendingAt).toBeNull();
+		expect(
+			h.published('orders.status_changed@1').some((e) => e.data.orderId === order.id && e.data.to === 'pending_payment'),
+		).toBe(true);
+	});
+
+	it('registers no periodic work; "Process due now" handles the website\'s due work', async () => {
+		expect(h.orders.product.background.mode).toBe('off');
+		expect(/** @type {any} */ (h.orders).jobs).toBeUndefined();
 		const order = await h.order();
 		h.clock.advance(49 * HOUR);
-		const { sweep } = h.orders.jobs;
-		expect(sweep.name).toBe('sweep');
-		expect(await sweep.trigger({})).toBe(false); // per website: nothing to do without one
-		expect(await sweep.trigger({ websiteId: WEBSITE })).toBe(true);
+		const left = await h.order();
+		const entry = {
+			key: `status:${left.id}:left`,
+			kind: 'event',
+			type: 'orders.status_changed@1',
+			data: { orderId: left.id, number: left.number, from: 'placed', to: 'pending_payment', actor: 'system', revenue: false },
+		};
+		await h
+			.collection('orders')
+			.updateOne({ id: left.id }, { $push: { pending: entry }, $set: { pendingAt: new Date(h.clock.now() - 2 * 60_000) } });
+		expect((await h.collection('orders').findOne({ id: order.id })).status).toBe('pending_payment');
+		const sid = await h.session('merchant');
+		const auth = { authorization: `Bearer ${sid}`, 'x-ss-website': WEBSITE };
+		const run = await h.call('POST', '/v1/dashboard/due:run', { key: null, headers: auth, body: {} });
+		expect(run.status, run.text).toBe(200);
+		expect(run.json.expired).toBeGreaterThanOrEqual(1);
+		expect(run.json.redelivered).toBe(1);
+		expect(run.json.more).toBe(false);
 		expect((await h.collection('orders').findOne({ id: order.id })).status).toBe('cancelled');
-		expect(await sweep.trigger({ websiteId: WEBSITE })).toBe(false); // throttled: at most once per interval
-		expect(await sweep.trigger({ websiteId: WEBSITE_2 })).toBe(true); // not subscribed: nothing to sweep
-		// a run past its deadline leaves the remaining steps for the next one
-		const site = await h.site();
-		expect(await h.orders.sweepSite(site, { limit: 5, deadline: 0 })).toEqual({ expired: 0, redelivered: 0, messages: 0 });
+		expect((await h.collection('orders').findOne({ id: left.id })).pendingAt).toBeNull();
+		// bounded: a small limit reports more work waiting
+		await h.order();
+		h.clock.advance(49 * HOUR);
+		await h.order();
+		h.clock.advance(49 * HOUR);
+		expect((await h.orders.processDue(await h.site(), { limit: 1 })).more).toBe(true);
+		const demo = await h.session('demo');
+		expect(
+			(await h.call('POST', '/v1/dashboard/due:run', { key: null, headers: { authorization: `Bearer ${demo}` }, body: {} }))
+				.status,
+		).toBe(403);
 	});
 
 	it('lists with filters and cursor pages; statuses and carriers are public', async () => {

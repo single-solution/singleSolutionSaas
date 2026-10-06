@@ -44,7 +44,6 @@ import {
 	SMTP_PORTS,
 	createOutbox,
 	createBackground,
-	detectRuntime,
 	CONTROL_DB_POOL_SIZE,
 	CLIENT_DB_POOL_SIZE,
 	REPLAY_COLLECTION,
@@ -104,8 +103,7 @@ createProduct({
                             // @ss/net createOutboundPolicy options for connector calls; allowHosts ignored when nodeEnv === 'production'
   outboundSend,             // (url, init) => { status, headers, body: Buffer, url } — replaces @ss/net safeFetch (tests; also behind outbound.fetch)
   createSmtpTransport,      // replaces nodemailer's transport of the built-in smtp messaging adapter (tests)
-  background: { mode, intervalMs, everyRequests },  // automatic flushing of usage + event outbox (below); default mode 'auto',
-                            // 'off' when NODE_ENV=test; intervalMs 30 s (server timer), everyRequests 20 (serverless)
+  background: { mode },     // queue delivery after requests (below): 'on' (default; 'auto' is an alias) | 'off' (default when NODE_ENV=test)
   auditSink,                // async (entry) => void; default: merchant DB collection `audit`
   problemBaseUri,           // RFC 9457 type base, default `<endpoints.base>/problems/`
   problemCodes,             // product-specific { code: { status, title } }
@@ -163,7 +161,7 @@ createProduct({
   },
   usage: {
     record({ websiteId, subscriptionId?, unit, quantity, idempotencyKey, occurredAt? }) → { ok, duplicate },  // subscriptionId defaults from the entitlement
-    flush({ maxBatches }?) → { sent, duplicates, rejected, failed, batches },
+    flush({ maxBatches, websiteId }?) → { sent, duplicates, rejected, failed, batches },  // websiteId: only that website's records
     stats() → { pending, sent, dead },
   },
   portal: {                                                            // signed client (client assertion, aud = Portal URL)
@@ -174,7 +172,7 @@ createProduct({
       // entitlement), actor { type: 'product', id: slug }, context { source: 'product', product: slug }; type must be in
       // the product namespace or manifest `events.publishes`. DURABLE: the envelope is written to the control-store outbox
       // (idempotent by event id), sent right away when the Portal answers, else retried with backoff by outbox.flush() /
-      // the background flusher; Portal `rejected` results and permanent 4xx are dead-lettered (kept 7 days). A delivery
+      // the next request for that website (never by a timer); Portal `rejected` results and permanent 4xx are dead-lettered (kept 7 days). A delivery
       // failure never throws; invalid input still throws invalid_event.
     publishEvents(envelopes),                                          // raw: POST /v1/product/events { events: [...] }
     requestIdentityIssuer({ websiteId, issuer, jwksUrl | publicJwks, audience?, claimMap? })
@@ -185,17 +183,15 @@ createProduct({
       // request equal to the active issuer answers active (200) — safe to repeat. Errors throw portal_error.
     baseUrl, jwksUrl,
   },
-  outbox: { flush({ maxBatches }?) → { sent, duplicates, rejected, failed, batches }, stats() → { pending, sent, dead } },
+  outbox: { flush({ maxBatches, websiteId }?) → { sent, duplicates, rejected, failed, batches }, stats() → { pending, sent, dead } },
     // event outbox (store `eventOutbox`, collection ss_kit_event_outbox): batches ≤ 50 events / ~200 kB per
     // POST /v1/product/events; per-event results { id, status: accepted|duplicate|rejected }; envelope dropped once sent
   outbound: {
     fetch(url, init?) → { status, headers, body: Buffer, url },   // @ss/net safeFetch under the product's outbound policy:
     policy,                                                        // public https only, DNS answers vetted at connect time,
   },                                                               // same-origin GET/HEAD redirects, deadline, size cap
-  flush() → Promise<void>,           // flush the usage queue and the event outbox now (single-flight)
-  background: { mode: 'server'|'serverless'|'off', start(), stop(),
-    every(name, intervalMs, fn({ websiteId, deadline }), { per: 'product'|'website' = 'product', budgetMs = 10_000 })
-      → { name, trigger({ websiteId? }) → Promise<boolean> } },   // throttled work after requests (below)
+  flush() → Promise<void>,           // send everything due in the usage queue and the event outbox now (single-flight)
+  background: { mode: 'on'|'off' },  // queue delivery after requests (below)
   data: {
     forWebsite(websiteId, { merchantId?, env? }?) → {
       websiteId, prefix,                                               // 'ss_<slug with - → _>_'
@@ -234,7 +230,7 @@ createProduct({
   health: { healthz() → { status, body }, readyz() → { status: 200|503, body: { status: ok|degraded|unavailable, checks } } },
   handler(routes, options?) → (Request) → Promise<Response>,         // = createRequestHandler(product, routes, options)
   heartbeat() → flushes the queues, then Portal heartbeat { version, status: 'ok', queues: { usagePending, usageDead, eventsPending, eventsDead } },
-  close(),                                                             // stop the background flusher, close pooled client-DB connections
+  close(),                                                             // close pooled client-DB connections
   context,                                                             // internal wiring used by the handler and standardRoutes
 }
 ```
@@ -278,37 +274,24 @@ stored in the merchant's own database (`ss_<slug>_idempotency` `{ websiteId, key
 a replay of a response that had a body that is not available (no website, merchant DB down, expired) answers **409
 `idempotency_replay_no_body`** — never a second execution. 5xx results are not stored.
 
-**Background flushing.** `mode: 'server'` (long-lived process; auto-detected when no serverless platform variable is set):
-an unref'd timer flushes the usage queue and event outbox every `intervalMs`, started by the first request (or
-`product.background.start()`). `mode: 'serverless'` (`VERCEL`, `AWS_LAMBDA_FUNCTION_NAME`, `NETLIFY`, `FUNCTION_TARGET`,
-`FUNCTIONS_WORKER_RUNTIME`): after a request that queued usage/events on this instance, and on every `everyRequests`-th
-request, the flush is scheduled with the framework's `after()` when the adapter provided one
-(`toNextRoute(handler, { after })` with `import { after } from 'next/server.js'`), else started in the background of the
-request. `heartbeat()` flushes too. Explicit `usage.flush()` / `outbox.flush()` / `product.flush()` remain; a product
-cron is no longer needed for delivery.
+**Queue delivery on requests (no timers).** Nothing in the kit runs on a timer, polls or sweeps (PLAN F.19:
+event-driven only). An event is sent inside the request that publishes it. After a request, the kit sends the usage
+and events queued on this instance since the last run and the due retries of the request's website (`ctx.websiteId`),
+one batch per website and queue: a send that failed is retried by the next request of this product for that website.
+The run goes through the framework's `after()` when the adapter provided one (`toNextRoute(handler, { after })` with
+`import { after } from 'next/server.js'`), else in the background of the request. Mode `off` (the test default) leaves
+sending to explicit `usage.flush()` / `outbox.flush()` / `product.flush()`; `heartbeat()` sends everything first.
 
-**Throttled work after requests** (PLAN F.19, free-tier hosting: one daily cron per deployment). Work that must happen
-sooner than the daily cron (expiring holds, retries, dispatch, crawls) is registered once in the composition root:
-
-```js
-product.background.every('sweep', 10 * 60_000, async ({ websiteId, deadline }) => sweep(websiteId, { deadline }), {
-	per: 'website', // or 'product' (one run per interval for the whole deployment)
-	budgetMs: 10_000, // deadline = now + budgetMs; keep it far below the function limit
-});
-```
-
-After a request (any route; `per: 'website'` only after requests that carry a website), a task whose interval has
-passed on this instance takes a lease in the control store (`ss_kit_leases`, `leases.acquire(key, intervalMs)`); only
-the instance that gets it runs `fn`, through `after()` when available. Failures are logged, never thrown. Active in the
-`server` and `serverless` modes (not `off`, the test default); `trigger({ websiteId })` runs a task directly under the
-same throttle and lease. Correctness never depends on it: anything with an expiry is treated as expired when read, the
-sweep only cleans up and releases, and the daily cron catches up.
+**No periodic product work.** Products register no crons and no background loops. Anything with an expiry is treated
+as expired when read and cleaned up when touched (or by a MongoDB TTL index: `ensureIndexes` accepts
+`expireAfterSeconds`); work that must be started without a customer request runs on the event or request that makes
+it relevant, or from a dashboard button.
 
 **Connection budget.** `configFromEnv().productDbOptions` are the control-database `MongoClient` options: pool
 `SS_PRODUCT_DB_MAX_POOL_SIZE` (default `CONTROL_DB_POOL_SIZE` = 5), `minPoolSize` 0, idle connections closed after
 60 s. Create the client once per instance (in the composition root that is cached on `globalThis`), never per
 request. Merchant database pools are `CLIENT_DB_POOL_SIZE` (3) per instance, cached on `globalThis` and closed when
-idle.
+idle (checked when the next website is served; no timer).
 
 ```js
 
@@ -375,7 +358,7 @@ later date as a backstop, and refuses to confirm a slot past its stale date (so 
 `createMongoStores({ db, prefix = 'ss_kit_', now? })` and `createMemoryStores({ now? })` return:
 
 ```
-{ replay, nonce, burnedTokens, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, leases, ping }
+{ replay, nonce, burnedTokens, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, ping }
 ```
 
 Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces are in `src/stores/types.js`.

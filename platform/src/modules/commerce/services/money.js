@@ -1,6 +1,7 @@
 /**
- * Credits (staff only), balance, statements, the live meter and spend policies. Balance and meter reads settle the
- * merchant's due hours first (lazy settlement), so a read never lags the ledger by more than the current hour.
+ * Credits (staff only), balance, statements, the live meter and spend policies. Balance, meter and statement reads
+ * settle the merchant's due hours first (settlement on read, F.19: there is no cron), so a read never lags the ledger
+ * by more than the current hour.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -18,7 +19,7 @@ import { runsNextHour } from '../core/subscription.js';
 /** @typedef {import('./subscriptions.js').Caller} Caller */
 /** @typedef {Record<string, any>} Doc */
 
-/** Time budget of the lazy settlement that runs before balance and meter reads. */
+/** Time budget of the settlement on read (balance, meter, statement, product document and usage calls). */
 export const LAZY_SETTLEMENT_BUDGET_MS = 2_000;
 
 /**
@@ -60,9 +61,9 @@ const policyView = (p) => ({
  */
 export const createMoney = ({ ctx, repo, deps, ledger, settlement }) => {
 	/**
-	 * Lazy settlement before a read: settle this merchant's complete hours up to now (the cron's target, idempotent per
-	 * `periodKey`), bounded by {@link LAZY_SETTLEMENT_BUDGET_MS} and `MAX_HOURS_PER_PASS` per subscription. A failure
-	 * never fails the read; the hourly cron catches up.
+	 * Settlement on read: settle this merchant's complete hours up to now (idempotent per `periodKey`), then evaluate
+	 * its low-balance and spend-limit holds, bounded by {@link LAZY_SETTLEMENT_BUDGET_MS} and `MAX_HOURS_PER_PASS` per
+	 * subscription. A failure never fails the read; the next read continues where this one stopped.
 	 * @param {string} merchantId
 	 */
 	const settleDue = async (merchantId) => {
@@ -180,6 +181,7 @@ export const createMoney = ({ ctx, repo, deps, ledger, settlement }) => {
 	 * @param {{ from: number, to: number, websiteId?: string | null }} range
 	 */
 	const statement = async (merchantId, { from, to, websiteId = null }) => {
+		await settleDue(merchantId);
 		const entries = await ledger.entries(merchantId, { from, to, websiteId, limit: 20_000 });
 		/** @type {Record<string, number>} */
 		const totals = Object.fromEntries(LEDGER_TYPES.map((t) => [t, 0]));
@@ -289,6 +291,7 @@ export const createMoney = ({ ctx, repo, deps, ledger, settlement }) => {
 	};
 
 	return Object.freeze({
+		settleDue,
 		/** @param {Parameters<typeof staffEntry>[1]} input */
 		addCredits: (input) => staffEntry('credit', input),
 		/** @param {Parameters<typeof staffEntry>[1]} input */

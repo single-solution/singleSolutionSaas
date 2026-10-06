@@ -1,10 +1,10 @@
 /**
- * Free-tier hosting model (one daily cron): a lapsed reservation is expired when it is read or touched, before any
- * sweep, and the throttled per-website sweep registered with `product.background.every` expires the rest after requests.
+ * No timers: a lapsed reservation is expired when it is read or touched (or its code is read, or its code, customer or
+ * device needs the use), and the dashboard's "Release expired reservations" releases a website's lapsed ones at once.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { SWEEP_EVERY_MS, sweepWebsite } from '../api/routes.js';
-import { cart, createHarness, MINUTE, T0, WEBSITE } from './harness.js';
+import { EXPIRE_RUN_LIMIT } from '../api/routes.js';
+import { cart, createHarness, MERCHANT, MINUTE, T0, WEBSITE } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -59,29 +59,63 @@ describe('expire on read', () => {
 	});
 });
 
-describe('background sweep', () => {
-	it('is registered per website and expires lapsed reservations when triggered (throttled)', async () => {
-		await h.coupon({ code: 'BGSWEEP1', action: { type: 'percent', percent: 10 } });
-		const held = await h.call('POST', '/v1/reservations', { body: { codes: ['BGSWEEP1'], cart: cart() } });
+describe('without timers', () => {
+	/** @param {any} kind */
+	const launch = async (kind) => {
+		const { token } = await h.portal.issueLaunch({
+			kind,
+			subject: 'usr_merchant',
+			user: { id: 'usr_merchant' },
+			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+		});
+		const sso = await h.handle(new Request(`https://coupons.example.com/sso?launch=${encodeURIComponent(token)}`));
+		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
+		if (!session) throw new Error(`no session (${sso.status})`);
+		return session;
+	};
+
+	it('registers no periodic work: time passing alone changes nothing stored', async () => {
+		expect(h.coupons.product.background.mode).toBe('off');
+		expect(/** @type {any} */ (h.coupons).tasks).toBeUndefined();
+		await h.coupon({ code: 'IDLE1', action: { type: 'percent', percent: 10 } });
+		const held = await h.call('POST', '/v1/reservations', { body: { codes: ['IDLE1'], cart: cart() } });
 		h.clock.advance(16 * MINUTE);
-		expect(h.coupons.tasks.sweep.name).toBe('sweep');
-		expect(await h.coupons.tasks.sweep.trigger({ websiteId: WEBSITE })).toBe(true);
-		expect(await stored(held.json.id)).toBe('expired');
-		// throttled: at most once per interval per website
-		expect(await h.coupons.tasks.sweep.trigger({ websiteId: WEBSITE })).toBe(false);
-		h.clock.advance(SWEEP_EVERY_MS);
-		expect(await h.coupons.tasks.sweep.trigger({ websiteId: WEBSITE })).toBe(true);
+		await h.call('GET', '/v1/coupons');
+		expect(await stored(held.json.id)).toBe('reserved');
 		h.clock.set(T0);
 	});
 
-	it('does nothing without a website or past its deadline', async () => {
-		expect(await sweepWebsite(h.coupons, { websiteId: null, deadline: Infinity })).toBe(0);
-		await h.coupon({ code: 'BGSWEEP2', action: { type: 'percent', percent: 10 } });
-		const held = await h.call('POST', '/v1/reservations', { body: { codes: ['BGSWEEP2'], cart: cart() } });
+	it('releases the lapsed reservations holding a code when the code is read', async () => {
+		await h.coupon({ code: 'CODEREAD', action: { type: 'percent', percent: 10 }, limits: { per_code: 1 } });
+		const held = await h.call('POST', '/v1/reservations', { body: { codes: ['CODEREAD'], cart: cart() } });
+		expect((await h.call('GET', '/v1/codes/CODEREAD')).json.taken).toBe(1);
 		h.clock.advance(16 * MINUTE);
-		expect(await sweepWebsite(h.coupons, { websiteId: WEBSITE, deadline: h.clock.now() })).toBe(0);
-		expect(await stored(held.json.id)).toBe('reserved');
-		expect(await sweepWebsite(h.coupons, { websiteId: WEBSITE, deadline: h.clock.now() + 1000 })).toBe(1);
+		const read = await h.call('GET', '/v1/codes/CODEREAD');
+		expect(read.json.taken).toBe(0);
+		expect(await stored(held.json.id)).toBe('expired');
+		h.clock.set(T0);
+	});
+
+	it('"Release expired reservations" releases the website\'s lapsed reservations at once (dashboard)', async () => {
+		await h.coupon({ code: 'BTN1', action: { type: 'percent', percent: 10 } });
+		await h.coupon({ code: 'BTN2', action: { type: 'percent', percent: 10 } });
+		const one = await h.call('POST', '/v1/reservations', { body: { codes: ['BTN1'], cart: cart() } });
+		const two = await h.call('POST', '/v1/reservations', { body: { codes: ['BTN2'], cart: cart() } });
+		h.clock.advance(16 * MINUTE);
+		const merchant = await launch('merchant');
+		const run = await h.call('POST', '/v1/dashboard/reservations:expire', { key: merchant, body: {} });
+		expect(run.status, run.text).toBe(200);
+		expect(run.json.expired).toBeGreaterThanOrEqual(2);
+		expect(run.json.more).toBe(false);
+		expect(await stored(one.json.id)).toBe('expired');
+		expect(await stored(two.json.id)).toBe('expired');
+		expect((await h.call('POST', '/v1/dashboard/reservations:expire', { key: merchant, body: {} })).json).toEqual({
+			expired: 0,
+			more: false,
+		});
+		expect(EXPIRE_RUN_LIMIT).toBe(100);
+		const demo = await launch('demo');
+		expect((await h.call('POST', '/v1/dashboard/reservations:expire', { key: demo, body: {} })).status).toBe(403);
 		h.clock.set(T0);
 	});
 });

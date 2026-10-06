@@ -1,7 +1,8 @@
 /**
  * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
  * the .well-known endpoints, /sso and — in development — the certification probes) plus the Reviews Mode C API and the
- * dashboard API (SSO sessions). The hourly request-flow cron lives in jobs/ and is added by the composition root.
+ * dashboard API (SSO sessions). Nothing runs on a timer: review requests are sent when an order completes (and on
+ * demand), stale photo slots are swept on the website's next upload (and on demand).
  * Every product route is gated by its element: a disabled element answers 403 element_disabled in every mode. POSTs
  * that create or move state require an Idempotency-Key (app-kit stores and replays the response); handlers are thin —
  * validation and rules live in core/.
@@ -97,7 +98,7 @@ const statusesOf = (value, allowed, fallback) => {
 };
 
 /**
- * The application (service + site resolution) shared by the routes, the event consumers, the job and the dashboard.
+ * The application (service + site resolution) shared by the routes, the event consumers and the dashboard.
  * @param {ReviewsApp} app
  */
 export const createReviews = (app) => {
@@ -120,14 +121,11 @@ export const createReviews = (app) => {
 	 * @param {any} doc
 	 * @returns {Promise<Site>}
 	 */
-	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
-		return {
-			websiteId,
-			settings: settingsForDoc(product, doc),
-			repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
-		};
-	};
+	const siteOf = async (websiteId, doc) => ({
+		websiteId,
+		settings: settingsForDoc(product, doc),
+		repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
+	});
 	/**
 	 * Site of a website from its entitlement (null without an active subscription or with the base element off).
 	 * @param {string} websiteId
@@ -945,6 +943,30 @@ export const buildRoutes = (reviews) => {
 				},
 			}),
 		),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/request-flow:run',
+			auth: 'launch',
+			element: 'request_flow',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: 'optional',
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				return s ? ok(await service.runRequests(s)) : noWebsite();
+			},
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/photos:sweep',
+			auth: 'launch',
+			element: 'photos',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: 'optional',
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				return s ? ok(await service.sweepPhotos(s)) : noWebsite();
+			},
+		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/moderation:check',

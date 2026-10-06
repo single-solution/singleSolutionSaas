@@ -1,12 +1,11 @@
 # jobs/
 
-Scheduled handlers (`core` + `adapters` only), wired to signed cron routes in `app/cron/*` and `vercel.json` when
-needed.
+None. This product runs no scheduled jobs, background loops or polling: work happens inside the request that makes it
+relevant, for the records that request touches.
 
-- `sweep.js` — `GET /cron/sweep` (daily catch-up, `Authorization: Bearer $CRON_SECRET`): for every website served
-  with `inspection` on, inspection photo slots past their `staleAt` are deleted — the object in the merchant's bucket
-  when it was uploaded, then the slot (app-kit `sweepStaleUploads`, ≤ 100 per website per run, idempotent). Websites
-  run independently. The same sweep runs after requests for the request's website (`product.background.every`, at most
-  hourly, ≤ 25 slots), registered by `wireJobs`; a slot past its `staleAt` never counts, whether or not it was swept.
-
-Report links expire by their stored `expiresAt`, and events and usage are flushed by app-kit's background flusher.
+- Inspection photo slots that were never confirmed stop counting once past their `staleAt` (checked on read). They are
+  deleted — the object in the merchant's bucket when it was uploaded, then the slot (app-kit `sweepStaleUploads`) — on
+  the website's next new photo slot (`POST /v1/inspections/{id}/photos`, up to 25 stale slots) or from the dashboard's
+  "Clean up stale photos" button (`POST /v1/dashboard/photos:sweep`, up to 100). A TTL index on `purgeAt` (a week
+  later) removes any record left behind.
+- Report links expire by their stored `expiresAt` (refused on read).

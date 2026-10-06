@@ -80,5 +80,10 @@
 	"dashboard.rules.reads": "Reads: {paths}",
 	"dashboard.rules.always": "Always (no condition)",
 	"dashboard.settings.intro": "Limits, stacking, code formats, reservations and every other setting are configured in the Portal.",
-	"dashboard.settings.open": "Open the configuration in the Portal"
+	"dashboard.settings.open": "Open the configuration in the Portal",
+	"dashboard.expire.title": "Expired reservations",
+	"dashboard.expire.help": "A reservation whose time ran out gives its uses back when its code, customer or device is next used or read. Release them all now:",
+	"dashboard.expire.run": "Release expired reservations",
+	"dashboard.expire.done": "{count} expired reservations released.",
+	"dashboard.expire.done_more": "{count} expired reservations released. More are waiting: press again."
 }

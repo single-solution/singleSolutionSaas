@@ -14,9 +14,8 @@ import { connectorsRoutes } from './routes.js';
 import { collections } from './schema.js';
 import { createConnectorsService } from './service.js';
 
-export const HEALTH_CRON = 'connectors-health';
-export const HEALTH_JOB = 'connectors.health_check';
-const MAX_ROUNDS = 30;
+/** Admin operation that checks every connector not checked recently (bounded; what is left stays due). */
+export const HEALTH_OPERATION = 'connectors-health';
 /** Response bodies of connection checks are read up to this size. */
 export const CHECK_MAX_BYTES = 64 * 1024;
 
@@ -49,28 +48,10 @@ export const createConnectorsModule = (options = {}) =>
 			return createConnectorsService(ctx, { policy, probes });
 		},
 		routes: (ctx) => connectorsRoutes(ctx.service('connectors')),
-		jobs: (ctx) => ({
-			[HEALTH_JOB]: async (payload, { deadline, signal }) => {
-				const result = await ctx.service('connectors').healthCheck({ deadline, signal });
-				const round = Number(payload?.round ?? 0) + 1;
-				// continue in the next daily drain (never spin inside this one), at most MAX_ROUNDS times per run
-				if (result.remaining && round <= MAX_ROUNDS) {
-					await ctx.jobs.enqueue({
-						name: HEALTH_JOB,
-						key: `${HEALTH_JOB}:${payload?.hour ?? 'manual'}:${round}`,
-						payload: { hour: payload?.hour ?? 'manual', round },
-						runAt: ctx.now() + 60_000,
-						maxAttempts: 3,
-						daily: true,
-					});
-				}
-				return result;
-			},
-		}),
-		crons: (ctx) => ({
-			// a step of the daily cron: check what is due within its deadline; what is left stays due for the next run
-			// (connectors are also checked on demand: test, rotate, update, assign)
-			[HEALTH_CRON]: async ({ deadline, signal }) => ctx.service('connectors').healthCheck({ deadline, signal }),
+		operations: (ctx) => ({
+			// on demand (admin console): connectors are otherwise checked when saved (create, rotate, update, assign,
+			// test) and when a product resolves one whose last check is old (F.19: no timer)
+			[HEALTH_OPERATION]: async ({ deadline, signal }) => ctx.service('connectors').healthCheck({ deadline, signal }),
 		}),
 	});
 

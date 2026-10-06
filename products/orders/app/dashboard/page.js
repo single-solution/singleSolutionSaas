@@ -9,6 +9,7 @@ import { redirect } from 'next/navigation.js';
 import { Card, Stat } from '@ss/ui';
 import { formatMoney } from '../../core/money.js';
 import { dashboardContext } from '../_lib/dashboard.js';
+import { ActionForm } from './_components/ActionForm.js';
 import { Shell, t } from './_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -44,5 +45,17 @@ export default async function Overview({ searchParams }) {
 				cards.map(([label, value]) => h(Stat, { key: String(label), label: String(label), value: String(value) })),
 			),
 		),
+		context.data.canWrite && context.data.websiteId
+			? h(
+					Card,
+					{ title: t('dashboard.due.title'), subtitle: t('dashboard.due.help') },
+					h(ActionForm, {
+						path: '/v1/dashboard/due:run',
+						websiteId: context.data.websiteId,
+						fields: [],
+						submit: t('dashboard.due.run'),
+					}),
+				)
+			: null,
 	);
 }

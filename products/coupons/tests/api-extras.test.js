@@ -6,8 +6,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
 import { createEventHandlers } from '../api/consumers.js';
-import { cronAuthorized, runSweepJob } from '../jobs/sweep.js';
-import { cart, createHarness, CRON_SECRET, MERCHANT, ORIGIN, T0, WEBSITE } from './harness.js';
+import { cart, createHarness, MERCHANT, ORIGIN, T0, WEBSITE } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -303,41 +302,7 @@ describe('privacy', () => {
 	});
 });
 
-describe('jobs and consumers', () => {
-	it('authorises the cron in constant time and isolates failing websites', async () => {
-		expect(cronAuthorized(`Bearer ${CRON_SECRET}`, CRON_SECRET)).toBe(true);
-		expect(cronAuthorized('Bearer nope', CRON_SECRET)).toBe(false);
-		expect(cronAuthorized(null, CRON_SECRET)).toBe(false);
-		expect(cronAuthorized('Bearer x', null)).toBe(false);
-		/** @type {string[]} */
-		const errors = [];
-		const result = await runSweepJob({
-			websiteIds: ['web_a', 'web_b', 'web_c'],
-			siteFor: async (id) => (id === 'web_b' ? null : { id }),
-			sweep: async (site) => {
-				if (site.id === 'web_c') throw new Error('down');
-				return 0;
-			},
-			onError: (id) => errors.push(id),
-		});
-		expect(result).toEqual({
-			websites: 2,
-			expired: 0,
-			results: [
-				{ websiteId: 'web_a', expired: 0 },
-				{ websiteId: 'web_c', error: 'failed' },
-			],
-		});
-		expect(errors).toEqual(['web_c']);
-		let pages = 0;
-		const paged = await runSweepJob({
-			websiteIds: ['web_a'],
-			siteFor: async () => ({}),
-			sweep: async () => ((pages += 1) <= 2 ? 100 : 3),
-		});
-		expect(paged.expired).toBe(203);
-	});
-
+describe('consumers', () => {
 	it('ignores events of websites without the api element and events without an order', async () => {
 		/** @type {string[]} */
 		const calls = [];

@@ -21,16 +21,14 @@
 			"x-kind": "config",
 			"x-ui": { "widget": "select", "group": "Eligibility", "order": 2 }
 		},
-		"request_delay_hours": {
-			"type": "integer",
-			"title": "Ask for a review after (hours)",
-			"description": "Hours after order.completed@1 before the review request is due (sent by the request flow, or shown to the customer).",
-			"default": 168,
-			"minimum": 0,
-			"maximum": 8760,
-			"x-kind": "config",
+		"send_on_completion": {
+			"type": "boolean",
+			"title": "Send the review request when the order completes",
+			"description": "On (with the request flow on): the request goes out as soon as order.completed@1 arrives, together with the website's other due requests and reminders. Off: requests wait until you run the flow (dashboard or POST /v1/request-flow:run). There is no delayed send: it would need a scheduled job, which this product does not run.",
+			"default": true,
+			"x-kind": "flag",
 			"x-experiment": true,
-			"x-ui": { "widget": "number", "group": "Timing", "order": 3 }
+			"x-ui": { "widget": "switch", "group": "Timing", "order": 3 }
 		},
 		"review_window_days": {
 			"type": "integer",

@@ -2,14 +2,12 @@ import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createIntegrations } from '../adapters/integrations.js';
 import { createTestGateway } from '../adapters/payments.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import { isTransactionUnsupported, strip } from '../adapters/db.js';
 import { maskKey, seal, sealingKey, unseal } from '../adapters/secrets.js';
 import { demoDashboard, kpisOf, resolveDashboard } from '../api/dashboard.js';
-import { fail, requesterOf } from '../api/routes.js';
+import { EXPIRY_RUN_LIMIT, fail, requesterOf } from '../api/routes.js';
 import { sessionView } from '../api/session.js';
-import { cronAuthorized, drain, runSweepJob } from '../jobs/sweep.js';
-import { CONNECTED, MERCHANT, WEBSITE, checkoutBody, createHarness } from './harness.js';
+import { CONNECTED, HOUR, MERCHANT, WEBSITE, checkoutBody, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -75,7 +73,7 @@ describe('dashboard', () => {
 		expect(await live.data.orders({})).toHaveLength(1);
 		expect(await live.data.order(placed.json.id)).toMatchObject({ number: placed.json.number, proofs: [] });
 		expect(await live.data.order('nope')).toBeNull();
-		// expire on read: once the transfer hold passed the dashboard shows the order cancelled, before any sweep
+		// expire on read: once the transfer hold passed the dashboard shows the order cancelled
 		await h.collection('orders').updateOne({ id: placed.json.id }, { $set: { expiresAt: new Date(h.clock.now() - 1) } });
 		expect(await live.data.order(placed.json.id)).toMatchObject({ status: 'cancelled' });
 		expect((await live.data.orders({}))[0]).toMatchObject({ status: 'cancelled' });
@@ -138,6 +136,36 @@ describe('dashboard', () => {
 		const demo = await launch('demo');
 		expect((await h.call('POST', `/v1/dashboard/orders/${cod.json.id}/confirm`, { key: demo, body: {} })).status).toBe(403);
 		expect((await h.call('GET', `/v1/dashboard/orders/${cod.json.id}/proofs/p`, { key: demo })).status).toBe(400);
+	});
+
+	it('"Process expired now" cancels the website\'s expired holds and reports its abandoned carts (no timer)', async () => {
+		const merchant = await launch('merchant');
+		const held = await h.call('POST', '/v1/orders', {
+			body: checkoutBody({ lines: [{ itemId: 'itm_d', quantity: 1 }], paymentMethod: 'cod' }),
+		});
+		expect(held.json.status).toBe('awaiting_confirmation');
+		const cartId = await h.cartWith([{ itemId: 'itm_d', quantity: 1 }]);
+		const past = new Date(h.clock.now() - 48 * HOUR);
+		await h.collection('orders').updateOne({ id: held.json.id }, { $set: { expiresAt: new Date(h.clock.now() - 1) } });
+		await h.collection('carts').updateOne({ id: cartId }, { $set: { updatedAt: past } });
+		// nothing happens by itself
+		expect((await h.collection('orders').findOne({ id: held.json.id }))?.status).toBe('awaiting_confirmation');
+		const run = await h.call('POST', '/v1/dashboard/expiry:run', { key: merchant, body: {} });
+		expect(run.status, run.text).toBe(200);
+		expect(run.json).toMatchObject({ more: false });
+		expect(run.json.expired).toBeGreaterThanOrEqual(1);
+		expect(run.json.abandoned).toBeGreaterThanOrEqual(1);
+		expect((await h.collection('orders').findOne({ id: held.json.id }))?.status).toBe('cancelled');
+		expect(h.published('checkout.cart_abandoned@1').filter((e) => e.data.cartId === cartId)).toHaveLength(1);
+		// a second press finds nothing left
+		expect((await h.call('POST', '/v1/dashboard/expiry:run', { key: merchant, body: {} })).json).toEqual({
+			expired: 0,
+			abandoned: 0,
+			more: false,
+		});
+		expect(EXPIRY_RUN_LIMIT).toBe(100);
+		const demo = await launch('demo');
+		expect((await h.call('POST', '/v1/dashboard/expiry:run', { key: demo, body: {} })).status).toBe(403);
 	});
 
 	it('maps requesters and failures', () => {
@@ -227,52 +255,7 @@ describe('adapters and jobs', () => {
 		expect((await action.verifyWebhook({ headers: {}, rawBody: raw })).ok).toBe(false);
 	});
 
-	it('keeps the site registry and runs the sweep job per website', async () => {
-		/** @type {any[]} */
-		const writes = [];
-		const collection = {
-			updateOne: async (/** @type {any} */ f) => {
-				writes.push(f);
-				if (f._id === 'web_fail') throw new Error('down');
-			},
-			find: () => ({ toArray: async () => [{ _id: 'web_db' }] }),
-		};
-		const registry = createSiteRegistry({ collection });
-		await registry.remember('web_a');
-		await registry.remember('web_a');
-		await registry.remember('web_fail');
-		expect(await registry.list()).toEqual(['web_a', 'web_db']);
-		expect(await createSiteRegistry().list()).toEqual([]);
-		/** @type {string[]} */
-		const errors = [];
-		const job = await runSweepJob({
-			websiteIds: ['a', 'b', 'c'],
-			siteFor: async (id) => (id === 'b' ? null : id),
-			tasks: { expired: async (site) => (site === 'c' ? Promise.reject(new Error('x')) : 0) },
-			onError: (id) => errors.push(id),
-		});
-		expect(job).toEqual({
-			websites: 2,
-			results: [
-				{ websiteId: 'a', expired: 0 },
-				{ websiteId: 'c', error: 'failed' },
-			],
-		});
-		expect(errors).toEqual(['c']);
-		// background runs: small pages, stopped by the page budget or the deadline
-		/** @type {number[]} */
-		const pages = [];
-		const full = async (/** @type {string} */ _site, /** @type {{ limit: number }} */ { limit }) => {
-			pages.push(limit);
-			return limit;
-		};
-		expect(await drain(full, 'a', { deadline: 10, now: () => 0, limit: 5, pages: 3 })).toBe(15);
-		expect(await drain(full, 'a', { deadline: 10, now: () => 10 })).toBe(0);
-		expect(await drain(async () => 2, 'a', { deadline: 10, now: () => 0 })).toBe(2);
-		expect(pages).toEqual([5, 5, 5]);
-		expect(cronAuthorized('Bearer abc', 'abc')).toBe(true);
-		expect(cronAuthorized('Bearer abd', 'abc')).toBe(false);
-		expect(cronAuthorized(null, 'abc')).toBe(false);
+	it('detects databases without transactions', async () => {
 		expect(isTransactionUnsupported({ codeName: 'IllegalOperation' })).toBe(true);
 		expect(isTransactionUnsupported({ message: 'Transaction numbers are only allowed on a replica set member' })).toBe(true);
 		expect(isTransactionUnsupported(new Error('other'))).toBe(false);

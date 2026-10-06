@@ -15,7 +15,7 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 | `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                                        |
 | `api/`          | thin REST handlers, event consumers, dashboard session view                                                           |
 | `adapters/`     | data repositories (every query keyed by `websiteId`) and the app-kit platform wiring                                  |
-| `jobs/`         | daily cron route (`/cron/daily`) and throttled background work after requests (`product.background.every`)            |
+| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)                          |
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                         |
 | `schemas/`      | feature schemas and product event data schemas                                                                        |
 | `app/`          | Next.js App Router: `.well-known/ss-register`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
@@ -48,7 +48,7 @@ ss certify . --url http://localhost:3000 --token <fresh token>   # certification
 `GET /v1/status` instead). To remove it by hand from a generated project:
 
 1. Delete `core/notes.js`, `headless/notes.js`, `ui/notes.js`, `api/notes.js`, `api/events.js`, `adapters/db.js`,
-   `jobs/purge-deleted.js`, `schemas/notes.features.json`, `schemas/events/<namespace>.note_created@1.json` and the
+   `schemas/notes.features.json`, `schemas/events/<namespace>.note_created@1.json` and the
    tests `tests/core.test.js`, `tests/headless.test.js`, `tests/ui.test.js`, `tests/api.test.js`, `tests/helpers.js`,
    `tests/memory-collection.js`.
 2. `manifest.json`: replace the `notes` element with your own (a service product needs at least one element), update
@@ -57,8 +57,6 @@ ss certify . --url http://localhost:3000 --token <fresh token>   # certification
 3. `openapi.json`: remove `/v1/notes` and `/v1/notes/{id}` and document your element's `api.resources` (mark the one
    `ss certify` should exercise with `"x-ss-certify": true`).
 4. `api/routes.js`: drop the notes routes and handlers; `wireEvents` registers nothing until you consume events.
-   `jobs/index.js`: drop the `purge` background task (`wireJobs` returns the product unchanged) and `tests/jobs.test.js`'s
-   purge test.
 5. `adapters/privacy.js`: list your own personal-data collections; when you store none, pass `export` /
    `anonymize` handlers that answer empty results (as `--minimal` does) so the Portal's data requests succeed.
 6. `strings/en.json`: remove the `notes.*` keys (keep `dashboard.*`).

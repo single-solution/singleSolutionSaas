@@ -4,7 +4,6 @@ import { noopLogger } from '@ss/app-kit';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { afterPair, beforePair, createRepositories, isDuplicateKey } from '../adapters/db.js';
 import { createPlatform, loadManifest, loadStrings } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import { createReportTokens, stableId } from '../adapters/tokens.js';
 import { failure, invalid, pageContext } from '../api/routes.js';
 import { ELEMENT_KEYS, settingsFrom } from '../api/settings.js';
@@ -24,34 +23,6 @@ describe('tokens', () => {
 		expect(tokens.hashOf('grr_short')).toBeNull();
 		expect(tokens.hashOf(5)).toBeNull();
 		expect(createReportTokens().issue().token).not.toBe(createReportTokens().issue().token);
-	});
-});
-
-describe('site registry', () => {
-	it('remembers website ids in memory or in the control database', async () => {
-		const memory = createSiteRegistry();
-		await memory.remember('web_b');
-		await memory.remember('web_a');
-		await memory.remember('web_a');
-		expect(await memory.list()).toEqual(['web_a', 'web_b']);
-		/** @type {string[]} */
-		const stored = [];
-		let fail = true;
-		const collection = {
-			updateOne: async (/** @type {any} */ filter) => {
-				if (fail) {
-					fail = false;
-					throw new Error('down');
-				}
-				stored.push(filter._id);
-			},
-			find: () => ({ toArray: async () => [{ _id: 'web_z' }] }),
-		};
-		const durable = createSiteRegistry({ collection });
-		await durable.remember('web_1'); // fails, forgotten
-		await durable.remember('web_1'); // retried
-		expect(stored).toEqual(['web_1']);
-		expect(await durable.list()).toEqual(['web_1', 'web_z']);
 	});
 });
 

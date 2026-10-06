@@ -8,8 +8,9 @@
  * - `assignments`: the tier of an item or of one of its variants (unique per item + variant).
  * - `units`: individually graded units (a serial, a lot, a room…) with their tier and report link (hash only).
  * - `inspections`: checklist results, score and suggested tier per inspection of a unit.
- * - `photos`: inspection photo slots in the merchant's bucket; a pending slot past its `staleAt` is swept by the
- *   cron (object and record deleted), with a later TTL (`purgeAt`) as a backstop.
+ * - `photos`: inspection photo slots in the merchant's bucket; a pending slot past its `staleAt` is swept on the
+ *   website's next photo upload or from the dashboard (object and record deleted), with a later TTL (`purgeAt`) on the
+ *   record as a backstop.
  * @module
  */
 import { sweepStaleUploads } from '@ss/app-kit';

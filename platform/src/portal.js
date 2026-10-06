@@ -3,7 +3,7 @@
  * wiring — no I/O happens here (the Mongo driver connects on first use), so building is cheap and testable.
  *
  * The returned object is what the Next.js adapters in `app/` call:
- * - `handle(request)` — the Portal API (`/v1/*` for modules, `/cron/:job` for cron triggers)
+ * - `handle(request)` — the Portal API (`/v1/*`; admin operations at `/v1/admin/operations/:name`)
  * - `jwks()` — the published JWKS (Portal keys and website-key signing keys, distinct kids)
  * - `readyz()` — dependency check
  * - `ensureIndexes()`, `migrate()` — operational entry points (scripts, deploy pipeline)
@@ -26,38 +26,22 @@ import {
 import { platformError } from './infra/errors.js';
 import { INFRA_PROBLEMS, createApiHandler, defineRoute, ok, problem } from './infra/http.js';
 import { createPlatformMailer } from './infra/mailer.js';
-import { createCronRunner, createCronRuns, createJobs } from './infra/jobs.js';
+import { createJobs, createOperationRunner, createOperationRuns } from './infra/jobs.js';
 import { composeModules, moduleProblems } from './infra/modules.js';
 import { can, websitesVisible } from './infra/rbac.js';
+import { afterResponse } from './infra/request-scope.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from './infra/schema.js';
 import { createIdempotencyStore, createRateLimitStore, createReplayStore } from './infra/stores.js';
 import { defaultRandomBytes } from './infra/util.js';
 
 /** @typedef {import('./infra/config.js').PortalConfig} PortalConfig */
 
-/** Built-in cron that verifies the audit hash chains (a step of the daily cron). */
-export const AUDIT_VERIFY_CRON = 'audit_verify';
-/** Built-in job doing the same verification on demand (and continuing a pass that hit its deadline). */
-export const AUDIT_VERIFY_JOB = 'audit.verify';
-/** The one scheduled cron (`vercel.json`, Vercel Hobby: daily): runs {@link DAILY_STEPS} in order (F.19). */
-export const DAILY_CRON = 'daily';
-/**
- * The daily cron's steps, in order, with their share of its time budget. A step may use all the time the later
- * steps do not reserve (their shares), so an early finish leaves more to the rest; every step resumes where it
- * stopped on the next run (cursors, the job queue, continuation jobs).
- */
-export const DAILY_STEPS = Object.freeze([
-	{ cron: 'settlement', share: 0.2 },
-	{ cron: 'drain', share: 0.16 },
-	{ cron: 'connectors-health', share: 0.3 },
-	{ cron: 'reconciliation', share: 0.12 },
-	{ cron: 'catalog_refresh', share: 0.12 },
-	{ cron: AUDIT_VERIFY_CRON, share: 0.1 },
-]);
-/** Opportunistic drain after requests: at most once per interval across instances, a few jobs, a short budget. */
-export const REQUEST_DRAIN = Object.freeze({ intervalMs: 15_000, budgetMs: 8_000, maxJobs: 10 });
-/** The deliveries an ingest enqueued are attempted right after the response, within this budget. */
-export const IMMEDIATE_DELIVERY_BUDGET_MS = 8_000;
+/** Built-in operation that verifies the audit hash chains (admin console; resumable with `after`). */
+export const AUDIT_VERIFY_OPERATION = 'audit_verify';
+/** Built-in operation that runs due jobs of the queue (admin console "Run due jobs"; bounded). */
+export const DRAIN_OPERATION = 'drain';
+/** A job enqueued during a request runs right after its response, within this budget (F.19: no queue drains). */
+export const REQUEST_JOB_BUDGET_MS = 8_000;
 /** @typedef {import('./infra/modules.js').ModuleDefinition} ModuleDefinition */
 /** @typedef {import('./infra/modules.js').SharedContext} SharedContext */
 /** @typedef {import('./infra/logger.js').Logger} Logger */
@@ -114,6 +98,19 @@ export const createPortal = ({
 		randomBytes,
 		random,
 		logger: logger.child({ component: 'jobs' }),
+		// event-driven (F.19): a job a request enqueued runs right after that request's response, and only that job
+		onEnqueued: ({ id }) => {
+			afterResponse(() =>
+				jobs.runBatch({
+					handlers: jobHandlers,
+					ids: [id],
+					maxJobs: 1,
+					deadlineMs: REQUEST_JOB_BUDGET_MS,
+					owner: 'request',
+					safetyMs: 1_000,
+				}),
+			);
+		},
 	});
 
 	// ports are known once the modules are composed; the verifier reads them lazily
@@ -144,8 +141,11 @@ export const createPortal = ({
 		secretHasher: createSecretHasher(config.websiteKeyPepper),
 		audit,
 		jobs,
-		// the runner is built after the modules (it needs their crons); names are read when asked
-		cronRuns: createCronRuns({ runs: repos.appendOnly(COLLECTIONS.cronRuns), names: () => cron.names() }),
+		// the runner is built after the modules (it needs their operations); names are read when asked
+		operationRuns: createOperationRuns({
+			runs: repos.appendOnly(COLLECTIONS.operationRuns),
+			names: () => operationRunner.names(),
+		}),
 		withTransaction: createTransactionRunner(db.client),
 		verifyWebsiteKey,
 		mailer: mailer ?? createPlatformMailer({ config, logger: logger.child({ component: 'mailer' }) }),
@@ -174,126 +174,67 @@ export const createPortal = ({
 	});
 	ports = composed.ports;
 
-	if (Object.hasOwn(composed.jobs, AUDIT_VERIFY_JOB)) throw new TypeError(`job ${AUDIT_VERIFY_JOB} is reserved`);
-	for (const name of ['drain', AUDIT_VERIFY_CRON, DAILY_CRON])
-		if (Object.hasOwn(composed.crons, name)) throw new TypeError(`cron ${name} is reserved`);
-
-	/**
-	 * Verify the audit chains from `after` on; a pass cut by its deadline continues in a `daily` job from the first
-	 * scope it skipped (the next daily drain runs it).
-	 * @param {{ deadline: number, signal?: AbortSignal, after?: string | null }} input
-	 */
-	const verifyAudit = async ({ deadline, signal, after = null }) => {
-		const report = await audit.verifyAll({ deadline, ...(signal ? { signal } : {}), after });
-		if (report.resumeAfter !== null) {
-			const day = new Date(now()).toISOString().slice(0, 10);
-			await jobs.enqueue({
-				name: AUDIT_VERIFY_JOB,
-				key: `${AUDIT_VERIFY_JOB}:${day}:${report.resumeAfter}`,
-				payload: { after: report.resumeAfter },
-				maxAttempts: 3,
-				daily: true,
-			});
-		}
-		return report;
-	};
+	for (const name of [DRAIN_OPERATION, AUDIT_VERIFY_OPERATION])
+		if (Object.hasOwn(composed.operations, name)) throw new TypeError(`operation ${name} is reserved`);
 
 	/** @type {Record<string, import('./infra/jobs.js').JobHandler>} */
-	const jobHandlers = {
-		...composed.jobs,
-		// built-in: the same verification on demand (`jobs.enqueue({ name: 'audit.verify' })`), or its continuation
-		[AUDIT_VERIFY_JOB]: async (payload, { deadline, signal }) =>
-			verifyAudit({ deadline, signal, after: typeof payload?.after === 'string' ? payload.after : null }),
+	const jobHandlers = { ...composed.jobs };
+
+	/** @type {Record<string, import('./infra/jobs.js').OperationHandler>} */
+	const operations = {
+		// built-in: run due jobs (failed jobs waiting for their retry time included) within the time budget
+		[DRAIN_OPERATION]: async ({ deadline }) =>
+			jobs.runBatch({ handlers: jobHandlers, deadlineMs: Math.max(0, deadline - now()), owner: 'operation:drain' }),
+		// built-in: recompute the audit hash chains from `after` on; a run cut by its deadline returns `resumeAfter`
+		[AUDIT_VERIFY_OPERATION]: async ({ deadline, signal, input }) =>
+			audit.verifyAll({ deadline, signal, after: typeof input.after === 'string' ? input.after : null }),
+		...composed.operations,
 	};
 
-	/** @type {Record<string, import('./infra/jobs.js').CronHandler>} */
-	const crons = {
-		// built-in: drain the job queue within the cron time budget
-		drain: async ({ deadline }) =>
-			jobs.runBatch({ handlers: jobHandlers, deadlineMs: Math.max(0, deadline - now()), owner: 'cron:drain' }),
-		// built-in: recompute every audit hash chain
-		[AUDIT_VERIFY_CRON]: async ({ deadline, signal }) => verifyAudit({ deadline, signal }),
-		...composed.crons,
-	};
-	/**
-	 * Built-in: the daily cron (the only one `vercel.json` schedules). Each step gets the time the later steps do not
-	 * reserve; a failing step is recorded and the next one runs.
-	 * @type {import('./infra/jobs.js').CronHandler}
-	 */
-	const daily = async ({ deadline, signal, logger: log, trigger }) => {
-		const total = Math.max(0, deadline - now());
-		const steps = DAILY_STEPS.filter((step) => Object.hasOwn(crons, step.cron));
-		/** @type {Record<string, unknown>} */
-		const stats = {};
-		for (const [index, step] of steps.entries()) {
-			const reserved = steps.slice(index + 1).reduce((sum, later) => sum + later.share * total, 0);
-			const stepDeadline = Math.floor(deadline - reserved);
-			if (signal.aborted || stepDeadline <= now()) {
-				stats[step.cron] = { skipped: true };
-				continue;
-			}
-			try {
-				const handler = /** @type {import('./infra/jobs.js').CronHandler} */ (crons[step.cron]);
-				stats[step.cron] =
-					(await handler({ deadline: stepDeadline, signal, logger: log.child({ step: step.cron }), trigger })) ?? {};
-			} catch (error) {
-				log.error('daily cron step failed', { step: step.cron, error });
-				stats[step.cron] = { failed: true };
-			}
-		}
-		return stats;
-	};
-
-	const cron = createCronRunner({
-		crons: { ...crons, [DAILY_CRON]: daily },
+	const operationRunner = createOperationRunner({
+		operations,
 		locks,
-		runs: repos.appendOnly(COLLECTIONS.cronRuns),
-		logger: logger.child({ component: 'cron' }),
-		deadlineMs: config.cronDeadlineMs,
+		runs: repos.appendOnly(COLLECTIONS.operationRuns),
+		logger: logger.child({ component: 'operations' }),
+		deadlineMs: config.operationDeadlineMs,
 		now,
 		randomBytes,
 	});
 
-	/** @param {import('./infra/http.js').RequestContext} ctx */
-	const cronRoute = async (ctx) => {
-		const result = await cron.run(String(ctx.params.job), { trigger: ctx.method === 'GET' ? 'cron' : 'manual' });
-		if (!result) return problem('not_found', `No cron job named ${ctx.params.job}.`);
-		if (result.status === 'failed') return problem('internal_error', `Cron run ${result.id} failed.`);
-		return ok(result);
-	};
-
 	const background = createBackground({
-		locks,
 		logger: logger.child({ component: 'background' }),
-		now,
 		mode: backgroundOptions.mode ?? (config.env === 'test' ? 'off' : 'on'),
 		...(backgroundOptions.fallback ? { fallback: backgroundOptions.fallback } : {}),
+		// a product calling the Portal is a natural moment to retry its own pending work (due event deliveries)
+		onProductCall: async (appId) => composed.ports.productCalled?.(appId),
 	});
-	// built-in: a short, bounded drain after requests (deliveries, mails, retries); `daily` jobs wait for the cron
-	const requestDrain = background.every(
-		'drain',
-		REQUEST_DRAIN.intervalMs,
-		async ({ deadline }) =>
-			jobs.runBatch({
-				handlers: jobHandlers,
-				deadlineMs: Math.max(0, deadline - now()),
-				owner: 'request:drain',
-				maxJobs: REQUEST_DRAIN.maxJobs,
-				skipDaily: true,
-				safetyMs: 1_000,
-			}),
-		{ budgetMs: REQUEST_DRAIN.budgetMs },
-	);
-	const moduleTasks = Object.fromEntries(
-		Object.entries(composed.background).map(([name, task]) => [
-			name,
-			background.every(name, task.intervalMs, task.run, task.budgetMs ? { budgetMs: task.budgetMs } : {}),
-		]),
-	);
 
 	const infraRoutes = [
-		defineRoute({ method: 'GET', path: '/cron/:job', auth: 'cron', handler: cronRoute }),
-		defineRoute({ method: 'POST', path: '/cron/:job', auth: 'cron', idempotent: false, handler: cronRoute }),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/operations',
+			auth: 'staff',
+			permission: 'platform.jobs.read',
+			handler: async () => ok({ items: await shared.operationRuns.latest() }),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/admin/operations/:name',
+			auth: 'staff',
+			permission: 'platform.jobs.manage',
+			idempotent: false,
+			handler: async (ctx) => {
+				const body = /** @type {Record<string, unknown> | undefined} */ (ctx.body);
+				const after = typeof body?.after === 'string' && body.after.length <= 512 ? body.after : undefined;
+				const result = await operationRunner.run(String(ctx.params.name), {
+					trigger: `staff:${ctx.actor?.id ?? 'unknown'}`,
+					input: after === undefined ? {} : { after },
+				});
+				if (!result) return problem('not_found', `No operation named ${ctx.params.name}.`);
+				if (result.status === 'failed') return problem('internal_error', `Operation run ${result.id} failed.`);
+				return ok(result);
+			},
+		}),
 	];
 
 	const api = createApiHandler({
@@ -306,7 +247,6 @@ export const createPortal = ({
 			verifyWebsiteKey,
 			portalUrl: config.portalUrl,
 			replayStore,
-			cronSecret: config.cronSecret,
 			ports: composed.ports,
 			now,
 		}),
@@ -347,9 +287,10 @@ export const createPortal = ({
 		registry,
 		shared,
 		modules: composed,
-		cron,
-		/** Work after responses: `tasks.drain` and the modules' tasks can be triggered directly (tests, operations). */
-		background: Object.freeze({ mode: background.mode, tasks: Object.freeze({ drain: requestDrain, ...moduleTasks }) }),
+		/** On-demand admin operations (`run(name, { input })`), also reachable at `POST /v1/admin/operations/:name`. */
+		operations: operationRunner,
+		/** Work right after responses (`on`, or `off` in tests). */
+		background: Object.freeze({ mode: background.mode }),
 		handle,
 		/** Published JWKS: Portal keys (current + previous) and website-key signing keys. */
 		jwks: () =>

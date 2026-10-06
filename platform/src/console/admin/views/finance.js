@@ -114,7 +114,10 @@ export function FinanceView(props) {
 			</Card>
 			<div className="grid gap-6 lg:grid-cols-2">
 				<Card title="Settlement" subtitle="Settles every complete UTC hour that is due (idempotent per hour).">
-					<p className="text-sm text-muted">Runs hourly by cron; force it after an incident or before reconciliation.</p>
+					<p className="text-sm text-muted">
+						A merchant settles whenever its balance is read or its products report; settle everyone now after an incident or
+						before reconciliation.
+					</p>
 					{canRun ? (
 						<Button className="mt-3" variant="secondary" onClick={() => setConfirm('settlement')}>
 							Force settlement
@@ -123,7 +126,7 @@ export function FinanceView(props) {
 					{stats?.kind === 'settlement' && stats.stats ? <StatsLine stats={stats.stats} /> : null}
 				</Card>
 				<Card title="Reconciliation" subtitle="Compares usage, settlement and the ledger; discrepancies raise alerts.">
-					<p className="text-sm text-muted">Runs nightly; a run resumes where the previous chunk stopped.</p>
+					<p className="text-sm text-muted">Runs on demand; a run resumes where the previous chunk stopped.</p>
 					{canRun ? (
 						<Button className="mt-3" variant="secondary" onClick={() => setConfirm('reconciliation')}>
 							Run reconciliation

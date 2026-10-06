@@ -68,10 +68,10 @@ pnpm check                # format, lint, typecheck, tests with coverage
 pnpm validate             # ss app validate
 ```
 
-Environment: the app-kit variables (`.env.example`), `CRON_SECRET` (`GET /cron/sweep`: expired holds, abandoned carts,
-heartbeat — `vercel.json` runs it once a day as a catch-up over every website) and `SS_CHECKOUT_SEAL_KEY`. Sooner work
-runs on requests: expired holds are cancelled when the order is read (and released when a placement needs the stock),
-and after a request for a website its expired holds (at most every 5 minutes) and abandoned carts (hourly) are swept
-(`jobs/sweep.js`, `product.background.every`).
+Environment: the app-kit variables (`.env.example`) and `SS_CHECKOUT_SEAL_KEY`. Nothing runs on a timer (no crons, no
+background loops): an expired hold is cancelled when the order is read, listed or confirmed (and released when a
+placement needs the stock); a cart is reported abandoned when the merchant's server reads it; the dashboard's "Process
+expired now" button (`POST /v1/dashboard/expiry:run`) does both for the website at once. Guest carts disappear through a
+TTL index. See `jobs/README.md`.
 
 See `docs/guide.md` for the integration guide.

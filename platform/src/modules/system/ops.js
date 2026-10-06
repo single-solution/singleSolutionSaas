@@ -1,13 +1,13 @@
 /**
- * Staff operations reads of the `system` module: platform health (last cron runs, job queue, last audit-chain
+ * Staff operations reads of the `system` module: platform health (last operation runs, job queue, last audit-chain
  * verification) and the audit log (search and per-scope chain verification). Read only; nothing is stored here.
  * @module
  */
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 
-/** The infra's nightly audit-chain verification cron (`portal.js` `AUDIT_VERIFY_CRON`). */
-export const AUDIT_VERIFY_CRON = 'audit_verify';
+/** The infra's audit-chain verification operation (`portal.js` `AUDIT_VERIFY_OPERATION`, run from the admin console). */
+export const AUDIT_VERIFY_OPERATION = 'audit_verify';
 export const AUDIT_SCOPE = /^(global|merchant:mer_[0-9a-z]{10,64})$/;
 const AUDIT_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const AUDIT_ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(\.\*)?$/;
@@ -64,14 +64,14 @@ export const createOps = (ctx) =>
 	Object.freeze({
 		/** Platform health for the admin dashboard. */
 		health: async () => {
-			const [crons, jobs, verification] = await Promise.all([
-				ctx.cronRuns.latest(),
+			const [operations, jobs, verification] = await Promise.all([
+				ctx.operationRuns.latest(),
 				ctx.jobs.queueHealth(),
-				ctx.cronRuns.last(AUDIT_VERIFY_CRON),
+				ctx.operationRuns.last(AUDIT_VERIFY_OPERATION),
 			]);
 			const stats = /** @type {Record<string, any> | null} */ (verification?.stats ?? null);
 			return {
-				crons,
+				operations,
 				jobs,
 				audit: {
 					lastVerification: verification

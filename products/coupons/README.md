@@ -48,8 +48,9 @@ the customer in the cart.
   checkouts can never over-redeem a limited code (tested with four parallel reservations and through the real Portal).
 - **Lifecycle.** `pending → reserved → redeemed | released | expired` by compare-and-set; a lapsed reservation is
   treated as expired as soon as it is read or touched (its uses go back then, also when its code, customer or device
-  needs the use), a throttled per-website sweep runs after requests (at most every 5 min), and the daily catch-up job
-  (`/cron/sweep`, 03:20 UTC, which also heartbeats) cleans up the rest; usage and events are flushed by app-kit itself.
+  needs the use, or its code is read), and the dashboard's "Release expired reservations" releases them all at once.
+  Nothing runs on a timer (no crons, no background loops, no periodic heartbeat); app-kit sends usage and events right
+  after the request that queued them. See `jobs/README.md`.
   A late `order.completed@1` re-claims an expired reservation when `api.confirm_expired` allows and the use is free.
 - **Exactly once.** Reservation ids derive from `reference` or the Idempotency-Key; redemption counters count once per
   code (`counted`); usage records and events carry deterministic idempotency keys.
@@ -109,12 +110,12 @@ one wins) → `order.completed@1` through the Event Hub → redeemed in the merc
    workspace root automatically.
 2. Environment variables (Production): `SS_PORTAL_URL` (pinned Portal), `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one
    line), `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional; recorded by the handshake), `SS_PRODUCT_DB_URI` (the
-   product's own small MongoDB — required in production), `CRON_SECRET` (≥ 16 chars, for the daily
-   `/cron/sweep` in `vercel.json`; Vercel Hobby runs it once a day), `SS_PRODUCT_DB_MAX_POOL_SIZE` (optional, default 5), `SS_LOG_LEVEL` (optional).
+   product's own small MongoDB — required in production), `SS_PRODUCT_DB_MAX_POOL_SIZE` (optional, default 5),
+   `SS_LOG_LEVEL` (optional).
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
 
 ## Changelog
 
-- **1.0.0** — first release: nine elements, apply box renderer and headless core, REST v1, dashboard, sweep job.
+- **1.0.0** — first release: nine elements, apply box renderer and headless core, REST v1, dashboard.

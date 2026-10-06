@@ -1,12 +1,17 @@
 /**
- * Database-backed job queue and cron runner (PLAN §13, F.19: "Vercel Cron → signed routes; Atlas-backed queues with
- * leases"). No worker processes: the queue is drained in bounded batches (`runBatch({ deadlineMs, maxJobs })`) that
- * stop leasing before the function time limit — opportunistically after requests (throttled, a few jobs), right after
- * an ingest for the jobs it enqueued (`keys`), and by the daily cron.
+ * Database-backed job queue and the runner of on-demand admin operations (PLAN F.19: event-driven only — no crons,
+ * no worker processes, no timers, no periodic drains).
+ *
+ * A job runs right after the request that enqueued it (`onEnqueued` hands it to the request scope, which runs exactly
+ * that job after the response). A job that fails stays queued with its next-attempt time (`runAt`) and is retried
+ * when there is a natural reason: the module that owns it runs its due jobs of the same `group` when that group is
+ * touched again (e.g. the Event Hub retries a product's due deliveries when an event is delivered to that product or
+ * the product calls the Portal), or staff run the `drain` operation (bounded) from the admin console.
  *
  * Queue semantics (`platform_jobs`):
  * - `enqueue` is idempotent on an optional job `key` (unique while the job document exists: done jobs are kept for
- *   `doneRetentionMs`, dead ones for `deadRetentionMs`, then removed by TTL).
+ *   `doneRetentionMs`, dead ones for `deadRetentionMs`, then removed by TTL); `group` tags jobs that are retried
+ *   together (`runBatch({ groups })`).
  * - `lease` atomically claims one due job (`queued` with `runAt ≤ now`, or `running` whose lease expired — the
  *   worker died) and gives it a visibility timeout; every lease counts an attempt.
  * - `complete` / `fail` only act while the caller still holds the lease (`leaseToken`), so a slow worker whose
@@ -16,8 +21,9 @@
  * - failures retry with exponential backoff and jitter (5 s · 2^(attempt-1), capped at 1 h) until `maxAttempts`,
  *   then the job is dead-lettered; `permanentFailure()` dead-letters at once. Dead jobs can be replayed.
  *
- * Cron runs (`platform_cron_runs`, append-only, 30-day TTL): one record per invocation with status and stats; a
- * per-job lease lock prevents overlapping runs of the same cron.
+ * Operation runs (`platform_operation_runs`, append-only, 30-day TTL): one record per admin-triggered operation
+ * (settlement, reconciliation, connector checks, catalog refresh, audit verification, drain) with status and stats; a
+ * per-operation lease lock prevents overlapping runs. Operations are bounded by a deadline and resumable (cursors).
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -98,7 +104,9 @@ const toJob = (doc) => ({
 
 /**
  * @param {{ repo: MutableOps, now?: () => number, randomBytes?: (n: number) => Uint8Array, random?: () => number,
- *   logger: Logger, doneRetentionMs?: number, deadRetentionMs?: number, defaultMaxAttempts?: number }} options
+ *   logger: Logger, doneRetentionMs?: number, deadRetentionMs?: number, defaultMaxAttempts?: number,
+ *   onEnqueued?: (job: { id: string, name: string }) => void }} options `onEnqueued`: a new job that is due now was
+ *   stored (the composition root runs it after the current request's response)
  */
 export const createJobs = ({
 	repo,
@@ -109,30 +117,24 @@ export const createJobs = ({
 	doneRetentionMs = 7 * 24 * 60 * 60_000,
 	deadRetentionMs = 30 * 24 * 60 * 60_000,
 	defaultMaxAttempts = 8,
+	onEnqueued,
 }) => {
 	/**
 	 * Enqueue a job. With a `key`, enqueueing the same key again returns the existing job (`inserted: false`).
-	 * `dropPayload: true` removes the payload once the job succeeds. `daily: true` marks long maintenance work (e.g. the
-	 * continuation of a daily pass that hit its deadline): only the daily cron's drain runs it, never the short drains
-	 * after requests.
+	 * `dropPayload: true` removes the payload once the job succeeds; `group` tags jobs retried together. A new job that
+	 * is due now is handed to `onEnqueued` (run after the current request).
 	 * @param {{ name: string, payload?: unknown, key?: string, runAt?: Date | number, maxAttempts?: number,
-	 *   dropPayload?: boolean, daily?: boolean }} input
+	 *   dropPayload?: boolean, group?: string }} input
 	 * @returns {Promise<{ id: string, inserted: boolean }>}
 	 */
-	const enqueue = async ({
-		name,
-		payload = null,
-		key,
-		runAt,
-		maxAttempts = defaultMaxAttempts,
-		dropPayload = false,
-		daily = false,
-	}) => {
+	const enqueue = async ({ name, payload = null, key, runAt, maxAttempts = defaultMaxAttempts, dropPayload = false, group }) => {
 		if (typeof name !== 'string' || !NAME.test(name)) throw platformError('invalid_argument', `invalid job name: ${name}`);
 		if (key !== undefined && (typeof key !== 'string' || key.length === 0 || key.length > 256))
 			throw platformError('invalid_argument', 'job key must be 1..256 chars');
 		if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 100)
 			throw platformError('invalid_argument', 'maxAttempts must be 1..100');
+		if (group !== undefined && (typeof group !== 'string' || group.length === 0 || group.length > 256))
+			throw platformError('invalid_argument', 'job group must be 1..256 chars');
 		const t = new Date(now());
 		const id = createId('job', { randomBytes });
 		try {
@@ -142,7 +144,7 @@ export const createJobs = ({
 				...(key === undefined ? {} : { key }),
 				payload,
 				...(dropPayload ? { dropPayload: true } : {}),
-				...(daily ? { daily: true } : {}),
+				...(group === undefined ? {} : { group }),
 				status: 'queued',
 				attempts: 0,
 				maxAttempts,
@@ -150,6 +152,7 @@ export const createJobs = ({
 				createdAt: t,
 				updatedAt: t,
 			});
+			if (onEnqueued && (runAt === undefined || new Date(runAt).getTime() <= t.getTime())) onEnqueued({ id, name });
 			return { id, inserted: true };
 		} catch (error) {
 			if (!isDuplicateKey(error) || key === undefined) throw error;
@@ -185,11 +188,11 @@ export const createJobs = ({
 	};
 
 	/**
-	 * Claim one due job (`keys`: only jobs enqueued with one of these keys; `skipDaily`: not jobs marked `daily`).
-	 * @param {{ names?: string[], keys?: string[], skipDaily?: boolean, leaseMs: number, owner?: string }} options
+	 * Claim one due job (`ids` / `keys` / `groups`: only those jobs).
+	 * @param {{ names?: string[], ids?: string[], keys?: string[], groups?: string[], leaseMs: number, owner?: string }} options
 	 * @returns {Promise<Job | null>}
 	 */
-	const lease = async ({ names, keys, skipDaily = false, leaseMs, owner = 'worker' }) => {
+	const lease = async ({ names, ids, keys, groups, leaseMs, owner = 'worker' }) => {
 		for (;;) {
 			const t = new Date(now());
 			const doc = await repo.findOneAndUpdate(
@@ -199,8 +202,9 @@ export const createJobs = ({
 						{ status: 'running', leaseUntil: { $lte: t } },
 					],
 					...(names ? { name: { $in: names } } : {}),
+					...(ids ? { _id: { $in: ids } } : {}),
 					...(keys ? { key: { $in: keys } } : {}),
-					...(skipDaily ? { daily: { $ne: true } } : {}),
+					...(groups ? { group: { $in: groups } } : {}),
 				},
 				{
 					$set: {
@@ -271,21 +275,22 @@ export const createJobs = ({
 	};
 
 	/**
-	 * Drain due jobs until the queue is empty, `maxJobs` were leased or the deadline approaches. Jobs without a handler
-	 * are not leased; `keys` limits the batch to jobs enqueued with those keys (e.g. the deliveries an ingest created);
-	 * `skipDaily` leaves the jobs marked `daily` to the daily cron.
+	 * Run due jobs until none is left, `maxJobs` were leased or the deadline approaches. Jobs without a handler are not
+	 * leased; `ids` / `keys` / `groups` limit the batch (e.g. the job a request just enqueued, or one product's due
+	 * deliveries).
 	 * @param {{ handlers: Record<string, JobHandler>, deadlineMs: number, owner?: string, concurrency?: number,
-	 *   safetyMs?: number, maxJobs?: number, keys?: string[], skipDaily?: boolean }} options
+	 *   safetyMs?: number, maxJobs?: number, ids?: string[], keys?: string[], groups?: string[] }} options
 	 */
 	const runBatch = async ({
 		handlers,
 		deadlineMs,
-		owner = 'cron',
+		owner = 'operation',
 		concurrency = 1,
 		safetyMs = 2_000,
 		maxJobs = Number.POSITIVE_INFINITY,
+		ids,
 		keys,
-		skipDaily = false,
+		groups,
 	}) => {
 		const names = Object.keys(handlers);
 		const deadline = now() + deadlineMs;
@@ -297,7 +302,7 @@ export const createJobs = ({
 			lost: 0,
 			stoppedBy: /** @type {'empty' | 'deadline' | 'limit'} */ ('empty'),
 		};
-		if (names.length === 0 || (keys && keys.length === 0)) return stats;
+		if (names.length === 0 || ids?.length === 0 || keys?.length === 0 || groups?.length === 0) return stats;
 		const controller = new AbortController();
 		const timer = setTimeout(() => controller.abort(), Math.max(0, deadlineMs - safetyMs));
 		let claimed = 0;
@@ -312,7 +317,7 @@ export const createJobs = ({
 					return;
 				}
 				claimed += 1;
-				const job = await lease({ names, keys, skipDaily, owner, leaseMs: Math.max(deadline - now(), 0) + 30_000 });
+				const job = await lease({ names, ids, keys, groups, owner, leaseMs: Math.max(deadline - now(), 0) + 30_000 });
 				if (!job) return;
 				stats.leased += 1;
 				const handler = /** @type {JobHandler} */ (handlers[job.name]);
@@ -394,6 +399,26 @@ export const createJobs = ({
 				finishedAt: doc.finishedAt,
 			})),
 		/**
+		 * Make queued jobs that wait for their retry time due now (staff "Retry now"), oldest first, bounded.
+		 * @param {{ name?: string, group?: string, limit?: number }} [filter]
+		 * @returns {Promise<number>} jobs made due
+		 */
+		makeDue: async ({ name, group, limit = 100 } = {}) => {
+			const t = new Date(now());
+			const filter = { status: 'queued', runAt: { $gt: t }, ...(name ? { name } : {}), ...(group ? { group } : {}) };
+			const waiting = await repo
+				.find(filter, { projection: { _id: 1 } })
+				.sort({ runAt: 1 })
+				.limit(Math.min(Math.max(1, limit), 1000))
+				.toArray();
+			if (waiting.length === 0) return 0;
+			const result = await repo.updateMany(
+				{ ...filter, _id: { $in: waiting.map((doc) => doc._id) } },
+				{ $set: { runAt: t, updatedAt: t } },
+			);
+			return result.modifiedCount;
+		},
+		/**
 		 * Re-queue a dead job with a fresh attempt budget.
 		 * @param {string} id
 		 * @returns {Promise<boolean>}
@@ -419,17 +444,20 @@ export const createJobs = ({
 /** @typedef {ReturnType<typeof createJobs>} Jobs */
 
 /**
- * @typedef {(ctx: { deadline: number, signal: AbortSignal, logger: Logger, trigger: string }) => Promise<Record<string, unknown> | void>} CronHandler
+ * An on-demand admin operation: bounded by `deadline`, resumable (`input.after`: the cursor a previous run returned as
+ * `resumeAfter`, when the operation has one).
+ * @typedef {(ctx: { deadline: number, signal: AbortSignal, logger: Logger, trigger: string,
+ *   input: Record<string, unknown> }) => Promise<Record<string, unknown> | void>} OperationHandler
  */
 
 /**
- * Cron runner: resolves a cron name to its handler, prevents overlapping runs with a lease lock and records every
- * invocation in the append-only `cron_runs` collection.
- * @param {{ crons: Record<string, CronHandler>, locks: Locks, runs: ReadOps, logger: Logger, deadlineMs: number,
+ * Operation runner: resolves an operation name to its handler, prevents overlapping runs with a lease lock and
+ * records every run in the append-only `operation_runs` collection. Runs only when staff ask (admin console button).
+ * @param {{ operations: Record<string, OperationHandler>, locks: Locks, runs: ReadOps, logger: Logger, deadlineMs: number,
  *   now?: () => number, randomBytes?: (n: number) => Uint8Array }} options
  */
-export const createCronRunner = ({
-	crons,
+export const createOperationRunner = ({
+	operations,
 	locks,
 	runs,
 	logger,
@@ -437,22 +465,22 @@ export const createCronRunner = ({
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
 }) => {
-	for (const name of Object.keys(crons)) if (!NAME.test(name)) throw new TypeError(`invalid cron name: ${name}`);
+	for (const name of Object.keys(operations)) if (!NAME.test(name)) throw new TypeError(`invalid operation name: ${name}`);
 	return Object.freeze({
-		names: () => Object.keys(crons),
+		names: () => Object.keys(operations),
 		/** @param {string} name */
-		has: (name) => Object.hasOwn(crons, name),
+		has: (name) => Object.hasOwn(operations, name),
 		/**
 		 * @param {string} name
-		 * @param {{ trigger?: string }} [options]
-		 * @returns {Promise<{ id: string, status: 'ok' | 'failed' | 'locked', stats?: Record<string, unknown> } | null>} null = unknown cron
+		 * @param {{ trigger?: string, input?: Record<string, unknown> }} [options]
+		 * @returns {Promise<{ id: string, status: 'ok' | 'failed' | 'locked', stats?: Record<string, unknown> } | null>} null = unknown operation
 		 */
-		run: async (name, { trigger = 'cron' } = {}) => {
-			if (!Object.hasOwn(crons, name)) return null;
-			const handler = /** @type {CronHandler} */ (crons[name]);
-			const id = createId('crn', { randomBytes });
+		run: async (name, { trigger = 'manual', input = {} } = {}) => {
+			if (!Object.hasOwn(operations, name)) return null;
+			const handler = /** @type {OperationHandler} */ (operations[name]);
+			const id = createId('opr', { randomBytes });
 			const startedAt = now();
-			const log = logger.child({ cron: name, cronRunId: id });
+			const log = logger.child({ operation: name, operationRunId: id });
 			const controller = new AbortController();
 			const timer = setTimeout(() => controller.abort(), deadlineMs);
 			/** @type {'ok' | 'failed' | 'locked'} */
@@ -462,15 +490,15 @@ export const createCronRunner = ({
 			/** @type {{ message: string, code?: string } | undefined} */
 			let error;
 			try {
-				const outcome = await locks.withLock(`cron:${name}`, { ttlMs: deadlineMs + 30_000, owner: id }, async () =>
-					handler({ deadline: startedAt + deadlineMs, signal: controller.signal, logger: log, trigger }),
+				const outcome = await locks.withLock(`operation:${name}`, { ttlMs: deadlineMs + 30_000, owner: id }, async () =>
+					handler({ deadline: startedAt + deadlineMs, signal: controller.signal, logger: log, trigger, input }),
 				);
 				if (outcome.locked) status = 'locked';
 				else stats = outcome.value ?? undefined;
 			} catch (cause) {
 				status = 'failed';
 				error = describeError(cause);
-				log.error('cron failed', { error: cause });
+				log.error('operation failed', { error: cause });
 			} finally {
 				clearTimeout(timer);
 			}
@@ -485,19 +513,19 @@ export const createCronRunner = ({
 				...(stats ? { stats } : {}),
 				...(error ? { error } : {}),
 			});
-			log.info('cron finished', { status, ms: now() - startedAt });
+			log.info('operation finished', { status, ms: now() - startedAt });
 			return { id, status, ...(stats ? { stats } : {}) };
 		},
 	});
 };
-/** @typedef {ReturnType<typeof createCronRunner>} CronRunner */
+/** @typedef {ReturnType<typeof createOperationRunner>} OperationRunner */
 
 /**
- * Read model of cron runs (`platform_cron_runs`) for health pages: the last run of every registered cron (`names`
- * is read lazily, so the runner may be created after this).
+ * Read model of operation runs (`platform_operation_runs`) for health pages: the last run of every registered
+ * operation (`names` is read lazily, so the runner may be created after this).
  * @param {{ runs: ReadOps, names: () => readonly string[] }} options
  */
-export const createCronRuns = ({ runs, names }) =>
+export const createOperationRuns = ({ runs, names }) =>
 	Object.freeze({
 		/**
 		 * @returns {Promise<Array<{ name: string, status: string, lastRun: { id: string, status: string, trigger: string,
@@ -518,7 +546,7 @@ export const createCronRuns = ({ runs, names }) =>
 						? {
 								id: String(doc._id),
 								status: String(doc.status),
-								trigger: String(doc.trigger ?? 'cron'),
+								trigger: String(doc.trigger ?? 'manual'),
 								startedAt: new Date(doc.startedAt).toISOString(),
 								finishedAt: doc.finishedAt ? new Date(doc.finishedAt).toISOString() : null,
 								durationMs: typeof doc.durationMs === 'number' ? doc.durationMs : null,
@@ -530,7 +558,7 @@ export const createCronRuns = ({ runs, names }) =>
 			});
 		},
 		/**
-		 * The last finished run of one cron.
+		 * The last finished run of one operation.
 		 * @param {string} name
 		 */
 		last: async (name) => {
@@ -538,4 +566,4 @@ export const createCronRuns = ({ runs, names }) =>
 			return doc ?? null;
 		},
 	});
-/** @typedef {ReturnType<typeof createCronRuns>} CronRuns */
+/** @typedef {ReturnType<typeof createOperationRuns>} OperationRuns */

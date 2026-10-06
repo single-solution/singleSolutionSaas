@@ -91,6 +91,8 @@
 	"dashboard.kpi.signins": "Signed in (30 days)",
 	"dashboard.kpi.sessions": "Active sessions",
 	"dashboard.kpi.deletions": "Pending deletions",
+	"dashboard.deletions.run": "Run due deletions",
+	"dashboard.deletions.done": "Deleted {count} customer(s) whose cooling-off had ended.",
 	"dashboard.customers.empty": "No customers yet.",
 	"dashboard.customers.search": "E-mail or phone",
 	"dashboard.identity.intro": "Signups issues the customer tokens of this website. Signups asks the Portal to register it as the website's issuer; once the merchant approves (Website → Identity), every other product accepts these tokens.",

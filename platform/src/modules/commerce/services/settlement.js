@@ -1,10 +1,11 @@
 /**
- * Hourly settlement (cron `settlement`) and the money safety rules that follow it.
+ * Hourly settlement and the money safety rules that follow it. Settlement runs when a merchant's money is read or a
+ * product reports for one of its websites (`money.settleDue`, F.19: no cron), and on demand (admin operation).
  *
  * Per subscription, from its cursor (`settledThrough`) to the last complete hour (minus a short lag so in-flight usage
  * of the hour lands first): `planSettlement` + `planMeteredSettlement` from `@ss/entitlements` produce one entry per
  * hour (`<sub>:<hour>`, zero amounts included) and one metered entry per hour with usage (`<sub>:<hour>:metered`).
- * Entries are appended with their `periodKey` as a unique key, so any re-run — overlapping crons, a crash after N
+ * Entries are appended with their `periodKey` as a unique key, so any re-run — overlapping reads and operations, a crash after N
  * inserts, a manual force — settles every hour exactly once; the cursor only moves after the append succeeded.
  *
  * After a merchant's subscriptions are settled: balance ≤ 0 pauses all of them (`insufficient_credits`), a positive
@@ -239,9 +240,10 @@ export const createSettlement = ({ ctx, repo, deps, ledger, subscriptions }) => 
 	};
 
 	/**
-	 * The `settlement` cron: settle due subscriptions in (merchant, id) order until done or the deadline approaches.
-	 * Also run lazily for one merchant (`merchantId`) before balance and meter reads, with a short deadline and no
-	 * margin. Idempotent: every hour is appended under its unique `periodKey`.
+	 * Settle due subscriptions in (merchant, id) order until done or the deadline approaches (the `settlement` admin
+	 * operation), or for one merchant (`merchantId`) on read, with a short deadline and no margin — then its money rules
+	 * are applied even when no hour was due (a spend-cap window may have reset). Idempotent: every hour is appended
+	 * under its unique `periodKey`.
 	 * @param {{ deadline?: number, signal?: AbortSignal, merchantId?: string | null, marginMs?: number,
 	 *   logger?: import('../../../infra/logger.js').Logger }} [options] `marginMs` = stop this long before `deadline`
 	 */
@@ -296,6 +298,7 @@ export const createSettlement = ({ ctx, repo, deps, ledger, subscriptions }) => 
 			if (!stats.complete) break;
 		}
 		if (current !== null) await finishMerchant(current);
+		else if (merchantId !== null && stats.complete) await finishMerchant(merchantId);
 		return stats;
 	};
 

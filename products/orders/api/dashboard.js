@@ -68,7 +68,7 @@ export const statsOf = (matrix, groups) => {
  * @param {import('./routes.js').Orders} orders
  */
 export const createDashboardApi = (orders) => {
-	const { product, lifecycle, ledger, bulk, documents, blocklist, siteOf, deps } = orders;
+	const { product, lifecycle, ledger, bulk, documents, blocklist, siteOf, processDue, deps } = orders;
 
 	/** @param {Site} site */
 	const stats = async (site) => ({
@@ -209,6 +209,8 @@ export const createDashboardApi = (orders) => {
 		write('/v1/dashboard/orders/:id/review', 'risk', (site, ctx, actor) =>
 			lifecycle.review(site, String(ctx.params.id), ctx.body, actor),
 		),
+		// "Process due now": the website's expired statuses, left-behind outbox entries and due message retries (no timer)
+		write('/v1/dashboard/due:run', 'lifecycle', async (site) => ({ ok: true, report: await processDue(site) })),
 		write('/v1/dashboard/order-batches', 'bulk', (site, ctx, actor) => bulk.batch(site, ctx.body, actor)),
 		write('/v1/dashboard/blocklist', 'risk', (site, ctx, actor) => blocklist.block(site, ctx.body, actor)),
 		print('/v1/dashboard/orders/:id/invoice', 'invoices', async (site, ctx) => {

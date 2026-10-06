@@ -7,7 +7,8 @@
  * - `orders`: one document per order with its lines, timeline, fulfilment, the append-only `payments` / `refunds`
  *   ledger with denormalised `paid` / `refunded` sums (guarded inside the same write, so a refund never exceeds what
  *   was received), risk flags and a transactional **outbox** (`pending`): the events and messages a change causes are
- *   pushed in the same single-document write, then delivered and pulled; the sweep job retries leftovers.
+ *   pushed in the same single-document write, then delivered and pulled; leftovers are redelivered when the order is
+ *   next read (or from the dashboard's "Process due now").
  * - `counters`: gap-free sequences (order and invoice numbers).
  * - `risk_profiles`: per customer key (customer id, subject, e-mail, phone digits): blocked flag and RTO count.
  * - `messages`: customer status messages (claim-before-send, retries).
@@ -370,11 +371,17 @@ export const createRepositories = (scope, { now }) => {
 				messages.updateOne(pin({ id, state: { $in: ['failed', 'retry'] } }), {
 					$set: { state: 'retry', nextAttemptAt: at(), attempts: 0 },
 				}),
-			/** @param {Date} before @param {number} limit */
-			due: async (before, limit) =>
+			/** @param {Date} before @param {number} limit @param {string} [orderId] only this order's */
+			due: async (before, limit, orderId) =>
 				(
 					await messages
-						.find(pin({ state: { $in: ['pending', 'retry', 'sending'] }, nextAttemptAt: { $lte: before } }))
+						.find(
+							pin({
+								...(orderId ? { orderId } : {}),
+								state: { $in: ['pending', 'retry', 'sending'] },
+								nextAttemptAt: { $lte: before },
+							}),
+						)
 						.sort({ nextAttemptAt: 1 })
 						.limit(limit)
 						.toArray()

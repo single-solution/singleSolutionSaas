@@ -354,7 +354,8 @@ export const createLifecycle = (deps, outbox) => {
 	};
 
 	/**
-	 * Move orders whose status expired (sweep: the daily cron and the throttled runs after requests).
+	 * Move the website's orders whose status expired, bounded (the dashboard's "Process due now"; reads expire the
+	 * orders they return).
 	 * @param {import('./context.js').Site} site
 	 * @param {number} limit
 	 */
@@ -368,7 +369,7 @@ export const createLifecycle = (deps, outbox) => {
 
 	/**
 	 * Expire on read: when the order's status has expired, apply the expiry now (before anyone sees or changes the
-	 * order), whether or not a sweep ran. Resolves true when the order was due (read it again).
+	 * order). Resolves true when the order was due (read it again).
 	 * @param {import('./context.js').Site} site
 	 * @param {Record<string, any>} order
 	 */
@@ -396,25 +397,32 @@ export const createLifecycle = (deps, outbox) => {
 /** @typedef {ReturnType<typeof createLifecycle>} Lifecycle */
 
 /**
- * The orders repository of a site with expiry applied on read: every order returned by `get`, `byNumber`, `page` and
- * `many` whose status expired is moved (by `expire`) and read again first, so nobody sees or acts on an expired status
- * that the sweep has not reached yet.
+ * The orders repository of a site with due work applied on read (nothing runs on a timer): every order returned by
+ * `get`, `byNumber`, `page` and `many` is passed to `settle` first (expiry, left-behind outbox entries) and read again
+ * when it changed, so nobody sees or acts on an expired status. A single order read (`get`, `byNumber`) is also passed
+ * to `touch` (its due message retries).
  * @template {{ get: (id: string) => Promise<any>, byNumber: (number: string) => Promise<any>,
  *   page: (filter: Record<string, unknown>, page: { after: unknown, limit: number }) => Promise<any[]>,
  *   many: (ids: string[]) => Promise<any[]> }} R
  * @param {R} orders
- * @param {(order: Record<string, any>) => Promise<boolean>} expire
+ * @param {{ settle: (order: Record<string, any>) => Promise<boolean>, touch?: (order: Record<string, any>) => Promise<unknown> }} work
  * @returns {R}
  */
-export const expiringOnRead = (orders, expire) => {
+export const settlingOnRead = (orders, { settle, touch = async () => undefined }) => {
 	/** @param {any} order */
-	const settle = async (order) => (order && (await expire(order)) ? orders.get(order.id) : order);
+	const settled = async (order) => (order && (await settle(order)) ? orders.get(order.id) : order);
+	/** @param {any} order */
+	const touched = async (order) => {
+		const current = await settled(order);
+		if (current) await touch(current);
+		return current;
+	};
 	return Object.freeze({
 		...orders,
-		get: async (/** @type {string} */ id) => settle(await orders.get(id)),
-		byNumber: async (/** @type {string} */ number) => settle(await orders.byNumber(number)),
+		get: async (/** @type {string} */ id) => touched(await orders.get(id)),
+		byNumber: async (/** @type {string} */ number) => touched(await orders.byNumber(number)),
 		page: async (/** @type {Record<string, unknown>} */ filter, /** @type {{ after: unknown, limit: number }} */ page) =>
-			Promise.all((await orders.page(filter, page)).map(settle)),
-		many: async (/** @type {string[]} */ ids) => Promise.all((await orders.many(ids)).map(settle)),
+			Promise.all((await orders.page(filter, page)).map(settled)),
+		many: async (/** @type {string[]} */ ids) => Promise.all((await orders.many(ids)).map(settled)),
 	});
 };

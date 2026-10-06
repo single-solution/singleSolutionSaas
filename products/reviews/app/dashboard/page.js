@@ -8,6 +8,7 @@ import { createElement as h } from 'react';
 import { redirect } from 'next/navigation.js';
 import { Card, Stat } from '@ss/ui';
 import { dashboardContext } from '../_lib/dashboard.js';
+import { DashboardActions } from './_components/DashboardActions.js';
 import { Shell, t } from './_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,10 @@ export default async function Overview({ searchParams }) {
 		['dashboard.kpi.questions', kpis.questions.pending],
 		['dashboard.kpi.unanswered', kpis.questions.unanswered],
 	];
+	const { canWrite, websiteId, settings } = context.data;
+	const requests = settings.enabled('request_flow');
+	const photos = settings.enabled('photos');
+	const actions = canWrite && websiteId && (requests || photos) ? h(DashboardActions, { websiteId, requests, photos }) : null;
 	return h(
 		Shell,
 		{ context, active: 'overview' },
@@ -42,5 +47,6 @@ export default async function Overview({ searchParams }) {
 				),
 			),
 		),
+		actions ? h(Card, { title: t('dashboard.actions.title') }, actions) : null,
 	);
 }

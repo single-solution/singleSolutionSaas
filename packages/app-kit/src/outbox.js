@@ -77,14 +77,14 @@ export const createOutbox = ({
 	};
 
 	/**
-	 * Send due events to the Portal.
-	 * @param {{ maxBatches?: number }} [options]
+	 * Send due events to the Portal (only the website's with `websiteId`).
+	 * @param {{ maxBatches?: number, websiteId?: string }} [options]
 	 * @returns {Promise<{ sent: number, duplicates: number, rejected: number, failed: number, batches: number }>}
 	 */
-	const flush = async ({ maxBatches = 20 } = {}) => {
+	const flush = async ({ maxBatches = 20, websiteId } = {}) => {
 		const totals = { sent: 0, duplicates: 0, rejected: 0, failed: 0, batches: 0 };
 		while (totals.batches < maxBatches) {
-			const leased = await store.lease({ now: now(), limit: batchSize, leaseMs, owner });
+			const leased = await store.lease({ now: now(), limit: batchSize, leaseMs, owner, ...(websiteId ? { websiteId } : {}) });
 			if (leased.length === 0) break;
 			let stop = false;
 			for (const batch of batchesOf(leased)) {

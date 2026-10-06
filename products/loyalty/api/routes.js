@@ -1,7 +1,7 @@
 /**
  * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
  * the .well-known endpoints, /sso and — in development — the certification probes) plus the Loyalty Mode C API and the
- * dashboard API (SSO sessions). The daily cron route lives in jobs/ and is added by the composition root. Every product route is gated by its element: a disabled element
+ * dashboard API (SSO sessions). Nothing runs on a timer. Every product route is gated by its element: a disabled element
  * answers 403 element_disabled in every mode. POSTs that move state require an Idempotency-Key (app-kit stores and
  * replays the response); handlers are thin — validation and rules live in core/.
  */
@@ -34,6 +34,9 @@ import { settingsForDoc } from './settings.js';
  * identity issuer in the Portal (bring-your-own identity, verified by app-kit), else a Loyalty wallet token.
  */
 export const IDENTITY_HEADER = 'ss-identity';
+
+/** Time budget of one dashboard "Run expiry now" press (a longer backlog continues on the next press). */
+export const EXPIRY_RUN_BUDGET_MS = 10_000;
 
 /**
  * Field problems → RFC 9457 `validation_failed`.
@@ -75,7 +78,6 @@ export const createLoyalty = (app) => {
 	 * @returns {Promise<Site>}
 	 */
 	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
 		return {
 			websiteId,
 			settings: settingsForDoc(product, doc),
@@ -506,6 +508,19 @@ export const buildRoutes = (loyalty) => {
 		}),
 		defineRoute({
 			method: 'POST',
+			path: '/v1/dashboard/expiry:run',
+			auth: 'launch',
+			element: 'expiry',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: false,
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				if (!s) return problem('bad_request', 'Open the dashboard for a website.');
+				return ok(await service.runExpiry(s, { deadline: app.now() + EXPIRY_RUN_BUDGET_MS }));
+			},
+		}),
+		defineRoute({
+			method: 'POST',
 			path: '/v1/dashboard/rules:check',
 			auth: 'launch',
 			idempotent: false,
@@ -517,35 +532,14 @@ export const buildRoutes = (loyalty) => {
 	];
 };
 
-/** Interval of the per-website expiry run after requests (the daily cron catches up on quiet websites). */
-export const EXPIRY_EVERY_MS = 60 * 60_000;
-
 /**
- * Expiry work of one website within `deadline` (the background task). Readers never wait for it: lapsed points are
- * expired when the member is read or moves.
- * @param {Loyalty} loyalty
- * @param {{ websiteId: string | null, deadline: number }} input
- * @returns {Promise<Record<string, number> | null>} the run's stats, null when the website has nothing to do
- */
-export const expireWebsite = async ({ service, siteFor }, { websiteId, deadline }) => {
-	const site = websiteId ? await siteFor(websiteId) : null;
-	if (!site || !(site.settings.expiry || site.settings.tiers)) return null;
-	return service.runExpiry(site, { deadline });
-};
-
-/**
- * Register the event consumers (app-kit dedupes deliveries on the event id) and the throttled per-website expiry run
- * after requests (`product.background.every`, at most every EXPIRY_EVERY_MS per website). Called once per product by
- * the composition roots (app/_lib/product.js, serve.js).
+ * Register the event consumers (app-kit dedupes deliveries on the event id). Nothing runs on a timer: lapsed points,
+ * due tier reviews and expiry notices are handled for a member when a request reads or moves it, and the merchant can
+ * run the whole website's expiry from the dashboard ("Run expiry now") or `POST /v1/expiry:run`. Called once per
+ * product by the composition roots (app/_lib/product.js, serve.js).
  * @param {Loyalty} loyalty
  */
 export const wireEvents = (loyalty) => {
 	for (const [type, handler] of Object.entries(createEventHandlers(loyalty))) loyalty.product.events.on(type, handler);
-	const expiry = loyalty.product.background.every(
-		'expiry',
-		EXPIRY_EVERY_MS,
-		(/** @type {{ websiteId: string | null, deadline: number }} */ input) => expireWebsite(loyalty, input),
-		{ per: 'website', budgetMs: 10_000 },
-	);
-	return { ...loyalty, tasks: { expiry } };
+	return loyalty;
 };

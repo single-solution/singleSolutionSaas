@@ -1,7 +1,7 @@
 /**
  * The application: one composition of the capture service, the trigger engine and the outbox dispatcher over a
- * website's settings and repositories, shared by the routes, the event consumers, the hosted pages, the dashboard and
- * the scheduled job. Side effects come in through `Deps` (clock, ids, tokens, Portal events, usage, audit, messaging),
+ * website's settings and repositories, shared by the routes, the event consumers, the hosted pages and the dashboard.
+ * Side effects come in through `Deps` (clock, ids, tokens, Portal events, usage, audit, messaging),
  * so every part is testable against the fake Portal and a fake provider.
  */
 import { createHash } from 'node:crypto';
@@ -14,7 +14,7 @@ import { createEngine } from './engine.js';
 import { settingsForDoc } from './settings.js';
 
 /**
- * @typedef {object} Site one website, as seen by a request, an event or the job
+ * @typedef {object} Site one website, as seen by a request or an event
  * @property {string} websiteId
  * @property {any} doc signed entitlement document
  * @property {import('./settings.js').Settings} settings
@@ -87,17 +87,14 @@ export const createAlerts = (app) => {
 	 * @param {any} doc
 	 * @returns {Promise<Site>}
 	 */
-	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
-		return {
-			websiteId,
-			doc,
-			settings: settingsForDoc(product, doc),
-			repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
-			domain: doc.domain,
-			allowSubdomains: doc.allowSubdomains === true,
-		};
-	};
+	const siteOf = async (websiteId, doc) => ({
+		websiteId,
+		doc,
+		settings: settingsForDoc(product, doc),
+		repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
+		domain: doc.domain,
+		allowSubdomains: doc.allowSubdomains === true,
+	});
 
 	/**
 	 * Site of a website from its entitlement (null without an active subscription or with the base element off).

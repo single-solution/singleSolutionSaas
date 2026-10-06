@@ -36,12 +36,11 @@ import { isObject } from './util.js';
  * @property {Buffer} sessionSecret HMAC key for session ids, recovery codes and throttle keys at rest
  * @property {Buffer} websiteKeyPepper HMAC pepper for website secret keys at rest
  * @property {Buffer} idempotencySecret HMAC key of idempotency fingerprints (`IDEMPOTENCY_SECRET` or derived)
- * @property {string} cronSecret bearer secret for `/api/cron/*`
  * @property {string} problemBaseUri RFC 9457 type base
  * @property {string} logLevel
  * @property {boolean} trustProxyHeaders use `X-Forwarded-For` for the client IP (only behind a trusted proxy)
  * @property {number} maxBodyBytes default JSON body cap
- * @property {number} cronDeadlineMs time budget of one cron invocation
+ * @property {number} operationDeadlineMs time budget of one on-demand admin operation (bounded, resumable)
  * @property {{ staff: SessionPolicy, merchant: SessionPolicy }} sessions
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound hosts outbound calls may reach although private or
  *   plain http (`OUTBOUND_DEV_ALLOW_HOSTS`; always empty in production)
@@ -86,7 +85,6 @@ export const ENV_VARS = Object.freeze([
 	['SECRETS_KEK', true, 'Key-encryption keys: `kid:base64(32 bytes)[,kid:base64…]`, first = active; or one bare base64 key.'],
 	['SESSION_SECRET', true, 'At least 32 bytes (base64 or text): HMAC key for session ids and recovery codes at rest.'],
 	['WEBSITE_KEY_PEPPER', true, 'At least 32 bytes (base64 or text): HMAC pepper for website secret keys at rest.'],
-	['CRON_SECRET', true, 'At least 32 characters; cron routes require `Authorization: Bearer <CRON_SECRET>`.'],
 	['IDEMPOTENCY_SECRET', false, 'At least 32 bytes: HMAC key of idempotency fingerprints (default: HKDF of SESSION_SECRET).'],
 	[
 		'OUTBOUND_DEV_ALLOW_HOSTS',
@@ -116,7 +114,11 @@ export const ENV_VARS = Object.freeze([
 	['LOG_LEVEL', false, 'debug | info | warn | error | silent (default info).'],
 	['TRUST_PROXY_HEADERS', false, '`true` behind a proxy that sets X-Forwarded-For (e.g. the hosting edge).'],
 	['MAX_BODY_BYTES', false, 'Default request body cap in bytes (default 1048576).'],
-	['CRON_DEADLINE_MS', false, 'Time budget per cron invocation in ms (default 50000; keep below the function limit).'],
+	[
+		'OPERATION_DEADLINE_MS',
+		false,
+		'Time budget of one on-demand admin operation in ms (default 50000; keep below the function limit).',
+	],
 	['STAFF_SESSION_IDLE_MINUTES', false, 'Staff idle timeout (default 30).'],
 	['STAFF_SESSION_MAX_HOURS', false, 'Staff absolute session lifetime (default 12).'],
 	['MERCHANT_SESSION_IDLE_MINUTES', false, 'Merchant idle timeout (default 1440).'],
@@ -422,8 +424,6 @@ export const loadConfig = (env = process.env) => {
 	if (sessionSecret && websiteKeyPepper && sessionSecret.equals(websiteKeyPepper)) {
 		problems.push('SESSION_SECRET and WEBSITE_KEY_PEPPER must differ');
 	}
-	const cronSecret = required('CRON_SECRET');
-	if (cronSecret && cronSecret.length < 32) problems.push('CRON_SECRET must be at least 32 characters');
 
 	// Website-key signer (dedicated: never the Portal launch/document key)
 	const websiteText = read('WEBSITE_KEY_SIGNING_KEYS');
@@ -523,8 +523,8 @@ export const loadConfig = (env = process.env) => {
 	if (trustText !== 'true' && trustText !== 'false') problems.push('TRUST_PROXY_HEADERS must be true or false');
 	const maxBodyBytes = intOf(read('MAX_BODY_BYTES'), 1024 * 1024, { min: 1024, max: 50 * 1024 * 1024 });
 	if (maxBodyBytes === null) problems.push('MAX_BODY_BYTES must be an integer 1024..52428800');
-	const cronDeadlineMs = intOf(read('CRON_DEADLINE_MS'), 50_000, { min: 1000, max: 900_000 });
-	if (cronDeadlineMs === null) problems.push('CRON_DEADLINE_MS must be an integer 1000..900000');
+	const operationDeadlineMs = intOf(read('OPERATION_DEADLINE_MS'), 50_000, { min: 1000, max: 900_000 });
+	if (operationDeadlineMs === null) problems.push('OPERATION_DEADLINE_MS must be an integer 1000..900000');
 
 	/**
 	 * @param {string} name
@@ -569,12 +569,11 @@ export const loadConfig = (env = process.env) => {
 		websiteKeySigningKeys: Object.freeze(/** @type {PrivateJwk[]} */ (websiteKeySigningKeys)),
 		websiteKeySigningDerived: !websiteText,
 		idempotencySecret: /** @type {Buffer} */ (idempotencySecret),
-		cronSecret,
 		problemBaseUri,
 		logLevel,
 		trustProxyHeaders: trustText === 'true',
 		maxBodyBytes: /** @type {number} */ (maxBodyBytes),
-		cronDeadlineMs: /** @type {number} */ (cronDeadlineMs),
+		operationDeadlineMs: /** @type {number} */ (operationDeadlineMs),
 		sessions: Object.freeze(sessions),
 		outbound: Object.freeze({ allowHosts: Object.freeze(allowHosts) }),
 		mail: Object.freeze({ smtp: smtp ? Object.freeze(smtp) : null, from: mailFrom }),

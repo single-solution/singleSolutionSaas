@@ -98,7 +98,7 @@ export const loadStaffSession = async (api) => {
 };
 
 /**
- * Platform health: queues and dead letters, unhealthy service apps, reconciliation and finance alerts, cron runs,
+ * Platform health: queues and dead letters, unhealthy service apps, reconciliation and finance alerts, operation runs,
  * the job queue and the last audit-chain verification (each section degrades on its own, e.g. for roles without
  * `platform.jobs.read`).
  * @param {ConsoleApi} api

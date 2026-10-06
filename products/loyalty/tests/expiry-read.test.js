@@ -1,10 +1,8 @@
 /**
- * Free-tier hosting model (one daily cron): points past their expiry are never shown or spendable, whether or not a job
- * ran (expire on read, booked on access), and the throttled per-website expiry run registered with
- * `product.background.every` books them after requests.
+ * No timers: points past their expiry are never shown or spendable (expire on read, booked on access), and a member's
+ * due tier review and expiry notice happen when a request reads that member. Nothing is registered to run later.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { EXPIRY_EVERY_MS, expireWebsite } from '../api/routes.js';
 import { memberAsOf } from '../core/views.js';
 import { createHarness, T0, WEBSITE } from './harness.js';
 
@@ -13,7 +11,20 @@ const DAY = 24 * 3_600_000;
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
 beforeAll(async () => {
-	h = await createHarness({ config: { redeem: { min_points: 10, max_share_percent: 50 }, expiry: { months: 6 } } });
+	h = await createHarness({
+		config: {
+			redeem: { min_points: 10, max_share_percent: 50 },
+			expiry: { months: 6, notice_days: 30 },
+			tiers: {
+				tiers: [
+					{ key: 'member', name: 'Member', threshold: 0, multiplier: 1 },
+					{ key: 'vip', name: 'VIP', threshold: 400, multiplier: 1 },
+				],
+				window_months: 1,
+				downgrade: 'end_of_period',
+			},
+		},
+	});
 });
 afterAll(async () => h?.close());
 
@@ -35,11 +46,15 @@ describe('expire on read', () => {
 		await earn('cus_lapse', 40);
 		expect((await stored('cus_lapse'))?.balance).toBe(40);
 		const history = (await h.call('GET', '/v1/members/cus_lapse/history')).json.items;
-		expect(history.map((/** @type {any} */ tx) => [tx.kind, tx.points])).toEqual([
-			['earn', 40],
-			['expire', -300],
-			['earn', 300],
-		]);
+		// the expiry and the new earning share a timestamp (listed in id order); the balances show which came first
+		expect(history.map((/** @type {any} */ tx) => [tx.kind, tx.points, tx.balanceAfter])).toEqual(
+			expect.arrayContaining([
+				['expire', -300, 0],
+				['earn', 40, 40],
+			]),
+		);
+		expect(history.at(-1)).toMatchObject({ kind: 'earn', points: 300 });
+		expect(history).toHaveLength(3);
 	});
 
 	it('refuses to spend lapsed points and books the expiry on access', async () => {
@@ -77,24 +92,46 @@ describe('expire on read', () => {
 	});
 });
 
-describe('background expiry', () => {
-	it('is registered per website and books lapsed points when triggered (throttled)', async () => {
-		await earn('cus_bg', 120);
-		await later(200 * DAY);
-		expect(h.loyalty.tasks.expiry.name).toBe('expiry');
-		expect(await h.loyalty.tasks.expiry.trigger({ websiteId: WEBSITE })).toBe(true);
-		expect((await stored('cus_bg'))?.balance).toBe(0);
-		expect(await h.loyalty.tasks.expiry.trigger({ websiteId: WEBSITE })).toBe(false);
-		h.clock.advance(EXPIRY_EVERY_MS);
-		expect(await h.loyalty.tasks.expiry.trigger({ websiteId: WEBSITE })).toBe(true);
+describe('due work happens on read, for that member only', () => {
+	const notices = (/** @type {string} */ customerId) =>
+		h.published('loyalty.expiring@1').filter((/** @type {any} */ event) => event.data.customerId === customerId);
+
+	it('publishes the expiry notice once when the member is read inside the notice window', async () => {
+		await earn('cus_notice', 80);
+		await earn('cus_other', 80);
+		await later(160 * DAY); // expires in ~20 days, inside the 30-day notice window
+		expect(notices('cus_notice')).toHaveLength(0);
+		await h.call('GET', '/v1/members/cus_notice');
+		await h.call('GET', '/v1/members/cus_notice');
+		expect(notices('cus_notice')).toHaveLength(1);
+		expect(notices('cus_notice')[0]?.data).toMatchObject({ points: 80, balance: 80 });
+		expect(notices('cus_other')).toHaveLength(0); // nobody else is scanned
+		expect((await stored('cus_notice'))?.lots[0]?.noticeFor).toBe(notices('cus_notice')[0]?.data.expiresOn);
 	});
 
-	it('does nothing without a website and stops at its deadline', async () => {
-		expect(await expireWebsite(h.loyalty, { websiteId: null, deadline: Infinity })).toBeNull();
+	it('applies a due tier review when the member is read', async () => {
+		await earn('cus_tier', 500);
+		expect((await stored('cus_tier'))?.tier?.key).toBe('vip');
+		await later(40 * DAY); // review date passed, the 1-month window metric dropped
+		expect((await stored('cus_tier'))?.tier?.key).toBe('vip');
+		const member = (await h.call('GET', '/v1/members/cus_tier')).json;
+		expect(member.tier).toMatchObject({ key: 'member' });
+		expect((await stored('cus_tier'))?.tier?.key).toBe('member');
+		expect(h.published('loyalty.tier_changed@1').some((/** @type {any} */ e) => e.data.customerId === 'cus_tier')).toBe(true);
+	});
+
+	it('registers no background task', () => {
+		expect(h.loyalty.product.background).not.toHaveProperty('every');
+		expect(/** @type {any} */ (h.loyalty).tasks).toBeUndefined();
+	});
+
+	it('stops a merchant-started run at its deadline (continued by the next run)', async () => {
 		await earn('cus_deadline', 50);
 		await later(200 * DAY);
-		const stats = await expireWebsite(h.loyalty, { websiteId: WEBSITE, deadline: 0 });
-		expect(stats).toMatchObject({ expired: 50 });
+		const site = await h.loyalty.siteFor(WEBSITE);
+		if (!site) throw new Error('no site');
+		const stats = await h.loyalty.service.runExpiry(site, { deadline: 0 });
+		expect(stats.expired).toBeGreaterThanOrEqual(50);
 		expect((await stored('cus_deadline'))?.balance).toBe(0);
 	});
 });

@@ -9,8 +9,6 @@ import { createCatalogModule } from '../../../src/modules/catalog/index.js';
 import { PORTAL_URL, createClock, createTestLogger, testConfig } from '../../helpers.js';
 import { fakeIntegration } from './fakes/modules.js';
 
-export const CRON = `Bearer ${'c'.repeat(40)}`;
-
 /** @type {Promise<any> | null} */
 let sharedConfig = null;
 /** Databases whose indexes exist already. */

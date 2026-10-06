@@ -59,6 +59,9 @@ export const METERED_UNIT = 'review';
 /** Grace after a photo slot's `staleAt` before the sweep deletes it (covers submissions in flight). */
 const SWEEP_GRACE_MS = 10 * MINUTE_MS;
 
+/** Stale photo slots swept when the website creates a new upload slot. */
+export const UPLOAD_SWEEP_LIMIT = 25;
+
 /** How long a claimed request delivery is held before another run may retry it. */
 const CLAIM_LEASE_MS = 15 * MINUTE_MS;
 /** Errors returned by an import (the rest are counted). */
@@ -213,7 +216,7 @@ export const createReviewsService = ({
 			contentLength: declared.size,
 			expiresIn: config.upload_ttl_seconds,
 		});
-		if (!existing)
+		if (!existing) {
 			await site.repos.photos.insert({
 				id,
 				key: slot.key,
@@ -227,6 +230,8 @@ export const createReviewsService = ({
 				staleAt: new Date(now() + retention.photos * DAY_MS),
 				purgeAt: new Date(now() + retention.photos * DAY_MS + STALE_BACKSTOP_MS),
 			});
+			await sweepOnUpload(site, bucket);
+		}
 		return {
 			ok: true,
 			photo: {
@@ -247,17 +252,32 @@ export const createReviewsService = ({
 		photo.staleAt !== undefined && photo.staleAt !== null && new Date(/** @type {any} */ (photo.staleAt)).getTime() <= now();
 
 	/**
-	 * Delete the objects and records of this website's stale photo slots (jobs; bounded and idempotent).
+	 * Delete the objects and records of this website's stale photo slots (bounded and idempotent): on the website's next
+	 * upload and from the dashboard's "Clean up photo uploads".
 	 * @param {Site} site
-	 * @param {{ limit?: number }} [options] slots per run (default: the sweep's)
+	 * @param {{ limit?: number, bucket?: any }} [options] slots per run (default: the sweep's); `bucket`: the storage
+	 *   connector already resolved
 	 * @returns {Promise<{ scanned: number, deleted: number, missing: number, failed: number }>}
 	 */
-	const sweepPhotos = (site, { limit } = {}) =>
+	const sweepPhotos = (site, { limit, bucket } = {}) =>
 		site.repos.photos.sweepStale({
-			storage: () => storage(site.websiteId),
+			storage: bucket ? async () => bucket : () => storage(site.websiteId),
 			olderThanMs: SWEEP_GRACE_MS,
 			...(limit === undefined ? {} : { limit }),
 		});
+
+	/**
+	 * A new upload slot sweeps a few of the website's stale ones (best effort: a failure never fails the upload).
+	 * @param {Site} site
+	 * @param {any} bucket
+	 */
+	const sweepOnUpload = async (site, bucket) => {
+		try {
+			await sweepPhotos(site, { limit: UPLOAD_SWEEP_LIMIT, bucket });
+		} catch {
+			// retried on the next upload or from the dashboard
+		}
+	};
 
 	/**
 	 * Check photos before they are attached: pending, owned by the submitter, uploaded, of an allowed type and exactly the
@@ -313,35 +333,56 @@ export const createReviewsService = ({
 	// ── orders → requests ───────────────────────────────────────────────────────────────────────────────────────
 
 	/**
-	 * Create (once per order) the review request of a completed order.
+	 * Create (once per order) the review request of a completed order. With the request flow on and
+	 * `collection.send_on_completion`, the website's request flow runs right away (`sendOnCompletion`): the new request
+	 * is sent now — there is no delayed send — together with the website's other due requests and reminders.
 	 * @param {Site} site
 	 * @param {import('../core/orders.js').OrderFacts} facts
-	 * @param {{ completedAt: number, locale?: string | null, source: 'event' | 'api' }} input
+	 * @param {{ completedAt: number, locale?: string | null, source: 'event' | 'api' }} input a completion reported
+	 *   in the future counts as now
 	 * @returns {Promise<{ ok: true, request: ReviewRequest, created: boolean } | Failure>}
 	 */
 	const createRequest = async (site, facts, { completedAt, locale = null, source }) => {
 		if (!facts.customerId) return { ok: false, reason: 'no_customer' };
 		if (facts.lines.length === 0) return { ok: false, reason: 'no_items' };
 		const { collection } = site.settings;
+		const at = Math.min(completedAt, now());
 		const request = buildRequest({
 			id: idFor(site.websiteId, 'rrq', facts.orderId),
 			order: { ...facts, customerId: facts.customerId },
-			completedAt,
-			delayHours: collection.request_delay_hours,
+			completedAt: at,
 			windowDays: collection.review_window_days,
 			locale,
 			source,
 		});
 		const created = await site.repos.requests.insert({
 			...request,
-			purgeAt: new Date(completedAt + retention.requests * DAY_MS),
+			purgeAt: new Date(at + retention.requests * DAY_MS),
 		});
 		for (const line of facts.lines) await site.repos.items.remember({ itemId: line.itemId, title: line.title, sku: line.sku });
+		if (created && (await sendOnCompletion(site)))
+			return { ok: true, request: /** @type {ReviewRequest} */ (await site.repos.requests.get(request.id)), created };
 		return {
 			ok: true,
 			request: created ? request : /** @type {ReviewRequest} */ (await site.repos.requests.byOrder(facts.orderId)),
 			created,
 		};
+	};
+
+	/**
+	 * After an order completed: run the website's request flow when it is on and sends on completion (best effort — a
+	 * failure leaves the requests due for the next completion or a manual run).
+	 * @param {Site} site
+	 * @returns {Promise<boolean>} whether the flow ran
+	 */
+	const sendOnCompletion = async (site) => {
+		if (!site.settings.requestFlow || !site.settings.collection.send_on_completion) return false;
+		try {
+			await runRequests(site);
+			return true;
+		} catch {
+			return false;
+		}
 	};
 
 	/**
@@ -699,10 +740,19 @@ export const createReviewsService = ({
 	const openRequest = async (site, token) => {
 		const requestId = tokens.verify(token, site.websiteId);
 		const request = requestId ? /** @type {ReviewRequest | null} */ (await site.repos.requests.get(requestId)) : null;
+		if (request?.status === 'open' && toMs(request.expiresAt) <= now()) await expireRequest(site, request.id);
 		return request
 			? { ok: /** @type {const} */ (true), request: customerRequestView(request, now()), contactName: request.contact.name }
 			: null;
 	};
+
+	/**
+	 * Mark an open request past its `expiresAt` as expired (it already reads as expired; this settles it when touched).
+	 * @param {Site} site
+	 * @param {string} id
+	 */
+	const expireRequest = (site, id) =>
+		site.repos.requests.update(id, { status: 'expired', 'delivery.state': 'done', 'delivery.nextAt': null }, ['open']);
 
 	/**
 	 * Send one due request (or reminder) through the merchant's messaging connector.
@@ -771,11 +821,11 @@ export const createReviewsService = ({
 
 	/**
 	 * The request flow for one website: expire, send and remind due requests (bounded per run, quiet hours honoured).
+	 * Runs when an order completes (`send_on_completion`), from `POST /v1/request-flow:run` and from the dashboard.
 	 * @param {Site} site
-	 * @param {{ deadline?: number }} [options] no request is started past `deadline` (the rest waits for the next run)
 	 * @returns {Promise<Record<string, number | boolean>>}
 	 */
-	const runRequests = async (site, { deadline = Infinity } = {}) => {
+	const runRequests = async (site) => {
 		const flow = site.settings.requestFlow;
 		const counts = { due: 0, sent: 0, reminded: 0, failed: 0, expired: 0, skipped: 0, quiet: false };
 		if (!flow) return counts;
@@ -786,7 +836,6 @@ export const createReviewsService = ({
 		/** @type {any} */
 		let adapter = null;
 		for (const request of due) {
-			if (now() >= deadline) break;
 			const step = nextStep(request, { now: at, reminders: flow.reminders, quiet });
 			if (step.action === 'wait') {
 				counts.quiet = true;
@@ -803,11 +852,7 @@ export const createReviewsService = ({
 				continue;
 			}
 			if (step.action === 'expire') {
-				await site.repos.requests.update(
-					request.id,
-					{ status: 'expired', 'delivery.state': 'done', 'delivery.nextAt': null },
-					['open'],
-				);
+				await expireRequest(site, request.id);
 				counts.expired += 1;
 				continue;
 			}

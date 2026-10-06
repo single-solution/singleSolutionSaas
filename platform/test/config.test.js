@@ -45,7 +45,7 @@ describe('loadConfig', () => {
 		expect(config.logLevel).toBe('info');
 		expect(config.trustProxyHeaders).toBe(false);
 		expect(config.maxBodyBytes).toBe(1024 * 1024);
-		expect(config.cronDeadlineMs).toBe(50_000);
+		expect(config.operationDeadlineMs).toBe(50_000);
 		expect(config.sessions.staff).toEqual({ idleMs: 30 * 60_000, absoluteMs: 12 * 3_600_000 });
 		expect(config.version).toBe('dev');
 		expect(Object.isFrozen(config)).toBe(true);
@@ -60,7 +60,6 @@ describe('loadConfig', () => {
 			'SECRETS_KEK',
 			'SESSION_SECRET',
 			'WEBSITE_KEY_PEPPER',
-			'CRON_SECRET',
 		]) {
 			expect(problems).toContain(`${name} is required`);
 		}
@@ -82,12 +81,11 @@ describe('loadConfig', () => {
 			SECRETS_KEK: 'k1:short',
 			SESSION_SECRET: 'short',
 			WEBSITE_KEY_PEPPER: 'short',
-			CRON_SECRET: 'short',
 			PROBLEM_BASE_URI: 'not a uri',
 			LOG_LEVEL: 'loud',
 			TRUST_PROXY_HEADERS: 'yes',
 			MAX_BODY_BYTES: '12',
-			CRON_DEADLINE_MS: 'soon',
+			OPERATION_DEADLINE_MS: 'soon',
 			STAFF_SESSION_IDLE_MINUTES: '-1',
 		});
 		const problems = problemsOf(env);
@@ -102,12 +100,11 @@ describe('loadConfig', () => {
 				expect.stringContaining('SECRETS_KEK'),
 				expect.stringContaining('SESSION_SECRET'),
 				expect.stringContaining('WEBSITE_KEY_PEPPER'),
-				expect.stringContaining('CRON_SECRET'),
 				expect.stringContaining('PROBLEM_BASE_URI'),
 				expect.stringContaining('LOG_LEVEL'),
 				expect.stringContaining('TRUST_PROXY_HEADERS'),
 				expect.stringContaining('MAX_BODY_BYTES'),
-				expect.stringContaining('CRON_DEADLINE_MS'),
+				expect.stringContaining('OPERATION_DEADLINE_MS'),
 				expect.stringContaining('STAFF_SESSION_IDLE_MINUTES'),
 			]),
 		);
@@ -135,7 +132,7 @@ describe('loadConfig', () => {
 				LOG_LEVEL: 'debug',
 				TRUST_PROXY_HEADERS: 'true',
 				MAX_BODY_BYTES: '2048',
-				CRON_DEADLINE_MS: '20000',
+				OPERATION_DEADLINE_MS: '20000',
 				PORTAL_VERSION: '1.2.3',
 				PORTAL_ENV: 'preview',
 				MERCHANT_SESSION_IDLE_MINUTES: '60',

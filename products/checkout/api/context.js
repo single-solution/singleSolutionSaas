@@ -1,5 +1,5 @@
 /**
- * The application shared by the routes, the event consumers, the dashboard and the scheduled job: website resolution
+ * The application shared by the routes, the event consumers and the dashboard: website resolution
  * (entitlement → settings → repositories in the merchant's database), connections to the merchant's other products,
  * event publishing, usage and audit.
  */
@@ -38,7 +38,6 @@ export const createCheckout = (app) => {
 	 * @returns {Promise<Site>}
 	 */
 	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
 		return {
 			websiteId,
 			merchantId: String(doc.merchantId ?? ''),

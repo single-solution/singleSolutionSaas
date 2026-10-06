@@ -158,6 +158,16 @@ export const createConfigRepo = (ctx) => {
 		listSchedules: (merchantId, key) =>
 			sch(merchantId).find({ merchantId, targetKey: key }).sort({ at: 1 }).limit(200).toArray(),
 		/**
+		 * Scheduled changes of a merchant whose time has come and that are not finished, oldest first.
+		 * @param {string} merchantId @param {Date} now @param {number} limit
+		 */
+		dueSchedules: (merchantId, now, limit) =>
+			sch(merchantId)
+				.find({ merchantId, status: { $in: ['pending', 'applying'] }, at: { $lte: now } })
+				.sort({ at: 1 })
+				.limit(limit)
+				.toArray(),
+		/**
 		 * Atomic status transition; returns the updated document or null when `from` did not match.
 		 * @param {string} merchantId
 		 * @param {string} scheduleId

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createKeyResolver, verifyEntitlementDocument } from '@ss/protocol';
 import { closeMongoClients } from '../../../src/infra/db.js';
+import { runInRequestScope } from '../../../src/infra/request-scope.js';
 import { T0, createClock, startMongo } from '../../helpers.js';
 import { APP, APP2, HOUR, M1, M2, STAFF, W1, W2, W3, bootCommerce, couponsManifest } from './fixtures.js';
 
@@ -700,7 +701,7 @@ describe('entitlement documents', () => {
 });
 
 describe('lazy settlement and trials', () => {
-	it('settles due hours on balance and meter reads, idempotently with the cron', async () => {
+	it('settles due hours on balance and meter reads, idempotently with the settlement operation', async () => {
 		const clock = createClock(T0 + 30 * MIN); // 10:30
 		const h = await bootCommerce({ mongo, dbName: 'cm_lazy', clock });
 		await h.credit(M1, 100_000);
@@ -722,6 +723,42 @@ describe('lazy settlement and trials', () => {
 		// another merchant's read settles only its own subscriptions
 		expect((await h.service.balance(M2)).balanceMillicredits).toBe(0);
 		expect((await h.service.verifyChain(M1)).ok).toBe(true);
+	});
+
+	it('settles on the product document fetch, so an out-of-credit hold reaches the document (no cron)', async () => {
+		const clock = createClock(T0);
+		const h = await bootCommerce({ mongo, dbName: 'cm_doc_hold', clock });
+		await h.credit(M1, 3000);
+		await h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
+		expect((await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }))).runtime.state).not.toBe('paused');
+		// two hours pass; nobody runs anything. The product's next document fetch settles the merchant first.
+		clock.set(T0 + 2 * HOUR + 5 * MIN);
+		const doc = await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }));
+		expect(doc.runtime.state).toBe('paused');
+		expect(keysOf(await ledgerRows(h, M1, 'settlement'))).toEqual(['2026-10-01T10:00:00Z=-1500', '2026-10-01T11:00:00Z=-1500']);
+		// usage reported by a product settles its merchant right after the response
+		clock.set(T0 + 3 * HOUR + 5 * MIN);
+		/** @type {Array<() => Promise<unknown>>} */
+		const deferred = [];
+		const sub = /** @type {any} */ ((await h.service.subscriptionsForWebsite(W1))[0]);
+		await runInRequestScope({ defer: (task) => void deferred.push(task) }, () =>
+			h.service.recordUsage({
+				appId: APP,
+				records: [
+					{
+						websiteId: W1,
+						subscriptionId: sub.subscriptionId,
+						unit: 'redemption',
+						quantity: 1,
+						idempotencyKey: 'u-hold-1',
+						occurredAt: new Date(clock.now()).toISOString(),
+					},
+				],
+			}),
+		);
+		expect(deferred).toHaveLength(1);
+		await deferred[0]?.();
+		expect(keysOf(await ledgerRows(h, M1, 'settlement'))).toHaveLength(3);
 	});
 
 	it('survives a failing lazy settlement (the read still answers)', async () => {

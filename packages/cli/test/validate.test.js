@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { initApp } from '../src/init.js';
-import { formatValidation, isDailyOrRarer, layerOf, packageOf, resolveImport, validateProject } from '../src/validate/index.js';
+import { formatValidation, layerOf, packageOf, resolveImport, validateProject } from '../src/validate/index.js';
 import { loadManifest, resolvePointer } from '../src/manifest.js';
 import { removeDir, tempDir } from './helpers/util.js';
 
@@ -221,28 +221,21 @@ describe('ss app validate', () => {
 		expect(rules(report)).toContain('openapi.invalid');
 	});
 
-	it('keeps vercel.json crons daily and few (free-tier hosting)', async () => {
+	it('refuses any vercel.json cron (event-driven only)', async () => {
 		const dir = await project();
-		const crons = (/** @type {unknown[]} */ list) =>
-			writeFile(path.join(dir, 'vercel.json'), JSON.stringify({ framework: 'nextjs', crons: list }));
-		await crons([
-			{ path: '/cron/a', schedule: '*/5 * * * *' },
-			{ path: '/cron/b', schedule: '0 * * * *' },
-			{ path: '/cron/c', schedule: '15 3 * * *' },
-		]);
+		await writeFile(
+			path.join(dir, 'vercel.json'),
+			JSON.stringify({ framework: 'nextjs', crons: [{ path: '/cron/a', schedule: '15 3 * * *' }] }),
+		);
 		const report = await validateProject(dir);
 		expect(report.ok).toBe(false);
-		expect(report.problems.filter((p) => p.rule === 'vercel.crons').map((p) => p.pointer)).toEqual([
-			'/crons',
-			'/crons/0/schedule',
-			'/crons/1/schedule',
-		]);
+		expect(report.problems.filter((p) => p.rule === 'vercel.crons').map((p) => p.pointer)).toEqual(['/crons']);
+		await writeFile(path.join(dir, 'vercel.json'), JSON.stringify({ framework: 'nextjs', crons: [] }));
+		expect(rules(await validateProject(dir))).toContain('vercel.crons');
+		await writeFile(path.join(dir, 'vercel.json'), JSON.stringify({ framework: 'nextjs' }));
+		expect(rules(await validateProject(dir))).not.toContain('vercel.crons');
 		await writeFile(path.join(dir, 'vercel.json'), '{ not json');
 		expect(rules(await validateProject(dir))).not.toContain('vercel.crons');
-		expect(isDailyOrRarer('15 3 * * 1')).toBe(true);
-		expect(isDailyOrRarer('15 3,9 * * *')).toBe(false);
-		expect(isDailyOrRarer(null)).toBe(false);
-		expect(isDailyOrRarer('15 3 * *')).toBe(false);
 	});
 
 	it('reports an unknown kind with the common anatomy only', async () => {

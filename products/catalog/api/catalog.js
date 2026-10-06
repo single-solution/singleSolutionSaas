@@ -4,8 +4,8 @@
  *
  * Reliable events: every change pushes its standard events onto the item document in the same atomic write
  * (`outbox`), then `flushItem` publishes them through the kit's durable outbox (`portal.publishEvent`, persisted in the
- * control store before it returns) and pulls them off the item. If the process dies in between, the sweep job
- * republishes the leftovers with the same idempotency keys, which the Portal deduplicates (event ids derive from
+ * control store before it returns) and pulls them off the item. If the process dies in between, the leftovers are
+ * republished with the same idempotency keys when the item is next read (`due.js`) or from the dashboard, which the Portal deduplicates (event ids derive from
  * them). Item snapshots (`item.created@1` / `item.updated@1`) are built at publish time from the stored item.
  */
 import { EVENT_TYPES, itemSnapshot } from '../core/events.js';
@@ -105,8 +105,8 @@ export const finalize = (site, next, { attributes, now }) => {
 export const entry = (type, key, data, extra = {}) => ({ type, key, ...(data ? { data } : {}), ...extra });
 
 /**
- * Publish an item's outbox entries and pull them off the item. Never throws: a failed publish stays in the outbox for
- * the sweep; an entry the Portal can never accept (invalid data) is dropped and logged.
+ * Publish an item's outbox entries and pull them off the item. Never throws: a failed publish stays in the outbox until
+ * the item is next read (or the dashboard processes due changes); an entry the Portal can never accept (invalid data) is dropped and logged.
  * @param {Deps} deps
  * @param {Site} site
  * @param {Record<string, any>} item the stored item (with its `outbox`)

@@ -3,7 +3,7 @@ import { createSigner, generateSigningKey } from '@ss/protocol';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { KEY_OVERLAP_MS, MAX_ACTIVE_KEYS } from '../../../src/modules/catalog/service.js';
 import { MERCHANT, PORTAL_URL, WEBSITE, startMongo } from '../../helpers.js';
-import { CRON, bootPortal, problemOf } from './boot.js';
+import { bootPortal, problemOf } from './boot.js';
 import { fakeCommerce } from './fakes/modules.js';
 import { startFakeProduct } from './fakes/product.js';
 import { renamedService, serviceManifest } from './fixtures.js';
@@ -211,21 +211,19 @@ describe('manifest versions: refresh, diff, review', () => {
 		expect((await lifecycle(t, appId, { action: 'activate' })).json.status).toBe('active');
 	});
 
-	it('refreshes in the daily cron step and continues a cut pass in a daily job', async () => {
+	it('refreshes with the catalog_refresh admin operation, resumable with `after`', async () => {
 		const { t, p, appId } = await setup();
 		await lifecycle(t, appId, { action: 'activate' });
 		const changed = serviceManifest();
 		changed.trialHours = 72;
 		p.setManifest(changed);
-		const cron = await t.call('POST', '/cron/catalog_refresh', { bearer: CRON, idempotencyKey: null });
-		expect(cron.json).toMatchObject({ status: 'ok', stats: { checked: 1, changed: 1, resumeAfter: null } });
+		const run = await t.staff('POST', '/v1/admin/operations/catalog_refresh');
+		expect(run.json).toMatchObject({ status: 'ok', stats: { checked: 1, changed: 1, resumeAfter: null } });
 		expect((await t.service().getApp(appId)).pendingVersion).toBe(2);
-		// a pass cut by its deadline resumes after the last app it handled, in a `daily` continuation job
+		// a pass cut by its deadline resumes after the last app it handled: the operation again with `after`
 		expect(await t.service().refreshAll({ after: appId })).toMatchObject({ checked: 0, resumeAfter: null });
-		const jobs = /** @type {any} */ (t).portal.shared.jobs;
-		await jobs.enqueue({ name: 'catalog.refresh_manifests', key: 'refresh-from', payload: { after: '' } });
-		const drained = await t.call('POST', '/cron/drain', { bearer: CRON, idempotencyKey: null });
-		expect(drained.json.stats).toMatchObject({ succeeded: 1 });
+		const resumed = await /** @type {any} */ (t).portal.operations.run('catalog_refresh', { input: { after: '' } });
+		expect(resumed.stats).toMatchObject({ checked: 1 });
 
 		// failures are counted, not thrown; an exhausted deadline skips the rest
 		p.tamper.registerStatus = 0;
@@ -238,7 +236,7 @@ describe('manifest versions: refresh, diff, review', () => {
 });
 
 describe('lifecycle and environments', () => {
-	it('deprecates with a sunset, retires on schedule and stops authenticating the product', async () => {
+	it('deprecates with a sunset, retires on read after it and stops authenticating the product', async () => {
 		const { t, p, appId } = await setup();
 		problemOf(
 			await lifecycle(t, appId, {
@@ -259,8 +257,10 @@ describe('lifecycle and environments', () => {
 		expect(await t.service().activeProducts({ includeDeprecated: false })).toEqual([]);
 
 		t.clock.advance(3 * DAY);
-		expect(await t.service().refreshAll()).toMatchObject({ retired: 1 });
+		// retired on read once the sunset has passed (no job)
 		expect((await t.service().getApp(appId)).status).toBe('retired');
+		expect((await t.service().getApp(appId)).status).toBe('retired');
+		expect(await t.service().activeProducts()).toEqual([]);
 		problemOf(
 			await t.call('POST', '/v1/product/heartbeat', {
 				bearer: await t.assertion(p.signer, appId),
@@ -341,6 +341,12 @@ describe('product calls: heartbeat, key rotation, revocation', () => {
 			422,
 		);
 		problemOf(await t.call('POST', '/v1/product/keys/rotate', { bearer: await t.assertion(k2, appId), body: {} }), 422);
+		// any authenticated product call marks the app as seen (no periodic heartbeat needed, F.19)
+		expect((await t.service().getApp(appId)).health).toMatchObject({
+			lastHeartbeatAt: null,
+			lastSeenAt: new Date(t.clock.now()).toISOString(),
+			stale: false,
+		});
 
 		const beat = { version: '1.4.0', status: 'ok' };
 		// both keys verify during the overlap

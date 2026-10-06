@@ -36,7 +36,6 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 		sessions: `${prefix}sessions`,
 		idempotency: `${prefix}idempotency`,
 		rateLimits: `${prefix}rate_limits`,
-		leases: `${prefix}leases`,
 	});
 	/** @param {string} name */
 	const col = (name) => db.collection(name);
@@ -52,15 +51,16 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 				col(names.nonce).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.entitlements).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.usageQueue).createIndex({ status: 1, nextAttemptAt: 1 }, { name: 'due' }),
+				col(names.usageQueue).createIndex({ websiteId: 1, status: 1, nextAttemptAt: 1 }, { name: 'due_website' }),
 				col(names.usageQueue).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.usageQueue).createIndex({ leaseToken: 1 }, { name: 'lease', sparse: true }),
 				col(names.eventOutbox).createIndex({ status: 1, nextAttemptAt: 1 }, { name: 'due' }),
+				col(names.eventOutbox).createIndex({ websiteId: 1, status: 1, nextAttemptAt: 1 }, { name: 'due_website' }),
 				col(names.eventOutbox).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.eventOutbox).createIndex({ leaseToken: 1 }, { name: 'lease', sparse: true }),
 				col(names.sessions).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.idempotency).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 				col(names.rateLimits).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
-				col(names.leases).createIndex({ expireAt: 1 }, { ...ttl, name: 'ttl' }),
 			]);
 		})().catch((error) => {
 			ready = undefined;
@@ -176,11 +176,16 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 					throw error;
 				}
 			},
-			lease: async ({ now: t, limit, leaseMs, owner }) => {
+			lease: async ({ now: t, limit, leaseMs, owner, websiteId }) => {
 				await ensureIndexes();
 				const c = col(names.usageQueue);
 				const at = new Date(t);
-				const due = { status: 'pending', nextAttemptAt: { $lte: at }, leaseUntil: { $lte: at } };
+				const due = {
+					...(websiteId ? { websiteId } : {}),
+					status: 'pending',
+					nextAttemptAt: { $lte: at },
+					leaseUntil: { $lte: at },
+				};
 				const candidates = await c
 					.find(/** @type {any} */ (due), { projection: { _id: 1 } })
 					.sort({ nextAttemptAt: 1 })
@@ -243,6 +248,7 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 					await col(names.eventOutbox).insertOne(
 						/** @type {any} */ ({
 							_id: id,
+							...(typeof envelope.websiteId === 'string' ? { websiteId: envelope.websiteId } : {}),
 							envelope,
 							status: 'pending',
 							attempts: 0,
@@ -257,11 +263,16 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 					throw error;
 				}
 			},
-			lease: async ({ now: t, limit, leaseMs, owner }) => {
+			lease: async ({ now: t, limit, leaseMs, owner, websiteId }) => {
 				await ensureIndexes();
 				const c = col(names.eventOutbox);
 				const at = new Date(t);
-				const due = { status: 'pending', nextAttemptAt: { $lte: at }, leaseUntil: { $lte: at } };
+				const due = {
+					...(websiteId ? { websiteId } : {}),
+					status: 'pending',
+					nextAttemptAt: { $lte: at },
+					leaseUntil: { $lte: at },
+				};
 				const candidates = await c
 					.find(/** @type {any} */ (due), { projection: { _id: 1 } })
 					.sort({ nextAttemptAt: 1 })
@@ -406,15 +417,6 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 				);
 			},
 		}),
-		leases: (() => {
-			const held = replayStore(names.leases);
-			return Object.freeze({
-				acquire: async (/** @type {string} */ key, /** @type {number} */ ttlMs) => {
-					await ensureIndexes();
-					return !(await held.seen(key, now() + ttlMs));
-				},
-			});
-		})(),
 		rateLimits: Object.freeze({
 			hit: async (key, windowMs, t) => {
 				await ensureIndexes();

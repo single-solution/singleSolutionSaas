@@ -1,6 +1,6 @@
-/** Crawled sources through the API and the sweep: JSON feeds, sitemaps (and indexes), limits, failures, stale removal. */
+/** Crawled sources through the API and the dashboard (no schedule): JSON feeds, sitemaps (and indexes), limits, failures, stale removal. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { CRON_SECRET, DAY, HOUR, WEBSITE, createHarness } from './harness.js';
+import { DAY, HOUR, WEBSITE, createHarness } from './harness.js';
 
 const BASE = 'https://shop.example.com';
 const SOURCES = [
@@ -80,10 +80,14 @@ describe('crawled sources', () => {
 	});
 
 	it('crawls a sitemap index over several steps, honours noindex and stays on the domain', async () => {
-		const first = await h.call('POST', '/v1/sources/help/crawl');
-		expect(first.json.crawl).toMatchObject({ status: 'running', total: 4, processed: 2 });
-		const swept = await h.call('GET', '/cron/sweep', { key: CRON_SECRET });
-		expect(swept.json.results[0].crawled).toBeGreaterThanOrEqual(1);
+		// a request whose time budget is spent runs one step; the next request continues the same run
+		const site = /** @type {any} */ (await h.search.siteFor(WEBSITE));
+		const first = await h.search.sources.crawlNow(site, 'help', { deadline: h.clock.now() });
+		expect(first.ok && first.value?.crawl).toMatchObject({ status: 'running', total: 4, processed: 2 });
+		const run = (await h.collection('crawls').findOne({ websiteId: WEBSITE, key: 'help' }))?.run;
+		const second = await h.call('POST', '/v1/sources/help/crawl');
+		expect(second.json.crawl).toMatchObject({ status: 'ok', processed: 4 });
+		expect((await h.collection('crawls').findOne({ websiteId: WEBSITE, key: 'help' }))?.run).toBe(run);
 		const state = (await h.call('GET', '/v1/sources')).json.items.find((/** @type {any} */ s) => s.key === 'help');
 		expect(state.crawl).toMatchObject({ status: 'ok', processed: 4, indexed: 2, failed: 1 });
 		expect(h.site.requests.some((r) => r.url.startsWith('https://elsewhere.com'))).toBe(false);
@@ -118,23 +122,30 @@ describe('crawled sources', () => {
 		expect((await h.call('POST', '/v1/sources/help/crawl')).json.crawl).toMatchObject({ status: 'failed', error: 'http_404' });
 	});
 
-	it('runs due sources from the sweep only when their interval passed', async () => {
+	it('crawls due sources from the dashboard only when their interval passed', async () => {
 		h.site.pages.set(`${BASE}/feed.json`, {
 			type: 'application/json',
 			body: JSON.stringify({ products: [{ id: 'p9', name: 'Scarf' }] }),
 		});
 		h.site.pages.set(`${BASE}/sitemap.xml`, { type: 'application/xml', body: '<urlset></urlset>' });
 		const before = h.site.requests.length;
-		await h.call('GET', '/cron/sweep', { key: CRON_SECRET });
+		const none = await h.call('POST', '/v1/dashboard/crawl-due', { key: await h.session('merchant') });
+		expect(none.json).toEqual({ crawled: 0 });
 		expect(h.site.requests.length).toBe(before);
 		h.clock.advance(DAY + HOUR);
-		await h.call('GET', '/cron/sweep', { key: CRON_SECRET });
+		const merchant = await h.session('merchant');
+		expect((await h.call('POST', '/v1/dashboard/crawl-due', { key: merchant })).json).toEqual({ crawled: 2 });
 		const list = (await h.call('GET', '/v1/sources')).json.items;
 		expect(list.find((/** @type {any} */ s) => s.key === 'help').crawl).toMatchObject({ status: 'ok', total: 0 });
 		expect(list.find((/** @type {any} */ s) => s.key === 'feed').crawl).toMatchObject({ status: 'ok', indexed: 1 });
-		const merchant = await h.session('merchant');
 		expect((await h.call('POST', '/v1/dashboard/sources/feed/crawl', { key: merchant })).status).toBe(200);
+		// no website in a demo session; a spent time budget starts nothing
+		expect((await h.call('POST', '/v1/dashboard/crawl-due', { key: await h.session('demo') })).status).toBe(403);
+		h.clock.advance(DAY + HOUR);
+		const site = /** @type {any} */ (await h.search.siteFor(WEBSITE));
+		expect(await h.search.sources.runDue(site, { deadline: h.clock.now() })).toEqual({ crawled: 0 });
 		await h.entitle({ config: { sources: { crawl_sources: SOURCES } }, elements: { sources: false } });
-		expect((await h.call('GET', '/cron/sweep', { key: CRON_SECRET })).json.results[0].crawled).toBe(0);
+		const off = /** @type {any} */ (await h.search.siteFor(WEBSITE));
+		expect(await h.search.sources.runDue(off)).toEqual({ crawled: 0 });
 	});
 });

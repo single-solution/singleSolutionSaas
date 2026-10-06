@@ -162,7 +162,7 @@ No product imports another; no product reads another's database; cooperation onl
 
 - **Unit**: subscription = website × product; inside it, elements on/off.
 - **Price**: from the product's versioned price book only — element hourly price (0 allowed), metered units with included quotas and overage, optional product base; plans are optional presets with feature bounds. Subscriptions pin the accepted price-book version.
-- **Settlement**: per started hour, one ledger entry per subscription per hour bucket with a unique `periodKey`; batch-resumable; lazily triggered on reads; reconciliation job compares expected vs settled hours and alerts on drift.
+- **Settlement**: per started hour, one ledger entry per subscription per hour bucket with a unique `periodKey`; batch-resumable; computed when read (F.19, no cron); reconciliation (admin operation) compares expected vs settled hours and alerts on drift.
 - **Credits**: merchant-level, append-only ledger in integer credits, cached balance verified nightly; staff add credits (offline payment); gateways later add deposits only; credits shown only.
 - **Safety**: live meter, projected month, budgets/caps per website and merchant, low-balance alerts in hours-remaining, balance ≤ 0 pauses everything, paused time never billed, auto-resume on top-up, trials as adjustments.
 - **Bundles & promotions**: Portal-defined discounts as adjustments; products stay independent.
@@ -223,7 +223,7 @@ Threat model (to be expanded in this file before M1) (assets, adversaries incl. 
 - **Standards**: JS ESM functional core with JSDoc + `checkJs --strict`; adapters injected; ESLint/Prettier; conventional commits; ADRs.
 - **Testing**: unit + property (idempotency, precedence, settlement) → adapter (`mongodb-memory-server`) → contract → isolation → Playwright (consoles, product dashboards, Loader on a sample site, injection on a sample origin) → load (settlement, fan-out, compile).
 - **CI/CD**: per PR all suites + preview deploy + scans; main → production with migration gate; products deploy independently; Portal keeps N-1 contract compatibility.
-- **Hosting**: one Vercel project per deployable; one Atlas DB/user per deployable (one shared M0 cluster, F.19); one daily Vercel Cron → signed route per deployable, real-time work on requests; Atlas-backed queues with leases; edge functions for injection/preview; CDN for bundles; Dockerfiles + compose as the portability proof.
+- **Hosting**: one Vercel project per deployable; one Atlas DB/user per deployable (one shared M0 cluster, F.19); no crons or background processing (F.19): work runs on the request or event that causes it, time-based state on read, maintenance as admin/merchant buttons; Atlas-backed queues with leases; edge functions for injection/preview; CDN for bundles; Dockerfiles + compose as the portability proof.
 - **Porting from ibrahimMobiles**: logic and tests only; constants → element features with schemas and bounds; store data → Graph/Event contracts; providers → shared-service adapters; per-website keys everywhere.
 
 ---
@@ -1236,10 +1236,10 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 ## F.11 Portal modules (`platform/src/modules/*`; contracts in `INTERFACES.md`)
 
-- **One composition root, isolated modules:** each module owns its collections (`defineCollection`), reaches others only through `ctx.service(name)`, and plugs into infra through routes, jobs, crons and single-provider ports (`sessionActor`, `appKeys`, `websiteKeyRevoked`). Merchant-owned records are `tenant: 'merchant'` (every filter pins `merchantId`); ledgers, audit, notes and events are append-only. No client data in Portal collections.
+- **One composition root, isolated modules:** each module owns its collections (`defineCollection`), reaches others only through `ctx.service(name)`, and plugs into infra through routes, jobs, on-demand operations and single-provider ports (`sessionActor`, `appKeys`, `websiteKeyRevoked`, `productCalled`). Merchant-owned records are `tenant: 'merchant'` (every filter pins `merchantId`); ledgers, audit, notes and events are append-only. No client data in Portal collections.
 - **identity:** accounts (scrypt, mandatory staff TOTP, login throttle), merchants, teams (merchant roles + website-scoped grants), websites (global domain claims, test twin, 30-day cooldown, staff transfer), website keys (dedicated signer, `sk_` stored as HMAC, revocation list), staff impersonation (one-time token bound to the staff member → merchant session with `via`, ≤ 60 min, audited on both chains), merchant search (`q`: name prefix or member e-mail prefix), append-only staff notes, and **identity issuers** (F.14).
 - **catalog:** registration handshake with proof of possession, signed manifest refresh (unsigned/invalid → `rejected` version, alerted), manifest diff + staff review, lifecycle, environments (production/staging bases — the delivery target), app keys, launches (admin app-wide needs a superadmin/admin role), merchant "Try demo" (`demo` launch, no scope, listed apps only).
-- **commerce:** subscriptions (≥ 1 h of credits, pinned price book, one-time trial credit), element switches, signed documents (version bumps only on a content-hash change; the hash covers the identity section), usage, hash-chained ledger in transactions, lazy + hourly settlement, nightly reconciliation, spend caps; asks delivery to recompile on every version bump or cancellation.
+- **commerce:** subscriptions (≥ 1 h of credits, pinned price book, one-time trial credit), element switches, signed documents (version bumps only on a content-hash change; the hash covers the identity section), usage, hash-chained ledger in transactions, settlement on read (F.19), on-demand reconciliation, spend caps; asks delivery to recompile on every version bump or cancellation.
 - **config:** immutable override versions per target with compare-and-set materialisation, locks, rollback, templates, scheduled changes, experiments, dry-run previews; values validated against the pinned manifest's feature schemas; commerce resolves precedence.
 - **integration:** Event Hub with header and beacon body auth, dedupe on `(websiteId, idempotencyKey)`, fan-out at ingest (payload only inside sealed jobs, DLQ ≤ 7 days, replay), product and control events, delivery to the app's registered environment (F.14), delivery logs and metrics.
 - **connectors:** merchant credentials sealed with per-connector AAD, never returned (masked previews), checks with least-privilege rules, rotation with 24 h rollback, `resolve` only for subscribed products whose manifest requires the kind (audited, ≤ 15 min).
@@ -1274,7 +1274,7 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 
 - **Idempotency privacy (app-kit):** the control store keeps only `{ HMAC key, HMAC fingerprint, status, allowlisted headers, replay: empty|website|none }` (HMAC key derived from the product signing key). Replay bodies live in the merchant's database (`ss_<slug>_idempotency`, unique `(websiteId, key)`, TTL 24 h) via `data.forWebsite`; routes without a website store no body and a replay answers 409 `idempotency_replay_no_body` (never a second run).
 - **Cold start:** `keys.verify` awaits the single in-flight revocation sync; concurrent first requests no longer answer 503.
-- **Background flushing:** usage queue and event outbox flush on an unref'd timer in long-lived servers and after requests on serverless (`toNextRoute(handler, { after })` with Next `after()`, else every Nth request or after a request that queued something); `heartbeat()` flushes first. `createProduct({ background: { mode: auto|server|serverless|off } })`, `off` under `NODE_ENV=test`. Product crons are no longer needed for delivery.
+- **Queue delivery:** usage queue and event outbox are sent after requests (superseded by F.19: no timers, no every-Nth-request flush; only the request's own website and what the instance queued). Product crons are not needed for delivery.
 - **Durable event outbox:** `portal.publishEvent` writes the envelope to `ss_kit_event_outbox` (id derived from `(websiteId, type, idempotencyKey)`, idempotent), sends at once, retries with backoff, dead-letters Portal `rejected` results / permanent 4xx (7 days); the envelope is dropped once sent. Heartbeat queues gain `eventsPending`/`eventsDead`. Portal `POST /v1/product/events` per-event results (`{ id, status }`) are honoured.
 - **Routes:** `rateLimit.limit` may be a (sync/async) function of `ctx`, evaluated after auth, entitlement, JSON body and identity (`Infinity` = no limit, `0` = refuse); `bucket` shares one window between routes. `problem(code, detail, { extensions })` adds RFC 9457 extension members (validated names; standard members and `requestId`/`errors` cannot be redefined). `paginate` accepts compound keyset keys (`keyOf` returns an array, encoded opaquely; `after` is the array). Next routes export `OPTIONS`.
 - **`product.outbound.fetch(url, init)`:** the SSRF-guarded `@ss/net` fetch under the product policy, for merchant-chosen URLs (chatbot knowledge pages and webhook tools).
@@ -1377,43 +1377,55 @@ for packs.
   `media_uploads` into `media` (storage optional; uploads answer `409 storage_not_connected` without it; its four
   settings are `media` features; plans and the price moved with it — uploads are now part of `media`).
 - **Kit:** `sweepStaleUploads` (delete objects of expired presigned uploads per website, bounded, idempotent), used by
-  the Grades (`/cron/sweep`) and Reviews crons.
+  the Grades and Reviews products on the next upload and from a dashboard button (F.19).
 - **Products:** Storefront maps Catalog's real `GET /v1/items` (brand object, `collectionIds`, variant `options`,
   `availability` / `purchasable`, `nextCursor`, no badges or rank); Grades serves the stub's
   `POST /v1/elements/<key>/actions/*`; Catalog's SKU uniqueness is race-free (unique partial index on normalised
   `skuKeys` while the setting is on, lazy backfill) and its CSV export uses short-lived signed download links.
 
-## F.19 Free-tier hosting model
+## F.19 Event-driven only: no scheduled or background processing
 
-The Portal and every service product run on **Vercel Hobby** with one **MongoDB Atlas M0** cluster, for $0. Hobby runs
-a cron at most once a day (at an imprecise time within the hour), a function for about 60 s, and nothing always-on; M0
-is one shared replica set (transactions work) with 512 MB and about 500 connections across every deployment. Nothing in
-the code is Vercel-specific: a paid host (Vercel's Hobby terms are for non-commercial use) needs no code change.
+The Portal and every service product run on **Vercel Hobby** with one **MongoDB Atlas M0** cluster, for $0 (a paid host
+needs no code change; Vercel's Hobby terms are for non-commercial use). The binding rule: **nothing runs unless
+something happens.** There are no crons, no timers, no polling, no periodic or throttled background loops and no queue
+drains on a timer. Work happens inside, or right after (`after()`), the request that caused it, and only for the item
+that request created or touched. Running nothing costs nothing.
 
-- **Crons are daily catch-ups; real-time work happens on requests.** Every deployable has one daily cron (at most two;
-  `ss app validate` refuses `vercel.json` entries more frequent than daily, or more than two: `vercel.crons`).
-  Correctness never waits for it: anything with an expiry (stock holds, unconfirmed COD orders, coupon reservations,
-  deal price locks, loyalty points) is treated as expired **when read** and released on access; sweeps only clean up.
-- **Throttled work after requests.** app-kit `product.background.every(name, intervalMs, fn, { per: 'product' |
-'website', budgetMs })`: after a request (a request for that website with `per: 'website'`), a task whose interval
-  passed on this instance takes a lease in the control store (`ss_kit_leases`), and only the holder runs `fn` through
-  Next `after()` with a deadline. Products run their sweeps, dispatch, retries, crawls and maintenance this way; the
-  daily cron covers every website once a day. The usage queue and event outbox already flush after requests.
-- **Portal.** One cron, `/api/cron/daily`, runs in order: settlement catch-up, drain, connectors health,
-  reconciliation, catalog refresh, audit verify. Each step gets the time the later steps do not reserve (their share
-  of `CRON_DEADLINE_MS`) and resumes where it stopped next time (settlement and health cursors, the queue,
-  reconciliation's saved run, catalog and audit continuation jobs marked `daily`). The individual crons stay runnable
-  (`/api/cron/<name>`). After responses (`ctx.defer`, `toNextRoute(handler, { after })`) the Portal runs a short
-  **drain** (at most every 15 s across instances via a lease lock, ≤ 10 jobs, 8 s, never `daily` jobs) and an
-  opportunistic **settlement** pass (module `background`, every 5 min, 3 s) — so product usage reports, heartbeats and
-  console loads all settle; balance and meter reads still settle the merchant lazily. The **Event Hub** attempts the
-  deliveries an ingest enqueued right after its response (only those job keys, lease-safe), so cross-product events
-  usually arrive within seconds; failures retry through the queue. Connectors are checked when used (test, rotate,
-  update, assign) and by the daily pass.
-- **Connection budget.** One database and one database user per deployable on the one cluster. Mongo clients are created
-  once per instance and cached on `globalThis` (Portal `getMongoClient`, products' composition roots, app-kit's merchant
-  pools), never per request. Pools are small: Portal `MONGODB_MAX_POOL_SIZE` default 5, products' control DB
-  `SS_PRODUCT_DB_MAX_POOL_SIZE` default 5 (`configFromEnv().productDbOptions`), merchant databases 3 per instance; idle
-  connections close after a minute.
-- **Templates.** `ss app init` generates `vercel.json` with one daily `/cron/daily` (heartbeat and queue flush) and
-  registers background work in `jobs/index.js` (`wireJobs`); the notes sample purges deleted notes hourly per website.
+- **No crons anywhere.** No `vercel.json` has `crons`; `ss app validate` refuses any (`vercel.crons`). There is no
+  `CRON_SECRET` and no cron route.
+- **Portal.** Every request runs in a request scope (`infra/request-scope.js`); `afterResponse(task)` hands work to the
+  end of that request. A job a request enqueued runs right after its response, and only that job.
+   - **Event Hub:** the ingested event is delivered right after the request. A failed delivery stays queued with its
+     next-attempt time and is retried when there is a natural reason: the next delivery to the same product and the
+     next time that product calls the Portal (entitlements, usage, heartbeat, any product API; port `productCalled`),
+     only that product's due deliveries, a few at a time. Dead-letter rules are kept (attempts spanning ~24 h of
+     backoff, or an event older than that window) and staff have "Retry deliveries now" per product.
+   - **Mail** is sent inside the request that needs it (no queue).
+   - **Billing is computed when read:** charges per started hour settle (idempotent by `periodKey`) before a merchant's
+     balance, meter or statement is read (merchant console, admin views), when a product fetches an entitlement
+     document or reports usage for one of its websites, and before a subscription change. Spend limits and low-balance
+     holds are evaluated at the same moments, so the document a product fetches reflects a hold. A product holding a
+     still-valid offline document (10 minutes, plus its cache) may keep serving until it next refreshes it.
+   - **Time-based state on read:** scheduled configuration changes apply on the first read of the merchant's
+     configuration at or after their time; a rotated key's revocation takes effect by time in the revocation list; a
+     deprecated app retires the first time it is read after its sunset; a failed website compile retries when its
+     loader is next served.
+   - **Connectors** are checked when saved or resolved (if the last check is older than 50 minutes), plus "Test" for
+     merchants.
+   - **Operations** (admin console, `POST /v1/admin/operations/:name`): `settlement`, `reconciliation`,
+     `connectors-health`, `catalog_refresh`, `audit_verify`, `drain` — bounded by `OPERATION_DEADLINE_MS`, resumable
+     (cursors, `{ after }`), recorded in `platform_operation_runs`. Never on a timer.
+- **Products.** app-kit sends the usage and events a request produced right after it; a failed send retries on the
+  next request of that product for that website. `product.background.every` and the leases store no longer exist.
+  Expiry is judged on read (holds, COD orders, coupon reservations, price locks, loyalty points, alert subscriptions,
+  chatbot snoozes, review requests, signup cooling-off); actual cleanup happens when the row is touched, and data
+  that can simply disappear uses MongoDB TTL indexes. Work that must be initiated without a customer request is
+  triggered by the event that makes it relevant (alerts dispatch on back-in-stock / price-drop events, a search page
+  re-crawl on `item.*`, review requests on `order.completed@1` — a delayed send would need a timer, so requests are
+  sent on completion) or is a merchant dashboard button ("Crawl now", "Send due now", "Process expired now", …).
+- **Connection budget.** One database and one database user per deployable on the one cluster. Mongo clients are
+  created once per instance and cached on `globalThis`; pools are small (Portal `MONGODB_MAX_POOL_SIZE` 5, products'
+  control DB `SS_PRODUCT_DB_MAX_POOL_SIZE` 5, merchant databases 3) and idle merchant pools are closed when the next
+  website is served.
+- **Templates.** `ss app init` generates `vercel.json` without crons and a `jobs/` folder with only a README; the notes
+  sample's soft-deleted notes are removed by a TTL index.

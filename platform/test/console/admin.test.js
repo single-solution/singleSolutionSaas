@@ -663,9 +663,13 @@ describe('admin console smoke', () => {
 				.map((a) => a.appId),
 		).toEqual(['a', 'b']);
 		expect(healthLabel({ kind: 'pack' })).toBeNull();
-		expect(healthLabel({ kind: 'service', health: { stale: true, lastHeartbeatAt: null } })).toEqual({
+		expect(healthLabel({ kind: 'service', health: { stale: true, lastSeenAt: null } })).toEqual({
 			status: 'failing',
-			label: 'No heartbeat',
+			label: 'Never seen',
+		});
+		expect(healthLabel({ kind: 'service', health: { stale: true, lastSeenAt: '2026-01-01T00:00:00Z' } })).toEqual({
+			status: 'failing',
+			label: 'Stale',
 		});
 		expect(healthLabel({ kind: 'service', health: { stale: false, status: 'degraded' } })).toEqual({
 			status: 'failing',

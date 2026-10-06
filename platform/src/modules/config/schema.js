@@ -64,8 +64,11 @@ export const collections = Object.freeze([
 		module: 'config',
 		name: SCHEDULES,
 		tenant: 'merchant',
-		description: 'Scheduled configuration changes (applied by the config.apply_scheduled job).',
-		indexes: [{ keys: { merchantId: 1, targetKey: 1, at: 1 }, name: 'merchant_target_at' }],
+		description: 'Scheduled configuration changes (applied on the first read of the configuration at or after `at`).',
+		indexes: [
+			{ keys: { merchantId: 1, targetKey: 1, at: 1 }, name: 'merchant_target_at' },
+			{ keys: { merchantId: 1, status: 1, at: 1 }, name: 'merchant_status_at' },
+		],
 	}),
 	defineCollection({
 		module: 'config',

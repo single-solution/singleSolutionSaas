@@ -54,7 +54,8 @@
  * Durable usage queue; `idempotencyKey` is unique for the lifetime of the record (including after it was sent).
  * @typedef {object} UsageQueueStore
  * @property {(record: UsageRecord) => Promise<{ inserted: boolean }>} enqueue
- * @property {(options: { now: number, limit: number, leaseMs: number, owner: string }) => Promise<QueuedUsage[]>} lease
+ * @property {(options: { now: number, limit: number, leaseMs: number, owner: string, websiteId?: string }) => Promise<QueuedUsage[]>} lease
+ *   due records, oldest first (only the website's with `websiteId`)
  * @property {(keys: string[], options: { now: number, retainMs: number }) => Promise<void>} ack mark sent (kept for dedupe)
  * @property {(keys: string[], options: { now: number, nextAttemptAt: number, error: string }) => Promise<void>} retry
  * @property {(keys: string[], options: { now: number, error: string }) => Promise<void>} deadLetter
@@ -120,19 +121,12 @@
  * event is sent (only the id is kept, for dedupe); dead events keep it until their retention ends.
  * @typedef {object} EventOutboxStore
  * @property {(event: { id: string, envelope: Record<string, unknown> }) => Promise<{ inserted: boolean }>} enqueue
- * @property {(options: { now: number, limit: number, leaseMs: number, owner: string }) => Promise<OutboxEvent[]>} lease
+ * @property {(options: { now: number, limit: number, leaseMs: number, owner: string, websiteId?: string }) => Promise<OutboxEvent[]>} lease
+ *   due events, oldest first (only the website's with `websiteId`, the envelope's `websiteId`)
  * @property {(ids: string[], options: { now: number, retainMs: number }) => Promise<void>} ack mark sent (envelope dropped)
  * @property {(ids: string[], options: { now: number, nextAttemptAt: number, error: string }) => Promise<void>} retry
  * @property {(ids: string[], options: { now: number, error: string, retainMs: number }) => Promise<void>} deadLetter
  * @property {() => Promise<{ pending: number, sent: number, dead: number }>} stats
- */
-
-/**
- * Throttle leases shared by every instance (background `every` tasks): `acquire` returns true when this caller took
- * the lease (no live lease existed), false while another holder's lease is live. A lease is never released early;
- * it simply expires after `ttlMs`.
- * @typedef {object} LeaseStore
- * @property {(key: string, ttlMs: number) => Promise<boolean>} acquire
  */
 
 /**
@@ -148,7 +142,6 @@
  * @property {IdempotencyStore} idempotency
  * @property {RateLimitStore} rateLimits
  * @property {PortalKeyStore} portalKeys
- * @property {LeaseStore} leases
  * @property {() => Promise<void>} [ping] readiness check of the backing database
  */
 

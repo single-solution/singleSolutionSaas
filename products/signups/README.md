@@ -27,7 +27,7 @@ a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — no
 | `widget`        | A, B    |        0 | Sign-in UI (`modal` / `inline`): identifier → code or link → terms → signed in; one-time-code autofill, remembered device                                                                                                                                      |
 | `risk`          | C       |      150 | Disposable / blocked e-mail domains, distinct identities and failed verifications per IP per hour, new-device notices, risk event log                                                                                                                          |
 | `consent`       | C       |       50 | Versioned terms / privacy documents, captured at sign-up, asked again when a required version changes; append-only acceptance records                                                                                                                          |
-| `data_rights`   | C       |       50 | Self-service export (download window) and deletion after a cooling-off period (cancellable), executed when the customer is next accessed or by the maintenance job                                                                                             |
+| `data_rights`   | C       |       50 | Self-service export (download window) and deletion after a cooling-off period (cancellable), executed when the customer is next read or by the dashboard's "Run due deletions" button                                                                          |
 
 Plans: **starter** = profile, sessions, otp, widget, account_pages (+ add-ons magic_link, risk, consent, data_rights) —
 900 mc/h; **pro** = everything. Trial 48 h.
@@ -54,9 +54,10 @@ converge).
      stores the request, e-mails the merchant owner and shows it under Website → Identity — or **200
      `{ status: "active", registered: true }`** once the merchant has approved (repeating is safe). The dashboard's
      Identity page has the same action ("Request in the Portal") and shows the last request.
-   - The **daily job** sends the request once by itself for every website whose entitlement document does not carry
-     the issuer yet and that has no request for the current issuer configuration (a rejected request is not repeated
-     on its own). Failures (Portal down, 403) are logged and never fail the job; the next run retries.
+   - On **`entitlement.changed@1`** Signups sends the request once by itself when the website's entitlement document
+     does not carry the issuer yet and there is no request for the current issuer configuration (a rejected request is
+     not repeated on its own). Failures (Portal down, 403) are logged and never fail the event; the next entitlement
+     change, the dashboard or `POST /v1/issuer:register` retries.
    - On approval the Portal makes Signups the website's active issuer (`managedBy` Signups), fetches the JWKS and
      re-signs the entitlement documents; `GET /v1/issuer` then reports `registered: true`. The merchant can still set
      or replace the issuer directly (Website → Identity, or `PUT /v1/merchants/{m}/websites/{w}/identity` with the
@@ -67,7 +68,8 @@ converge).
 Revocation: Signups' own routes check the session and session version on every request (immediate); other products
 see a revoked session when its short-lived access token expires. Key rotation (`sessions.key_rotation_days`, or
 `POST /v1/issuer:rotate`) publishes the next key `sessions.key_prepublish_hours` before it signs (the Portal refreshes a
-JWKS URL at most hourly) and keeps the old key until its tokens have expired; the daily job prunes keys.
+JWKS URL at most hourly) and keeps the old key until its tokens have expired. Rotation and pruning happen when the keys are read (signing, JWKS);
+nothing runs on a timer.
 
 ## Security
 
@@ -162,9 +164,8 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
    workspace root automatically.
 2. Environment variables (Production): `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one line),
    `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional), `SS_PRODUCT_DB_URI` (the product's own small MongoDB —
-   required in production), **`SIGNUPS_SEAL_SECRET`** (≥ 32 random characters; keep it safe), `CRON_SECRET` (daily
-   catch-up `/cron/maintenance`, 03:40 UTC in `vercel.json`; the same maintenance runs after requests, at most hourly
-   per website), `SS_LOG_LEVEL` (optional).
+   required in production), **`SIGNUPS_SEAL_SECRET`** (≥ 32 random characters; keep it safe), `SS_LOG_LEVEL`
+   (optional). There are no crons: nothing runs unless a request or event arrives (see [jobs/README.md](jobs/README.md)).
 3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin — it is also the
    prefix of every website's issuer, so keep it stable.
@@ -176,7 +177,9 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
 
 - **Unreleased** — problems carry RFC 9457 extension members (`attemptsRemaining`, `retryAfterSeconds`); messaging
   uses app-kit's built-in `generic-http` / `smtp` adapters; Signups requests to be the website's identity issuer
-  (`capabilities.identityIssuer`, `POST /v1/issuer:register`, daily job, dashboard button; the merchant approves). Free-tier hosting: the cron is a daily catch-up, maintenance
-  also runs after requests (at most hourly per website), and a due deletion runs when the customer is next accessed.
+  (`capabilities.identityIssuer`, `POST /v1/issuer:register`, on `entitlement.changed@1`, dashboard button; the
+  merchant approves). Event-driven only: the maintenance cron, the background task after requests and the site
+  registry are gone — a due deletion runs when the customer is read (single reads and listings) or from the
+  dashboard's "Run due deletions" button (`POST /v1/dashboard/deletions:run`), keys rotate and are pruned when read.
 - **1.0.0** — first release: nine elements, sign-in and account renderers with headless cores, REST v1, issuer (JWKS,
-  discovery, rotation), dashboard, daily job.
+  discovery, rotation), dashboard, daily job (removed since).

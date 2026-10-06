@@ -164,7 +164,7 @@ api/             routes: read input, call core, use adapters, return a result
 headless/        UI logic without the DOM, for merchants who build their own UI
 ui/              drop-in UI that renders headless/ with the website's theme
 app/             thin Next.js wiring only (routes call app-kit)
-jobs/            the daily cron route and background work after requests (cleanup, retries)
+jobs/            trigger-run handlers (on an event, on read, or from a dashboard button); nothing is scheduled
 tests/           Vitest tests, including certify (the Portal end-to-end test lives in e2e/)
 eslint.config.js, tsconfig.json, vitest.config.js   tooling, built from @ss/config
 docs/guide.md    short guide for developers using the product
@@ -225,11 +225,12 @@ compile. Use `.js` files with JSDoc types; do not add `.ts` files.
   (`budget.shared`); `ss app validate` measures them exactly as the Portal does (minified, bundled, gzip) and warns
   when one is exceeded or padded.
 - Prefer static and cacheable responses. API responses that hold private data are `no-store`.
-- Do not poll. Use events (`events.publish`, consumed through `/.well-known/ss-events`) and short-lived caches.
-- Run slow work after the response, with `after()`, or in `jobs/`. Usage and events are flushed automatically.
-- Crons run once a day (free tier). Work that must happen sooner runs after requests with
-  `product.background.every(name, intervalMs, fn, { per: 'website' })`, and anything with an expiry is checked when
-  read.
+- **Nothing runs on its own** (PLAN F.19): no crons, no timers, no polling, no periodic or throttled background loops.
+  Work happens inside, or right after (`after()`), the request or event that caused it, and only for what that request
+  touched. Usage and events a request produced are sent right after it; a failed send retries on the next request.
+- Anything with an expiry is treated as expired when read and cleaned up when touched; data that can simply disappear
+  gets a MongoDB TTL index. Work a merchant must start (a crawl, a catch-up) is a dashboard button.
+- Use events (`events.publish`, consumed through `/.well-known/ss-events`) and short-lived caches.
 - Use one indexed query rather than many. Every query must have an index declared in `adapters/db.js`.
 
 ## Testing
@@ -261,17 +262,22 @@ cluster shared by all of them. One GitHub repository feeds many Vercel projects.
 | One per service product | `products/<name>`                     | aftersales, alerts, catalog, chatbot, checkout, configurator, coupons, deals, grades, loyalty, orders, reviews, search, signups, wishlist |
 | —                       | `products/pdp`, `products/storefront` | **Not deployed.** These are element packs, published into the Portal with `ss pack publish` (step 5)                                      |
 
-**How it works on free tiers** (PLAN F.19):
+**How it works on free tiers** (PLAN F.19: event-driven only):
 
-- **Crons are daily catch-ups.** Hobby runs a cron at most once a day, so each deployable has one daily cron in its
-  `vercel.json` (the Portal's `/api/cron/daily` settles, drains the queue, checks connectors, reconciles, refreshes
-  manifests and verifies the audit log, each step time-boxed and resumed the next day).
-- **Real-time work happens on requests.** Event deliveries are attempted right after they are ingested; queued jobs,
-  settlement and product sweeps (expiring holds, retries, dispatch, crawls) run after ordinary requests, throttled by a
-  lease so busy sites do not repeat them; anything that expires is treated as expired when read. A quiet site simply
-  waits for its next request or the daily cron.
+- **Nothing to schedule.** No deployable has a cron (`vercel.json` has none; `ss app validate` refuses one), no
+  `CRON_SECRET`, no timer, no polling and no background loop. Running nothing costs nothing.
+- **Work happens when something happens.** An ingested event is delivered right after the request that ingested it; a
+  failed delivery is retried when the next event goes to that product or the product next calls the Portal (or staff
+  press "Retry now"). Billing is computed when read: a merchant's complete hours settle whenever its balance, meter or
+  statement is read, a product fetches an entitlement document or reports usage for one of its websites, or a
+  subscription changes — so low-balance and spend-limit holds reach the products' entitlement documents. Products
+  treat expiries on read, clean up when rows are touched (or by TTL indexes) and put merchant-started work behind
+  dashboard buttons. Reconciliation, audit verification, connector checks and manifest refreshes are admin buttons.
+- **Offline documents.** A product holding a still-valid entitlement document (10 minutes, plus its cache) may keep
+  serving until it next refreshes it; a hold therefore takes effect within minutes, without any timer.
 - **Small connection pools.** About 15 deployments share M0's ~500 connections, so pools are 5 per instance (Portal
-  `MONGODB_MAX_POOL_SIZE`, products `SS_PRODUCT_DB_MAX_POOL_SIZE`) and clients are reused across requests.
+  `MONGODB_MAX_POOL_SIZE`, products `SS_PRODUCT_DB_MAX_POOL_SIZE`), merchant databases 3, and clients are cached on
+  `globalThis` and reused across requests.
 - Vercel's Hobby terms are for non-commercial use; moving to a paid plan or another Node 22 host later needs no code
   change.
 
@@ -335,9 +341,8 @@ For every folder in the table above:
    variables. Keep the **registration token** printed in the first comment line somewhere safe for step 4; it must
    not go into Vercel.
 
-3. Also set `SS_PRODUCT_DB_URI` (its Atlas database from step 1), `SS_LOG_LEVEL=info`, `CRON_SECRET` (any random
-   string of 32+ characters; Vercel sends it to the daily cron), and the product's own variables from
-   `products/<name>/.env.example`.
+3. Also set `SS_PRODUCT_DB_URI` (its Atlas database from step 1), `SS_LOG_LEVEL=info`, and the product's own
+   variables from `products/<name>/.env.example`. There is nothing to schedule.
 4. Deploy and add a domain, for example `chatbot.apps.<your-domain>`.
 5. Portal → **Admin → Apps → Register**: enter the product URL and paste the registration token. The Portal checks
    the product proves it holds the key, then lists it. Activate it, and merchants can subscribe.
@@ -357,5 +362,5 @@ Repeat for `products/storefront`.
 
 - Vercel only rebuilds the projects whose folder or `@ss/*` dependencies changed in a push.
 - After a deploy that changes Portal data, run `pnpm db:indexes && pnpm db:migrate` in `platform` again.
-- Nothing is Vercel-specific: any Node 22 host that runs `next start` with the same variables and calls each
-  deployable's daily cron route with `Authorization: Bearer $CRON_SECRET` works.
+- Nothing is Vercel-specific: any Node 22 host that runs `next start` with the same variables works; there is no
+  cron or worker to set up anywhere.

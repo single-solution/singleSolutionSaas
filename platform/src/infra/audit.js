@@ -11,7 +11,7 @@
  * carries `scope`, `seq` (1, 2, …), `prevHash` (the previous entry's `hash`, or the scope's genesis hash) and
  * `hash = sha256(prevHash ‖ "\n" ‖ canonical JSON of the entry without hash)`. Appends run under a per-scope lease
  * lock and the unique `{ scope, seq }` index keeps the chain linear even if a lease expired. `verifyChain(scope)`
- * recomputes a scope (nightly cron `audit_verify`); an edited, deleted or reordered entry breaks it.
+ * recomputes a scope (admin operation `audit_verify`, on demand); an edited, deleted or reordered entry breaks it.
  * @module
  */
 import { createId } from '@ss/contracts';

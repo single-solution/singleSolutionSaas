@@ -6,7 +6,7 @@
  * - `items`: one document per item with its variants and media embedded (atomic stock and price changes, one read
  *   per item page), the denormalised rollups (price range, stock, facets) and a transactional **event outbox**: the
  *   standard events of a change are pushed onto the item in the same single-document write, then published through
- *   the kit's durable outbox and pulled; the sweep job republishes anything left (same idempotency keys).
+ *   the kit's durable outbox and pulled; anything left is republished when the item is next read or from the dashboard (same idempotency keys).
  *   Writes are compare-and-set on `version`.
  *   With "SKUs unique across the catalog" on, a live item also carries `skuKeys` (its normalised SKUs) under a unique
  *   partial index, so two concurrent writes can never both claim one SKU (the loser gets E11000 → `sku_taken`);

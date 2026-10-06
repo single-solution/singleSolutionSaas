@@ -83,7 +83,7 @@ const MANIFEST_RESIGN_MS = 3_600_000;
  * @property {{ collections?: import('./privacy.js').PrivacyCollection[], export?: (input: any) => Promise<unknown>, anonymize?: (input: any) => Promise<unknown> }} [privacy]
  * @property {((entry: any) => Promise<unknown>) | null} [auditSink]
  * @property {{ entitlementTtlMs?: number, revocationSyncMs?: number }} [cache]
- * @property {{ mode?: import('./background.js').BackgroundMode, intervalMs?: number, everyRequests?: number }} [background]
+ * @property {{ mode?: import('./background.js').BackgroundMode }} [background] queue delivery after requests (`off` in tests)
  *   automatic flushing of the usage queue and the event outbox (default `auto`; `off` when `NODE_ENV=test`)
  */
 
@@ -264,15 +264,11 @@ export const createProduct = (options) => {
 	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
 	const background = createBackground({
 		tasks: [
-			{ name: 'usage', run: () => usage.flush() },
-			{ name: 'events', run: () => outbox.flush() },
+			{ name: 'usage', run: (options) => usage.flush(options) },
+			{ name: 'events', run: (options) => outbox.flush(options) },
 		],
-		mode: options.background?.mode ?? (nodeEnv === 'test' ? 'off' : 'auto'),
+		mode: options.background?.mode ?? (nodeEnv === 'test' ? 'off' : 'on'),
 		logger,
-		leases: stores.leases,
-		now,
-		...(options.background?.intervalMs ? { intervalMs: options.background.intervalMs } : {}),
-		...(options.background?.everyRequests ? { everyRequests: options.background.everyRequests } : {}),
 	});
 	const production = nodeEnv === 'production';
 	const { allowHosts = [], ...outboundRest } = options.outbound ?? {};
@@ -424,7 +420,7 @@ export const createProduct = (options) => {
 	 * Publish a product event: fills in the envelope (`id`, `occurredAt`, `env` from the website's entitlement,
 	 * `actor: { type: 'product', id: slug }`, `context: { source: 'product', product: slug }`), validates it, sends it.
 	 * The envelope goes through the durable outbox: it is stored first (idempotent by event id), sent right away when
-	 * the Portal is reachable, and otherwise retried with backoff by `flush` / the background flusher (dead-lettered on
+	 * the Portal is reachable, and otherwise retried with backoff by `flush` / the next request for that website (dead-lettered on
 	 * a Portal rejection). The event id is derived from `(websiteId, type, idempotencyKey)` unless `id` is given, so a
 	 * repeated publish of the same logical event is a no-op.
 	 * @param {{ websiteId: string, type: string, data: Record<string, unknown>, idempotencyKey: string, id?: string, env?: 'live' | 'test', occurredAt?: string, context?: Record<string, unknown> }} input
@@ -464,7 +460,7 @@ export const createProduct = (options) => {
 			);
 		}
 		const { status } = await outbox.publish(envelope);
-		if (status === 'queued') background.markDirty();
+		if (status === 'queued') background.markDirty(websiteId);
 		return envelope;
 	};
 
@@ -530,7 +526,7 @@ export const createProduct = (options) => {
 			/** @type {typeof usage.record} */
 			record: async (input) => {
 				const result = await usage.record(input);
-				if (!result.duplicate) background.markDirty();
+				if (!result.duplicate) background.markDirty(input.websiteId);
 				return result;
 			},
 		}),
@@ -546,15 +542,10 @@ export const createProduct = (options) => {
 			fetch: (url, init) => outboundSend(url, init),
 			policy: outboundPolicy,
 		}),
-		/** Flush the usage queue and the event outbox now (also run by the background flusher). */
+		/** Send everything due in the usage queue and the event outbox now (requests send their own after responding). */
 		flush: () => background.tick(),
-		background: Object.freeze({
-			mode: background.mode,
-			start: background.start,
-			stop: background.stop,
-			/** Throttled work after requests: `every(name, intervalMs, fn, { per: 'product' | 'website', budgetMs })`. */
-			every: background.every,
-		}),
+		/** Queue delivery after requests: `on`, or `off` (tests; explicit `flush()` only). */
+		background: Object.freeze({ mode: background.mode }),
 		portal: Object.freeze({ ...portal, publishEvent }),
 		data,
 		connectors,
@@ -580,11 +571,8 @@ export const createProduct = (options) => {
 					: {}),
 			});
 		},
-		/** Stop the background flusher and close pooled client-database connections (graceful shutdown, tests). */
-		close: () => {
-			background.stop();
-			return data.closeAll();
-		},
+		/** Close pooled client-database connections (graceful shutdown, tests). */
+		close: () => data.closeAll(),
 	};
 	return Object.freeze(product);
 };

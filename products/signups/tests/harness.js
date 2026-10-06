@@ -12,7 +12,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createSignups, wireEvents } from '../api/routes.js';
-import { cronRoutes, wireJobs } from '../jobs/maintenance.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -22,7 +21,6 @@ export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = { origin: `https://${DOMAIN}` };
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const SEAL_SECRET = 'seal-secret-0123456789abcdefghijklmnopqrstuvwxyz';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const ELEMENTS = ['profile', 'sessions', 'otp', 'magic_link', 'account_pages', 'widget', 'risk', 'consent', 'data_rights'];
@@ -113,14 +111,13 @@ export const createHarness = async (
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_signups_api_tests_0123456789'),
 			SIGNUPS_SEAL_SECRET: SEAL_SECRET,
-			CRON_SECRET,
 			...env,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: gateway.send },
 	});
-	const signups = wireJobs(wireEvents(createSignups(app)));
-	const handle = createRequestHandler(signups.product, [...buildRoutes(signups), ...cronRoutes(signups)]);
+	const signups = wireEvents(createSignups(app));
+	const handle = createRequestHandler(signups.product, buildRoutes(signups));
 
 	let version = 0;
 	/**

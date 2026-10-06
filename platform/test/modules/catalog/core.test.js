@@ -100,10 +100,21 @@ describe('health', () => {
 	});
 
 	it('flags stale apps', () => {
-		expect(healthView(null, NOW)).toEqual({ lastHeartbeatAt: null, version: null, status: null, queues: null, stale: true });
+		expect(healthView(null, NOW)).toEqual({
+			lastHeartbeatAt: null,
+			lastSeenAt: null,
+			version: null,
+			status: null,
+			queues: null,
+			stale: true,
+		});
 		const fresh = { lastHeartbeatAt: new Date(NOW - 60_000), version: '1', status: 'ok', queues: null };
 		expect(healthView(fresh, NOW)).toMatchObject({ stale: false, lastHeartbeatAt: iso(NOW - 60_000) });
-		expect(healthView(fresh, NOW + 20 * 60_000).stale).toBe(true);
+		expect(healthView(fresh, NOW + 25 * 60 * 60_000).stale).toBe(true);
+		// any product call counts as being in touch (no periodic heartbeat, F.19)
+		const seen = { ...fresh, lastSeenAt: new Date(NOW + 24 * 60 * 60_000) };
+		expect(healthView(seen, NOW + 25 * 60 * 60_000)).toMatchObject({ stale: false, lastSeenAt: iso(NOW + 24 * 60 * 60_000) });
+		expect(healthView({ ...fresh, lastSeenAt: new Date(NOW - 120_000) }, NOW).lastSeenAt).toBe(iso(NOW - 60_000));
 		expect(healthView(fresh, NOW, 30_000).stale).toBe(true);
 	});
 });

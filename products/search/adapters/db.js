@@ -287,14 +287,14 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			apply: async (change) => {
 				await count(change.add, change.addPublic, 1);
 				await count(change.remove, change.removePublic, -1);
+				// terms no document uses any more leave the vocabulary right away (no cleanup pass)
+				if (change.remove.length > 0) await terms.deleteMany({ websiteId, term: { $in: change.remove }, df: { $lte: 0 } });
 				// public flag moves for terms that stay in the document
 				const stayPublic = change.addPublic.filter((term) => !change.add.includes(term));
 				if (stayPublic.length > 0) await terms.updateMany({ websiteId, term: { $in: stayPublic } }, { $inc: { pdf: 1 } });
 				const leavePublic = change.removePublic.filter((term) => !change.remove.includes(term));
 				if (leavePublic.length > 0) await terms.updateMany({ websiteId, term: { $in: leavePublic } }, { $inc: { pdf: -1 } });
 			},
-			/** Remove terms no document uses any more. */
-			cleanup: async () => (await terms.deleteMany({ websiteId, df: { $lte: 0 } })).deletedCount ?? 0,
 			/** @returns {Promise<number>} */
 			size: async () => terms.countDocuments({ websiteId }),
 		}),

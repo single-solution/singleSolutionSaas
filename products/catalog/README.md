@@ -6,8 +6,13 @@ business logic lives in `core/` (pure) and `headless/` (DOM-free), and `@ss/app-
 (registration, launches, website keys, entitlements with offline grace, events, usage, data guard).
 
 All catalog data lives in the **merchant's own database** (`ss_catalog_*` collections through `data.forWebsite`); files
-stay in the merchant's storage or the Files product. The product's control database holds only kit caches, queues and
-the website ids the sweep job visits.
+stay in the merchant's storage or the Files product. The product's control database holds only kit caches and queues.
+
+**No periodic work.** There are no crons, timers or background loops: everything happens inside (or right after) the
+request that makes it relevant. A scheduled publish / unpublish publishes its `item.updated@1` when the item is next read
+(listings, item pages, the dashboard); an expired stock hold reads as expired at once and its stock is given back when it
+is read or before stock is next taken or adjusted; outbox leftovers are republished when their item is next read. The
+dashboard's **Process due changes** button (`POST /v1/dashboard/due-work`) does all three for the website at once.
 
 ## Elements and pricing
 
@@ -39,8 +44,8 @@ features now.
 
 - Publishes the standard `item.created@1`, `item.updated@1` (with `changed`), `item.deleted@1`, `inventory.changed@1`
   and `price.changed@1` (`@ss/contracts` schemas). Every change pushes its events onto the item document in the same
-  atomic write (a transactional outbox), then publishes them through the kit's durable outbox; the sweep job
-  republishes anything a crash left behind with the same idempotency keys. The private cost is never published.
+  atomic write (a transactional outbox), then publishes them through the kit's durable outbox; anything a crash
+  left behind is republished with the same idempotency keys when the item is next read (or from the dashboard). The private cost is never published.
 - Consumes `order.placed@1` (takes stock once per order, or converts the order's stock reservation),
   `order.cancelled@1` (gives it back) and `order.refunded@1` (gives refunded lines back when
   `variants.restock_on_refund` is on).
@@ -58,17 +63,15 @@ manifest.json, openapi.json, schemas/*.features.json, strings/en.json
 core/       items, variants, attributes, collections, brands, media, fields, money, csv, importing, feeds, events, views, query
 headless/   items, variants (option picker), filters, collections, brands, gallery — Mode B cores
 ui/         default renderers of the six UI elements (Mode A)
-adapters/   db (repositories + indexes), tokens (feed tokens, ids), registry, platform (environment → app-kit)
-api/        routes, catalog (write pipeline + outbox), items, variants, taxonomy, media, transfer, feeds, dashboard, events
-jobs/       sweep (GET /cron/sweep)
+adapters/   db (repositories + indexes), tokens (feed tokens, ids), platform (environment → app-kit)
+api/        routes, catalog (write pipeline + outbox), items, variants, taxonomy, media, transfer, feeds, dashboard, events, due (work due by time, done on read)
+jobs/       none (see jobs/README.md)
 app/        Next.js wiring and the dashboard (overview, items, item detail with stock, import & export, feeds, settings)
 ```
 
 ## Environment
 
-See `.env.example`: the app-kit variables plus `CATALOG_FEED_SECRET` (optional, feed-token HMAC secret) and
-`CRON_SECRET` (the sweep cron in `vercel.json`: a daily catch-up over every website, as the free Vercel Hobby plan
-allows; between runs the sweep runs after requests, at most every 5 minutes per website).
+See `.env.example`: the app-kit variables plus `CATALOG_FEED_SECRET` (optional, feed-token HMAC secret).
 
 ## Commands
 

@@ -12,7 +12,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createDeals, wireEvents } from '../api/routes.js';
-import { cronRoutes } from '../jobs/maintenance.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -21,7 +20,6 @@ export const MERCHANT = 'mer_0123456789abcdefghjkmnpq';
 export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 /** Friday 2 October 2026, 12:00 UTC (14:00 in Europe/Berlin). */
 export const T0 = Date.parse('2026-10-02T12:00:00Z');
 export const ELEMENTS = [
@@ -85,14 +83,13 @@ export const createHarness = async (
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_deals_api_tests_0123456789abc'),
-			CRON_SECRET,
 			...env,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger },
 	});
 	const deals = wireEvents(createDeals(app));
-	const handle = createRequestHandler(deals.product, [...buildRoutes(deals), ...cronRoutes(deals)]);
+	const handle = createRequestHandler(deals.product, buildRoutes(deals));
 
 	let version = 0;
 	/**

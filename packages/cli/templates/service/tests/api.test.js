@@ -1,10 +1,9 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
-import { createNotesRepository } from '../adapters/db.js';
+import { DELETED_RETENTION_MS, NOTES_INDEXES, createNotesRepository } from '../adapters/db.js';
 import { createEventHandlers } from '../api/events.js';
 import { createNotesHandlers } from '../api/notes.js';
 import { sessionView } from '../api/session.js';
-import { purgeDeletedNotes } from '../jobs/purge-deleted.js';
 import { createMemoryCollection } from './memory-collection.js';
 
 const setup = () => {
@@ -120,11 +119,16 @@ describe('api/session + jobs', () => {
 		assert.equal(sessionView({ kind: 'demo', role: 'demo', subject: 'usr_demo' }).user, 'usr_demo');
 	});
 
-	it('purges soft-deleted notes after the retention window', async () => {
-		const { handlers, repoFor } = setup();
+	it('marks soft-deleted notes for removal by a TTL index (no job)', async () => {
+		const { handlers, collection } = setup();
 		const created = /** @type {any} */ (await handlers.create({ websiteId: 'web_1', body: { text: 'old' } }));
 		await handlers.remove({ websiteId: 'web_1', params: { id: created.body.id } });
-		const purged = await purgeDeletedNotes({ repos: [await repoFor('web_1')], now: () => Date.parse('2027-01-01T00:00:00Z') });
-		assert.equal(purged, 1);
+		const doc = collection.docs.find((d) => d.id === created.body.id);
+		assert.ok(doc?.purgeAt instanceof Date);
+		assert.equal(doc.purgeAt.getTime(), Date.parse(doc.deletedAt) + DELETED_RETENTION_MS);
+		assert.deepEqual(
+			NOTES_INDEXES.find((index) => index.name === 'purge_ttl'),
+			{ key: { purgeAt: 1 }, name: 'purge_ttl', expireAfterSeconds: 0 },
+		);
 	});
 });

@@ -27,7 +27,7 @@ import { sessionView } from './session.js';
 /** @typedef {import('./context.js').Site} Site */
 
 /**
- * The application: context + services (shared by the routes, the event consumers, the dashboard and the job).
+ * The application: context + services (shared by the routes, the event consumers and the dashboard).
  * @param {import('../adapters/platform.js').CheckoutApp} app
  */
 export const createApplication = (app) => {
@@ -115,8 +115,10 @@ export const buildRoutes = (application) => {
 					after: typeof p.after === 'string' ? p.after : null,
 					fetchLimit: p.fetchLimit,
 				});
+				// the merchant's server reading carts is what marks the due ones abandoned (no timer)
+				const current = await Promise.all(list.map((/** @type {any} */ cart) => orders.abandonIfDue(s, cart)));
 				return p.respond(
-					list.map((/** @type {any} */ cart) => cartView(cart)),
+					current.map((cart) => cartView(/** @type {any} */ (cart))),
 					(/** @type {{ id: string }} */ cart) => cart.id,
 				);
 			},
@@ -135,8 +137,13 @@ export const buildRoutes = (application) => {
 			path: '/v1/carts/:id',
 			...website('cart'),
 			handler: async (ctx) => {
-				const loaded = await carts.load(await site(ctx), ctx.params.id, requesterOf(ctx), { open: false });
-				return loaded.ok ? ok(cartView(/** @type {any} */ (loaded.cart))) : fail(loaded);
+				const s = await site(ctx);
+				const who = requesterOf(ctx);
+				const loaded = await carts.load(s, ctx.params.id, who, { open: false });
+				if (!loaded.ok) return fail(loaded);
+				// a server-key read marks a due cart abandoned; a shopper reading it is back, so it is not reported
+				const cart = who.kind === 'sk' ? await orders.abandonIfDue(s, loaded.cart) : loaded.cart;
+				return ok(cartView(/** @type {any} */ (cart)));
 			},
 		}),
 		defineRoute({
@@ -772,6 +779,9 @@ export const buildRoutes = (application) => {
 	];
 };
 
+/** Orders and carts handled per "Process expired now" press (press again while `more`). */
+export const EXPIRY_RUN_LIMIT = 100;
+
 /**
  * Dashboard actions (launch sessions; demo sessions are read-only).
  * @param {Application} application
@@ -836,6 +846,18 @@ const dashboardRoutes = (application) => {
 							})
 						: Promise.resolve(null),
 				),
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/expiry:run',
+			...write,
+			handler: async (ctx) => {
+				if (!ctx.websiteId || !ctx.entitlement) return problem('bad_request', 'Open the dashboard for a website.');
+				const s = await site(ctx);
+				const expired = await orders.expire(s, { limit: EXPIRY_RUN_LIMIT });
+				const abandoned = await orders.abandon(s, { limit: EXPIRY_RUN_LIMIT });
+				return ok({ expired, abandoned, more: expired === EXPIRY_RUN_LIMIT || abandoned === EXPIRY_RUN_LIMIT });
+			},
 		}),
 		defineRoute({
 			method: 'GET',

@@ -19,7 +19,6 @@ const lines = [
 	`SESSION_SECRET=${secret()}`,
 	`WEBSITE_KEY_PEPPER=${secret()}`,
 	`IDEMPOTENCY_SECRET=${secret()}`,
-	`CRON_SECRET=${randomBytes(32).toString('base64url')}`,
 	// local products, object stores and databases may be reached over loopback / plain http (ignored in production)
 	`OUTBOUND_DEV_ALLOW_HOSTS=localhost,127.0.0.1,::1`,
 	// delivery artefacts (pack assets, compiled website bundles) on local disk; production uses an S3-compatible bucket

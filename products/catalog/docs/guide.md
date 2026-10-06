@@ -23,8 +23,10 @@ Everything that differs between websites is a setting in the Portal:
   type uses; `items.custom_fields` — typed fields (text, number, date, select, …) validated on every write; public ones
   are returned to browsers.
 - `items.statuses` — your statuses, each mapped to the standard `draft` / `active` / `archived` (what events carry)
-  and marked public or not. `publishAt` / `unpublishAt` schedule visibility; the sweep job publishes `item.updated@1`
-  (`changed: ["published"]`) when a window opens or closes.
+  and marked public or not. `publishAt` / `unpublishAt` schedule visibility, applied at read time on the
+  website. Nothing runs on a timer, so `item.updated@1` (`changed: ["published"]` / `["unpublished"]`) is published
+  when the item is next read after the window opens or closes (a listing or item page, or the dashboard), or when you
+  press **Process due changes** on the dashboard overview.
 - `items.currency` (or the website currency from the Portal; per item with `items.item_currency`). Prices are integer
   **minor units** in the API and events, major units ("12.50") in CSV files.
 - `items.languages` — `translations: { de: { title, summary, description, seo } }`; read with `?lang=de`.
@@ -41,8 +43,8 @@ single-variant item can be created with `price`, `sku`, `quantity` at item level
 - `POST /v1/stock-reservations { lines: [{ variantId | sku, quantity }], orderId? }` takes stock for a checkout: all
   lines or none (`insufficient_stock`). Send `order.placed@1` with the same `orderId` to convert it; otherwise it
   expires after `variants.reservation_ttl_minutes`: from then on it reads as `expired`, and its stock is given back
-  when it is read, when a new reservation is taken, or by the background sweep (after requests, at most every
-  5 minutes per website) — whichever comes first (the daily cron catches up on quiet websites).
+  when it is read, before a new reservation, an order or a stock adjustment takes stock, or when you press **Process
+  due changes** on the dashboard overview — whichever comes first. There is no scheduled job.
 - Without a reservation, `order.placed@1` takes the stock (lines matched by `variantId`, `sku`, or the single variant
   of `itemId`), once per order; `order.cancelled@1` gives it back. Overselling is recorded (negative stock).
 

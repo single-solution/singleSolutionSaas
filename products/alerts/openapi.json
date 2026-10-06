@@ -39,6 +39,10 @@
 		},
 		{
 			"name": "standard"
+		},
+		{
+			"name": "dashboard",
+			"description": "Merchant dashboard actions (SSO session)."
 		}
 	],
 	"components": {
@@ -53,6 +57,12 @@
 				"in": "header",
 				"name": "SS-Signature",
 				"description": "Portal-signed request (ss-request.v1)"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
 			}
 		},
 		"parameters": {
@@ -519,7 +529,7 @@
 					},
 					"more": {
 						"type": "boolean",
-						"description": "more waiters remain (continued by the scheduled run)"
+						"description": "more waiters remain (continued by the next trigger of the website or a manual outbox run)"
 					},
 					"at": {
 						"type": "string",
@@ -1634,7 +1644,7 @@
 			"post": {
 				"operationId": "dispatchMessages",
 				"tags": ["dispatch"],
-				"summary": "Run the outbox now (also done right after triggers and by the scheduled job): repair stale claims, continue open runs, send due messages (claim before send). sk_ only.",
+				"summary": "Run the outbox now (also done right after each trigger while inline dispatch is on): repair stale claims, continue open trigger runs, send due messages (claim before send). sk_ only.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKeyOptional"
@@ -1672,6 +1682,54 @@
 					}
 				},
 				"x-ss-key-kind": "sk"
+			}
+		},
+		"/v1/dashboard/messages:dispatch": {
+			"post": {
+				"operationId": "dashboardDispatchMessages",
+				"tags": ["dashboard"],
+				"summary": "Dashboard \"Send due now\" (SSO session, merchant roles): the same outbox run as POST /v1/messages:dispatch for the session's website.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"sent": 3,
+									"deferred": 1,
+									"cancelled": 0,
+									"capped": 0,
+									"retry": 0,
+									"failed": 0,
+									"recovered": {
+										"requeued": 0,
+										"closed": 0
+									},
+									"resumed": {
+										"resumed": 0,
+										"queued": 0
+									}
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
 			}
 		},
 		"/v1/waitlist": {

@@ -12,7 +12,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createReviews, wireEvents } from '../api/routes.js';
-import { cronRoutes, wireJobs } from '../jobs/requests.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -22,7 +21,6 @@ export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = { origin: `https://${DOMAIN}` };
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const HOUR = 3_600_000;
 export const DAY = 24 * HOUR;
@@ -155,14 +153,13 @@ export const createHarness = async (
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_reviews_api_tests_0123456789'),
-			CRON_SECRET,
 			...env,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: providers.send },
 	});
-	const reviews = wireJobs(wireEvents(createReviews(app)));
-	const handle = createRequestHandler(reviews.product, [...buildRoutes(reviews), ...cronRoutes(reviews)]);
+	const reviews = wireEvents(createReviews(app));
+	const handle = createRequestHandler(reviews.product, [...buildRoutes(reviews)]);
 	const issuer = createTestIdentityIssuer({ alg: 'ES256', audience: 'shop-web' });
 
 	let version = 0;

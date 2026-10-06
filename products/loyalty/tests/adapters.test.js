@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import { createWalletTokens, MIN_SECRET_LENGTH, stableId, walletSecret } from '../adapters/tokens.js';
-import { cronAuthorized, runExpiryJob } from '../jobs/expiry.js';
 import { mongoUri, ROOT } from './harness.js';
 
 describe('adapters/tokens', () => {
@@ -40,79 +38,6 @@ describe('adapters/tokens', () => {
 	});
 });
 
-describe('adapters/registry', () => {
-	it('remembers websites in memory or in the control database (ids only)', async () => {
-		const memory = createSiteRegistry();
-		await memory.remember('web_b');
-		await memory.remember('web_a');
-		await memory.remember('web_a');
-		expect(await memory.list()).toEqual(['web_a', 'web_b']);
-		/** @type {any[]} */
-		const writes = [];
-		let fail = true;
-		const collection = {
-			updateOne: async (/** @type {any} */ filter) => {
-				if (fail) {
-					fail = false;
-					throw new Error('down');
-				}
-				writes.push(filter._id);
-			},
-			find: () => ({ toArray: async () => [{ _id: 'web_z' }, ...writes.map((id) => ({ _id: id }))] }),
-		};
-		const stored = createSiteRegistry({ collection });
-		await stored.remember('web_1'); // fails: forgotten, retried next time
-		await stored.remember('web_1');
-		expect(writes).toEqual(['web_1']);
-		expect(await stored.list()).toEqual(['web_1', 'web_z']);
-	});
-});
-
-describe('jobs/expiry', () => {
-	it('runs every wanted website and isolates failures', async () => {
-		/** @type {Array<[string, unknown]>} */
-		const errors = [];
-		const result = await runExpiryJob({
-			websiteIds: ['web_ok', 'web_off', 'web_none', 'web_boom'],
-			siteFor: async (id) => (id === 'web_none' ? null : { id }),
-			wants: (site) => site.id !== 'web_off',
-			run: async (site) => {
-				if (site.id === 'web_boom') throw new Error('boom');
-				return { expired: 3 };
-			},
-			onError: (websiteId, error) => errors.push([websiteId, /** @type {Error} */ (error).message]),
-		});
-		expect(result).toEqual({
-			websites: 2,
-			results: [
-				{ websiteId: 'web_ok', expired: 3 },
-				{ websiteId: 'web_boom', error: 'failed' },
-			],
-		});
-		expect(errors).toEqual([['web_boom', 'boom']]);
-		expect(
-			(
-				await runExpiryJob({
-					websiteIds: ['x'],
-					siteFor: async () => {
-						throw new Error('x');
-					},
-					wants: () => true,
-					run: async () => ({}),
-				})
-			).results,
-		).toEqual([{ websiteId: 'x', error: 'failed' }]);
-	});
-
-	it('compares cron secrets in constant time', () => {
-		expect(cronAuthorized('Bearer abc', 'abc')).toBe(true);
-		expect(cronAuthorized('Bearer abd', 'abc')).toBe(false);
-		expect(cronAuthorized('Bearer ab', 'abc')).toBe(false);
-		expect(cronAuthorized(null, 'abc')).toBe(false);
-		expect(cronAuthorized('Bearer abc', null)).toBe(false);
-	});
-});
-
 describe('adapters/platform', () => {
 	it('refuses to start without the required environment', async () => {
 		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
@@ -130,12 +55,8 @@ describe('adapters/platform', () => {
 				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_0123456789abcdef0123'),
 				SS_PRODUCT_DB_URI: mongoUri(`loyalty_control_${Date.now()}`),
 				SS_OUTBOUND_ALLOW_HOSTS: '127.0.0.1',
-				CRON_SECRET: 'x'.repeat(16),
 			},
 		});
-		expect(app.cronSecret).toBe('x'.repeat(16));
-		await app.registry.remember('web_1');
-		expect(await app.registry.list()).toEqual(['web_1']);
 		expect(app.strings.en?.['wallet.title']).toBe('Your rewards');
 		await app.close();
 	});

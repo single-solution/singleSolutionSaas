@@ -123,11 +123,12 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 				});
 				return { inserted: true };
 			},
-			lease: async ({ now: t, limit, leaseMs, owner }) => {
+			lease: async ({ now: t, limit, leaseMs, owner, websiteId }) => {
 				/** @type {QueuedUsage[]} */
 				const out = [];
 				for (const record of usage.values()) {
 					if (out.length >= limit) break;
+					if (websiteId && record.websiteId !== websiteId) continue;
 					if (record.status !== 'pending' || record.nextAttemptAt > t || record.leaseUntil > t) continue;
 					record.leaseUntil = t + leaseMs;
 					record.leaseOwner = owner;
@@ -176,11 +177,12 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 				outbox.set(id, { id, envelope, attempts: 0, status: 'pending', nextAttemptAt: 0, leaseUntil: 0, expireAt: null });
 				return { inserted: true };
 			},
-			lease: async ({ now: t, limit, leaseMs }) => {
+			lease: async ({ now: t, limit, leaseMs, websiteId }) => {
 				/** @type {import('./types.js').OutboxEvent[]} */
 				const out = [];
 				for (const record of outbox.values()) {
 					if (out.length >= limit) break;
+					if (websiteId && record.envelope?.websiteId !== websiteId) continue;
 					if (record.status !== 'pending' || record.nextAttemptAt > t || record.leaseUntil > t || !record.envelope) continue;
 					record.leaseUntil = t + leaseMs;
 					out.push({
@@ -283,12 +285,6 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 				portalKeys = { jwks, fetchedAt };
 			},
 		}),
-		leases: (() => {
-			const held = memoryReplay(now);
-			return Object.freeze({
-				acquire: async (/** @type {string} */ key, /** @type {number} */ ttlMs) => !(await held.seen(key, now() + ttlMs)),
-			});
-		})(),
 		ping: async () => {},
 		usageRecords: () => [...usage.values()].map((record) => publicUsage(record)),
 	};

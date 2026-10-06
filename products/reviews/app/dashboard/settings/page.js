@@ -28,7 +28,10 @@ export default async function Settings({ searchParams }) {
 			h(KeyValueList, {
 				items: [
 					{ label: t('dashboard.settings.who'), value: settings.collection.who },
-					{ label: t('dashboard.settings.delay'), value: String(settings.collection.request_delay_hours) },
+					{
+						label: t('dashboard.settings.send_on_completion'),
+						value: t(settings.collection.send_on_completion ? 'dashboard.settings.on' : 'dashboard.settings.off'),
+					},
 					{ label: t('dashboard.settings.scale'), value: String(settings.content.rating_scale) },
 					{ label: t('dashboard.settings.rules'), value: String(settings.moderation?.rules.length ?? 0) },
 					{ label: t('dashboard.settings.request_flow'), value: on('request_flow') },

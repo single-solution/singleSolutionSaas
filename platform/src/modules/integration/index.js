@@ -21,6 +21,10 @@ export const createIntegrationModule = (options = {}) =>
 		jobs: (ctx) => ({
 			[DELIVER_JOB]: (payload, { job, signal }) => ctx.service('integration').runDelivery(payload, { job, signal }),
 		}),
+		ports: (ctx) => ({
+			// a product calling the Portal (entitlements, usage, heartbeat, any product API) retries its due deliveries
+			productCalled: (appId) => ctx.service('integration').deliverDueFor(appId),
+		}),
 	});
 
 export const integrationModule = createIntegrationModule();

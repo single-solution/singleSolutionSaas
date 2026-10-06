@@ -97,6 +97,8 @@ export const MIGRATIONS = [
 
 /** Fields the repositories never return. */
 const INTERNAL = new Set(['_id', 'websiteId', 'merchantId', 'env', 'schemaVersion', 'createdAt', 'updatedAt']);
+/** Subscription statuses that expire (a claimed one is mid-delivery and settles first). */
+const WAITING = new Set(['unconfirmed', 'pending']);
 
 /**
  * @param {Record<string, any> | null} doc
@@ -150,18 +152,38 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 	 * @returns {{ expiresAt: { $not: { $lte: Date } } }}
 	 */
 	const unexpired = () => ({ expiresAt: { $not: { $lte: new Date(now()) } } });
+	/**
+	 * A waiting subscription (unconfirmed / pending) past its `expiresAt` reads as `expired` (the TTL monitor deletes it
+	 * later; `findActive` ends it for good when it is touched).
+	 * @param {Record<string, any> | null} doc
+	 */
+	const isExpired = (doc) =>
+		Boolean(doc) &&
+		WAITING.has(/** @type {any} */ (doc).status) &&
+		/** @type {any} */ (doc).expiresAt instanceof Date &&
+		/** @type {any} */ (doc).expiresAt.getTime() <= now();
+	/** @param {Record<string, any> | null} doc */
+	const readSub = (doc) => (isExpired(doc) ? { ...strip(doc), status: 'expired' } : strip(doc));
 
 	return Object.freeze({
 		websiteId,
 		subscriptions: Object.freeze({
 			/** @param {string} id */
-			get: async (id) => strip(await subscriptions.findOne({ websiteId, id })),
+			get: async (id) => readSub(await subscriptions.findOne({ websiteId, id })),
 			/**
-			 * The active subscription of a contact for a type and target.
+			 * The active subscription of a contact for a type and target. One past its expiry is ended here (`expired`,
+			 * no longer active) so a new subscription can take its place.
 			 * @param {{ contactKey: string, type: string, targetKey: string }} key
 			 */
-			findActive: async ({ contactKey, type, targetKey }) =>
-				strip(await subscriptions.findOne({ websiteId, contactKey, type, targetKey, active: true })),
+			findActive: async ({ contactKey, type, targetKey }) => {
+				const doc = await subscriptions.findOne({ websiteId, contactKey, type, targetKey, active: true });
+				if (!isExpired(doc)) return strip(doc);
+				await subscriptions.updateOne(
+					{ websiteId, id: doc.id, active: true, status: doc.status },
+					{ $set: { status: 'expired', endedAt: new Date(now()).toISOString() }, $unset: { active: '' } },
+				);
+				return null;
+			},
 			/**
 			 * Insert a new subscription. False when an active one exists for the contact, type and target (a concurrent
 			 * double submit).
@@ -198,11 +220,12 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 						{ sort: { subscribedAt: -1, id: -1 }, limit: fetchLimit },
 					)
 					.toArray();
-				return docs.map(strip);
+				return docs.map(readSub);
 			},
-			countActive: async () => subscriptions.countDocuments({ websiteId, active: true }),
+			countActive: async () => subscriptions.countDocuments({ websiteId, active: true, ...unexpired() }),
 			/** @param {string} contactKey */
-			countActiveForContact: async (contactKey) => subscriptions.countDocuments({ websiteId, contactKey, active: true }),
+			countActiveForContact: async (contactKey) =>
+				subscriptions.countDocuments({ websiteId, contactKey, active: true, ...unexpired() }),
 			/**
 			 * Pending subscriptions of targets, in waitlist order.
 			 * @param {{ targetKeys: string[], types: string[], limit: number }} query
@@ -225,7 +248,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			claim: async (id, cycle, triggerId) =>
 				strip(
 					await subscriptions.findOneAndUpdate(
-						{ websiteId, id, status: 'pending', cycle },
+						{ websiteId, id, status: 'pending', cycle, ...unexpired() },
 						{
 							$set: {
 								status: 'claimed',
@@ -317,6 +340,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 					type: sub.type,
 					targetKey: sub.targetKey,
 					status: 'pending',
+					...unexpired(),
 					$or: [
 						{ rank: { $lt: sub.rank } },
 						{ rank: sub.rank, subscribedAt: { $lt: sub.subscribedAt } },
@@ -344,7 +368,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				return (
 					await subscriptions
 						.find(
-							{ websiteId, type, targetKey, status: 'pending', ...range },
+							{ websiteId, type, targetKey, status: 'pending', ...unexpired(), ...range },
 							{ sort: { rank: 1, subscribedAt: 1, id: 1 }, limit: fetchLimit },
 						)
 						.toArray()

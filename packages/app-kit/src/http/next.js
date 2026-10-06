@@ -2,8 +2,8 @@
  * Next.js App Router adapter: `export const { GET, POST, PATCH, DELETE } = toNextRoute(handler)` in a catch-all
  * `route.js`. A leading `/api` is stripped so routes are declared as `/v1/...` whether Next serves them under
  * `/api/v1/...` (e.g. through a `/v1/:path*` → `/api/v1/:path*` rewrite) or directly. The path the client addressed is
- * kept for Portal request signatures. Pass Next's `after` (`import { after } from 'next/server.js'`) so the kit's
- * background flush of the usage queue and event outbox runs after the response on serverless deployments.
+ * kept for Portal request signatures. Pass Next's `after` (`import { after } from 'next/server.js'`) so the usage and
+ * events a request queued (and its website's due retries) are sent after the response.
  * @module
  */
 import { rememberOriginalPath, rememberScheduler } from './handler.js';

@@ -773,7 +773,7 @@
 			"post": {
 				"operationId": "runRequestFlow",
 				"tags": ["request_flow"],
-				"summary": "Send due requests and reminders now through your messaging connector (the hourly job does the same). sk_ only.",
+				"summary": "Send due requests and reminders now through your messaging connector (also done when an order completes while collection.send_on_completion is on; nothing runs on a timer). sk_ only.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKeyOptional"
@@ -2845,6 +2845,99 @@
 				}
 			}
 		},
+		"/v1/dashboard/request-flow:run": {
+			"post": {
+				"operationId": "dashboardRunRequestFlow",
+				"tags": ["dashboard"],
+				"summary": "Dashboard \"Send due requests now\" (SSO session, merchant roles): the same run as POST /v1/request-flow:run.",
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/FlowRun"
+								},
+								"example": {
+									"due": 3,
+									"sent": 2,
+									"reminded": 1,
+									"failed": 0,
+									"expired": 0,
+									"skipped": 0,
+									"quiet": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
+		},
+		"/v1/dashboard/photos:sweep": {
+			"post": {
+				"operationId": "dashboardSweepPhotos",
+				"tags": ["dashboard"],
+				"summary": "Dashboard \"Clean up photo uploads\" (SSO session, merchant roles): delete this website's stale photo slots — the object in the merchant's bucket, then the slot (bounded; also done on the website's next upload).",
+				"security": [
+					{
+						"session": []
+					}
+				],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"scanned": {
+											"type": "integer"
+										},
+										"deleted": {
+											"type": "integer"
+										},
+										"missing": {
+											"type": "integer"
+										},
+										"failed": {
+											"type": "integer"
+										}
+									}
+								},
+								"example": {
+									"scanned": 2,
+									"deleted": 1,
+									"missing": 1,
+									"failed": 0
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
 		"/v1/dashboard/moderation:check": {
 			"post": {
 				"operationId": "dashboard_check",
@@ -2889,66 +2982,6 @@
 									"warnings": [],
 									"paths": ["review.rating"],
 									"functions": []
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/cron/requests": {
-			"get": {
-				"operationId": "cronRequests",
-				"tags": ["request_flow"],
-				"summary": "Hourly job (Vercel cron, Authorization: Bearer $CRON_SECRET): per website, the sweep of stale photo slots (objects deleted from the merchant’s bucket, then the slots) and, with the request flow on, the request flow.",
-				"security": [
-					{
-						"cron": []
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object",
-									"properties": {
-										"websites": {
-											"type": "integer"
-										},
-										"results": {
-											"type": "array",
-											"items": {
-												"type": "object",
-												"properties": {}
-											}
-										}
-									}
-								},
-								"example": {
-									"websites": 1,
-									"results": [
-										{
-											"websiteId": "web_1",
-											"due": 2,
-											"sent": 2,
-											"reminded": 0,
-											"failed": 0,
-											"expired": 0,
-											"skipped": 0,
-											"quiet": false,
-											"photos": {
-												"scanned": 1,
-												"deleted": 1,
-												"missing": 0,
-												"failed": 0
-											}
-										}
-									]
 								}
 							}
 						}
@@ -3294,11 +3327,6 @@
 				"in": "cookie",
 				"name": "ss_session",
 				"description": "dashboard session from GET /sso?launch="
-			},
-			"cron": {
-				"type": "http",
-				"scheme": "bearer",
-				"description": "CRON_SECRET"
 			}
 		},
 		"parameters": {

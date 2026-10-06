@@ -51,7 +51,7 @@ const STATUSES = ['pending', 'active', 'deprecated', 'retired'];
 /** Health label of an app: `Healthy`, `Stale`, the reported status, or null for packs. */
 export const healthLabel = (/** @type {any} */ app) => {
 	if (app.kind !== 'service' || !app.health) return null;
-	if (app.health.stale) return { status: 'failing', label: app.health.lastHeartbeatAt ? 'Stale' : 'No heartbeat' };
+	if (app.health.stale) return { status: 'failing', label: app.health.lastSeenAt ? 'Stale' : 'Never seen' };
 	if (app.health.status && app.health.status !== 'ok') return { status: 'failing', label: humanize(app.health.status) };
 	return { status: 'ok', label: 'Healthy' };
 };
@@ -458,6 +458,7 @@ export function AppView(props) {
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [refreshing, setRefreshing] = useState(false);
+	const [retrying, setRetrying] = useState(false);
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.apps(), label: 'Back to apps' }} />;
 	const { staff } = props;
 	const canReview = staffCan(staff, 'platform.apps.review');
@@ -528,6 +529,24 @@ export function AppView(props) {
 		await Promise.all([reload(), versions.reload()]);
 	};
 
+	// event deliveries that failed wait for a natural retry (the next event or call of the product); staff can force it
+	const retryDeliveries = async () => {
+		setRetrying(true);
+		setProblem(null);
+		const result = await adminFetch(adminApi.retryDeliveries(app.appId), { method: 'POST', body: {} });
+		setRetrying(false);
+		if (!result.ok) {
+			setProblem(result.problem);
+			return;
+		}
+		const r = result.data;
+		toast.show({
+			title: 'Deliveries retried',
+			description: `${formatNumber(r.succeeded ?? 0)} delivered, ${formatNumber(r.retried ?? 0)} still failing, ${formatNumber(r.dead ?? 0)} dead-lettered`,
+			tone: (r.retried ?? 0) + (r.dead ?? 0) > 0 ? 'danger' : 'success',
+		});
+	};
+
 	const actions = [];
 	if (canReview && (app.status === 'pending' || app.status === 'deprecated')) actions.push('activate');
 	if (canReview && app.status === 'active') actions.push('deprecate');
@@ -564,6 +583,15 @@ export function AppView(props) {
 								Refresh manifest
 							</Button>
 						) : null}
+						{app.kind === 'service' && staffCan(staff, 'platform.jobs.manage') ? (
+							<Button
+								variant="secondary"
+								onClick={() => void retryDeliveries()}
+								loading={retrying}
+								icon={<Icon name="send" size={14} />}>
+								Retry deliveries now
+							</Button>
+						) : null}
 						{actions.map((a) => (
 							<Button
 								key={a}
@@ -583,7 +611,7 @@ export function AppView(props) {
 			<ActionProblem problem={!lifecycle && !revoking ? problem : null} />
 			{app.status === 'deprecated' && app.sunsetAt ? (
 				<Callout tone="warning" title={`Deprecated — retires ${formatDate(app.sunsetAt)}`}>
-					Merchants see the sunset date; the daily job retires the app once it passes.
+					Merchants see the sunset date; the app is retired the first time it is used after the sunset.
 				</Callout>
 			) : null}
 			<Card title="Overview">
@@ -630,6 +658,7 @@ export function AppView(props) {
 											return h ? <StatusBadge status={h.status} label={h.label} /> : '—';
 										})(),
 									},
+									{ label: 'Last seen', value: formatDateTime(health.lastSeenAt) },
 									{ label: 'Last heartbeat', value: formatDateTime(health.lastHeartbeatAt) },
 									{ label: 'Reported version', value: health.version ?? '—' },
 								]}

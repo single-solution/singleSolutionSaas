@@ -3,7 +3,7 @@
  * daily job and the dashboard API — through the real routes on MongoDB.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createHarness, CRON_SECRET, WEBSITE } from './harness.js';
+import { createHarness, WEBSITE } from './harness.js';
 
 const DAY = 24 * 3_600_000;
 
@@ -321,12 +321,11 @@ describe('account pages, orders, consent and data rights', () => {
 			(await h.call('GET', exported.json.download, { token: (await h.signIn('rights@example.com')).json.tokens.accessToken }))
 				.status,
 		).toBe(410);
-		expect((await h.call('GET', '/cron/maintenance', { key: null })).status).toBe(401);
 		h.clock.advance(15 * DAY);
 		await h.entitle();
-		const job = await h.call('GET', '/cron/maintenance', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(job.status).toBe(200);
-		expect(job.json.results.find((/** @type {any} */ r) => r.websiteId === WEBSITE)).toMatchObject({ deletions: 1 });
+		// listing the customer is a read: the due deletion runs first
+		const listed = await h.call('GET', '/v1/customers?email=rights@example.com', { key: h.sk });
+		expect(listed.json.items).toEqual([expect.objectContaining({ id: signedIn.json.customer.id, status: 'deleted' })]);
 		const customer = await h.collection('customers').findOne({ websiteId: WEBSITE, id: signedIn.json.customer.id });
 		expect(customer).toMatchObject({ status: 'deleted', email: null });
 		expect((await h.collection('data_requests').findOne({ websiteId: WEBSITE, id: again.json.id }))?.status).toBe('completed');
@@ -336,7 +335,7 @@ describe('account pages, orders, consent and data rights', () => {
 		expect(fresh.json.created).toBe(true);
 	});
 
-	it('deletes a customer whose cooling-off ended when accessed, before any job, and from the work after requests', async () => {
+	it('deletes a customer whose cooling-off ended when accessed, and from the dashboard button', async () => {
 		/** @param {string} email @param {string} ip */
 		const requestDeletion = async (email, ip) => {
 			const signedIn = await h.signIn(email, { headers: { 'x-forwarded-for': ip } });
@@ -369,12 +368,26 @@ describe('account pages, orders, consent and data rights', () => {
 		);
 		expect(await stored(cancel.id)).toMatchObject({ status: 'deleted' });
 
-		// the maintenance after requests (throttled background task) deletes the rest
+		// nothing runs by itself: the dashboard's "Run due deletions" button deletes the rest
 		expect((await stored(background.id))?.status).toBe('active');
-		expect(h.signups.maintenance.name).toBe('maintenance');
-		expect(await h.signups.maintenance.trigger({ websiteId: WEBSITE })).toBe(true);
+		const press = async (/** @type {any} */ kind, /** @type {Record<string, unknown>} */ scope) => {
+			const { token } = await h.portal.issueLaunch({
+				kind,
+				subject: 'usr_1',
+				user: { id: 'usr_1' },
+				scope,
+				subscriptions: [],
+			});
+			const sso = await h.handle(new Request(`https://signups.example.com/sso?launch=${token}`));
+			const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
+			return h.call('POST', '/v1/dashboard/deletions:run', { key: null, headers: { authorization: `Bearer ${session}` } });
+		};
+		const merchant = { merchantId: 'mer_0123456789abcdefghjkmnpq', websiteId: WEBSITE };
+		expect((await press('demo', {})).status).toBe(403);
+		expect((await press('merchant', merchant)).json).toEqual({ deleted: 1 });
 		expect(await stored(background.id)).toMatchObject({ status: 'deleted', email: null });
-		expect(await h.signups.maintenance.trigger({ websiteId: WEBSITE })).toBe(false);
+		expect((await press('merchant', merchant)).json).toEqual({ deleted: 0 });
+		expect((await press('merchant', { merchantId: 'mer_0123456789abcdefghjkmnpq' })).status).toBe(400);
 	});
 
 	it('honours disabled data rights and immediate deletion', async () => {
@@ -463,5 +476,27 @@ describe('dashboard API', () => {
 		expect(demo.json).toMatchObject({ demo: true, overview: { customers: 4 } });
 		const view = await h.call('GET', '/v1/session', { key: null, headers: { authorization: `Bearer ${demoSession}` } });
 		expect(view.json).toMatchObject({ kind: 'demo', role: 'demo' });
+	});
+
+	it('lists customers for a live dashboard (due deletions of the listed customers run first)', async () => {
+		const { resolveDashboard } = await import('../api/dashboard.js');
+		const signedIn = await h.signIn('listed-due@example.com', { headers: { 'x-forwarded-for': '203.0.113.77' } });
+		await h.call('POST', '/v1/data-requests', { token: signedIn.json.tokens.accessToken, body: { type: 'delete' } });
+		h.clock.advance(31 * 24 * 3_600_000);
+		await h.entitle();
+		const { token } = await h.portal.issueLaunch({
+			kind: 'merchant',
+			subject: 'usr_1',
+			user: { id: 'usr_1' },
+			scope: { merchantId: 'mer_0123456789abcdefghjkmnpq', websiteId: WEBSITE },
+			subscriptions: [],
+		});
+		const sso = await h.handle(new Request(`https://signups.example.com/sso?launch=${token}`));
+		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
+		const live = await resolveDashboard({ signups: h.signups, sessionId: session, website: WEBSITE, now: h.clock.now() });
+		if (live.state !== 'ready') throw new Error(live.state);
+		const listed = await live.data.customers({ email: 'listed-due@example.com' });
+		expect(listed).toEqual([expect.objectContaining({ id: signedIn.json.customer.id, status: 'deleted' })]);
+		expect(await live.data.customers({ email: 'nobody@example.com' })).toEqual([]);
 	});
 });

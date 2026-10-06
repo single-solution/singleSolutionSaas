@@ -19,7 +19,7 @@ a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — no
 | `redeem`      | C       |      300 | `quote` / `redeem` / `release` / `confirm` for any checkout (idempotent): minimum points, maximum share of the transaction, conversion rate (`rate_points` → `rate_value_minor`), with or without offers                                                                                                                                                                                                                                                |
 | `wallet`      | A, B, C |      200 | Balance badge, tier progress, points expiring soon, history; default renderer ≤ 8 KB, headless core, `GET /v1/wallet` with customer wallet tokens                                                                                                                                                                                                                                                                                                       |
 | `tiers`       | C       |      300 | Ladder by points earned or spend in a rolling window of local months, earn multipliers, perk flags, downgrade policy (`never`, `end_of_period`, `immediate`)                                                                                                                                                                                                                                                                                            |
-| `expiry`      | C       |      100 | Lots expire FIFO `months` after they were earned (+ grace days); `loyalty.expiring@1` notices `notice_days` ahead; expired on read, hourly after requests, daily catch-up job                                                                                                                                                                                                                                                                           |
+| `expiry`      | C       |      100 | Lots expire FIFO `months` after they were earned (+ grace days); `loyalty.expiring@1` notices `notice_days` ahead; expired, noticed and tier-reviewed when a member is read; whole website from the dashboard button                                                                                                                                                                                                                                    |
 | `referrals`   | C       |      300 | Codes (`<prefix><random>`), attribution (API or `customer.created@1` `source: "referral:<CODE>"`), window, rewards for both sides on the referee's first qualifying order, fraud caps (self, duplicates, existing customers, per month, lifetime)                                                                                                                                                                                                       |
 | `adjustments` | C       |      100 | Manual credits/debits with reason codes and notes (API and dashboard), audited in the merchant database                                                                                                                                                                                                                                                                                                                                                 |
 | `reversal`    | C       |      100 | `order.cancelled@1` / `order.refunded@1`: redeemed points back first, then earned points reversed (proportionally for partial refunds), capped at the balance or allowed negative                                                                                                                                                                                                                                                                       |
@@ -54,6 +54,10 @@ Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `l
 - **Data.** Collections `ss_loyalty_{members,transactions,orders,redemptions,referrals,audit}` in the merchant
   database, `websiteId` first in every index, created lazily; versioned migrations; export/anonymise via the
   Portal-signed standard routes.
+- **No background work.** Nothing runs on a timer (no crons, no background tasks). When a request reads or moves a
+  member, that member's lapsed lots are expired, a due tier review is applied and a due `loyalty.expiring@1` notice is
+  published. The merchant can run the same for the whole website with the dashboard's "Run expiry now" button
+  (`POST /v1/dashboard/expiry:run`, 10 s per press; press again while more remain) or `POST /v1/expiry:run`.
 
 ## API (Mode C)
 
@@ -82,7 +86,7 @@ loadMore }, subscribe, validate, strings, t, formatPoints, destroy }`; `client.w
 
 ## Dashboard (SSO)
 
-Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs, earn rules with live rules@1 validation, member
+Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs with a "Run expiry now" button, earn rules with live rules@1 validation, member
 search, member detail with history and audited adjustments, settings (link to the subscription's configuration in the
 Portal — the product never stores merchant configuration). Demo launches ("Try demo") show sandbox data computed with
 the real core; impersonation shows the audit banner.
@@ -113,9 +117,7 @@ hourly settlement).
    - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
      registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
    - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required in production.
-   - `CRON_SECRET` — for the daily catch-up cron in `vercel.json` (`/cron/expiry`, 02:15 UTC). Between runs, points past
-     their expiry are expired when the member is read or moves, and a throttled run per website (at most hourly)
-     happens after requests. `SS_PRODUCT_DB_MAX_POOL_SIZE` — optional pool size of that client (default 5).
+   - `SS_PRODUCT_DB_MAX_POOL_SIZE` — optional pool size of that client (default 5).
    - `LOYALTY_WALLET_SECRET` — optional (≥ 32 chars); `SS_LOG_LEVEL` — optional.
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
@@ -124,5 +126,8 @@ hourly settlement).
 ## Changelog
 
 - **1.1.0 (unreleased)** — bring-your-own identity via app-kit (wallet tokens as fallback), `custom.*` consumed from
-  the Event Hub, self-contained order completions.
-- **1.0.0** — first release: eight elements, wallet renderer and headless core, REST v1, dashboard, daily job.
+  the Event Hub, self-contained order completions; no scheduled or periodic work at all (no crons, no background
+  tasks): a member's lapsed points, due tier review and expiry notice are handled when a request reads or moves that
+  member, and the dashboard's "Run expiry now" button (`POST /v1/dashboard/expiry:run`) or `POST /v1/expiry:run` runs
+  the whole website.
+- **1.0.0** — first release: eight elements, wallet renderer and headless core, REST v1, dashboard.

@@ -3,7 +3,8 @@
  * channel the customer can be reached on, through the merchant's own messaging connector — or handed to a messaging
  * product as `orders.customer_update@1` (identity references only; the text is read back with the sk_ key). Messages
  * are stored first and claimed before sending (a lease), so two instances never send one twice; failures retry
- * with backoff up to `max_attempts`.
+ * with backoff up to `max_attempts`. Nothing runs on a timer: a due retry is sent when its order is next read, or from
+ * the dashboard's "Process due now".
  */
 import { formatMoney } from '../core/money.js';
 import { pickChannel, renderMessage } from '../core/messages.js';
@@ -137,13 +138,14 @@ export const createNotifier = (deps) => {
 	};
 
 	/**
-	 * Retry due messages (sweep).
+	 * Retry due messages: the website's (the dashboard button) or one order's (when the order is read), bounded.
 	 * @param {import('./context.js').Site} site
 	 * @param {number} limit
+	 * @param {{ orderId?: string }} [scope]
 	 */
-	const retryDue = async (site, limit) => {
+	const retryDue = async (site, limit, { orderId } = {}) => {
 		let sent = 0;
-		for (const message of await site.repos.messages.due(new Date(deps.now()), limit)) {
+		for (const message of await site.repos.messages.due(new Date(deps.now()), limit, orderId)) {
 			// an expired lease (a crashed send) is released back to retry first
 			if (message.state === 'sending') await site.repos.messages.settle(message.id, { state: 'retry' });
 			if ((await send(site, message.id)) === 'sent') sent += 1;

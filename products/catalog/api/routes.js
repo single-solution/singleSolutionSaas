@@ -24,17 +24,13 @@ import { createTaxonomyService } from './taxonomy.js';
 import { createTransferService, MAX_CSV_CHARS } from './transfer.js';
 import { createVariantsService } from './variants.js';
 import { attributeView } from '../core/views.js';
-import { flushItem } from './catalog.js';
-import { EVENT_TYPES } from '../core/events.js';
-import { nextTransition, isPublic } from '../core/items.js';
+import { createDueWork } from './due.js';
 
 /** @typedef {import('../adapters/platform.js').CatalogApp} CatalogApp */
 /** @typedef {import('./catalog.js').Site} Site */
 
 /** Items listed by an element view of the Loader's element stub. */
 const VIEW_ITEMS = 12;
-/** Work per website and sweep run. */
-const SWEEP_BATCH = 200;
 
 /**
  * Field problems → RFC 9457 `validation_failed`.
@@ -55,7 +51,7 @@ export const failure = (result) => {
 };
 
 /**
- * The application (services + site resolution) shared by the routes, the event consumers, the job and the dashboard.
+ * The application (services + site resolution) shared by the routes, the event consumers and the dashboard.
  * @param {CatalogApp} app
  */
 export const createCatalog = (app) => {
@@ -83,14 +79,11 @@ export const createCatalog = (app) => {
 	 * @param {any} doc
 	 * @returns {Promise<Site>}
 	 */
-	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
-		return {
-			websiteId,
-			settings: settingsForDoc(product, doc),
-			repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
-		};
-	};
+	const siteOf = async (websiteId, doc) => ({
+		websiteId,
+		settings: settingsForDoc(product, doc),
+		repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
+	});
 	/**
 	 * Site of a website from its entitlement (null without an active subscription or with items off).
 	 * @param {string} websiteId
@@ -101,37 +94,8 @@ export const createCatalog = (app) => {
 		if (!result.ok || !product.entitlements.can(result.doc, 'items')) return null;
 		return siteOf(websiteId, result.doc);
 	};
-	/**
-	 * Sweep one website: scheduled visibility changes, expired reservations, leftover outbox entries. Each step takes at
-	 * most `limit` records; the rest is left for the next run.
-	 * @param {Site} site
-	 * @param {{ limit?: number }} [options]
-	 */
-	const sweepSite = async (site, { limit = SWEEP_BATCH } = {}) => {
-		const now = app.now();
-		let published = 0;
-		for (const item of await site.repos.items.dueTransitions(new Date(now), limit)) {
-			const visible = isPublic(item, { statuses: site.settings.items.statuses, now, scheduled: true });
-			const key = `item.updated:${item.id}:visibility:${item.nextTransitionAt instanceof Date ? item.nextTransitionAt.toISOString() : String(item.nextTransitionAt)}`;
-			const next = {
-				...item,
-				nextTransitionAt: nextTransition(item, now),
-				version: (item.version ?? 1) + 1,
-				updatedAt: new Date(now),
-			};
-			const entries = [{ type: EVENT_TYPES.updated, key, changed: [visible ? 'published' : 'unpublished'] }];
-			if (await site.repos.items.write(next, item.version ?? 1, entries)) {
-				await flushItem(deps, site, { ...next, outbox: [...(item.outbox ?? []), ...entries] });
-				published += 1;
-			}
-		}
-		const expired = site.settings.enabled('variants') ? await variants.expire(site, limit) : 0;
-		let republished = 0;
-		for (const item of await site.repos.items.pendingOutbox(new Date(now - 60_000), limit))
-			republished += (await flushItem(deps, site, item)).published;
-		return { transitions: published, expiredReservations: expired, republished };
-	};
-	return { app, product, deps, items, variants, taxonomy, media, transfer, feeds, siteOf, siteFor, sweepSite };
+	const due = createDueWork(deps, { variants });
+	return { app, product, deps, items, variants, taxonomy, media, transfer, feeds, siteOf, siteFor, due };
 };
 
 /** @typedef {ReturnType<typeof createCatalog>} Catalog */
@@ -300,10 +264,9 @@ export const buildRoutes = (catalog) => {
 						? { facets: await listFacets(s, result.result.where, ctx.query['filter[collectionId]']) }
 						: {}),
 				};
-				return ok(
-					{ ...body, items: await viewsOf(ctx, s, body.items), sort, ...extra },
-					{ headers: { ...cacheFor(ctx, s), ...(link ? { link } : {}) } },
-				);
+				const views = await viewsOf(ctx, s, body.items);
+				await catalog.due.settle(s, body.items);
+				return ok({ ...body, items: views, sort, ...extra }, { headers: { ...cacheFor(ctx, s), ...(link ? { link } : {}) } });
 			},
 		}),
 		route({
@@ -330,6 +293,7 @@ export const buildRoutes = (catalog) => {
 				const view = isServer(ctx)
 					? await items.owner(s, item, { exposeCost: exposeCost(ctx, s), ...(signed ? { signed } : {}) })
 					: (await items.publicViews(s, [item], { lang: ctx.query.lang ?? null, ...(signed ? { signed } : {}) }))[0];
+				await catalog.due.settle(s, [item]);
 				return ok(
 					{ ...view, ...(item.slug !== ref && !ref.startsWith('itm_') ? { redirectFrom: ref } : {}) },
 					{ headers: signed ? { 'cache-control': 'no-store' } : cacheFor(ctx, s) },

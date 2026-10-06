@@ -173,7 +173,7 @@
 		{
 			"key": "expiry",
 			"name": "Expiry",
-			"description": "Points expire FIFO by lot after a number of months, with notices ahead of time (daily job).",
+			"description": "Points expire FIFO by lot after a number of months, with notices ahead of time (handled when a member is read, or from the dashboard).",
 			"modes": ["C"],
 			"stateful": true,
 			"price": {

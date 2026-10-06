@@ -1,7 +1,7 @@
 /**
  * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
  * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
- * ALERTS_TOKEN_SECRET and CRON_SECRET) and the project files (manifest with feature schemas inlined, string catalogs).
+ * ALERTS_TOKEN_SECRET) and the project files (manifest with feature schemas inlined, string catalogs).
  * This is the only place that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
@@ -9,7 +9,6 @@ import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import { addressFor, contactIdOf } from '../core/contact.js';
 import { INDEXES, MIGRATIONS, repositoriesFor } from './db.js';
-import { createSiteRegistry } from './registry.js';
 import { createTokens, randomId, stableId, tokenSecret } from './tokens.js';
 
 /**
@@ -65,8 +64,6 @@ export const PROBLEM_CODES = Object.freeze({
  * @typedef {object} AlertsApp
  * @property {any} product app-kit product
  * @property {import('./tokens.js').Tokens} tokens
- * @property {import('./registry.js').SiteRegistry} registry
- * @property {string | null} cronSecret
  * @property {string} portalUrl
  * @property {string} instanceId this process (message lease owner)
  * @property {() => number} now
@@ -155,8 +152,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
 	/** @type {unknown} */
 	let stores;
-	/** @type {any} */
-	let sites = null;
 	/** @type {{ close: () => Promise<void> } | null} */
 	let controlClient = null;
 	if (config.productDbUri) {
@@ -166,7 +161,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		const mongoStores = createMongoStores({ db: client.db() });
 		await mongoStores.ensureIndexes();
 		stores = mongoStores;
-		sites = client.db().collection('ss_alerts_sites');
 	}
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
 	const tokens = createTokens({ secret: tokenSecret({ secret: env.ALERTS_TOKEN_SECRET, signingKey }), now });
@@ -198,8 +192,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	return {
 		product,
 		tokens,
-		registry: createSiteRegistry({ collection: sites }),
-		cronSecret: env.CRON_SECRET && env.CRON_SECRET.length >= 16 ? env.CRON_SECRET : null,
 		portalUrl,
 		instanceId: randomId('ins'),
 		now,

@@ -156,7 +156,6 @@ export const testEnv = async (overrides = {}) => {
 		SECRETS_KEK: `kek-2:${b64(32, 2)},kek-1:${b64(32, 1)}`,
 		SESSION_SECRET: b64(32, 3),
 		WEBSITE_KEY_PEPPER: b64(32, 4),
-		CRON_SECRET: 'c'.repeat(40),
 		...overrides,
 	};
 };

@@ -42,7 +42,7 @@ export const failure = (result) => {
 };
 
 /**
- * The application (services + site resolution) shared by the routes, the event consumers, the job and the dashboard.
+ * The application (services + site resolution) shared by the routes, the event consumers and the dashboard.
  * @param {SearchApp} app
  * @param {{ atlasRunner?: any, atlasProbe?: any }} [options] test doubles for the Atlas driver calls
  */
@@ -74,14 +74,11 @@ export const createSearchApp = (app, options = {}) => {
 	 * @param {any} doc
 	 * @returns {Promise<Site>}
 	 */
-	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
-		return {
-			websiteId,
-			settings: settingsForDoc(product, doc),
-			repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
-		};
-	};
+	const siteOf = async (websiteId, doc) => ({
+		websiteId,
+		settings: settingsForDoc(product, doc),
+		repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
+	});
 	/**
 	 * Site of a website from its entitlement (null without an active subscription or with the index off).
 	 * @param {string} websiteId
@@ -92,18 +89,7 @@ export const createSearchApp = (app, options = {}) => {
 		if (!result.ok || !product.entitlements.can(result.doc, 'index')) return null;
 		return siteOf(websiteId, result.doc);
 	};
-	/**
-	 * Scheduled work of one website: crawl steps, the Atlas index state, vocabulary cleanup.
-	 * @param {Site} site
-	 * @param {{ deadline?: number }} [options] no crawl step is started after `deadline` (epoch ms)
-	 */
-	const sweepSite = async (site, { deadline } = {}) => {
-		const crawled = await sources.runDue(site, deadline === undefined ? {} : { deadline });
-		const atlas = site.settings.index.engine === 'portable' ? null : await engines.atlasStatus(site, { refresh: true });
-		const cleaned = await site.repos.vocabulary.cleanup();
-		return { ...crawled, atlas: atlas?.state ?? 'disabled', termsRemoved: cleaned };
-	};
-	return { app, product, engines, documents, search, sources, siteOf, siteFor, sweepSite };
+	return { app, product, engines, documents, search, sources, siteOf, siteFor };
 };
 
 /** @typedef {ReturnType<typeof createSearchApp>} SearchProduct */

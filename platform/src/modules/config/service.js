@@ -54,7 +54,8 @@ import { createConfigRepo } from './repo.js';
  * @property {string | null} [ip]
  */
 
-export const APPLY_SCHEDULED_JOB = 'config.apply_scheduled';
+/** Scheduled changes applied per read of a merchant's configuration, at most (F.19: applied on read, no job). */
+export const DUE_SCHEDULES_PER_READ = 20;
 const MAX_ATTEMPTS = 5;
 const MANIFEST_CACHE = 100;
 
@@ -546,6 +547,7 @@ export const createConfigService = (ctx) => {
 			typeof hint.merchantId === 'string' && typeof hint.appId === 'string'
 				? { merchantId: hint.merchantId, appId: hint.appId }
 				: await subscriptionInfo(subscriptionId);
+		await applyDue(info.merchantId);
 		const keys = {
 			platform: targetKey({ level: 'platform', appId: info.appId }),
 			merchant: targetKey({ level: 'merchant', merchantId: info.merchantId, appId: info.appId }),
@@ -893,7 +895,8 @@ export const createConfigService = (ctx) => {
 	});
 
 	/**
-	 * Store a change to apply later (validated now and again when applied) and enqueue `config.apply_scheduled`.
+	 * Store a change to apply later (validated now and again when applied). It is applied on read (F.19: no job): the
+	 * first read of the merchant's configuration at or after `at` (a document refresh, a console read) applies it.
 	 * @param {RequestMeta & { change: unknown, at: unknown, scope?: Scope }} input
 	 */
 	const schedule = async ({ change, at, scope, actor, requestId, ip }) => {
@@ -924,12 +927,6 @@ export const createConfigService = (ctx) => {
 		};
 		const merchantId = /** @type {string} */ (r.merchantId);
 		await repo.insertSchedule(merchantId, doc);
-		await ctx.jobs.enqueue({
-			name: APPLY_SCHEDULED_JOB,
-			payload: { scheduleId, merchantId },
-			key: `${APPLY_SCHEDULED_JOB}:${scheduleId}`,
-			runAt: when.value,
-		});
 		await ctx.audit.record({
 			actor,
 			action: 'config.scheduled',
@@ -943,7 +940,7 @@ export const createConfigService = (ctx) => {
 	};
 
 	/**
-	 * Job body: apply a scheduled change exactly once (version change key `schedule:<id>`).
+	 * Apply a scheduled change exactly once (version change key `schedule:<id>`).
 	 * @param {{ scheduleId: string, merchantId: string }} payload
 	 */
 	const applyScheduled = async ({ scheduleId, merchantId }) => {
@@ -978,6 +975,30 @@ export const createConfigService = (ctx) => {
 		}
 	};
 
+	/** @type {Set<string>} merchants whose due changes this instance is applying (an apply re-reads the layers) */
+	const applying = new Set();
+
+	/**
+	 * Apply the merchant's scheduled changes whose time has come, oldest first (bounded). Runs when the merchant's
+	 * configuration is read; failures are logged and the change is tried again on the next read.
+	 * @param {string} merchantId
+	 */
+	const applyDue = async (merchantId) => {
+		if (applying.has(merchantId)) return;
+		applying.add(merchantId);
+		try {
+			for (const doc of await repo.dueSchedules(merchantId, new Date(ctx.now()), DUE_SCHEDULES_PER_READ)) {
+				try {
+					await applyScheduled({ scheduleId: String(doc._id), merchantId });
+				} catch (error) {
+					ctx.logger.warn('scheduled change not applied yet', { scheduleId: String(doc._id), error });
+				}
+			}
+		} finally {
+			applying.delete(merchantId);
+		}
+	};
+
 	/**
 	 * @param {RequestMeta & { merchantId: string, scheduleId: string, scope?: Scope }} input
 	 */
@@ -1007,6 +1028,7 @@ export const createConfigService = (ctx) => {
 	const listSchedules = async ({ target, level, scope }) => {
 		const r = await resolveTarget(target, level, scope);
 		if (r.merchantId === null) return { items: [] };
+		await applyDue(r.merchantId);
 		return { items: (await repo.listSchedules(r.merchantId, r.key)).map(scheduleView) };
 	};
 
@@ -1167,6 +1189,7 @@ export const createConfigService = (ctx) => {
 		pushTemplate,
 		schedule,
 		applyScheduled,
+		applyDue,
 		cancelSchedule,
 		listSchedules,
 		createExperiment,

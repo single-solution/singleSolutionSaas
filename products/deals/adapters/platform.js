@@ -1,7 +1,7 @@
 /**
  * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
  * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_PRODUCT_DB_MAX_POOL_SIZE, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
- * DEALS_LOCK_SECRET and CRON_SECRET) and the project files (manifest with feature schemas inlined, string
+ * DEALS_LOCK_SECRET) and the project files (manifest with feature schemas inlined, string
  * catalogs). This is the only place that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
@@ -70,7 +70,6 @@ export const PROBLEM_CODES = Object.freeze({
  * @typedef {object} DealsApp
  * @property {any} product app-kit product
  * @property {import('./locks.js').LockTokens} locks
- * @property {string | null} cronSecret
  * @property {string} portalUrl
  * @property {() => number} now
  * @property {Record<string, Record<string, string>>} strings
@@ -135,7 +134,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	return {
 		product,
 		locks: createLockTokens({ secret: lockSecret({ secret: env.DEALS_LOCK_SECRET, signingKey }) }),
-		cronSecret: env.CRON_SECRET && env.CRON_SECRET.length >= 16 ? env.CRON_SECRET : null,
 		portalUrl,
 		now,
 		strings,

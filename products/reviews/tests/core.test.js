@@ -486,11 +486,12 @@ describe('orders and requests', () => {
 			}),
 			customerId: 'cus_1',
 		};
-		const request = buildRequest({ id: 'rrq_1', order: facts, completedAt: T0, delayHours: 24, windowDays: 30 });
+		const request = buildRequest({ id: 'rrq_1', order: facts, completedAt: T0, windowDays: 30 });
+		// due at completion: there is no delayed send
 		expect(request).toMatchObject({
 			status: 'open',
-			dueAt: new Date(T0 + DAY).toISOString(),
-			delivery: { state: 'scheduled', nextAt: new Date(T0 + DAY).toISOString() },
+			dueAt: new Date(T0).toISOString(),
+			delivery: { state: 'scheduled', nextAt: new Date(T0).toISOString() },
 			source: 'event',
 		});
 		expect(
@@ -498,7 +499,6 @@ describe('orders and requests', () => {
 				id: 'r',
 				order: { ...facts, customerKeys: [] },
 				completedAt: T0,
-				delayHours: 0,
 				windowDays: 1,
 				source: 'api',
 				locale: 'de',
@@ -654,7 +654,6 @@ describe('reviews', () => {
 			id: 'r',
 			order: { ...orderFacts({ orderId: 'o', customerId: 'c', lines: [{ itemId: 'i' }] }), customerId: 'c' },
 			completedAt: T0,
-			delayHours: 1,
 			windowDays: 1,
 		});
 		expect(customerRequestView(request, T0)).toMatchObject({ open: true, items: [{ itemId: 'i', reviewed: false }] });

@@ -8,8 +8,8 @@
  * - `items`: per item the approved-review rollup (recomputed exactly from approved reviews) and display metadata.
  * - `requests`: one review request per completed order (eligibility + request flow delivery state).
  * - `orders`: order snapshots from `order.placed@1` (items, customer) until completion.
- * - `photos`: upload slots in the merchant's bucket; a pending slot past its `staleAt` is swept by the jobs
- *   (object and record deleted), with a later TTL (`purgeAt`) as a backstop.
+ * - `photos`: upload slots in the merchant's bucket; a pending slot past its `staleAt` is swept (object and record
+ *   deleted) on the website's next upload or from the dashboard, with a later TTL (`purgeAt`) as a backstop.
  * - `questions`: Q&A, answers embedded.
  * @module
  */
@@ -594,24 +594,37 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				return (result.matchedCount ?? 0) > 0;
 			},
 			/**
-			 * Requests by status and delivery state (request flow status).
+			 * Requests by status and delivery state (request flow status); an open request past its `expiresAt` counts as
+			 * expired.
 			 */
 			stats: async () => {
+				const at = new Date(now()).toISOString();
+				const expired = { $and: [{ $eq: ['$status', 'open'] }, { $lte: ['$expiresAt', at] }] };
 				const rows = await requests
 					.aggregate([
 						{ $match: { websiteId } },
-						{ $group: { _id: { status: '$status', state: '$delivery.state' }, count: { $sum: 1 } } },
+						{
+							$group: {
+								_id: { status: { $cond: [expired, 'expired', '$status'] }, state: '$delivery.state' },
+								count: { $sum: 1 },
+							},
+						},
 					])
 					.toArray();
 				return rows.map((/** @type {any} */ row) => ({ status: row._id.status, state: row._id.state, count: row.count }));
 			},
 			/**
-			 * Next due delivery instant (ISO) of open requests.
+			 * Next due delivery instant (ISO) of open, unexpired requests.
 			 */
 			nextDue: async () => {
 				const [doc] = await requests
 					.find(
-						{ websiteId, status: 'open', 'delivery.nextAt': { $ne: null } },
+						{
+							websiteId,
+							status: 'open',
+							expiresAt: { $gt: new Date(now()).toISOString() },
+							'delivery.nextAt': { $ne: null },
+						},
 						{ sort: { 'delivery.nextAt': 1 }, limit: 1, projection: { delivery: 1 } },
 					)
 					.toArray();

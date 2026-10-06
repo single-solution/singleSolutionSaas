@@ -1,8 +1,9 @@
-/** Knowledge (SSO): FAQ entries (add from here) and the configured web pages with their fetch state. */
+/** Knowledge (SSO): FAQ entries (add from here) and the configured web pages with their fetch state (refresh due ones). */
 import { createElement as h } from 'react';
 import { Card, StatusBadge } from '@ss/ui';
 import { dashboardContext } from '../../_lib/dashboard.js';
 import { EntryForm } from '../_components/EntryForm.js';
+import { RefreshSources } from '../_components/RefreshSources.js';
 import { Shell, t } from '../_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -53,6 +54,9 @@ export default async function Knowledge({ searchParams }) {
 					),
 				),
 			),
+			context.data.canWrite && context.data.websiteId && sources.length > 0
+				? h(RefreshSources, { websiteId: context.data.websiteId })
+				: null,
 		),
 	);
 }

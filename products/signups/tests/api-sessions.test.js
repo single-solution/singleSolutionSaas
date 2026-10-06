@@ -2,11 +2,12 @@
  * Sessions and the website's identity issuer: EdDSA access tokens verified offline exactly as other products do
  * (app-kit `verifyIdentityToken` with the JWKS this product publishes), refresh-token rotation with reuse detection,
  * device list, revoke one / all, signing-key rotation with pre-publication, discovery, the issuer report and the
- * request to become the website's issuer (POST /v1/issuer:register, daily job, dashboard; the merchant approves).
+ * request to become the website's issuer (POST /v1/issuer:register, on entitlement.changed@1, dashboard; the merchant
+ * approves).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { verifyIdentityToken } from '@ss/app-kit';
-import { CRON_SECRET, createHarness, WEBSITE } from './harness.js';
+import { createHarness, WEBSITE } from './harness.js';
 
 const HOUR = 3_600_000;
 
@@ -92,9 +93,18 @@ describe('identity issuer', () => {
 		const after = await h.signIn('rotate@example.com');
 		expect(kid(after.json.tokens.accessToken)).not.toBe(kid(before.json.tokens.accessToken));
 		expect((await sectionFor()).jwks.map((/** @type {any} */ k) => k.kid)).toContain(kid(before.json.tokens.accessToken));
-		// after the retention window the superseded key disappears and is pruned by the daily job
+		// after the retention window the superseded key is no longer published
 		h.clock.advance(2 * HOUR);
 		expect((await sectionFor()).jwks.map((/** @type {any} */ k) => k.kid)).not.toContain(kid(before.json.tokens.accessToken));
+		// beyond the newest generations, superseded keys are deleted when the keys are next read (no job)
+		for (let i = 0; i < 5; i += 1) {
+			await h.call('POST', '/v1/issuer:rotate', { key: h.sk });
+			h.clock.advance(3 * HOUR);
+		}
+		await h.signIn('rotate@example.com');
+		const stored = await h.collection('keys').find({ websiteId: WEBSITE, kind: 'signing' }).toArray();
+		expect(stored).toHaveLength(5);
+		expect(stored.map((record) => record.kid)).not.toContain(kid(before.json.tokens.accessToken));
 	});
 });
 
@@ -105,20 +115,18 @@ describe('identity issuer request (the merchant approves in the Portal)', () => 
 		r = await createHarness();
 	});
 	afterAll(async () => r?.close());
-	const job = () => r.call('GET', '/cron/maintenance', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-	const ours = (/** @type {any} */ result) => result.json.results.find((/** @type {any} */ x) => x.websiteId === WEBSITE);
+	let version = 100;
+	const changed = () => r.deliver('entitlement.changed@1', { version: (version += 1) });
 	const portalPath = `/v1/product/websites/${WEBSITE}/identity`;
 
-	it('the daily job asks once, never fails on a Portal error, and retries the next day', async () => {
-		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toBeNull(); // the website is now known
+	it('entitlement.changed@1 asks once, never fails on a Portal error, and retries on the next change', async () => {
+		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toBeNull();
 		r.portal.failNext(portalPath, 503);
-		const failed = await job();
+		const failed = await changed();
 		expect(failed.status).toBe(200);
-		expect(ours(failed)).toMatchObject({ issuerRequested: 0 });
 		expect(r.portal.identityRequests.size).toBe(0);
 		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toBeNull();
-		const sent = await job();
-		expect(ours(sent)).toMatchObject({ issuerRequested: 1 });
+		expect((await changed()).status).toBe(200);
 		expect(r.portal.identityRequests.get(WEBSITE)).toMatchObject({
 			status: 'pending',
 			input: {
@@ -130,8 +138,10 @@ describe('identity issuer request (the merchant approves in the Portal)', () => 
 		});
 		// already requested for this configuration: not asked again (a rejection is not repeated on its own)
 		const calls = r.portal.calls.filter((c) => c.path === portalPath).length;
-		expect(ours(await job())).toMatchObject({ issuerRequested: 0 });
+		expect((await changed()).status).toBe(200);
 		expect(r.portal.calls.filter((c) => c.path === portalPath)).toHaveLength(calls);
+		// events for websites without a subscription are ignored
+		expect((await r.deliver('entitlement.changed@1', {}, { websiteId: 'web_9123456789abcdefghjkmnpq' })).status).toBe(200);
 		expect((await r.call('GET', '/v1/issuer', { key: r.sk })).json.request).toEqual({
 			status: 'pending',
 			requestedAt: new Date(r.clock.now()).toISOString(),

@@ -24,7 +24,7 @@ import { createDocuments } from './documents.js';
 import { createEventHandlers } from './events.js';
 import { createIntake } from './intake.js';
 import { createLedger } from './ledger.js';
-import { createLifecycle, expiringOnRead } from './lifecycle.js';
+import { createLifecycle, settlingOnRead } from './lifecycle.js';
 import { createNotifier } from './notify.js';
 import { createOutbox } from './outbox.js';
 import { createBlocklist, entryView } from './risk.js';
@@ -34,8 +34,10 @@ import { settingsForDoc } from './settings.js';
 /** @typedef {import('../adapters/platform.js').OrdersApp} OrdersApp */
 /** @typedef {import('./context.js').Site} Site */
 
-/** Work per website and sweep run. */
-const SWEEP_BATCH = 200;
+/** Items per step of one "Process due now" press (press again while `more`). */
+export const DUE_BATCH = 100;
+/** Due message retries of one order when it is read. */
+const ORDER_RETRIES = 5;
 
 /** Headers of the printable HTML views: no script can run, nothing is cached. */
 export const HTML_HEADERS = HTML_VIEW_HEADERS;
@@ -53,7 +55,7 @@ export const failure = (result) =>
 	});
 
 /**
- * The application (services + site resolution) shared by the routes, the event consumers, the job and the dashboard.
+ * The application (services + site resolution) shared by the routes, the event consumers and the dashboard.
  * @param {OrdersApp} app
  */
 export const createOrders = (app) => {
@@ -87,12 +89,24 @@ export const createOrders = (app) => {
 	 * @returns {Promise<Site>}
 	 */
 	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
 		const repos = await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env });
 		/** @type {Site} */
 		const site = { websiteId, settings: settingsForDoc(product, doc), repos };
-		// expire on read: an order whose status expired is moved before it is returned (the sweep only catches up)
-		site.repos = { ...repos, orders: expiringOnRead(repos.orders, (order) => lifecycle.expireIfDue(site, order)) };
+		// due work on read (no timer): an order whose status expired is moved, entries a crashed request left behind are
+		// delivered, and a single order read sends that order's due message retries
+		site.repos = {
+			...repos,
+			orders: settlingOnRead(repos.orders, {
+				settle: async (order) => {
+					const expired = await lifecycle.expireIfDue(site, order);
+					return (await outbox.redeliver(site, order)) > 0 || expired;
+				},
+				touch: (order) =>
+					site.settings.enabled('customer_updates')
+						? notifier.retryDue(site, ORDER_RETRIES, { orderId: order.id })
+						: Promise.resolve(0),
+			}),
+		};
 		return site;
 	};
 	/**
@@ -106,19 +120,16 @@ export const createOrders = (app) => {
 		return siteOf(websiteId, result.doc);
 	};
 	/**
-	 * Sweep one website: auto-expiry, the order outbox, message retries — `limit` items each; a step that would start
-	 * after `deadline` is left for the next run.
+	 * The website's due work at once, bounded (the dashboard's "Process due now"): auto-expiry, left-behind outbox
+	 * entries, due message retries — `limit` items each.
 	 * @param {Site} site
-	 * @param {{ limit?: number, deadline?: number }} [options]
+	 * @param {{ limit?: number }} [options]
 	 */
-	const sweepSite = async (site, { limit = SWEEP_BATCH, deadline = Infinity } = {}) => {
-		/** @param {() => Promise<number>} step */
-		const within = async (step) => (app.now() < deadline ? step() : 0);
-		return {
-			expired: await within(() => lifecycle.expireDue(site, limit)),
-			redelivered: await within(() => outbox.retry(site, limit)),
-			messages: site.settings.enabled('customer_updates') ? await within(() => notifier.retryDue(site, limit)) : 0,
-		};
+	const processDue = async (site, { limit = DUE_BATCH } = {}) => {
+		const expired = await lifecycle.expireDue(site, limit);
+		const redelivered = await outbox.retry(site, limit);
+		const messages = site.settings.enabled('customer_updates') ? await notifier.retryDue(site, limit) : 0;
+		return { expired, redelivered, messages, more: Math.max(expired, messages) >= limit };
 	};
 	return {
 		app,
@@ -134,7 +145,7 @@ export const createOrders = (app) => {
 		blocklist,
 		siteOf,
 		siteFor,
-		sweepSite,
+		processDue,
 	};
 };
 

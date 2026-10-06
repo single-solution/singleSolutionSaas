@@ -209,11 +209,9 @@ describe('variants', () => {
 			body: { lines: [{ variantId: small.id, quantity: 1 }] },
 		});
 		h.clock.advance(HOUR);
-		const sweep = await h.call('GET', '/cron/sweep', {
-			key: null,
-			headers: { authorization: 'Bearer cron-secret-0123456789abcdef' },
-		});
-		expect(sweep.json.results[0].expiredReservations).toBe(1);
+		const due = await h.call('POST', '/v1/dashboard/due-work', { key: await h.session('merchant'), idempotencyKey: null });
+		expect(due.status, JSON.stringify(due.json)).toBe(200);
+		expect(due.json.expiredReservations).toBe(1);
 		expect((await h.call('GET', `/v1/stock-reservations/${expiring.json.id}`)).json.status).toBe('expired');
 		const unknown = await h.call('POST', '/v1/stock-reservations', { body: { lines: [{ sku: 'NOPE', quantity: 1 }] } });
 		expect(unknown.json.errors[0].code).toBe('variant_unknown');

@@ -142,7 +142,6 @@ export const createGrades = (app) => {
 	 * @returns {Promise<Site>}
 	 */
 	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
 		return {
 			websiteId,
 			settings: settingsForDoc(product, doc),
@@ -978,6 +977,19 @@ export const buildRoutes = (grades) => {
 				if (!s) return noWebsite();
 				const result = await service.issueReportLink(s, ctx.params.id, { actor: dashboardActor(ctx.session) });
 				return result.ok ? created(result.link) : failure(result);
+			},
+		}),
+		defineRoute({
+			// the dashboard's "Clean up stale photos" button (the same clean-up runs on the website's next photo upload)
+			method: 'POST',
+			path: '/v1/dashboard/photos:sweep',
+			auth: 'launch',
+			element: 'inspection',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: false,
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				return s ? ok(await service.sweepPhotos(s)) : noWebsite();
 			},
 		}),
 		defineRoute({

@@ -1,16 +1,13 @@
 /** Alert types, waitlist tiers from identity claims, analytics, dashboard, privacy, adapters and the plain server. */
-import { MongoClient } from 'mongodb';
 import { afterEach, describe, expect, it } from 'vitest';
 import { noopLogger } from '@ss/app-kit';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform, loadManifest, loadStrings } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import { createTokens, randomId, stableId, tokenSecret } from '../adapters/tokens.js';
 import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
 import { fromServer } from '../api/events.js';
 import { escapeHtml } from '../api/pages.js';
 import { sessionView } from '../api/session.js';
-import { cronAuthorized, runDispatchJob } from '../jobs/dispatch.js';
 import { startServer } from '../serve.js';
 import { createHarness, MERCHANT, mongoUri, ROOT, WEBSITE, WEBSITE_2 } from './harness.js';
 
@@ -233,25 +230,6 @@ describe('adapters', () => {
 		expect(stableId('alm', 'k')).toBe(stableId('alm', 'k'));
 	});
 
-	it('remembers websites in the control database', async () => {
-		const client = await new MongoClient(mongoUri(`alerts_registry_${Date.now()}`)).connect();
-		try {
-			const registry = createSiteRegistry({ collection: client.db().collection('ss_alerts_sites') });
-			await registry.remember('web_b');
-			await registry.remember('web_a');
-			await registry.remember('web_a');
-			expect(await registry.list()).toEqual(['web_a', 'web_b']);
-			const failing = createSiteRegistry({
-				collection: { updateOne: async () => Promise.reject(new Error('down')), find: () => ({ toArray: async () => [] }) },
-			});
-			await failing.remember('web_c');
-			expect(await failing.list()).toEqual([]);
-			await client.db().dropDatabase();
-		} finally {
-			await client.close();
-		}
-	});
-
 	it('loads the project files and refuses to start without its environment', async () => {
 		const manifest = await loadManifest(ROOT);
 		expect(manifest.elements.every((/** @type {any} */ element) => element.features.type === 'object')).toBe(true);
@@ -271,7 +249,6 @@ describe('adapters', () => {
 				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_alerts_serve_0123456789abcdef'),
 				SS_PRODUCT_DB_URI: mongoUri(`alerts_control_${Date.now()}`),
-				CRON_SECRET: 'short',
 			},
 			overrides: { logger: noopLogger },
 		});
@@ -283,43 +260,13 @@ describe('adapters', () => {
 			expect(page.headers.get('content-type')).toMatch(/text\/html/);
 			const posted = await fetch(`${server.url}/u/garbage`, { method: 'POST', body: 'x' });
 			expect(posted.status).toBe(404);
-			expect(server.alerts.app.cronSecret).toBeNull();
 		} finally {
 			await server.close();
 		}
 	});
 });
 
-describe('jobs and helpers', () => {
-	it('isolates failing websites in the cron job', async () => {
-		/** @type {string[]} */
-		const errors = [];
-		const result = await runDispatchJob({
-			websiteIds: ['a', 'b', 'c'],
-			siteFor: async (id) => (id === 'c' ? null : { id }),
-			run: async (site) => {
-				if (site.id === 'a') throw new Error('boom');
-				return { sent: 1 };
-			},
-			onError: (id) => errors.push(id),
-		});
-		expect(result).toEqual({
-			websites: 2,
-			results: [
-				{ websiteId: 'a', error: 'failed' },
-				{ websiteId: 'b', sent: 1 },
-			],
-		});
-		expect(errors).toEqual(['a']);
-		expect(
-			(await runDispatchJob({ websiteIds: ['x'], siteFor: async () => Promise.reject(new Error('x')), run: async () => ({}) }))
-				.results,
-		).toEqual([{ websiteId: 'x', error: 'failed' }]);
-		expect(cronAuthorized('Bearer secret-secret', 'secret-secret')).toBe(true);
-		expect(cronAuthorized(null, 'secret')).toBe(false);
-		expect(cronAuthorized('Bearer x', null)).toBe(false);
-	});
-
+describe('helpers', () => {
 	it('escapes page text and classifies event provenance', () => {
 		expect(escapeHtml(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;');
 		expect(fromServer({ actor: { type: 'merchant' } }, { source: 'portal' })).toBe(true);

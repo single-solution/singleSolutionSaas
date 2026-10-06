@@ -45,7 +45,6 @@ import { createClock, mongoUri } from './helpers.js';
 const { JSDOM } = createRequire(import.meta.url)('jsdom');
 
 const HOUR = 3_600_000;
-const CRON_SECRET = 'c'.repeat(40);
 const PORTAL_URL = 'http://127.0.0.1:4999';
 const STAFF = { email: 'root@portal.test', password: 'staff password 123!' };
 const MERCHANT_USER = { email: 'owner@shop.example.com', password: 'merchant password 123!' };
@@ -85,7 +84,6 @@ beforeAll(async () => {
 		SECRETS_KEK: `kek-1:${randomBytes(32).toString('base64')}`,
 		SESSION_SECRET: randomBytes(32).toString('base64'),
 		WEBSITE_KEY_PEPPER: randomBytes(32).toString('base64'),
-		CRON_SECRET,
 		PLATFORM_ASSET_STORAGE: 'memory',
 		// honest budgets (F.18): the pro defaults fit, every add-on at once does not
 		DELIVERY_BUDGET_KB: '55',
@@ -94,11 +92,14 @@ beforeAll(async () => {
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.SS_TEST_MONGO_URI)).connect();
 	const portalDb = mongo.db(`e2e_portal_${randomBytes(4).toString('hex')}`);
 	const mailer = createMailer();
+	/** @type {Array<() => Promise<unknown>>} work the Portal runs right after each response (F.19: no cron) */
+	const afterResponseTasks = [];
 	const portal = createPortal({
 		config,
 		db: portalDb,
 		logger: /** @type {any} */ (noopLogger),
 		now: clock.now,
+		background: { mode: 'on', fallback: (task) => void afterResponseTasks.push(task) },
 		mailer,
 		modules: [
 			systemModule,
@@ -402,8 +403,7 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		const { call, state, clock } = ctx;
 		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
 		clock.advance(2 * HOUR);
-		const settled = await call('GET', '/cron/settlement', { bearer: CRON_SECRET });
-		expect(settled.status, JSON.stringify(settled.json)).toBe(200);
+		// no cron: reading the statement settles the merchant's complete hours first
 		const from = encodeURIComponent(new Date(hour0 - HOUR).toISOString());
 		const to = encodeURIComponent(new Date(clock.now() + HOUR).toISOString());
 		const statement = await call('GET', `/v1/merchants/${state.merchantId}/statement?from=${from}&to=${to}`, {

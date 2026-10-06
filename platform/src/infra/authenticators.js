@@ -7,12 +7,12 @@
  * | `merchant`   | `__Host-ss_merchant` session cookie          | session store                                            |
  * | `websiteKey` | `Authorization: Bearer pk_…/sk_…`            | `verifyWebsiteKey` (website-key JWKS) + revocation port; `originAllowed` for pk_ |
  * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = PORTAL_URL) |
- * | `cron`       | `Authorization: Bearer <CRON_SECRET>`        | constant-time comparison                                 |
  *
  * Ports (provided by modules, see `modules/README.md`): `sessionActor(session) → Actor | null` (default: roles stored
  * in the session), `appKeys(appId) → KeyResolver | null` (default: none — every assertion is refused) and
  * `websiteKeyRevoked(claims, rawKey) → boolean` (default: none — website keys fail closed with 503). The raw key is
- * passed so the provider can also check the stored HMAC of `sk_` keys.
+ * passed so the provider can also check the stored HMAC of `sk_` keys. `productCalled(appId)` (optional) runs after
+ * every request a product made.
  *
  * Website keys are verified by one implementation, {@link createWebsiteKeyVerifier}: the `websiteKey`
  * authenticator and `ctx.verifyWebsiteKey` (modules that authenticate keys carried in a body) share it.
@@ -21,7 +21,6 @@
 import { isProtocolError, originAllowed, verifyAssertion, verifyWebsiteKey } from '@ss/protocol';
 import { actorFromSession, readCookie, sessionCookieName } from './auth.js';
 import { isProblem, problem } from './http.js';
-import { safeEqual } from './util.js';
 
 /** Staff API tokens (F.18): `sst_` + an opaque session token. */
 const STAFF_TOKEN = /^sst_([A-Za-z0-9_-]{43})$/;
@@ -40,6 +39,8 @@ const STAFF_TOKEN = /^sst_([A-Za-z0-9_-]{43})$/;
  * @property {(session: Session) => Actor | null | Promise<Actor | null>} [sessionActor]
  * @property {(appId: string) => KeyResolver | null | undefined | Promise<KeyResolver | null | undefined>} [appKeys]
  * @property {(claims: WebsiteKeyClaims, rawKey: string) => boolean | Promise<boolean>} [websiteKeyRevoked]
+ * @property {(appId: string) => Promise<unknown>} [productCalled] runs right after a request a product made (its own
+ *   due work, e.g. pending event deliveries; F.19)
  */
 
 /**
@@ -132,7 +133,6 @@ export const createWebsiteKeyVerifier = ({ keyResolver, revoked, now = Date.now 
  *   verifyWebsiteKey: WebsiteKeyVerifier,
  *   portalUrl: string,
  *   replayStore: ReplayStore,
- *   cronSecret: string,
  *   ports?: AuthPorts,
  *   now?: () => number,
  * }} options
@@ -144,7 +144,6 @@ export const createAuthenticators = ({
 	verifyWebsiteKey: verifyKey,
 	portalUrl,
 	replayStore,
-	cronSecret,
 	ports = {},
 	now = Date.now,
 }) => {
@@ -212,13 +211,5 @@ export const createAuthenticators = ({
 		}
 	};
 
-	/** @type {Authenticator} */
-	const cron = async (request) => {
-		const token = bearerOf(request);
-		if (token === null) return null;
-		if (!safeEqual(token, cronSecret)) return problem('unauthorized', 'Invalid cron credentials.');
-		return { ok: true, mode: 'cron', actor: { type: 'system', id: 'cron' } };
-	};
-
-	return Object.freeze({ staff: sessionAuth('staff'), merchant: sessionAuth('merchant'), websiteKey, product, cron });
+	return Object.freeze({ staff: sessionAuth('staff'), merchant: sessionAuth('merchant'), websiteKey, product });
 };

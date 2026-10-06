@@ -80,7 +80,7 @@
 		{
 			"key": "request_flow",
 			"name": "Request flow",
-			"description": "Scheduled review requests and reminders through the merchant's own messaging connector (email, SMS, WhatsApp), quiet hours and retries (hourly job).",
+			"description": "Review requests sent when the order completes, and reminders, through the merchant's own messaging connector (email, SMS, WhatsApp), quiet hours and retries (no scheduled jobs).",
 			"modes": ["C"],
 			"stateful": true,
 			"price": {

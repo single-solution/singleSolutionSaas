@@ -125,6 +125,8 @@
 	"dashboard.inspections.draft": "In progress",
 	"dashboard.inspections.completed": "Completed",
 	"dashboard.inspections.suggested": "Suggested tier",
+	"dashboard.inspections.sweep": "Clean up stale photos",
+	"dashboard.inspections.swept": "{deleted} stale photo slot(s) removed, {failed} failed.",
 	"dashboard.settings.intro": "Settings are kept in the Portal per website and environment, with locks, versions and rollback.",
 	"dashboard.settings.open": "Configure in the Portal",
 	"dashboard.settings.on": "On",

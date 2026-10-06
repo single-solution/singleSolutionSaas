@@ -1,7 +1,8 @@
-/** Latest messages of the outbox (contacts masked). */
+/** Latest messages of the outbox (contacts masked) and the "Send due now" button (merchants). */
 import { createElement as h } from 'react';
 import { Badge, Card, EmptyState } from '@ss/ui';
 import { dashboardContext } from '../../_lib/dashboard.js';
+import { SendDueNow } from '../_components/SendDueNow.js';
 import { DataTable, Shell, t } from '../_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,9 @@ export default async function Messages({ searchParams }) {
 		h(
 			Card,
 			{ title: t('dashboard.nav.messages') },
+			context.data.canWrite && context.data.websiteId
+				? h('div', { className: 'mb-4' }, h(SendDueNow, { websiteId: context.data.websiteId }))
+				: null,
 			rows.length === 0
 				? h(EmptyState, { title: t('dashboard.empty.messages'), compact: true })
 				: h(DataTable, {

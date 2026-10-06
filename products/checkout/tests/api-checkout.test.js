@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestIdentityIssuer } from '@ss/app-kit/testing';
-import { CONNECTED, CRON_SECRET, HOUR, URLS, WEBSITE, WEBSITE_2, checkoutBody, createHarness } from './harness.js';
+import { CONNECTED, HOUR, URLS, WEBSITE, checkoutBody, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -292,16 +292,12 @@ describe('placement', () => {
 		});
 		expect(capped.json.errors[0]).toMatchObject({ path: '/paymentMethod', code: 'over_cap' });
 		await entitle();
-		// the confirmation hold expires: the sweep cancels it, gives the stock back, publishes order.cancelled@1
+		// the confirmation hold expires: reading the order cancels it, gives the stock back, publishes order.cancelled@1
 		h.clock.advance(25 * HOUR);
-		const swept = await h.call('GET', '/cron/sweep', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(swept.status).toBe(200);
-		expect(swept.json.results[0].expired).toBeGreaterThanOrEqual(2);
 		expect((await h.call('GET', `/v1/orders/${placed.json.id}`)).json).toMatchObject({ status: 'cancelled' });
 		expect(h.published('order.cancelled@1').some((e) => e.data.orderId === placed.json.id && e.data.reason === 'expired')).toBe(
 			true,
 		);
-		expect((await h.call('GET', '/cron/sweep', { key: null })).status).toBe(401);
 	});
 
 	it('refuses what it must, and compensates other products when placement fails', async () => {
@@ -699,21 +695,27 @@ describe('after placement', () => {
 		).toBe(200);
 	});
 
-	it('publishes abandoned carts once', async () => {
+	it('publishes an abandoned cart once, when the merchant server reads it (a shopper read does not)', async () => {
 		const id = await h.cartWith([{ itemId: 'itm_b', quantity: 1 }]);
 		h.clock.advance(30 * HOUR);
 		await entitle();
-		const first = await h.call('GET', '/cron/sweep', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		await h.call('GET', '/cron/sweep', { key: null, headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		const cart = await h.collection('carts').findOne({ id });
-		expect(
-			h.published('checkout.cart_abandoned@1').filter((e) => e.data.cartId === id),
-			`${first.text} ${JSON.stringify(cart)}`,
-		).toHaveLength(1);
+		expect((await h.call('GET', `/v1/carts/${id}`, { key: h.pk })).status).toBe(200);
+		expect(h.published('checkout.cart_abandoned@1').filter((e) => e.data.cartId === id)).toHaveLength(0);
+		expect((await h.call('GET', `/v1/carts/${id}`)).status).toBe(200);
+		await h.call('GET', `/v1/carts/${id}`);
+		await h.call('GET', '/v1/carts?limit=100');
+		expect(h.published('checkout.cart_abandoned@1').filter((e) => e.data.cartId === id)).toHaveLength(1);
+		expect((await h.collection('carts').findOne({ id }))?.abandonedAt).toBeInstanceOf(Date);
+		// listing marks the due ones too
+		const listed = await h.cartWith([{ itemId: 'itm_b', quantity: 1 }]);
+		h.clock.advance(30 * HOUR);
+		await entitle();
+		await h.call('GET', '/v1/carts?limit=100');
+		expect(h.published('checkout.cart_abandoned@1').filter((e) => e.data.cartId === listed)).toHaveLength(1);
 	});
 });
 
-describe('expiry without a sweep (free-tier hosting: daily cron + work on requests)', () => {
+describe('expiry without timers (on read, on placement, dashboard button)', () => {
 	it('treats an expired hold as expired on read and releases it on access', async () => {
 		await entitle({ payment_manual: { ...CONNECTED.payment_manual, max_open_orders: 1 } });
 		await h.item('itm_hold', { variants: [{ variantId: 'v', price: 2000, available: 1 }] });
@@ -734,7 +736,7 @@ describe('expiry without a sweep (free-tier hosting: daily cron + work on reques
 		const soldOut = await h.call('POST', '/v1/orders', { key: h.pk, body: body('+447700900112') });
 		expect(soldOut.json.type).toMatch(/cart_unavailable_lines$/);
 
-		// the confirmation hold passes; no sweep runs: the expired order is not open and its unit is released on access
+		// the confirmation hold passes: the expired order is not open and its unit is released on access
 		h.clock.advance(25 * HOUR);
 		const second = await h.call('POST', '/v1/orders', { key: h.pk, body: body('+447700900111') });
 		expect(second.status, second.text).toBe(201);
@@ -769,7 +771,9 @@ describe('expiry without a sweep (free-tier hosting: daily cron + work on reques
 		await entitle();
 	});
 
-	it('registers the per-website background work; its trigger sweeps that website', async () => {
+	it('registers no periodic work: nothing changes until something touches the website', async () => {
+		expect(h.application.product.background.mode).toBe('off');
+		expect(/** @type {any} */ (h.application).jobs).toBeUndefined();
 		await entitle();
 		const placed = await h.call('POST', '/v1/orders', {
 			key: h.pk,
@@ -779,17 +783,10 @@ describe('expiry without a sweep (free-tier hosting: daily cron + work on reques
 				contact: { name: 'B', phone: '+447700900221' },
 			}),
 		});
-		const cartId = await h.cartWith([{ itemId: 'itm_b', quantity: 1 }]);
 		h.clock.advance(31 * HOUR);
 		await entitle();
-		const { holds, abandoned } = h.application.jobs;
-		expect([holds.name, abandoned.name]).toEqual(['holds', 'abandoned']);
-		expect(await holds.trigger({})).toBe(false); // per website: nothing to do without one
-		expect(await holds.trigger({ websiteId: WEBSITE })).toBe(true);
-		expect((await h.collection('orders').findOne({ id: placed.json.id }))?.status).toBe('cancelled');
-		expect(await holds.trigger({ websiteId: WEBSITE })).toBe(false); // throttled: at most once per interval
-		expect(await abandoned.trigger({ websiteId: WEBSITE })).toBe(true);
-		expect(h.published('checkout.cart_abandoned@1').some((e) => e.data.cartId === cartId)).toBe(true);
-		expect(await abandoned.trigger({ websiteId: WEBSITE_2 })).toBe(true); // not subscribed: nothing to sweep
+		// time passing alone does nothing: the stored order is still waiting
+		expect((await h.collection('orders').findOne({ id: placed.json.id }))?.status).toBe('awaiting_confirmation');
+		expect((await h.call('GET', `/v1/orders/${placed.json.id}`)).json.status).toBe('cancelled');
 	});
 });

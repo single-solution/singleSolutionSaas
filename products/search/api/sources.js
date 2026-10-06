@@ -1,13 +1,19 @@
 /**
- * Sources service: Catalog item events and scheduled crawls of the website's own public JSON feed or sitemap.
+ * Sources service: Catalog item events and crawls of the website's own public JSON feed or sitemap.
  *
- * Crawls run in steps (the background sweep after requests and the daily job, or `POST /v1/sources/:key/crawl`): a JSON feed is fetched once per step and up
- * to a step's worth of records is indexed; a sitemap (or sitemap index) is read once per run, then a step fetches the
- * next `sources.pages_per_run` pages. Every fetch goes through app-kit `outbound.fetch` (public https only, DNS
- * answers vetted at connect time, same-origin redirects, deadline and size cap) and only URLs on the website's own
- * domain are fetched. When a run completes, documents of the source that the run did not see are removed.
+ * Nothing runs on a timer. A crawl runs when the merchant asks for it (`POST /v1/sources/:key/crawl`, the dashboard's
+ * "Crawl now" and "Crawl due sources"), step after step within `CRAWL_BUDGET_MS`; a run the budget cut short is
+ * continued by the next request. A source's `every_hours` marks it due again after that many hours (shown on the
+ * dashboard and crawled by "Crawl due sources"). When a Catalog item event names an item whose page a sitemap source
+ * indexed (the page URL from `sources.catalog_url_template`), that one page is fetched again right away.
+ *
+ * A JSON feed is fetched once per step and up to a step's worth of records is indexed; a sitemap (or sitemap index) is
+ * read once per run, then a step fetches the next `sources.pages_per_run` pages. Every fetch goes through app-kit
+ * `outbound.fetch` (public https only, DNS answers vetted at connect time, same-origin redirects, deadline and size
+ * cap) and only URLs on the website's own domain are fetched. When a run completes, documents of the source that the
+ * run did not see are removed.
  */
-import { documentFromItem } from '../core/catalog.js';
+import { documentFromItem, itemUrl } from '../core/catalog.js';
 import { crawledId, crawlSourcesOf, extractPage, hostAllowed, mapRecord, parseSitemap, recordsOf } from '../core/sources.js';
 
 /** @typedef {import('./documents.js').Site} Site */
@@ -18,6 +24,8 @@ export const RECORDS_PER_PAGE = 25;
 /** Stale documents removed per step. */
 const STALE_BATCH = 500;
 const HOUR_MS = 3_600_000;
+/** Time one crawl request may spend: no step starts after it (the next request continues the run). */
+export const CRAWL_BUDGET_MS = 10_000;
 
 /**
  * @param {{ documents: import('./documents.js').DocumentsService, fetch: (url: string, init: Record<string, unknown>) => Promise<{ status: number, headers: Record<string, string>, body: Buffer }>,
@@ -25,13 +33,13 @@ const HOUR_MS = 3_600_000;
  */
 export const createSourcesService = ({ documents, fetch, now, newId, userAgent }) => {
 	/**
-	 * Apply one Catalog item event.
+	 * Index (or remove) the Catalog item of an item event.
 	 * @param {Site} site
 	 * @param {string} type event type
 	 * @param {unknown} data
 	 * @returns {Promise<'indexed' | 'removed' | 'skipped' | 'failed'>}
 	 */
-	const onItemEvent = async (site, type, data) => {
+	const indexItem = async (site, type, data) => {
 		const { sources, types } = site.settings;
 		if (!site.settings.enabled('sources') || !sources.catalog_events || !types.has(sources.catalog_type)) return 'skipped';
 		if (type.startsWith('item.deleted')) {
@@ -93,7 +101,7 @@ export const createSourcesService = ({ documents, fetch, now, newId, userAgent }
 	};
 
 	/**
-	 * Finish a run: remove what the run did not see and schedule the next one.
+	 * Finish a run: remove what the run did not see and record when the source is due again.
 	 * @param {Site} site
 	 * @param {CrawlSource} source
 	 * @param {Record<string, any>} state
@@ -123,7 +131,7 @@ export const createSourcesService = ({ documents, fetch, now, newId, userAgent }
 	};
 
 	/**
-	 * Record a failed run (retried at the next interval).
+	 * Record a failed run (due again after the interval).
 	 * @param {Site} site
 	 * @param {CrawlSource} source
 	 * @param {string} reason
@@ -266,14 +274,13 @@ export const createSourcesService = ({ documents, fetch, now, newId, userAgent }
 	};
 
 	/**
-	 * Run one step of a source (a new run when the last one finished).
+	 * Run one step of a source (a new run unless one is in progress).
 	 * @param {Site} site
 	 * @param {CrawlSource} source
-	 * @param {{ restart?: boolean }} [options]
 	 */
-	const step = async (site, source, { restart = false } = {}) => {
+	const step = async (site, source) => {
 		const saved = (await site.repos.crawls.get(source.key)) ?? {};
-		const running = saved.status === 'running' && !restart;
+		const running = saved.status === 'running';
 		const state = running
 			? saved
 			: {
@@ -307,20 +314,100 @@ export const createSourcesService = ({ documents, fetch, now, newId, userAgent }
 	};
 
 	/**
-	 * The scheduled work of a website: one step per due source (none started after `deadline`, epoch ms; the next run
-	 * continues with the rest).
+	 * Crawl a source step after step until its run is done or `deadline` (epoch ms) passed (at least one step).
+	 * @param {Site} site
+	 * @param {CrawlSource} source
+	 * @param {number} deadline
+	 */
+	const crawl = async (site, source, deadline) => {
+		/** @type {Record<string, any>} */
+		let state = await step(site, source);
+		while (state.status === 'running' && now() < deadline) state = await step(site, source);
+		return state;
+	};
+
+	/**
+	 * Crawl the website's due sources (in progress, never crawled, or `every_hours` passed); none is started after
+	 * `deadline` (epoch ms) — the next request continues with the rest.
 	 * @param {Site} site
 	 * @param {{ deadline?: number }} [options]
 	 */
-	const runDue = async (site, { deadline = Infinity } = {}) => {
+	const runDue = async (site, { deadline = now() + CRAWL_BUDGET_MS } = {}) => {
 		if (!site.settings.enabled('sources')) return { crawled: 0 };
 		let crawled = 0;
 		for (const source of await due(site)) {
 			if (now() >= deadline) break;
-			await step(site, source);
+			await crawl(site, source, deadline);
 			crawled += 1;
 		}
 		return { crawled };
+	};
+
+	/**
+	 * The page URL of a Catalog item (absolute, on the website's domain), or null.
+	 * @param {Site} site
+	 * @param {unknown} data
+	 */
+	const itemPageOf = (site, data) => {
+		const itemId = /** @type {any} */ (data)?.itemId;
+		const link = typeof itemId === 'string' ? itemUrl(site.settings.sources.catalog_url_template, itemId) : null;
+		if (!link) return null;
+		const url = new URL(link, `https://${site.settings.domain ?? 'invalid'}`).href;
+		return hostAllowed(url, site.settings.domain) ? url : null;
+	};
+
+	/**
+	 * Fetch again (or remove) the page a sitemap source indexed for one URL.
+	 * @param {Site} site
+	 * @param {CrawlSource} source
+	 * @param {string} url
+	 * @param {{ gone: boolean }} options
+	 * @returns {Promise<'indexed' | 'removed' | 'skipped'>}
+	 */
+	const recrawlPage = async (site, source, url, { gone }) => {
+		const id = crawledId(source.key, url);
+		const existing = await site.repos.documents.get(id);
+		if (!existing) return 'skipped';
+		if (gone) return (await documents.remove(site, id)) ? 'removed' : 'skipped';
+		const page = await get(site, url, 'text/html');
+		if (!page.ok)
+			return ['http_404', 'http_410'].includes(page.reason) && (await documents.remove(site, id)) ? 'removed' : 'skipped';
+		if (!/html/i.test(page.contentType)) return 'skipped';
+		const extracted = extractPage(page.text);
+		if (extracted.noindex) return (await documents.remove(site, id)) ? 'removed' : 'skipped';
+		const type = /** @type {import('../core/schema.js').TypeDef} */ (site.settings.types.get(source.type));
+		const input = { id, type: source.type, url, image: extracted.image, fields: pageFields(extracted, type) };
+		const result = await documents.upsert(site, input, { source: `crawl:${source.key}`, crawlRun: existing.crawlRun ?? null });
+		return result.ok ? 'indexed' : 'skipped';
+	};
+
+	/**
+	 * Re-crawl the item's page in every sitemap source that indexed it (an item event names it).
+	 * @param {Site} site
+	 * @param {string} type event type
+	 * @param {unknown} data
+	 */
+	const recrawlItemPage = async (site, type, data) => {
+		if (!site.settings.enabled('sources')) return [];
+		const url = itemPageOf(site, data);
+		if (!url) return [];
+		const gone = type.startsWith('item.deleted');
+		const results = [];
+		for (const source of configured(site).sources.filter((s) => s.kind === 'sitemap'))
+			results.push(await recrawlPage(site, source, url, { gone }));
+		return results;
+	};
+
+	/**
+	 * Apply one Catalog item event: index the item (Catalog events) and re-crawl its page where a sitemap indexed it.
+	 * @param {Site} site
+	 * @param {string} type event type
+	 * @param {unknown} data
+	 */
+	const onItemEvent = async (site, type, data) => {
+		const indexed = await indexItem(site, type, data);
+		await recrawlItemPage(site, type, data);
+		return indexed;
 	};
 
 	/**
@@ -371,11 +458,12 @@ export const createSourcesService = ({ documents, fetch, now, newId, userAgent }
 	};
 
 	/**
-	 * Start a new run of a source now and run its first step.
+	 * Crawl a source now: continue its run in progress or start a new one, step after step within `deadline` (epoch ms).
 	 * @param {Site} site
 	 * @param {string} key
+	 * @param {{ deadline?: number }} [options]
 	 */
-	const crawlNow = async (site, key) => {
+	const crawlNow = async (site, key, { deadline = now() + CRAWL_BUDGET_MS } = {}) => {
 		const { sources, refused } = configured(site);
 		const source = sources.find((s) => s.key === key);
 		if (!source) {
@@ -384,11 +472,11 @@ export const createSourcesService = ({ documents, fetch, now, newId, userAgent }
 				? { ok: /** @type {const} */ (false), reason: 'source_not_allowed', detail: reason }
 				: { ok: /** @type {const} */ (false), reason: 'source_unknown', detail: 'No crawled source has this key.' };
 		}
-		await step(site, source, { restart: true });
+		await crawl(site, source, deadline);
 		return { ok: /** @type {const} */ (true), value: (await list(site)).items.find((item) => item.key === key) };
 	};
 
-	return { onItemEvent, runDue, list, crawlNow, step };
+	return { onItemEvent, recrawlItemPage, runDue, list, crawlNow, step };
 };
 
 /** @typedef {ReturnType<typeof createSourcesService>} SourcesService */

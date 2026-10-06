@@ -5,6 +5,6 @@ import { staffContext } from '../../_lib/server.js';
 export const metadata = { title: 'Platform health' };
 
 export default async function PlatformHealthPage() {
-	const { api } = await staffContext('/admin');
-	return <DashboardView {...await loadDashboard(api)} />;
+	const { api, staff } = await staffContext('/admin');
+	return <DashboardView {...await loadDashboard(api)} staff={staff} />;
 }

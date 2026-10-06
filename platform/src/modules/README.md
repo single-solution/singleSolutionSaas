@@ -31,7 +31,7 @@ export const exampleModule = defineModule({
 	service: (ctx) => createExampleService(ctx), // built lazily, once
 	routes: (ctx) => exampleRoutes(ctx.service('example')),
 	jobs: (ctx) => ({ 'example.sync': async (payload, { job, signal, deadline, logger }) => {} }),
-	crons: (ctx) => ({ settlement: async ({ deadline, signal, logger }) => ({ settled: 12 }) }),
+	operations: (ctx) => ({ settlement: async ({ deadline, signal, logger, input }) => ({ settled: 12 }) }), // admin buttons
 	ports: (ctx) => ({ appKeys: (appId) => keyResolverFor(appId) }), // infra ports this module implements
 });
 ```
@@ -73,20 +73,28 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
   HTTP(S), `checkHost` + `guardedLookup` for sockets and the MongoDB driver, `isSafeMongoUri` for connection strings,
   `signV4` for object stores. No module keeps its own SSRF rules.
 - **No client data** in Portal collections (PLAN §1a): ids, hashes, sealed credentials, control-plane facts only.
-- **Routes** are `/v1/...` with an `auth` mode (`staff`, `merchant`, `websiteKey`, `product`, `cron`, `public`, or a
+- **Routes** are `/v1/...` with an `auth` mode (`staff`, `merchant`, `websiteKey`, `product`, `public`, or a
   list tried in order) and, for console routes, a `permission` checked against `resource(ctx)` (default
   `{ merchantId: params.merchantId ?? actor.merchantId, websiteId: params.websiteId }`). Load the entity, then call
   `ctx.authorize(permission, { merchantId, websiteId })` when the resource is only known after a lookup. POSTs that
   create or move state keep the default `idempotent: true`. Duplicate routes across modules are a boot error.
 - **Wire formats** in PLAN F.9 (`/v1/product/*`) are binding; product routes use `auth: 'product'` (client
   assertion; `ctx.app.appId`).
+- **Nothing is scheduled** (PLAN F.19): no crons, timers, polling or periodic passes. Work runs inside, or right after
+  (`ctx.defer` / `afterResponse()` from `infra/request-scope.js`), the request that caused it, for what it touched.
+  Time-based state is judged when read.
 - **Jobs** are named `<module>.<job>`, idempotent (they may run more than once) and should check `signal`/`deadline`
-  in long loops. Use a job `key` to dedupe enqueues. Throw `permanentFailure(message)` for errors retries cannot fix.
-- **Crons** are global names (`settlement`, `reconciliation`); add the schedule to `vercel.json`. The built-in
-  `drain` cron runs queued jobs. Unknown cron names answer 404.
+  in long loops. A job enqueued during a request runs right after that response. A failed one waits for a natural
+  trigger: tag it with a `group` and run that group's due jobs (`ctx.jobs.runBatch({ groups, maxJobs })`) when the
+  thing it concerns is touched again. Use a job `key` to dedupe enqueues. Throw `permanentFailure(message)` for errors
+  retries cannot fix.
+- **Operations** are global names (`settlement`, `reconciliation`): bounded, resumable tasks staff run from the admin
+  console (`POST /v1/admin/operations/:name`, `{ after? }`). The built-in `drain` runs due jobs and `audit_verify`
+  verifies the audit chains. Unknown operation names answer 404.
 - **Ports** are infra extension points with a single provider each: `sessionActor(session)` (identity: live roles,
   deactivated users → null), `appKeys(appId)` (catalog: registered app keys as a `KeyResolver`),
-  `websiteKeyRevoked(claims, rawKey)` (identity: revocation + `sk_` hash check). Without a provider, product assertions are refused and
+  `websiteKeyRevoked(claims, rawKey)` (identity: revocation + `sk_` hash check), `productCalled(appId)` (integration:
+  retries the product's due deliveries after any request it made). Without a provider, product assertions are refused and
   website keys fail closed (503).
 - **Migrations** are `YYYYMMDDHHMM-<module>-<slug>`, run in id order across modules under a lock, recorded once, and
   must be safe to re-run after a crash. Provide `plan()` for the dry run. They receive the raw `Db` and must never

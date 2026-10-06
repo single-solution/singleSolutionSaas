@@ -1,7 +1,7 @@
 /**
  * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
- * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
- * CRON_SECRET) and the project files (manifest with feature schemas inlined, string catalogs). This is the only place
+ * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS) and the
+ * project files (manifest with feature schemas inlined, string catalogs). This is the only place
  * that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
@@ -10,7 +10,6 @@ import { configFromEnv, createLogger, createMongoStores, createProduct } from '@
 import { INDEXES, MIGRATIONS } from './db.js';
 import { hashKey, newId, stableId } from './ids.js';
 import { PRIVACY } from './privacy.js';
-import { createSiteRegistry } from './registry.js';
 
 export { PRIVACY };
 
@@ -80,8 +79,6 @@ export const PROBLEM_CODES = Object.freeze({
 /**
  * @typedef {object} OrdersApp
  * @property {any} product app-kit product
- * @property {import('./registry.js').SiteRegistry} registry
- * @property {string | null} cronSecret
  * @property {string} portalUrl
  * @property {() => number} now
  * @property {(prefix: string) => string} newId
@@ -113,8 +110,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const [manifest, strings] = await Promise.all([loadManifest(root), loadStrings(root)]);
 	/** @type {unknown} */
 	let stores;
-	/** @type {any} */
-	let sites = null;
 	/** @type {{ close: () => Promise<void> } | null} */
 	let controlClient = null;
 	/* v8 ignore start -- a control database is only configured in deployments */
@@ -125,7 +120,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		const mongoStores = createMongoStores({ db: client.db() });
 		await mongoStores.ensureIndexes();
 		stores = mongoStores;
-		sites = client.db().collection('ss_orders_sites');
 	}
 	/* v8 ignore stop */
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
@@ -153,8 +147,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	);
 	return {
 		product,
-		registry: createSiteRegistry({ collection: sites }),
-		cronSecret: env.CRON_SECRET && env.CRON_SECRET.length >= 16 ? env.CRON_SECRET : null,
 		portalUrl,
 		now,
 		newId,

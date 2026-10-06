@@ -3118,14 +3118,14 @@
 				}
 			}
 		},
-		"/cron/sweep": {
-			"get": {
-				"operationId": "cronSweep",
-				"tags": ["inspection"],
-				"summary": "Hourly job (Vercel cron, Authorization: Bearer $CRON_SECRET): per website with inspection on, delete the inspection photo slots past their stale date (the object in the merchant’s bucket, then the slot).",
+		"/v1/dashboard/photos:sweep": {
+			"post": {
+				"operationId": "dashboardSweepPhotos",
+				"tags": ["dashboard"],
+				"summary": "Dashboard \"Clean up stale photos\": delete this website's inspection photo slots past their stale date (the object in the merchant’s bucket, then the slot), at most 100 per call. The same clean-up runs on the website's next photo upload; nothing runs on a timer.",
 				"security": [
 					{
-						"cron": []
+						"session": []
 					}
 				],
 				"responses": {
@@ -3136,32 +3136,13 @@
 								"schema": {
 									"type": "object",
 									"properties": {
-										"websites": {
-											"type": "integer"
-										},
-										"results": {
-											"type": "array",
-											"items": {
-												"type": "object",
-												"properties": {}
-											}
-										}
+										"scanned": { "type": "integer" },
+										"deleted": { "type": "integer" },
+										"missing": { "type": "integer" },
+										"failed": { "type": "integer" }
 									}
 								},
-								"example": {
-									"websites": 1,
-									"results": [
-										{
-											"websiteId": "web_1",
-											"photos": {
-												"scanned": 2,
-												"deleted": 1,
-												"missing": 1,
-												"failed": 0
-											}
-										}
-									]
-								}
+								"example": { "scanned": 2, "deleted": 1, "missing": 1, "failed": 0 }
 							}
 						}
 					},
@@ -3184,11 +3165,6 @@
 				"in": "cookie",
 				"name": "ss_session",
 				"description": "Dashboard session from GET /sso?launch="
-			},
-			"cron": {
-				"type": "http",
-				"scheme": "bearer",
-				"description": "CRON_SECRET (Vercel Cron)"
 			}
 		},
 		"parameters": {

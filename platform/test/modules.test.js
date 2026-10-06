@@ -23,7 +23,7 @@ describe('defineModule', () => {
 });
 
 describe('composeModules', () => {
-	it('builds lazy services across modules, collects jobs, crons and ports', () => {
+	it('builds lazy services across modules, collects jobs, operations and ports', () => {
 		/** @type {string[]} */
 		const built = [];
 		const a = defineModule({
@@ -34,7 +34,7 @@ describe('composeModules', () => {
 			},
 			routes: (ctx) => [{ method: 'GET', path: '/v1/alpha', auth: 'public', handler: () => ctx.service('alpha').hello() }],
 			jobs: () => ({ 'alpha.work': async () => {} }),
-			crons: () => ({ settlement: async () => {} }),
+			operations: () => ({ settlement: async () => {} }),
 			ports: () => ({ appKeys: () => null }),
 		});
 		const b = defineModule({ name: 'beta', service: (ctx) => (built.push('beta'), { name: () => ctx.module }) });
@@ -46,7 +46,7 @@ describe('composeModules', () => {
 		expect(composed.service('alpha')).toBe(composed.service('alpha'));
 		expect(composed.routes).toHaveLength(1);
 		expect(Object.keys(composed.jobs)).toEqual(['alpha.work']);
-		expect(Object.keys(composed.crons)).toEqual(['settlement']);
+		expect(Object.keys(composed.operations)).toEqual(['settlement']);
 		expect(typeof composed.ports.appKeys).toBe('function');
 		const ctx = composed.context('beta');
 		expect(ctx.collection('beta_x')).toBe('beta:beta_x');
@@ -64,12 +64,12 @@ describe('composeModules', () => {
 		expect(() =>
 			composeModules(
 				[
-					defineModule({ name: 'a', crons: () => ({ c: async () => {} }) }),
-					defineModule({ name: 'b', crons: () => ({ c: async () => {} }) }),
+					defineModule({ name: 'a', operations: () => ({ c: async () => {} }) }),
+					defineModule({ name: 'b', operations: () => ({ c: async () => {} }) }),
 				],
 				opts,
 			),
-		).toThrow(/cron c/);
+		).toThrow(/operation c/);
 		expect(() =>
 			composeModules(
 				[

@@ -15,33 +15,8 @@ import { createCatalogService } from './service.js';
 /** @typedef {import('./service.js').CatalogOptions} CatalogOptions */
 /** @typedef {import('./service.js').CatalogService} CatalogService */
 
-export const REFRESH_JOB = 'catalog.refresh_manifests';
-export const REFRESH_CRON = 'catalog_refresh';
-
-/**
- * Refresh the manifests from `after` on; when the deadline cuts the pass, enqueue its continuation as a `daily` job
- * (run by the next daily drain).
- * @param {import('../../infra/modules.js').ModuleContext} ctx
- * @param {{ deadline: number, signal?: AbortSignal, after?: string | null }} options
- */
-const refresh = async (ctx, { deadline, signal, after = null }) => {
-	const stats = await /** @type {CatalogService} */ (ctx.service('catalog')).refreshAll({
-		deadline,
-		...(signal ? { signal } : {}),
-		after,
-	});
-	if (stats.resumeAfter !== null) {
-		const day = new Date(ctx.now()).toISOString().slice(0, 10);
-		await ctx.jobs.enqueue({
-			name: REFRESH_JOB,
-			key: `${REFRESH_JOB}:${day}:${stats.resumeAfter}`,
-			payload: { after: stats.resumeAfter },
-			maxAttempts: 3,
-			daily: true,
-		});
-	}
-	return stats;
-};
+/** Admin operation that re-fetches every listed app's manifest (on demand; resumable with `after`). */
+export const REFRESH_OPERATION = 'catalog_refresh';
 
 /**
  * @param {CatalogOptions} [options]
@@ -61,14 +36,15 @@ export const createCatalogModule = (options = {}) =>
 			catalogRoutes(/** @type {CatalogService} */ (ctx.service('catalog')), {
 				commerce: () => (ctx.moduleNames().includes('commerce') ? ctx.service('commerce') : null),
 			}),
-		jobs: (ctx) => ({
-			// on demand, or the continuation of a daily pass that hit its deadline
-			[REFRESH_JOB]: async (payload, { deadline, signal }) =>
-				refresh(ctx, { deadline, signal, after: typeof payload?.after === 'string' ? payload.after : null }),
-		}),
-		crons: (ctx) => ({
-			// a step of the daily cron: refresh within its deadline; the rest continues in a `daily` job
-			[REFRESH_CRON]: async ({ deadline, signal }) => refresh(ctx, { deadline, signal }),
+		operations: (ctx) => ({
+			// on demand (admin console): refresh within the deadline; a cut run returns `resumeAfter`, and running it
+			// again with `{ after: resumeAfter }` continues (F.19: no timer, no continuation jobs)
+			[REFRESH_OPERATION]: async ({ deadline, signal, input }) =>
+				/** @type {CatalogService} */ (ctx.service('catalog')).refreshAll({
+					deadline,
+					signal,
+					after: typeof input.after === 'string' ? input.after : null,
+				}),
 		}),
 		ports: (ctx) => ({
 			appKeys: (appId) => /** @type {CatalogService} */ (ctx.service('catalog')).appKeys(appId),

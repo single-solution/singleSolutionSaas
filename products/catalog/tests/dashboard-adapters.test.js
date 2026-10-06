@@ -1,12 +1,10 @@
-/** Dashboard resolution (sign-in, demo, pick website, not subscribed, live data) and the adapters (tokens, registry, platform). */
+/** Dashboard resolution (sign-in, demo, pick website, not subscribed, live data) and the adapters (tokens, platform). */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MongoClient } from 'mongodb';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createHmac } from 'node:crypto';
 import { demoDashboard, dashboardActor, exportParamsOf, resolveDashboard, statusLabel, stubContext } from '../api/dashboard.js';
 import { sessionView } from '../api/session.js';
 import { createPlatform } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import {
 	EXPORT_LINK_MAX_MS,
 	createExportLinks,
@@ -17,7 +15,6 @@ import {
 	newId,
 	stableId,
 } from '../adapters/tokens.js';
-import { cronAuthorized, runSweep } from '../jobs/sweep.js';
 import { MERCHANT, ROOT, T0, WEBSITE, WEBSITE_2, createHarness, mongoUri } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
@@ -177,29 +174,6 @@ describe('adapters', () => {
 		).toBeNull();
 	});
 
-	it('remembers websites in memory or in the control database', async () => {
-		const memory = createSiteRegistry();
-		await memory.remember('web_b');
-		await memory.remember('web_a');
-		await memory.remember('web_a');
-		expect(await memory.list()).toEqual(['web_a', 'web_b']);
-		const client = await new MongoClient(mongoUri(`registry_${Date.now()}`)).connect();
-		const collection = client.db().collection('ss_catalog_sites');
-		const stored = createSiteRegistry({ collection });
-		await stored.remember('web_c');
-		expect(await createSiteRegistry({ collection }).list()).toEqual(['web_c']);
-		const failing = createSiteRegistry({
-			collection: /** @type {any} */ ({
-				updateOne: async () => Promise.reject(new Error('down')),
-				find: () => ({ toArray: async () => [] }),
-			}),
-		});
-		await failing.remember('web_d');
-		expect(await failing.list()).toEqual([]);
-		await client.db().dropDatabase();
-		await client.close();
-	});
-
 	it('builds the platform from the environment (control database optional) and refuses missing variables', async () => {
 		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
 			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
@@ -211,37 +185,12 @@ describe('adapters', () => {
 				SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_catalog_platform_test_000000'),
 				SS_PRODUCT_DB_URI: mongoUri(`control_${Date.now()}`),
-				CRON_SECRET: 'short',
 				CATALOG_FEED_SECRET: 'f'.repeat(40),
 			},
 			root: ROOT,
 		});
-		expect(app.cronSecret).toBeNull();
-		await app.registry.remember('web_x');
-		expect(await app.registry.list()).toEqual(['web_x']);
+		expect(Object.keys(app)).not.toContain('registry');
 		expect(app.product.manifest.elements[0].features.properties.max_items).toBeTruthy();
 		await app.close();
-	});
-
-	it('runs the sweep per website, isolating failures, and checks the cron secret in constant time', async () => {
-		const result = await runSweep({
-			websiteIds: ['a', 'b', 'c'],
-			siteFor: async (id) => (id === 'c' ? null : { id }),
-			run: async (site) => {
-				if (site.id === 'b') throw new Error('boom');
-				return { n: 1 };
-			},
-		});
-		expect(result).toEqual({
-			websites: 2,
-			results: [
-				{ websiteId: 'a', n: 1 },
-				{ websiteId: 'b', error: 'failed' },
-			],
-		});
-		expect(cronAuthorized('Bearer abc', 'abc')).toBe(true);
-		expect(cronAuthorized('Bearer abd', 'abc')).toBe(false);
-		expect(cronAuthorized(null, 'abc')).toBe(false);
-		expect(cronAuthorized('Bearer abc', null)).toBe(false);
 	});
 });

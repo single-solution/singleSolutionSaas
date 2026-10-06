@@ -27,6 +27,7 @@ import { createOutboundPolicy, isNetError, safeFetch as netFetch } from '@ss/net
 import { canonicalJson, verifyEntitlementDocument } from '@ss/protocol';
 import { deriveSecret } from '../../infra/config.js';
 import { problem } from '../../infra/http.js';
+import { afterResponse } from '../../infra/request-scope.js';
 import { checkUpload, isAssetPath, sha256Hex } from './core/assets.js';
 import {
 	LANGUAGE_CATALOG,
@@ -80,6 +81,10 @@ import { createAssetStorage, withImmutableCache } from './storage.js';
  */
 
 export const COMPILE_JOB = 'delivery.compile';
+/** Time budget of a compile retried after serving the website's loader. */
+const COMPILE_RETRY_BUDGET_MS = 8_000;
+/** @param {string} websiteId */
+const compileGroup = (websiteId) => `delivery.website:${websiteId}`;
 export const LOADER_SCOPES = Object.freeze(['events.write', 'elements.read']);
 const SYSTEM = /** @type {Actor} */ ({ type: 'system', id: 'delivery' });
 const JS = 'text/javascript; charset=utf-8';
@@ -1059,6 +1064,7 @@ export const createDeliveryService = (ctx, options = {}) => {
 			payload: { websiteId, request: doc.requested, reason },
 			key: `${COMPILE_JOB}:${websiteId}:${doc.requested}`,
 			maxAttempts: 5,
+			group: compileGroup(websiteId),
 		});
 		return { websiteId, request: doc.requested, jobId: job.id };
 	};
@@ -1208,6 +1214,19 @@ export const createDeliveryService = (ctx, options = {}) => {
 		if (!pinned) {
 			const alias = await aliases.findOne({ websiteId });
 			current = alias?.version ?? null;
+			// a requested compile that has not landed (it failed and waits for its retry): serving the website's loader
+			// is the natural moment to retry it, after the response (F.19: no queue drain)
+			if (alias && Number(alias.requested ?? 0) > Number(alias.compiledRequest ?? 0))
+				afterResponse(() =>
+					ctx.jobs.runBatch({
+						handlers: { [COMPILE_JOB]: (payload) => runCompileJob(payload) },
+						groups: [compileGroup(websiteId)],
+						maxJobs: 1,
+						deadlineMs: COMPILE_RETRY_BUDGET_MS,
+						owner: 'delivery.serve',
+						safetyMs: 1_000,
+					}),
+				);
 		}
 		if (current === null) return fail('not_found', 'No bundle is published for this website.');
 		const artefact = (await artefacts.findOne({ websiteId, version: current })) ?? fail('not_found', 'No such bundle.');

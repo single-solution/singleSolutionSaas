@@ -22,7 +22,7 @@ describe('verified purchases', () => {
 		const [request] = await h.collection('requests').find({ websiteId: WEBSITE, orderId }).toArray();
 		expect(request).toMatchObject({ status: 'open', customerId: 'cus_ava', merchantId: expect.any(String), env: 'live' });
 		expect(request?.items.map((/** @type {any} */ item) => item.itemId)).toEqual(['itm_a', 'itm_b']);
-		expect(request?.dueAt).toBe(new Date(h.clock.now() + 168 * 3_600_000).toISOString());
+		expect(request?.dueAt).toBe(new Date(h.clock.now()).toISOString()); // due at completion (no delayed send)
 
 		const open = await h.call('GET', '/v1/review-requests', { as: 'cus_ava' });
 		expect(open.status).toBe(200);

@@ -5,8 +5,9 @@ import { created, defineRoute, ok } from '../src/infra/http.js';
 import { defineModule } from '../src/infra/modules.js';
 import { COLLECTIONS } from '../src/infra/schema.js';
 import { systemModule } from '../src/modules/system/index.js';
-import { DAILY_STEPS, createPortal, healthz } from '../src/portal.js';
+import { createPortal, healthz } from '../src/portal.js';
 import { createBackground } from '../src/infra/background.js';
+import { afterResponse } from '../src/infra/request-scope.js';
 import { toNextRoute } from '../src/infra/http.js';
 import { getPortal, resetPortal } from '../src/runtime.js';
 import { closeMongoClients } from '../src/infra/db.js';
@@ -64,9 +65,9 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 		jobs: (ctx) => ({
 			'probe.add': async (payload) => void (await ctx.service('probe').add(payload.merchantId, payload.name)),
 		}),
-		crons: () => ({
+		operations: () => ({
 			settlement: async () => ({ settled: 0 }),
-			broken: async () => Promise.reject(new Error('cron exploded')),
+			broken: async () => Promise.reject(new Error('operation exploded')),
 		}),
 		routes: (ctx) => [
 			defineRoute({
@@ -389,90 +390,38 @@ describe('Portal end to end', () => {
 		expect([res.status, res.headers.get('retry-after')]).toEqual([503, '30']);
 	});
 
-	it('cron: bearer secret, built-in drain, module crons, failures and run records', async () => {
-		const { portal, call, config } = await boot({ dbName: 'it_cron' });
+	it('admin operations: staff only, built-in drain, module operations, failures and run records', async () => {
+		const { portal, call } = await boot({ dbName: 'it_operations' });
 		await portal.ensureIndexes();
-		const auth = { authorization: `Bearer ${config.cronSecret}` };
+		// enqueued outside a request: nothing runs it until something touches it (here: the drain operation)
 		await portal.shared.jobs.enqueue({ name: 'probe.add', payload: { merchantId: MERCHANT, name: 'from-job' } });
-		expect((await call('GET', '/api/cron/drain')).status).toBe(401);
-		expect((await call('GET', '/api/cron/drain', { headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
-		const drained = await call('GET', '/api/cron/drain', { headers: auth });
+		expect((await call('POST', '/v1/admin/operations/drain')).status).toBe(401);
+		const staff = await login(portal, { kind: 'staff', subject: 'stf_1', roles: ['superadmin'], mfa: true });
+		const headers = { cookie: staff.cookie, ...SAME_ORIGIN };
+		const drained = await call('POST', '/v1/admin/operations/drain', { headers });
 		expect(drained.status).toBe(200);
 		expect(drained.json).toMatchObject({ status: 'ok', stats: { leased: 1, succeeded: 1 } });
 		expect(await /** @type {any} */ (portal.modules.service('probe')).count(MERCHANT)).toBe(1);
-		expect((await call('POST', '/api/cron/settlement', { headers: auth })).json).toMatchObject({
+		expect((await call('POST', '/v1/admin/operations/settlement', { headers })).json).toMatchObject({
 			status: 'ok',
 			stats: { settled: 0 },
 		});
-		expect((await call('GET', '/api/cron/nope', { headers: auth })).status).toBe(404);
-		expect((await call('GET', '/api/cron/broken', { headers: auth })).status).toBe(500);
-		expect(portal.cron.names()).toEqual(['drain', 'audit_verify', 'settlement', 'broken', 'daily']);
-		const db = mongo.db('it_cron');
-		const runs = await db.collection(COLLECTIONS.cronRuns).find({}).toArray();
-		expect(runs.map((r) => `${r.name}:${r.trigger}:${r.status}`).sort()).toEqual([
-			'broken:cron:failed',
-			'drain:cron:ok',
-			'settlement:manual:ok',
-		]);
-		// a staff or product credential cannot trigger crons
-		const staff = await login(portal, { kind: 'staff', subject: 'stf_1', roles: ['superadmin'], mfa: true });
-		expect((await call('GET', '/api/cron/drain', { headers: { cookie: staff.cookie } })).status).toBe(401);
+		expect((await call('POST', '/v1/admin/operations/nope', { headers })).status).toBe(404);
+		expect((await call('POST', '/v1/admin/operations/broken', { headers })).status).toBe(500);
+		expect(portal.operations.names()).toEqual(['drain', 'audit_verify', 'settlement', 'broken']);
+		const runs = await mongo.db('it_operations').collection(COLLECTIONS.operationRuns).find({}).toArray();
+		expect(runs.map((r) => `${r.name}:${r.status}`).sort()).toEqual(['broken:failed', 'drain:ok', 'settlement:ok']);
+		const listed = await call('GET', '/v1/admin/operations', { headers });
+		expect(listed.json.items.map((/** @type {any} */ o) => o.name)).toEqual(['audit_verify', 'broken', 'drain', 'settlement']);
+		// a product credential cannot run operations
+		expect((await call('POST', '/v1/admin/operations/drain', { headers: { authorization: 'Bearer x' } })).status).toBe(401);
 	});
 
-	it('daily cron: runs its steps in order within its budget and records each step', async () => {
-		const { portal, call, config } = await boot({ dbName: 'it_daily' });
-		await portal.ensureIndexes();
-		await portal.shared.jobs.enqueue({ name: 'probe.add', payload: { merchantId: MERCHANT, name: 'daily' } });
-		const res = await call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${config.cronSecret}` } });
-		expect(res.status).toBe(200);
-		// the probe module registers `settlement` only; the other steps are skipped by absence, never fail
-		expect(Object.keys(res.json.stats)).toEqual(['settlement', 'drain', 'audit_verify']);
-		expect(res.json.stats).toMatchObject({
-			settlement: { settled: 0 },
-			drain: { leased: 1, succeeded: 1 },
-			audit_verify: { resumeAfter: null },
-		});
-		expect(DAILY_STEPS.map((step) => step.cron)).toEqual([
-			'settlement',
-			'drain',
-			'connectors-health',
-			'reconciliation',
-			'catalog_refresh',
-			'audit_verify',
-		]);
-		expect(DAILY_STEPS.reduce((sum, step) => sum + step.share, 0)).toBeCloseTo(1);
-		expect(portal.cron.names()).toContain('daily');
-	});
-
-	it('daily cron: a failing step is recorded and the next runs; past the deadline the rest is skipped', async () => {
-		const clock = createClock();
-		const steps = defineModule({
-			name: 'steps',
-			crons: () => ({
-				settlement: async () => Promise.reject(new Error('boom')),
-				reconciliation: async () => {
-					clock.advance(10 * 60_000); // overruns the whole budget
-					return { done: true };
-				},
-				catalog_refresh: async () => ({ never: true }),
-			}),
-		});
-		const { call, config, entries } = await boot({ dbName: 'it_daily_fail', modules: [systemModule, steps], clock });
-		const res = await call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${config.cronSecret}` } });
-		expect(res.json.stats).toMatchObject({
-			settlement: { failed: true },
-			drain: { leased: 0 },
-			reconciliation: { done: true },
-			catalog_refresh: { skipped: true },
-			audit_verify: { skipped: true },
-		});
-		expect(entries.some((e) => e.msg === 'daily cron step failed')).toBe(true);
-	});
-
-	it('work after responses: deferred tasks and a throttled, leased drain (F.19)', async () => {
+	it('work after responses: a job enqueued by a request runs right after it, and only that job (F.19)', async () => {
 		/** @type {Array<() => Promise<unknown>>} */
 		const scheduled = [];
-		const clock = createClock();
+		/** @type {string[]} */
+		const called = [];
 		const probe = defineModule({
 			name: 'probe2',
 			jobs: (ctx) => ({
@@ -480,10 +429,11 @@ describe('Portal end to end', () => {
 					await ctx.locks.acquire(`mark:${payload.name}`, { ttlMs: 60_000 });
 				},
 			}),
-			background: () => ({
-				'probe2.tick': { intervalMs: 60_000, run: async () => Promise.reject(new Error('tick failed')) },
+			ports: () => ({
+				appKeys: () => null,
+				productCalled: async (/** @type {string} */ appId) => void called.push(appId),
 			}),
-			routes: () => [
+			routes: (ctx) => [
 				defineRoute({
 					method: 'GET',
 					path: '/v1/probe2/defer',
@@ -493,38 +443,46 @@ describe('Portal end to end', () => {
 						return ok({ deferred: true });
 					},
 				}),
+				defineRoute({
+					method: 'POST',
+					path: '/v1/probe2/mark',
+					auth: 'public',
+					idempotent: false,
+					handler: async () => {
+						await ctx.jobs.enqueue({ name: 'probe2.mark', payload: { name: 'now' } });
+						await ctx.jobs.enqueue({ name: 'probe2.mark', payload: { name: 'later' }, runAt: Date.now() + 3_600_000 });
+						return ok({});
+					},
+				}),
 			],
 		});
 		const background = { mode: 'on', fallback: (/** @type {any} */ task) => void scheduled.push(task) };
-		const one = await boot({ dbName: 'it_after', modules: [systemModule, probe], clock, background });
+		const one = await boot({ dbName: 'it_after', modules: [systemModule, probe], background });
 		await one.portal.ensureIndexes();
 		const jobs = one.portal.shared.jobs;
-		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'a' } });
-		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'later' }, daily: true });
+		// an unrelated job waiting in the queue is never swept by a request
+		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'unrelated' } });
 		expect((await one.call('GET', '/v1/probe2/defer')).status).toBe(200);
 		expect(scheduled).toHaveLength(1);
 		for (const task of scheduled.splice(0)) await task();
 		expect(one.entries.some((e) => e.msg === 'deferred task failed')).toBe(true);
-		expect(one.entries.some((e) => e.msg === 'background task failed')).toBe(true);
-		expect(await jobs.stats()).toMatchObject({ done: 1, queued: 1 }); // the `daily` job waits for the cron
-		// throttled: nothing more to schedule within the interval, and a second instance does not get the lease
-		await one.call('GET', '/v1/probe2/defer');
+		expect(await jobs.stats()).toMatchObject({ done: 0, queued: 1 });
+		expect((await one.call('POST', '/v1/probe2/mark')).status).toBe(200);
 		for (const task of scheduled.splice(0)) await task();
-		await jobs.enqueue({ name: 'probe2.mark', payload: { name: 'b' } });
-		const two = await boot({ dbName: 'it_after', modules: [systemModule, probe], clock, background });
-		expect(await two.portal.background.tasks.drain.trigger()).toBe(false);
-		clock.advance(15_000);
-		expect(await two.portal.background.tasks.drain.trigger()).toBe(true);
-		expect(await jobs.stats()).toMatchObject({ done: 2, queued: 1 });
+		// the job due now ran; the future one and the unrelated one still wait
+		expect(await jobs.stats()).toMatchObject({ done: 1, queued: 2 });
+		// a product's request is followed by the productCalled port
+		await one.call('GET', '/v1/probe2/defer', { headers: { authorization: 'Bearer nope' } });
+		for (const task of scheduled.splice(0)) await task();
+		expect(called).toEqual([]); // unauthenticated (public route): no product
 		// Next.js adapter: the request's after() takes precedence over the fallback
-		clock.advance(60_000);
 		/** @type {Array<() => Promise<unknown>>} */
 		const viaAfter = [];
 		const route = toNextRoute((request) => one.portal.handle(request), { after: (task) => void viaAfter.push(task) });
 		await route.GET(new Request(`${ORIGIN}/v1/probe2/defer`));
 		expect([viaAfter.length, scheduled.length]).toEqual([1, 0]);
 		// test mode runs nothing after responses
-		const off = await boot({ dbName: 'it_after', modules: [systemModule, probe], clock });
+		const off = await boot({ dbName: 'it_after', modules: [systemModule, probe] });
 		expect(off.portal.background.mode).toBe('off');
 		await off.call('GET', '/v1/probe2/defer');
 		expect(scheduled).toHaveLength(0);
@@ -532,50 +490,62 @@ describe('Portal end to end', () => {
 });
 
 describe('background (unit)', () => {
-	it('validates tasks, falls back when after() throws and logs failures', async () => {
+	it('runs deferred tasks (and those they defer), follows product calls, falls back when after() throws', async () => {
 		const { logger, entries } = createTestLogger();
-		let held = false;
-		const locks = {
-			acquire: async () => {
-				if (held) return null;
-				held = true;
-				return /** @type {any} */ ({});
-			},
-		};
 		/** @type {Array<() => Promise<unknown>>} */
 		const fallback = [];
-		const bg = createBackground({ locks: /** @type {any} */ (locks), logger, fallback: (task) => void fallback.push(task) });
-		const run = async () => {};
-		expect(() => bg.every('Bad', 1000, run)).toThrow(TypeError);
-		expect(() => bg.every('a', 10, run)).toThrow(RangeError);
-		bg.every('a', 1000, run);
-		expect(() => bg.every('a', 1000, run)).toThrow(TypeError);
+		/** @type {string[]} */
+		const calls = [];
+		const bg = createBackground({
+			logger,
+			fallback: (task) => void fallback.push(task),
+			onProductCall: async (appId) => void calls.push(appId),
+		});
+		/** @type {Array<() => Promise<unknown>>} */
+		const deferred = [
+			async () => {
+				afterResponse(async () => void calls.push('nested'));
+			},
+			async () => Promise.reject(new Error('boom')),
+		];
 		bg.afterResponse({
-			deferred: [],
+			deferred,
 			schedule: () => {
 				throw new Error('outside a request');
 			},
 			log: logger,
+			app: { appId: 'app_1' },
 		});
 		expect(fallback).toHaveLength(1);
 		await fallback[0]?.();
-		bg.afterResponse({ deferred: [], schedule: null, log: logger }); // throttled in memory: nothing to do
+		expect(calls).toEqual(['app_1', 'nested']);
+		expect(entries.some((e) => e.msg === 'deferred task failed')).toBe(true);
+		bg.afterResponse({ deferred: [], schedule: null, log: logger, app: null }); // nothing to do
 		expect(fallback).toHaveLength(1);
-		const failing = createBackground({
-			locks: /** @type {any} */ ({ acquire: async () => Promise.reject(new Error('db down')) }),
-			logger,
-		});
-		expect(await failing.every('b', 1000, run).trigger()).toBe(true);
-		expect(entries.some((e) => e.msg === 'background task failed')).toBe(true);
+		// a task that keeps deferring is cut off
+		const loop = createBackground({ logger, fallback: (task) => void fallback.push(task) });
+		/** @type {() => Promise<void>} */
+		const again = async () => void afterResponse(again);
+		loop.afterResponse({ deferred: [again], schedule: null, log: logger, app: null });
+		await fallback[1]?.();
+		expect(entries.some((e) => e.msg === 'deferred tasks dropped')).toBe(true);
 		// the default fallback runs the work in the background of the request
 		let ran = false;
-		const plain = createBackground({ locks: /** @type {any} */ ({ acquire: async () => ({}) }), logger });
-		plain.every('c', 1000, async () => {
-			ran = true;
+		const plain = createBackground({ logger });
+		plain.afterResponse({
+			deferred: [
+				async () => {
+					ran = true;
+				},
+			],
+			schedule: null,
+			log: logger,
+			app: null,
 		});
-		plain.afterResponse({ deferred: [], schedule: null, log: logger });
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(ran).toBe(true);
+		// outside a request, afterResponse schedules nothing
+		expect(afterResponse(async () => {})).toBe(false);
 	});
 });
 
@@ -725,9 +695,6 @@ describe('runtime', () => {
 		// the Next.js adapters delegate to the cached instance
 		const api = await import('../app/api/[...path]/route.js');
 		expect((await api.GET(new Request(`${PORTAL_URL}/api/v1/system/info`))).status).toBe(200);
-		const cronRoute = await import('../app/api/cron/[job]/route.js');
-		expect((await cronRoute.GET(new Request(`${PORTAL_URL}/api/cron/drain`))).status).toBe(401);
-		expect(cronRoute.maxDuration).toBe(60);
 		const jwks = await import('../app/.well-known/jwks.json/route.js');
 		expect((await jwks.GET().json()).keys).toHaveLength(3);
 		const ready = await import('../app/readyz/route.js');
@@ -801,25 +768,26 @@ describe('infra hardening (Mongo)', () => {
 		).toBe('unavailable');
 	});
 
-	it('hash-chains audit entries and verifies them with the audit_verify cron and the audit.verify job', async () => {
-		const { portal, call, config } = await boot({ dbName: 'it_audit_chain' });
+	it('hash-chains audit entries and verifies them with the audit_verify operation (resumable)', async () => {
+		const { portal, call } = await boot({ dbName: 'it_audit_chain' });
 		await portal.ensureIndexes();
 		const audit = portal.shared.audit;
 		const actor = /** @type {const} */ ({ type: 'staff', id: 'stf_1' });
 		await audit.record({ actor, action: 'staff.created', target: { type: 'staff', id: 'stf_2' } });
 		await audit.record({ actor, action: 'credits.adjusted', target: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT } });
 		await audit.record({ actor, action: 'credits.adjusted', target: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT } });
-		const auth = { authorization: `Bearer ${config.cronSecret}` };
-		const run = await call('GET', '/api/cron/audit_verify', { headers: auth });
-		expect(run.json).toMatchObject({ status: 'ok', stats: { scopes: 2, verified: 2, entries: 3, broken: [] } });
+		const staff = await login(portal, { kind: 'staff', subject: 'stf_9', roles: ['superadmin'], mfa: true });
+		const headers = { cookie: staff.cookie, ...SAME_ORIGIN };
+		const run = await call('POST', '/v1/admin/operations/audit_verify', { headers });
+		expect(run.json).toMatchObject({ status: 'ok', stats: { verified: 2, entries: 3, broken: [] } });
 		const raw = mongo.db('it_audit_chain').collection(COLLECTIONS.audit);
 		await raw.updateOne({ merchantId: MERCHANT, seq: 1 }, { $set: { action: 'credits.refunded' } });
-		await portal.shared.jobs.enqueue({ name: 'audit.verify' });
-		const drained = await call('GET', '/api/cron/drain', { headers: auth });
-		expect(drained.json.stats).toMatchObject({ leased: 1, succeeded: 1 });
-		expect((await call('GET', '/api/cron/audit_verify', { headers: auth })).json.stats.broken).toEqual([
+		expect((await call('POST', '/v1/admin/operations/audit_verify', { headers })).json.stats.broken).toEqual([
 			{ scope: `merchant:${MERCHANT}`, seq: 1, id: expect.stringMatching(/^aud_/), reason: 'hash' },
 		]);
+		// resumable: `after` skips the scopes up to the cursor
+		const resumed = await portal.operations.run('audit_verify', { input: { after: `merchant:${MERCHANT}` } });
+		expect(resumed?.stats).toMatchObject({ broken: [] });
 	});
 
 	it("idempotent 'no-store' routes keep only the status in the shared store", async () => {
@@ -876,12 +844,10 @@ describe('infra hardening (Mongo)', () => {
 		const { logger } = createTestLogger();
 		const build = (/** @type {any} */ definition) =>
 			createPortal({ config, db: mongo.db('it_reserved'), modules: [defineModule({ name: 'clash', ...definition })], logger });
-		expect(() => build({ crons: () => ({ audit_verify: async () => ({}) }) })).toThrow(/reserved/);
-		expect(() => build({ crons: () => ({ drain: async () => ({}) }) })).toThrow(/reserved/);
-		expect(() => build({ crons: () => ({ daily: async () => ({}) }) })).toThrow(/reserved/);
-		expect(() => build({ background: () => ({ tick: { intervalMs: 1000, run: async () => {} } }) })).toThrow(/clash\./);
+		expect(() => build({ operations: () => ({ audit_verify: async () => ({}) }) })).toThrow(/reserved/);
+		expect(() => build({ operations: () => ({ drain: async () => ({}) }) })).toThrow(/reserved/);
+		// periodic module work no longer exists (F.19)
+		expect(() => build({ background: () => ({}) })).not.toThrow();
 		expect(() => build({ problems: { idempotency_replay_no_body: { status: 409, title: 'x' } } })).toThrow(/reserved/);
-		const auditModule = defineModule({ name: 'audit', jobs: () => ({ 'audit.verify': async () => undefined }) });
-		expect(() => createPortal({ config, db: mongo.db('it_reserved'), modules: [auditModule], logger })).toThrow(/reserved/);
 	});
 });

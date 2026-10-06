@@ -182,7 +182,7 @@ describe('preview sessions', () => {
 		expect(csp).not.toContain('nonce-');
 		expect(await page.text()).toContain('__ssr.start(');
 		// the preview host serves nothing but /p/*
-		for (const other of ['/v1/system/info', `/w/${W1}/loader.js`, '/cron/drain'])
+		for (const other of ['/v1/system/info', `/w/${W1}/loader.js`, '/v1/admin/operations'])
 			expect((await t.portal.handle(new Request(`https://preview.example-previews.test${other}`))).status).toBe(404);
 	});
 

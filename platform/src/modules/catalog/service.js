@@ -3,7 +3,7 @@
  *
  * - Service registration (Portal side of the one-time-token handshake, `@ss/protocol`), with SSRF-safe outbound calls.
  * - Element-pack bundle uploads (signed descriptor: manifest + asset hashes).
- * - Manifest versions: refresh (staff or the daily job; the served manifest must carry a valid
+ * - Manifest versions: refresh (staff, or the `catalog_refresh` admin operation; the served manifest must carry a valid
  *   `SS-Manifest-Signature` made with a registered app key, otherwise it is stored as `rejected` and alerted), diff,
  *   staff approval / rejection, `manifest.accepted@1`.
  * - Lifecycle (pending → active → deprecated → retired), environments, app keys (rotation overlap, revocation).
@@ -35,7 +35,7 @@ import {
 import { problem } from '../../infra/http.js';
 import { checkBundleAssets, checkUiManifest, parseBundleUpload } from './core/bundle.js';
 import { diffManifests } from './core/diff.js';
-import { STALE_AFTER_MS, healthView, parseHeartbeat } from './core/health.js';
+import { SEEN_EVERY_MS, STALE_AFTER_MS, healthView, parseHeartbeat } from './core/health.js';
 import { launchRefusal, launchUrl } from './core/launch.js';
 import { applyLifecycle, dueForRetirement, reviewRefusal } from './core/lifecycle.js';
 import { catalogEntry } from './core/summary.js';
@@ -133,11 +133,47 @@ const checkedManifest = (manifest, kind, pointer = '') => {
  * @param {CatalogOptions} [options]
  */
 export const createCatalogService = (ctx, options = {}) => {
-	const repo = createCatalogRepo({
+	const stored = createCatalogRepo({
 		apps: ctx.collection(APPS),
 		versions: ctx.collection(VERSIONS),
 		keys: ctx.collection(KEYS),
 		launches: ctx.collection(LAUNCHES),
+	});
+	/**
+	 * Retirement on read (F.19: no timer): a deprecated app whose sunset has passed is retired the first time it is
+	 * read after the sunset (compare-and-set, audited once).
+	 * @template {AppDoc | null} A
+	 * @param {A} app
+	 * @returns {Promise<A>}
+	 */
+	const current = async (app) => {
+		if (!app || !dueForRetirement(app, ctx.now())) return app;
+		const retired = await stored.updateApp(app._id, { status: 'deprecated' }, { $set: { status: 'retired' } });
+		if (retired)
+			await audit({
+				actor: SYSTEM,
+				action: 'catalog.app_retired',
+				app: app._id,
+				before: { status: 'deprecated' },
+				after: { status: 'retired' },
+				reason: 'sunset reached',
+			});
+		return /** @type {A} */ (retired ?? (await stored.app(app._id)) ?? app);
+	};
+	/** @type {typeof stored} */
+	const repo = Object.freeze({
+		...stored,
+		app: async (appId) => current(await stored.app(appId)),
+		appBySlug: async (slug) => current(await stored.appBySlug(slug)),
+		listApps: async (query) => {
+			/** @type {AppDoc[]} */
+			const out = [];
+			for (const app of await stored.listApps(query)) {
+				const now = await current(app);
+				if (!query.status || query.status.includes(now.status)) out.push(now);
+			}
+			return out;
+		},
 	});
 	/** @type {OutboundPolicy} */
 	const policy = createOutboundPolicy({
@@ -878,7 +914,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		const updated = await repo.updateApp(
 			appId,
 			{ kind: 'service' },
-			{ $set: { health: { lastHeartbeatAt: at, ...parsed.value } } },
+			{ $set: { health: { lastHeartbeatAt: at, lastSeenAt: at, ...parsed.value } } },
 		);
 		if (!updated) fail('not_found', 'Unknown app.');
 		return { ok: true, serverTime: at.toISOString() };
@@ -1019,6 +1055,23 @@ export const createCatalogService = (ctx, options = {}) => {
 		if (typeof appId !== 'string' || appId.length === 0 || appId.length > 128) return null;
 		const app = await repo.app(appId);
 		if (!app || app.kind !== 'service' || app.status === 'retired') return null;
+		// a product calling the Portal is how the Portal knows it is alive (no periodic heartbeat, F.19)
+		const seen = app.health?.lastSeenAt instanceof Date ? app.health.lastSeenAt.getTime() : 0;
+		if (ctx.now() - seen >= SEEN_EVERY_MS)
+			await stored
+				.updateApp(
+					appId,
+					{ kind: 'service' },
+					{
+						$set: {
+							health: {
+								...(app.health ?? { lastHeartbeatAt: null, version: null, status: null, queues: null }),
+								lastSeenAt: new Date(ctx.now()),
+							},
+						},
+					},
+				)
+				.catch(() => null);
 		const keys = await usableKeys(appId);
 		if (keys.length === 0) return null;
 		const jwks = createJwks(
@@ -1158,12 +1211,13 @@ export const createCatalogService = (ctx, options = {}) => {
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
-	// scheduled job
+	// admin operation
 
 	/**
-	 * `catalog.refresh_manifests`: refresh every live service app and retire deprecated apps past their sunset, in id
-	 * order from the app after `after`. Apps not reached before the deadline count as `skipped`, and `resumeAfter` is
-	 * the last app handled then (null when the pass completed), where a continuation picks up.
+	 * `catalog_refresh` (admin operation, on demand): refresh every live service app in id order from the app after
+	 * `after` (deprecated apps past their sunset are retired as they are read). Apps not reached before the deadline
+	 * count as `skipped`, and `resumeAfter` is the last app handled then (null when the pass completed): run the
+	 * operation again with `{ after: resumeAfter }` to continue.
 	 * @param {{ deadline?: number, signal?: AbortSignal, after?: string | null }} [options]
 	 */
 	const refreshAll = async ({ deadline = Infinity, signal, after: from = null } = {}) => {
@@ -1173,7 +1227,6 @@ export const createCatalogService = (ctx, options = {}) => {
 			unchanged: 0,
 			rejected: 0,
 			failed: 0,
-			retired: 0,
 			skipped: 0,
 			resumeAfter: /** @type {string | null} */ (null),
 		};
@@ -1189,21 +1242,6 @@ export const createCatalogService = (ctx, options = {}) => {
 					continue;
 				}
 				last = String(app._id);
-				if (dueForRetirement(app, ctx.now())) {
-					const retired = await repo.updateApp(app._id, { status: 'deprecated' }, { $set: { status: 'retired' } });
-					if (retired) {
-						stats.retired += 1;
-						await audit({
-							actor: SYSTEM,
-							action: 'catalog.app_retired',
-							app: app._id,
-							before: { status: 'deprecated' },
-							after: { status: 'retired' },
-							reason: 'sunset reached',
-						});
-					}
-					continue;
-				}
 				if (app.kind !== 'service') continue;
 				stats.checked += 1;
 				try {

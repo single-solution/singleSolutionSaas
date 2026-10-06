@@ -7,7 +7,6 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createSearchApp, wireEvents } from '../../api/routes.js';
-import { cronRoutes, scheduleSweep } from '../../jobs/sweep.js';
 
 const KEY = Symbol.for('ss.products.search');
 
@@ -20,8 +19,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getSearch = () =>
-	(shared().search ??= createPlatform().then((app) => scheduleSweep(wireEvents(createSearchApp(app)))));
+export const getSearch = () => (shared().search ??= createPlatform().then((app) => wireEvents(createSearchApp(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).
@@ -33,7 +31,7 @@ export const forward = (method) => async (/** @type {Request} */ request, /** @t
 	const state = shared();
 	state.next ??= getSearch().then((instance) =>
 		toNextRoute(
-			createRequestHandler(instance.product, [...buildRoutes(instance), ...cronRoutes(instance)], {
+			createRequestHandler(instance.product, buildRoutes(instance), {
 				maxBodyBytes: 8_000_000,
 			}),
 			{ after },

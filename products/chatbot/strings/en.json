@@ -175,6 +175,8 @@
 	"dashboard.knowledge.add": "Add entry",
 	"dashboard.knowledge.added": "Entry added.",
 	"dashboard.knowledge.sources": "Web pages",
+	"dashboard.knowledge.refresh": "Refresh due pages",
+	"dashboard.knowledge.refreshed": "{refreshed} refreshed, {failed} failed, {remaining} still due.",
 	"dashboard.settings.text": "Settings live in your subscription's configuration in the Portal — this product never stores them.",
 	"dashboard.settings.open": "Open the configuration in the Portal",
 	"dashboard.settings.ai": "AI provider",

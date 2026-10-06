@@ -175,7 +175,8 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 	};
 
 	/**
-	 * Signing-key records of a website (rotated lazily when due).
+	 * Signing-key records of a website, settled when read from the database: a rotation that is due starts (the new key
+	 * is pre-published first) and superseded keys past the retention window are deleted. Nothing rotates on a timer.
 	 * @param {Site} site
 	 * @returns {Promise<any[]>}
 	 */
@@ -187,6 +188,14 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		if (rotationDue(records, now(), site.settings.sessions.key_rotation_days)) {
 			await createKey(site, records);
 			records = await site.repos.keys.list('signing');
+		}
+		const prunable = prunableKeys(records, now(), RETAIN_MS);
+		if (prunable.length > 0) {
+			await site.repos.keys.remove(
+				'signing',
+				prunable.map((record) => record.generation),
+			);
+			records = records.filter((/** @type {any} */ record) => !prunable.includes(record));
 		}
 		keyCache.set(site.websiteId, { records, at: now() });
 		return records;
@@ -1296,8 +1305,8 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 	};
 
 	/**
-	 * Expire-on-read: a customer whose deletion's cooling-off has ended is deleted on access, whether or not the
-	 * maintenance job has run yet. Returns the customer as it now is (anonymised when the deletion ran).
+	 * Expire-on-read: a customer whose deletion's cooling-off has ended is deleted on access (nothing runs on a timer).
+	 * Returns the customer as it now is (anonymised when the deletion ran).
 	 * @template {Customer | null} C
 	 * @param {Site} site
 	 * @param {C} customer
@@ -1313,20 +1322,51 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 	};
 
 	/**
-	 * Execute the deletions whose cooling-off ended.
+	 * Expire-on-read for a listing: the due deletions of the customers listed (one query) run before they are shown.
+	 * @param {Site} site
+	 * @param {Customer[]} customers
+	 * @returns {Promise<Customer[]>}
+	 */
+	const settleDeletions = async (site, customers) => {
+		const active = customers.filter((customer) => customer.status !== 'deleted').map((customer) => customer.id);
+		if (!site.settings.dataRights || active.length === 0) return customers;
+		const settled = new Set();
+		for (const request of await site.repos.dataRequests.due(iso(), active.length, active))
+			if ((await runDeletion(site, request)) && typeof request.customerId === 'string') settled.add(request.customerId);
+		if (settled.size === 0) return customers;
+		return Promise.all(
+			customers.map(async (customer) =>
+				settled.has(customer.id)
+					? /** @type {Customer} */ ((await site.repos.customers.get(customer.id)) ?? customer)
+					: customer,
+			),
+		);
+	};
+
+	/**
+	 * Execute one due deletion request (idempotent: the request is closed compare-and-set).
+	 * @param {Site} site
+	 * @param {Record<string, any>} request
+	 * @returns {Promise<boolean>} whether this call completed it
+	 */
+	const runDeletion = async (site, request) => {
+		if (!deletionDue(/** @type {any} */ (request), now())) return false;
+		const customer = await site.repos.customers.get(request.customerId);
+		if (customer && customer.status !== 'deleted') await executeDeletion(site, customer, 'self_service');
+		return site.repos.dataRequests.close(request.id, { status: 'completed', completedAt: iso() });
+	};
+
+	/**
+	 * Execute the deletions whose cooling-off ended (at most 100 per call) — the dashboard's "Run due deletions" button.
+	 * Customers due for deletion are also deleted whenever they are read (`settleDeletion`, `settleDeletions`).
 	 * @param {Site} site
 	 */
 	const runDueDeletions = async (site) => {
+		if (!site.settings.dataRights) return 0;
 		let deleted = 0;
-		for (const request of await site.repos.dataRequests.due(iso(), 100)) {
-			if (!deletionDue(/** @type {any} */ (request), now())) continue;
-			const customer = await site.repos.customers.get(request.customerId);
-			if (customer && customer.status !== 'deleted') await executeDeletion(site, customer, 'self_service');
-			if (await site.repos.dataRequests.close(request.id, { status: 'completed', completedAt: iso() })) deleted += 1;
-		}
+		for (const request of await site.repos.dataRequests.due(iso(), 100)) if (await runDeletion(site, request)) deleted += 1;
 		return deleted;
 	};
-
 	// ── Portal-signed privacy operations ──────────────────────────────────────────────────────────────────
 
 	/**
@@ -1379,7 +1419,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		return { websiteId: site.websiteId, anonymized: { customers: 1 } };
 	};
 
-	// ── account pages, orders, risk, dashboard, maintenance ───────────────────────────────────────────────
+	// ── account pages, orders, risk, dashboard, identity issuer ───────────────────────────────────────────
 
 	/**
 	 * The account view of a signed-in customer (sections the merchant enabled).
@@ -1560,9 +1600,10 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 	};
 
 	/**
-	 * Daily: ask the Portal once to make Signups the website's issuer, while it is not registered and no request was
-	 * sent yet for the current issuer configuration (a rejected request is not repeated on its own; `POST
-	 * /v1/issuer:register` or the dashboard asks again). Best effort: a failure is logged and retried the next day.
+	 * On `entitlement.changed@1` (the event that makes it relevant): ask the Portal once to make Signups the website's
+	 * issuer, while it is not registered and no request was sent yet for the current issuer configuration (a rejected
+	 * request is not repeated on its own; `POST /v1/issuer:register` or the dashboard asks again). Best effort: a
+	 * failure is logged and retried on the next entitlement change or from the dashboard.
 	 * @param {Site} site
 	 * @returns {Promise<number>} 1 when a request was sent
 	 */
@@ -1570,7 +1611,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		if (!requestIssuer || !site.settings.enabled('sessions') || site.doc?.identity?.issuer === issuerOf(site)) return 0;
 		try {
 			if (await lastRequest(site, registration(site))) return 0;
-			const outcome = await registerIssuer(site, { actor: { type: 'system', id: 'maintenance' } });
+			const outcome = await registerIssuer(site, { actor: { type: 'system', id: 'entitlement_changed' } });
 			return outcome.ok ? 1 : 0;
 		} catch (error) {
 			log?.warn?.('identity issuer request failed', {
@@ -1579,24 +1620,6 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 			});
 			return 0;
 		}
-	};
-
-	/**
-	 * Daily maintenance of one website: due deletions, key rotation and pruning, the issuer request.
-	 * @param {Site} site
-	 */
-	const maintain = async (site) => {
-		const deletions = site.settings.dataRights ? await runDueDeletions(site) : 0;
-		const before = (await site.repos.keys.list('signing')).length;
-		const records = await keysOf(site);
-		const prunable = prunableKeys(records, now(), RETAIN_MS);
-		const pruned = await site.repos.keys.remove(
-			'signing',
-			prunable.map((record) => record.generation),
-		);
-		if (pruned > 0) keyCache.delete(site.websiteId);
-		const issuerRequested = await autoRegisterIssuer(site);
-		return { deletions, rotated: records.length > before ? 1 : 0, pruned, issuerRequested };
 	};
 
 	return Object.freeze({
@@ -1627,12 +1650,13 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		requestView,
 		runDueDeletions,
 		settleDeletion,
+		settleDeletions,
+		autoRegisterIssuer,
 		privacyExport,
 		privacyAnonymize,
 		account,
 		applyOrderEvent,
 		overview,
-		maintain,
 	});
 };
 

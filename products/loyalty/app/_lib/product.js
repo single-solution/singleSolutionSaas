@@ -7,7 +7,6 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createLoyalty, wireEvents } from '../../api/routes.js';
-import { cronRoutes } from '../../jobs/expiry.js';
 
 const KEY = Symbol.for('ss.products.loyalty');
 
@@ -29,7 +28,7 @@ export const getLoyalty = () => (shared().loyalty ??= createPlatform().then((app
 export const forward = (method) => async (/** @type {Request} */ request, /** @type {unknown} */ context) => {
 	const state = shared();
 	state.next ??= getLoyalty().then((instance) =>
-		toNextRoute(createRequestHandler(instance.product, [...buildRoutes(instance), ...cronRoutes(instance)]), { after }),
+		toNextRoute(createRequestHandler(instance.product, buildRoutes(instance)), { after }),
 	);
 	return /** @type {any} */ ((await state.next)[method])(request, context);
 };

@@ -78,12 +78,5 @@ export const createMemoryCollection = () => {
 			guard(filter);
 			return select(filter).length;
 		},
-		/** @param {Record<string, any>} filter */
-		deleteMany: async (filter) => {
-			guard(filter);
-			const doomed = select(filter);
-			for (const doc of doomed) docs.splice(docs.indexOf(doc), 1);
-			return { deletedCount: doomed.length };
-		},
 	};
 };

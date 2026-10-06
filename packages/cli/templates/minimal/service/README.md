@@ -19,7 +19,7 @@ A service product needs at least one element, so this project ships the placehol
 | `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                                        |
 | `api/`          | thin REST handlers, event consumers, dashboard session view                                                           |
 | `adapters/`     | the app-kit platform wiring and the personal-data declaration (`privacy.js`)                                          |
-| `jobs/`         | daily cron route (`/cron/daily`); background work after requests is registered in `jobs/index.js`                     |
+| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)                          |
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                         |
 | `schemas/`      | feature schemas and product event data schemas                                                                        |
 | `app/`          | Next.js App Router: `.well-known/ss-register`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |

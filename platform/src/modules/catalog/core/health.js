@@ -1,11 +1,14 @@
 /**
- * Product health from heartbeats (pure). Products send `POST /v1/product/heartbeat { version, status, queues? }`
- * (PLAN F.9); an app whose last heartbeat is older than the staleness window is flagged `stale`.
+ * Product health (pure). Products may send `POST /v1/product/heartbeat { version, status, queues? }` (PLAN F.9), and
+ * every authenticated product call marks the app as seen (`lastSeenAt`). Nothing pings on a timer (F.19), so an app
+ * is flagged `stale` only when it has not been in touch at all within the staleness window.
  * @module
  */
 
-/** Heartbeats are expected every few minutes; after 15 minutes of silence the app is stale. */
-export const STALE_AFTER_MS = 15 * 60_000;
+/** An app neither seen nor heard from for a day is stale. */
+export const STALE_AFTER_MS = 24 * 60 * 60_000;
+/** `lastSeenAt` is written at most this often per app (a product call is the trigger; no timer). */
+export const SEEN_EVERY_MS = 5 * 60_000;
 
 const STATUS = /^[a-z][a-z_]{0,31}$/;
 const VERSION = /^[0-9A-Za-z][0-9A-Za-z.+_-]{0,63}$/;
@@ -50,14 +53,18 @@ export const parseHeartbeat = (body) => {
 
 /**
  * Health view of an app.
- * @param {{ lastHeartbeatAt?: Date | null, version?: string | null, status?: string | null, queues?: Record<string, number> | null } | null | undefined} health
+ * @param {{ lastHeartbeatAt?: Date | null, lastSeenAt?: Date | null, version?: string | null, status?: string | null,
+ *   queues?: Record<string, number> | null } | null | undefined} health
  * @param {number} now
  * @param {number} [staleAfterMs]
  */
 export const healthView = (health, now, staleAfterMs = STALE_AFTER_MS) => {
-	const last = health?.lastHeartbeatAt instanceof Date ? health.lastHeartbeatAt : null;
+	const beat = health?.lastHeartbeatAt instanceof Date ? health.lastHeartbeatAt : null;
+	const seen = health?.lastSeenAt instanceof Date ? health.lastSeenAt : null;
+	const last = beat && seen ? (beat > seen ? beat : seen) : (beat ?? seen);
 	return {
-		lastHeartbeatAt: last ? last.toISOString() : null,
+		lastHeartbeatAt: beat ? beat.toISOString() : null,
+		lastSeenAt: last ? last.toISOString() : null,
 		version: health?.version ?? null,
 		status: health?.status ?? null,
 		queues: health?.queues ?? null,

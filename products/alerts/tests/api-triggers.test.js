@@ -341,7 +341,8 @@ describe('API triggers', () => {
 		for (const email of ['1@example.com', '2@example.com', '3@example.com'])
 			await t.subscribe({ type: 'custom:seat', itemId: 'show_1', email });
 		await t.deliver('custom.seat_freed@1', { eventId: 'show_1', seats: 2 });
-		expect(t.provider.sent).toHaveLength(1);
+		// the event's own outbox run continues the open run once: both seats are told right away
+		expect(t.provider.sent).toHaveLength(2);
 		await t.call('POST', '/v1/messages:dispatch', { idempotencyKey: null });
 		await t.call('POST', '/v1/messages:dispatch', { idempotencyKey: null });
 		expect(t.provider.sent).toHaveLength(2);

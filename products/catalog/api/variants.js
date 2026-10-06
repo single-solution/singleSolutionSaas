@@ -4,8 +4,9 @@
  * taken, the lines already taken are given back), and the order consumers (`order.placed@1` takes stock once per
  * order — or converts the order's reservation —, `order.cancelled@1` gives it back, `order.refunded@1` gives refunded
  * lines back). Every quantity change publishes `inventory.changed@1`, every price change `price.changed@1`.
- * A held reservation past its `expiresAt` is expired at read time and released on access (read, replay, or before a new
- * reservation takes stock); the background sweep and the daily job release the rest.
+ * A held reservation past its `expiresAt` is expired at read time and released on access: when it is read or replayed,
+ * before a new reservation or an order takes stock, before a stock adjustment, and by the dashboard's "Process due
+ * changes" (no timer ever runs).
  */
 import { EVENT_TYPES, inventoryData, priceChanges, stockChanges } from '../core/events.js';
 import { canTake, checkVariantSet, validateStockLines, validateVariant } from '../core/variants.js';
@@ -18,7 +19,7 @@ import { optionPools, skuConflicts } from './items.js';
 /** @typedef {import('./catalog.js').Failure} Failure */
 
 const REASON = /^[a-z][a-z0-9_.:-]{0,63}$/;
-/** Expired reservations released before a new one is taken (the rest wait for the background sweep). */
+/** Expired reservations released before stock is taken or adjusted (the rest on the next such request or by the dashboard). */
 const EXPIRE_ON_ACCESS = 20;
 
 /**
@@ -243,6 +244,7 @@ export const createVariantsService = (deps) => {
 			return invalid([issue(hasDelta ? '/delta' : '/quantity', 'quantity_invalid')]);
 		const reason = input.reason === undefined ? 'adjustment' : input.reason;
 		if (typeof reason !== 'string' || !REASON.test(reason)) return invalid([issue('/reason', 'reason_invalid')]);
+		await expire(site, EXPIRE_ON_ACCESS);
 		const item = await site.repos.items.byVariant(variantId);
 		if (!item) return fail('not_found', 'No such variant.');
 		const variant = item.variants.find((/** @type {any} */ v) => v.id === variantId);
@@ -369,7 +371,7 @@ export const createVariantsService = (deps) => {
 		const resolved = await resolveLines(site, checked.lines);
 		if (resolved.missing.length > 0)
 			return invalid(resolved.missing.map((index) => issue(`/lines/${index}`, 'variant_unknown')));
-		// stock held by reservations that already expired is given back first (release on access, before any sweep)
+		// stock held by reservations that already expired is given back first (release on access)
 		await expire(site, EXPIRE_ON_ACCESS);
 		const taken = await take(site, resolved.lines, { guard: true, reason: 'reservation', key: id });
 		if (!taken.ok) return taken;
@@ -393,7 +395,7 @@ export const createVariantsService = (deps) => {
 	};
 
 	/**
-	 * Release a held reservation (`DELETE /v1/stock-reservations/{id}`) or expire it (sweep).
+	 * Release a held reservation (`DELETE /v1/stock-reservations/{id}`) or expire it.
 	 * @param {Site} site
 	 * @param {string} id
 	 * @param {{ status?: 'released' | 'expired' }} [options]
@@ -421,8 +423,8 @@ export const createVariantsService = (deps) => {
 	};
 
 	/**
-	 * The view of a stored reservation as of now: a held reservation past `expiresAt` is expired even before the sweep
-	 * ran, and is released on access (its stock given back).
+	 * The view of a stored reservation as of now: a held reservation past `expiresAt` is expired, and is released on
+	 * access (its stock given back).
 	 * @param {Site} site
 	 * @param {Record<string, any>} move
 	 */
@@ -467,6 +469,7 @@ export const createVariantsService = (deps) => {
 		}
 		const resolved = await resolveLines(site, /** @type {any} */ (orderLines(data.lines)));
 		if (resolved.lines.length === 0) return { applied: false };
+		await expire(site, EXPIRE_ON_ACCESS);
 		const id = `ord_${deps.stableId(`${site.websiteId}|order|${data.orderId}`)}`;
 		if (
 			!(await site.repos.moves.insert({ id, kind: 'order', status: 'applied', orderId: data.orderId, lines: resolved.lines }))
@@ -510,7 +513,7 @@ export const createVariantsService = (deps) => {
 	};
 
 	/**
-	 * Release expired reservations (sweep).
+	 * Release expired reservations of the website, oldest first (on access and from the dashboard).
 	 * @param {Site} site
 	 * @param {number} limit
 	 */

@@ -1949,6 +1949,36 @@
 				}
 			}
 		},
+		"/v1/dashboard/knowledge-sources:refresh": {
+			"post": {
+				"operationId": "refreshDueSources",
+				"tags": ["knowledge"],
+				"summary": "Dashboard \"Refresh due pages\": fetch the configured pages that are due (never fetched, or older than refresh_hours), at most 5 per call. Nothing refreshes them on a timer.",
+				"security": [{ "dashboardSession": [] }],
+				"parameters": [{ "name": "X-SS-Website", "in": "header", "required": false, "schema": { "type": "string" } }],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"refreshed": { "type": "integer" },
+										"failed": { "type": "integer" },
+										"remaining": { "type": "integer" }
+									}
+								},
+								"example": { "refreshed": 2, "failed": 0, "remaining": 0 }
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
 		"/v1/knowledge:search": {
 			"post": {
 				"operationId": "searchKnowledge",

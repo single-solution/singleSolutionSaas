@@ -8,6 +8,7 @@ import { createElement as h } from 'react';
 import { redirect } from 'next/navigation.js';
 import { Card, Stat } from '@ss/ui';
 import { dashboardContext } from '../_lib/dashboard.js';
+import { DueWorkButton } from './_components/DueWorkButton.js';
 import { Shell, t } from './_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -52,5 +53,15 @@ export default async function Overview({ searchParams }) {
 				),
 			),
 		),
+		context.data.demo || !context.data.canWrite || !context.data.websiteId
+			? null
+			: h(
+					Card,
+					{
+						title: t('dashboard.due.title'),
+						actions: h(DueWorkButton, { websiteId: context.data.websiteId }),
+					},
+					h('p', { className: 'text-sm text-muted' }, t('dashboard.due.help')),
+				),
 	);
 }

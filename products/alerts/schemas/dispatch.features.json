@@ -117,7 +117,7 @@
 		"inline_dispatch": {
 			"type": "boolean",
 			"title": "Send right after the trigger",
-			"description": "Off: messages wait for the next background pass (after requests, at most every 5 minutes) or the daily run.",
+			"description": "On: each trigger sends its alerts and anything else of the website that is due. Off: messages wait for POST /v1/messages:dispatch or the dashboard's \"Send due now\" (nothing runs on a timer).",
 			"default": true,
 			"x-kind": "flag",
 			"x-ui": { "widget": "switch", "group": "Delivery", "order": 13 }

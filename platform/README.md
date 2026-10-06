@@ -3,7 +3,8 @@
 The Portal holds **control-plane data only** (accounts, websites, subscriptions, entitlements, credits, ledger,
 audit, keys, delivery metadata — PLAN §1a). Client data lives in the client's own resources. This package is the
 foundation every control-plane module builds on: configuration, database access with tenant and append-only
-guards, the HTTP layer with all auth modes, cryptography, sessions, RBAC, audit, jobs and crons.
+guards, the HTTP layer with all auth modes, cryptography, sessions, RBAC, audit, jobs and on-demand operations. Nothing
+runs on a schedule (PLAN F.19: event-driven only).
 
 Next.js 16 (App Router) · React 19 · MongoDB driver 6 · Tailwind 4 · JavaScript ESM, functional, JSDoc-typed.
 
@@ -12,7 +13,6 @@ Next.js 16 (App Router) · React 19 · MongoDB driver 6 · Tailwind 4 · JavaScr
 ```
 app/                         thin Next.js adapters — no logic
   api/[...path]/route.js     every module route (toNextRoute → portal.handle)
-  api/cron/[job]/route.js    cron triggers (Bearer CRON_SECRET) → cron runner (`daily` is the scheduled one)
   w/[...path]/ p/[...path]/  delivery plane: bundles, pack and UI-bundle modules (/w/*), preview proxy (/p/*) → portal.handle
   .well-known/jwks.json/     published JWKS: Portal keys (current + previous) + website-key signing keys
   healthz/  readyz/          liveness (no deps) / readiness (config + DB ping)
@@ -29,15 +29,16 @@ src/
                              locks, transactions, migrations
     schema.js                infra collections (platform_*)
     http.js                  routes, auth modes, CSRF, RBAC, rate limits, idempotency, problems, pagination
-    authenticators.js        staff / merchant / websiteKey / product / cron authenticators (+ ports)
+    authenticators.js        staff / merchant / websiteKey / product authenticators (+ ports)
     stores.js                shared replay, idempotency and rate-limit stores
     crypto.js                Portal signer + JWKS, dedicated website-key signer, envelope encryption, website-secret hashing
     auth.js                  scrypt passwords, TOTP + recovery codes, sessions, cookies, login throttle, CSRF
     rbac.js                  permissions, role bundles, website-scoped grants, can()
     audit.js                 append-only, hash-chained audit log (per-scope chains, verification)
     mailer.js                platform mailer (SMTP via nodemailer; templates)
-    jobs.js                  job queue (leases, retries, dead letters) and cron runner
-    background.js            work after responses: deferred tasks, throttled leased tasks (drain, settlement)
+    jobs.js                  job queue (leases, retries, dead letters) and the on-demand operation runner
+    background.js            work right after a response, for that request only (deferred tasks, product calls)
+    request-scope.js         the request a piece of work belongs to (`afterResponse(task)` from anywhere)
     logger.js                JSON logger with redaction
     modules.js               defineModule / composeModules (isolation boundary)
     security-headers.js      CSP and static security headers
@@ -70,7 +71,6 @@ the original status) instead of executing twice or re-sending a secret. Use a ne
 | `merchant`   | `__Host-ss_merchant` cookie                | session store                                                                                                                            |
 | `websiteKey` | `Authorization: Bearer pk_…` / `sk_…`      | `@ss/protocol` `verifyWebsiteKey` with the website-key keys, `websiteKeyRevoked(claims, rawKey)` port, `originAllowed` for `pk_`, scopes |
 | `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = `PORTAL_URL`, shared replay store                                                            |
-| `cron`       | `Authorization: Bearer <CRON_SECRET>`      | constant-time comparison                                                                                                                 |
 | `public`     | none                                       | —                                                                                                                                        |
 
 A route may list several modes; the first credential present decides (an invalid one fails — it never falls through).
@@ -80,7 +80,7 @@ referer, keyKind?, scopes?, env? })` — the same implementation as the authenti
 **CSRF** (cookie sessions only): mutations must carry `Sec-Fetch-Site: same-origin` when the browser sends it, and an
 `Origin` exactly equal to the `PORTAL_URL` origin when sent; a mutation with neither is refused. Together with
 `SameSite=Lax` cookies and JSON-only bodies (form posts get 415), no CSRF token is needed. Bearer-authenticated calls
-(products, website keys, cron) are not subject to CSRF.
+(products, website keys) are not subject to CSRF.
 
 **Sessions**: 256-bit opaque tokens; only `HMAC(SESSION_SECRET, token)` is stored; idle and absolute expiry (TTL);
 `rotate` on any privilege change (MFA completed, roles changed, impersonation) keeps the absolute expiry and kills the
@@ -96,7 +96,7 @@ dummy hash. **TOTP**: RFC 6238 SHA-1, 6 digits, 30 s, ±1 step, single use (stor
 
 - Every collection is declared (`defineCollection`) by its owning module; `ensureIndexes` creates the declared
   indexes and TTLs and reports undeclared ones (it never drops).
-- Append-only collections (`platform_audit`, `platform_cron_runs`, `platform_migrations`, ledgers, events) get a
+- Append-only collections (`platform_audit`, `platform_operation_runs`, `platform_migrations`, ledgers, events) get a
   repository without update/delete. `$out` / `$merge` are refused everywhere so they cannot be bypassed.
 - Merchant-scoped collections (`tenant: 'merchant'`) are only reachable through `forMerchant(merchantId)` (filters and
   the first `$match` must pin `merchantId` by equality; inserts are stamped; `merchantId` cannot change;
@@ -112,81 +112,90 @@ dummy hash. **TOTP**: RFC 6238 SHA-1, 6 digits, 30 s, ±1 step, single use (stor
   its domain claim and grants in one.
 - **Audit chain**: `platform_audit` entries are chained per scope (`global` for staff/platform actions,
   `merchant:<id>` per merchant): `seq`, `prevHash`, `hash = sha256(prevHash ‖ canonical JSON)`, appended under a
-  per-scope lease lock (unique `{ scope, seq }`). `audit.verifyChain(scope)` recomputes a scope; the nightly cron
-  `audit_verify` (and the job `audit.verify`) verifies every scope and logs `audit chain broken` errors with the first
+  per-scope lease lock (unique `{ scope, seq }`). `audit.verifyChain(scope)` recomputes a scope; the admin operation
+  `audit_verify` (on demand, resumable with `after`) verifies every scope and logs `audit chain broken` errors with the first
   broken link (`seq_gap`, `prev_hash`, `hash`).
 
-### Jobs and crons
+### Jobs and operations (event-driven only)
 
-The job queue lives in `platform_jobs`: idempotent enqueue by `key`, atomic leases with a visibility timeout,
-exponential backoff with jitter (5 s → 1 h), dead letters after `maxAttempts` (default 8), replay. Jobs enqueued with
-`dropPayload: true` lose their payload when they succeed (`complete(job, { dropPayload: true })`), e.g. Event Hub
-deliveries whose payload is a sealed event. There are no workers, and on Vercel Hobby crons run once a day (PLAN F.19),
-so the queue is drained in three bounded ways:
+Nothing runs on a schedule: no crons, no timers, no polling, no periodic or throttled drains (PLAN F.19). Work happens
+inside, or right after, the request that caused it, and only for what that request created or touched.
 
-- **right after an ingest**: the Event Hub attempts the deliveries it just enqueued after the response (`ctx.defer`,
-  only those job keys, lease-safe), so cross-product events usually arrive within seconds;
-- **after requests**: a short drain (≤ 10 jobs, 8 s) runs after any response at most every 15 s across instances (an
-  in-memory check, then a lease lock `every:drain` in `platform_locks`); jobs enqueued with `daily: true` (long
-  continuations) are left to the cron;
-- **daily**: `vercel.json` schedules `/api/cron/daily` once a day.
+The job queue lives in `platform_jobs`: idempotent enqueue by `key`, a `group` for jobs retried together, atomic leases
+with a visibility timeout, exponential backoff with jitter (5 s → 1 h), dead letters after `maxAttempts` (default 8),
+replay. Jobs enqueued with `dropPayload: true` lose their payload when they succeed, e.g. Event Hub deliveries whose
+payload is a sealed event. Every request runs in a request scope (`infra/request-scope.js`):
 
-Deferred and background work runs through Next `after()` (`toNextRoute(handler, { after })` in `app/api` and `app/w`).
-Modules add throttled work with `background: (ctx) => ({ '<module>.<task>': { intervalMs, budgetMs, run } })`;
-commerce settles every 5 minutes this way (3 s), so product usage reports, heartbeats and console loads keep billing
-current, and balance and meter reads still settle the merchant first. `createPortal({ background: { mode: 'off' } })`
-(the default when `PORTAL_ENV=test`) runs none of it.
+- **a job a request enqueued runs right after that response** (`onEnqueued` → `afterResponse`), and only that job;
+- **a failed job waits** with its next-attempt time until there is a natural reason to retry it: the Event Hub retries
+  a product's due deliveries (a few) when the next event is delivered to that product and when that product next calls
+  the Portal (the `productCalled` port follows every `product`-auth request); a failed website compile is retried when
+  the website's loader is next served; staff can press "Retry deliveries now" (app page) or run `drain`;
+- **settlement is computed when read**: a merchant settles (idempotently per `periodKey`) before its balance, meter or
+  statement is read, when a product fetches an entitlement document or reports usage for one of its websites (usage:
+  right after the response), and before a subscription change; low-balance and spend-limit holds are evaluated at the
+  same moments, so the document a product fetches reflects a hold. A product with a still-valid document (10 minutes,
+  plus its cache) may keep serving until it refreshes it;
+- **time-based state is judged on read**: scheduled configuration changes are applied by the first read of the
+  merchant's configuration at or after their time; a rotated website key's revocation takes effect by time in the
+  revocation list; a deprecated app is retired the first time it is read after its sunset;
+- **product liveness** needs no periodic heartbeat: every authenticated product call marks the app as seen
+  (`health.lastSeenAt`, written at most every 5 minutes); an app silent for a day is flagged stale;
+- **connectors** are checked when saved (create, rotate, update, assign, test) and when a product resolves one whose
+  last check is older than 50 minutes (after the response).
 
-`daily` runs these steps in order. Each step may use the time the later steps do not reserve (their share of
-`CRON_DEADLINE_MS`) and resumes where it stopped on the next run. Each cron also stays callable on its own
-(`/api/cron/<name>`, Bearer `CRON_SECRET`). Every run holds a lease lock (no overlaps) and appends a
-`platform_cron_runs` record with the stats of each step.
+Deferred work runs through Next `after()` (`toNextRoute(handler, { after })` in `app/api` and `app/w`).
+`createPortal({ background: { mode: 'off' } })` (the default when `PORTAL_ENV=test`) runs none of it.
 
-| step                | share | owner                     | resumes from                                        |
-| ------------------- | ----- | ------------------------- | --------------------------------------------------- |
-| `settlement`        | 20 %  | commerce                  | each subscription's `settledThrough` cursor         |
-| `drain`             | 16 %  | infra (runs queued jobs)  | the queue (`daily` continuations included)          |
-| `connectors-health` | 30 %  | connectors                | connectors not checked within 50 minutes stay due   |
-| `reconciliation`    | 12 %  | commerce                  | the saved run (phase and cursor), even the next day |
-| `catalog_refresh`   | 12 %  | catalog                   | a `daily` continuation job from the last app        |
-| `audit_verify`      | 10 %  | infra (audit hash chains) | a `daily` `audit.verify` job from the last scope    |
+**Operations** are bounded, resumable maintenance tasks that staff run on demand from the admin console (Platform
+health → Operations, `POST /v1/admin/operations/:name` with `platform.jobs.manage`, body `{ after? }` to continue a
+cut run). Each run holds a lease lock (no overlaps), gets `OPERATION_DEADLINE_MS`, and appends a
+`platform_operation_runs` record.
 
-`daily`, `drain` and `audit_verify` (and the job `audit.verify`) are reserved: a module registering them is a boot error.
+| operation           | owner                     | resumes from                                        |
+| ------------------- | ------------------------- | --------------------------------------------------- |
+| `settlement`        | commerce                  | each subscription's `settledThrough` cursor         |
+| `reconciliation`    | commerce                  | the saved run (phase and cursor), even the next day |
+| `connectors-health` | connectors                | connectors not checked within 50 minutes stay due   |
+| `catalog_refresh`   | catalog                   | `after`: the `resumeAfter` app of the last run      |
+| `audit_verify`      | infra (audit hash chains) | `after`: the `resumeAfter` scope of the last run    |
+| `drain`             | infra (runs due jobs)     | the queue                                           |
+
+`drain` and `audit_verify` are reserved: a module registering them is a boot error.
 
 ## Environment
 
 All variables are validated together at start (names only are reported, never values). No host is hardcoded.
 
-| Variable                        | Required | Description                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                   | yes      | Control-plane MongoDB connection string (never a client database).                                                                                                                                                                                                                                                                                                        |
-| `MONGODB_DB`                    |          | Database name; default: path of `MONGODB_URI`, else `ss_portal`.                                                                                                                                                                                                                                                                                                          |
-| `MONGODB_MAX_POOL_SIZE`         |          | Pool size per instance (default 5: one Atlas M0 cluster allows ~500 connections across every deployment and instance).                                                                                                                                                                                                                                                    |
-| `PORTAL_URL`                    | yes      | Canonical Portal URL (issuer of launches, audience of assertions, CSRF origin). https unless localhost in development.                                                                                                                                                                                                                                                    |
-| `PORTAL_SIGNING_KEYS`           | yes      | JSON array of private Ed25519 JWKs with unique `kid`s. The first signs; all are published in the JWKS.                                                                                                                                                                                                                                                                    |
-| `SECRETS_KEK`                   | yes      | `kid:base64(32 bytes)[,kid:base64…]`, first = active (one bare base64 key is accepted as `k1`).                                                                                                                                                                                                                                                                           |
-| `SESSION_SECRET`                | yes      | ≥ 32 bytes (base64 or text). HMAC key for session ids, recovery codes, throttle keys.                                                                                                                                                                                                                                                                                     |
-| `WEBSITE_KEY_PEPPER`            | yes      | ≥ 32 bytes, different from `SESSION_SECRET`. HMAC pepper for website secret keys at rest.                                                                                                                                                                                                                                                                                 |
-| `CRON_SECRET`                   | yes      | ≥ 32 characters. Cron routes require `Authorization: Bearer <CRON_SECRET>`.                                                                                                                                                                                                                                                                                               |
-| `WEBSITE_KEY_SIGNING_KEYS`      | prod     | JSON array of private Ed25519 JWKs that sign website keys only (first signs, all published; kids ≠ Portal kids). Outside production a key is derived from `SESSION_SECRET`.                                                                                                                                                                                               |
-| `IDEMPOTENCY_SECRET`            |          | ≥ 32 bytes. HMAC key of idempotency fingerprints (default: HKDF of `SESSION_SECRET`).                                                                                                                                                                                                                                                                                     |
-| `OUTBOUND_DEV_ALLOW_HOSTS`      |          | Comma-separated hosts/IPs outbound calls (event deliveries, registrations, identity-issuer JWKS, connector checks) may reach although private or plain http (`ctx.config.outbound.allowHosts`); ignored in production.                                                                                                                                                    |
-| `PLATFORM_SMTP_URL`             |          | Platform mailer `smtp(s)://user:pass@host:port` (percent-encode the credentials).                                                                                                                                                                                                                                                                                         |
-| `PLATFORM_MAIL_FROM`            |          | Sender, `Name <address>` or `address`; required with `PLATFORM_SMTP_URL`.                                                                                                                                                                                                                                                                                                 |
-| `PLATFORM_ASSET_STORAGE`        |          | Platform-owned artefact storage (pack assets, compiled website bundles — our software, never client data): JSON `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }` (S3-compatible, https in production), or `memory` / `file:<dir>` outside production. Without it the delivery routes answer 503.                    |
-| `DELIVERY_BUDGET_KB`            |          | Website bundle budget in KB gzip: Loader + Σ element `budget.js` + Σ product `budget.shared`, all measured minified and gzipped (default 60; PLAN F.18 has the reasoning).                                                                                                                                                                                                |
-| `PREVIEW_ORIGIN`                |          | Dedicated cookie-less preview origin (https, host ≠ `PORTAL_URL`'s, ideally another registrable domain) pointed at the same deployment. Preview links use it, the Portal host refuses `/p/*`, and that host serves only `/p/*` (API, `/w/*`, cron and console pages answer 404). Previews there stay `CSP: sandbox` + `allow-same-origin` and run the merchant's scripts. |
-| `PROBLEM_BASE_URI`              |          | RFC 9457 type base (default `<PORTAL_URL>/problems/`).                                                                                                                                                                                                                                                                                                                    |
-| `PORTAL_ENV`                    |          | `production` · `preview` · `development` · `test` (default from `NODE_ENV`).                                                                                                                                                                                                                                                                                              |
-| `PORTAL_VERSION`                |          | Reported by `/healthz` and `/v1/system/info` (default `dev`).                                                                                                                                                                                                                                                                                                             |
-| `LOG_LEVEL`                     |          | `debug` · `info` (default) · `warn` · `error` · `silent`.                                                                                                                                                                                                                                                                                                                 |
-| `TRUST_PROXY_HEADERS`           |          | `true` behind a proxy that sets `X-Forwarded-For` (needed for per-IP limits).                                                                                                                                                                                                                                                                                             |
-| `MAX_BODY_BYTES`                |          | Default body cap (1 MiB).                                                                                                                                                                                                                                                                                                                                                 |
-| `CRON_DEADLINE_MS`              |          | Cron time budget (50 000; keep below the route's `maxDuration` of 60 s).                                                                                                                                                                                                                                                                                                  |
-| `STAFF_SESSION_IDLE_MINUTES`    |          | Default 30.                                                                                                                                                                                                                                                                                                                                                               |
-| `STAFF_SESSION_MAX_HOURS`       |          | Default 12.                                                                                                                                                                                                                                                                                                                                                               |
-| `MERCHANT_SESSION_IDLE_MINUTES` |          | Default 1440.                                                                                                                                                                                                                                                                                                                                                             |
-| `MERCHANT_SESSION_MAX_HOURS`    |          | Default 336.                                                                                                                                                                                                                                                                                                                                                              |
+| Variable                        | Required | Description                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`                   | yes      | Control-plane MongoDB connection string (never a client database).                                                                                                                                                                                                                                                                                                  |
+| `MONGODB_DB`                    |          | Database name; default: path of `MONGODB_URI`, else `ss_portal`.                                                                                                                                                                                                                                                                                                    |
+| `MONGODB_MAX_POOL_SIZE`         |          | Pool size per instance (default 5: one Atlas M0 cluster allows ~500 connections across every deployment and instance).                                                                                                                                                                                                                                              |
+| `PORTAL_URL`                    | yes      | Canonical Portal URL (issuer of launches, audience of assertions, CSRF origin). https unless localhost in development.                                                                                                                                                                                                                                              |
+| `PORTAL_SIGNING_KEYS`           | yes      | JSON array of private Ed25519 JWKs with unique `kid`s. The first signs; all are published in the JWKS.                                                                                                                                                                                                                                                              |
+| `SECRETS_KEK`                   | yes      | `kid:base64(32 bytes)[,kid:base64…]`, first = active (one bare base64 key is accepted as `k1`).                                                                                                                                                                                                                                                                     |
+| `SESSION_SECRET`                | yes      | ≥ 32 bytes (base64 or text). HMAC key for session ids, recovery codes, throttle keys.                                                                                                                                                                                                                                                                               |
+| `WEBSITE_KEY_PEPPER`            | yes      | ≥ 32 bytes, different from `SESSION_SECRET`. HMAC pepper for website secret keys at rest.                                                                                                                                                                                                                                                                           |
+| `WEBSITE_KEY_SIGNING_KEYS`      | prod     | JSON array of private Ed25519 JWKs that sign website keys only (first signs, all published; kids ≠ Portal kids). Outside production a key is derived from `SESSION_SECRET`.                                                                                                                                                                                         |
+| `IDEMPOTENCY_SECRET`            |          | ≥ 32 bytes. HMAC key of idempotency fingerprints (default: HKDF of `SESSION_SECRET`).                                                                                                                                                                                                                                                                               |
+| `OUTBOUND_DEV_ALLOW_HOSTS`      |          | Comma-separated hosts/IPs outbound calls (event deliveries, registrations, identity-issuer JWKS, connector checks) may reach although private or plain http (`ctx.config.outbound.allowHosts`); ignored in production.                                                                                                                                              |
+| `PLATFORM_SMTP_URL`             |          | Platform mailer `smtp(s)://user:pass@host:port` (percent-encode the credentials).                                                                                                                                                                                                                                                                                   |
+| `PLATFORM_MAIL_FROM`            |          | Sender, `Name <address>` or `address`; required with `PLATFORM_SMTP_URL`.                                                                                                                                                                                                                                                                                           |
+| `PLATFORM_ASSET_STORAGE`        |          | Platform-owned artefact storage (pack assets, compiled website bundles — our software, never client data): JSON `{ endpoint?, region, bucket, accessKeyId, secretAccessKey, sessionToken?, forcePathStyle?, prefix? }` (S3-compatible, https in production), or `memory` / `file:<dir>` outside production. Without it the delivery routes answer 503.              |
+| `DELIVERY_BUDGET_KB`            |          | Website bundle budget in KB gzip: Loader + Σ element `budget.js` + Σ product `budget.shared`, all measured minified and gzipped (default 60; PLAN F.18 has the reasoning).                                                                                                                                                                                          |
+| `PREVIEW_ORIGIN`                |          | Dedicated cookie-less preview origin (https, host ≠ `PORTAL_URL`'s, ideally another registrable domain) pointed at the same deployment. Preview links use it, the Portal host refuses `/p/*`, and that host serves only `/p/*` (API, `/w/*` and console pages answer 404). Previews there stay `CSP: sandbox` + `allow-same-origin` and run the merchant's scripts. |
+| `PROBLEM_BASE_URI`              |          | RFC 9457 type base (default `<PORTAL_URL>/problems/`).                                                                                                                                                                                                                                                                                                              |
+| `PORTAL_ENV`                    |          | `production` · `preview` · `development` · `test` (default from `NODE_ENV`).                                                                                                                                                                                                                                                                                        |
+| `PORTAL_VERSION`                |          | Reported by `/healthz` and `/v1/system/info` (default `dev`).                                                                                                                                                                                                                                                                                                       |
+| `LOG_LEVEL`                     |          | `debug` · `info` (default) · `warn` · `error` · `silent`.                                                                                                                                                                                                                                                                                                           |
+| `TRUST_PROXY_HEADERS`           |          | `true` behind a proxy that sets `X-Forwarded-For` (needed for per-IP limits).                                                                                                                                                                                                                                                                                       |
+| `MAX_BODY_BYTES`                |          | Default body cap (1 MiB).                                                                                                                                                                                                                                                                                                                                           |
+| `OPERATION_DEADLINE_MS`         |          | Time budget of one admin operation (50 000; keep below the function time limit, 60 s on Vercel Hobby).                                                                                                                                                                                                                                                              |
+| `STAFF_SESSION_IDLE_MINUTES`    |          | Default 30.                                                                                                                                                                                                                                                                                                                                                         |
+| `STAFF_SESSION_MAX_HOURS`       |          | Default 12.                                                                                                                                                                                                                                                                                                                                                         |
+| `MERCHANT_SESSION_IDLE_MINUTES` |          | Default 1440.                                                                                                                                                                                                                                                                                                                                                       |
+| `MERCHANT_SESSION_MAX_HOURS`    |          | Default 336.                                                                                                                                                                                                                                                                                                                                                        |
 
 `instrumentation.js` loads the configuration when a server instance starts: an invalid configuration is logged as
 `Failed to prepare server … Invalid Portal configuration: …` and every request (including `/healthz`) fails, so a
@@ -235,7 +244,7 @@ is filtered by the staff member's permissions (`infra/rbac.js`).
   sign-in, verification afterwards), `/admin/forgot-password`, and `/staff/reset-password` (target of the staff setup
   and reset e-mails). The staff session is the `__Host-ss_staff` cookie, separate from merchant sessions; a session
   without its second factor only reaches the MFA routes.
-- **Pages:** dashboard (deliveries, dead letters, unhealthy service apps, crons, job queue, last audit verification,
+- **Pages:** dashboard (deliveries, dead letters, unhealthy service apps, operations with Run buttons, job queue, last audit verification,
   reconciliation, alerts) · merchants (search, detail, suspend/resume, notes, impersonation) · websites (lookup,
   transfer) · apps (register, pack upload, versions with manifest diff and breaking flags, review, lifecycle,
   environments, keys, health, admin launch per merchant or app-wide) · subscriptions (admin overrides and locks,
@@ -243,15 +252,15 @@ is filtered by the staff member's permissions (`infra/rbac.js`).
   verification, settlement, reconciliation, alerts) · integration (delivery log, dead letters, replay, metrics) ·
   connectors (status only) · audit log (search, chain verification) · staff (invite, roles, MFA reset, deactivate).
 
-| Route (staff)                                       | Permission                | Notes                                                                        |
-| --------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------- |
-| `GET /v1/admin/merchants?q=`                        | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix |
-| `GET\|POST /v1/admin/merchants/:merchantId/notes`   | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)    |
-| `POST /v1/admin/merchants/:merchantId/impersonate`  | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)          |
-| `POST /v1/auth/impersonation/exchange`              | staff session             | `{ token }` → merchant session cookie with `via`                             |
-| `GET /v1/admin/system/health`                       | `platform.jobs.read`      | `{ crons: [{ name, status, lastRun }], jobs, audit: { lastVerification } }`  |
-| `GET /v1/admin/audit?scope&actorId&targetId&action` | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses   |
-| `GET /v1/admin/audit/verification?scope=`           | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited             |
+| Route (staff)                                       | Permission                | Notes                                                                            |
+| --------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------- |
+| `GET /v1/admin/merchants?q=`                        | `platform.merchants.read` | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix     |
+| `GET\|POST /v1/admin/merchants/:merchantId/notes`   | `.read` / `.write`        | append-only staff notes, audited (`merchant.note_added`, body not copied)        |
+| `POST /v1/admin/merchants/:merchantId/impersonate`  | `platform.impersonate`    | `{ userId, minutes ≤ 60, reason }` → one-time exchange token (60 s)              |
+| `POST /v1/auth/impersonation/exchange`              | staff session             | `{ token }` → merchant session cookie with `via`                                 |
+| `GET /v1/admin/system/health`                       | `platform.jobs.read`      | `{ operations: [{ name, status, lastRun }], jobs, audit: { lastVerification } }` |
+| `GET /v1/admin/audit?scope&actorId&targetId&action` | `platform.audit.read`     | newest first, cursor pagination; `action` may end in `.*`; no IP addresses       |
+| `GET /v1/admin/audit/verification?scope=`           | `platform.audit.read`     | recomputes one chain (`global` or `merchant:<id>`), rate-limited                 |
 
 **Impersonation.** Starting one mints a single-use token bound to the staff member (only its HMAC is stored; an
 attempt by anyone else does not burn it). The staff member's own browser exchanges it within 60 s for a merchant
@@ -283,7 +292,7 @@ by itself. A local `mongod` (`mongodb://127.0.0.1:27017/ss_portal`) works the sa
 One Vercel project (Hobby works), one database and database user on the shared Atlas M0 cluster (PLAN §13, F.19). The
 `MongoClient` is created once per instance and cached on `globalThis` (`getMongoClient`). Set the variables above (`TRUST_PROXY_HEADERS=true` behind the
 hosting edge). The deploy pipeline runs `db:indexes` and `db:migrate` before traffic moves (migration gate).
-The one cron in `vercel.json` calls `/api/cron/daily` with the `CRON_SECRET` bearer.
+There is nothing to schedule: `vercel.json` has no crons and no `CRON_SECRET` exists.
 
 ## Checks
 

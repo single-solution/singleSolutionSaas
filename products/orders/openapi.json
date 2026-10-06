@@ -2161,6 +2161,53 @@
 					}
 				}
 			}
+		},
+		"/v1/dashboard/due:run": {
+			"post": {
+				"operationId": "postV1DashboardDueRun",
+				"tags": ["dashboard"],
+				"summary": "Process due now: move the website's orders whose status expired, deliver outbox entries a crashed request left behind and send due customer message retries, at most 100 of each per call (call again while `more`). Nothing runs on a timer; the same work happens for an order when it is read.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"expired": {
+											"type": "integer"
+										},
+										"redelivered": {
+											"type": "integer"
+										},
+										"messages": {
+											"type": "integer"
+										},
+										"more": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"expired": 3,
+									"redelivered": 0,
+									"messages": 1,
+									"more": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
 		}
 	},
 	"components": {
@@ -2169,6 +2216,12 @@
 				"type": "http",
 				"scheme": "bearer",
 				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
 			}
 		},
 		"schemas": {

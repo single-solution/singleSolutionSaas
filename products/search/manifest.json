@@ -6,7 +6,7 @@
 		"kind": "service",
 		"version": "1.0.0",
 		"category": "tools",
-		"description": "Search for any website: an index of merchant-defined document types (products, articles, docs, listings, pages) in the merchant's own database, served by MongoDB Atlas Search when the database supports it (index definitions managed by the product) or by a portable engine (inverted index, prefix matching, bounded typo tolerance, field boosts); filled from Catalog item events, scheduled crawls of a public JSON feed or sitemap, and sk_ API upserts; ranking with field boosts, synonyms and pinned results; popular and recent suggestions; an accessible search overlay; aggregated query analytics without personal data."
+		"description": "Search for any website: an index of merchant-defined document types (products, articles, docs, listings, pages) in the merchant's own database, served by MongoDB Atlas Search when the database supports it (index definitions managed by the product) or by a portable engine (inverted index, prefix matching, bounded typo tolerance, field boosts); filled from Catalog item events, on-demand crawls of a public JSON feed or sitemap, and sk_ API upserts; ranking with field boosts, synonyms and pinned results; popular and recent suggestions; an accessible search overlay; aggregated query analytics without personal data."
 	},
 	"endpoints": {
 		"base": "https://search.example.com",
@@ -79,7 +79,7 @@
 		{
 			"key": "sources",
 			"name": "Sources",
-			"description": "What fills the index: Catalog item.*@1 events (automatic when Catalog is active), scheduled crawls of the website's own public JSON feed or sitemap (fetched through the SSRF-guarded outbound client with page, size and time limits), and direct sk_ API upserts of any document type.",
+			"description": "What fills the index: Catalog item.*@1 events (automatic when Catalog is active), on-demand crawls of the website's own public JSON feed or sitemap (started from the dashboard or the API, item pages re-crawled on Catalog events; fetched through the SSRF-guarded outbound client with page, size and time limits), and direct sk_ API upserts of any document type.",
 			"modes": ["C"],
 			"stateful": true,
 			"price": {

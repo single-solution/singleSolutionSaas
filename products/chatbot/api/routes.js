@@ -1,7 +1,9 @@
 /**
  * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
  * the .well-known endpoints, /sso and — in development — the certification probes) plus the Chatbot Mode C API and
- * the dashboard API (SSO sessions). The cron route lives in jobs/ and is added by the composition root.
+ * the dashboard API (SSO sessions). There are no cron or background routes: work that is due (snooze wake-ups, SLA
+ * breaches, auto-close) is done when a conversation is read, deleted records are purged by TTL indexes and due web
+ * pages are refreshed from the dashboard or the API.
  *
  * Every product route is gated by its element (403 element_disabled in every mode). POSTs that create or move state
  * require an Idempotency-Key (app-kit stores and replays the response). Browser (`pk_`) routes identify the customer
@@ -17,7 +19,7 @@ import { leakCheck, moderateInbound, moderateOutbound } from '../core/moderation
 import { checkCondition } from '../core/rules.js';
 import { parametersOf, toolSchemas } from '../core/tools.js';
 import { HOUR_MS, iso, monthKey } from '../core/time.js';
-import { repositoriesFor } from '../adapters/db.js';
+import { purgeDate, repositoriesFor } from '../adapters/db.js';
 import { DASHBOARD_WRITE_ROLES } from './dashboard.js';
 import { createEventHandlers } from './events.js';
 import { createNoteHandler } from './notes.js';
@@ -41,6 +43,24 @@ export const retentionDays = (duration) => {
 	const match = typeof duration === 'string' ? /^P(\d{1,5})D$/.exec(duration) : null;
 	return match ? Number(match[1]) : 30;
 };
+
+/**
+ * Repositories whose conversation reads settle what became due (SLA breaches, auto-close) for the conversations read.
+ * @param {import('../adapters/db.js').Repositories} repos
+ * @param {(conversation: any) => Promise<any>} settle
+ * @returns {import('../adapters/db.js').Repositories}
+ */
+export const settledRepos = (repos, settle) =>
+	Object.freeze({
+		...repos,
+		conversations: Object.freeze({
+			...repos.conversations,
+			/** @param {string} id */
+			get: async (id) => settle(await repos.conversations.get(id)),
+			/** @param {Parameters<typeof repos.conversations.list>[0]} query */
+			list: async (query) => Promise.all((await repos.conversations.list(query)).map(settle)),
+		}),
+	});
 
 /** Cursor `<at>|<id>` of a row. @param {string} field */
 const cursorOn = (field) => (/** @type {any} */ row) => `${field.split('.').reduce((v, k) => v?.[k], row)}|${row.id}`;
@@ -77,13 +97,15 @@ export const createChatbot = (app) => {
 	 * @returns {Promise<Site>}
 	 */
 	const siteOf = async (websiteId, doc, domain) => {
-		await app.registry.remember(websiteId);
-		return {
+		/** @type {Site} */
+		const s = {
 			websiteId,
 			domain: domain ?? (typeof doc.domain === 'string' ? doc.domain : null),
 			settings: settingsForDoc(product, doc),
 			repos: await repoFor(websiteId, { merchantId: doc.merchantId, env: doc.env }),
 		};
+		s.repos = settledRepos(s.repos, (conversation) => service.settle(s, conversation));
+		return s;
 	};
 	/** Site from the entitlement (null without an active subscription or with the window off). @param {string} websiteId */
 	const siteFor = async (websiteId) => {
@@ -603,9 +625,7 @@ export const buildRoutes = (chatbot) => {
 			path: '/v1/agents/:id',
 			...website('inbox', 'sk'),
 			handler: async (ctx) =>
-				(await (await site(ctx)).repos.agents.remove(ctx.params.id, iso(app.now())))
-					? noContent()
-					: problem('not_found', 'No such agent.'),
+				(await removeAgent(await site(ctx), ctx.params.id)) ? noContent() : problem('not_found', 'No such agent.'),
 		}),
 		defineRoute({
 			method: 'GET',
@@ -846,7 +866,8 @@ export const buildRoutes = (chatbot) => {
 			...website('knowledge', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				if (!(await s.repos.entries.remove(ctx.params.id, iso(app.now())))) return problem('not_found', 'No such entry.');
+				if (!(await s.repos.entries.remove(ctx.params.id, iso(app.now()), purgeAt(s))))
+					return problem('not_found', 'No such entry.');
 				await s.repos.chunks.removeSource('faq', ctx.params.id);
 				return noContent();
 			},
@@ -1363,7 +1384,29 @@ export const buildRoutes = (chatbot) => {
 				return result.ok ? created(result.entry) : failed(result);
 			},
 		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/knowledge-sources:refresh',
+			auth: 'launch',
+			element: 'knowledge',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: false,
+			handler: async (ctx) => {
+				const s = await dashboardSite(ctx);
+				return s ? ok(await service.refreshDue(s)) : problem('bad_request', 'Open the dashboard for a website.');
+			},
+		}),
 	];
+
+	/** When a record deleted now is purged (TTL index). @param {Site} s */
+	function purgeAt(s) {
+		return purgeDate(iso(app.now()), s.settings.transcripts.deleted_retention_days);
+	}
+
+	/** Soft-delete an agent (purged by the TTL index). @param {Site} s @param {string} id */
+	async function removeAgent(s, id) {
+		return s.repos.agents.remove(id, iso(app.now()), purgeAt(s));
+	}
 
 	/**
 	 * Create and index a FAQ entry (idempotent per key; bounded by `knowledge.max_entries`).

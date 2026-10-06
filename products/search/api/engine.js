@@ -4,7 +4,7 @@
  *
  * - **atlas** — MongoDB Atlas Search on the merchant's database (`$search` with the product-managed index), used when
  *   `index.engine` is `auto` or `atlas` and the index is ready. The state is probed at most every 10 minutes per
- *   website (and by the sweep job), stored for the dashboard, and a failing `$search` falls back to the portable
+ *   website when a search needs it (and by the dashboard re-check), stored for the dashboard, and a failing `$search` falls back to the portable
  *   engine for a cooldown instead of failing the visitor's search.
  * - **portable** — the product's own engine on any MongoDB: vocabulary lookups (exact, prefix range scan, trigram
  *   typo candidates checked with a bounded edit distance), one indexed candidate query over the multikey `terms`

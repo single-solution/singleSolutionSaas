@@ -87,6 +87,8 @@ export const adminApi = Object.freeze({
 	reject: (/** @type {string} */ a, /** @type {number | string} */ v) =>
 		`/v1/admin/apps/${e(a)}/versions/${e(String(v))}/reject`,
 	refresh: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/refresh`,
+	/** Staff "Retry now" for a product's queued event deliveries */
+	retryDeliveries: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/deliveries/retry`,
 	lifecycle: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/lifecycle`,
 	environments: (/** @type {string} */ a) => `/v1/admin/apps/${e(a)}/environments`,
 	revokeAppKey: (/** @type {string} */ a, /** @type {string} */ kid) => `/v1/admin/apps/${e(a)}/keys/${e(kid)}/revoke`,
@@ -104,6 +106,8 @@ export const adminApi = Object.freeze({
 		`/v1/admin/merchants/${e(m)}/ledger${query(q)}`,
 	ledgerVerification: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/ledger/verification`,
 	settlement: () => '/v1/admin/commerce/settlement',
+	/** On-demand admin operation (`drain`, `audit_verify`, `connectors-health`, `catalog_refresh`, …); body `{ after? }` */
+	operation: (/** @type {string} */ name) => `/v1/admin/operations/${e(name)}`,
 	reconciliation: () => '/v1/admin/commerce/reconciliation',
 	alerts: (/** @type {{ merchantId?: string | null }} */ q = {}) => `/v1/admin/commerce/alerts${query(q)}`,
 
@@ -136,7 +140,7 @@ export const adminApi = Object.freeze({
 	) => `/v1/admin/connectors${query(q)}`,
 
 	// observability (system module)
-	/** `{ crons: [{ name, status, lastRun }], jobs: { queued, leased, retrying, dead }, audit: { lastVerification } }` */
+	/** `{ operations: [{ name, status, lastRun }], jobs: { queued, leased, retrying, dead }, audit: { lastVerification } }` */
 	health: () => '/v1/admin/system/health',
 	/** newest-first audit entries `{ items, nextCursor }` */
 	audit: (

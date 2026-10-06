@@ -1761,6 +1761,49 @@
 					}
 				}
 			}
+		},
+		"/v1/dashboard/expiry:run": {
+			"post": {
+				"operationId": "postV1DashboardExpiryRun",
+				"tags": ["dashboard"],
+				"summary": "Process expired now: cancel the website's expired holds (stock, codes and points go back) and publish checkout.cart_abandoned@1 for due carts, at most 100 of each per call (call again while `more`).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"expired": {
+											"type": "integer"
+										},
+										"abandoned": {
+											"type": "integer"
+										},
+										"more": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"expired": 2,
+									"abandoned": 5,
+									"more": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
 		}
 	},
 	"components": {
@@ -1769,6 +1812,12 @@
 				"type": "http",
 				"scheme": "bearer",
 				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
 			}
 		},
 		"schemas": {

@@ -3,7 +3,8 @@
  * the .well-known endpoints, /sso and — in development — the certification probes) plus the Alerts Mode C API, the
  * hosted link pages and the dashboard API (SSO sessions). Every product route is gated by its element: a disabled
  * element answers 403 element_disabled in every mode. POSTs that move state require an Idempotency-Key (app-kit stores
- * and replays the response); handlers are thin — validation and rules live in core/. The cron route lives in jobs/.
+ * and replays the response); handlers are thin — validation and rules live in core/. Nothing runs on a timer: the
+ * outbox is run by triggers (inline dispatch), `POST /v1/messages:dispatch` and the dashboard's "Send due now" button.
  */
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { addressFor, contactIdOf } from '../core/contact.js';
@@ -13,12 +14,16 @@ import { enabledTypes, isId, targetKeyOf } from '../core/types.js';
 import { isObject, validateTrigger } from '../core/validate.js';
 import { messageView, subscriptionView, triggerView } from '../core/views.js';
 import { analyticsOf } from './analytics.js';
+import { DASHBOARD_WRITE_ROLES } from './dashboard.js';
 import { createEventHandlers } from './events.js';
 import { createPages } from './pages.js';
 import { createAlerts } from './service.js';
 import { sessionView } from './session.js';
 
 /** @typedef {import('./service.js').Alerts} Alerts */
+
+/** Messages one manual outbox run (API or dashboard button) sends at most. */
+export const SEND_NOW_LIMIT = 200;
 /** @typedef {import('./service.js').Site} Site */
 
 export { createAlerts };
@@ -88,7 +93,7 @@ export const changeOf = (body, at, site) => {
  * @param {Alerts} alerts
  */
 export const buildRoutes = (alerts) => {
-	const { product, capture, engine, dispatcher, siteOf, deps } = alerts;
+	const { product, capture, engine, siteOf, deps } = alerts;
 	const pages = createPages({ alerts });
 	/** @param {any} ctx */
 	const site = (ctx) => siteOf(ctx.websiteId, ctx.entitlement.doc);
@@ -182,8 +187,7 @@ export const buildRoutes = (alerts) => {
 							: { index, ok: false, errors: [{ path: '', code: 'invalid' }] },
 					);
 				}
-				const sent =
-					queued > 0 && s.settings.dispatch.inline ? await dispatcher.run(s, { limit: Math.min(200, queued + 10) }) : null;
+				const sent = await engine.sendAfterTrigger(s, queued);
 				return ok({ results, queued, dispatched: sent });
 			},
 		}),
@@ -216,8 +220,7 @@ export const buildRoutes = (alerts) => {
 					processed += 1;
 					queued += Number(run?.queued ?? 0);
 				}
-				const sent =
-					queued > 0 && s.settings.dispatch.inline ? await dispatcher.run(s, { limit: Math.min(200, queued + 10) }) : null;
+				const sent = await engine.sendAfterTrigger(s, queued);
 				return ok({ rows: parsed.rows.length, processed, queued, errors: errors.slice(0, 100), dispatched: sent });
 			},
 		}),
@@ -372,10 +375,7 @@ export const buildRoutes = (alerts) => {
 			...website('dispatch'),
 			idempotent: 'optional',
 			handler: async (ctx) => {
-				const s = await site(ctx);
-				const recovered = await dispatcher.recover(s);
-				const resumed = await engine.resume(s);
-				return ok({ ...(await dispatcher.run(s, { limit: 200 })), recovered, resumed });
+				return ok(await engine.sendDue(await site(ctx), { limit: SEND_NOW_LIMIT }));
 			},
 		}),
 
@@ -496,6 +496,18 @@ export const buildRoutes = (alerts) => {
 					active: await s.repos.subscriptions.countActive(),
 					analytics: await analyticsOf(s, s.settings.analytics.defaultDays, deps.now()),
 				});
+			},
+		}),
+		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/messages:dispatch',
+			auth: 'launch',
+			element: 'dispatch',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: 'optional',
+			handler: async (ctx) => {
+				if (!ctx.websiteId || !ctx.entitlement) return problem('bad_request', 'Open the dashboard for a website.');
+				return ok(await engine.sendDue(await site(ctx), { limit: SEND_NOW_LIMIT }));
 			},
 		}),
 	];

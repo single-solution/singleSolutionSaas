@@ -114,7 +114,9 @@ credits, settlement, spend caps.
   documents of every live subscription of an app, e.g. after a manifest is accepted) → `{ invalidated }`
 - `previewDocument({ subscriptionId, layers })` → the canonical, unsigned document the subscription would get with
   `layers` (config dry runs; nothing stored or emitted)
-- Crons `settlement` (hourly), `reconciliation` (nightly).
+- Settlement on read (F.19, no cron): `settleDue(merchantId)` runs before balance, meter and statement reads, product
+  document fetches (`documentFor`), subscription changes, and right after a product's usage batch; admin operations
+  `settlement` and `reconciliation` run on demand.
 - Reads configuration layers from `config.layersFor(subscriptionId)`; resource status from
   `connectors.statusFor(websiteId)`; the website's identity issuer from `identity.identityFor(websiteId)` (document
   `identity` section; it extends the content hash, so an issuer change or key rotation bumps the version) and the
@@ -141,7 +143,8 @@ Layered overrides with versions, locks, templates and scheduled changes for subs
   → new version (validated against the manifest feature schema via `@ss/contracts` `validateFeatureConfig`)
 - `history(target)`, `rollback({ target, version, actor })`
 - Templates: `saveTemplate`, `applyTemplate({ templateId, websiteIds })`
-- Scheduled changes: `schedule({ change, at })` + job `config.apply_scheduled`
+- Scheduled changes: `schedule({ change, at })`, applied on read (`applyDue(merchantId)`, called by `layersFor` and
+  `listSchedules`) at or after `at` — no job
 - Calls `commerce.invalidate(subscriptionId)` (commerce exposes `invalidate`) after every change.
 
 ## integration (`modules/integration`)
@@ -161,7 +164,9 @@ idempotencyKey)`; payloads are NOT persisted in Portal — only routing metadata
   carry no `websiteId` in the envelope and need `appIds`.
 - Fan-out: subscriptions derived from accepted manifests (`events.consumes`, which may hold globs such as `custom.*` or
   `order.*@1`, each covered by an `events.subscribe:` scope) × active subscriptions; deliveries are jobs
-  `integration.deliver` signed with `@ss/protocol` `signEvent`, retries with backoff, DLQ, replay.
+  `integration.deliver` signed with `@ss/protocol` `signEvent`, attempted right after the ingesting request; a failed
+  one is retried (backoff, then due) on the next delivery to that product and when the product next calls the Portal
+  (port `productCalled`), or by staff (`POST /v1/admin/apps/:appId/deliveries/retry`, `retryNow`); DLQ, replay.
 - **Delivery target:** the app's registered environment base (`catalog.getApp().environments`) + the manifest's
   `endpoints.events` path: events of `test` websites go to `staging` when one is registered, everything else to
   `production`; no environment → dead-lettered `no_endpoint`. https only; plain http and private addresses only for
@@ -255,9 +260,10 @@ uploadPath }` (same descriptor = same version). Then `PUT /v1/product/ui-bundles
 strings?, placement? }] }, actor })` → `{ previewId, url, expiresAt, version, budget, elements, warnings }`;
   `servePreview({ token, path, search, host })`. With `PREVIEW_ORIGIN` (F.16) preview URLs use that origin, `/p/*` on
   the Portal host is refused (`delivery_preview_refused`), and the preview host serves nothing but `/p/*` (404 from
-  `portal.handle` for API, `/w/*` and cron paths; `proxy.js` for console pages). There the page keeps `CSP: sandbox`
+  `portal.handle` for API and `/w/*` paths; `proxy.js` for console pages). There the page keeps `CSP: sandbox`
   but adds `allow-same-origin` and admits the merchant's own scripts (`script-src https: 'unsafe-inline'`).
-- Job `delivery.compile`. Problems `delivery_budget_exceeded`, `delivery_asset_mismatch`, `delivery_preview_refused`.
+- Job `delivery.compile` (runs right after the request that asked for it; a failed one is retried when the website's
+  loader is next served). Problems `delivery_budget_exceeded`, `delivery_asset_mismatch`, `delivery_preview_refused`.
 
 - Commerce calls `requestCompile` (see commerce); the compile reads only public service functions, so delivery has no
   write path into other modules except `identity.issueKey` / `revokeKey` for its one `pk_` key.

@@ -426,11 +426,25 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			 */
 			close: async (id, set) =>
 				(await dataRequests.updateOne({ ...w, id, status: 'pending' }, { $set: set })).modifiedCount === 1,
-			/** Deletions due at `at` (ISO). @param {string} at @param {number} limit */
-			due: async (at, limit) =>
+			/**
+			 * Deletions due at `at` (ISO), optionally only of some customers.
+			 * @param {string} at
+			 * @param {number} limit
+			 * @param {string[]} [customerIds]
+			 */
+			due: async (at, limit, customerIds) =>
 				(
 					await dataRequests
-						.find({ ...w, type: 'delete', status: 'pending', effectiveAt: { $lte: at } }, { limit })
+						.find(
+							{
+								...w,
+								type: 'delete',
+								status: 'pending',
+								effectiveAt: { $lte: at },
+								...(customerIds ? { customerId: { $in: customerIds } } : {}),
+							},
+							{ limit },
+						)
 						.toArray()
 				).map(strip),
 			/** @param {Record<string, unknown>} [filter] */

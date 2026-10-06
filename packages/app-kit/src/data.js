@@ -404,9 +404,6 @@ export const createData = ({
 			createSingleFlight()
 		);
 	const pools = poolRegistry();
-	/** @type {ReturnType<typeof setInterval> | undefined} */
-	let sweeper;
-
 	/**
 	 * Close pools unused for longer than `idleMs`.
 	 * @param {{ idleMs?: number }} [options]
@@ -473,10 +470,6 @@ export const createData = ({
 				});
 			entry = { client: connecting, lastUsed: now() };
 			pools.set(key, entry);
-			if (autoSweep && !sweeper && idleMs > 0) {
-				sweeper = setInterval(() => void closeIdle(), Math.max(1000, Math.floor(idleMs / 2)));
-				sweeper.unref?.();
-			}
 		}
 		entry.lastUsed = now();
 		return { key, client: entry.client };
@@ -491,6 +484,8 @@ export const createData = ({
 	const forWebsite = async (websiteId, stampFields = {}) => {
 		if (typeof websiteId !== 'string' || websiteId.length === 0) throw kitError('invalid_argument', 'websiteId is required');
 		const { uri, dbName } = await descriptorFor(websiteId);
+		// pools unused for `idleMs` are closed when the next website is served (no timer)
+		if (autoSweep && idleMs > 0) void closeIdle();
 		const { key, client: clientPromise } = clientFor(uri);
 		const client = await clientPromise;
 		const db = client.db(dbName);
@@ -619,8 +614,6 @@ export const createData = ({
 
 	/** Close every pool this process opened (tests, graceful shutdown). */
 	const closeAll = async () => {
-		if (sweeper) clearInterval(sweeper);
-		sweeper = undefined;
 		const entries = [...pools.values()];
 		pools.clear();
 		await Promise.all(entries.map((entry) => entry.client.then((client) => client.close()).catch(() => {})));

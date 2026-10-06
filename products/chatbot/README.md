@@ -29,7 +29,7 @@ a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — no
 | `proactive`    | A, B, C |      150 | —                                            | Rules@1 on page / visitor / cart, delay, open window, per-session / per-day / cooldown caps, dismissal memory, global daily cap, not while a conversation is open                                                                                                                                                       |
 | `lead_capture` | B, C    |      150 | —                                            | Configurable fields, consent, when it is offered, `chatbot.lead_captured@1`, optional forwarding to a webhook tool                                                                                                                                                                                                      |
 | `csat`         | B, C    |      100 | —                                            | Scale 2/3/5/10, when asked (on close, after a person, manual), comment, target and summary                                                                                                                                                                                                                              |
-| `transcripts`  | C       |      100 | —                                            | Retention days (TTL index on `retainUntil`), JSON/text export for merchants and (optionally) customers, internal notes on request, purge of soft-deleted records                                                                                                                                                        |
+| `transcripts`  | C       |      100 | —                                            | Retention days (TTL index on `retainUntil`), JSON/text export for merchants and (optionally) customers, internal notes on request, TTL purge of soft-deleted records                                                                                                                                                    |
 | `moderation`   | C       |      100 | —                                            | PII redaction in/out (Luhn cards, mod-97 IBANs, e-mails, phones, IPs), redaction before the AI, leak filter (credential shapes, internals phrases), link policy (website only / allow-list / none / any), blocked terms (mask / reject)                                                                                 |
 
 Plans: **starter** = window, launcher, ai_replies, knowledge, handoff, lead_capture, moderation (1 550 mc/h; add-ons
@@ -91,7 +91,7 @@ tokens only, budgets 20 / 8 / 8 KB.
 ## Dashboard (SSO)
 
 `/sso?launch=` → `ss_session`: overview KPIs, inbox (status filter), a live conversation (polled with the same transport,
-replies, canned replies, internal notes, status), knowledge (FAQ entries, page states), settings (link to the
+replies, canned replies, internal notes, status), knowledge (FAQ entries, page states, "Refresh due pages"), settings (link to the
 subscription's configuration in the Portal and the AI connector state). Demo launches show sample conversations;
 impersonation shows the audit banner; replies by dashboard users create their agent record when the inbox is on.
 
@@ -120,10 +120,9 @@ elements, 10 mc metered for the tokens above the included amount).
    workspace root automatically.
 2. Environment variables (Production): `SS_PORTAL_URL` (pinned Portal), `SS_APP_SIGNING_KEY` (Ed25519 private JWK, one
    line), `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID` (optional), `SS_PRODUCT_DB_URI` (the product's own small MongoDB:
-   sessions, caches, usage queue, site registry — required in production), `CRON_SECRET` (≥ 16 chars, for
-   the daily catch-up `/cron/maintenance` in `vercel.json`; per-website maintenance also runs after requests, at most
-   every 15 minutes), optional `CHATBOT_TOKEN_SECRET` (≥ 32 chars; else derived
-   from the signing key) and `SS_LOG_LEVEL`.
+   sessions, caches, usage queue — required in production), optional `CHATBOT_TOKEN_SECRET` (≥ 32 chars; else derived
+   from the signing key) and `SS_LOG_LEVEL`. There are no crons: nothing runs unless a request arrives (see
+   [jobs/README.md](jobs/README.md)).
 3. Deploy, register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
 4. Run `ss certify . --url https://<deployment> --token <token>` against a fresh deployment before listing.
@@ -133,8 +132,10 @@ elements, 10 mc metered for the tokens above the included amount).
 - **Unreleased** — knowledge pages and webhook tools use app-kit's `product.outbound.fetch` (the private connector
   workaround is gone); `window.messages_per_minute` is an app-kit dynamic route limit on
   `POST /v1/conversations/{id}/messages` (per customer / guest marker for browsers, per conversation for servers; agent
-  and bot replies are not limited); the maintenance job no longer flushes usage (the kit does); free-tier hosting: the maintenance cron runs once a day as a catch-up; per-website maintenance runs after
-  requests (`product.background.every`, at most every 15 minutes per website), and a snoozed conversation whose time
-  has passed reads as open (and is woken when read) before any job runs.
+  and bot replies are not limited); event-driven only — the maintenance cron, the background task after requests and
+  the site registry are gone: a passed snooze reads as open and is woken when read, SLA breaches are recorded and idle
+  conversations auto-closed when the conversation is read or listed (the inbox KPI counts missed targets right away),
+  deleted FAQ entries and agents are purged by a TTL index on `purgeAt`, and due web pages are refreshed by the
+  dashboard's "Refresh due pages" button (`POST /v1/dashboard/knowledge-sources:refresh`) or per page by the API.
 - **1.0.0** — first release: thirteen elements, three renderers, six headless cores, REST v1 (45 paths), dashboard,
-  maintenance cron.
+  maintenance cron (removed since).

@@ -13,7 +13,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createSearchApp, wireEvents } from '../api/routes.js';
-import { cronRoutes, scheduleSweep } from '../jobs/sweep.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -23,7 +22,6 @@ export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = { origin: `https://${DOMAIN}` };
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const HOUR = 3_600_000;
 export const DAY = 24 * HOUR;
@@ -94,13 +92,12 @@ export const createHarness = async ({ config = {}, elements = {}, website = { ti
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_search_api_tests_0123456789'),
-			CRON_SECRET,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: site.send },
 	});
-	const search = scheduleSweep(wireEvents(createSearchApp(app, atlas)));
-	const handle = createRequestHandler(search.product, [...buildRoutes(search), ...cronRoutes(search)], {
+	const search = wireEvents(createSearchApp(app, atlas));
+	const handle = createRequestHandler(search.product, buildRoutes(search), {
 		maxBodyBytes: 8_000_000,
 	});
 

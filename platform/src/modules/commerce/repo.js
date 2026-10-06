@@ -1,6 +1,6 @@
 /**
  * Data access of the `commerce` module (its own collections only). Merchant-scoped collections are reached with
- * `forMerchant(merchantId)` whenever the merchant is known; lookups by a global id (product calls, crons) use the
+ * `forMerchant(merchantId)` whenever the merchant is known; lookups by a global id (product calls, admin operations) use the
  * explicit `acrossMerchants()` view with an exact-id filter.
  * @module
  */

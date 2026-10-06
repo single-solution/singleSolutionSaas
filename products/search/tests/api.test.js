@@ -1,6 +1,6 @@
 /** Mode C API through the real handler: documents, search, limits, suggestions, analytics, catalog events, views. */
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { CRON_SECRET, DAY, WEBSITE, createHarness } from './harness.js';
+import { DAY, WEBSITE, createHarness } from './harness.js';
 
 const TYPES = [
 	{
@@ -68,7 +68,8 @@ describe('documents and search', () => {
 
 	it('keeps the vocabulary in step and searches with pk_ without private fields', async () => {
 		const terms = await h.collection('terms').find({ websiteId: WEBSITE }).toArray();
-		expect(terms.find((/** @type {any} */ t) => t.term === 'zebra')).toMatchObject({ df: 0, pdf: 0 });
+		// a term no document uses any more leaves the vocabulary in the same write (no cleanup pass)
+		expect(terms.find((/** @type {any} */ t) => t.term === 'zebra')).toBeUndefined();
 		expect(terms.find((/** @type {any} */ t) => t.term === 'acme')).toMatchObject({ df: 1, pdf: 1 });
 		const result = await h.call('GET', '/v1/search?q=linen&limit=5', { key: h.pk });
 		expect(result.status).toBe(200);
@@ -220,7 +221,7 @@ describe('rate limits, suggestions, analytics and clicks', () => {
 	});
 });
 
-describe('catalog events, overlay views, dashboard routes and the sweep', () => {
+describe('catalog events, overlay views and dashboard routes', () => {
 	/** @type {Awaited<ReturnType<typeof createHarness>>} */
 	let h;
 	beforeAll(async () => {
@@ -277,13 +278,5 @@ describe('catalog events, overlay views, dashboard routes and the sweep', () => 
 		const demo = await h.session('demo');
 		expect((await h.call('POST', '/v1/dashboard/engine/check', { key: demo })).status).toBe(403);
 		expect((await h.call('GET', '/v1/session', { key: merchant })).json).toMatchObject({ kind: 'merchant' });
-	});
-
-	it('sweeps every known website with the cron secret', async () => {
-		expect((await h.call('GET', '/cron/sweep', { key: null })).status).toBe(401);
-		const swept = await h.call('GET', '/cron/sweep', { key: CRON_SECRET });
-		expect(swept.status).toBe(200);
-		expect(swept.json.results[0]).toMatchObject({ websiteId: WEBSITE, crawled: 0 });
-		expect(typeof swept.json.results[0].termsRemoved).toBe('number');
 	});
 });

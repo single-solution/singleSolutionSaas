@@ -12,7 +12,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createOrders, wireEvents } from '../api/routes.js';
-import { cronRoutes, wireJobs } from '../jobs/sweep.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -22,7 +21,6 @@ export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = { origin: `https://${DOMAIN}` };
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const PROVIDER = 'https://messages.example.com';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const HOUR = 3_600_000;
@@ -116,13 +114,12 @@ export const createHarness = async ({
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_orders_api_tests_0123456789'),
-			CRON_SECRET,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger, outboundSend: provider.send },
 	});
-	const orders = wireJobs(wireEvents(createOrders(app)));
-	const handle = createRequestHandler(orders.product, [...buildRoutes(orders), ...cronRoutes(orders)], {
+	const orders = wireEvents(createOrders(app));
+	const handle = createRequestHandler(orders.product, buildRoutes(orders), {
 		maxBodyBytes: 16_000_000,
 	});
 

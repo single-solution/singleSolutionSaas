@@ -56,9 +56,10 @@ Plans: **starter** = tiers, filters, warranty, mapping (+ add-ons showcase, insp
 (`inspections/<inspection>/<photo>` under the website's prefix) in which **`content-type` and `content-length` are
 signed headers**, so the bucket accepts exactly the declared type and size. Completing an inspection HEAD-checks each
 pending photo (exists, same size and type) before it counts towards `photos_required`. A slot that was never
-confirmed is stale one day after its upload link expires (`staleAt`): it no longer counts, and the sweep (after
-requests, at most hourly per website, plus the daily catch-up `GET /cron/sweep`) deletes its object from the merchant's bucket (when it was uploaded) and the slot (app-kit
-`sweepStaleUploads`); a TTL index a week later is only a backstop. `POST /v1/units/{id}/report-link` issues a random 256-bit `grr_…` token (only its SHA-256 is
+confirmed is stale one day after its upload link expires (`staleAt`): it no longer counts, and the website's next new
+photo slot (up to 25 stale slots) or the dashboard's "Clean up stale photos" button (`POST /v1/dashboard/photos:sweep`)
+deletes its object from the merchant's bucket (when it was uploaded) and the slot (app-kit `sweepStaleUploads`); a TTL
+index on the record a week later is only a backstop. Nothing runs on a timer. `POST /v1/units/{id}/report-link` issues a random 256-bit `grr_…` token (only its SHA-256 is
 stored with the unit; a new link replaces the old one, `DELETE` revokes it) and, with `report_url_template`, the link to
 the merchant's own page that renders the drop-in report. `GET /v1/inspection-reports/{token}` (pk_, rate limited,
 `no-store`) returns the buyer-facing report with presigned (or public-base) photo links.
@@ -91,15 +92,14 @@ pnpm --filter @ss/product-grades validate
 ```
 
 Environment: the standard app-kit variables in `.env.example` (`SS_PORTAL_URL`, `SS_APP_ID`, `SS_APP_SIGNING_KEY`,
-`SS_REGISTRATION_TOKEN_HASH`, `SS_PRODUCT_DB_URI`, `SS_LOG_LEVEL`, `SS_OUTBOUND_ALLOW_HOSTS`) and `CRON_SECRET` (≥ 16
-characters; Vercel Cron sends it as `Authorization: Bearer`) for the daily catch-up `GET /cron/sweep` in `vercel.json`,
-which sweeps stale inspection photo slots of every website served (ids kept in the control database, `ss_grades_sites`).
+`SS_REGISTRATION_TOKEN_HASH`, `SS_PRODUCT_DB_URI`, `SS_LOG_LEVEL`, `SS_OUTBOUND_ALLOW_HOSTS`). There are no crons and no
+background work (see [jobs/README.md](jobs/README.md)).
 
 ## Dashboard
 
 SSO from the Portal (`/sso?launch=` → `/dashboard`): overview (graded items, units, inspections, per-tier counts),
 tiers & mapping (the ladder with colours and warranty, the vocabulary table with its problems), units & inspections
-(re-grade a unit, create a report link; audited) and settings (a link to the Portal, where settings are edited with
+(re-grade a unit, create a report link; audited; clean up stale photo slots) and settings (a link to the Portal, where settings are edited with
 locks, versions and rollback). Demo launches show sample data scored by the real core; nothing is stored.
 
 See `docs/guide.md` for the developer guide.

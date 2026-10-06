@@ -307,7 +307,7 @@ describe('compile, serve, rollback', () => {
 		expect(queued.length).toBeGreaterThan(0);
 		t.world.layers.set(pack.subscriptionId, { website: { features: { 'bar.message': { value: 'v2' } } } });
 		await t.commerce.invalidate(pack.subscriptionId); // second bump
-		const run = await t.portal.cron.run('drain', { trigger: 'manual' });
+		const run = await t.portal.operations.run('drain');
 		expect(run?.status).toBe('ok');
 		const alias = await t.db.collection('delivery_aliases').findOne({ websiteId: W1 });
 		expect(alias).toMatchObject({ compiledRequest: alias?.requested });

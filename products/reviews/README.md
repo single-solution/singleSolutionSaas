@@ -18,18 +18,18 @@ AggregateRating / Review structured-data nodes — generalised (no region, langu
 Every element is switchable per website and priced in millicredits per hour; every setting is a feature with a schema,
 a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — nothing is hard-coded.
 
-| Element           | Modes   | Price /h | What it does                                                                                                                                                                                                                                                                                                                                                                             |
-| ----------------- | ------- | -------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `collection`      | C       |      300 | Who may review (`verified_buyers` · `identified` · `anyone`), review requests opened by `order.completed@1` (due `request_delay_hours` later, open `review_window_days`), signed review links, one review per order item (or per item), public name format, daily per-customer limit, website time zone. Metered: **`review`** (5 mc each; starter 300 / pro 3 000 included)             |
-| `request_flow`    | C       |      200 | Request job (after requests, at most every 15 min per website, plus a daily catch-up): sends the request and reminders (`reminders` = days after the first send) through the merchant's **messaging connector** on the first channel with a contact (email / SMS / WhatsApp), quiet hours in the website zone, retries with back-off, template ids + rendered text; requires `messaging` |
-| `moderation`      | C       |      200 | Content checks (merchant's blocked words in any script, links, minimum length → queue or reject), then rules@1 rules in order (approve / reject / queue, reason codes), default action; unverified reviews never auto-approve unless allowed; manual queue, rejection reasons, public merchant replies                                                                                   |
-| `content`         | C       |      100 | Rating scale (3–10), title and text limits, author name length, attribute ratings (e.g. quality, value, fit with low/high labels)                                                                                                                                                                                                                                                        |
-| `photos`          | C       |      100 | Presigned uploads straight to the merchant's **storage connector** (jpeg/png/webp, size and count limits, HEAD-verified on attach), presigned or public view links; requires `storage`                                                                                                                                                                                                   |
-| `display`         | A, B, C |      200 | Summary (average, count, distribution, attribute averages), list with sorting, filters (rating, verified, photos) and keyset pagination, stars for product lists, the write-a-review form; default renderer (`stars` / `summary` / `list`), headless core, Loader stub view                                                                                                              |
-| `structured_data` | C       |      100 | `GET /v1/structured-data/{itemId}` → schema.org `Product` with `AggregateRating` and `Review` nodes from approved reviews only (minimum count, how many, which), brand                                                                                                                                                                                                                   |
-| `qna`             | C       |      200 | Questions per item (identified or anyone), merchant answers, customer answers (verified buyers or identified), moderation of both, limits                                                                                                                                                                                                                                                |
-| `import`          | C       |      100 | RFC 4180 CSV import with mapped column names, per-row validation, dry run, duplicates skipped by `external_id`, imported as approved or through moderation                                                                                                                                                                                                                               |
-| `analytics`       | C       |      100 | Submitted / approved / rejected over time (day / week / month in the website zone), average rating, verified and photo shares, request conversion, decision and reply times, top items                                                                                                                                                                                                   |
+| Element           | Modes   | Price /h | What it does                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | ------- | -------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `collection`      | C       |      300 | Who may review (`verified_buyers` · `identified` · `anyone`), review requests opened by `order.completed@1` (sent at once with `send_on_completion`, open `review_window_days`), signed review links, one review per order item (or per item), public name format, daily per-customer limit, website time zone. Metered: **`review`** (5 mc each; starter 300 / pro 3 000 included)                        |
+| `request_flow`    | C       |      200 | Request flow, run when an order completes (no timers; also on demand from the API or dashboard): sends the request and the due reminders (`reminders` = days after the first send) through the merchant's **messaging connector** on the first channel with a contact (email / SMS / WhatsApp), quiet hours in the website zone, retries with back-off, template ids + rendered text; requires `messaging` |
+| `moderation`      | C       |      200 | Content checks (merchant's blocked words in any script, links, minimum length → queue or reject), then rules@1 rules in order (approve / reject / queue, reason codes), default action; unverified reviews never auto-approve unless allowed; manual queue, rejection reasons, public merchant replies                                                                                                     |
+| `content`         | C       |      100 | Rating scale (3–10), title and text limits, author name length, attribute ratings (e.g. quality, value, fit with low/high labels)                                                                                                                                                                                                                                                                          |
+| `photos`          | C       |      100 | Presigned uploads straight to the merchant's **storage connector** (jpeg/png/webp, size and count limits, HEAD-verified on attach), presigned or public view links; requires `storage`                                                                                                                                                                                                                     |
+| `display`         | A, B, C |      200 | Summary (average, count, distribution, attribute averages), list with sorting, filters (rating, verified, photos) and keyset pagination, stars for product lists, the write-a-review form; default renderer (`stars` / `summary` / `list`), headless core, Loader stub view                                                                                                                                |
+| `structured_data` | C       |      100 | `GET /v1/structured-data/{itemId}` → schema.org `Product` with `AggregateRating` and `Review` nodes from approved reviews only (minimum count, how many, which), brand                                                                                                                                                                                                                                     |
+| `qna`             | C       |      200 | Questions per item (identified or anyone), merchant answers, customer answers (verified buyers or identified), moderation of both, limits                                                                                                                                                                                                                                                                  |
+| `import`          | C       |      100 | RFC 4180 CSV import with mapped column names, per-row validation, dry run, duplicates skipped by `external_id`, imported as approved or through moderation                                                                                                                                                                                                                                                 |
+| `analytics`       | C       |      100 | Submitted / approved / rejected over time (day / week / month in the website zone), average rating, verified and photo shares, request conversion, decision and reply times, top items                                                                                                                                                                                                                     |
 
 Plans: **starter** = collection, moderation, content, display, structured_data (+ add-ons request_flow, photos, qna,
 import, analytics); **pro** = everything. Trial 48 h.
@@ -61,7 +61,7 @@ when a request backs them).
   normalise to the current `content.rating_scale`.
 - **Data.** Collections `ss_reviews_{reviews,items,requests,orders,photos,questions,audit}` in the merchant database,
   `websiteId` first in every index, created lazily; TTL retention for requests and orders (`P730D`); pending photo
-  slots are stale after `P30D` and swept by the request job (object and slot deleted), with a TTL a week later as a
+  slots are stale after `P30D` and swept on the next upload or from the dashboard (object and slot deleted), with a TTL a week later as a
   backstop; versioned migrations; export/anonymise through the Portal-signed standard routes (anonymising keeps
   the rating, removes author, text, photos and contact).
 
@@ -74,7 +74,7 @@ key):
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Reviews         | `GET /v1/reviews` (pk: approved, public; sk: every status; filters `itemId`, `rating`, `verified`, `photos`, `status`, `customerId`; `sort`; `include=summary`; cursor) · `POST /v1/reviews` · `GET /v1/reviews/{id}` · `DELETE /v1/reviews/{id}` |
 | Requests        | `GET /v1/review-requests` (pk + identity: what I can review) · `POST /v1/review-requests` · `GET /v1/review-requests/{id}` · `…/link` · `…/cancel` · `POST /v1/review-requests:open` `{ token }`                                                  |
-| Request flow    | `GET /v1/request-flow` · `POST /v1/request-flow:run` · `GET /cron/requests` (daily catch-up)                                                                                                                                                      |
+| Request flow    | `GET /v1/request-flow` · `POST /v1/request-flow:run`                                                                                                                                                                                              |
 | Moderation      | `GET /v1/moderation` (queue + counts) · `POST /v1/moderation/{id}/approve` · `…/reject` `{ reason }` · `…/reply` · `DELETE …/reply` · `POST /v1/moderation:check`                                                                                 |
 | Content, photos | `GET /v1/review-form` · `POST /v1/review-photos` (presigned PUT) · `GET /v1/review-photos/{id}`                                                                                                                                                   |
 | Display         | `GET /v1/ratings?itemIds=` (stars) · `GET /v1/ratings/{itemId}` (summary + display settings) · `GET /v1/elements/display/view` (Loader stub)                                                                                                      |
@@ -98,8 +98,9 @@ variant: 'stars' | 'summary' | 'list' }, slots, dom })`, design tokens only, ≤
 
 Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs, the moderation queue (pending / published /
 rejected) with approve, reject with a reason and public replies, questions to publish, reject or answer, and settings
-(link to the subscription's configuration in the Portal — the product never stores merchant configuration). Every
-action is audited with the merchant or staff actor; demo launches show sandbox reviews moderated by the real core.
+(link to the subscription's configuration in the Portal — the product never stores merchant configuration). Merchants
+also get **Send due requests now** (`POST /v1/dashboard/request-flow:run`) and **Clean up photo uploads**
+(`POST /v1/dashboard/photos:sweep`) on the overview. Every action is audited with the merchant or staff actor; demo launches show sandbox reviews moderated by the real core.
 
 ## Develop and certify
 
@@ -130,10 +131,7 @@ settlement).
    - `SS_APP_SIGNING_KEY` — Ed25519 private JWK (one line); `SS_REGISTRATION_TOKEN_HASH` — SHA-256 of the one-time
      registration token issued by Portal staff; `SS_APP_ID` — after registration (optional; recorded by the handshake).
    - `SS_PRODUCT_DB_URI` — the product's own small MongoDB (sessions, caches, usage queue). Required in production.
-   - `CRON_SECRET` — for the daily catch-up cron in `vercel.json` (`/cron/requests`, 02:30 UTC: the request flow and the
-     sweep of stale photo slots for every website). The same work runs after requests for the request's website (at most
-     every 15 minutes, small batches), so a free (Hobby) plan is enough; `POST /v1/request-flow:run` runs the flow on
-     demand.
+   - No cron and no cron secret: the product schedules nothing (see "No scheduled work" below).
    - `REVIEWS_LINK_SECRET` — optional (≥ 32 chars, else derived from the signing key); `SS_LOG_LEVEL` — optional.
 3. Deploy, then register from the Portal admin (`POST /v1/admin/apps/register` with the deployment URL and the token),
    review and activate. `endpoints.base` in `manifest.json` must be the deployment's https origin.
@@ -148,13 +146,22 @@ settlement).
   enforce signed headers); stored keys are relative to the product's area of the bucket (`objectKey` is the full key), and photos stay private in the merchant's bucket (presigned view
   links) unless a public base URL is configured. Merchants who need EXIF stripping should process uploads in their
   bucket (e.g. a storage event function) or set a bucket lifecycle rule; tell shoppers that photos are published as-is.
-  Pending upload slots are stale after `retention.photos` (they can no longer be attached); the request job deletes
-  their objects from the bucket and the slots (app-kit `sweepStaleUploads`, ≤ 100 per website per run). Slots created
-  before this release are migrated lazily (`photo_stale_dates`).
+  Pending upload slots are stale after `retention.photos` (they can no longer be attached); their objects and slots
+  are deleted (app-kit `sweepStaleUploads`) on the website's next upload (≤ 25) or with **Clean up photo uploads**
+  (≤ 100), and a TTL index on `purgeAt` removes forgotten slot records. Slots created before this release are migrated
+  lazily (`photo_stale_dates`).
+- **No scheduled work.** There are no crons, background passes or polling. A review request is sent when its order
+  completes (`collection.send_on_completion`, with `request_flow` on); that run also sends the website's other due
+  requests, reminders and retries (bounded by `request_flow.max_per_run`). A request delay ("ask N days after
+  delivery") would need a timer, so there is none: reminders, retries and requests held by quiet hours go out with
+  the website's next completed order, `POST /v1/request-flow:run` or **Send due requests now**. Requests past
+  `expiresAt` read as expired everywhere and are marked so when touched.
 - Incentives for reviews (coupons, points) are left to other products listening to `reviews.approved@1`.
 
 ## Changelog
 
-- **Unreleased** — free-tier hosting: the cron runs once a day as a catch-up; the request flow and the photo sweep
-  also run after requests for the request's website (`product.background.every`, at most every 15 minutes).
-- **1.0.0** — first release: ten elements, display renderer and headless core, REST v1, dashboard, hourly request job.
+- **Unreleased** — event-driven: no cron and no background work. `collection.request_delay_hours` is replaced by
+  `collection.send_on_completion` (requests are sent when the order completes); due reminders and retries go out with
+  the next completion or on demand (API, dashboard); stale photo slots are swept on the next upload or from the
+  dashboard.
+- **1.0.0** — first release: ten elements, display renderer and headless core, REST v1, dashboard, request flow.

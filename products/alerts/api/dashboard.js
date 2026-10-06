@@ -12,25 +12,29 @@ import { settingsFrom } from './settings.js';
 
 /** Rows listed per dashboard page. */
 export const DASHBOARD_PAGE = 50;
+/** Session roles that may act from the dashboard ("Send due now"); viewers and demo sessions may not. */
+export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin', 'impersonate']);
 
 /**
  * @typedef {object} DashboardData
  * @property {boolean} demo
  * @property {string | null} websiteId
  * @property {number} windowDays
+ * @property {boolean} canWrite the session may run the outbox ("Send due now")
  * @property {() => Promise<{ active: number, analytics: ReturnType<typeof summarize> }>} overview
  * @property {() => Promise<Array<ReturnType<typeof subscriptionView>>>} subscriptions
  * @property {() => Promise<Array<ReturnType<typeof messageView>>>} messages
  */
 
 /**
- * @param {{ site: import('./service.js').Site, now: () => number }} input
+ * @param {{ site: import('./service.js').Site, now: () => number, canWrite?: boolean }} input
  * @returns {DashboardData}
  */
-export const liveDashboard = ({ site, now }) => ({
+export const liveDashboard = ({ site, now, canWrite = false }) => ({
 	demo: false,
 	websiteId: site.websiteId,
 	windowDays: site.settings.analytics.defaultDays,
+	canWrite: canWrite && site.settings.enabled('dispatch'),
 	overview: async () => ({
 		active: await site.repos.subscriptions.countActive(),
 		analytics: await analyticsOf(site, site.settings.analytics.defaultDays, now()),
@@ -112,6 +116,7 @@ export const demoDashboard = ({ now }) => {
 		demo: true,
 		websiteId: null,
 		windowDays: settings.analytics.defaultDays,
+		canWrite: false,
 		overview: async () => ({
 			active: decided.filter((sub) => sub.status === 'pending').length,
 			analytics: summarize({
@@ -151,5 +156,13 @@ export const resolveDashboard = async ({ alerts, sessionId, website = null, now 
 	if (!websiteId) return { state: 'pick_website', session };
 	const result = await product.entitlements.forWebsite(websiteId);
 	if (!result.ok || !product.entitlements.can(result.doc, 'types')) return { state: 'not_subscribed', session };
-	return { state: 'ready', session, data: liveDashboard({ site: await siteOf(websiteId, result.doc), now: deps.now }) };
+	return {
+		state: 'ready',
+		session,
+		data: liveDashboard({
+			site: await siteOf(websiteId, result.doc),
+			now: deps.now,
+			canWrite: DASHBOARD_WRITE_ROLES.includes(session.role),
+		}),
+	};
 };

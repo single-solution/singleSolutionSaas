@@ -1,8 +1,12 @@
-/** Recent graded units (tier, score, report link) and inspections, with re-grading and report links for writers. */
+/**
+ * Recent graded units (tier, score, report link) and inspections, with re-grading, report links and the clean-up of
+ * stale photo slots for writers.
+ */
 import { createElement as h } from 'react';
 import { Badge, Card, EmptyState, Table } from '@ss/ui';
 import { dashboardContext } from '../../_lib/dashboard.js';
 import { Shell, t } from '../_components/Shell.js';
+import { SweepPhotos } from '../_components/SweepPhotos.js';
 import { UnitActions } from '../_components/UnitActions.js';
 
 export const dynamic = 'force-dynamic';
@@ -104,6 +108,7 @@ export default async function Units({ searchParams }) {
 							{ key: 'tier', header: t('dashboard.units.tier'), render: (/** @type {any} */ row) => label(row.tier) },
 						],
 					}),
+			canWrite && websiteId && settings.enabled('inspection') ? h(SweepPhotos, { websiteId }) : null,
 		),
 	);
 }

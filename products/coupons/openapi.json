@@ -2809,6 +2809,45 @@
 					}
 				}
 			}
+		},
+		"/v1/dashboard/reservations:expire": {
+			"post": {
+				"operationId": "postV1DashboardReservationsExpire",
+				"tags": ["dashboard"],
+				"summary": "Release expired reservations: expire this website's reservations whose time ran out (their uses go back, coupons.released@1 reason `expired`), at most 100 per call (call again while `more`). Nothing runs on a timer; a lapsed reservation is otherwise expired when it, its code, customer or device is next used or read.",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"expired": {
+											"type": "integer"
+										},
+										"more": {
+											"type": "boolean"
+										}
+									}
+								},
+								"example": {
+									"expired": 4,
+									"more": false
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
 		}
 	},
 	"components": {
@@ -2823,6 +2862,12 @@
 				"in": "header",
 				"name": "SS-Signature",
 				"description": "Portal-signed request (ss-request.v1)"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
 			}
 		},
 		"parameters": {

@@ -1,7 +1,6 @@
-/** Adapters without the kit: the messaging seam (http, smtp, failures), the site registry and ids. */
+/** Adapters without the kit: the messaging seam (http, smtp, failures) and ids. */
 import { describe, expect, it } from 'vitest';
 import { createMessenger } from '../adapters/messaging.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import { hashKey, newId, stableId } from '../adapters/ids.js';
 
 const message = {
@@ -75,29 +74,8 @@ describe('messaging', () => {
 	});
 });
 
-describe('registry and ids', () => {
-	it('remembers websites in memory or in a collection', async () => {
-		const memory = createSiteRegistry();
-		await memory.remember('w2');
-		await memory.remember('w1');
-		await memory.remember('w1');
-		expect(await memory.list()).toEqual(['w1', 'w2']);
-		/** @type {any[]} */
-		const docs = [{ _id: 'w9' }];
-		let fail = true;
-		const collection = {
-			updateOne: async () => {
-				if (fail) {
-					fail = false;
-					throw new Error('down');
-				}
-			},
-			find: () => ({ toArray: async () => docs }),
-		};
-		const stored = createSiteRegistry({ collection });
-		await stored.remember('w1');
-		await stored.remember('w1');
-		expect(await stored.list()).toEqual(['w1', 'w9']);
+describe('ids', () => {
+	it('makes opaque, stable and hashed ids', () => {
 		expect(newId('ord')).toMatch(/^ord_[0-9a-z]{26}$/);
 		expect(stableId('pay', 'x')).toBe(stableId('pay', 'x'));
 		expect(hashKey('w', 'e:a@b.c')).toMatch(/^e:[0-9a-f]{40}$/);

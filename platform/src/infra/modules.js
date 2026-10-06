@@ -1,12 +1,14 @@
 /**
  * Module definitions and their isolation boundary. A module is a plain object (see `modules/README.md`):
  *
- *   defineModule({ name, collections, migrations, problems, service, routes, jobs, crons, background, ports })
+ *   defineModule({ name, collections, migrations, problems, service, routes, jobs, operations, ports })
  *
  * Every factory receives a {@link ModuleContext}. A module reaches **only its own collections** through
  * `ctx.collection(name)`; another module's data is reached through that module's public `service` via
  * `ctx.service(name)` (a module's own routes use `ctx.service(<own name>)` too) (built lazily, so module order does not matter; cycles are a boot error). Job names are
- * namespaced `<module>.<job>`; cron names, routes, problem codes and ports are global and collisions are boot errors.
+ * namespaced `<module>.<job>`; operation names, routes, problem codes and ports are global and collisions are boot
+ * errors. Nothing runs on a schedule (PLAN F.19): jobs run after the request that enqueued them, operations when staff
+ * run them from the admin console.
  * @module
  */
 import { platformError } from './errors.js';
@@ -15,7 +17,7 @@ import { platformError } from './errors.js';
 /** @typedef {import('./db.js').Migration} Migration */
 /** @typedef {import('./http.js').RouteDefinition} RouteDefinition */
 /** @typedef {import('./jobs.js').JobHandler} JobHandler */
-/** @typedef {import('./jobs.js').CronHandler} CronHandler */
+/** @typedef {import('./jobs.js').OperationHandler} OperationHandler */
 /** @typedef {import('./authenticators.js').AuthPorts} AuthPorts */
 /** @typedef {import('./logger.js').Logger} Logger */
 
@@ -32,7 +34,8 @@ import { platformError } from './errors.js';
  * @property {ReturnType<typeof import('./crypto.js').createSecretHasher>} secretHasher website secret keys at rest
  * @property {import('./audit.js').Audit} audit
  * @property {import('./jobs.js').Jobs} jobs
- * @property {import('./jobs.js').CronRuns} cronRuns last run of every registered cron (read only, health pages)
+ * @property {import('./jobs.js').OperationRuns} operationRuns last run of every registered operation (read only, health
+ *   pages)
  * @property {import('./db.js').Locks} locks
  * @property {import('./db.js').WithTransaction} withTransaction run `fn(session)` in a retried multi-document
  *   transaction; pass `{ session }` to every repository call inside it
@@ -64,17 +67,9 @@ import { platformError } from './errors.js';
  * @property {(ctx: ModuleContext) => object} [service] public API for other modules
  * @property {(ctx: ModuleContext) => RouteDefinition[]} [routes]
  * @property {(ctx: ModuleContext) => Record<string, JobHandler>} [jobs]
- * @property {(ctx: ModuleContext) => Record<string, CronHandler>} [crons]
- * @property {(ctx: ModuleContext) => Record<string, BackgroundTask>} [background] throttled work after requests
- *   (F.19): each task runs at most once per `intervalMs` across instances, with a `deadline` of `budgetMs`
+ * @property {(ctx: ModuleContext) => Record<string, OperationHandler>} [operations] on-demand admin operations
+ *   (bounded by a deadline, resumable), run from the admin console
  * @property {(ctx: ModuleContext) => AuthPorts} [ports] implementations of infra ports (one provider per port)
- */
-
-/**
- * @typedef {object} BackgroundTask
- * @property {number} intervalMs
- * @property {number} [budgetMs]
- * @property {(input: { deadline: number }) => Promise<unknown>} run
  */
 
 const NAME = /^[a-z][a-z0-9]*$/;
@@ -96,7 +91,7 @@ export const defineModule = (definition) => {
 		if (!String(migration.id).includes(`-${name}-`))
 			throw new TypeError(`migration ${migration.id} must be named YYYYMMDDHHMM-${name}-<slug>`);
 	}
-	for (const key of ['service', 'routes', 'jobs', 'crons', 'background', 'ports']) {
+	for (const key of ['service', 'routes', 'jobs', 'operations', 'ports']) {
 		const value = /** @type {Record<string, unknown>} */ (definition)[key];
 		if (value !== undefined && typeof value !== 'function')
 			throw new TypeError(`module ${name}: ${key} must be a factory function`);
@@ -105,7 +100,7 @@ export const defineModule = (definition) => {
 };
 
 /**
- * Wire modules over the shared context: per-module contexts, lazy services, then routes, jobs, crons and ports.
+ * Wire modules over the shared context: per-module contexts, lazy services, then routes, jobs, operations and ports.
  * @param {ReadonlyArray<Readonly<ModuleDefinition>>} modules
  * @param {{ shared: SharedContext, collection: (module: string, name: string) => any }} options
  */
@@ -169,10 +164,8 @@ export const composeModules = (modules, { shared, collection }) => {
 	const routes = [];
 	/** @type {Record<string, JobHandler>} */
 	const jobs = {};
-	/** @type {Record<string, CronHandler>} */
-	const crons = {};
-	/** @type {Record<string, BackgroundTask>} */
-	const background = {};
+	/** @type {Record<string, OperationHandler>} */
+	const operations = {};
 	/** @type {AuthPorts & Record<string, unknown>} */
 	const ports = {};
 	/** @type {Record<string, string>} */
@@ -186,14 +179,9 @@ export const composeModules = (modules, { shared, collection }) => {
 				throw new TypeError(`job ${jobName} of module ${m.name} must be named ${m.name}.<job>`);
 			jobs[jobName] = handler;
 		}
-		for (const [cronName, handler] of Object.entries(m.crons?.(ctx) ?? {})) {
-			if (Object.hasOwn(crons, cronName)) throw new TypeError(`cron ${cronName} is registered twice`);
-			crons[cronName] = handler;
-		}
-		for (const [taskName, task] of Object.entries(m.background?.(ctx) ?? {})) {
-			if (!taskName.startsWith(`${m.name}.`))
-				throw new TypeError(`background task ${taskName} of module ${m.name} must be named ${m.name}.<task>`);
-			background[taskName] = task;
+		for (const [operationName, handler] of Object.entries(m.operations?.(ctx) ?? {})) {
+			if (Object.hasOwn(operations, operationName)) throw new TypeError(`operation ${operationName} is registered twice`);
+			operations[operationName] = handler;
 		}
 		for (const [port, impl] of Object.entries(m.ports?.(ctx) ?? {})) {
 			if (Object.hasOwn(ports, port)) throw new TypeError(`port ${port} is provided by ${portOwners[port]} and ${m.name}`);
@@ -206,8 +194,7 @@ export const composeModules = (modules, { shared, collection }) => {
 		names: () => [...byName.keys()],
 		routes,
 		jobs,
-		crons,
-		background,
+		operations,
 		/** @type {AuthPorts} */
 		ports,
 		service: serviceOf,

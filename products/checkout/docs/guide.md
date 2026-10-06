@@ -19,6 +19,11 @@ Checkout prices lines only from item records it knows — never from the browser
 `{ itemId, variantId?, quantity }`, `PATCH|DELETE /v1/carts/{id}/lines/{lineId}`, `POST /v1/carts/{id}/reconcile`
 (price / stock changes, reported in `changes`), `POST /v1/carts/{id}/merge` after sign-in (with `SS-Identity`).
 
+Abandoned carts (`cart.abandoned_after_hours` > 0): an open cart with lines untouched that long publishes
+`checkout.cart_abandoned@1` once, when your server reads it (`GET /v1/carts` or `GET /v1/carts/{id}` with `sk_`) or when
+the merchant presses "Process expired now" on the dashboard. There is no timer: a shopper reading their own cart does
+not report it.
+
 ## 3. Checkout
 
 - `GET /v1/checkout-form?country=XX` — the form for the country (fields, order, required, labels, autocomplete,
@@ -35,8 +40,8 @@ COD → `awaiting_confirmation` (confirm with `POST /v1/orders/{id}/confirm`, el
 `cod_confirmation_hours`); pay at pickup → `pending_payment` until collected. With `place_order.expiry_owner = checkout`
 an order whose hold passed is expired from that moment: it is cancelled (stock released) as soon as it is read, listed or
 confirmed, it no longer counts towards the open-order cap, and a placement short of stock releases expired holds first;
-orders nobody touches are cancelled by the sweep that runs after requests (every few minutes per website) and by the
-daily cron catch-up. `order.cancelled@1` gives codes and points back.
+nothing runs on a timer, so an order nobody touches is cancelled the next time it is read, or when the merchant presses
+"Process expired now" on the dashboard. `order.cancelled@1` gives codes and points back.
 
 ## 4. After placement
 

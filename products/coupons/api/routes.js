@@ -71,6 +71,11 @@ const failure = ({ reason, path, problems, rejected }) => {
 	return problem(reason, path ? `${message(reason)} (${path})` : message(reason));
 };
 
+/** Lapsed reservations of one code expired when the code is read. */
+const READ_SWEEP = 50;
+/** Lapsed reservations expired per "Release expired reservations" press (press again while `more`). */
+export const EXPIRE_RUN_LIMIT = 100;
+
 /** @param {string | null | undefined} value */
 const sha = (value) => (value ? createHash('sha256').update(value).digest('hex').slice(0, 32) : null);
 
@@ -96,7 +101,6 @@ export const createCoupons = (app) => {
 	 * @returns {Promise<Site>}
 	 */
 	const siteOf = async (websiteId, doc) => {
-		await app.registry.remember(websiteId);
 		return {
 			websiteId,
 			domain: String(doc.domain ?? ''),
@@ -105,8 +109,8 @@ export const createCoupons = (app) => {
 		};
 	};
 	/**
-	 * Site of a website from its entitlement (null without an active subscription or with `api` off — events and the
-	 * job only touch reservations).
+	 * Site of a website from its entitlement (null without an active subscription or with `api` off — events only touch
+	 * reservations).
 	 * @param {string} websiteId
 	 * @returns {Promise<Site | null>}
 	 */
@@ -290,7 +294,10 @@ export const buildRoutes = (coupons) => {
 			...website('codes'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
-				const doc = await s.repos.codes.get(codeParam(s, ctx.params.code));
+				const code = codeParam(s, ctx.params.code);
+				// expire on read: lapsed reservations holding this code give their uses back before it is shown
+				await service.sweep(s, { code, limit: READ_SWEEP });
+				const doc = await s.repos.codes.get(code);
 				return doc ? ok(codeView(doc)) : problem('code_not_found', 'No such code.');
 			},
 		}),
@@ -701,6 +708,18 @@ export const buildRoutes = (coupons) => {
 			},
 		}),
 		defineRoute({
+			method: 'POST',
+			path: '/v1/dashboard/reservations:expire',
+			auth: 'launch',
+			element: 'codes',
+			roles: [...DASHBOARD_WRITE_ROLES],
+			handler: async (ctx) => {
+				if (!ctx.websiteId || !ctx.entitlement) return problem('bad_request', 'Open the dashboard for a website.');
+				const expired = await service.sweep(await site(ctx), { limit: EXPIRE_RUN_LIMIT });
+				return ok({ expired, more: expired >= EXPIRE_RUN_LIMIT });
+			},
+		}),
+		defineRoute({
 			method: 'GET',
 			path: '/v1/dashboard/coupons/:id/export',
 			auth: 'launch',
@@ -732,48 +751,12 @@ export const buildRoutes = (coupons) => {
 	];
 };
 
-/** Interval of the per-website sweep run after requests (the daily cron catches up on quiet websites). */
-export const SWEEP_EVERY_MS = 5 * 60_000;
-/** Reservations expired per page of the background sweep. */
-const SWEEP_BATCH = 50;
-/** Pages per background run (bounded; the deadline usually stops it first). */
-const SWEEP_PAGES = 10;
-
 /**
- * Expire lapsed reservations of one website within `deadline` (the background task; readers never wait for it, an
- * expired reservation is treated as expired when touched).
- * @param {Coupons} coupons
- * @param {{ websiteId: string | null, deadline: number }} input
- * @returns {Promise<number>} reservations expired
- */
-export const sweepWebsite = async ({ app, service, siteFor }, { websiteId, deadline }) => {
-	const site = websiteId ? await siteFor(websiteId) : null;
-	if (!site) return 0;
-	let expired = 0;
-	for (let page = 0; page < SWEEP_PAGES && app.now() < deadline; page += 1) {
-		const count = await service.sweep(site, { limit: SWEEP_BATCH });
-		expired += count;
-		if (count < SWEEP_BATCH) break;
-	}
-	return expired;
-};
-
-/**
- * Register the event consumers (app-kit dedupes deliveries on the event id) and the throttled per-website sweep that
- * runs after requests (`product.background.every`, at most every SWEEP_EVERY_MS per website). Called once per product
- * by the composition roots (app/_lib/product.js, serve.js).
+ * Register the event consumers (app-kit dedupes deliveries on the event id). Called once per product by the composition
+ * roots (app/_lib/product.js, serve.js). Nothing is scheduled: reservations expire when they are touched.
  * @param {Coupons} coupons
  */
 export const wireEvents = (coupons) => {
 	for (const [type, handler] of Object.entries(createEventHandlers(coupons))) coupons.product.events.on(type, handler);
-	const sweepTask = coupons.product.background.every(
-		'sweep',
-		SWEEP_EVERY_MS,
-		(/** @type {any} */ input) => sweepWebsite(coupons, input),
-		{
-			per: 'website',
-			budgetMs: 10_000,
-		},
-	);
-	return { ...coupons, tasks: { sweep: sweepTask } };
+	return coupons;
 };

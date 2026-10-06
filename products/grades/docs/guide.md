@@ -84,7 +84,8 @@ problems in the dashboard.
    tier (thresholds under **Inspection → Score → suggested tier**; a failed critical item caps the tier).
 3. Photos: `POST /v1/inspections/{id}/photos { item, contentType, size }` → PUT the file to `upload.url` with exactly
    `upload.headers` (type and length are signed) before the link expires. Complete the inspection within a day of
-   the link expiring: older slots no longer count and the sweep (after requests, at most hourly, and a daily catch-up) deletes them (and their objects).
+   the link expiring: older slots no longer count, and they (and their objects) are deleted on your next photo upload
+   or from the dashboard's "Clean up stale photos" button.
 4. `PATCH /v1/inspections/{id} { results?, complete: true, tier? }` — completes when required answers and photos are
    present; the unit takes the suggested tier (or the one you name) and `grades.unit_inspected@1` is published.
 5. `POST /v1/units/{id}/report-link` → `{ token, url }` to share with the buyer; your report page renders the drop-in

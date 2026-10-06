@@ -31,6 +31,11 @@ or currency is assumed.
 `paid_in_full`, `return_reason`) and which catalogued event is published. The default matrix only lets a dispatched
 order be delivered or returned. Revenue statuses (`revenue: true`) are the one definition of a sale everywhere.
 
+Auto-expiry (`expire_after_hours` > 0) needs no timer: an order whose status expired is moved to `expire_to` (with its
+events and customer message) the moment any read reaches it — your server, the customer or the dashboard — and never
+counts as open after its deadline. Undelivered events and customer message retries are sent when the order is next
+read; the dashboard's "Process due now" handles every due order of the website at once.
+
 Fulfilment: `PATCH /v1/orders/{id}/fulfilment`; serials: `PUT /v1/orders/{id}/serials`; payments and refunds:
 `POST /v1/orders/{id}/payments|refunds`; bulk: `POST /v1/order-batches`, `GET /v1/order-exports`,
 `POST /v1/order-imports`; documents: `GET /v1/orders/{id}/invoice`, `/v1/packing-slips?ids=`, `/v1/pick-lists?ids=`.

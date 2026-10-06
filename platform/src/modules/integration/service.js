@@ -6,8 +6,13 @@
  * (unique `(websiteId, idempotencyKey)` = dedupe) → fan-out at ingest to the products that consume the type →
  * one delivery record + one job `integration.deliver` per (event, product) carrying the payload **sealed** with
  * `ctx.envelope` (aad websiteId + eventId) → signed POST to the product's events endpoint, attempted right after the
- * ingest response (`ctx.defer`, F.19) → retries with the job queue's backoff for ~24 h (drained after requests and by
- * the daily cron) → DLQ (sealed, ≤ 7 days) → replay. Payloads never reach a collection in clear text.
+ * response of the request that ingested the event (the job queue runs a job right after the request that enqueued
+ * it; F.19: event-driven only, no cron, no drain) → a failed delivery stays queued with its next-attempt time and is
+ * retried when there is a natural reason: the next delivery to the same product, and the next time that product calls
+ * the Portal (`productCalled` port: entitlements, usage, heartbeat, any product API call) — only that product's due
+ * deliveries, a few at a time — or when staff press "Retry now" for the product → after the attempts that span ~24 h
+ * of backoff (or once the event is older than that window), DLQ (sealed, ≤ 7 days) → replay. Payloads never reach a
+ * collection in clear text.
  * @module
  */
 import { createHash } from 'node:crypto';
@@ -15,6 +20,7 @@ import { createId, eventScopeOf } from '@ss/contracts';
 import { checkUrl, createOutboundPolicy, safeFetch } from '@ss/net';
 import { signEvent } from '@ss/protocol';
 import { isProblem, problem } from '../../infra/http.js';
+import { afterResponse } from '../../infra/request-scope.js';
 import {
 	DELIVERY_STATUSES,
 	DELIVERY_TIMEOUT_MS,
@@ -29,6 +35,7 @@ import {
 	eventsEndpoint,
 	MAX_RESPONSE_BYTES,
 	parseLimit,
+	RETRY_WINDOW_MS,
 } from './core/delivery.js';
 import {
 	DELIVERABLE_APP_STATUSES,
@@ -63,10 +70,18 @@ const PLATFORM_SCOPE = 'platform';
 
 /** Job name of a delivery attempt. */
 export const DELIVER_JOB = 'integration.deliver';
-/** Time budget of the delivery attempt right after an ingest (F.19: events usually arrive within seconds). */
+/** Time budget of a delivery run after a request (F.19: events usually arrive within seconds). */
 export const IMMEDIATE_DELIVERY_MS = 8_000;
+/** A product's due (failed, waiting) deliveries retried per natural trigger, at most. */
+export const DUE_RETRIES_PER_TRIGGER = 5;
+/** Due deliveries retried when staff press "Retry now" for a product, at most. */
+export const DUE_RETRIES_PER_REQUEST = 100;
 
-/** @typedef {(task: () => Promise<unknown>) => void} Defer */
+/**
+ * Job group of a product's deliveries (its due deliveries are retried together).
+ * @param {string} appId
+ */
+export const deliveryGroup = (appId) => `integration.app:${appId}`;
 
 /**
  * @typedef {object} IntegrationOptions
@@ -230,9 +245,8 @@ export const createIntegrationService = (ctx, options = {}) => {
 	 * @param {EventEnvelope} event
 	 * @param {string[]} targets
 	 * @param {'event' | 'control'} kind
-	 * @param {string[]} [enqueued] collects the delivery job keys (for the immediate attempt after the response)
 	 */
-	const fanout = async (record, event, targets, kind, enqueued = []) => {
+	const fanout = async (record, event, targets, kind) => {
 		if (targets.length > 0) {
 			const sealed = ctx.envelope.seal(JSON.stringify(event), {
 				aad: { websiteId: record.websiteId ?? PLATFORM_SCOPE, eventId: record.eventId },
@@ -249,8 +263,16 @@ export const createIntegrationService = (ctx, options = {}) => {
 					appId,
 				});
 				const key = jobKey(record.websiteId ?? PLATFORM_SCOPE, record.eventId, appId);
-				await ctx.jobs.enqueue({ name: DELIVER_JOB, key, payload: { deliveryId, sealed }, maxAttempts, dropPayload: true });
-				enqueued.push(key);
+				// runs right after this request (job queue); then the product's older due deliveries get a retry too
+				await ctx.jobs.enqueue({
+					name: DELIVER_JOB,
+					key,
+					payload: { deliveryId, sealed },
+					maxAttempts,
+					dropPayload: true,
+					group: deliveryGroup(appId),
+				});
+				retrySoon(appId);
 			}
 		}
 		await repo.fanoutDone(record._id, targets.length);
@@ -260,10 +282,10 @@ export const createIntegrationService = (ctx, options = {}) => {
 	 * Record an event (dedupe) and fan it out. A duplicate whose fan-out never finished (crash, concurrent request)
 	 * resumes it; job keys keep deliveries single.
 	 * @param {{ event: EventEnvelope, merchantId: string | null, source: EventRecord['source'], publisherAppId: string | null,
-	 *   targets: string[], kind: 'event' | 'control', enqueued?: string[] }} input
+	 *   targets: string[], kind: 'event' | 'control' }} input
 	 * @returns {Promise<'accepted' | 'duplicate'>}
 	 */
-	const accept = async ({ event, merchantId, source, publisherAppId, targets, kind, enqueued = [] }) => {
+	const accept = async ({ event, merchantId, source, publisherAppId, targets, kind }) => {
 		/** @type {EventRecord} */
 		const record = {
 			_id: createId('iev', { randomBytes: ctx.randomBytes }),
@@ -280,12 +302,12 @@ export const createIntegrationService = (ctx, options = {}) => {
 			deliveries: { total: 0, delivered: 0, dead: 0 },
 		};
 		if (await repo.insertEvent(record)) {
-			await fanout(record, event, targets, kind, enqueued);
+			await fanout(record, event, targets, kind);
 			return 'accepted';
 		}
 		const existing = await repo.eventByKey(event.websiteId ?? null, event.idempotencyKey);
 		if (existing && existing.fanout === 'pending' && existing.eventId === event.id)
-			await fanout(existing, event, targets, kind, enqueued);
+			await fanout(existing, event, targets, kind);
 		return 'duplicate';
 	};
 
@@ -311,11 +333,11 @@ export const createIntegrationService = (ctx, options = {}) => {
 
 	/**
 	 * Ingest website events (already authenticated key claims). Consent and end-customer identity are the site's
-	 * concern: events arrive consented; identity tokens are not stored. `defer` (the request's `ctx.defer`) gets the
-	 * immediate delivery attempt of what was enqueued, run after the response.
-	 * @param {{ website: WebsiteClaims, events: unknown, defer?: Defer }} input
+	 * concern: events arrive consented; identity tokens are not stored. The deliveries are attempted right after the
+	 * response.
+	 * @param {{ website: WebsiteClaims, events: unknown }} input
 	 */
-	const ingest = async ({ website, events, defer }) => {
+	const ingest = async ({ website, events }) => {
 		const batch = checkBatch(events);
 		if (!batch.ok) throw problem(batch.code, batch.detail);
 		const { table } = await routingFor(website.websiteId);
@@ -323,8 +345,6 @@ export const createIntegrationService = (ctx, options = {}) => {
 		const results = [];
 		/** @type {Set<string>} */
 		const seen = new Set();
-		/** @type {string[]} */
-		const enqueued = [];
 		for (const raw of batch.events) {
 			const checked = checkWebsiteEvent(raw, website);
 			if (!checked.ok) {
@@ -345,20 +365,18 @@ export const createIntegrationService = (ctx, options = {}) => {
 				publisherAppId: null,
 				targets: consumersOf(event.type, table),
 				kind: 'event',
-				enqueued,
 			});
 			results.push({ ...ids, status });
 		}
-		deliverSoon(enqueued, defer);
 		return summary(results);
 	};
 
 	/**
 	 * `POST /v1/events`: header (`Authorization: Bearer`) or body (`{ key, identity?, events }`, sendBeacon) auth.
-	 * @param {{ rawBody: string, headers: Headers, defer?: Defer }} input
+	 * @param {{ rawBody: string, headers: Headers }} input
 	 * @returns {Promise<{ body: ReturnType<typeof summary>, headers: Record<string, string> }>}
 	 */
-	const ingestRequest = async ({ rawBody, headers, defer }) => {
+	const ingestRequest = async ({ rawBody, headers }) => {
 		const parsed = parseIngestRequest({
 			rawBody,
 			contentType: headers.get('content-type'),
@@ -371,7 +389,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		/** @type {Record<string, string>} */
 		const cors = website.kind === 'pk' && origin ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {};
 		try {
-			return { body: await ingest({ website, events: parsed.events, ...(defer ? { defer } : {}) }), headers: cors };
+			return { body: await ingest({ website, events: parsed.events }), headers: cors };
 		} catch (error) {
 			if (isProblem(error)) throw { ...error, headers: { ...error.headers, ...cors } };
 			throw error;
@@ -384,9 +402,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 	/**
 	 * Events published by a product (`POST /v1/product/events`, F.9): manifest namespace + publish-scope rules,
 	 * active subscription on the event's website, fan-out to the other subscribed products.
-	 * @param {{ appId: string, events: unknown, defer?: Defer }} input
+	 * @param {{ appId: string, events: unknown }} input
 	 */
-	const publishFromProduct = async ({ appId, events, defer }) => {
+	const publishFromProduct = async ({ appId, events }) => {
 		const batch = checkBatch(events);
 		if (!batch.ok) throw problem(batch.code, batch.detail);
 		const catalog = ctx.service('catalog');
@@ -422,8 +440,6 @@ export const createIntegrationService = (ctx, options = {}) => {
 		const results = [];
 		/** @type {Set<string>} */
 		const seen = new Set();
-		/** @type {string[]} */
-		const enqueued = [];
 		for (const raw of batch.events) {
 			const checked = checkProductEvent(raw, manifest);
 			if (!checked.ok) {
@@ -459,11 +475,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 				publisherAppId: appId,
 				targets: consumersOf(event.type, table, { exclude: appId }),
 				kind: 'event',
-				enqueued,
 			});
 			results.push({ ...ids, status });
 		}
-		deliverSoon(enqueued, defer);
 		return summary(results);
 	};
 
@@ -606,7 +620,10 @@ export const createIntegrationService = (ctx, options = {}) => {
 			if (changed) await repo.bump(delivery.eventRecordId, { delivered: 1 });
 			return { status: 'delivered' };
 		}
-		if (outcome.permanent || job.attempts >= job.maxAttempts) {
+		// dead-letter rules: a permanent failure, the last allowed attempt, or an event older than the retry window
+		// (retries wait for a natural trigger, so a quiet product's deliveries can be due long after their backoff)
+		const expired = ctx.now() - new Date(job.createdAt).getTime() >= RETRY_WINDOW_MS;
+		if (outcome.permanent || job.attempts >= job.maxAttempts || expired) {
 			const expireAt = dlqExpiry(ctx.now(), delivery.payloadExpiresAt);
 			await repo.putDeadLetter({
 				_id: delivery._id,
@@ -811,12 +828,55 @@ export const createIntegrationService = (ctx, options = {}) => {
 		});
 
 	/**
-	 * Hand the immediate delivery attempt of an ingest to the request's `defer` (after the response).
-	 * @param {string[]} keys
-	 * @param {Defer | undefined} defer
+	 * Retry a product's due deliveries (failed ones whose next-attempt time has come), oldest first, bounded. Called on
+	 * natural triggers only: a new delivery to that product, a call from that product, staff "Retry now".
+	 * @param {string} appId
+	 * @param {{ limit?: number, deadlineMs?: number }} [options]
 	 */
-	const deliverSoon = (keys, defer) => {
-		if (defer && keys.length > 0) defer(() => deliverNow(keys));
+	const deliverDueFor = (appId, { limit = DUE_RETRIES_PER_TRIGGER, deadlineMs = IMMEDIATE_DELIVERY_MS } = {}) =>
+		ctx.jobs.runBatch({
+			handlers: { [DELIVER_JOB]: (payload, jobCtx) => runDelivery(payload, jobCtx) },
+			groups: [deliveryGroup(appId)],
+			deadlineMs,
+			maxJobs: limit,
+			owner: 'retry',
+			safetyMs: 1_000,
+		});
+
+	/** @type {Set<string>} products with a due-delivery retry already scheduled on this instance */
+	const retrying = new Set();
+	/**
+	 * Schedule {@link deliverDueFor} after the current request (once per product while one is pending).
+	 * @param {string} appId
+	 */
+	const retrySoon = (appId) => {
+		if (retrying.has(appId)) return;
+		retrying.add(appId);
+		const scheduled = afterResponse(async () => {
+			retrying.delete(appId);
+			await deliverDueFor(appId);
+		});
+		if (!scheduled) retrying.delete(appId);
+	};
+
+	/**
+	 * Staff "Retry now" for a product's queue: its due deliveries plus those still waiting for their backoff (the
+	 * waiting ones are made due first), bounded.
+	 * @param {string} appId
+	 * @param {{ actor: Actor, requestId?: string | null, ip?: string | null }} context
+	 */
+	const retryNow = async (appId, { actor, requestId = null, ip = null }) => {
+		const made = await ctx.jobs.makeDue({ name: DELIVER_JOB, group: deliveryGroup(appId), limit: DUE_RETRIES_PER_REQUEST });
+		const stats = await deliverDueFor(appId, { limit: DUE_RETRIES_PER_REQUEST, deadlineMs: ctx.config.operationDeadlineMs });
+		await ctx.audit.record({
+			actor: /** @type {any} */ (actor),
+			action: 'integration.deliveries_retried',
+			target: { type: 'app', id: appId, merchantId: null },
+			after: { madeDue: made, ...stats },
+			requestId,
+			ip,
+		});
+		return { appId, ...stats };
 	};
 
 	return {
@@ -827,6 +887,8 @@ export const createIntegrationService = (ctx, options = {}) => {
 		emitControl,
 		runDelivery,
 		deliverNow,
+		deliverDueFor,
+		retryNow,
 		deliveryLog,
 		deadLetters,
 		replay,

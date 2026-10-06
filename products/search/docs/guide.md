@@ -9,7 +9,8 @@ configured in the Portal.
 - **Atlas Search** — when your database is MongoDB Atlas, the product creates and manages the search index
   `ss_search_v1` on `ss_search_documents` and searches with `$search`. If your database user may not list or create
   search indexes, the dashboard (Overview → Search engine) says so and shows the exact index definition to create in
-  Atlas → Search; grant `listSearchIndexes` / `createSearchIndexes` or create it yourself.
+  Atlas → Search; grant `listSearchIndexes` / `createSearchIndexes` or create it yourself. The index state is checked
+  when a search needs it (at most every 10 minutes) and when you press **Re-check** on the dashboard.
 - **Portable** — on any MongoDB: an inverted index (the multikey `terms` index), prefix matching on the last word,
   typo tolerance with a bounded edit distance (1 typo from `typo_min_length`, 2 from `typo_two_edits_length`, never
   for numbers), synonyms, field boosts and a document boost. Candidates and results are capped.
@@ -70,11 +71,14 @@ assumed contract: there is no `results` alias (Storefront accepts `items`), and 
   items as `sources.catalog_type` documents (title, brand, SKUs, attributes, lowest price); the page URL comes from
   `sources.catalog_url_template` (`/items/{itemId}`). Cost is never indexed.
 - **Crawls**: `sources.crawl_sources` — a JSON feed (records mapped with field paths `a.b|c`) or a sitemap / sitemap
-  index of **your own domain** (https only). The scheduler fetches `pages_per_run` pages per run through the
-  SSRF-guarded client with a timeout and a size cap; pages with `robots: noindex` are skipped; documents a finished run
-  did not see are removed. Crawl steps run in the background after requests to your website's search (at most every
-  15 minutes) and in a daily catch-up, so a source runs on the first pass after its `every_hours` elapsed and a
-  large sitemap advances one step per pass. `POST /v1/sources/{key}/crawl` (sk_) starts a run now.
+  index of **your own domain** (https only). A crawl fetches `pages_per_run` pages per step through the SSRF-guarded
+  client with a timeout and a size cap; pages with `robots: noindex` are skipped; documents a finished run did not see
+  are removed. Nothing runs on a schedule: crawls run when you press **Crawl now** (one source) or **Crawl due
+  sources** (every source never crawled, in progress, or whose `every_hours` passed) on the dashboard's Sources page,
+  or when your server calls `POST /v1/sources/{key}/crawl` (sk_). One press crawls step after step for up to 10
+  seconds; a large sitemap that needs longer is continued by the next press. When a Catalog item event arrives for an
+  item whose page (from `sources.catalog_url_template`) a sitemap source indexed, that page is fetched again right
+  away (and removed when the item is deleted or the page is gone).
 - **API**: `POST /v1/documents` (create or replace; `id` optional), `POST /v1/documents:batch` (≤ 100),
   `DELETE /v1/documents/{id}`, `GET /v1/documents` — `sk_` only, with `sources.api_upserts`.
 

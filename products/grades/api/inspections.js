@@ -29,6 +29,8 @@ export const UNIT_INSPECTED = 'grades.unit_inspected@1';
 const DAY_MS = 86_400_000;
 /** Grace after a photo slot's `staleAt` before the sweep deletes it (covers completions in flight). */
 const SWEEP_GRACE_MS = 10 * 60_000;
+/** Stale slots swept on each new photo slot of a website (the dashboard button sweeps up to the sweep's default). */
+export const UPLOAD_SWEEP_LIMIT = 25;
 
 /**
  * Owner view of a unit.
@@ -100,14 +102,15 @@ export const createInspectionService = ({
 		photo.staleAt !== undefined && photo.staleAt !== null && new Date(/** @type {any} */ (photo.staleAt)).getTime() <= now();
 
 	/**
-	 * Delete the objects and records of this website's stale photo slots (jobs; bounded and idempotent).
+	 * Delete the objects and records of this website's stale photo slots (bounded and idempotent): on the website's
+	 * next photo upload and from the dashboard's "Clean up stale photos" button — never on a timer.
 	 * @param {Site} site
-	 * @param {{ limit?: number }} [options] slots per run (default: the sweep's)
+	 * @param {{ limit?: number, bucket?: any }} [options] slots per run (default: the sweep's); an already resolved bucket
 	 * @returns {Promise<{ scanned: number, deleted: number, missing: number, failed: number }>}
 	 */
-	const sweepPhotos = (site, { limit } = {}) =>
+	const sweepPhotos = (site, { limit, bucket } = {}) =>
 		site.repos.photos.sweepStale({
-			storage: () => storage(site.websiteId),
+			storage: bucket ? async () => bucket : () => storage(site.websiteId),
 			olderThanMs: SWEEP_GRACE_MS,
 			...(limit === undefined ? {} : { limit }),
 		});
@@ -457,7 +460,9 @@ export const createInspectionService = ({
 			contentLength: declared.size,
 			expiresIn: config.upload_ttl_seconds,
 		});
-		if (!existing)
+		if (!existing) {
+			// a new upload is the moment to clean up this website's abandoned slots (best effort: the TTL is the backstop)
+			await sweepPhotos(site, { limit: UPLOAD_SWEEP_LIMIT, bucket }).catch(() => null);
 			await site.repos.photos.insert({
 				id,
 				inspectionId,
@@ -468,10 +473,12 @@ export const createInspectionService = ({
 				size,
 				status: 'pending',
 				addedAt: iso(),
-				// past `staleAt` the cron sweep deletes the object and the slot; the TTL on `purgeAt` is only a backstop
+				// past `staleAt` the next upload (or the dashboard) deletes the object and the slot; the TTL on `purgeAt`
+				// is only a backstop
 				staleAt: new Date(now() + Number(config.upload_ttl_seconds) * 1000 + DAY_MS),
 				purgeAt: new Date(now() + Number(config.upload_ttl_seconds) * 1000 + DAY_MS + STALE_BACKSTOP_MS),
 			});
+		}
 		return {
 			ok: true,
 			photo: {

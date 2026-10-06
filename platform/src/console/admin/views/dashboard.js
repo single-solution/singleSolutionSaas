@@ -1,11 +1,13 @@
 'use client';
 /**
  * Platform health at a glance: event deliveries and dead letters, unhealthy service apps (stale or failing
- * heartbeats), reconciliation runs and finance alerts, cron runs, the job queue and the last audit hash-chain
- * verification (`GET /v1/admin/system/health`).
+ * heartbeats), reconciliation runs and finance alerts, the on-demand operations (last run and a Run button each:
+ * nothing runs on a schedule), the job queue and the last audit hash-chain verification (`GET /v1/admin/system/health`).
  * @module
  */
+import { useState } from 'react';
 import {
+	Button,
 	ButtonLink,
 	Card,
 	EmptyState,
@@ -17,10 +19,12 @@ import {
 	formatDateTime,
 	formatNumber,
 	humanize,
+	useToast,
 } from '@ss/ui';
 import { Link } from '../../link.js';
-import { adminRoutes } from '../paths.js';
-import { AdminProblem, IdChip } from './common.js';
+import { adminFetch } from '../client.js';
+import { adminApi, adminRoutes } from '../paths.js';
+import { AdminProblem, IdChip, staffCan } from './common.js';
 
 /**
  * @param {any} props loader result of `loadDashboard`
@@ -52,7 +56,7 @@ export function DashboardView(props) {
 					label="Unhealthy apps"
 					value={formatNumber(unhealthy.length)}
 					tone={unhealthy.length > 0 ? 'danger' : 'success'}
-					hint={unhealthy.length > 0 ? 'Stale or failing heartbeat' : 'Every service app reports in'}
+					hint={unhealthy.length > 0 ? 'Silent for a day or reporting a problem' : 'Every service app is in touch'}
 				/>
 				<Stat
 					label="Finance alerts"
@@ -66,53 +70,7 @@ export function DashboardView(props) {
 			) : null}
 
 			<div className="grid gap-6 xl:grid-cols-2">
-				<Card title="Cron jobs" subtitle="Last run of every scheduled job.">
-					{health.problem ? (
-						<p className="text-sm text-danger">{describeProblem(health.problem)}</p>
-					) : (
-						<Table
-							caption="Cron jobs"
-							dense
-							rows={/** @type {any[]} */ (h?.crons ?? [])}
-							rowKey={(c) => c.name}
-							empty="No cron has run yet."
-							columns={[
-								{
-									key: 'name',
-									header: 'Cron',
-									rowHeader: true,
-									render: (c) => <span className="font-mono text-xs">{c.name}</span>,
-								},
-								{
-									key: 'status',
-									header: 'Last run',
-									render: (c) =>
-										c.lastRun ? (
-											<span className="space-y-0.5">
-												<StatusBadge status={c.lastRun.status} />
-												{c.lastRun.error?.message ? (
-													<span
-														className="block max-w-xs truncate text-xs text-danger"
-														title={c.lastRun.error.message}>
-														{c.lastRun.error.message}
-													</span>
-												) : null}
-											</span>
-										) : (
-											<span className="text-muted">Never</span>
-										),
-								},
-								{ key: 'at', header: 'Finished', render: (c) => formatDateTime(c.lastRun?.finishedAt) },
-								{
-									key: 'ms',
-									header: 'Duration',
-									align: 'right',
-									render: (c) => (c.lastRun ? `${formatNumber(c.lastRun.durationMs)} ms` : '—'),
-								},
-							]}
-						/>
-					)}
-				</Card>
+				<OperationsCard health={health} canRun={staffCan(props.staff, 'platform.jobs.manage')} />
 				<Card title="Job queue and audit chain">
 					{health.problem ? (
 						<p className="text-sm text-danger">{describeProblem(health.problem)}</p>
@@ -135,7 +93,7 @@ export function DashboardView(props) {
 			<div className="grid gap-6 xl:grid-cols-2">
 				<Card
 					title="Unhealthy service apps"
-					subtitle="Heartbeat older than the stale window or a status other than ok."
+					subtitle="Not seen (no call, no heartbeat) for a day, or a reported status other than ok."
 					actions={
 						<ButtonLink as={Link} href={adminRoutes.apps({ kind: 'service' })} size="sm" variant="ghost">
 							All apps
@@ -170,7 +128,7 @@ export function DashboardView(props) {
 										/>
 									),
 								},
-								{ key: 'last', header: 'Last heartbeat', render: (a) => formatDateTime(a.health.lastHeartbeatAt) },
+								{ key: 'last', header: 'Last seen', render: (a) => formatDateTime(a.health.lastSeenAt) },
 							]}
 						/>
 					)}
@@ -212,7 +170,7 @@ export function DashboardView(props) {
 
 			<Card
 				title="Reconciliation"
-				subtitle="Nightly comparison of usage, settlement and the ledger."
+				subtitle="On-demand comparison of usage, settlement and the ledger."
 				actions={
 					<ButtonLink as={Link} href={adminRoutes.finance()} size="sm" variant="ghost">
 						Finance
@@ -278,5 +236,100 @@ export function AuditChainLine({ verification }) {
 				</Link>
 			))}
 		</div>
+	);
+}
+
+/**
+ * The on-demand admin operations: last run of each, and a Run button (Continue when the last run stopped at its
+ * deadline and returned a cursor). Nothing runs on a schedule (PLAN F.19).
+ * @param {{ health: { data: any, problem: any }, canRun: boolean }} props
+ */
+function OperationsCard({ health, canRun }) {
+	const toast = useToast();
+	const [rows, setRows] = useState(/** @type {any[]} */ (health.data?.operations ?? []));
+	const [running, setRunning] = useState(/** @type {string | null} */ (null));
+	const [error, setError] = useState(/** @type {string | null} */ (null));
+	/** @param {any} op */
+	const run = async (op) => {
+		const after = op.lastRun?.stats?.resumeAfter;
+		setRunning(op.name);
+		setError(null);
+		const result = await adminFetch(adminApi.operation(op.name), {
+			method: 'POST',
+			body: typeof after === 'string' ? { after } : {},
+		});
+		setRunning(null);
+		if (!result.ok) {
+			setError(describeProblem(result.problem));
+			return;
+		}
+		const at = new Date().toISOString();
+		setRows((current) =>
+			current.map((row) =>
+				row.name === op.name
+					? {
+							...row,
+							status: result.data.status,
+							lastRun: { status: result.data.status, finishedAt: at, durationMs: null, stats: result.data.stats ?? null },
+						}
+					: row,
+			),
+		);
+		toast.show({ title: `${humanize(op.name)}: ${humanize(result.data.status)}` });
+	};
+	return (
+		<Card title="Operations" subtitle="Run on demand; nothing runs on a schedule. Long runs continue where they stopped.">
+			{health.problem ? (
+				<p className="text-sm text-danger">{describeProblem(health.problem)}</p>
+			) : (
+				<>
+					{error ? <p className="mb-2 text-sm text-danger">{error}</p> : null}
+					<Table
+						caption="Operations"
+						dense
+						rows={rows}
+						rowKey={(c) => c.name}
+						empty="No operation is registered."
+						columns={[
+							{
+								key: 'name',
+								header: 'Operation',
+								rowHeader: true,
+								render: (c) => <span className="font-mono text-xs">{c.name}</span>,
+							},
+							{
+								key: 'status',
+								header: 'Last run',
+								render: (c) =>
+									c.lastRun ? (
+										<span className="space-y-0.5">
+											<StatusBadge status={c.lastRun.status} />
+											{c.lastRun.error?.message ? (
+												<span className="block max-w-xs truncate text-xs text-danger" title={c.lastRun.error.message}>
+													{c.lastRun.error.message}
+												</span>
+											) : null}
+										</span>
+									) : (
+										<span className="text-muted">Never</span>
+									),
+							},
+							{ key: 'at', header: 'Finished', render: (c) => formatDateTime(c.lastRun?.finishedAt) },
+							{
+								key: 'run',
+								header: '',
+								align: 'right',
+								render: (c) =>
+									canRun ? (
+										<Button size="sm" variant="secondary" loading={running === c.name} onClick={() => void run(c)}>
+											{typeof c.lastRun?.stats?.resumeAfter === 'string' ? 'Continue' : 'Run'}
+										</Button>
+									) : null,
+							},
+						]}
+					/>
+				</>
+			)}
+		</Card>
 	);
 }

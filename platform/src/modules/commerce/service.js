@@ -14,6 +14,7 @@ import { createSubscriptions } from './services/subscriptions.js';
 import { createUsage } from './services/usage.js';
 import { createId } from '@ss/contracts';
 import { problem } from '../../infra/http.js';
+import { afterResponse } from '../../infra/request-scope.js';
 import { checkStatementQuery } from './core/validate.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
@@ -52,17 +53,48 @@ export const createCommerceService = (ctx) => {
 	const usage = createUsage({ ctx, repo, deps, subscriptions });
 	const reconciliation = createReconciliation({ ctx, repo, ledger, settlement });
 
+	/**
+	 * Settle the merchant of a website before reading or changing its money-relevant state (F.19: settlement on read).
+	 * @param {unknown} websiteId
+	 */
+	const settleWebsite = async (websiteId) => {
+		if (typeof websiteId !== 'string') return;
+		const website = await Promise.resolve(deps.getWebsite(websiteId)).catch(() => null);
+		if (website?.merchantId) await money.settleDue(String(website.merchantId));
+	};
+	/** @param {unknown} subscriptionId */
+	const settleSubscription = async (subscriptionId) => {
+		if (typeof subscriptionId !== 'string') return;
+		const sub = await repo.subscriptionById(subscriptionId).catch(() => null);
+		if (sub?.merchantId) await money.settleDue(String(sub.merchantId));
+	};
+	/**
+	 * A subscription change settles the merchant's due hours first.
+	 * @template {{ subscriptionId: string }} I
+	 * @template R
+	 * @param {(input: I) => Promise<R>} change
+	 * @returns {(input: I) => Promise<R>}
+	 */
+	const settledFirst = (change) => async (input) => {
+		await settleSubscription(input.subscriptionId);
+		return change(input);
+	};
+
 	return {
 		// subscriptions
-		subscribe: subscriptions.subscribe,
+		/** @type {typeof subscriptions.subscribe} */
+		subscribe: async (input) => {
+			await settleWebsite(input.websiteId);
+			return subscriptions.subscribe(input);
+		},
 		getSubscription: subscriptions.getSubscription,
 		subscriptionsForWebsite: subscriptions.subscriptionsForWebsite,
 		subscriptionsOfMerchant: subscriptions.subscriptionsOfMerchant,
-		setElement: subscriptions.setElement,
-		changePlan: subscriptions.changePlan,
-		pause: subscriptions.pause,
-		resume: subscriptions.resume,
-		cancel: subscriptions.cancel,
+		setElement: settledFirst(subscriptions.setElement),
+		changePlan: settledFirst(subscriptions.changePlan),
+		pause: settledFirst(subscriptions.pause),
+		resume: settledFirst(subscriptions.resume),
+		cancel: settledFirst(subscriptions.cancel),
 		invalidate: subscriptions.invalidate,
 		/** @param {string} websiteId */
 		invalidateWebsite: async (websiteId) => {
@@ -96,8 +128,24 @@ export const createCommerceService = (ctx) => {
 		resourceNeeds: subscriptions.resourceNeedsOf,
 		onMerchantStatus: subscriptions.onMerchantStatus,
 		// documents and usage
-		documentFor: subscriptions.documentFor,
-		recordUsage: usage.recordUsage,
+		/**
+		 * The signed document of a subscription. The merchant is settled first, so a low-balance or spend-limit hold
+		 * reaches the document a product fetches.
+		 * @type {typeof subscriptions.documentFor}
+		 */
+		documentFor: async (input) => {
+			await settleWebsite(input.websiteId);
+			return subscriptions.documentFor(input);
+		},
+		/**
+		 * Record a product's usage batch; the merchants it concerns are settled right after the response.
+		 * @param {Parameters<typeof usage.recordUsage>[0]} input
+		 */
+		recordUsage: async (input) => {
+			const out = await usage.recordUsage(input);
+			for (const merchantId of out.merchants) afterResponse(() => money.settleDue(merchantId));
+			return { results: out.results };
+		},
 		// money
 		addCredits: money.addCredits,
 		adjust: money.adjust,
@@ -130,9 +178,20 @@ export const createCommerceService = (ctx) => {
 		/** @param {string} merchantId @param {{ afterSeq?: number | null, limit?: number }} [page] */
 		ledgerEntries: async (merchantId, { afterSeq = null, limit = 100 } = {}) =>
 			(await ledger.entries(merchantId, { afterSeq, limit })).map(entryView),
-		// crons and operations
-		runSettlement: settlement.runSettlement,
-		runReconciliation: reconciliation.runReconciliation,
+		// operations (admin console) and settlement on read
+		settleDue: money.settleDue,
+		/**
+		 * Settlement pass (all merchants, or `merchantId`), bounded by the operation deadline unless one is given.
+		 * @param {Parameters<typeof settlement.runSettlement>[0]} [options]
+		 */
+		runSettlement: (options = {}) =>
+			settlement.runSettlement({ deadline: ctx.now() + ctx.config.operationDeadlineMs, ...options }),
+		/**
+		 * Reconciliation chunk (resumes where the previous one stopped), bounded like {@link runSettlement}.
+		 * @param {Parameters<typeof reconciliation.runReconciliation>[0]} [options]
+		 */
+		runReconciliation: (options = {}) =>
+			reconciliation.runReconciliation({ deadline: ctx.now() + ctx.config.operationDeadlineMs, ...options }),
 		/** @param {{ merchantId?: string | null, limit?: number }} [query] */
 		alerts: async ({ merchantId = null, limit = 100 } = {}) =>
 			(await repo.listAlerts({ merchantId, limit })).map((a) => ({

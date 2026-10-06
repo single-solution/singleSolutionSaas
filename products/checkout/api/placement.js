@@ -12,7 +12,7 @@
  * - **Compensated reservations elsewhere.** Coupon codes are reserved, points redeemed, deals committed (and Catalog
  *   stock reserved when it is the stock source) before the local transaction; any failure releases what was taken.
  * - **Holds expire.** Unpaid / unconfirmed orders carry `expiresAt`; once it passes the order is cancelled and gives
- *   everything back — when it is read, when a placement needs its stock, or by the sweep (jobs/), whichever comes first.
+ *   everything back — when it is read, when a placement needs its stock, or from the dashboard's "Process expired now".
  * - **Safety** (lesson A12): blocklist, open-order cap counting cash-on-delivery orders, COD caps and confirmation.
  */
 import { createHash } from 'node:crypto';

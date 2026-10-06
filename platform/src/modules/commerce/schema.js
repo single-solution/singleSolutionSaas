@@ -133,6 +133,6 @@ export const collections = Object.freeze([
 	defineCollection({
 		module: 'commerce',
 		name: STATE,
-		description: 'Cron cursors (reconciliation progress).',
+		description: 'Operation cursors (reconciliation progress).',
 	}),
 ]);

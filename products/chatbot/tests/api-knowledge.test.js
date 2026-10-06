@@ -510,3 +510,45 @@ describe('flows', () => {
 		await h.entitle({ identity: issuer.section });
 	});
 });
+
+describe('due web pages (no timer)', () => {
+	it('refreshes due pages on demand, bounded per call — the dashboard button', async () => {
+		h.network.on((request) => {
+			if (request.url === 'https://shop.example.com/returns')
+				return h.network.reply(
+					'<html><head><title>Returns</title></head><body><p>Returns within 30 days.</p></body></html>',
+					200,
+					{
+						'content-type': 'text/html',
+					},
+				);
+			if (request.url === 'https://shop.example.com/gone') return h.network.reply('gone', 500);
+			return null;
+		});
+		await h.entitle({
+			identity: issuer.section,
+			config: {
+				knowledge: {
+					sources: [
+						{ id: 'returns', url: 'https://shop.example.com/returns', refresh_hours: 1 },
+						{ id: 'gone', url: 'https://shop.example.com/gone' },
+					],
+				},
+			},
+		});
+		const site = /** @type {any} */ (await h.chatbot.siteFor(WEBSITE));
+		expect(await h.chatbot.service.refreshDue(site, { maxSources: 1 })).toEqual({ refreshed: 1, failed: 0, remaining: 1 });
+		expect(await h.chatbot.service.refreshDue(site)).toEqual({ refreshed: 0, failed: 1, remaining: 0 });
+		expect(await h.chatbot.service.refreshDue(site)).toEqual({ refreshed: 0, failed: 0, remaining: 0 });
+		h.clock.advance(2 * 3_600_000);
+		await h.entitle({ identity: issuer.section, config: { knowledge: { sources: [site.settings.knowledge.sources[0]] } } });
+		const later = /** @type {any} */ (await h.chatbot.siteFor(WEBSITE));
+		expect(await h.chatbot.service.refreshDue(later)).toEqual({ refreshed: 1, failed: 0, remaining: 0 });
+		expect(await h.chatbot.service.refreshDue({ ...later, settings: { ...later.settings, knowledge: null } })).toEqual({
+			refreshed: 0,
+			failed: 0,
+			remaining: 0,
+		});
+		await h.entitle({ identity: issuer.section });
+	});
+});

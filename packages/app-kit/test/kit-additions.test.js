@@ -1,16 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import {
-	createBackground,
-	createMemoryStores,
-	defineRoute,
-	detectRuntime,
-	feature,
-	ok,
-	paginate,
-	problem,
-	standardRoutes,
-	toNextRoute,
-} from '../src/index.js';
+import { createBackground, defineRoute, feature, ok, paginate, problem, standardRoutes, toNextRoute } from '../src/index.js';
 import { WEBSITE, entitle, setup, websiteKey } from './helpers.js';
 
 const BASE = 'https://coupons.example.dev';
@@ -79,89 +68,65 @@ describe('portal.publishEvent through the durable outbox', () => {
 	});
 });
 
-describe('background flushing', () => {
-	it('detects serverless platforms', () => {
-		expect(detectRuntime({ VERCEL: '1' })).toBe('serverless');
-		expect(detectRuntime({ AWS_LAMBDA_FUNCTION_NAME: 'f' })).toBe('serverless');
-		expect(detectRuntime({})).toBe('server');
-		const logger = /** @type {any} */ ({ warn: () => {} });
-		expect(() => createBackground({ tasks: [], logger, intervalMs: 10 })).toThrow(RangeError);
-		expect(() => createBackground({ tasks: [], logger, everyRequests: 0 })).toThrow(RangeError);
+describe('queue delivery on requests (no timer)', () => {
+	const quiet = /** @type {any} */ ({ warn: () => {} });
+
+	it('validates the mode and does nothing when off', () => {
+		expect(() => createBackground({ tasks: [], mode: /** @type {any} */ ('server'), logger: quiet })).toThrow(TypeError);
+		const run = vi.fn(async () => {});
+		const off = createBackground({ tasks: [{ name: 'q', run }], mode: 'off', logger: quiet });
+		expect(off.mode).toBe('off');
+		off.markDirty('web_1');
+		/** @type {Array<() => Promise<unknown>>} */
+		const scheduled = [];
+		off.afterRequest((task) => void scheduled.push(task), { websiteId: 'web_1' });
+		expect(scheduled).toHaveLength(0);
+		expect(createBackground({ tasks: [], logger: quiet }).mode).toBe('on');
 	});
 
-	it('server mode: an unref’d timer starts with the first request and stops on close', async () => {
-		/** @type {Array<() => void>} */
-		const timers = [];
-		const unref = vi.fn();
-		const clear = vi.fn();
-		const run = vi.fn(async () => {});
-		const failing = vi.fn(async () => Promise.reject(new Error('x')));
+	it('after a request: sends what was queued and the request website’s due retries, one batch each', async () => {
+		/** @type {Array<unknown>} */
+		const calls = [];
 		const warn = vi.fn();
 		const background = createBackground({
 			tasks: [
-				{ name: 'a', run: failing },
-				{ name: 'b', run },
+				{ name: 'a', run: async () => Promise.reject(new Error('x')) },
+				{ name: 'b', run: async (options) => void calls.push(options) },
 			],
-			mode: 'server',
+			mode: 'on',
 			logger: /** @type {any} */ ({ warn }),
-			setInterval: (fn) => {
-				timers.push(fn);
-				return { unref };
-			},
-			clearInterval: clear,
-		});
-		expect(background.mode).toBe('server');
-		background.afterRequest(null);
-		background.afterRequest(null);
-		expect(timers).toHaveLength(1);
-		expect(unref).toHaveBeenCalled();
-		timers[0]?.();
-		await background.tick();
-		expect(run).toHaveBeenCalled();
-		expect(warn).toHaveBeenCalledWith('background flush failed', expect.objectContaining({ task: 'a' }));
-		background.stop();
-		expect(clear).toHaveBeenCalled();
-	});
-
-	it('serverless mode: flushes after requests that queued something (via after()), else every Nth request', async () => {
-		const run = vi.fn(async () => {});
-		const background = createBackground({
-			tasks: [{ name: 'q', run }],
-			mode: 'serverless',
-			everyRequests: 3,
-			logger: /** @type {any} */ ({ warn: () => {} }),
 		});
 		/** @type {Array<() => Promise<unknown>>} */
 		const scheduled = [];
-		const after = (/** @type {() => Promise<unknown>} */ task) => {
-			scheduled.push(task);
-		};
-		background.afterRequest(after);
+		const after = (/** @type {() => Promise<unknown>} */ task) => void scheduled.push(task);
+		background.afterRequest(after); // no website, nothing queued: nothing to do
 		expect(scheduled).toHaveLength(0);
-		background.markDirty();
-		background.afterRequest(after);
+		background.markDirty('web_2');
+		background.afterRequest(after, { websiteId: 'web_1' });
 		expect(scheduled).toHaveLength(1);
 		await scheduled[0]?.();
-		expect(run).toHaveBeenCalledTimes(1);
-		background.afterRequest(after); // 3rd request
-		expect(scheduled).toHaveLength(2);
-		await scheduled[1]?.();
-		// a throwing after() (outside a request scope) falls back to a background run
-		background.markDirty();
+		expect(calls).toEqual([
+			{ websiteId: 'web_2', maxBatches: 1 },
+			{ websiteId: 'web_1', maxBatches: 1 },
+		]);
+		expect(warn).toHaveBeenCalledWith('queue delivery failed', expect.objectContaining({ task: 'a', websiteId: 'web_2' }));
+		background.afterRequest(after); // the queued website was handled: nothing left
+		expect(scheduled).toHaveLength(1);
+		// a throwing after() (outside a request scope) falls back to a run in the background of the request
+		background.markDirty('web_3');
 		background.afterRequest(() => {
 			throw new Error('outside request');
 		});
-		await background.tick();
-		expect(run).toHaveBeenCalledTimes(3);
-		background.afterRequest(undefined); // off-cycle, clean: nothing
-		const off = createBackground({ tasks: [{ name: 'q', run }], mode: 'off', logger: /** @type {any} */ ({}) });
-		off.markDirty();
-		off.afterRequest(after);
-		expect(scheduled).toHaveLength(2);
+		await vi.waitFor(() => expect(calls).toContainEqual({ websiteId: 'web_3', maxBatches: 1 }));
+		// tick() sends everything due (single-flight)
+		const first = background.tick();
+		expect(background.tick()).toBe(first);
+		await first;
+		expect(calls).toContainEqual(undefined);
 	});
 
-	it('wires into the product: usage recorded in a request is flushed after it (Next after) and by heartbeat', async () => {
-		const { portal, product } = await setup({ overrides: { background: { mode: 'serverless', everyRequests: 1000 } } });
+	it('wires into the product: usage recorded in a request is sent after it (Next after) and by heartbeat', async () => {
+		const { portal, product } = await setup({ overrides: { background: { mode: 'on' } } });
 		await entitle(portal);
 		const sk = await websiteKey(portal, { kind: 'sk', keyId: 'key_2' });
 		const handle = product.handler([
@@ -192,118 +157,31 @@ describe('background flushing', () => {
 		await product.usage.record({ websiteId: WEBSITE, unit: 'redemption', quantity: 1, idempotencyKey: 'u-2' });
 		await product.heartbeat();
 		expect(portal.usage.size).toBe(2);
-		expect(product.background.mode).toBe('serverless');
+		expect(product.background.mode).toBe('on');
 		await product.flush();
 		await product.close();
 	});
-});
 
-describe('throttled background tasks (every)', () => {
-	const quiet = /** @type {any} */ ({ warn: () => {} });
-
-	it('validates its arguments', () => {
-		const background = createBackground({ tasks: [], mode: 'serverless', logger: quiet });
-		const fn = async () => {};
-		expect(() => background.every('Bad Name', 1000, fn)).toThrow(TypeError);
-		expect(() => background.every('a', 10, fn)).toThrow(RangeError);
-		expect(() => background.every('a', 1000, fn, { per: /** @type {any} */ ('merchant') })).toThrow(TypeError);
-		background.every('a', 1000, fn);
-		expect(() => background.every('a', 1000, fn)).toThrow(TypeError);
-	});
-
-	it('runs at most once per interval per website after requests, with a deadline', async () => {
-		let t = 1_000_000;
-		/** @type {Array<{ websiteId: string | null, deadline: number }>} */
-		const runs = [];
-		const background = createBackground({
-			tasks: [],
-			mode: 'serverless',
-			everyRequests: 1000,
-			logger: quiet,
-			now: () => t,
-		});
-		background.every('sweep', 60_000, async (input) => void runs.push(input), { per: 'website', budgetMs: 5_000 });
-		/** @type {Array<() => Promise<unknown>>} */
-		const scheduled = [];
-		const after = (/** @type {() => Promise<unknown>} */ task) => void scheduled.push(task);
-		background.afterRequest(after); // no website: nothing to do
-		expect(scheduled).toHaveLength(0);
-		background.afterRequest(after, { websiteId: 'web_1' });
-		expect(scheduled).toHaveLength(1);
-		await scheduled[0]?.();
-		expect(runs).toEqual([{ websiteId: 'web_1', deadline: t + 5_000 }]);
-		background.afterRequest(after, { websiteId: 'web_1' }); // throttled in memory
-		expect(scheduled).toHaveLength(1);
-		background.afterRequest(after, { websiteId: 'web_2' }); // another website is independent
-		await scheduled[1]?.();
-		expect(runs.map((r) => r.websiteId)).toEqual(['web_1', 'web_2']);
-		t += 60_000;
-		background.afterRequest(after, { websiteId: 'web_1' });
-		await scheduled[2]?.();
-		expect(runs).toHaveLength(3);
-	});
-
-	it('takes a shared lease so only one instance runs per interval, and logs failures', async () => {
-		let t = 5_000_000;
-		const stores = createMemoryStores({ now: () => t });
-		const warn = vi.fn();
-		const make = () =>
-			createBackground({
-				tasks: [],
-				mode: 'server',
-				logger: /** @type {any} */ ({ warn }),
-				leases: stores.leases,
-				now: () => t,
-				setInterval: () => ({}),
-				clearInterval: () => {},
-			});
-		const a = make();
-		const b = make();
-		let count = 0;
-		const ta = a.every('expire', 10_000, async () => void (count += 1));
-		const tb = b.every('expire', 10_000, async () => void (count += 1));
-		expect(await ta.trigger()).toBe(true);
-		expect(await tb.trigger()).toBe(false); // the lease is held by instance a
-		expect(count).toBe(1);
-		t += 10_000;
-		expect(await tb.trigger()).toBe(true);
-		expect(count).toBe(2);
-		const failing = a.every('boom', 1000, async () => Promise.reject(new Error('x')), { per: 'website' });
-		expect(await failing.trigger()).toBe(false); // per-website task without a website
-		expect(await failing.trigger({ websiteId: 'web_1' })).toBe(true);
-		expect(warn).toHaveBeenCalledWith('background task failed', expect.objectContaining({ task: 'boom', websiteId: 'web_1' }));
-		// server mode schedules due tasks after requests too (here: no after(), so a background run)
-		t += 10_000;
-		a.afterRequest(null);
-		await vi.waitFor(() => expect(count).toBe(3));
-		a.stop();
-		// off mode never runs them after requests
-		const off = createBackground({ tasks: [], mode: 'off', logger: quiet });
-		const never = vi.fn(async () => {});
-		off.every('x', 1000, never);
-		off.afterRequest(null, { websiteId: 'web_1' });
-		expect(never).not.toHaveBeenCalled();
-	});
-
-	it('is exposed on the product and runs after website requests', async () => {
-		const { portal, product } = await setup({ overrides: { background: { mode: 'serverless', everyRequests: 1000 } } });
+	it('retries a failed send on the next request for that website, never by itself', async () => {
+		const { portal, product, clock } = await setup({ overrides: { background: { mode: 'on' } } });
 		await entitle(portal);
+		await product.entitlements.forWebsite(WEBSITE);
 		const sk = await websiteKey(portal, { kind: 'sk', keyId: 'key_2' });
-		/** @type {Array<string | null>} */
-		const seen = [];
-		product.background.every('expire', 60_000, async (/** @type {any} */ input) => void seen.push(input.websiteId), {
-			per: 'website',
-		});
+		portal.setDown(true);
+		await product.portal.publishEvent({ websiteId: WEBSITE, type: 'coupon_box.redeemed@1', data: {}, idempotencyKey: 'x-1' });
+		portal.setDown(false);
+		expect(await product.outbox.stats()).toMatchObject({ pending: 1 });
+		clock.advance(60_000); // time passes: nothing runs on its own
+		expect(await product.outbox.stats()).toMatchObject({ pending: 1 });
 		const handle = product.handler([
 			defineRoute({ method: 'GET', path: '/v1/ping', auth: 'website', handler: async () => ok({ ok: true }) }),
 		]);
 		/** @type {Array<() => Promise<unknown>>} */
 		const scheduled = [];
 		const next = toNextRoute(handle, { after: (task) => scheduled.push(task) });
-		const res = await next.GET(req('/api/v1/ping', { headers: { authorization: `Bearer ${sk}` } }));
-		expect(res.status).toBe(200);
+		await next.GET(req('/api/v1/ping', { headers: { authorization: `Bearer ${sk}` } }));
 		for (const task of scheduled) await task();
-		expect(seen).toEqual([WEBSITE]);
+		expect(await product.outbox.stats()).toMatchObject({ pending: 0, sent: 1 });
 		await product.close();
 	});
 });

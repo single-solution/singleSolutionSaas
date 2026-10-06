@@ -184,7 +184,7 @@ describe('items', () => {
 		expect((await h.call('GET', '/v1/items/!!bad')).status).toBe(404);
 	});
 
-	it('hides drafts and items outside their publication window from pk_, and the sweep publishes visibility changes', async () => {
+	it('hides drafts and items outside their publication window from pk_, and publishes visibility changes on read', async () => {
 		const at = new Date(h.clock.now() + 2 * HOUR).toISOString();
 		const until = new Date(h.clock.now() + DAY).toISOString();
 		const scheduled = await h.call('POST', '/v1/items', {
@@ -196,16 +196,12 @@ describe('items', () => {
 		expect((await h.call('GET', `/v1/items/${draft.json.id}`, { key: h.pk })).status).toBe(404);
 		h.clock.advance(3 * HOUR);
 		expect((await h.call('GET', '/v1/items/launch', { key: h.pk })).status).toBe(200);
-		const unauthorized = await h.call('GET', '/cron/sweep', { key: null });
-		expect(unauthorized.status).toBe(401);
-		const sweep = await h.call('GET', '/cron/sweep', {
-			key: null,
-			headers: { authorization: 'Bearer cron-secret-0123456789abcdef' },
-		});
-		expect(sweep.status).toBe(200);
-		expect(sweep.json.results[0]).toMatchObject({ websiteId: WEBSITE, transitions: 1 });
+		// no timer: the visibility change is published when the item is read after the window opened
 		const event = h.published('item.updated@1').at(-1);
 		expect(event.data).toMatchObject({ itemId: scheduled.json.id, changed: ['published'] });
+		const count = h.published('item.updated@1').length;
+		expect((await h.call('GET', '/v1/items/launch', { key: h.pk })).status).toBe(200);
+		expect(h.published('item.updated@1').length).toBe(count);
 		const bad = await h.call('POST', '/v1/items', { body: { title: 'Bad window', publishAt: until, unpublishAt: at } });
 		expect(bad.json.errors[0].code).toBe('before_publish');
 	});

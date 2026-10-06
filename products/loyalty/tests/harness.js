@@ -12,7 +12,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createLoyalty, wireEvents } from '../api/routes.js';
-import { cronRoutes } from '../jobs/expiry.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -21,7 +20,6 @@ export const MERCHANT = 'mer_0123456789abcdefghjkmnpq';
 export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const ELEMENTS = ['earn_rules', 'redeem', 'wallet', 'tiers', 'expiry', 'referrals', 'adjustments', 'reversal'];
 
@@ -73,14 +71,13 @@ export const createHarness = async (
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_loyalty_api_tests_0123456789'),
-			CRON_SECRET,
 			...env,
 		},
 		root: ROOT,
 		overrides: { fetch: portal.fetch, now: clock.now, logger: noopLogger },
 	});
 	const loyalty = wireEvents(createLoyalty(app));
-	const handle = createRequestHandler(loyalty.product, [...buildRoutes(loyalty), ...cronRoutes(loyalty)]);
+	const handle = createRequestHandler(loyalty.product, buildRoutes(loyalty));
 
 	let version = 0;
 	/**

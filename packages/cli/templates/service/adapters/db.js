@@ -5,9 +5,16 @@
 
 export const NOTES_COLLECTION = 'notes';
 
-/** Indexes (websiteId first in every compound index), created idempotently on first connect. */
+/** Retention of soft-deleted notes: MongoDB removes them by itself after this (TTL index on `purgeAt`, no job). */
+export const DELETED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Indexes (websiteId first in every compound index), created idempotently on first connect. `purge_ttl` lets the
+ * database delete soft-deleted notes once their retention ends: nothing in the product runs on a timer.
+ */
 export const NOTES_INDEXES = Object.freeze([
 	{ key: { websiteId: 1, deletedAt: 1, id: -1 }, name: 'website_active_id' },
+	{ key: { purgeAt: 1 }, name: 'purge_ttl', expireAfterSeconds: 0 },
 	{ key: { websiteId: 1, id: 1 }, name: 'website_id', unique: true },
 	{
 		key: { websiteId: 1, sourceEventId: 1 },
@@ -26,7 +33,6 @@ export const NOTES_INDEXES = Object.freeze([
  * @property {(doc: object) => Promise<unknown>} insertOne
  * @property {(filter: object, update: object, options?: object) => Promise<{ matchedCount?: number, upsertedCount?: number }>} updateOne
  * @property {(filter: object) => Promise<number>} countDocuments
- * @property {(filter: object) => Promise<{ deletedCount?: number }>} [deleteMany]
  */
 
 /**
@@ -93,24 +99,16 @@ export const createNotesRepository = (collection, websiteId) => {
 			);
 		},
 		/**
-		 * Soft delete (Part E §5: DELETE is soft by default).
+		 * Soft delete (Part E §5: DELETE is soft by default). `purgeAt` (a Date, for the TTL index) is when the database
+		 * removes the note for good.
 		 * @param {string} id
 		 * @param {string} at ISO time
 		 * @returns {Promise<boolean>}
 		 */
 		remove: async (id, at) => {
-			const result = await collection.updateOne({ ...active, id }, { $set: { deletedAt: at, updatedAt: at } });
+			const purgeAt = new Date(Date.parse(at) + DELETED_RETENTION_MS);
+			const result = await collection.updateOne({ ...active, id }, { $set: { deletedAt: at, updatedAt: at, purgeAt } });
 			return (result.matchedCount ?? 0) > 0;
-		},
-		/**
-		 * Hard-delete soft-deleted notes older than `before` (retention job).
-		 * @param {string} before ISO time
-		 * @returns {Promise<number>}
-		 */
-		purgeDeleted: async (before) => {
-			if (!collection.deleteMany) return 0;
-			const result = await collection.deleteMany({ websiteId, deletedAt: { $lt: before } });
-			return result.deletedCount ?? 0;
 		},
 	});
 };

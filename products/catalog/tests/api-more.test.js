@@ -1,4 +1,4 @@
-/** Mode C media, uploads, import/export, feeds, element views, stats, dashboard routes and the outbox sweep. */
+/** Mode C media, uploads, import/export, feeds, element views, stats, dashboard routes and outbox leftovers republished on read. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WEBSITE, createHarness } from './harness.js';
 
@@ -6,8 +6,6 @@ import { WEBSITE, createHarness } from './harness.js';
 let h;
 /** @type {Record<string, any>} */
 let shirt;
-
-const CRON = { key: null, headers: { authorization: 'Bearer cron-secret-0123456789abcdef' } };
 
 beforeAll(async () => {
 	h = await createHarness({
@@ -278,7 +276,7 @@ describe('feeds', () => {
 	});
 });
 
-describe('element views, stats, dashboard and the outbox sweep', () => {
+describe('element views, stats, dashboard and outbox leftovers republished on read', () => {
 	it('serves text-only element views for the Loader stub', async () => {
 		const ctx = encodeURIComponent(JSON.stringify({ path: '/p', itemId: shirt.id }));
 		const items = await h.call('GET', '/v1/elements/items/view', { key: h.pk });
@@ -392,7 +390,7 @@ describe('element views, stats, dashboard and the outbox sweep', () => {
 		expect((await h.call('GET', '/v1/session', { key: session })).json).toMatchObject({ kind: 'merchant' });
 	});
 
-	it('republishes outbox entries a crashed request left behind (same idempotency key)', async () => {
+	it('republishes outbox entries a crashed request left behind when the item is read (same idempotency key)', async () => {
 		await h.collection('items').updateOne(
 			{ websiteId: WEBSITE, id: shirt.id },
 			{
@@ -407,8 +405,8 @@ describe('element views, stats, dashboard and the outbox sweep', () => {
 				{ $push: { outbox: { type: 'inventory.changed@1', key: `inventory:bad`, data: { nope: true } } } },
 			);
 		const before = h.published('item.updated@1').length;
-		const sweep = await h.call('GET', '/cron/sweep', CRON);
-		expect(sweep.json.results[0].republished).toBe(2);
+		// reading the item republishes its leftovers (no timer)
+		expect((await h.call('GET', `/v1/items/${shirt.id}`)).status).toBe(200);
 		expect(h.published('item.updated@1').length).toBe(before + 1);
 		const stored = await h.collection('items').findOne({ websiteId: WEBSITE, id: shirt.id });
 		expect(stored?.outbox).toEqual([]);

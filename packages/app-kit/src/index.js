@@ -17,7 +17,7 @@ export { createS3Storage } from './connectors/storage.js';
 export { createHttpConnector, createHttpAi, createHttpMessaging } from './connectors/http.js';
 export { createSmtpMessaging, SMTP_PORTS } from './connectors/smtp.js';
 export { createOutbox } from './outbox.js';
-export { createBackground, detectRuntime } from './background.js';
+export { createBackground } from './background.js';
 export { REPLAY_COLLECTION, REPLAY_HEADERS } from './http/replay.js';
 export { presignUrl, signHeaders } from './connectors/sigv4.js';
 export { createEvents, checkEvent, CONTROL_EVENTS } from './events.js';

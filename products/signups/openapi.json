@@ -1132,7 +1132,7 @@
 			"post": {
 				"operationId": "registerIssuer",
 				"tags": ["sessions"],
-				"summary": "Ask the Portal to make Signups this website’s identity issuer (the body of GET /v1/issuer `portal.body`, sent with the product’s own credentials). The Portal keeps the request pending until the merchant approves it (Website → Identity); once approved the same call answers active, so it is safe to repeat. The daily job sends it once by itself while the issuer is not registered. sk_ only.",
+				"summary": "Ask the Portal to make Signups this website’s identity issuer (the body of GET /v1/issuer `portal.body`, sent with the product’s own credentials). The Portal keeps the request pending until the merchant approves it (Website → Identity); once approved the same call answers active, so it is safe to repeat. Signups also sends it once by itself on entitlement.changed@1 while the issuer is not registered. sk_ only.",
 				"x-ss-key-kind": "sk",
 				"responses": {
 					"202": {
@@ -1866,6 +1866,29 @@
 				}
 			}
 		},
+		"/v1/dashboard/deletions:run": {
+			"post": {
+				"operationId": "runDueDeletions",
+				"tags": ["data_rights"],
+				"summary": "Dashboard \"Run due deletions\": execute the deletion requests whose cooling-off ended (at most 100 per call). A due customer is also deleted whenever it is read; nothing runs on a timer.",
+				"security": [{ "dashboardSession": [] }],
+				"parameters": [{ "name": "X-SS-Website", "in": "header", "required": false, "schema": { "type": "string" } }],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": { "type": "object", "properties": { "deleted": { "type": "integer" } } },
+								"example": { "deleted": 1 }
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				}
+			}
+		},
 		"/v1/entitlement": {
 			"get": {
 				"operationId": "getEntitlement",
@@ -2230,6 +2253,12 @@
 				"in": "header",
 				"name": "SS-Signature",
 				"description": "Portal-signed request (ss-request.v1)"
+			},
+			"dashboardSession": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "Dashboard session from GET /sso?launch="
 			}
 		},
 		"parameters": {
@@ -2790,7 +2819,7 @@
 					},
 					"request": {
 						"type": ["object", "null"],
-						"description": "The last request Signups sent to the Portal to become this website’s identity issuer (POST /v1/issuer:register or the daily job), while it matches the current issuer; null otherwise.",
+						"description": "The last request Signups sent to the Portal to become this website’s identity issuer (POST /v1/issuer:register, the dashboard or on entitlement.changed@1), while it matches the current issuer; null otherwise.",
 						"properties": {
 							"status": {
 								"type": "string",

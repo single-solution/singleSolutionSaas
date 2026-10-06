@@ -1,8 +1,9 @@
 /**
  * The order outbox: the events and customer messages a change causes are pushed onto the order (`pending`) in the
  * same single-document write as the change, then delivered — events through app-kit's durable event outbox, messages
- * through the notifier — and pulled. A crash between the write and the delivery leaves the entries for the sweep job,
- * which delivers them again with the same idempotency keys, so nothing is lost and nothing is sent twice.
+ * through the notifier — and pulled. A crash between the write and the delivery leaves the entries on the order; they
+ * are delivered again with the same idempotency keys the next time the order is read (`redeliver`) or from the
+ * dashboard's "Process due now" (`retry`), so nothing is lost and nothing is sent twice. Nothing runs on a timer.
  */
 import { customerRef, eventContext } from '../core/orders.js';
 import { isRevenue } from '../core/lifecycle.js';
@@ -67,6 +68,9 @@ export const moveEntries = (site, order, { from, to, actor, reason, publish, seq
 	return entries;
 };
 
+/** Entries younger than this belong to a request that is still delivering them. */
+export const OUTBOX_GRACE_MS = 60_000;
+
 /**
  * @param {import('./context.js').Deps} deps
  * @param {import('./notify.js').Notifier} notifier
@@ -103,18 +107,31 @@ export const createOutbox = (deps, notifier) => {
 	};
 
 	/**
-	 * Redeliver what crashed requests left behind (sweep).
+	 * Is the order carrying entries a crashed request left behind?
+	 * @param {Record<string, any>} order
+	 */
+	const leftBehind = (order) => Boolean(order.pendingAt) && new Date(order.pendingAt).getTime() <= deps.now() - OUTBOX_GRACE_MS;
+
+	/**
+	 * Redeliver one order's left-behind entries when it is read (no timer). Returns entries delivered.
+	 * @param {import('./context.js').Site} site
+	 * @param {Record<string, any>} order
+	 */
+	const redeliver = async (site, order) => (leftBehind(order) ? flush(site, order) : 0);
+
+	/**
+	 * Redeliver the website's left-behind entries, bounded (the dashboard's "Process due now").
 	 * @param {import('./context.js').Site} site
 	 * @param {number} limit
 	 */
 	const retry = async (site, limit) => {
 		let delivered = 0;
-		for (const order of await site.repos.orders.pendingOutbox(new Date(deps.now() - 60_000), limit))
+		for (const order of await site.repos.orders.pendingOutbox(new Date(deps.now() - OUTBOX_GRACE_MS), limit))
 			delivered += await flush(site, order);
 		return delivered;
 	};
 
-	return Object.freeze({ flush, retry });
+	return Object.freeze({ flush, redeliver, retry });
 };
 
 /** @typedef {ReturnType<typeof createOutbox>} Outbox */

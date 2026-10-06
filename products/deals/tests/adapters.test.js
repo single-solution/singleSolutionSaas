@@ -1,9 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createPlatform } from '../adapters/platform.js';
 import { createLockTokens, lockSecret, MAX_TOKEN_LENGTH } from '../adapters/locks.js';
-import { cronAuthorized, runMaintenance } from '../jobs/maintenance.js';
 import { lockClaims } from '../core/locks.js';
-import { CRON_SECRET, createHarness, ROOT } from './harness.js';
+import { ROOT } from './harness.js';
 
 const claims = lockClaims({
 	websiteId: 'web_1',
@@ -52,37 +51,10 @@ describe('price-lock tokens', () => {
 	});
 });
 
-describe('platform and maintenance', () => {
+describe('platform', () => {
 	it('refuses to start without the required environment', async () => {
 		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
 			/SS_PORTAL_URL, SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH/,
 		);
-	});
-	it('sends the heartbeat (app-kit flushes the queues first); a failure is reported', async () => {
-		expect(await runMaintenance({ heartbeat: async () => undefined })).toEqual({ heartbeat: 'sent' });
-		expect(await runMaintenance({ heartbeat: async () => Promise.reject(new Error('y')) })).toEqual({ heartbeat: 'failed' });
-		expect(cronAuthorized(`Bearer ${CRON_SECRET}`, CRON_SECRET)).toBe(true);
-		expect(cronAuthorized('Bearer nope', CRON_SECRET)).toBe(false);
-		expect(cronAuthorized(null, CRON_SECRET)).toBe(false);
-		expect(cronAuthorized('Bearer x', null)).toBe(false);
-	});
-});
-
-describe('cron route', () => {
-	/** @type {Awaited<ReturnType<typeof createHarness>>} */
-	let h;
-	beforeAll(async () => {
-		h = await createHarness();
-	});
-	afterAll(async () => h?.close());
-	it('runs the maintenance pass with the cron secret only', async () => {
-		const request = (/** @type {Record<string, string>} */ headers) =>
-			h.handle(new Request('https://deals.example.com/cron/maintenance', { headers }));
-		expect((await request({})).status).toBe(401);
-		const response = await request({ authorization: `Bearer ${CRON_SECRET}` });
-		expect(response.status).toBe(200);
-		const body = await response.json();
-		expect(body.heartbeat).toBe('sent');
-		expect(['sent', 'failed']).toContain(body.heartbeat);
 	});
 });

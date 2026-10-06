@@ -2,7 +2,7 @@
  * The chatbot service: conversations and the message pipeline (moderation → language → flows → handoff → AI →
  * moderation), handoff to the inbox with assignment and SLAs, agent replies and notes, status changes with CSAT and
  * closing, guest claims, leads, ratings, proactive messages, agents, transcripts, the order/customer caches fed by
- * events and the periodic maintenance. Pure decisions live in core/; this layer only orders effects.
+ * events, and the work that is due when a conversation is read (SLA breaches, auto-close). Pure decisions live in core/; this layer only orders effects.
  *
  * Exactly once: ids of conversations, messages, leads and agents derive from the request's Idempotency-Key (app-kit
  * also replays the stored response), stores are upserts keyed by them, and usage records and events carry the same
@@ -1349,7 +1349,10 @@ export const createChatbotService = (deps) => {
 		inboxSummary: async (site) => {
 			const inbox = site.settings.inbox;
 			const at = now();
-			const [stats, agents] = await Promise.all([site.repos.conversations.stats(iso(at - DAY_MS)), site.repos.agents.all()]);
+			const [stats, agents] = await Promise.all([
+				site.repos.conversations.stats(iso(at - DAY_MS), iso(at)),
+				site.repos.agents.all(),
+			]);
 			return {
 				open: stats.open,
 				waiting: stats.waiting,
@@ -1369,54 +1372,64 @@ export const createChatbotService = (deps) => {
 		},
 
 		/**
-		 * Periodic work for one website: knowledge refresh, SLA breaches, snooze wake-ups, auto-close.
+		 * Expired on read: a conversation read by a request is settled first — SLA targets it missed are recorded
+		 * (audited once: the write is guarded) and, with `inbox.auto_close_after_hours`, a resolved or pending
+		 * conversation idle that long is closed. Only the conversation the request touches; nothing runs on a timer.
 		 * @param {Site} site
-		 * @param {{ maxSources?: number, batch?: number, deadline?: number }} [options] no knowledge refresh starts past
-		 *   `deadline` (the rest is bounded by `batch`)
+		 * @param {Conversation | null} conversation
+		 * @returns {Promise<Conversation | null>}
 		 */
-		maintain: async (site, { maxSources = 5, batch = 200, deadline = Infinity } = {}) => {
+		settle: async (site, conversation) => {
+			if (!conversation) return conversation;
 			const at = now();
-			const result = { refreshed: 0, failed: 0, breaches: 0, woken: 0, closed: 0 };
-			if (site.settings.knowledge) {
-				for (const source of (await knowledge.dueSources(site)).slice(0, maxSources)) {
-					if (now() >= deadline) break;
-					const refreshed = await knowledge.refreshSource(site, source);
-					if (refreshed.ok) result.refreshed += 1;
-					else result.failed += 1;
-				}
-			}
-			for (const conversation of await site.repos.conversations.slaCandidates(iso(at), batch)) {
-				const breached = slaBreaches(conversation, at);
-				if (breached.length === 0) continue;
-				await site.repos.conversations.update(conversation.id, {
-					set: { 'sla.breached': [...(conversation.sla?.breached ?? []), ...breached] },
+			let current = conversation;
+			const breached = slaBreaches(current, at);
+			if (breached.length > 0) {
+				const all = [...(current.sla?.breached ?? []), ...breached];
+				const updated = await site.repos.conversations.update(current.id, {
+					set: { 'sla.breached': all },
+					unless: { 'sla.breached': { $nin: breached } },
 				});
-				await deps.audit({
-					websiteId: site.websiteId,
-					actor: { type: 'product', id: 'chatbot' },
-					action: 'sla.breached',
-					target: { type: 'conversation', id: conversation.id },
-					after: { breached },
-				});
-				result.breaches += breached.length;
-			}
-			for (const conversation of await site.repos.conversations.dueSnoozed(iso(at), batch)) {
-				await site.repos.conversations.update(conversation.id, {
-					set: { status: 'open', snoozedUntil: null },
-					ifStatus: ['snoozed'],
-				});
-				result.woken += 1;
+				if (updated) {
+					await deps.audit({
+						websiteId: site.websiteId,
+						actor: { type: 'product', id: 'chatbot' },
+						action: 'sla.breached',
+						target: { type: 'conversation', id: current.id },
+						after: { breached },
+					});
+					current = updated;
+				} else
+					current = { ...current, sla: { .../** @type {NonNullable<Conversation['sla']>} */ (current.sla), breached: all } };
 			}
 			const hours = site.settings.inbox?.auto_close_after_hours ?? 0;
-			if (hours > 0)
-				for (const conversation of await site.repos.conversations.idle(iso(at - hours * HOUR_MS), batch)) {
-					await close(site, conversation, {
+			if (hours > 0 && ['resolved', 'pending'].includes(current.status) && Date.parse(current.last.at) < at - hours * HOUR_MS)
+				current = (
+					await close(site, current, {
 						actor: { type: 'system', id: 'auto_close' },
 						reason: 'inactive',
-						key: `auto:${conversation.id}`,
-					});
-					result.closed += 1;
-				}
+						key: `auto:${current.id}`,
+					})
+				).conversation;
+			return current;
+		},
+
+		/**
+		 * Refresh the web pages that are due (never fetched, or older than their `refresh_hours`), at most `maxSources`
+		 * per call — the dashboard's "Refresh due pages" button (a single page: `POST /v1/knowledge-sources/:id/refresh`).
+		 * @param {Site} site
+		 * @param {{ maxSources?: number }} [options]
+		 */
+		refreshDue: async (site, { maxSources = 5 } = {}) => {
+			const result = { refreshed: 0, failed: 0, remaining: 0 };
+			if (!site.settings.knowledge) return result;
+			const due = await knowledge.dueSources(site);
+			for (const source of due.slice(0, maxSources)) {
+				const refreshed = await knowledge.refreshSource(site, source);
+				if (refreshed.ok) result.refreshed += 1;
+				else result.failed += 1;
+			}
+			result.remaining = Math.max(0, due.length - maxSources);
 			return result;
 		},
 
@@ -1491,7 +1504,7 @@ export const createChatbotService = (deps) => {
 		overview: async (site) => {
 			const at = now();
 			const [stats, tokens, csat, leads, chunks] = await Promise.all([
-				site.repos.conversations.stats(iso(at - DAY_MS)),
+				site.repos.conversations.stats(iso(at - DAY_MS), iso(at)),
 				site.repos.counters.get(`tokens:${monthKey(at, site.settings.timeZone)}`),
 				summarise(await site.repos.ratings.since(iso(at - 30 * DAY_MS)), site.settings.csat?.target ?? 0.85),
 				site.repos.leads.countSince(iso(at - 30 * DAY_MS)),

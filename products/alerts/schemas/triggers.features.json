@@ -74,7 +74,7 @@
 		"fanout_limit": {
 			"type": "integer",
 			"title": "Subscriptions claimed per trigger run",
-			"description": "Larger waitlists continue in the scheduled run (every subscription is still told once).",
+			"description": "Larger waitlists continue on the next trigger of the website, a manual outbox run or the dashboard's \"Send due now\" (every subscription is still told once).",
 			"default": 200,
 			"minimum": 1,
 			"maximum": 5000,

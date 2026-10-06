@@ -8,6 +8,7 @@ import { createElement as h } from 'react';
 import { redirect } from 'next/navigation.js';
 import { Callout, Card, Stat } from '@ss/ui';
 import { dashboardContext } from '../_lib/dashboard.js';
+import { RunDeletions } from './_components/RunDeletions.js';
 import { Shell, t, withWebsite } from './_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -52,6 +53,9 @@ export default async function Overview({ searchParams }) {
 					h(Stat, { key: String(label), label: t(String(label)), value: format.format(Number(value)) }),
 				),
 			),
+			(kpis.pendingDeletions ?? 0) > 0 && !context.data.demo && context.data.websiteId
+				? h(RunDeletions, { websiteId: context.data.websiteId })
+				: null,
 		),
 	);
 }

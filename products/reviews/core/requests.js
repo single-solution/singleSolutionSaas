@@ -1,8 +1,9 @@
 /**
  * Review requests (pure): one per completed order, listing the order's items. A request makes the customer's reviews
- * of those items **verified** while it is open (`collection.review_window_days` after completion), becomes due
- * `collection.request_delay_hours` after completion, and is sent — then reminded — by the request flow through the
- * merchant's messaging connector. Every transition is a plain function of (request, settings, now).
+ * of those items **verified** while it is open (`collection.review_window_days` after completion), is due at
+ * completion, and is sent — then reminded — by the request flow through the merchant's messaging connector (the flow
+ * runs when an order completes or on demand; nothing runs on a timer). Every transition is a plain function of
+ * (request, settings, now).
  * @module
  */
 import { DAY_MS, HOUR_MS, iso, toMs } from './time.js';
@@ -43,11 +44,11 @@ export const DELIVERY_STATES = Object.freeze(/** @type {const} */ (['scheduled',
 /**
  * A new request for a completed order.
  * @param {{ id: string, order: import('./orders.js').OrderFacts & { customerId: string }, completedAt: number,
- *   delayHours: number, windowDays: number, locale?: string | null, source?: 'event' | 'api' }} input
+ *   windowDays: number, locale?: string | null, source?: 'event' | 'api' }} input
  * @returns {ReviewRequest}
  */
-export const buildRequest = ({ id, order, completedAt, delayHours, windowDays, locale = null, source = 'event' }) => {
-	const due = completedAt + delayHours * HOUR_MS;
+export const buildRequest = ({ id, order, completedAt, windowDays, locale = null, source = 'event' }) => {
+	const due = completedAt;
 	return {
 		id,
 		orderId: order.orderId,

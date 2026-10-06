@@ -812,11 +812,12 @@ describe('admin console interactions (jsdom)', () => {
 		render(
 			<DashboardView
 				ok
+				staff={me}
 				health={{
 					available: true,
 					problem: null,
 					data: {
-						crons: [
+						operations: [
 							{ name: 'drain', lastRun: { status: 'ok', finishedAt: new Date().toISOString(), durationMs: 12 } },
 							{ name: 'settlement', lastRun: null },
 						],
@@ -843,6 +844,8 @@ describe('admin console interactions (jsdom)', () => {
 		);
 		expect(shows('Audit chains intact')).toBe(true);
 		expect(shows('drain')).toBe(true);
+		await press('Run');
+		await until(() => staff.calls.some((c) => c.path.includes('/v1/admin/operations/') && c.status === 200));
 		cleanup();
 		render(
 			<DashboardView

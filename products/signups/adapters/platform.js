@@ -1,7 +1,7 @@
 /**
  * Platform adapter: builds the app-kit product from the environment (`configFromEnv`: SS_PORTAL_URL, SS_APP_ID,
  * SS_APP_SIGNING_KEY, SS_REGISTRATION_TOKEN_HASH, SS_PRODUCT_DB_URI, SS_LOG_LEVEL, SS_OUTBOUND_ALLOW_HOSTS; plus
- * SIGNUPS_SEAL_SECRET, SIGNUPS_SEAL_SECRET_PREVIOUS and CRON_SECRET) and the project files (manifest with feature
+ * SIGNUPS_SEAL_SECRET and SIGNUPS_SEAL_SECRET_PREVIOUS) and the project files (manifest with feature
  * schemas inlined, string catalogs). This is the only place that reads the environment.
  */
 import { readFile, readdir } from 'node:fs/promises';
@@ -9,7 +9,6 @@ import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
 import { createSealer, sealSecret } from './crypto.js';
 import { INDEXES, MIGRATIONS } from './db.js';
-import { createSiteRegistry } from './registry.js';
 
 /**
  * @param {string} file
@@ -75,8 +74,6 @@ export const PROBLEM_CODES = Object.freeze({
  * @typedef {object} SignupsApp
  * @property {any} product app-kit product
  * @property {import('./crypto.js').Sealer} sealer
- * @property {import('./registry.js').SiteRegistry} registry
- * @property {string | null} cronSecret
  * @property {string} portalUrl
  * @property {string} base the product's public base URL (issuer prefix)
  * @property {() => number} now
@@ -106,8 +103,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	const manifest = overrides.manifest ?? loaded;
 	/** @type {unknown} */
 	let stores;
-	/** @type {any} */
-	let sites = null;
 	/** @type {{ close: () => Promise<void> } | null} */
 	let controlClient = null;
 	if (config.productDbUri) {
@@ -117,7 +112,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		const mongoStores = createMongoStores({ db: client.db() });
 		await mongoStores.ensureIndexes();
 		stores = mongoStores;
-		sites = client.db().collection('ss_signups_sites');
 	}
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
 	const signingKey = /** @type {string} */ (config.signingKey);
@@ -156,8 +150,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	return {
 		product,
 		sealer: createSealer({ secrets }),
-		registry: createSiteRegistry({ collection: sites }),
-		cronSecret: env.CRON_SECRET && env.CRON_SECRET.length >= 16 ? env.CRON_SECRET : null,
 		portalUrl: /** @type {string} */ (config.portalUrl),
 		base: String(manifest.endpoints.base).replace(/\/+$/, ''),
 		now,

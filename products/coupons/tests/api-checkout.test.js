@@ -6,7 +6,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestIdentityIssuer } from '@ss/app-kit/testing';
-import { cart, createHarness, CRON_SECRET, MINUTE, ORIGIN, T0 } from './harness.js';
+import { cart, createHarness, MINUTE, ORIGIN, T0 } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -225,11 +225,7 @@ describe('reservations', () => {
 		expect((await h.call('GET', `/v1/reservations/${second.json.id}`)).json.status).toBe('expired');
 		expect(h.published('coupons.released@1').find((e) => e.data.reservationId === second.json.id)?.data.reason).toBe('expired');
 		h.clock.advance(16 * MINUTE);
-		const job = await h.call('GET', '/cron/sweep', { headers: { authorization: `Bearer ${CRON_SECRET}` } });
-		expect(job.status).toBe(200);
-		expect(job.json.expired).toBeGreaterThanOrEqual(1);
 		expect((await h.call('GET', `/v1/reservations/${third.json.id}`)).json.status).toBe('expired');
-		expect((await h.call('GET', '/cron/sweep')).status).toBe(401);
 		h.clock.set(T0);
 	});
 
@@ -237,7 +233,6 @@ describe('reservations', () => {
 		await h.coupon({ code: 'LATE', action: { type: 'percent', percent: 10 }, limits: { per_code: 1 } });
 		const reserved = await h.call('POST', '/v1/reservations', { body: { codes: ['LATE'], cart: cart(), orderId: 'ord_late' } });
 		h.clock.advance(20 * MINUTE);
-		await h.call('GET', '/cron/sweep', { headers: { authorization: `Bearer ${CRON_SECRET}` } });
 		expect((await h.call('GET', `/v1/reservations/${reserved.json.id}`)).json.status).toBe('expired');
 		const done = await h.deliver('order.completed@1', { orderId: 'ord_late' });
 		expect(done.status).toBe(200);
@@ -247,7 +242,6 @@ describe('reservations', () => {
 		await h.coupon({ code: 'LATE2', action: { type: 'percent', percent: 10 }, limits: { per_code: 1 } });
 		const strict = await h.call('POST', '/v1/reservations', { body: { codes: ['LATE2'], cart: cart() } });
 		h.clock.advance(20 * MINUTE);
-		await h.call('GET', '/cron/sweep', { headers: { authorization: `Bearer ${CRON_SECRET}` } });
 		const refused = await h.call('POST', `/v1/reservations/${strict.json.id}/redeem`, {});
 		expect(refused.status).toBe(409);
 		expect(refused.json.type).toMatch(/reservation_expired$/);

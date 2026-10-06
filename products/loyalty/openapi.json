@@ -1078,7 +1078,7 @@
 			"post": {
 				"operationId": "runExpiry",
 				"tags": ["expiry"],
-				"summary": "Run the expiry job for this website now (FIFO expiry, notices, tier reviews). Idempotency-Key optional; runs are idempotent.",
+				"summary": "Run the expiry work for this website now (FIFO expiry, notices, tier reviews); nothing runs on a schedule. Idempotency-Key optional; runs are idempotent.",
 				"responses": {
 					"200": {
 						"description": "OK",
@@ -1683,6 +1683,53 @@
 					}
 				}
 			}
+		},
+		"/v1/dashboard/expiry:run": {
+			"post": {
+				"operationId": "postV1DashboardExpiryRun",
+				"tags": ["expiry"],
+				"summary": "Dashboard \"Run expiry now\" button: the same expiry work for the session's website (merchant and staff roles), within a time budget (press again while more remain).",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"properties": {
+										"expired": {
+											"type": "integer"
+										},
+										"members": {
+											"type": "integer"
+										},
+										"notices": {
+											"type": "integer"
+										},
+										"tierReviews": {
+											"type": "integer"
+										}
+									}
+								},
+								"example": {
+									"expired": 1200,
+									"members": 3,
+									"notices": 5,
+									"tierReviews": 1
+								}
+							}
+						}
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
+				},
+				"security": [
+					{
+						"session": []
+					}
+				]
+			}
 		}
 	},
 	"components": {
@@ -1697,6 +1744,12 @@
 				"in": "header",
 				"name": "SS-Signature",
 				"description": "Portal-signed request (ss-request.v1)"
+			},
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session",
+				"description": "dashboard session from GET /sso?launch="
 			}
 		},
 		"parameters": {

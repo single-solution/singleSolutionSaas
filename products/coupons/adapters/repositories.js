@@ -356,7 +356,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				return strip(await reservations.findOne({ websiteId, id }));
 			},
 			/** Open (reserved) reservations. */
-			/** Reservations still holding uses at `at` (lapsed ones count as expired before any sweep). @param {string} at ISO */
+			/** Reservations still holding uses at `at` (lapsed ones count as expired before they are touched). @param {string} at ISO */
 			countOpen: (at) => reservations.countDocuments({ websiteId, status: 'reserved', expiresAt: { $gte: at } }),
 			/**
 			 * Redeemed reservations per currency in a window (report).

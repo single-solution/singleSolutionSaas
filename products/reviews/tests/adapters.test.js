@@ -1,9 +1,8 @@
-/** Adapters: link tokens, ids, the site registry, the platform wiring (env, control DB, retention) and settings. */
+/** Adapters: link tokens, ids, the platform wiring (env, control DB, retention) and settings. */
 import { randomBytes as nodeRandomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform, loadStrings, retentionDays } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
 import { createLinkTokens, linkSecret, randomBytes, stableId } from '../adapters/tokens.js';
 import { createRepositories } from '../adapters/db.js';
 import { sessionView } from '../api/session.js';
@@ -51,34 +50,6 @@ describe('tokens', () => {
 	});
 });
 
-describe('site registry', () => {
-	it('remembers website ids in memory or in the control database', async () => {
-		const memory = createSiteRegistry();
-		await memory.remember('web_b');
-		await memory.remember('web_a');
-		await memory.remember('web_a');
-		expect(await memory.list()).toEqual(['web_a', 'web_b']);
-		/** @type {string[]} */
-		const stored = [];
-		let fail = true;
-		const collection = {
-			updateOne: async (/** @type {any} */ filter) => {
-				if (fail) {
-					fail = false;
-					throw new Error('down');
-				}
-				stored.push(filter._id);
-			},
-			find: () => ({ toArray: async () => [{ _id: 'web_z' }] }),
-		};
-		const durable = createSiteRegistry({ collection });
-		await durable.remember('web_1'); // fails, forgotten
-		await durable.remember('web_1'); // retried
-		expect(stored).toEqual(['web_1']);
-		expect(await durable.list()).toEqual(['web_1', 'web_z']);
-	});
-});
-
 describe('platform', () => {
 	it('refuses to start without the required environment', async () => {
 		await expect(createPlatform({ env: {}, root: ROOT })).rejects.toThrow(
@@ -95,15 +66,11 @@ describe('platform', () => {
 				SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_reviews_adapter_0123456789'),
 				SS_PRODUCT_DB_URI: mongoUri(`reviews_ctrl_${nodeRandomBytes(4).toString('hex')}`),
 				SS_OUTBOUND_ALLOW_HOSTS: 'localhost',
-				CRON_SECRET: 'short',
 				REVIEWS_LINK_SECRET: 'l'.repeat(40),
 			},
 			root: ROOT,
 		});
-		expect(app.cronSecret).toBeNull();
 		expect(app.retention).toEqual({ requests: 730, orders: 730, photos: 30 });
-		await app.registry.remember('web_ctrl');
-		expect(await app.registry.list()).toContain('web_ctrl');
 		await app.close();
 		expect(retentionDays('P10D', 1)).toBe(10);
 		expect(retentionDays('P1Y', 7)).toBe(7);

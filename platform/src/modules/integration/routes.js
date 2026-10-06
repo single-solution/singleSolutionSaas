@@ -64,7 +64,7 @@ export const integrationRoutes = (service) => [
 		maxBodyBytes: INGEST_MAX_BODY,
 		rateLimit: { limit: 600, windowMs: 60_000, key: ingestSubject },
 		handler: async (ctx) => {
-			const { body, headers } = await service.ingestRequest({ rawBody: ctx.rawBody, headers: ctx.headers, defer: ctx.defer });
+			const { body, headers } = await service.ingestRequest({ rawBody: ctx.rawBody, headers: ctx.headers });
 			return ok(body, { status: 202, headers });
 		},
 	}),
@@ -80,7 +80,6 @@ export const integrationRoutes = (service) => [
 				await service.publishFromProduct({
 					appId: /** @type {{ appId: string }} */ (ctx.app).appId,
 					events: body && typeof body === 'object' ? body.events : undefined,
-					defer: ctx.defer,
 				}),
 			);
 		},
@@ -142,6 +141,15 @@ export const integrationRoutes = (service) => [
 		permission: 'platform.jobs.manage',
 		resource: () => ({}),
 		handler: async (ctx) => ok(await service.replay(String(ctx.params.deliveryId), auditContext(ctx))),
+	}),
+	defineRoute({
+		method: 'POST',
+		path: '/v1/admin/apps/:appId/deliveries/retry',
+		auth: 'staff',
+		permission: 'platform.jobs.manage',
+		resource: () => ({}),
+		idempotent: false,
+		handler: async (ctx) => ok(await service.retryNow(String(ctx.params.appId), auditContext(ctx))),
 	}),
 	defineRoute({
 		method: 'GET',

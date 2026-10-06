@@ -8,6 +8,7 @@ import { createElement as h } from 'react';
 import { redirect } from 'next/navigation.js';
 import { Card, Stat } from '@ss/ui';
 import { dashboardContext } from '../_lib/dashboard.js';
+import { RunExpiry } from './_components/RunExpiry.js';
 import { Shell, t } from './_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
@@ -42,5 +43,8 @@ export default async function Overview({ searchParams }) {
 				),
 			),
 		),
+		context.data.canWrite && context.data.websiteId && context.data.settings.enabled('expiry')
+			? h(Card, { title: t('dashboard.expiry.title') }, h(RunExpiry, { websiteId: context.data.websiteId }))
+			: null,
 	);
 }

@@ -1,33 +1,42 @@
-/** Adapters without the router: the site registry (control database), tokens and the platform's environment checks. */
+/** Adapters without the router: TTL purge of deleted records, tokens and the platform's environment checks. */
 import { describe, expect, it } from 'vitest';
 import { generateSigningKey } from '@ss/protocol';
 import { createPlatform, loadStrings } from '../adapters/platform.js';
-import { createSiteRegistry } from '../adapters/registry.js';
+import { DELETED_RETENTION_DAYS, INDEXES, MIGRATIONS, purgeDate } from '../adapters/db.js';
 import { createTokens, rootSecret, stableId } from '../adapters/tokens.js';
 import { retentionDays } from '../api/routes.js';
 import { ROOT } from './harness.js';
 
-describe('site registry', () => {
-	it('remembers websites in the control database and survives write failures', async () => {
-		/** @type {Map<string, unknown>} */
-		const docs = new Map();
-		let fail = true;
-		const collection = {
-			updateOne: async (/** @type {any} */ filter) => {
-				if (fail) throw new Error('down');
-				docs.set(filter._id, filter);
-			},
-			find: () => ({ toArray: async () => [...docs.keys()].map((_id) => ({ _id })).concat([{ _id: 'web_other' }]) }),
+describe('purge of soft-deleted records (TTL, no job)', () => {
+	it('declares TTL indexes on purgeAt and backfills records deleted before it existed', async () => {
+		for (const collection of ['entries', 'agents'])
+			expect(INDEXES).toContainEqual({ collection, keys: { purgeAt: 1 }, name: 'purge_ttl', expireAfterSeconds: 0 });
+		expect(purgeDate('2026-01-01T00:00:00.000Z', 0).toISOString()).toBe('2026-01-02T00:00:00.000Z');
+		/** @type {Array<{ name: string, filter: any, update: any }>} */
+		const updates = [];
+		const scope = {
+			websiteId: 'web_a',
+			collection: (/** @type {string} */ name) => ({
+				find: () => ({ toArray: async () => [{ id: `${name}_1`, deletedAt: '2026-01-01T00:00:00.000Z' }] }),
+				updateOne: async (/** @type {any} */ filter, /** @type {any} */ update) => {
+					updates.push({ name, filter, update });
+				},
+			}),
 		};
-		const registry = createSiteRegistry({ collection });
-		await registry.remember('web_a'); // failed: retried next time
-		fail = false;
-		await registry.remember('web_a');
-		await registry.remember('web_a');
-		expect(await registry.list()).toEqual(['web_a', 'web_other']);
-		const memory = createSiteRegistry();
-		await memory.remember('web_b');
-		expect(await memory.list()).toEqual(['web_b']);
+		const migration = MIGRATIONS.find((m) => m.name === 'deleted_purge_at');
+		await migration?.up(scope);
+		expect(updates).toEqual([
+			{
+				name: 'entries',
+				filter: { websiteId: 'web_a', id: 'entries_1' },
+				update: { $set: { purgeAt: purgeDate('2026-01-01T00:00:00.000Z', DELETED_RETENTION_DAYS) } },
+			},
+			{
+				name: 'agents',
+				filter: { websiteId: 'web_a', id: 'agents_1' },
+				update: { $set: { purgeAt: purgeDate('2026-01-01T00:00:00.000Z', DELETED_RETENTION_DAYS) } },
+			},
+		]);
 	});
 });
 

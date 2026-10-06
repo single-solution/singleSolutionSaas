@@ -12,7 +12,6 @@ import { createId } from '@ss/contracts';
 import { generateSigningKey, hashRegistrationToken } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
 import { buildRoutes, createChatbot, wireEvents } from '../api/routes.js';
-import { cronRoutes, wireJobs } from '../jobs/maintenance.js';
 import { createNetwork } from './helpers.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -23,7 +22,6 @@ export const WEBSITE = 'web_0123456789abcdefghjkmnpq';
 export const WEBSITE_2 = 'web_1123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
 export const ORIGIN = `https://${DOMAIN}`;
-export const CRON_SECRET = 'cron-secret-0123456789abcdef';
 export const T0 = Date.parse('2026-10-01T10:00:00Z');
 export const ELEMENTS = [
 	'window',
@@ -91,7 +89,6 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, ai =
 			SS_APP_ID: APP_ID,
 			SS_APP_SIGNING_KEY: JSON.stringify(privateJwk),
 			SS_REGISTRATION_TOKEN_HASH: hashRegistrationToken('rt_chatbot_api_tests_0123456789'),
-			CRON_SECRET,
 			...env,
 		},
 		root: ROOT,
@@ -105,8 +102,8 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, ai =
 			outboundSend: network.send,
 		},
 	});
-	const chatbot = wireJobs(wireEvents(createChatbot(app)));
-	const handle = createRequestHandler(chatbot.product, [...buildRoutes(chatbot), ...cronRoutes(chatbot)]);
+	const chatbot = wireEvents(createChatbot(app));
+	const handle = createRequestHandler(chatbot.product, buildRoutes(chatbot));
 
 	let version = 0;
 	/**

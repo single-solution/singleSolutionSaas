@@ -197,5 +197,10 @@
 	"dashboard.settings.key": "Server key for your other products",
 	"dashboard.settings.key_help": "An sk_ key of this website (scopes for Coupons, Deals, Loyalty, Catalog). Stored sealed in your database; never shown again.",
 	"dashboard.settings.save": "Save key",
-	"dashboard.settings.saved": "Saved."
+	"dashboard.settings.saved": "Saved.",
+	"dashboard.expiry.title": "Expired holds and abandoned carts",
+	"dashboard.expiry.help": "Expired orders are cancelled and carts are reported abandoned when they are next read. Process them all now:",
+	"dashboard.expiry.run": "Process expired now",
+	"dashboard.expiry.done": "{expired} expired orders cancelled, {abandoned} carts reported abandoned.",
+	"dashboard.expiry.done_more": "{expired} expired orders cancelled, {abandoned} carts reported abandoned. More are waiting: press again."
 }

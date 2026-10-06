@@ -89,11 +89,17 @@
 	"dashboard.settings.on": "on",
 	"dashboard.settings.off": "off",
 	"dashboard.settings.who": "Who may review",
-	"dashboard.settings.delay": "Request after (hours)",
+	"dashboard.settings.send_on_completion": "Send requests when the order completes",
 	"dashboard.settings.scale": "Rating scale",
 	"dashboard.settings.rules": "Moderation rules",
 	"dashboard.settings.request_flow": "Request flow",
 	"dashboard.settings.photos": "Photos",
 	"dashboard.settings.qna": "Questions & answers",
-	"dashboard.settings.time_zone": "Time zone"
+	"dashboard.settings.time_zone": "Time zone",
+	"dashboard.actions.title": "Actions",
+	"dashboard.actions.intro": "Nothing runs on a schedule: review requests go out when orders complete and stale photo uploads are cleaned up on the next upload. Run them now here.",
+	"dashboard.actions.run_requests": "Send due requests now",
+	"dashboard.actions.run_requests_done": "Sent {sent} requests and {reminded} reminders.",
+	"dashboard.actions.sweep_photos": "Clean up photo uploads",
+	"dashboard.actions.sweep_photos_done": "Removed {deleted} unused photo uploads."
 }

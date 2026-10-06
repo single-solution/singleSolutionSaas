@@ -78,7 +78,7 @@
 		"abandoned_after_hours": {
 			"type": "integer",
 			"title": "Abandoned after (hours)",
-			"description": "An open cart with lines untouched this long publishes checkout.cart_abandoned@1 once (for Automation / Messaging). 0 = off.",
+			"description": "An open cart with lines untouched this long publishes checkout.cart_abandoned@1 once (for Automation / Messaging), when your server next reads it or from the dashboard's Process expired now. 0 = off.",
 			"default": 24,
 			"minimum": 0,
 			"maximum": 720,

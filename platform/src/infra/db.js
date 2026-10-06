@@ -13,7 +13,7 @@
  *     `$match` must pin `merchantId` by equality, inserts are stamped, `merchantId` can never be changed,
  *     cross-collection stages are refused) or the explicit `acrossMerchants()` view for staff/system code;
  *   - every repository refuses `$where` and the `$out` / `$merge` write stages (which could bypass append-only).
- * - `createLocks` — lease locks (unique `_id`, expiry takeover) used by migrations and cron runs.
+ * - `createLocks` — lease locks (unique `_id`, expiry takeover) used by migrations, operation runs and ledger appends.
  * - `createTransactionRunner` — `withTransaction(async (session) => …)` over a driver session: snapshot reads,
  *   majority commit, whole-transaction retry on `TransientTransactionError` and commit retry on
  *   `UnknownTransactionCommitResult`. Repository operations take the driver options, so `{ session }` is passed to

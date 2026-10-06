@@ -54,7 +54,7 @@ export const METERED_UNIT = 'redemption';
 
 /** Refusals that count as failed attempts for velocity limits (guessing codes). */
 const FAILURES = new Set(['code_not_found', 'code_disabled', 'coupon_inactive', 'blocked']);
-/** Expired reservations swept per lazy sweep / job page. */
+/** Expired reservations released per call (when a code, customer or device needs the use). */
 const SWEEP_PAGE = 100;
 /** Attempts at a fresh code when generated codes collide. */
 const GENERATION_ROUNDS = 5;
@@ -546,8 +546,8 @@ export const createCouponsService = ({
 	};
 
 	/**
-	 * Expire-on-read: an open reservation past its TTL is expired (and its uses released) when it is touched, before any
-	 * sweep. Returns the current reservation.
+	 * Expire-on-read: an open reservation past its TTL is expired (and its uses released) when it is touched (nothing runs
+	 * on a timer). Returns the current reservation.
 	 * @param {Site} site
 	 * @param {Record<string, any> | null} reservation
 	 * @returns {Promise<Record<string, any> | null>}
@@ -567,7 +567,8 @@ export const createCouponsService = ({
 	const reservationOf = async (site, id) => settle(site, await site.repos.reservations.get(id));
 
 	/**
-	 * Expire reservations past their TTL (all of a website, those holding a code, or those of a customer / device).
+	 * Expire reservations past their TTL, bounded: those holding a code or of a customer / device (when they need the
+	 * use or the code is read), or the website's (the dashboard's "Release expired reservations").
 	 * @param {Site} site
 	 * @param {{ code?: string, couponId?: string, customerId?: string | null, deviceId?: string | null, limit?: number }} [filter]
 	 * @returns {Promise<number>} reservations expired by this call

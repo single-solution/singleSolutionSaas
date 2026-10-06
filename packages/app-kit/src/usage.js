@@ -91,14 +91,14 @@ export const createUsage = ({
 	};
 
 	/**
-	 * Send due records to the Portal.
-	 * @param {{ maxBatches?: number }} [options]
+	 * Send due records to the Portal (only the website's with `websiteId`).
+	 * @param {{ maxBatches?: number, websiteId?: string }} [options]
 	 * @returns {Promise<{ sent: number, duplicates: number, rejected: number, failed: number, batches: number }>}
 	 */
-	const flush = async ({ maxBatches = 20 } = {}) => {
+	const flush = async ({ maxBatches = 20, websiteId: only } = {}) => {
 		const totals = { sent: 0, duplicates: 0, rejected: 0, failed: 0, batches: 0 };
 		for (let i = 0; i < maxBatches; i += 1) {
-			const leased = await queue.lease({ now: now(), limit: batchSize, leaseMs, owner });
+			const leased = await queue.lease({ now: now(), limit: batchSize, leaseMs, owner, ...(only ? { websiteId: only } : {}) });
 			if (leased.length === 0) break;
 			totals.batches += 1;
 			const records = leased.map(({ idempotencyKey, websiteId, subscriptionId, unit, quantity, occurredAt }) => ({

@@ -222,9 +222,9 @@ describe('ledger integrity', () => {
 			complete: false,
 			phase: 'subscriptions',
 		});
-		const cron = await h.portal.cron.run('settlement');
-		expect(cron).toMatchObject({ status: 'ok', stats: { subscriptions: 1, entries: 3, complete: true } });
-		expect(await h.portal.cron.run('reconciliation')).toMatchObject({
+		const run = await h.portal.operations.run('settlement');
+		expect(run).toMatchObject({ status: 'ok', stats: { subscriptions: 1, entries: 3, complete: true } });
+		expect(await h.portal.operations.run('reconciliation')).toMatchObject({
 			status: 'ok',
 			stats: { complete: true, discrepancies: 0 },
 		});

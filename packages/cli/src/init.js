@@ -40,7 +40,6 @@ export const NOTES_SAMPLE_FILES = Object.freeze([
 	'api/notes.js',
 	'api/events.js',
 	'adapters/db.js',
-	'jobs/purge-deleted.js',
 	'schemas/events/{{namespace}}.note_created@1.json',
 	'tests/api.test.js',
 	'tests/memory-collection.js',

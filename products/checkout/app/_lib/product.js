@@ -7,7 +7,6 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { buildRoutes, createApplication, wireEvents } from '../../api/routes.js';
-import { cronRoutes, wireJobs } from '../../jobs/sweep.js';
 
 const KEY = Symbol.for('ss.products.checkout');
 
@@ -20,8 +19,7 @@ const shared = () => {
 	return (store[KEY] ??= {});
 };
 
-export const getApplication = () =>
-	(shared().application ??= createPlatform().then((app) => wireJobs(wireEvents(createApplication(app)))));
+export const getApplication = () => (shared().application ??= createPlatform().then((app) => wireEvents(createApplication(app))));
 
 /**
  * A Next.js route export that forwards to the app-kit router (which strips the `/api` prefix of rewritten paths).
@@ -30,7 +28,7 @@ export const getApplication = () =>
 export const forward = (method) => async (/** @type {Request} */ request, /** @type {unknown} */ context) => {
 	const state = shared();
 	state.next ??= getApplication().then((application) =>
-		toNextRoute(createRequestHandler(application.product, [...buildRoutes(application), ...cronRoutes(application)]), {
+		toNextRoute(createRequestHandler(application.product, buildRoutes(application)), {
 			after,
 		}),
 	);

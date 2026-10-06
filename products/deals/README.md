@@ -77,6 +77,9 @@ Missing line details come from the synced catalog (`PUT /v1/items/{itemId}`, `PO
   stateless, verified on any instance. Usage and stock limits still apply at commit.
 - **Data.** `ss_deals_{deals,items,quotes,applications,counters,customer_usage,audit}` in the merchant DB, `websiteId`
   first in every index, quotes TTL-purged, versioned migrations; export / anonymise via the Portal-signed routes.
+- **No background work.** Nothing runs on a timer (no crons, no background tasks, no periodic heartbeat). Quotes
+  and price locks are judged against their expiry when used; app-kit sends usage and events after the request that
+  queued them.
 
 ## API (Mode C)
 
@@ -129,9 +132,7 @@ window → price lock honoured after the window closed → commit (uses in the m
 
 1. Create a Vercel project with this directory as root (framework: Next.js); `next.config.js` sets the monorepo root.
 2. Environment (Production): `SS_PORTAL_URL`, `SS_APP_SIGNING_KEY`, `SS_REGISTRATION_TOKEN_HASH`, `SS_APP_ID`
-   (optional), `SS_PRODUCT_DB_URI` (required in production), `CRON_SECRET` (daily catch-up cron in `vercel.json`,
-   03:40 UTC: heartbeat — app-kit flushes usage and events itself after requests, and sends a throttled heartbeat at
-   most hourly after requests; price locks and quotes are checked against their expiry when used),
+   (optional), `SS_PRODUCT_DB_URI` (required in production),
    `SS_PRODUCT_DB_MAX_POOL_SIZE` (optional, default 5), `DEALS_LOCK_SECRET` (optional, ≥ 32 chars), `SS_LOG_LEVEL` (optional).
 3. Deploy, register from the Portal admin with the deployment URL and token, review and activate; `endpoints.base` in
    `manifest.json` must be the deployment's https origin.
@@ -139,6 +140,5 @@ window → price lock honoured after the window closed → commit (uses in the m
 
 ## Changelog
 
-- **Unreleased** — the quote rate limit is app-kit's dynamic route limit (`rateLimit.limit(ctx)` = `quote_api.rate_per_minute`, one shared bucket for quotes, offers and price locks; counted before validation); the maintenance job no longer flushes usage (the kit does).
-- **1.0.0** — first release: ten elements, badges and deals page renderers and headless cores, REST v1, dashboard,
-  maintenance cron.
+- **Unreleased** — the quote rate limit is app-kit's dynamic route limit (`rateLimit.limit(ctx)` = `quote_api.rate_per_minute`, one shared bucket for quotes, offers and price locks; counted before validation); no scheduled or periodic work at all (no crons, no background tasks, no periodic heartbeat): app-kit sends usage and events after the request that queued them; price locks and quotes are checked against their expiry when used; a TTL index purges old quotes.
+- **1.0.0** — first release: ten elements, badges and deals page renderers and headless cores, REST v1, dashboard.

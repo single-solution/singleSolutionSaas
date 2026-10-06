@@ -63,7 +63,7 @@ const memoryStores = () => {
 /** Header-driven fake authenticators: `x-test-<mode>: <json actor>` (or `bad`). */
 const fakeAuthenticators = () => {
 	/**
-	 * @param {'staff' | 'merchant' | 'websiteKey' | 'product' | 'cron'} mode
+	 * @param {'staff' | 'merchant' | 'websiteKey' | 'product'} mode
 	 * @param {boolean} [cookie]
 	 */
 	const make = (mode, cookie = false) =>
@@ -80,7 +80,6 @@ const fakeAuthenticators = () => {
 		merchant: make('merchant', true),
 		websiteKey: make('websiteKey'),
 		product: make('product'),
-		cron: make('cron'),
 	};
 };
 

@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createLoyalty, wireEvents } from './api/routes.js';
-import { cronRoutes } from './jobs/expiry.js';
 
 export { loadManifest } from './adapters/platform.js';
 
@@ -31,7 +30,7 @@ export const startServer = async ({
 } = {}) => {
 	const loyalty = wireEvents(createLoyalty(await createPlatform({ env, root, overrides })));
 	const { product } = loyalty;
-	const handle = createRequestHandler(product, [...buildRoutes(loyalty), ...cronRoutes(loyalty)]);
+	const handle = createRequestHandler(product, buildRoutes(loyalty));
 	/** @type {import('node:http').RequestListener} */
 	const listener = async (incoming, outgoing) => {
 		const scheme = tls ? 'https' : 'http';

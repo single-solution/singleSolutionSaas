@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { createRequestHandler } from '@ss/app-kit';
 import { createPlatform } from './adapters/platform.js';
 import { buildRoutes, createDeals, wireEvents } from './api/routes.js';
-import { cronRoutes } from './jobs/maintenance.js';
 
 export { loadManifest } from './adapters/platform.js';
 
@@ -31,7 +30,7 @@ export const startServer = async ({
 } = {}) => {
 	const deals = wireEvents(createDeals(await createPlatform({ env, root, overrides })));
 	const { product } = deals;
-	const handle = createRequestHandler(product, [...buildRoutes(deals), ...cronRoutes(deals)]);
+	const handle = createRequestHandler(product, buildRoutes(deals));
 	/** @type {import('node:http').RequestListener} */
 	const listener = async (incoming, outgoing) => {
 		const scheme = tls ? 'https' : 'http';

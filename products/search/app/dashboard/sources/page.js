@@ -1,4 +1,4 @@
-/** Sources: Catalog events and API writes (on/off), crawled sources with their last run, and "crawl now". */
+/** Sources: Catalog events and API writes (on/off), crawled sources with their last run, "crawl now" and "crawl due sources". */
 import { createElement as h } from 'react';
 import { Badge, Card, EmptyState, KeyValueList } from '@ss/ui';
 import { dashboardContext } from '../../_lib/dashboard.js';
@@ -7,12 +7,20 @@ import { Shell, t } from '../_components/Shell.js';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Whether a source is due (never crawled, in progress, or its next run time passed).
+ * @param {{ status?: string | null, nextRunAt?: string | null } | null} crawl
+ * @param {number} now
+ */
+const isDue = (crawl, now) => !crawl || crawl.status === 'running' || !crawl.nextRunAt || Date.parse(crawl.nextRunAt) <= now;
+
 /** @param {{ searchParams: Promise<Record<string, string | string[] | undefined>> }} props */
 export default async function Sources({ searchParams }) {
 	const { website } = await searchParams;
 	const context = await dashboardContext(typeof website === 'string' ? website : null);
 	if (context.state !== 'ready') return h(Shell, { context, active: 'sources' });
 	const sources = await context.data.sources();
+	const now = Date.now();
 	const onOff = (/** @type {boolean} */ on) => t(on ? 'dashboard.settings.on' : 'dashboard.settings.off');
 	return h(
 		Shell,
@@ -29,7 +37,17 @@ export default async function Sources({ searchParams }) {
 		),
 		h(
 			Card,
-			{ title: t('dashboard.sources.crawls') },
+			{
+				title: t('dashboard.sources.crawls'),
+				actions:
+					sources.items.length > 0 && context.data.canWrite && context.data.websiteId
+						? h(ActionButton, {
+								path: '/v1/dashboard/crawl-due',
+								label: t('dashboard.sources.crawl_due'),
+								websiteId: context.data.websiteId,
+							})
+						: null,
+			},
 			sources.items.length === 0
 				? h(EmptyState, { title: t('dashboard.sources.none'), compact: true })
 				: h(
@@ -49,6 +67,9 @@ export default async function Sources({ searchParams }) {
 												children: source.crawl?.status ?? t('dashboard.sources.never'),
 											})
 										: h(Badge, { tone: 'warning', children: t(`dashboard.sources.refused.${source.reason}`) }),
+									source.allowed && isDue(source.crawl, now)
+										? h(Badge, { tone: 'info', children: t('dashboard.sources.due') })
+										: null,
 									source.url ? h('span', { className: 'text-sm text-muted' }, `${source.kind} · ${source.url}`) : null,
 								),
 								source.crawl
@@ -63,12 +84,17 @@ export default async function Sources({ searchParams }) {
 												removed: source.crawl.removed,
 											}),
 											source.crawl.error ? ` · ${source.crawl.error}` : '',
+											source.crawl.nextRunAt
+												? ` · ${t('dashboard.sources.next', { at: source.crawl.nextRunAt.slice(0, 16).replace('T', ' ') })}`
+												: '',
 										)
 									: null,
 								source.allowed && context.data.canWrite && context.data.websiteId
 									? h(ActionButton, {
 											path: `/v1/dashboard/sources/${encodeURIComponent(source.key)}/crawl`,
-											label: t('dashboard.sources.crawl'),
+											label: t(
+												source.crawl?.status === 'running' ? 'dashboard.sources.continue' : 'dashboard.sources.crawl',
+											),
 											websiteId: context.data.websiteId,
 										})
 									: null,
