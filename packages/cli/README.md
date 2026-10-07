@@ -1,68 +1,68 @@
 # @ss/cli (`ss`)
 
-Developer tooling for SSPS v1 products (PLAN Part E §14, F.7). JavaScript ESM, functional, no dependencies beyond the
-`@ss/*` core packages and esbuild (loaded on demand by `ss pack build`).
+Developer tooling for Single Solution products (PLAN.md Part 0: 0.4.13 product standard, 0.11 environment, F.17
+splittable units). JavaScript ESM, functional; it depends on `@ss/contracts` (manifest checks), `@ss/app-kit` (the
+widget entry, bundled when a product has not installed it yet) and esbuild (the widget bundle).
 
-| Command                                                                          | What it does                                                                                                                                                                                                                                                     |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ss app init <dir> --kind service\|pack --slug <slug> --name <name> [--minimal]` | generates a project from `templates/shared` + `templates/<kind>`; `--minimal` (service only) leaves out the `notes` sample; a service gets a generated `CONNECT_SECRET` in `.env.local`                                                                          |
-| `ss app validate [dir] [--json]`                                                 | manifest (local `$ref`s bundled) schema + semantics, anatomy, module refs/exports, import direction, DOM-free cores, no colour literals in `ui/`, string keys/placeholders/slices, OpenAPI coverage, package wiring, server shape, no `vercel.json` crons (F.19) |
-| `ss app assets [dir] [--check]`                                                  | generates `app/_lib/assets.js` (manifest, feature schemas and strings as static imports for the Next.js server build); `--check` fails when it is out of date                                                                                                    |
-| `ss pack build [dir] [--out <dir>] [--json]`                                     | bundles the manifest's `headless` / `renderer` modules (minified ESM + shared chunks), the catalogs and the `ss-pack-bundle@1` descriptor into `dist/pack`                                                                                                       |
+| Command                                                                                   | What it does                                                                                                                                               |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ss app init <dir> --id <id> --name <name> [--base-url <origin>] [--sdk-version <range>]` | generates a product in the 0.4.13 layout with the sample feature `notes`, then its generated files and a git-ignored `.env.local` with development secrets |
+| `ss app validate [dir] [--json]`                                                          | checks the product standard (below)                                                                                                                        |
+| `ss app assets [dir] [--check]`                                                           | generates `openapi.json` from the routes and `api/widget-script.js` from `ui/`; `--check` fails when either is out of date                                 |
 
-Exit codes: `0` ok, `1` failed validation or command error, `2` usage error.
+Exit codes: `0` ok, `1` failed validation or command error, `2` usage error. `--base-url` defaults to
+`http://localhost:3000` (the manifest's `endpoints.base` until the product has its address).
 
-## Pack build (F.18)
+## The generated product
 
-`ss pack build` works the same for an element pack and for a service product's widgets (its Mode A elements). It
-bundles every module the manifest names (`headless` / `renderer`, `file.js#export`) with esbuild — minified ES modules
-for browsers, code-split shared code in `chunks/<name>-<hash>.js`, each entry at its own path — adds the string
-catalogs (`strings/<lang>.json` and legacy per-element files, compact JSON), hashes every asset and writes
-`dist/pack/` (`descriptor.json`: `{ format: 'ss-pack-bundle@1', manifest (features inline), assets: [{ path, sha256,
-size, contentType }] }` plus the asset files). The descriptor is unsigned.
+`templates/product` (plus `templates/standalone` outside a pnpm workspace: `pnpm-workspace.yaml`, `.nvmrc`), with the
+placeholders `{{id}}`, `{{name}}`, `{{global}}` (`SS<Product>`), `{{baseUrl}}` and `{{sdkVersion}}`:
 
-Upload the folder in the Portal Admin Console: **Upload pack version** (packs) or **Upload widgets** (a connected
-service product whose manifest has Mode A elements). The console posts `descriptor.json` to `POST /v1/admin/packs` and
-then `PUT`s every missing asset.
+- `manifest.json` (0.4.13: id, name, version, endpoints, widgetScriptUrl, docsUrl, features with a settings `$ref` into
+  `schemas/`, permissions, widgets), `openapi.json` (generated), `.env.example` with exactly `MONGODB_URI`,
+  `CONNECT_SECRET`, `ENCRYPTION_KEY`, `vercel.json` without crons, `.gitignore` (`.env*` except `.env.example`),
+  `.prettierignore`, `eslint.config.js` / `tsconfig.json` / `vitest.config.js` from `@ss/config`, `next.config.js`
+  (rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs`, `/v1/*` to the API function), `postcss.config.mjs`.
+- `core/` (note checks, widget names), `api/` (routes, the `/docs` page, the generated widget bundle), `adapters/`
+  (`product.js`: the kit wiring; `notes-store.js`: the merchant database), `ui/` (the visitor widget `note_form` and the
+  admin widget `inbox` on `@ss/app-kit/widget`, mounted only into `data-ss-<id>` elements), `app/` (two functions:
+  `app/api/[...path]/route.js` and the dashboard page `app/dashboard/page.js` on `@ss/ui`, texts in
+  `app/dashboard/texts.js`), `strings/en.json`, `schemas/`, `tests/` (Vitest on the kit's fake Portal and a test
+  MongoDB, coverage 90/90/85), `docs/guide.json`.
+- `package.json`: private, UNLICENSED, `@ss/*` at `workspace:^` (or `--sdk-version`), scripts `check`, `test`, `lint`,
+  `typecheck`, `format`, `format:check`, `dev`, `build`, `start`, `validate`, and two entries for system tests:
+  `./product` (`createProductInstance(options)`, plus `manifest` and `strings`) and `./routes` (`createRoutes(product)`):
+  `product.handler(createRoutes(product), { after })`.
 
-Programmatic: `@ss/cli/pack` — `buildPack(dir)`, `descriptorOf(pack)`, `writePack(pack, out)`, `bundleModules`,
-`moduleEntries`, `stringAssets`, `assetOf`, `loadManifest` (also re-exported from `@ss/cli`).
+The widget bundle: `ui/entry.js` and its imports are bundled by esbuild (IIFE, minified, browser) into
+`api/widget-script.js`, which exports the string `WIDGET_SCRIPT`; the public `/widget.js` route (auth `none`) serves
+it, the same for every website. With `data-token` the script fetches the website's widget config from the kit
+(`GET /v1/widget/config`; admin widgets `GET /v1/widget/admin/config` with a ticket). The dashboard's Back to Portal and
+"Manage tokens in the Portal" links use `portalUrl` from `GET /v1/dashboard/session`.
 
 ## Validate
 
-`ss app validate` scans sources only — never build output (`dist/`, `.ss-pack-out/`) — so minified identifiers never
-fool the `t('…')` check, and `strings.slice` reports keys an element renders outside its `stringKeys` (and every
-sibling's). `headless/` may import `@ss/web/element` (the DOM-free element runtime) and nothing else from `@ss/web`.
-Package wiring (`package.dependency`, `package.devDependency`, `package.script`) expects the scripts `dev`, `build`,
-`start`, `check`, `test`, `lint`, `typecheck`, `format:check`, `validate` for a service product and `check`, `test`,
-`lint`, `typecheck`, `format:check`, `validate` for a pack. No import or stylesheet reference may leave the project
-(`imports.outside`, every file including `tests/` and `app/`), and `vercel.json` declares no crons (`vercel.crons`).
+| Rule                                                                                        | Checks                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `anatomy.missing`                                                                           | the nine folders and the files every product has                                                                                                                                                                                              |
+| `manifest.*`                                                                                | `manifest.json` with its `$ref`s bundled, against `@ss/contracts` `validateManifest`                                                                                                                                                          |
+| `routes.dynamic`, `routes.auth`, `routes.feature`, `routes.permission`                      | every `defineRoute` in `api/` has literal method, path and auth; browser, server and ticket routes belong to a manifest feature (or permission)                                                                                               |
+| `routes.widget-script`, `routes.docs`                                                       | a path `widgetScriptUrl` and a path `docsUrl` are public `GET` routes (auth `none`)                                                                                                                                                           |
+| `strings.file`, `strings.invalid`, `strings.placeholders`, `strings.unknown-key`            | `strings/en.json` is the only text file, flat texts, well-formed `{placeholders}`, every `t('key')` exists                                                                                                                                    |
+| `env.example`, `vercel.crons`                                                               | exactly the three variables; no crons                                                                                                                                                                                                         |
+| `imports.direction`, `imports.package`, `imports.unresolved`, `imports.outside`, `core.dom` | api → core, adapters; adapters → core; ui → core (+ `@ss/app-kit/widget`); app → api, adapters, core, strings; JSON data from strings/, schemas/, docs/, root for api, adapters and app; nothing leaves the project; core/ has no DOM globals |
+| `package.dependency`, `package.devDependency`, `package.script`, `package.missing`          | `@ss/app-kit`, `@ss/cli`, `@ss/config`, the standard scripts, and every imported package listed                                                                                                                                               |
+| `server.entries`, `server.tracing`                                                          | at most two server functions (the API route and the dashboard page), no `outputFileTracingIncludes`                                                                                                                                           |
+| `assets.openapi`, `assets.widget`                                                           | `openapi.json` (compared as JSON) and `api/widget-script.js` match the sources                                                                                                                                                                |
 
-## Templates
-
-Every generated project is self-sufficient: its tooling config comes from `@ss/config` (`eslint.config.js`,
-`tsconfig.json` extending `@ss/config/tsconfig.base.json`, `vitest.config.js` with the coverage thresholds, the
-`prettier` key) and it has its own `check`, `test`, `lint`, `typecheck` and `format:check` scripts. `@ss/*` ranges
-default to `workspace:^` (`--sdk-version` for a project outside the monorepo). Outside a pnpm workspace,
-`templates/standalone` adds what a repository of its own needs (`pnpm-workspace.yaml` with the allowed build scripts,
-`.nvmrc`). A service product exports `./platform` (`adapters/platform.js`, `createPlatform`) and `./routes`
-(`api/routes.js`, `buildRoutes`) so a test harness can compose it with app-kit's `createRequestHandler`. The template
-has no scheduled work: app-kit sends usage and events after requests, and the notes sample's soft-deleted notes are
-removed by a MongoDB TTL index (`purge_ttl`). Every Next.js route file exports `OPTIONS` (CORS preflight reaches
-app-kit) and `_lib/product.js` passes Next's `after` to `toNextRoute`.
-
-**`ss app init --minimal`** (service products) leaves out the `notes` sample (`NOTES_SAMPLE_FILES`: core, headless,
-renderer, API handlers, event consumer, repository, feature/event schemas and their tests) and overlays
-`templates/minimal/service`: a product needs at least one element, so it ships one placeholder Mode C element
-`status` (`GET /v1/status`, a `greeting` config feature), no database requirement and no events. The project passes
-`ss app validate` and its own Vitest suite (with the coverage thresholds). The full template's README explains how to
-remove the sample by hand.
+Programmatic: `validateProject(dir)` → `{ ok, dir, manifest, problems: [{ severity, rule, file, line?, pointer?, message }], summary }`;
+also `initApp`, `writeAssets`, `renderOpenapi`, `scanRoutes` and the scanners.
 
 ## Testing
 
 ```sh
-pnpm check   # in this folder: format, lint, typecheck, vitest with coverage (from the root: pnpm --filter @ss/cli check)
+pnpm check   # format, lint, typecheck, vitest with coverage (from the root: pnpm --filter @ss/cli check)
 ```
 
-`src/bin.js` (process wiring only) is excluded with a `/* v8 ignore start/stop */` block; everything else is tested
-through `main()` with injected io. `test/init.test.js` generates every template and runs its own test suite.
+`src/bin.js` (process wiring only) is excluded; everything else is tested through `main()` with injected io.
+`test/init.test.js` generates a product, validates it and runs its own test suite with the coverage thresholds.

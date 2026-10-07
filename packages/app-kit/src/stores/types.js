@@ -1,130 +1,39 @@
 /**
- * Store interfaces. Every store is async-capable; the in-memory implementations are for development and tests, the
- * MongoDB implementations (`createMongoStores`) live in the product's own small control database — never in a
- * merchant database — and hold ids, hashes and short-lived state only.
+ * The product database store (PLAN 0.4.8). One small document store backs everything the kit keeps in the product's
+ * own database: the Portal connection and keys, switches, settings, widget texts and theme, connections, Recent
+ * changes, cached status, revoked token ids, business.json copies, widget last-seen times, dashboard sessions, replay
+ * records and rate-limit counters. It never holds business data.
+ *
+ * `createMemoryStore` is for development and tests; `createMongoStore` is the production store.
  * @module
  */
 
 /**
- * Replay/nonce store (shape of `@ss/protocol` `ReplayStore`, plus `forget`).
- * @typedef {object} ReplayStore
- * @property {(id: string, expiresAtMs: number) => Promise<boolean>} seen true when already recorded (a replay)
- * @property {(id: string) => Promise<void>} forget remove an id (used when processing failed and must be retried)
+ * The collections the kit uses. Per-website documents carry `websiteId`.
+ * @typedef {'state' | 'switches' | 'settings' | 'connections' | 'changes' | 'status' | 'revoked' | 'business'
+ *   | 'widget' | 'sessions'} Collection
+ */
+
+/** @typedef {Record<string, any>} Doc */
+
+/**
+ * Equality filter on top-level fields; a field holding an array matches when it contains the value.
+ * @typedef {Record<string, string | number | boolean | null>} Filter
  */
 
 /**
- * The product's own settings in its control database: the Portal connection (Portal URL, appId, base URL, the
- * product's private key) and generated secrets. `insert` is insert-if-absent, so concurrent cold starts agree on one
- * value; `put` replaces.
- * @typedef {object} SettingsStore
- * @property {(id: string) => Promise<Record<string, any> | null>} get
- * @property {(id: string, value: Record<string, any>) => Promise<boolean>} insert false when `id` already exists
- * @property {(id: string, value: Record<string, any>) => Promise<void>} put insert or replace
- * @property {(id: string) => Promise<void>} delete
- */
-
-/**
- * @typedef {object} EntitlementCacheEntry
- * @property {string} token signed entitlement document (compact JWS)
- * @property {number} version document version (monotonic)
- * @property {number} fetchedAt epoch ms of the successful Portal fetch
- */
-
-/**
- * Signed entitlement documents per website (re-verified whenever read back).
- * @typedef {object} EntitlementStore
- * @property {(websiteId: string) => Promise<EntitlementCacheEntry | null>} get
- * @property {(websiteId: string, entry: EntitlementCacheEntry) => Promise<boolean>} put keeps the newest version; false when older
- * @property {(websiteId: string) => Promise<void>} delete
- */
-
-/**
- * @typedef {object} UsageRecord
- * @property {string} idempotencyKey
- * @property {string} websiteId
- * @property {string} subscriptionId
- * @property {string} unit
- * @property {number} quantity
- * @property {string} occurredAt ISO-8601
- */
-
-/**
- * @typedef {UsageRecord & { attempts: number, status: 'pending' | 'sent' | 'dead', lastError?: string }} QueuedUsage
- */
-
-/**
- * Durable usage queue; `idempotencyKey` is unique for the lifetime of the record (including after it was sent).
- * @typedef {object} UsageQueueStore
- * @property {(record: UsageRecord) => Promise<{ inserted: boolean }>} enqueue
- * @property {(options: { now: number, limit: number, leaseMs: number, owner: string, websiteId?: string }) => Promise<QueuedUsage[]>} lease
- *   due records, oldest first (only the website's with `websiteId`)
- * @property {(keys: string[], options: { now: number, retainMs: number }) => Promise<void>} ack mark sent (kept for dedupe)
- * @property {(keys: string[], options: { now: number, nextAttemptAt: number, error: string }) => Promise<void>} retry
- * @property {(keys: string[], options: { now: number, error: string }) => Promise<void>} deadLetter
- * @property {() => Promise<{ pending: number, sent: number, dead: number }>} stats
- */
-
-/**
- * Website-key revocations (keyIds) plus the Portal sync cursor.
- * @typedef {object} RevocationStore
- * @property {() => Promise<{ keyIds: string[], cursor: string | null, syncedAt: number | null }>} get
- * @property {(keyIds: string[], meta?: { cursor?: string | null, syncedAt?: number }) => Promise<void>} add
- */
-
-/**
- * Product dashboard sessions created from verified launches.
- * @typedef {object} SessionStore
- * @property {(id: string, data: Record<string, unknown>, expiresAtMs: number) => Promise<void>} create
- * @property {(id: string) => Promise<Record<string, unknown> | null>} get
- * @property {(id: string) => Promise<void>} delete
- */
-
-/**
- * Fixed-window counters.
- * @typedef {object} RateLimitStore
+ * @typedef {object} Store
+ * @property {(collection: Collection, id: string) => Promise<Doc | null>} get
+ * @property {(collection: Collection, id: string, doc: Doc) => Promise<void>} put insert or replace
+ * @property {(collection: Collection, id: string, doc: Doc) => Promise<boolean>} insert insert if absent (false when it exists)
+ * @property {(collection: Collection, id: string) => Promise<void>} delete
+ * @property {(collection: Collection, filter: Filter, options?: { limit?: number }) => Promise<Doc[]>} list newest
+ *   `at` first
+ * @property {(collection: Collection, filter: Filter) => Promise<number>} deleteWhere
+ * @property {(id: string, expiresAtMs: number) => Promise<boolean>} seen records an id; true when already recorded
+ * @property {(id: string) => Promise<void>} forget
  * @property {(key: string, windowMs: number, now: number) => Promise<{ count: number, resetAt: number }>} hit
- */
-
-/**
- * Last successfully fetched Portal JWKS (public keys only), so a cold instance can verify during a Portal outage.
- * @typedef {object} PortalKeyStore
- * @property {() => Promise<{ jwks: unknown, fetchedAt: number } | null>} get
- * @property {(jwks: unknown, fetchedAt: number) => Promise<void>} put
- */
-
-/**
- * @typedef {object} OutboxEvent
- * @property {string} id event id (the dedupe key)
- * @property {Record<string, unknown>} envelope the complete event envelope
- * @property {number} attempts
- * @property {'pending' | 'sent'} status
- * @property {string} [lastError]
- */
-
-/**
- * Durable outbox of product events (`portal.publishEvent`), idempotent by event id. The envelope is dropped once the
- * event is sent or dropped (only the id is kept, for dedupe).
- * @typedef {object} EventOutboxStore
- * @property {(event: { id: string, envelope: Record<string, unknown> }) => Promise<{ inserted: boolean }>} enqueue
- * @property {(options: { now: number, limit: number, leaseMs: number, owner: string, websiteId?: string }) => Promise<OutboxEvent[]>} lease
- *   due events, oldest first (only the website's with `websiteId`, the envelope's `websiteId`)
- * @property {(ids: string[], options: { now: number, retainMs: number }) => Promise<void>} ack mark sent or dropped (envelope dropped)
- * @property {(ids: string[], options: { now: number, nextAttemptAt: number, error: string }) => Promise<void>} retry
- * @property {() => Promise<{ pending: number, sent: number }>} stats
- */
-
-/**
- * @typedef {object} Stores
- * @property {ReplayStore} replay single-use ids: launches, events, seen `Idempotency-Key`s (`idem:` prefix)
- * @property {ReplayStore} nonce
- * @property {SettingsStore} settings
- * @property {EntitlementStore} entitlements
- * @property {UsageQueueStore} usageQueue
- * @property {EventOutboxStore} eventOutbox
- * @property {RevocationStore} revocations
- * @property {SessionStore} sessions
- * @property {RateLimitStore} rateLimits
- * @property {PortalKeyStore} portalKeys
+ *   fixed-window counter
  */
 
 export {};

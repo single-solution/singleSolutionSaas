@@ -26,7 +26,6 @@ const FRIENDLY = Object.freeze({
 	idempotency_replay_no_body: 'This request was already sent. Reload to see the result.',
 	internal_error: 'Something went wrong on our side. Try again in a moment.',
 	service_unavailable: 'The service is temporarily unavailable. Try again shortly.',
-	credits_exhausted: 'Your credit balance is too low for this. Add credits and try again.',
 	payload_too_large: 'The request is too large.',
 	unsupported_media_type: 'The request could not be read.',
 });
@@ -35,7 +34,6 @@ const FRIENDLY = Object.freeze({
 const DETAIL_FIRST = new Set([
 	'invalid_credentials',
 	'token_invalid',
-	'credits_exhausted',
 	'conflict',
 	'forbidden',
 	'not_found',

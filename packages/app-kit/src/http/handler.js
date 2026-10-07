@@ -1,22 +1,31 @@
 /**
- * Framework-agnostic request handler: `(Request) → Promise<Response>` (WHATWG Fetch API, so it runs on Node,
- * serverless and edge-style runtimes). Pipeline per request:
+ * The request handler: `(Request) → Promise<Response>` (WHATWG Fetch API). Pipeline per request:
  *
- *   request id → route match (404/405, CORS preflight) → body read with a byte cap (413) → auth (website key /
- *   launch session / none) → entitlement + element gating → JSON parse (415/400) → customer identity → rate limit
- *   (429; limit and key may be functions of the context) → duplicate refusal for `idempotent: true` routes (409) →
- *   handler → RFC 9457 problems for every error. A misconfigured product answers every request 503 with its problems. After the response, the usage and events that request (or this instance) queued, and the website's due retries, are sent.
+ *   configuration problems (503) → request id → CORS preflight → route match (404/405) → Portal connection (503 before
+ *   connect, except `none` routes) → body with a byte cap (413) → auth → status of the product on the website (403
+ *   `product_unavailable`, 503 `portal_unreachable`) → feature (403 `feature_off`) → merchant database (403
+ *   `database_not_connected`) → JSON (415/400) → rate limits (429) → `Idempotency-Key` (409) → handler → RFC 9457
+ *   problems for every error.
+ *
+ * Auth: `browser` (browser token from `Authorization: Bearer`; the Origin must be `https://<exact domain>` or local,
+ * CORS only for it), `server` (server token; refused when an Origin header is
+ * present; no CORS), `ticket` (ticket bound to the request's Origin; CORS only for it), `dashboard` (session cookie;
+ * writes only from the product's own address; never framed) and `none`. Every token or ticket failure is the same
+ * 401 `invalid_token`.
+ *
+ * Right after the response (Next.js `after`, through `toNextRoute`): a pending price report, a stale business.json,
+ * unsent activity copies, the staff named in a ticket and the widget last-seen time.
  * @module
  */
-import { STOPPED_STATES, can } from '../entitlements.js';
+import { canonicalOrigin, isLocalOrigin, isProtocolError, originAllowed, verifyToken } from '@ss/protocol';
 import { createId } from '@ss/contracts';
-import { sha256Hex } from '../util.js';
+import { isKitError, sha256Hex } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
-import { misconfiguredResponse } from '../misconfigured.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
 
 /** @typedef {import('./routes.js').RouteDefinition} RouteDefinition */
 /** @typedef {import('./routes.js').CompiledRoute} CompiledRoute */
+/** @typedef {import('./results.js').ProblemResult} ProblemResult */
 /** @typedef {import('./results.js').RouteResult} RouteResult */
 
 /**
@@ -26,27 +35,29 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {string} method
  * @property {string} path
  * @property {Record<string, string>} params
- * @property {Record<string, string>} query query parameters (first value of each name)
- * @property {URLSearchParams} searchParams all query parameters
- * @property {string | undefined} idempotencyKey the request's valid `Idempotency-Key`, if any
+ * @property {Record<string, string>} query first value of each query parameter
+ * @property {URLSearchParams} searchParams
  * @property {Headers} headers
- * @property {unknown} body parsed JSON (undefined when empty or `rawBody` routes)
+ * @property {string | undefined} idempotencyKey
+ * @property {unknown} body parsed JSON (undefined when empty or for `rawBody` routes)
  * @property {string} rawBody
- * @property {import('../keys.js').WebsiteBinding | null} website
- * @property {{ doc: import('@ss/contracts').EntitlementDocument, stale: boolean, version: number } | null} entitlement
- * @property {import('../launch.js').Session | null} session
- * @property {string | null} websiteId website of the request (key binding, or the session's selected website)
- * @property {import('../identity.js').CustomerIdentity | null} identity the verified customer (routes with `identity`)
- * @property {import('../identity.js').IdentityFailure | null} identityProblem why `identity` is null (optional identity)
- * @property {any} product
+ * @property {string | null} origin the canonical Origin header, if any
+ * @property {string | null} websiteId
+ * @property {string | null} merchantId
+ * @property {import('@ss/contracts').StatusResponse | null} status the status response of the website
+ * @property {import('@ss/protocol').TokenClaims | null} token browser or server token claims
+ * @property {import('@ss/protocol').TicketClaims | null} ticket
+ * @property {import('../dashboard.js').Session | null} session dashboard session
+ * @property {(task: () => Promise<unknown>) => void} after run work right after the response
+ * @property {() => Promise<import('../data.js').WebsiteData>} data the website's merchant database (tenant guard)
  * @property {import('../logger.js').Logger} log
  */
 
-/** Per-request `after()` schedulers registered by adapters (e.g. Next.js `after` through `toNextRoute`). */
+/** Per-request `after()` schedulers registered by adapters (`toNextRoute`). */
 const SCHEDULERS = new WeakMap();
 
 /**
- * Register the framework's `after(fn)` for a request: the kit's queue delivery then runs after the response.
+ * Register the framework's `after(fn)` for a request.
  * @param {Request} request
  * @param {(task: () => Promise<unknown>) => void} after
  */
@@ -54,10 +65,16 @@ export const rememberScheduler = (request, after) => {
 	SCHEDULERS.set(request, after);
 };
 
-/**
- * @param {URLSearchParams} params
- * @returns {Record<string, string>} first value of each name
- */
+const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
+const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
+const CORS_HEADERS = 'authorization, content-type, idempotency-key, x-request-id';
+const LAST_SEEN_EVERY_MS = 60 * 60_000;
+const STAFF_EVERY_MS = 10 * 60_000;
+const NO_FRAMES = Object.freeze({ 'x-frame-options': 'DENY', 'content-security-policy': "frame-ancestors 'none'" });
+
+/** @param {URLSearchParams} params */
 const firstValues = (params) => {
 	/** @type {Record<string, string>} */
 	const out = {};
@@ -65,23 +82,16 @@ const firstValues = (params) => {
 	return out;
 };
 
-const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
-const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
-const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-/** How long a seen Idempotency-Key refuses a repeat of the same route for the same website. */
-const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
-const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-identity, x-request-id, x-ss-website';
-
 /**
  * Read at most `max` bytes of the request body.
  * @param {Request} request
  * @param {number} max
- * @returns {Promise<{ ok: true, text: string } | { ok: false }>}
+ * @returns {Promise<string | null>} null when too large
  */
 const readBody = async (request, max) => {
 	const declared = Number(request.headers.get('content-length') ?? '0');
-	if (Number.isFinite(declared) && declared > max) return { ok: false };
-	if (!request.body) return { ok: true, text: '' };
+	if (Number.isFinite(declared) && declared > max) return null;
+	if (!request.body) return '';
 	const reader = request.body.getReader();
 	/** @type {Uint8Array[]} */
 	const chunks = [];
@@ -92,44 +102,43 @@ const readBody = async (request, max) => {
 		size += value.byteLength;
 		if (size > max) {
 			await reader.cancel().catch(() => {});
-			return { ok: false };
+			return null;
 		}
 		chunks.push(value);
 	}
-	return { ok: true, text: Buffer.concat(chunks).toString('utf8') };
+	return Buffer.concat(chunks).toString('utf8');
 };
 
-/**
- * @param {string | null} cookieHeader
- * @param {string} name
- * @returns {string | undefined}
- */
-const readCookie = (cookieHeader, name) => {
-	for (const part of (cookieHeader ?? '').split(';')) {
-		const [key, ...rest] = part.trim().split('=');
-		if (key === name) return rest.join('=');
-	}
-	return undefined;
-};
+/** @param {string | null} header */
+const bearerOf = (header) => /^Bearer\s+(\S+)$/i.exec(header ?? '')?.[1] ?? null;
 
 /**
  * Create the request handler.
- * @param {any} product the object returned by `createProduct`
+ * @param {import('../product.js').Kit} kit the internal parts `createProduct` wires
  * @param {ReadonlyArray<RouteDefinition>} routes
- * @param {{ basePath?: string, maxBodyBytes?: number, requestIdHeader?: string, trustForwardedFor?: boolean }} [options]
+ * @param {{ after?: (task: () => Promise<unknown>) => void }} [options] `after`: the post-response scheduler for requests
+ *   that did not come through `toNextRoute` (default: run detached)
  * @returns {(request: Request) => Promise<Response>}
  */
-export const createRequestHandler = (product, routes, options = {}) => {
-	const ctxKit = product.context;
-	const { problems, logger, now, randomBytes, stores } = ctxKit;
+export const createRequestHandler = (kit, routes, options = {}) => {
+	const { problems, logger, now, randomBytes, store, manifest } = kit;
 	const compiled = compileRoutes(routes);
-	const basePath = (options.basePath ?? '').replace(/\/+$/, '');
-	const maxBodyBytes = options.maxBodyBytes ?? 1024 * 1024;
-	const requestIdHeader = (options.requestIdHeader ?? ctxKit.requestIdHeader ?? 'x-request-id').toLowerCase();
-	const trustForwardedFor = options.trustForwardedFor ?? true;
+	const featureKeys = manifest.features.map((/** @type {{ key: string }} */ f) => f.key);
+	/** @type {Map<string, string>} */
+	const featureOfPermission = new Map(
+		manifest.permissions.map((/** @type {{ key: string, feature: string }} */ p) => [p.key, p.feature]),
+	);
+	for (const route of compiled) {
+		if (route.feature !== undefined && !featureKeys.includes(route.feature))
+			throw new TypeError(`route ${route.id}: unknown feature ${route.feature}`);
+		if (route.permission !== undefined && !featureOfPermission.has(route.permission))
+			throw new TypeError(`route ${route.id}: unknown permission ${route.permission}`);
+	}
+	/** @type {Map<string, number>} */
+	const lastWrites = new Map();
 
 	/**
-	 * @param {RouteResult | import('./results.js').ProblemResult} result
+	 * @param {RouteResult} result
 	 * @param {string} requestId
 	 * @param {string} instance
 	 * @returns {{ status: number, headers: Record<string, string>, body: string | null }}
@@ -139,15 +148,17 @@ export const createRequestHandler = (product, routes, options = {}) => {
 			/** @type {import('@ss/contracts').Problem} */
 			let doc;
 			try {
+				const { reason, ...extensions } = result.extensions ?? {};
 				doc = problems.create(result.code, {
-					...(result.status === undefined ? {} : { status: result.status }),
 					...(result.detail === undefined ? {} : { detail: result.detail }),
 					...(result.errors === undefined ? {} : { errors: result.errors }),
+					...(reason === undefined
+						? {}
+						: { reason: /** @type {import('@ss/contracts').ProductUnavailableReason} */ (reason) }),
 					requestId,
 					instance,
 				});
-				// RFC 9457 extension members (names validated by `problem()`; standard members cannot be clobbered)
-				if (result.extensions) doc = Object.freeze({ ...result.extensions, ...doc });
+				doc = Object.freeze({ ...extensions, ...doc });
 			} catch {
 				doc = problems.create('internal_error', { requestId, instance });
 			}
@@ -166,68 +177,148 @@ export const createRequestHandler = (product, routes, options = {}) => {
 	};
 
 	/**
+	 * Browser or server token of a request.
+	 * @param {CompiledRoute} r
+	 * @param {Request} request
+	 * @param {string | null} rawOrigin
+	 * @returns {Promise<import('@ss/protocol').TokenClaims | null>}
+	 */
+	const verifyWebsiteToken = async (r, request, rawOrigin) => {
+		const kind = r.auth === 'browser' ? 'browser' : 'server';
+		if (kind === 'server' && rawOrigin !== null) return null;
+		if (kind === 'browser' && rawOrigin === null) return null;
+		const token = bearerOf(request.headers.get('authorization'));
+		if (!token) return null;
+		const { portalUrl, portalKeys } = kit.connection.active();
+		try {
+			const claims = await verifyToken({
+				token,
+				keyResolver: portalKeys,
+				issuer: portalUrl,
+				productId: manifest.id,
+				kind,
+				isRevoked: kit.status.isRevoked,
+				now,
+			});
+			if (kind === 'browser' && rawOrigin !== null && !originAllowed({ origin: rawOrigin, domain: claims.domain }))
+				return null;
+			return claims;
+		} catch (error) {
+			if (isProtocolError(error)) return null;
+			throw error;
+		}
+	};
+
+	/**
+	 * Work right after a website request.
+	 * @param {RequestContext} ctx
+	 * @param {CompiledRoute} r
+	 */
+	const afterWebsiteRequest = async (ctx, r) => {
+		const websiteId = /** @type {string} */ (ctx.websiteId);
+		const status = /** @type {import('@ss/contracts').StatusResponse} */ (ctx.status);
+		const tasks = [
+			async () => {
+				const kept = await kit.business.get(websiteId, status.domain);
+				if (kept.stale) await kit.business.refresh(websiteId, status.domain);
+			},
+			async () => {
+				if (r.database !== false) await kit.activity.retry(websiteId, ctx.merchantId);
+			},
+			async () => {
+				// widget installed: a visitor-widget request from the real domain (never a local origin)
+				if (r.auth !== 'browser' || ctx.origin === null || isLocalOrigin(ctx.origin)) return;
+				if (now() - (lastWrites.get(`seen|${websiteId}`) ?? -Infinity) < LAST_SEEN_EVERY_MS) return;
+				lastWrites.set(`seen|${websiteId}`, now());
+				await store.put('widget', websiteId, { websiteId, lastSeenAt: now() });
+			},
+			async () => {
+				// the merchant's staff named in a ticket
+				const user = ctx.ticket?.user;
+				if (!user || r.database === false) return;
+				const key = `staff|${websiteId}|${user.id}`;
+				if (now() - (lastWrites.get(key) ?? -Infinity) < STAFF_EVERY_MS) return;
+				lastWrites.set(key, now());
+				const db = await ctx.data();
+				await db
+					.collection('staff')
+					.updateOne(
+						{ websiteId, id: user.id },
+						{ $set: { name: user.name, email: user.email, lastSeenAt: new Date(now()) } },
+						{ upsert: true },
+					);
+			},
+		];
+		for (const task of tasks) await task().catch((error) => logger.warn('work after the request failed', { websiteId, error }));
+	};
+
+	/**
 	 * @param {Request} request
 	 * @returns {Promise<Response>}
 	 */
 	return async (request) => {
-		// a misconfigured product (`createProduct({ problems })`) answers every route with the reasons
-		if (Array.isArray(product.problems) && product.problems.length > 0) return misconfiguredResponse(product.problems);
 		const started = now();
 		const url = new URL(request.url);
 		const method = request.method.toUpperCase();
-		const presented = request.headers.get(requestIdHeader);
+		const presented = request.headers.get('x-request-id');
 		const requestId = presented && REQUEST_ID.test(presented) ? presented : createId('req', { randomBytes });
 		const log = logger.child({ requestId });
-		let pathname = url.pathname;
-		if (basePath && (pathname === basePath || pathname.startsWith(`${basePath}/`)))
-			pathname = pathname.slice(basePath.length) || '/';
-		const origin = request.headers.get('origin');
+		const pathname = url.pathname;
+		const rawOrigin = request.headers.get('origin');
 		/** @type {Record<string, string>} */
 		const extra = { 'x-request-id': requestId };
+		/** @type {Array<() => Promise<unknown>>} */
+		const afterTasks = [];
 		/** @type {CompiledRoute | null} */
 		let route = null;
 		/** @type {string | null} */
 		let websiteId = null;
 
-		/**
-		 * @param {{ status: number, headers: Record<string, string>, body: string | null }} rendered
-		 */
+		/** @param {{ status: number, headers: Record<string, string>, body: string | null }} rendered */
 		const finish = (rendered) => {
-			const headers = new Headers({ ...rendered.headers, ...extra });
-			try {
-				ctxKit.background?.afterRequest(SCHEDULERS.get(request), { websiteId });
-			} catch (error) {
-				log.warn('background scheduling failed', { error });
-			}
+			/** @type {(task: () => Promise<unknown>) => void} */
+			const scheduler = SCHEDULERS.get(request) ?? options.after ?? ((task) => void task());
+			if (kit.connection.connected()) afterTasks.unshift(() => kit.reports.syncManifest());
+			if (afterTasks.length > 0)
+				scheduler(async () => {
+					for (const task of afterTasks) await task().catch((error) => log.warn('work after the request failed', { error }));
+				});
 			log.info('request', {
 				method,
 				path: pathname,
 				status: rendered.status,
 				ms: now() - started,
 				...(websiteId ? { websiteId } : {}),
-				...(route?.element ? { element: route.element } : {}),
 			});
-			return new Response(method === 'HEAD' || rendered.body === '' ? null : rendered.body, {
+			return new Response(method === 'HEAD' ? null : rendered.body, {
 				status: rendered.status,
-				headers,
+				headers: { ...rendered.headers, ...extra },
 			});
 		};
-		/** @param {import('./results.js').ProblemResult} p */
+		/** @param {ProblemResult} p */
 		const fail = (p) => finish(render(p, requestId, pathname));
 
 		try {
+			if (kit.configProblems.length > 0) {
+				extra['retry-after'] = '60';
+				return fail(
+					problem('unavailable', 'This product is misconfigured.', { extensions: { problems: [...kit.configProblems] } }),
+				);
+			}
 			if (method === 'OPTIONS') {
 				const parts = splitPath(pathname);
 				const matching = compiled.filter((r) => matchPath(r, parts) !== null);
+				if (matching.length === 0) return fail(problem('not_found'));
 				const methods = [...new Set(matching.map((r) => r.method))];
-				if (methods.length === 0) return fail(problem('not_found'));
-				const cors = matching.some((r) => r.cors ?? r.auth === 'website');
-				if (cors && origin) {
-					extra['access-control-allow-origin'] = origin;
-					extra['access-control-allow-methods'] = methods.join(', ');
-					extra['access-control-allow-headers'] = CORS_HEADERS;
-					extra['access-control-max-age'] = '600';
-					extra.vary = 'Origin';
+				const origin = canonicalOrigin(rawOrigin);
+				if (origin && matching.some((r) => r.auth === 'browser' || r.auth === 'ticket')) {
+					Object.assign(extra, {
+						'access-control-allow-origin': origin,
+						'access-control-allow-methods': methods.join(', '),
+						'access-control-allow-headers': CORS_HEADERS,
+						'access-control-max-age': '600',
+						vary: 'Origin',
+					});
 				}
 				extra.allow = [...methods, 'OPTIONS'].join(', ');
 				return finish({ status: 204, headers: {}, body: null });
@@ -240,18 +331,15 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				extra.allow = allow.join(', ');
 				return fail(problem('method_not_allowed'));
 			}
-			route = matched.route;
-			const r = route;
-			if (r.cors === true) extra['access-control-allow-origin'] = '*';
+			const r = matched.route;
+			route = r;
+			if (r.auth === 'dashboard' || pathname === '/sso') Object.assign(extra, NO_FRAMES);
+			if (r.auth === 'dashboard') extra['cache-control'] = 'no-store';
 
-			// generated secrets and the Portal connection (cached per instance); before a Portal connects only
-			// `connected: false` routes (connect, health, the manifest) answer
-			if (typeof product.ready === 'function') await product.ready();
-			if (r.connected !== false && typeof product.connected === 'function' && !product.connected()) {
+			await kit.connection.ready();
+			if (r.auth !== 'none' && !kit.connection.connected()) {
 				extra['retry-after'] = '60';
-				return fail(
-					problem('unavailable', 'This product is not connected to a Portal yet (Portal: Admin → Apps → Add product).'),
-				);
+				return fail(problem('unavailable', 'This product is not connected to a Portal yet.'));
 			}
 
 			/** @type {RequestContext} */
@@ -263,99 +351,89 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				params: matched.params,
 				query: firstValues(url.searchParams),
 				searchParams: url.searchParams,
+				headers: request.headers,
 				idempotencyKey: IDEMPOTENCY_KEY.test(request.headers.get('idempotency-key') ?? '')
 					? /** @type {string} */ (request.headers.get('idempotency-key'))
 					: undefined,
-				headers: request.headers,
 				body: undefined,
 				rawBody: '',
-				website: null,
-				entitlement: null,
-				session: null,
+				origin: canonicalOrigin(rawOrigin),
 				websiteId: null,
-				identity: null,
-				identityProblem: null,
-				product,
+				merchantId: null,
+				status: null,
+				token: null,
+				ticket: null,
+				session: null,
+				after: (task) => {
+					afterTasks.push(task);
+				},
+				data: () => {
+					if (!ctx.websiteId) throw problem('bad_request', 'This request names no website.');
+					return kit.data.forWebsite(ctx.websiteId, ctx.merchantId ? { merchantId: ctx.merchantId } : {});
+				},
 				log,
 			};
 
-			// body
 			if (BODY_METHODS.has(method)) {
-				const read = await readBody(request, r.maxBodyBytes ?? maxBodyBytes);
-				if (!read.ok) return fail(problem('payload_too_large', `The body exceeds ${r.maxBodyBytes ?? maxBodyBytes} bytes.`));
-				ctx.rawBody = read.text;
+				const max = r.maxBodyBytes ?? 1024 * 1024;
+				const text = await readBody(request, max);
+				if (text === null) return fail(problem('payload_too_large', `The body exceeds ${max} bytes.`));
+				ctx.rawBody = text;
 			}
 
 			// auth
-			if (r.auth === 'website') {
-				const verified = await product.keys.verify(request.headers.get('authorization'), {
-					origin,
-					referer: request.headers.get('referer'),
-					requiredScopes: r.scopes ?? [],
-					...(r.keyKind ? { expectedKind: r.keyKind } : {}),
+			if (r.auth === 'browser' || r.auth === 'server') {
+				const claims = await verifyWebsiteToken(r, request, rawOrigin);
+				if (!claims) return fail(problem('invalid_token', 'The token is not valid.'));
+				ctx.token = claims;
+				ctx.websiteId = claims.websiteId;
+				if (r.auth === 'browser' && ctx.origin)
+					Object.assign(extra, { 'access-control-allow-origin': ctx.origin, vary: 'Origin' });
+			} else if (r.auth === 'ticket') {
+				const ticket = bearerOf(request.headers.get('authorization')) ?? '';
+				try {
+					ctx.ticket = await kit.tickets.verify({ ticket, origin: rawOrigin, isRevoked: kit.status.isRevoked });
+				} catch (error) {
+					if (!isProtocolError(error)) throw error;
+					return fail(problem('invalid_token', 'The token is not valid.'));
+				}
+				ctx.websiteId = ctx.ticket.websiteId;
+				Object.assign(extra, { 'access-control-allow-origin': ctx.ticket.origin, vary: 'Origin' });
+				if (r.permission !== undefined && !ctx.ticket.permissions.includes(r.permission))
+					return fail(problem('forbidden', 'The ticket does not carry this permission.'));
+			} else if (r.auth === 'dashboard') {
+				const allowed = await kit.dashboard.authorize(ctx, r);
+				if (!allowed.ok) return fail(allowed.problem);
+				Object.assign(ctx, {
+					session: allowed.session,
+					websiteId: allowed.websiteId,
+					merchantId: allowed.merchantId,
+					status: allowed.status,
 				});
-				if (!verified.ok) {
-					if (verified.code === 'unavailable') extra['retry-after'] = '30';
-					return fail(problem(verified.code, verified.detail));
-				}
-				ctx.website = verified.website;
-				ctx.websiteId = verified.website.websiteId;
-				websiteId = ctx.websiteId;
-				if ((r.cors ?? true) && origin && verified.website.kind === 'pk') {
-					extra['access-control-allow-origin'] = origin;
-					extra.vary = 'Origin';
-				}
-			} else if (r.auth === 'launch') {
-				const bearer = /^Bearer\s+(ses_\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1];
-				const id = bearer ?? readCookie(request.headers.get('cookie'), ctxKit.sessionCookie);
-				const session = await product.launch.session(id);
-				if (!session) return fail(problem('unauthorized', 'A dashboard session is required.'));
-				if (r.roles && !r.roles.includes(session.role))
-					return fail(problem('forbidden', 'This role cannot use this operation.'));
-				ctx.session = session;
-				const scope = session.scope ?? {};
-				const allowed = [scope.websiteId, ...(Array.isArray(scope.websiteIds) ? scope.websiteIds : [])].filter(Boolean);
-				const selected = request.headers.get('x-ss-website') ?? (allowed.length === 1 ? allowed[0] : null);
-				if (selected) {
-					if (!allowed.includes(selected)) return fail(problem('forbidden', 'This session has no access to that website.'));
-					ctx.websiteId = selected;
-					websiteId = selected;
-				}
+			}
+			websiteId = ctx.websiteId;
+
+			if (r.auth === 'browser' || r.auth === 'server' || r.auth === 'ticket') {
+				const id = /** @type {string} */ (ctx.websiteId);
+				const serving = await kit.status.serving(id);
+				if (!serving.ok) return fail(serving.problem);
+				// a status fetch also refreshes the revocation list: check the token (or the ticket's server token) again
+				if (await kit.status.isRevoked(ctx.token?.jti ?? ctx.ticket?.tid ?? ''))
+					return fail(problem('invalid_token', 'The token is not valid.'));
+				ctx.status = serving.status;
+				ctx.merchantId = serving.status.merchantId;
+				const feature = r.feature ?? (r.permission === undefined ? undefined : featureOfPermission.get(r.permission));
+				if (feature !== undefined && !(await kit.reports.isOn(id, feature)))
+					return fail(problem('feature_off', `The feature ${feature} is off.`));
+				if (r.database !== false && (await kit.connections.value(id, 'database')) === null)
+					return fail(problem('database_not_connected', 'Connect the merchant database in the product dashboard first.'));
+				afterTasks.push(() => afterWebsiteRequest(ctx, r));
 			}
 
-			// entitlement + element gating
-			const needsEntitlement =
-				(r.auth === 'website' && r.entitlement !== false) || (r.auth === 'launch' && r.element !== undefined);
-			if (needsEntitlement) {
-				if (!ctx.websiteId) return fail(problem('bad_request', 'Select a website with the X-SS-Website header.'));
-				const result = await product.entitlements.forWebsite(ctx.websiteId);
-				if (!result.ok) {
-					if (result.reason === 'unavailable') {
-						extra['retry-after'] = '30';
-						return fail(problem('unavailable', 'Entitlements are temporarily unavailable.'));
-					}
-					return fail(problem('subscription_inactive', 'This website has no active subscription to this product.'));
-				}
-				const { doc } = result;
-				if (ctx.website && (doc.env !== ctx.website.env || doc.merchantId !== ctx.website.merchantId)) {
-					return fail(problem('forbidden', 'The key does not match this subscription.'));
-				}
-				ctx.entitlement = { doc, stale: result.stale, version: result.version };
-				if (result.stale) extra['ss-entitlement-stale'] = 'true';
-				if (r.element !== undefined && !can(doc, r.element)) {
-					const state = doc.runtime.state;
-					if (state === 'spend_cap') return fail(problem('spend_cap_reached', 'The spend cap for this website is reached.'));
-					if (STOPPED_STATES.includes(state)) return fail(problem('subscription_inactive', `The subscription is ${state}.`));
-					return fail(problem('element_disabled', `Element '${r.element}' is not enabled for this website.`));
-				}
-			}
-
-			// JSON body
 			if (!r.rawBody && ctx.rawBody.length > 0) {
 				const type = (request.headers.get('content-type') ?? '').toLowerCase();
-				if (!/^application\/([a-z0-9.+-]+\+)?json(\s*;|$)/.test(type)) {
+				if (!/^application\/([a-z0-9.+-]+\+)?json(\s*;|$)/.test(type))
 					return fail(problem('unsupported_media_type', 'Send application/json.'));
-				}
 				try {
 					ctx.body = JSON.parse(ctx.rawBody);
 				} catch {
@@ -363,78 +441,31 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				}
 			}
 
-			// customer identity (bring-your-own identity: the website's issuer from the entitlement document)
-			if (r.identity) {
-				const verified = product.identity.verify(request, { doc: ctx.entitlement?.doc, body: ctx.body });
-				if (verified.ok) ctx.identity = verified.identity;
-				else {
-					ctx.identityProblem = verified.code;
-					if (r.identity === 'required') {
-						return fail(
-							verified.code === 'identity_missing'
-								? problem('identity_required', 'Send the customer token in the SS-Identity header.')
-								: verified.code === 'identity_not_configured'
-									? problem('identity_required', 'This website has no identity issuer configured.')
-									: problem('identity_invalid', `The customer token was refused (${verified.code}).`),
-						);
-					}
-				}
-			}
-
-			// rate limit (the limit may depend on the request, e.g. a plan feature: `limit: (ctx) => number`)
-			/** @type {number | null} */
-			let limit = null;
-			if (r.rateLimit) {
+			for (const limit of r.rateLimit === undefined ? [] : [r.rateLimit].flat()) {
+				const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+				const per = limit.per ?? (ctx.websiteId ? 'website' : 'visitor');
+				const subject = per === 'website' && ctx.websiteId ? `w:${ctx.websiteId}` : `ip:${ip}`;
 				try {
-					const value = typeof r.rateLimit.limit === 'function' ? await r.rateLimit.limit(ctx) : r.rateLimit.limit;
-					if (value === Number.POSITIVE_INFINITY || value === null) limit = null;
-					else if (Number.isSafeInteger(value) && value >= 0) limit = value;
-					else log.error('rate limit is not a non-negative integer; not limiting', { route: r.id });
-				} catch (error) {
-					log.error('rate limit function failed; not limiting', { route: r.id, error });
-				}
-			}
-			if (r.rateLimit && limit !== null) {
-				const forwarded = trustForwardedFor ? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() : undefined;
-				const subject = r.rateLimit.key
-					? await r.rateLimit.key(ctx)
-					: ctx.website
-						? `w:${ctx.website.websiteId}`
-						: ctx.session
-							? `s:${ctx.session.subject}`
-							: `ip:${forwarded ?? 'unknown'}`;
-				try {
-					const { count, resetAt } = await stores.rateLimits.hit(
-						`${r.rateLimit.bucket ?? r.id}|${subject}`,
-						/** @type {number} */ (r.rateLimit.windowMs),
-						now(),
-					);
-					const reset = Math.max(0, Math.ceil((resetAt - now()) / 1000));
-					extra['ratelimit-limit'] = String(limit);
-					extra['ratelimit-remaining'] = String(Math.max(0, limit - count));
-					extra['ratelimit-reset'] = String(reset);
-					if (count > limit) {
-						extra['retry-after'] = String(Math.max(1, reset));
+					const windowMs = limit.windowSeconds * 1000;
+					const { count, resetAt } = await store.hit(`${r.id}|${per}|${subject}`, windowMs, now());
+					if (count > limit.limit) {
+						extra['retry-after'] = String(Math.max(1, Math.ceil((resetAt - now()) / 1000)));
 						return fail(problem('rate_limited', 'Too many requests.'));
 					}
 				} catch (error) {
-					log.warn('rate limit store failed; allowing request', { error });
+					log.warn('rate limit store failed; allowing the request', { error });
 				}
 			}
 
-			// duplicate refusal: a route declaring `idempotent: true` refuses an Idempotency-Key it saw for the same
-			// website (or session) within 24 h; only the hashed key and its expiry are stored, never a body
 			/** @type {string | null} */
 			let duplicateKey = null;
 			if (r.idempotent === true && ctx.idempotencyKey) {
 				const principal = ctx.websiteId ?? ctx.session?.subject ?? 'anonymous';
 				duplicateKey = `idem:${sha256Hex(`${principal}\n${r.id}\n${ctx.idempotencyKey}`)}`;
-				if (await stores.replay.seen(duplicateKey, now() + DUPLICATE_WINDOW_MS)) {
+				if (await store.seen(duplicateKey, now() + DUPLICATE_WINDOW_MS))
 					return fail(problem('duplicate_request', 'A request with this Idempotency-Key was already processed.'));
-				}
 			}
 
-			// handler
 			/** @type {{ status: number, headers: Record<string, string>, body: string | null }} */
 			let rendered;
 			try {
@@ -446,23 +477,20 @@ export const createRequestHandler = (product, routes, options = {}) => {
 						headers: Object.fromEntries(out.headers.entries()),
 						body: text.length > 0 ? text : null,
 					};
-				} else if (isResult(out)) {
-					rendered = render(out, requestId, pathname);
-				} else {
-					rendered = render(out === undefined ? noContent() : ok(out), requestId, pathname);
-				}
+				} else rendered = render(isResult(out) ? out : out === undefined ? noContent() : ok(out), requestId, pathname);
 			} catch (error) {
 				if (isProblem(error)) rendered = render(error, requestId, pathname);
+				else if (isKitError(error, 'database_not_connected'))
+					rendered = render(problem('database_not_connected'), requestId, pathname);
 				else {
 					log.error('route handler failed', { error, route: r.id });
 					rendered = render(problem('internal_error'), requestId, pathname);
 				}
 			}
-			// a failed attempt (5xx) may be retried with the same key
-			if (duplicateKey && rendered.status >= 500) await stores.replay.forget(duplicateKey).catch(() => {});
+			if (duplicateKey && rendered.status >= 500) await store.forget(duplicateKey).catch(() => {});
 			return finish(rendered);
 		} catch (error) {
-			log.error('request failed', { error });
+			log.error('request failed', { error, ...(route ? { route: route.id } : {}) });
 			return fail(problem('internal_error'));
 		}
 	};

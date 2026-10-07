@@ -1,264 +1,96 @@
 /**
- * In-memory stores — development and tests only (serverless instances do not share memory, so replay protection,
- * duplicate refusal and rate limits are per-instance here). Production uses `createMongoStores`.
+ * In-memory product database store: development and tests only (serverless instances share no memory). Documents with
+ * a numeric `expiresAt` (epoch ms) disappear once it has passed.
  * @module
  */
 
-/** @typedef {import('./types.js').Stores} Stores */
-/** @typedef {import('./types.js').QueuedUsage} QueuedUsage */
+/** @typedef {import('./types.js').Store} Store */
+/** @typedef {import('./types.js').Doc} Doc */
+/** @typedef {import('./types.js').Filter} Filter */
 
 /**
- * @param {() => number} now
- * @returns {import('./types.js').ReplayStore}
+ * @param {Doc} doc
+ * @param {Filter} filter
+ * @returns {boolean}
  */
-const memoryReplay = (now) => {
+export const matches = (doc, filter) =>
+	Object.entries(filter).every(([field, value]) => {
+		const actual = doc[field];
+		return Array.isArray(actual) ? actual.includes(value) : (actual ?? null) === value;
+	});
+
+/**
+ * @param {{ now?: () => number }} [options]
+ * @returns {Store}
+ */
+export const createMemoryStore = ({ now = Date.now } = {}) => {
+	/** @type {Map<string, Map<string, Doc>>} */
+	const collections = new Map();
 	/** @type {Map<string, number>} */
-	const entries = new Map();
+	const replay = new Map();
+	/** @type {Map<string, { count: number, resetAt: number }>} */
+	const windows = new Map();
+
+	/** @param {string} name */
+	const col = (name) => {
+		let found = collections.get(name);
+		if (!found) {
+			found = new Map();
+			collections.set(name, found);
+		}
+		return found;
+	};
+	/** @param {Doc | undefined} doc */
+	const live = (doc) => doc !== undefined && !(typeof doc.expiresAt === 'number' && doc.expiresAt <= now());
+
 	return Object.freeze({
+		get: async (collection, id) => {
+			const doc = col(collection).get(id);
+			return live(doc) ? structuredClone(/** @type {Doc} */ (doc)) : null;
+		},
+		put: async (collection, id, doc) => {
+			col(collection).set(id, structuredClone(doc));
+		},
+		insert: async (collection, id, doc) => {
+			if (live(col(collection).get(id))) return false;
+			col(collection).set(id, structuredClone(doc));
+			return true;
+		},
+		delete: async (collection, id) => {
+			col(collection).delete(id);
+		},
+		list: async (collection, filter, { limit = 1000 } = {}) =>
+			[...col(collection).values()]
+				.filter((doc) => live(doc) && matches(doc, filter))
+				.sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+				.slice(0, limit)
+				.map((doc) => structuredClone(doc)),
+		deleteWhere: async (collection, filter) => {
+			let count = 0;
+			for (const [id, doc] of col(collection)) {
+				if (!matches(doc, filter)) continue;
+				col(collection).delete(id);
+				count += 1;
+			}
+			return count;
+		},
 		seen: async (id, expiresAtMs) => {
-			const existing = entries.get(id);
+			const existing = replay.get(id);
 			if (existing !== undefined && existing > now()) return true;
-			entries.set(id, expiresAtMs);
+			replay.set(id, expiresAtMs);
 			return false;
 		},
 		forget: async (id) => {
-			entries.delete(id);
+			replay.delete(id);
+		},
+		hit: async (key, windowMs, t) => {
+			const start = Math.floor(t / windowMs) * windowMs;
+			const id = `${key}|${start}`;
+			const entry = windows.get(id) ?? { count: 0, resetAt: start + windowMs };
+			entry.count += 1;
+			windows.set(id, entry);
+			if (windows.size > 10_000) for (const [k, v] of windows) if (v.resetAt <= t) windows.delete(k);
+			return { ...entry };
 		},
 	});
-};
-
-/**
- * Create the full set of in-memory stores.
- * @param {{ now?: () => number }} [options]
- * @returns {Stores & { usageRecords: () => QueuedUsage[] }}
- */
-export const createMemoryStores = ({ now = Date.now } = {}) => {
-	/** @type {Map<string, Record<string, any>>} */
-	const settings = new Map();
-	/** @type {Map<string, import('./types.js').EntitlementCacheEntry>} */
-	const entitlements = new Map();
-	/** @type {Map<string, QueuedUsage & { nextAttemptAt: number, leaseUntil: number, leaseOwner: string | null, expireAt: number | null }>} */
-	const usage = new Map();
-	/** @type {Set<string>} */
-	const revoked = new Set();
-	/** @type {{ cursor: string | null, syncedAt: number | null }} */
-	let revocationMeta = { cursor: null, syncedAt: null };
-	/** @type {Map<string, { data: Record<string, unknown>, expiresAt: number }>} */
-	const sessions = new Map();
-	/** @type {Map<string, { count: number, resetAt: number }>} */
-	const windows = new Map();
-	/** @type {{ jwks: unknown, fetchedAt: number } | null} */
-	let portalKeys = null;
-	/** @type {Map<string, { id: string, envelope: Record<string, unknown> | null, attempts: number, status: 'pending' | 'sent', lastError?: string, nextAttemptAt: number, leaseUntil: number, expireAt: number | null }>} */
-	const outbox = new Map();
-
-	/** @param {QueuedUsage & { expireAt: number | null }} record */
-	const live = (record) => record.expireAt === null || record.expireAt > now();
-
-	/** @param {QueuedUsage & Record<string, unknown>} record @returns {QueuedUsage} */
-	const publicUsage = ({
-		idempotencyKey,
-		websiteId,
-		subscriptionId,
-		unit,
-		quantity,
-		occurredAt,
-		attempts,
-		status,
-		lastError,
-	}) => ({
-		idempotencyKey,
-		websiteId,
-		subscriptionId,
-		unit,
-		quantity,
-		occurredAt,
-		attempts,
-		status,
-		...(lastError === undefined ? {} : { lastError }),
-	});
-
-	return {
-		replay: memoryReplay(now),
-		nonce: memoryReplay(now),
-		settings: Object.freeze({
-			get: async (id) => (settings.has(id) ? structuredClone(settings.get(id) ?? null) : null),
-			insert: async (id, value) => {
-				if (settings.has(id)) return false;
-				settings.set(id, structuredClone(value));
-				return true;
-			},
-			put: async (id, value) => {
-				settings.set(id, structuredClone(value));
-			},
-			delete: async (id) => {
-				settings.delete(id);
-			},
-		}),
-		entitlements: Object.freeze({
-			get: async (websiteId) => entitlements.get(websiteId) ?? null,
-			put: async (websiteId, entry) => {
-				const existing = entitlements.get(websiteId);
-				if (existing && existing.version > entry.version) return false;
-				entitlements.set(websiteId, { ...entry });
-				return true;
-			},
-			delete: async (websiteId) => {
-				entitlements.delete(websiteId);
-			},
-		}),
-		usageQueue: Object.freeze({
-			enqueue: async (record) => {
-				const existing = usage.get(record.idempotencyKey);
-				if (existing && live(existing)) return { inserted: false };
-				usage.set(record.idempotencyKey, {
-					...record,
-					attempts: 0,
-					status: 'pending',
-					nextAttemptAt: 0,
-					leaseUntil: 0,
-					leaseOwner: null,
-					expireAt: null,
-				});
-				return { inserted: true };
-			},
-			lease: async ({ now: t, limit, leaseMs, owner, websiteId }) => {
-				/** @type {QueuedUsage[]} */
-				const out = [];
-				for (const record of usage.values()) {
-					if (out.length >= limit) break;
-					if (websiteId && record.websiteId !== websiteId) continue;
-					if (record.status !== 'pending' || record.nextAttemptAt > t || record.leaseUntil > t) continue;
-					record.leaseUntil = t + leaseMs;
-					record.leaseOwner = owner;
-					out.push(publicUsage(record));
-				}
-				return out;
-			},
-			ack: async (keys, { now: t, retainMs }) => {
-				for (const key of keys) {
-					const record = usage.get(key);
-					if (!record) continue;
-					record.status = 'sent';
-					record.leaseUntil = 0;
-					record.expireAt = t + retainMs;
-				}
-			},
-			retry: async (keys, { nextAttemptAt, error }) => {
-				for (const key of keys) {
-					const record = usage.get(key);
-					if (!record || record.status !== 'pending') continue;
-					record.attempts += 1;
-					record.nextAttemptAt = nextAttemptAt;
-					record.leaseUntil = 0;
-					record.lastError = error;
-				}
-			},
-			deadLetter: async (keys, { error }) => {
-				for (const key of keys) {
-					const record = usage.get(key);
-					if (!record) continue;
-					record.status = 'dead';
-					record.leaseUntil = 0;
-					record.lastError = error;
-				}
-			},
-			stats: async () => {
-				const out = { pending: 0, sent: 0, dead: 0 };
-				for (const record of usage.values()) if (live(record)) out[record.status] += 1;
-				return out;
-			},
-		}),
-		eventOutbox: Object.freeze({
-			enqueue: async ({ id, envelope }) => {
-				const existing = outbox.get(id);
-				if (existing && (existing.expireAt === null || existing.expireAt > now())) return { inserted: false };
-				outbox.set(id, { id, envelope, attempts: 0, status: 'pending', nextAttemptAt: 0, leaseUntil: 0, expireAt: null });
-				return { inserted: true };
-			},
-			lease: async ({ now: t, limit, leaseMs, websiteId }) => {
-				/** @type {import('./types.js').OutboxEvent[]} */
-				const out = [];
-				for (const record of outbox.values()) {
-					if (out.length >= limit) break;
-					if (websiteId && record.envelope?.websiteId !== websiteId) continue;
-					if (record.status !== 'pending' || record.nextAttemptAt > t || record.leaseUntil > t || !record.envelope) continue;
-					record.leaseUntil = t + leaseMs;
-					out.push({
-						id: record.id,
-						envelope: record.envelope,
-						attempts: record.attempts,
-						status: record.status,
-						...(record.lastError === undefined ? {} : { lastError: record.lastError }),
-					});
-				}
-				return out;
-			},
-			ack: async (ids, { now: t, retainMs }) => {
-				for (const id of ids) {
-					const record = outbox.get(id);
-					if (!record) continue;
-					Object.assign(record, { status: 'sent', envelope: null, leaseUntil: 0, expireAt: t + retainMs });
-				}
-			},
-			retry: async (ids, { nextAttemptAt, error }) => {
-				for (const id of ids) {
-					const record = outbox.get(id);
-					if (!record || record.status !== 'pending') continue;
-					Object.assign(record, { attempts: record.attempts + 1, nextAttemptAt, leaseUntil: 0, lastError: error });
-				}
-			},
-			stats: async () => {
-				const out = { pending: 0, sent: 0 };
-				for (const record of outbox.values())
-					if (record.expireAt === null || record.expireAt > now()) out[record.status] += 1;
-				return out;
-			},
-		}),
-		revocations: Object.freeze({
-			get: async () => ({ keyIds: [...revoked], ...revocationMeta }),
-			add: async (keyIds, meta = {}) => {
-				for (const id of keyIds) revoked.add(id);
-				revocationMeta = {
-					cursor: meta.cursor === undefined ? revocationMeta.cursor : meta.cursor,
-					syncedAt: meta.syncedAt === undefined ? revocationMeta.syncedAt : meta.syncedAt,
-				};
-			},
-		}),
-		sessions: Object.freeze({
-			create: async (id, data, expiresAt) => {
-				sessions.set(id, { data, expiresAt });
-			},
-			get: async (id) => {
-				const entry = sessions.get(id);
-				if (!entry) return null;
-				if (entry.expiresAt <= now()) {
-					sessions.delete(id);
-					return null;
-				}
-				return entry.data;
-			},
-			delete: async (id) => {
-				sessions.delete(id);
-			},
-		}),
-		rateLimits: Object.freeze({
-			hit: async (key, windowMs, t) => {
-				const start = Math.floor(t / windowMs) * windowMs;
-				const id = `${key}|${start}`;
-				const entry = windows.get(id) ?? { count: 0, resetAt: start + windowMs };
-				entry.count += 1;
-				windows.set(id, entry);
-				if (windows.size > 10_000) for (const [k, v] of windows) if (v.resetAt <= t) windows.delete(k);
-				return { ...entry };
-			},
-		}),
-		portalKeys: Object.freeze({
-			get: async () => portalKeys,
-			put: async (jwks, fetchedAt) => {
-				portalKeys = { jwks, fetchedAt };
-			},
-		}),
-		usageRecords: () => [...usage.values()].map((record) => publicUsage(record)),
-	};
 };

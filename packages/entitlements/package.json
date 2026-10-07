@@ -1,7 +1,7 @@
 {
 	"name": "@ss/entitlements",
 	"version": "0.1.0",
-	"description": "Pure commerce core: entitlement resolution (precedence, locks, runtime state), quotas, hourly settlement math.",
+	"description": "Hourly charge maths for the Portal: millicredit units, UTC hour helpers and the ledger hash.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {
@@ -37,15 +37,11 @@
 		"build:types": "tsc -p tsconfig.types.json",
 		"prepack": "pnpm build:types"
 	},
-	"dependencies": {
-		"@ss/contracts": "workspace:^"
-	},
 	"devDependencies": {
 		"@ss/config": "workspace:^",
 		"@types/node": "^22.20.4",
 		"@vitest/coverage-v8": "^3.2.7",
 		"eslint": "^9.39.5",
-		"fast-check": "^4.10.2",
 		"prettier": "^3.9.9",
 		"typescript": "~5.9.3",
 		"vitest": "^3.2.7"

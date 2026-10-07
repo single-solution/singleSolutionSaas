@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	ALL_SCHEMAS,
-	SCHEMA_IDS,
-	createValidator,
-	eventDataSchemaId,
-	getDefaultValidator,
-	problemsFromAjv,
-} from '../src/index.js';
+import { ALL_SCHEMAS, SCHEMA_IDS, createValidator, getDefaultValidator, problemsFromAjv } from '../src/index.js';
 import { expectProblem } from './helpers.js';
 
 describe('createValidator', () => {
@@ -17,7 +10,7 @@ describe('createValidator', () => {
 			expect(v.has(id)).toBe(true);
 			expect(() => v.validate(id, {})).not.toThrow();
 		}
-		expect(v.has(eventDataSchemaId('order.placed@1'))).toBe(true);
+		expect(v.has('urn:nope')).toBe(false);
 	});
 
 	it('all built-in schemas are deeply frozen', () => {
@@ -43,12 +36,13 @@ describe('createValidator', () => {
 					$id: 'urn:product:coupons:v1:coupon',
 					type: 'object',
 					required: ['value'],
-					properties: { value: { $ref: `${SCHEMA_IDS.common}#/$defs/money` } },
+					properties: { value: { $ref: `${SCHEMA_IDS.common}#/$defs/millicredits` } },
 				},
 			],
 		});
-		expect(v.validate('urn:product:coupons:v1:coupon', { value: { amount: 1, currency: 'INR' } }).ok).toBe(true);
-		expectProblem(v.validate('urn:product:coupons:v1:coupon', { value: { amount: 1 } }), '/value/currency', 'required');
+		expect(v.validate('urn:product:coupons:v1:coupon', { value: 1500 }).ok).toBe(true);
+		expectProblem(v.validate('urn:product:coupons:v1:coupon', { value: -1 }), '/value', 'minimum');
+		expectProblem(v.validate('urn:product:coupons:v1:coupon', {}), '/value', 'required');
 		expect(() => createValidator({ schemas: [{ type: 'object' }] })).toThrow(TypeError);
 	});
 
@@ -67,6 +61,7 @@ describe('problemsFromAjv', () => {
 			{ keyword: 'propertyNames', instancePath: '/m', schemaPath: '', params: { propertyName: 'Bad' }, message: 'x' },
 			{ keyword: 'enum', instancePath: '/e', schemaPath: '', params: { allowedValues: ['a', 'b'] }, message: 'x' },
 			{ keyword: 'const', instancePath: '/k', schemaPath: '', params: { allowedValue: '1' }, message: 'x' },
+			{ keyword: 'false schema', instancePath: '/f', schemaPath: '', params: {}, message: 'boolean schema is false' },
 			{ keyword: 'if', instancePath: '', schemaPath: '', params: {}, message: 'must match "then" schema' },
 			{ keyword: 'type', instancePath: '/t', schemaPath: '', params: {}, message: 'must be string' },
 			{ keyword: 'type', instancePath: '/t', schemaPath: '', params: {}, message: 'must be string' },
@@ -77,6 +72,7 @@ describe('problemsFromAjv', () => {
 			{ path: '/m/Bad', message: 'has an invalid property name', keyword: 'propertyNames' },
 			{ path: '/e', message: 'must be one of: "a", "b"', keyword: 'enum' },
 			{ path: '/k', message: 'must equal "1"', keyword: 'const' },
+			{ path: '/f', message: 'is not allowed', keyword: 'false schema' },
 			{ path: '/t', message: 'must be string', keyword: 'type' },
 		]);
 		expect(problemsFromAjv(null)).toEqual([]);

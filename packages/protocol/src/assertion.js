@@ -1,15 +1,14 @@
 /**
  * Client assertions: product → Portal authentication (RFC 7523 style, EdDSA, `typ: ss-assertion+jwt`).
  *
- * `iss = sub = appId`, `aud` = the Portal endpoint/issuer, fresh `jti`, `iat`, `exp` with `exp - iat ≤ 300 s`. The
- * Portal picks the app's registered keys from the claimed `iss`, verifies, then records `iss|jti` in a shared replay
+ * `iss = sub = productId`, `aud` = the Portal endpoint/issuer, fresh `jti`, `iat`, `exp` with `exp - iat ≤ 300 s`. The
+ * Portal picks the product's pinned keys from the claimed `iss`, verifies, then records `iss|jti` in a shared replay
  * store until expiry so a captured assertion cannot be reused. See `replay.js` for the store interface.
  */
 import { createProtocolError } from './errors.js';
 import { defaultRandomBytes, randomId } from './encoding.js';
 import { checkTimeClaims, nowSeconds, peekPayload, requireString, signCompact, verifyCompact } from './jws.js';
-
-export { createMemoryReplayStore } from './replay.js';
+import { isProductId } from './tokens.js';
 
 /** @typedef {import('./keys.js').Signer} Signer */
 /** @typedef {import('./keys.js').KeyResolver} KeyResolver */
@@ -23,27 +22,34 @@ export const MAX_ASSERTION_LIFETIME_SECONDS = 300;
 
 /**
  * Sign a client assertion.
- * @param {{ signer: Signer, appId: string, audience: string, ttlSeconds?: number, jti?: string, now?: () => number,
+ * @param {{ signer: Signer, productId: string, audience: string, ttlSeconds?: number, jti?: string, now?: () => number,
  *   randomBytes?: (length: number) => Uint8Array }} params
  * @returns {Promise<string>}
  */
 export const signAssertion = async ({
 	signer,
-	appId,
+	productId,
 	audience,
 	ttlSeconds = 60,
 	jti,
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
 }) => {
-	requireString(appId, 'appId');
+	if (!isProductId(productId)) throw createProtocolError('invalid_argument', 'productId is invalid');
 	requireString(audience, 'audience');
 	if (!Number.isInteger(ttlSeconds) || ttlSeconds <= 0 || ttlSeconds > MAX_ASSERTION_LIFETIME_SECONDS) {
 		throw createProtocolError('invalid_argument', `ttlSeconds must be 1..${MAX_ASSERTION_LIFETIME_SECONDS}`);
 	}
 	const iat = nowSeconds(now);
 	/** @type {AssertionClaims} */
-	const claims = { iss: appId, sub: appId, aud: audience, jti: jti ?? randomId(randomBytes), iat, exp: iat + ttlSeconds };
+	const claims = {
+		iss: productId,
+		sub: productId,
+		aud: audience,
+		jti: jti ?? randomId(randomBytes),
+		iat,
+		exp: iat + ttlSeconds,
+	};
 	return signCompact({ signer, typ: ASSERTION_TYP, payload: claims });
 };
 
@@ -51,19 +57,26 @@ export const signAssertion = async ({
  * Verify a client assertion and record its jti.
  * @param {{
  *   token: unknown,
- *   keyResolverForApp: (appId: string) => KeyResolver | null | undefined | Promise<KeyResolver | null | undefined>,
+ *   keyResolverForProduct: (productId: string) => KeyResolver | null | undefined | Promise<KeyResolver | null | undefined>,
  *   audience: string, replayStore: ReplayStore, now?: () => number, skewSeconds?: number,
- * }} params `keyResolverForApp` returns the resolver over the app's registered keys, or null for unknown apps.
- * @returns {Promise<{ appId: string, claims: AssertionClaims }>}
+ * }} params `keyResolverForProduct` returns the resolver over the product's pinned key, or null for unknown products.
+ * @returns {Promise<{ productId: string, claims: AssertionClaims }>}
  */
-export const verifyAssertion = async ({ token, keyResolverForApp, audience, replayStore, now = Date.now, skewSeconds = 30 }) => {
+export const verifyAssertion = async ({
+	token,
+	keyResolverForProduct,
+	audience,
+	replayStore,
+	now = Date.now,
+	skewSeconds = 30,
+}) => {
 	requireString(audience, 'audience');
 	if (!replayStore || typeof replayStore.seen !== 'function')
 		throw createProtocolError('invalid_argument', 'replayStore is required');
 	const claimed = peekPayload(token).iss;
 	if (typeof claimed !== 'string' || claimed.length === 0) throw createProtocolError('issuer', 'iss is missing');
-	const keyResolver = await keyResolverForApp(claimed);
-	if (!keyResolver) throw createProtocolError('issuer', 'unknown app');
+	const keyResolver = await keyResolverForProduct(claimed);
+	if (!keyResolver) throw createProtocolError('issuer', 'unknown product');
 	const { payload } = await verifyCompact({ token, keyResolver, typ: ASSERTION_TYP });
 	if (payload.iss !== claimed) throw createProtocolError('issuer', 'issuer mismatch');
 	if (payload.sub !== claimed) throw createProtocolError('subject', 'sub must equal iss');
@@ -80,5 +93,5 @@ export const verifyAssertion = async ({ token, keyResolverForApp, audience, repl
 	if (await replayStore.seen(`assertion|${claimed}|${payload.jti}`, (exp + skewSeconds) * 1000)) {
 		throw createProtocolError('replay', 'assertion was already used');
 	}
-	return { appId: claimed, claims: /** @type {AssertionClaims} */ (/** @type {unknown} */ (payload)) };
+	return { productId: claimed, claims: /** @type {AssertionClaims} */ (/** @type {unknown} */ (payload)) };
 };

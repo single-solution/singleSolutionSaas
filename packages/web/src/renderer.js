@@ -1,5 +1,5 @@
 /**
- * Helpers for default renderers (Mode A, PLAN Part E §4 and §8): a safe DOM builder, design tokens as CSS variables,
+ * DOM helpers for a widget's ready-made UI: a safe DOM builder, design tokens as CSS variables,
  * slot resolution, layout-shift reservation, reduced motion, focus management and accessibility utilities.
  * Nothing here ever parses HTML: text becomes text nodes and only allowlisted attributes are written.
  * @module
@@ -269,7 +269,7 @@ export const slot = (name, slots, fallback, options = {}) => {
 };
 
 /**
- * Reserve layout space before an element's code loads (no CLS on mount). Returns `release()`.
+ * Reserve layout space before a widget's code loads (no CLS on mount). Returns `release()`.
  * @param {HTMLElement} el
  * @param {{ minHeight?: number | string, minWidth?: number | string, aspectRatio?: number | string }} [space]
  * @returns {() => void}

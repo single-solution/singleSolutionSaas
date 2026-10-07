@@ -1,13 +1,12 @@
 /**
- * Formatting for the consoles. Money is always shown in **credits** derived from integer millicredits (PLAN F.1:
- * 1 credit = 1000 millicredits), with at most 3 decimals and no rounding beyond that (millicredits are exact).
+ * Formatting for the consoles. Money is always shown in **credits** derived from integer millicredits (1 credit =
+ * 1000 millicredits), with at most 3 decimals and no rounding beyond that (millicredits are exact).
  * Dates render in UTC so server and browser output agree (no hydration drift).
  * @module
  */
 
 const CREDITS = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 const INTEGER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
-const DECIMAL = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 const DATE_TIME = new Intl.DateTimeFormat('en-GB', {
 	year: 'numeric',
 	month: 'short',
@@ -52,15 +51,6 @@ export const formatCreditsPerHour = (millicredits) =>
 	creditsNumber(millicredits) === '—' ? '—' : `${creditsNumber(millicredits)} credits/h`;
 
 /**
- * Per-unit price of a reduced fraction `{ millicredits, per }` → `0.01 credits / 100 units`.
- * @param {number} millicredits
- * @param {number} [per]
- * @param {string} [unit]
- */
-export const formatUnitPrice = (millicredits, per = 1, unit = 'unit') =>
-	`${creditsNumber(millicredits)} credits / ${per === 1 ? unit : `${INTEGER.format(per)} ${unit}s`}`;
-
-/**
  * Parse a credits amount typed by a person (`12`, `12.5`, `0.125`) into integer millicredits.
  * @param {string} input
  * @returns {{ ok: true, value: number } | { ok: false, message: string }}
@@ -70,18 +60,6 @@ export const parseCredits = (input) => {
 	if (!/^\d{1,12}(\.\d{1,3})?$/.test(text)) return { ok: false, message: 'Enter an amount in credits with up to 3 decimals.' };
 	const [whole = '0', fraction = ''] = text.split('.');
 	return { ok: true, value: Number(whole) * 1000 + Number(fraction.padEnd(3, '0')) };
-};
-
-/**
- * Hours of credits left at the current burn rate: `null` (no spend) → `No spend`.
- * @param {number | null | undefined} hours
- */
-export const formatHours = (hours) => {
-	if (hours === null || hours === undefined) return 'No spend';
-	if (!Number.isFinite(hours)) return '—';
-	if (hours <= 0) return '0 h';
-	if (hours < 48) return `${DECIMAL.format(hours)} h`;
-	return `${DECIMAL.format(hours / 24)} days`;
 };
 
 /** @param {unknown} value */
@@ -116,7 +94,7 @@ export const formatDate = (value) => {
 export const formatNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? INTEGER.format(value) : '—');
 
 /**
- * Human label of a snake/kebab code (`spend_cap` → `Spend cap`).
+ * Human label of a snake/kebab code (`low_balance` → `Low balance`).
  * @param {string | null | undefined} code
  */
 export const humanize = (code) => {

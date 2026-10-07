@@ -1,377 +1,489 @@
 /**
- * A fake Portal for product tests, built only from `@ss/protocol` primitives: it signs entitlement documents,
- * website keys, launches and events with its own Ed25519 key, publishes a JWKS, verifies the product's client
- * assertions, deduplicates usage by idempotency key, serves revocations and resource descriptors, records
- * identity-issuer requests (approve or reject them as the merchant), and can simulate outages. `fetch` routes requests
- * for the Portal origin and delegates anything else to `fallbackFetch`.
+ * `@ss/app-kit/testing` — test doubles for products built on the kit:
  *
- * Test/development only — never deploy it.
+ * - `createFakePortal()`: the Portal side of the Product ↔ Portal contract (PLAN 0.4.12): connect, price and feature
+ *   reports, status (settable), websites, revocations, directory and launch consume, plus helpers that sign tokens,
+ *   launches and notices;
+ * - `createAccountsDouble()`: Accounts as products see it before step 7: it receives activity copies and calls a
+ *   product's data-rights routes with a pasted server token;
+ * - `createNetwork(handlers)`: routes `fetch` and outbound calls (`outboundSend`) to in-process handlers by origin;
+ * - `createMemoryStore()`.
  * @module
  */
+import { validateActivityCopy, validateFeatureReport, validatePriceReport } from '@ss/contracts';
+import { netError } from '@ss/net';
 import {
+	createConnectRequest,
 	createJwks,
 	createKeyResolver,
-	createConnectRequest,
 	createMemoryReplayStore,
 	createSigner,
 	generateSigningKey,
 	issueLaunch,
-	issueWebsiteKey,
-	signEntitlementDocument,
-	signEvent,
+	issueToken,
+	signNotice,
 	verifyAssertion,
 	verifyConnectResponse,
 } from '@ss/protocol';
-import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
-import { isObject } from './util.js';
+import { createMemoryStore } from './stores/memory.js';
 
-/** @typedef {import('@ss/protocol').PublicJwk} PublicJwk */
+export { createMemoryStore };
+
+/** @typedef {(request: Request) => Promise<Response>} Handler */
+/**
+ * @typedef {object} FakeWebsite
+ * @property {string} websiteId
+ * @property {string} domain
+ * @property {string} merchantId
+ * @property {string} merchantName
+ * @property {'active' | 'grace' | 'stopped' | 'suspended' | 'removed'} status
+ * @property {string | null} graceEndsAt
+ * @property {number} todayMillicredits
+ * @property {Record<string, { version: number, on: string[] }>} features by product id
+ */
 
 /**
  * @param {number} status
- * @param {unknown} body
+ * @param {unknown} [body]
  * @returns {Response}
  */
-const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+const json = (status, body) =>
+	new Response(body === undefined ? null : JSON.stringify(body), {
+		status,
+		headers: body === undefined ? {} : { 'content-type': 'application/json' },
+	});
 
 /**
- * Build an entitlement payload with sensible defaults.
- * @param {Partial<import('@ss/contracts').EntitlementDocument> & { websiteId: string, productSlug: string, now: number, validForMs?: number }} input
- * @returns {import('@ss/contracts').EntitlementDocument}
+ * @param {string} base
+ * @param {string} code
+ * @param {number} status
  */
-export const entitlementPayload = ({ now, validForMs = 5 * 60_000, ...input }) => ({
-	subscriptionId: 'sub_0123456789abcdefghjkmnpq',
-	merchantId: 'mer_0123456789abcdefghjkmnpq',
-	domain: 'shop.example.com',
-	allowSubdomains: false,
-	env: 'live',
-	priceBookVersion: '2026-10-01',
-	version: 1,
-	issuedAt: new Date(now).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-	validFrom: new Date(now).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-	validUntil: new Date(now + validForMs).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-	elements: {},
-	features: {},
-	config: {},
-	runtime: { state: 'active' },
-	resources: [],
-	dataScope: { prefix: `ss_${input.productSlug.replace(/-/g, '_')}_` },
-	...input,
-});
+const fail = (base, code, status) =>
+	new Response(JSON.stringify({ type: `${base}/problems/${code}`, title: code, status }), {
+		status,
+		headers: { 'content-type': 'application/problem+json' },
+	});
 
 /**
- * @param {{ url?: string, now?: () => number, appId?: string, kid?: string, fallbackFetch?: typeof globalThis.fetch }} [options]
+ * Route `fetch` and outbound calls to in-process handlers by origin. Unknown origins fail like an unreachable host.
+ * @param {Record<string, Handler>} handlers origin → handler
  */
-export const createFakePortal = async ({
-	url = 'https://portal.test',
-	now = Date.now,
-	appId = 'app_test',
-	kid = 'portal-1',
-	fallbackFetch,
-} = {}) => {
-	const base = url.replace(/\/+$/, '');
-	const { privateJwk, publicJwk } = await generateSigningKey({ kid });
+export const createNetwork = (handlers) => {
+	/** @type {typeof globalThis.fetch} */
+	const fetch = async (input, init) => {
+		const request = new Request(input, init);
+		const handler = handlers[new URL(request.url).origin];
+		if (!handler) throw new TypeError('fetch failed');
+		return handler(request);
+	};
+	/** @type {import('./connections.js').OutboundSend} */
+	const send = async (url, init = {}) => {
+		const handler = handlers[new URL(url).origin];
+		if (!handler) throw netError('network', 'unreachable', 'the host cannot be reached');
+		const response = await handler(
+			new Request(url, {
+				method: init.method ?? 'GET',
+				...(init.headers ? { headers: init.headers } : {}),
+				...(init.body === undefined ? {} : { body: /** @type {BodyInit} */ (init.body) }),
+			}),
+		);
+		const body = Buffer.from(await response.arrayBuffer());
+		if (init.maxBytes !== undefined && body.length > init.maxBytes)
+			throw netError('too_large', 'body_length', 'the response is too large');
+		return { status: response.status, headers: Object.fromEntries(response.headers.entries()), body, url };
+	};
+	return { fetch, send };
+};
+
+/**
+ * A fake Portal implementing the Portal side of PLAN 0.4.12.
+ * @param {{ url?: string, now?: () => number, pageSize?: number }} [options]
+ */
+export const createFakePortal = async ({ url = 'https://portal.test', now = Date.now, pageSize = 100 } = {}) => {
+	const { privateJwk, publicJwk } = await generateSigningKey({ kid: 'portal-1' });
 	const signer = createSigner(privateJwk);
-	/** @type {PublicJwk[]} */
-	let jwksKeys = [publicJwk];
-	/** @type {PublicJwk | null} */
-	let productKey = null;
-	const replay = createMemoryReplayStore({ now });
-	/** @type {Map<string, string>} */
-	const documents = new Map();
+	const jwks = createJwks([publicJwk]);
+	const replayStore = createMemoryReplayStore({ now });
+	/** @type {Map<string, { productId: string, baseUrl: string, publicJwk: any, manifest: any, prices: { version: number, features: any[] }, handler: Handler | null }>} */
+	const products = new Map();
+	/** @type {Map<string, FakeWebsite>} */
+	const websites = new Map();
+	/** @type {Map<string, { name: string, role: 'owner' | 'support' | 'finance' }>} */
+	const admins = new Map();
 	/** @type {string[]} */
 	const revoked = [];
-	/** @type {Map<string, { descriptor: Record<string, unknown>, ttlMs: number }>} */
-	const resources = new Map();
-	/** @type {Map<string, Record<string, unknown>>} */
-	const usage = new Map();
 	/** @type {Set<string>} */
-	const consumedLaunches = new Set();
-	/** @type {unknown[]} */
-	const published = [];
-	/** @type {Array<{ method: string, path: string, appId?: string }>} */
+	const consumed = new Set();
+	/** @type {Array<{ productId: string, body: any }>} */
+	const priceReports = [];
+	/** @type {Array<{ productId: string, websiteId: string, body: any }>} */
+	const featureReports = [];
+	/** @type {Array<{ method: string, path: string, productId: string | null }>} */
 	const calls = [];
-	/** @type {Map<string, number[]>} */
-	const failures = new Map();
-	/** @type {Set<string>} */
-	const rejectUsage = new Set();
-	/** @type {Set<string>} event types answered `rejected` */
-	const rejectEvents = new Set();
-	/** @type {Set<string>} `${websiteId}|${idempotencyKey}` of accepted events (the Event Hub dedupes on it) */
-	const seenEvents = new Set();
-	/** @type {Map<string, { status: 'pending' | 'approved' | 'rejected', appId: string, input: Record<string, unknown> }>} */
-	const identityRequests = new Map();
-	/** @type {Map<string, Record<string, unknown>>} approved (active) issuers by websiteId */
-	const identityIssuers = new Map();
-	/** @type {Set<string>} websites whose identity requests are refused (403) */
-	const refuseIdentity = new Set();
-	const state = { down: false };
-	/** @type {{ baseUrl: string, manifest: unknown } | null} the product bound by the last connect */
-	let connected = null;
+	let reachable = true;
+	let websiteSeq = 0;
 
-	/**
-	 * @param {Request} request
-	 * @returns {Promise<string | null>} appId when the assertion verifies
-	 */
-	const authenticate = async (request) => {
-		const match = /^Bearer (.+)$/.exec(request.headers.get('authorization') ?? '');
-		if (!match || !productKey) return null;
-		const key = productKey;
+	/** @param {Request} request */
+	const productOf = async (request) => {
+		const token = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1];
 		try {
-			const { appId: id } = await verifyAssertion({
-				token: match[1],
-				keyResolverForApp: (claimed) => (claimed === appId ? createKeyResolver({ jwks: createJwks([key]), now }) : null),
-				audience: base,
-				replayStore: replay,
+			const { productId } = await verifyAssertion({
+				token,
+				keyResolverForProduct: (id) => {
+					const product = products.get(id);
+					return product ? createKeyResolver({ jwks: { keys: [product.publicJwk] }, now }) : null;
+				},
+				audience: url,
+				replayStore,
 				now,
 			});
-			return id;
+			return productId;
 		} catch {
 			return null;
 		}
 	};
 
-	/**
-	 * @param {RequestInfo | URL} input
-	 * @param {RequestInit} [init]
-	 * @returns {Promise<Response>}
-	 */
-	const fetch = async (input, init) => {
-		const request = new Request(input, init);
-		const target = new URL(request.url);
-		if (target.origin !== new URL(base).origin) {
-			if (!fallbackFetch) throw new TypeError(`fake portal: no route to ${target.origin}`);
-			return fallbackFetch(input, init);
+	/** @param {FakeWebsite} site @param {string} productId */
+	const statusOf = (site, productId) => ({
+		websiteId: site.websiteId,
+		merchantId: site.merchantId,
+		merchantName: site.merchantName,
+		domain: site.domain,
+		status: site.status,
+		graceEndsAt: site.status === 'grace' ? site.graceEndsAt : null,
+		todayMillicredits: site.todayMillicredits,
+		featuresVersion: site.features[productId]?.version ?? 0,
+		validUntil: new Date(now() + 5 * 60_000).toISOString(),
+	});
+
+	/** @type {Handler} */
+	const handle = async (request) => {
+		const { pathname, searchParams } = new URL(request.url);
+		const method = request.method;
+		if (method === 'GET' && pathname === '/.well-known/jwks.json') return json(200, jwks);
+		const productId = await productOf(request);
+		calls.push({ method, path: pathname, productId });
+		if (!productId) return fail(url, 'unauthorized', 401);
+		const product = /** @type {NonNullable<ReturnType<typeof products.get>>} */ (products.get(productId));
+		const body = method === 'GET' ? null : await request.json().catch(() => null);
+		const parts = pathname.split('/').filter(Boolean).map(decodeURIComponent);
+		if (method === 'PUT' && pathname === '/v1/product/prices') {
+			const checked = validatePriceReport(body);
+			if (!checked.ok) return fail(url, 'validation_failed', 422);
+			if (checked.value.version <= product.prices.version) return fail(url, 'conflict', 409);
+			product.prices = structuredClone(checked.value);
+			priceReports.push({ productId, body: checked.value });
+			return json(200, { version: checked.value.version });
 		}
-		if (state.down) throw new TypeError('fetch failed');
-		const path = target.pathname;
-		const queued = failures.get(path);
-		if (queued && queued.length > 0) {
-			const status = /** @type {number} */ (queued.shift());
-			calls.push({ method: request.method, path });
-			return json(status, { type: `${base}/problems/failure`, title: 'Injected failure', status });
+		if (parts[0] === 'v1' && parts[1] === 'product' && parts[2] === 'websites' && parts[3] !== undefined) {
+			const site = websites.get(parts[3]);
+			if (!site) return fail(url, 'website_not_found', 404);
+			if (method === 'GET' && parts[4] === 'status') return json(200, statusOf(site, productId));
+			if (method === 'PUT' && parts[4] === 'features') {
+				const checked = validateFeatureReport(body);
+				if (!checked.ok) return fail(url, 'validation_failed', 422);
+				const report = checked.value;
+				const priced = new Map(product.prices.features.map((f) => [f.key, f]));
+				const admin = admins.get(report.adminId);
+				const depsOff = report.on.some((key) =>
+					(priced.get(key)?.dependsOn ?? []).some((/** @type {string} */ dep) => !report.on.includes(dep)),
+				);
+				if (report.on.some((key) => !priced.has(key)) || depsOff || !admin || admin.role === 'finance')
+					return fail(url, 'validation_failed', 422);
+				if (report.version <= (site.features[productId]?.version ?? 0)) return fail(url, 'conflict', 409);
+				site.features[productId] = { version: report.version, on: [...report.on] };
+				featureReports.push({ productId, websiteId: site.websiteId, body: report });
+				return json(200, { version: report.version });
+			}
 		}
-		if (path === '/.well-known/jwks.json') {
-			calls.push({ method: 'GET', path });
-			return json(200, createJwks(jwksKeys));
+		if (method === 'GET' && pathname === '/v1/product/websites') {
+			const rows = [...websites.values()].filter((site) => site.status !== 'removed');
+			const start = Number(searchParams.get('cursor') ?? '0');
+			const items = rows.slice(start, start + pageSize).map(({ websiteId, domain, merchantId, merchantName, status }) => ({
+				websiteId,
+				domain,
+				merchantId,
+				merchantName,
+				status,
+			}));
+			return json(200, { items, cursor: start + pageSize < rows.length ? String(start + pageSize) : null });
 		}
-		const caller = await authenticate(request);
-		calls.push({ method: request.method, path, ...(caller ? { appId: caller } : {}) });
-		if (!caller) return json(401, { type: `${base}/problems/invalid_credentials`, title: 'Invalid credentials', status: 401 });
-		const body = request.method === 'POST' || request.method === 'PUT' ? await request.json().catch(() => null) : null;
-		const identityPath = /^\/v1\/product\/websites\/([^/]+)\/identity$/.exec(path);
-		if (request.method === 'PUT' && identityPath) {
-			const websiteId = decodeURIComponent(identityPath[1] ?? '');
-			if (refuseIdentity.has(websiteId))
-				return json(403, { type: `${base}/problems/forbidden`, title: 'Forbidden', status: 403 });
-			if (!isObject(body) || typeof body.issuer !== 'string')
-				return json(422, { type: `${base}/problems/validation_failed`, title: 'Validation failed', status: 422 });
-			const input = { claimMap: { subject: 'sub' }, ...body };
-			const active = identityIssuers.get(websiteId);
-			if (active && JSON.stringify(active) === JSON.stringify(input)) return json(200, { status: 'active', issuer: active });
-			identityRequests.set(websiteId, { status: 'pending', appId: caller, input });
-			return json(202, { status: 'pending', request: { websiteId, status: 'pending', ...input } });
+		if (method === 'GET' && pathname === '/v1/product/revocations') {
+			const since = Number(searchParams.get('since') ?? '0');
+			return json(200, { tokenIds: revoked.slice(since), cursor: revoked.length > 0 ? String(revoked.length) : null });
 		}
-		switch (`${request.method} ${path}`) {
-			case 'GET /v1/product/entitlements': {
-				const token = documents.get(target.searchParams.get('websiteId') ?? '');
-				return token
-					? json(200, { document: token })
-					: json(404, { type: `${base}/problems/not_found`, title: 'Not found', status: 404 });
-			}
-			case 'GET /v1/product/revocations': {
-				const since = Number(target.searchParams.get('since') ?? '0');
-				return json(200, { keyIds: revoked.slice(since), cursor: String(revoked.length) });
-			}
-			case 'POST /v1/product/usage': {
-				const records = isObject(body) && Array.isArray(body.records) ? body.records : [];
-				const results = records.map((/** @type {Record<string, any>} */ record) => {
-					const key = String(record.idempotencyKey);
-					if (rejectUsage.has(key)) return { idempotencyKey: key, status: 'rejected', reason: 'invalid_subscription' };
-					if (usage.has(key)) return { idempotencyKey: key, status: 'duplicate' };
-					usage.set(key, record);
-					return { idempotencyKey: key, status: 'accepted' };
-				});
-				return json(200, { results });
-			}
-			case 'POST /v1/product/launch/consume': {
-				const jti = isObject(body) ? String(body.jti) : '';
-				const consumed = !consumedLaunches.has(jti);
-				consumedLaunches.add(jti);
-				return json(200, { consumed });
-			}
-			case 'POST /v1/product/events': {
-				published.push(body);
-				// like the Event Hub: per-event results, dedupe on (websiteId, idempotencyKey)
-				const results = (isObject(body) && Array.isArray(body.events) ? body.events : []).map((/** @type {any} */ e) => {
-					const ids = { id: e?.id, idempotencyKey: e?.idempotencyKey };
-					if (rejectEvents.has(e?.type)) return { ...ids, status: 'rejected', reason: 'invalid_event' };
-					const dedupe = `${e?.websiteId}|${e?.idempotencyKey}`;
-					if (seenEvents.has(dedupe)) return { ...ids, status: 'duplicate' };
-					seenEvents.add(dedupe);
-					return { ...ids, status: 'accepted' };
-				});
-				return json(202, { accepted: results.filter((r) => r.status === 'accepted').length, results });
-			}
-			case 'POST /v1/product/resources/resolve': {
-				const key = isObject(body) ? `${body.websiteId}|${body.kind}` : '';
-				const resource = resources.get(key);
-				if (!resource) return json(424, { type: `${base}/problems/resource_missing`, title: 'Missing', status: 424 });
-				return json(200, {
-					kind: /** @type {any} */ (body).kind,
-					descriptor: resource.descriptor,
-					expiresAt: new Date(now() + resource.ttlMs).toISOString(),
-				});
-			}
-			default:
-				return json(404, { type: `${base}/problems/not_found`, title: 'Not found', status: 404 });
+		if (method === 'GET' && parts[2] === 'directory' && parts[3] !== undefined) {
+			const other = products.get(parts[3]);
+			return other ? json(200, { baseUrl: other.baseUrl }) : fail(url, 'not_found', 404);
 		}
+		if (method === 'POST' && pathname === '/v1/product/launch/consume') {
+			const jti = String(body?.jti ?? '');
+			const first = !consumed.has(jti);
+			consumed.add(jti);
+			return json(200, { consumed: first });
+		}
+		return fail(url, 'not_found', 404);
 	};
 
-	return {
-		url: base,
-		kid,
-		publicJwk,
-		signer,
-		fetch,
-		calls,
-		published,
-		usage,
-		/** @param {boolean} down */
-		setDown: (down) => {
-			state.down = down;
+	/** @param {string} websiteId */
+	const site = (websiteId) => {
+		const found = websites.get(websiteId);
+		if (!found) throw new Error(`unknown website ${websiteId}`);
+		return found;
+	};
+
+	return Object.freeze({
+		url,
+		jwks,
+		/** The Portal's request handler (for `createNetwork`). */
+		handle,
+		/** @type {typeof globalThis.fetch} `fetch` to this Portal; refuses like a dead network while unreachable */
+		fetch: async (input, init) => {
+			if (!reachable) throw new TypeError('fetch failed');
+			return handle(new Request(input, init));
 		},
-		/** Answer the next request to `path` with `status` (repeatable). @param {string} path @param {number} status */
-		failNext: (path, status) => {
-			failures.set(path, [...(failures.get(path) ?? []), status]);
-		},
-		/** @param {string} key */
-		rejectUsageKey: (key) => rejectUsage.add(key),
-		/** Identity-issuer requests (`PUT /v1/product/websites/:websiteId/identity`) by websiteId. */
-		identityRequests,
-		/**
-		 * Decide a pending identity-issuer request as the merchant: `approve` makes it the active issuer (a repeated
-		 * identical request then answers `active`). Returns the request, or null when none is pending.
-		 * @param {string} websiteId
-		 * @param {'approve' | 'reject'} decision
-		 */
-		decideIdentityRequest: (websiteId, decision) => {
-			const pending = identityRequests.get(websiteId);
-			if (!pending || pending.status !== 'pending') return null;
-			pending.status = decision === 'approve' ? 'approved' : 'rejected';
-			if (decision === 'approve') identityIssuers.set(websiteId, pending.input);
-			return pending;
-		},
-		/** Answer identity-issuer requests for this website with 403. @param {string} websiteId */
-		refuseIdentityRequests: (websiteId) => refuseIdentity.add(websiteId),
-		/** Answer events of this type with `rejected`. @param {string} type */
-		rejectEventType: (type) => rejectEvents.add(type),
-		/** Trust this product key for client assertions. @param {PublicJwk} jwk */
-		trustProductKey: (jwk) => {
-			productKey = jwk;
-		},
-		/** Replace the published JWKS (rotation tests). @param {PublicJwk[]} keys */
-		setJwks: (keys) => {
-			jwksKeys = keys;
-		},
-		/** Sign and publish an entitlement document. @param {Parameters<typeof entitlementPayload>[0] extends infer P ? Omit<P, 'now'> & { now?: number } : never} input */
-		setEntitlement: async (input) => {
-			const payload = entitlementPayload({ now: now(), ...input });
-			const token = await signEntitlementDocument({ signer, payload: /** @type {any} */ (payload) });
-			documents.set(payload.websiteId, token);
-			return { token, payload };
-		},
-		/** @param {string} websiteId */
-		removeEntitlement: (websiteId) => documents.delete(websiteId),
-		/** Sign an arbitrary document with the Portal key. @param {Record<string, unknown>} payload */
-		signDocument: (payload) => signEntitlementDocument({ signer, payload: /** @type {any} */ (payload) }),
-		/** @param {Omit<Parameters<typeof issueWebsiteKey>[0], 'signer' | 'now'>} input */
-		issueWebsiteKey: (input) => issueWebsiteKey({ signer, now, ...input }),
-		/** @param {string} keyId */
-		revoke: (keyId) => revoked.push(keyId),
-		/** @param {Omit<Parameters<typeof issueLaunch>[0], 'signer' | 'issuer' | 'audience' | 'now'> & { audience?: string }} input */
-		issueLaunch: (input) => issueLaunch({ signer, issuer: base, audience: appId, now, ...input }),
-		/** @param {string} websiteId @param {string} kind @param {Record<string, unknown>} descriptor @param {number} [ttlMs] */
-		setResource: (websiteId, kind, descriptor, ttlMs = 5 * 60_000) =>
-			resources.set(`${websiteId}|${kind}`, { descriptor, ttlMs }),
-		/** Sign an event (or any body) for delivery to the product. @param {unknown} payload */
-		signEvent: async (payload) => {
-			const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
-			const headers = await signEvent({ signer, body, timestamp: Math.floor(now() / 1000) });
-			return { headers: { ...headers, 'content-type': 'application/json' }, body };
+		/** @param {boolean} value */
+		setReachable: (value) => {
+			reachable = value;
 		},
 		/**
-		 * Connect a product the way the Portal does (`POST <productUrl>/.well-known/ss-connect`, HMAC with the connect
-		 * secret): on success the product's key is pinned for client assertions.
-		 * @param {{ productUrl: string, secret: string, fetch: (request: Request) => Promise<Response> }} input `fetch`
-		 *   reaches the product (its request handler in tests)
-		 * @returns {Promise<{ status: number, appId?: string }>}
+		 * Connect (or reconnect) a product: the signed handshake against its handler.
+		 * @param {{ handler: Handler, baseUrl: string, secret: string, priceListVersion?: number }} input
 		 */
-		connect: async ({ productUrl, secret, fetch: productFetch }) => {
-			const request = createConnectRequest({ secret, productUrl, portalUrl: base, jwks: createJwks(jwksKeys), appId, now });
-			const res = await productFetch(
-				new Request(request.url, { method: 'POST', headers: request.headers, body: request.body }),
-			);
-			if (!res.ok) return { status: res.status };
-			const answer = await verifyConnectResponse({
+		connect: async ({ handler, baseUrl, secret, priceListVersion }) => {
+			const known = [...products.values()].find((p) => p.baseUrl === baseUrl);
+			const request = createConnectRequest({
 				secret,
-				headers: res.headers,
-				body: await res.text(),
-				nonce: request.nonce,
-				appId,
+				productUrl: baseUrl,
+				portalUrl: url,
+				jwks,
+				priceListVersion: priceListVersion ?? known?.prices.version ?? 0,
 				now,
 			});
-			productKey = answer.publicJwk;
-			connected = { baseUrl: request.baseUrl, manifest: answer.manifest };
-			return { status: res.status, appId };
+			const response = await handler(
+				new Request(request.url, { method: 'POST', headers: request.headers, body: request.body }),
+			);
+			if (response.status !== 200) throw new Error(`connect failed with ${response.status}: ${await response.text()}`);
+			const answer = verifyConnectResponse({
+				secret,
+				headers: response.headers,
+				body: await response.text(),
+				nonce: request.nonce,
+				now,
+			});
+			const prices = /** @type {{ version: number, features: any[] }} */ (/** @type {unknown} */ (answer.prices));
+			products.set(answer.productId, {
+				productId: answer.productId,
+				baseUrl: request.baseUrl,
+				publicJwk: answer.publicJwk,
+				manifest: answer.manifest,
+				prices,
+				handler,
+			});
+			return { productId: answer.productId, manifest: answer.manifest, prices };
 		},
-		/** The product bound by the last successful connect (`{ baseUrl, manifest }`), or null. */
-		connected: () => connected,
-	};
+		/** Make another product known to the directory. @param {{ productId: string, baseUrl: string }} input */
+		addProduct: ({ productId, baseUrl }) => {
+			products.set(productId, {
+				productId,
+				baseUrl,
+				publicJwk: null,
+				manifest: null,
+				prices: { version: 0, features: [] },
+				handler: null,
+			});
+		},
+		/**
+		 * @param {{ domain: string, websiteId?: string, merchantId?: string, merchantName?: string,
+		 *   status?: FakeWebsite['status'], graceEndsAt?: string | null, todayMillicredits?: number }} input
+		 * @returns {string} the website id
+		 */
+		addWebsite: ({
+			domain,
+			websiteId,
+			merchantId = 'mer_0123456789abcdefghjkmnpq',
+			merchantName = 'Example Shop',
+			status = 'active',
+			graceEndsAt = null,
+			todayMillicredits = 0,
+		}) => {
+			websiteSeq += 1;
+			const id = websiteId ?? `web_${String(websiteSeq).padStart(26, '0')}`;
+			websites.set(id, {
+				websiteId: id,
+				domain,
+				merchantId,
+				merchantName,
+				status,
+				graceEndsAt,
+				todayMillicredits,
+				features: {},
+			});
+			return id;
+		},
+		/** @param {string} websiteId @param {Partial<Pick<FakeWebsite, 'status' | 'graceEndsAt' | 'todayMillicredits'>>} patch */
+		setStatus: (websiteId, patch) => {
+			Object.assign(site(websiteId), patch);
+		},
+		/** Delete a website (its status answers 404 afterwards). @param {string} websiteId */
+		deleteWebsite: (websiteId) => {
+			websites.delete(websiteId);
+		},
+		/** @param {string} websiteId @param {string} productId */
+		features: (websiteId, productId) => site(websiteId).features[productId] ?? { version: 0, on: [] },
+		/** @param {{ id: string, name: string, role: 'owner' | 'support' | 'finance' }} admin */
+		addAdmin: ({ id, name, role }) => {
+			admins.set(id, { name, role });
+		},
+		/**
+		 * Sign a browser or server token.
+		 * @param {{ websiteId: string, productId: string, kind: 'browser' | 'server' }} input
+		 * @returns {Promise<{ token: string, jti: string }>}
+		 */
+		issueToken: async ({ websiteId, productId, kind }) => {
+			const { token, claims } = await issueToken({
+				signer,
+				issuer: url,
+				websiteId,
+				domain: site(websiteId).domain,
+				productId,
+				kind,
+				now,
+			});
+			return { token, jti: claims.jti };
+		},
+		/** Revoke a token id (as regenerating does). @param {string} jti */
+		revoke: (jti) => {
+			revoked.push(jti);
+		},
+		/**
+		 * Sign a launch. Merchant launches name the merchant's websites; admin launches register the admin.
+		 * @param {{ productId: string, kind: 'merchant' | 'admin', websiteId?: string | null, role?: 'owner' | 'support',
+		 *   adminId?: string, adminName?: string, sessionExpiresAt?: string }} input
+		 * @returns {Promise<string>}
+		 */
+		issueLaunch: async ({
+			productId,
+			kind,
+			websiteId = null,
+			role = 'owner',
+			adminId = 'adm_0123456789abcdefghjkmnpq',
+			adminName = 'Ada Admin',
+			sessionExpiresAt,
+		}) => {
+			const common = {
+				signer,
+				issuer: url,
+				audience: productId,
+				kind,
+				sessionExpiresAt: sessionExpiresAt ?? new Date(now() + 8 * 60 * 60_000).toISOString(),
+				branding: { name: 'Single Solution', accent: '#2563eb', logoUrl: null },
+				support: { email: 'support@example.com', phone: '+1 555 0100' },
+				now,
+			};
+			if (kind === 'admin') {
+				admins.set(adminId, { name: adminName, role });
+				return (await issueLaunch({ ...common, admin: { id: adminId, name: adminName, role, websiteId } })).token;
+			}
+			const own = site(/** @type {string} */ (websiteId));
+			const list = [...websites.values()].filter((w) => w.merchantId === own.merchantId && w.status !== 'removed');
+			const merchant = {
+				id: own.merchantId,
+				name: own.merchantName,
+				websites: list.map((w) => ({ websiteId: w.websiteId, domain: w.domain })),
+				websiteId: own.websiteId,
+			};
+			return (await issueLaunch({ ...common, merchant })).token;
+		},
+		/**
+		 * Sign a notice body.
+		 * @param {{ type: string, websiteId?: string, subject?: string }} notice
+		 * @returns {Promise<{ headers: Record<string, string>, body: string }>}
+		 */
+		signNotice: async (notice) => {
+			const body = JSON.stringify(notice);
+			return {
+				headers: {
+					...(await signNotice({ signer, body, timestamp: Math.floor(now() / 1000) })),
+					'content-type': 'application/json',
+				},
+				body,
+			};
+		},
+		/**
+		 * Sign and deliver a notice to a connected product.
+		 * @param {string} productId
+		 * @param {{ type: string, websiteId?: string, subject?: string }} notice
+		 * @returns {Promise<Response>}
+		 */
+		sendNotice: async (productId, notice) => {
+			const product = products.get(productId);
+			if (!product?.handler) throw new Error(`product ${productId} is not connected`);
+			const body = JSON.stringify(notice);
+			const headers = {
+				...(await signNotice({ signer, body, timestamp: Math.floor(now() / 1000) })),
+				'content-type': 'application/json',
+			};
+			return product.handler(new Request(`${product.baseUrl}/.well-known/ss-events`, { method: 'POST', headers, body }));
+		},
+		/** What the products sent. */
+		priceReports,
+		featureReports,
+		calls,
+		/** @param {string} productId */
+		prices: (productId) => products.get(productId)?.prices ?? null,
+	});
 };
 
 /**
- * A website's own identity issuer for tests (bring-your-own identity): a fresh key pair, the entitlement-document
- * `identity` section to pass to `setEntitlement({ identity })`, and `sign(claims, header?)` minting customer tokens.
- * @param {{ alg?: 'EdDSA' | 'ES256' | 'RS256', kid?: string, issuer?: string, audience?: string,
- *   claimMap?: { subject: string, email?: string, phone?: string } }} [options]
+ * Accounts as products see it before it ships (PLAN 0.12 step 6): receives activity copies at
+ * `POST /v1/activity-copies` and calls a product's data-rights routes with a pasted server token.
+ * @param {{ url?: string }} [options]
  */
-export const createTestIdentityIssuer = ({
-	alg = 'EdDSA',
-	kid = 'site-key-1',
-	issuer = 'https://login.shop.example.com/',
-	audience,
-	claimMap = { subject: 'sub', email: 'email', phone: 'phone_number' },
-} = {}) => {
-	const pair =
-		alg === 'EdDSA'
-			? generateKeyPairSync('ed25519')
-			: alg === 'ES256'
-				? generateKeyPairSync('ec', { namedCurve: 'P-256' })
-				: generateKeyPairSync('rsa', { modulusLength: 2048 });
-	const jwk = /** @type {Record<string, string>} */ (pair.publicKey.export({ format: 'jwk' }));
-	const section = /** @type {import('@ss/contracts').IdentitySection} */ ({
-		issuer,
-		jwks: [{ ...jwk, kid, alg, use: 'sig' }],
-		...(audience ? { audience } : {}),
-		claimMap,
-	});
-	/** @param {unknown} value */
-	const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-	return Object.freeze({
-		section,
-		/**
-		 * @param {Record<string, unknown>} claims
-		 * @param {Record<string, unknown>} [header] extra/overriding JWS header members
-		 */
-		sign: (claims, header = {}) => {
-			const input = `${b64({ alg, kid, typ: 'JWT', ...header })}.${b64(claims)}`;
-			const signature = cryptoSign(
-				alg === 'EdDSA' ? null : 'sha256',
-				Buffer.from(input),
-				alg === 'ES256' ? { key: pair.privateKey, dsaEncoding: 'ieee-p1363' } : pair.privateKey,
+export const createAccountsDouble = ({ url = 'https://accounts.test' } = {}) => {
+	/** @type {Array<{ token: string, copy: import('@ss/contracts').ActivityCopy }>} */
+	const copies = [];
+	let failing = false;
+
+	/** @type {Handler} */
+	const handle = async (request) => {
+		const token = /^Bearer\s+(\S+)$/.exec(request.headers.get('authorization') ?? '')?.[1];
+		if (request.method !== 'POST' || new URL(request.url).pathname !== '/v1/activity-copies')
+			return fail(url, 'not_found', 404);
+		if (!token) return fail(url, 'invalid_token', 401);
+		if (failing) return fail(url, 'unavailable', 503);
+		const checked = validateActivityCopy(await request.json().catch(() => null));
+		if (!checked.ok) return fail(url, 'validation_failed', 422);
+		copies.push({ token, copy: checked.value });
+		return json(201, { received: true });
+	};
+
+	/**
+	 * @param {'export' | 'delete'} kind
+	 * @returns {(input: { handler: Handler, baseUrl: string, token: string, user: { id?: string, email?: string, phone?: string } }) => Promise<{ status: number, body: any }>}
+	 */
+	const dataRights =
+		(kind) =>
+		async ({ handler, baseUrl, token, user }) => {
+			const response = await handler(
+				new Request(`${baseUrl}/v1/data-rights/${kind}`, {
+					method: 'POST',
+					headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+					body: JSON.stringify({ user }),
+				}),
 			);
-			return `${input}.${signature.toString('base64url')}`;
+			return { status: response.status, body: await response.json() };
+		};
+
+	return Object.freeze({
+		url,
+		handle,
+		copies,
+		/** @param {boolean} value answer 503 to copies while true */
+		setFailing: (value) => {
+			failing = value;
 		},
+		exportUser: dataRights('export'),
+		deleteUser: dataRights('delete'),
 	});
 };

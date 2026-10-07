@@ -1,13 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { PROBLEM_CODES, SCHEMA_IDS, createProblemFactory, getDefaultValidator, problem, validateManifest } from '../src/index.js';
-import { problemDoc } from '../src/testing.js';
 import { expectProblem } from './helpers.js';
 
 const v = getDefaultValidator();
 
+/** @returns {any} */
+const problemDoc = () => ({
+	type: 'https://errors.example.dev/validation_failed',
+	title: 'Validation failed',
+	status: 422,
+	detail: 'The request body is invalid.',
+	instance: '/v1/notes',
+	requestId: 'req_0123456789abcdefghjkmnpq',
+	errors: [{ path: '/body', message: 'must be string', keyword: 'type' }],
+});
+
 describe('problem schema', () => {
 	it('accepts RFC 9457 documents with extensions', () => {
 		expect(v.validate(SCHEMA_IDS.problem, problemDoc()).ok).toBe(true);
+		expect(v.validate(SCHEMA_IDS.problem, { ...problemDoc(), reason: 'stopped', extra: 1 }).ok).toBe(true);
 		expect(v.validate(SCHEMA_IDS.problem, { type: 'about:blank', title: 'Not found', status: 404 }).ok).toBe(true);
 	});
 	/** @type {Array<[string, (p: any) => unknown, string, string]>} */
@@ -17,6 +28,7 @@ describe('problem schema', () => {
 		['string status', (p) => (p.status = '422'), '/status', 'type'],
 		['error without message', (p) => (p.errors = [{ path: '/a' }]), '/errors/0/message', 'required'],
 		['error with bad pointer', (p) => (p.errors = [{ path: 'a', message: 'x' }]), '/errors/0/path', 'pattern'],
+		['unknown reason', (p) => (p.reason = 'deleted'), '/reason', 'enum'],
 	];
 	it.each(invalid)('rejects %s', (_name, mutate, path, keyword) => {
 		const p = problemDoc();
@@ -70,16 +82,53 @@ describe('problem factory', () => {
 	});
 
 	it('creates problems from codes with registry title/status', () => {
-		const p = factory.create('quota_exhausted', { detail: 'redemptions used up', requestId: 'req_9' });
+		const p = factory.create('feature_off', { detail: 'Notes is off', requestId: 'req_9' });
 		expect(p).toEqual({
-			type: 'https://errors.example.dev/quota_exhausted',
-			title: PROBLEM_CODES.quota_exhausted.title,
-			status: 429,
-			detail: 'redemptions used up',
+			type: 'https://errors.example.dev/feature_off',
+			title: PROBLEM_CODES.feature_off.title,
+			status: 403,
+			detail: 'Notes is off',
 			requestId: 'req_9',
 		});
 		expect(factory.problem({ code: 'forbidden', detail: 'x' }).type).toBe('https://errors.example.dev/forbidden');
 		expect(factory.problem({ title: 'Raw', status: 418 }).type).toBe('about:blank');
+	});
+
+	it('carries the reason of product_unavailable, and only there', () => {
+		expect(factory.create('product_unavailable', { reason: 'suspended' })).toEqual({
+			type: 'https://errors.example.dev/product_unavailable',
+			title: PROBLEM_CODES.product_unavailable.title,
+			status: 403,
+			reason: 'suspended',
+		});
+		expect(() => factory.create('product_unavailable')).toThrow(TypeError);
+		expect(() => factory.create('forbidden', { reason: 'stopped' })).toThrow(TypeError);
+		expect(() => problem({ title: 'X', status: 403, reason: /** @type {any} */ ('deleted') })).toThrow(TypeError);
+		expect(v.validate(SCHEMA_IDS.problem, factory.create('product_unavailable', { reason: 'removed' })).ok).toBe(true);
+	});
+
+	it('has the codes of the new model and none of the old billing ones', () => {
+		expect(PROBLEM_CODES.invalid_token.status).toBe(401);
+		expect(PROBLEM_CODES.product_unavailable.status).toBe(403);
+		expect(PROBLEM_CODES.feature_off.status).toBe(403);
+		expect(PROBLEM_CODES.database_not_connected.status).toBe(403);
+		expect(PROBLEM_CODES.website_not_found.status).toBe(404);
+		expect(PROBLEM_CODES.portal_unreachable.status).toBe(503);
+		for (const old of [
+			'credits_exhausted',
+			'spend_cap_reached',
+			'scope_missing',
+			'element_disabled',
+			'subscription_inactive',
+			'invalid_event',
+			'unknown_event_type',
+			'resource_missing',
+			'quota_exhausted',
+			'identity_required',
+			'identity_invalid',
+			'origin_not_allowed',
+		])
+			expect(Object.hasOwn(PROBLEM_CODES, old)).toBe(false);
 	});
 
 	it('wraps validation problems', () => {

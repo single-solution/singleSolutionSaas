@@ -1,11 +1,8 @@
 import { createHash } from 'node:crypto';
 
 /**
- * Deterministic hashing used for document versions.
- *
- * Decision: we use `node:crypto` SHA-256 directly. It is deterministic and performs no I/O, so the
- * functions stay referentially transparent; the only cost is that this package targets Node (the
- * Portal and app-kit), not the browser Loader. Browser code receives already-resolved documents.
+ * Deterministic hashing for the Portal ledger's hash chain: a canonical JSON form and its SHA-256.
+ * Uses `node:crypto`, so this package runs on Node only.
  */
 
 /**

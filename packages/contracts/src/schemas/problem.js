@@ -1,11 +1,12 @@
 /**
- * Problem details (RFC 9457) with `requestId` and field-level `errors[]` (PLAN Part E §5).
- * Extension members are allowed, as the RFC permits.
+ * Problem details (RFC 9457) with `requestId`, field-level `errors[]` and, for `product_unavailable`, the extension
+ * member `reason` (stopped, suspended or removed). Other extension members are allowed, as the RFC permits.
  * @module
  */
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS } from './schema-ids.js';
 import { commonRef as ref } from './common.js';
+import { PRODUCT_UNAVAILABLE_REASONS } from '../constants.js';
 
 /** The problem schema. */
 export const problemSchema = deepFreeze({
@@ -21,6 +22,7 @@ export const problemSchema = deepFreeze({
 		detail: { type: 'string', maxLength: 4000 },
 		instance: { type: 'string', format: 'uri-reference', maxLength: 2000 },
 		requestId: ref('opaqueId'),
+		reason: { type: 'string', enum: [...PRODUCT_UNAVAILABLE_REASONS] },
 		errors: {
 			type: 'array',
 			maxItems: 500,

@@ -1,61 +1,29 @@
 'use client';
 /**
- * SchemaForm renders an element's configuration form from its feature JSON Schema (the `@ss/contracts` subset)
- * with our `x-ui` hints: `widget`, `group` (fieldsets), `order`, `help`, `placeholder`, `advanced` (behind a
- * disclosure) and `hidden`. It shows plan bounds (`x-plan[plan].max` → "Plan max") and locked features as read-only
- * with a lock icon and who set them ("Set by platform/admin").
+ * SchemaForm renders a feature's settings form from its settings schema with the `x-ui` hints: `widget`, `group`
+ * (fieldsets), `order`, `help`, `placeholder`, `advanced` (behind a disclosure) and `hidden`.
  *
- * It is controlled: `values` holds the value of every top-level feature, `onChange(name, value)` reports edits.
+ * It is controlled: `values` holds the value of every setting, `onChange(name, value)` reports edits.
  * Validation messages come from `errors` (client-side `validateValues` and/or server field errors).
  * @module
  */
 import { useId, useState } from 'react';
 import { Button } from './Button.js';
 import { Checkbox, CheckboxGroup, Input, LABEL_CLASS, RadioGroup, Select, Switch, TextArea } from './fields.js';
-import { Badge } from './display.js';
 import { cx } from './cx.js';
 import { Icon } from './icons.js';
-import { PlacementField } from './PlacementField.js';
 import { fieldsOf, groupFields, validateValue, widgetOf } from './schema.js';
 
-/** @typedef {import('./schema.js').FeatureSchema} FeatureSchema */
-/** @typedef {import('./schema.js').FeatureNode} FeatureNode */
+/** @typedef {import('./schema.js').SettingsSchema} SettingsSchema */
+/** @typedef {import('./schema.js').SettingNode} SettingNode */
 /** @typedef {import('./schema.js').FieldDescriptor} FieldDescriptor */
-/** @typedef {{ label?: string, reason?: string }} LockInfo */
-
-/** @param {unknown} value */
-const display = (value) => {
-	if (value === null) return 'Unlimited';
-	if (value === undefined) return '—';
-	if (typeof value === 'boolean') return value ? 'On' : 'Off';
-	if (Array.isArray(value)) return value.length === 0 ? 'None' : value.join(', ');
-	if (typeof value === 'object') return JSON.stringify(value);
-	return String(value);
-};
-
-const fmt = new Intl.NumberFormat('en-US');
-
-/**
- * Bounds hint shown next to a label.
- * @param {FieldDescriptor} field
- */
-const boundsHint = (field) => {
-	const { bounds, node } = field;
-	const parts = [];
-	if (typeof bounds.planMax === 'number') {
-		const what = node.type === 'array' ? ' items' : node.type === 'string' ? ' chars' : '';
-		parts.push(`Plan max ${fmt.format(bounds.planMax)}${what}`);
-	}
-	if (bounds.planMax === false) parts.push('Not in your plan');
-	return parts.join(' · ') || null;
-};
 
 /**
  * Generic value control for a node (recursive for objects).
- * @param {{ id: string, label: string, node: FeatureNode, value: unknown, onChange: (value: unknown) => void,
+ * @param {{ id: string, label: string, node: SettingNode, value: unknown, onChange: (value: unknown) => void,
  *   error?: string | undefined, help?: import('react').ReactNode, disabled?: boolean, widget?: string,
- *   placeholder?: string | null, aside?: import('react').ReactNode, unlimitedAllowed?: boolean, plan?: string | null,
- *   flagAllowed?: boolean, max?: number | undefined, maxLength?: number | undefined, maxItems?: number | undefined }} props
+ *   placeholder?: string | null, aside?: import('react').ReactNode, max?: number | undefined,
+ *   maxLength?: number | undefined, maxItems?: number | undefined }} props
  */
 function NodeControl({
 	id,
@@ -69,9 +37,6 @@ function NodeControl({
 	widget = widgetOf(node),
 	placeholder,
 	aside,
-	unlimitedAllowed = false,
-	plan = null,
-	flagAllowed = true,
 	max,
 	maxLength,
 	maxItems,
@@ -81,22 +46,6 @@ function NodeControl({
 	const common = { id, error, help, aside, disabled };
 	const ph = placeholder ?? undefined;
 
-	if (widget === 'placement')
-		return (
-			<PlacementField
-				id={id}
-				label={label}
-				node={node}
-				value={value}
-				onChange={onChange}
-				plan={plan}
-				disabled={disabled}
-				{...(error ? { error } : {})}
-				{...(help ? { help } : {})}
-				{...(aside ? { aside } : {})}
-			/>
-		);
-
 	if (node.type === 'boolean') {
 		if (widget === 'checkbox')
 			return (
@@ -104,7 +53,7 @@ function NodeControl({
 					id={id}
 					label={label}
 					checked={value === true}
-					disabled={disabled || (!flagAllowed && value !== true)}
+					disabled={disabled}
 					onChange={(e) => onChange(e.currentTarget.checked)}
 					help={help}
 					error={error}
@@ -115,7 +64,7 @@ function NodeControl({
 				id={id}
 				label={label}
 				checked={value === true}
-				disabled={disabled || (!flagAllowed && value !== true)}
+				disabled={disabled}
 				onChange={(next) => onChange(next)}
 				description={help}
 				error={error}
@@ -125,33 +74,22 @@ function NodeControl({
 	}
 
 	if (node.type === 'integer' || node.type === 'number') {
-		const unlimited = value === null;
 		return (
-			<div className="space-y-2">
-				<Input
-					{...common}
-					label={label}
-					type="number"
-					inputMode={node.type === 'integer' ? 'numeric' : 'decimal'}
-					step={node.multipleOf ?? (node.type === 'integer' ? 1 : 'any')}
-					min={node.minimum}
-					max={max}
-					value={unlimited || value === undefined ? '' : String(value)}
-					placeholder={unlimited ? 'Unlimited' : ph}
-					disabled={disabled || unlimited}
-					onChange={(e) => {
-						const raw = e.currentTarget.value;
-						onChange(raw === '' ? undefined : Number(raw));
-					}}
-				/>
-				{unlimitedAllowed && !disabled ? (
-					<Checkbox
-						label="Unlimited"
-						checked={unlimited}
-						onChange={(e) => onChange(e.currentTarget.checked ? null : (node.default ?? node.minimum ?? 0))}
-					/>
-				) : null}
-			</div>
+			<Input
+				{...common}
+				label={label}
+				type="number"
+				inputMode={node.type === 'integer' ? 'numeric' : 'decimal'}
+				step={node.multipleOf ?? (node.type === 'integer' ? 1 : 'any')}
+				min={node.minimum}
+				max={max}
+				value={typeof value === 'number' ? String(value) : ''}
+				placeholder={ph}
+				onChange={(e) => {
+					const raw = e.currentTarget.value;
+					onChange(raw === '' ? undefined : Number(raw));
+				}}
+			/>
 		);
 	}
 
@@ -266,7 +204,6 @@ function NodeControl({
 						node={child}
 						value={record[key]}
 						disabled={disabled}
-						plan={plan}
 						max={child.maximum}
 						maxLength={child.maxLength}
 						maxItems={child.maxItems}
@@ -313,75 +250,43 @@ function NodeControl({
 }
 
 /**
- * Read-only row of a locked feature.
- * @param {{ field: FieldDescriptor, value: unknown, lock: LockInfo }} props
- */
-function LockedField({ field, value, lock }) {
-	return (
-		<div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-line bg-surface-2 px-4 py-3">
-			<div className="min-w-0 space-y-0.5">
-				<p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
-					<Icon name="lock" size={13} title="Locked" />
-					{field.title}
-				</p>
-				<p className="text-xs text-muted">
-					{lock.label ?? 'Set by platform/admin'}
-					{lock.reason ? ` — ${lock.reason}` : ''}
-				</p>
-			</div>
-			<span className="max-w-full break-all rounded-lg bg-surface px-2 py-1 font-mono text-xs text-fg">{display(value)}</span>
-		</div>
-	);
-}
-
-/**
- * @param {{ schema: FeatureSchema | null | undefined, values: Record<string, unknown>,
- *   onChange: (name: string, value: unknown) => void, plan?: string | null, locks?: Record<string, LockInfo>,
- *   errors?: Record<string, string>, overridden?: Record<string, boolean>, onReset?: (name: string) => void,
- *   disabled?: boolean, idPrefix?: string, emptyText?: string, className?: string }} props
+ * `overridden` marks settings the website saved itself; with `onReset` they get a Reset link (back to the default).
+ * @param {{ schema: SettingsSchema | null | undefined, values: Record<string, unknown>,
+ *   onChange: (name: string, value: unknown) => void, errors?: Record<string, string>,
+ *   overridden?: Record<string, boolean>, onReset?: (name: string) => void, disabled?: boolean, idPrefix?: string,
+ *   emptyText?: string, className?: string }} props
  */
 export function SchemaForm({
 	schema,
 	values,
 	onChange,
-	plan = null,
-	locks = {},
 	errors = {},
 	overridden = {},
 	onReset,
 	disabled = false,
 	idPrefix,
-	emptyText = 'This element has no settings.',
+	emptyText = 'This feature has no settings.',
 	className,
 }) {
 	const auto = useId();
 	const prefix = idPrefix ?? `sf${auto.replace(/[^a-zA-Z0-9_-]/g, '')}`;
 	const [showAdvanced, setShowAdvanced] = useState(false);
-	const fields = fieldsOf(schema, { plan });
+	const fields = fieldsOf(schema);
 	if (fields.length === 0) return <p className="text-sm text-muted">{emptyText}</p>;
 	const { groups, advanced } = groupFields(fields);
 	const advancedErrors = advanced.some((f) => errors[f.name]);
 
 	/** @param {FieldDescriptor} field */
 	const renderField = (field) => {
-		const lock = locks[field.name];
-		if (lock) return <LockedField key={field.name} field={field} value={values[field.name]} lock={lock} />;
-		const hint = boundsHint(field);
-		const isOverridden = overridden[field.name] === true;
-		const aside = (
-			<span className="inline-flex flex-wrap items-center gap-1.5">
-				{field.unitLabel ? <span className="text-muted">{field.unitLabel}</span> : null}
-				{hint ? <Badge tone={field.bounds.planMax === false ? 'warning' : 'info'}>{hint}</Badge> : null}
-				{isOverridden && onReset && !disabled ? (
-					<button
-						type="button"
-						onClick={() => onReset(field.name)}
-						className="rounded text-xs font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus">
-						Reset
-					</button>
-				) : null}
-			</span>
-		);
+		const aside =
+			overridden[field.name] === true && onReset && !disabled ? (
+				<button
+					type="button"
+					onClick={() => onReset(field.name)}
+					className="rounded text-xs font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-focus">
+					Reset
+				</button>
+			) : undefined;
 		return (
 			<div key={field.name} data-field={field.name}>
 				<NodeControl
@@ -396,9 +301,6 @@ export function SchemaForm({
 					placeholder={field.placeholder}
 					disabled={disabled || field.node.readOnly === true}
 					aside={aside}
-					unlimitedAllowed={field.unlimitedAllowed}
-					plan={plan}
-					flagAllowed={field.bounds.flagAllowed}
 					max={field.bounds.max}
 					maxLength={field.bounds.maxLength}
 					maxItems={field.bounds.maxItems}

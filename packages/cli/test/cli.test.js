@@ -23,41 +23,50 @@ const ss = async (argv) => {
 describe('ss (main)', () => {
 	it('prints help and version, rejects unknown commands and options', async () => {
 		expect(await ss([])).toMatchObject({ code: 0, out: USAGE });
-		expect(await ss(['--version'])).toMatchObject({ code: 0, out: `${VERSION}\n` });
+		expect(await ss(['--help'])).toMatchObject({ code: 0, out: USAGE });
+		expect(await ss(['-v'])).toMatchObject({ code: 0, out: `${VERSION}\n` });
 		expect((await ss(['nope'])).code).toBe(2);
+		expect((await ss(['app'])).code).toBe(2);
 		expect((await ss(['app', 'nope'])).code).toBe(2);
 		expect((await ss(['app', 'validate', '--bogus'])).code).toBe(2);
 		expect((await ss(['app', 'init'])).code).toBe(2);
-		expect((await ss(['app', 'init', 'x', '--kind', 'weird'])).code).toBe(2);
-		for (const removed of ['dev', 'certify']) expect((await ss([removed])).code).toBe(2);
-		expect((await ss(['pack', 'publish'])).code).toBe(2);
+		expect((await ss(['app', 'init', 'x', '--id', 'x1'])).err).toContain('needs --id and --name');
+		expect((await ss(['app', 'init', 'x', '--id', 'x1', '--name', 'X', '--kind', 'pack'])).code).toBe(2);
+		for (const removed of ['pack', 'dev', 'certify']) expect((await ss([removed, 'build'])).code).toBe(2);
 	});
 
-	it('inits and validates projects with exit codes', async () => {
-		const created = await ss(['app', 'init', 'svc', '--kind', 'service', '--slug', 'cli-notes', '--name', 'CLI Notes']);
-		expect(created.code).toBe(0);
-		expect(created.out).toContain("Created service product 'cli-notes'");
-		expect(created.out).toContain('pnpm dev');
-		expect(await ss(['app', 'validate', 'svc'])).toMatchObject({ code: 0, out: expect.stringContaining('✔ valid') });
-		expect(await ss(['app', 'assets', 'svc', '--check'])).toMatchObject({
+	it('inits, validates and regenerates assets with exit codes', async () => {
+		const created = await ss([
+			'app',
+			'init',
+			'demo',
+			'--id',
+			'demo',
+			'--name',
+			'Demo',
+			'--base-url',
+			'https://demo.example.com',
+		]);
+		expect(created).toMatchObject({ code: 0, out: expect.stringContaining("Created product 'demo' in demo") });
+		expect(await ss(['app', 'validate', 'demo'])).toMatchObject({ code: 0, out: expect.stringContaining('✔ valid') });
+		expect(JSON.parse((await ss(['app', 'validate', 'demo', '--json'])).out).ok).toBe(true);
+		expect(await ss(['app', 'assets', 'demo', '--check'])).toMatchObject({
 			code: 0,
-			out: expect.stringContaining('up to date'),
+			out: 'openapi.json is up to date\napi/widget-script.js is up to date\n',
 		});
-		await writeFile(path.join(root, 'svc/app/_lib/assets.js'), '// stale\n');
-		expect(await ss(['app', 'assets', 'svc', '--check'])).toMatchObject({
+		await writeFile(path.join(root, 'demo/api/widget-script.js'), '// stale\n');
+		expect(await ss(['app', 'assets', 'demo', '--check'])).toMatchObject({
 			code: 1,
-			err: expect.stringContaining('out of date'),
+			err: 'api/widget-script.js out of date: run ss app assets\n',
 		});
-		expect(await ss(['app', 'assets', 'svc'])).toMatchObject({ code: 0, out: expect.stringContaining('written') });
-		const json = await ss(['app', 'validate', 'svc', '--json']);
-		expect(JSON.parse(json.out).ok).toBe(true);
-		expect((await ss(['app', 'init', 'svc', '--kind', 'pack', '--slug', 'x1', '--name', 'X'])).code).toBe(1);
-		await writeFile(path.join(root, 'svc/core/extra.js'), "import '../ui/notes.js';\n");
-		const invalid = await ss(['app', 'validate', 'svc']);
-		expect(invalid.code).toBe(1);
-		expect(invalid.out).toContain('imports.direction');
-		const pack = await ss(['app', 'init', 'pk', '--kind', 'pack', '--slug', 'cli-pack', '--name', 'Pack']);
-		expect(pack).toMatchObject({ code: 0, out: expect.stringContaining('ss pack build') });
-		expect((await ss(['app', 'validate', 'pk'])).code).toBe(0);
-	});
+		expect(await ss(['app', 'assets', 'demo'])).toMatchObject({
+			code: 0,
+			out: expect.stringContaining('api/widget-script.js written'),
+		});
+		expect((await ss(['app', 'init', 'demo', '--id', 'demo', '--name', 'Demo'])).code).toBe(1);
+		expect((await ss(['app', 'init', 'other', '--id', 'Bad', '--name', 'Demo'])).err).toContain('--id must be');
+		await writeFile(path.join(root, 'demo/core/extra.js'), "import '../ui/dom.js';\n");
+		const invalid = await ss(['app', 'validate', 'demo']);
+		expect(invalid).toMatchObject({ code: 1, out: expect.stringContaining('imports.direction') });
+	}, 60_000);
 });

@@ -4,345 +4,380 @@ import path from 'node:path';
 import { initApp } from '../src/init.js';
 import { formatValidation, layerOf, packageOf, resolveImport, serverEntries, validateProject } from '../src/validate/index.js';
 import { writeAssets } from '../src/assets.js';
-import { walk } from '../src/fsutil.js';
+import { renderOpenapi } from '../src/openapi.js';
+import { projectFiles } from '../src/project.js';
 import { loadManifest, resolvePointer } from '../src/manifest.js';
-import { removeDir, tempDir } from './helpers/util.js';
+import { copyProject, edit, removeDir, tempDir } from './helpers/util.js';
 
 /** @type {string} */
 let root;
+/** @type {string} */
+let base;
 let counter = 0;
 
 beforeAll(async () => {
 	root = await tempDir('ss-validate-');
-});
+	base = path.join(root, 'base');
+	await initApp({ dir: base, id: 'demo', name: 'Demo' });
+}, 60_000);
 afterAll(async () => {
 	await removeDir(root);
 });
 
-/** @param {'service' | 'pack'} [kind] */
-const project = async (kind = 'service') => {
+/** A fresh copy of the generated product. */
+const project = async () => {
 	counter += 1;
 	const dir = path.join(root, `p${counter}`);
-	await initApp({ dir, kind, slug: 'demo-notes', name: 'Demo Notes' });
+	await copyProject(base, dir);
 	return dir;
 };
 
-/** @param {string} dir @param {string} file @param {(text: string) => string} change */
-const edit = async (dir, file, change) => writeFile(path.join(dir, file), change(await readFile(path.join(dir, file), 'utf8')));
-
-/** @param {string} dir */
-const filesOf = async (dir) => {
-	const list = await walk(dir);
-	return { dir, list, set: new Set(list), read: (/** @type {string} */ file) => readFile(path.join(dir, file), 'utf8') };
+/** @param {string} dir @param {string} file @param {string} text */
+const put = async (dir, file, text) => {
+	await mkdir(path.dirname(path.join(dir, file)), { recursive: true });
+	await writeFile(path.join(dir, file), text);
 };
 
 /** @param {import('../src/validate/index.js').ValidationReport} report */
 const rules = (report) => report.problems.map((problem) => problem.rule);
 
+/** @param {import('../src/validate/index.js').ValidationReport} report @param {string} rule */
+const messages = (report, rule) => report.problems.filter((problem) => problem.rule === rule).map((problem) => problem.message);
+
 describe('ss app validate', () => {
-	it('accepts freshly generated service and pack projects', async () => {
-		for (const kind of /** @type {const} */ (['service', 'pack'])) {
-			const report = await validateProject(await project(kind));
-			expect(report.problems).toEqual([]);
-			expect(report.ok).toBe(true);
-			expect(formatValidation(report)).toContain('✔ valid');
-		}
+	it('accepts a freshly generated product', async () => {
+		const report = await validateProject(await project());
+		expect(report.problems).toEqual([]);
+		expect(report).toMatchObject({ ok: true, summary: { errors: 0, warnings: 0 } });
+		expect(formatValidation(report)).toContain('✔ valid (0 warnings');
 	});
 
-	it('reports import-direction, package, unresolved and outside imports', async () => {
+	it('reports missing folders and files', async () => {
+		const dir = await project();
+		await rm(path.join(dir, 'docs'), { recursive: true });
+		await rm(path.join(dir, 'app/dashboard/page.js'));
+		await rm(path.join(dir, '.env.example'));
+		const report = await validateProject(dir);
+		expect(report.problems.filter((p) => p.rule === 'anatomy.missing').map((p) => p.file)).toEqual([
+			'.env.example',
+			'app/dashboard/page.js',
+			'docs/',
+		]);
+		expect(formatValidation(report)).toMatch(/✖ \d+ errors, 0 warnings/);
+	});
+
+	it('checks the manifest with @ss/contracts, $refs included', async () => {
+		const dir = await project();
+		await edit(dir, 'manifest.json', (text) =>
+			text.replace('"feature": "notes", "kind": "admin"', '"feature": "nope", "kind": "admin"'),
+		);
+		await edit(dir, 'schemas/notes.settings.json', (text) => text.replace('"default": 500', '"default": "many"'));
+		const report = await validateProject(dir);
+		expect(rules(report).filter((rule) => rule.startsWith('manifest.')).length).toBeGreaterThanOrEqual(2);
+		expect(report.ok).toBe(false);
+
+		const missing = await project();
+		await rm(path.join(missing, 'manifest.json'));
+		expect(rules(await validateProject(missing))).toContain('manifest.read');
+		const badRef = await project();
+		await edit(badRef, 'manifest.json', (text) => text.replace('schemas/notes.settings.json', '../outside.json'));
+		expect(rules(await validateProject(badRef))).toContain('manifest.ref');
+	});
+
+	it('checks routes against the manifest', async () => {
+		const dir = await project();
+		await put(
+			dir,
+			'api/extra.js',
+			[
+				"import { defineRoute } from '@ss/app-kit';",
+				'export const extra = [',
+				"\tdefineRoute({ method: 'GET', path: '/v1/a', auth: 'server', feature: 'nope', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/b', auth: 'ticket', permission: 'nope.read', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/c', auth: 'weird', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: '/v1/d', auth: 'browser', handler: () => 1 }),",
+				"\tdefineRoute({ method: 'GET', path: `/v1/${'e'}`, auth: 'server', feature: 'notes', handler: () => 1 }),",
+				"\tdefineRoute({ ...{ method: 'GET' }, path: '/v1/f', auth: 'none', handler: () => 1 }),",
+				'\tdefineRoute({ handler: () => 1 }),',
+				'];',
+				'',
+			].join('\n'),
+		);
+		const report = await validateProject(dir);
+		expect(messages(report, 'routes.feature')).toEqual([
+			"GET /v1/a: feature 'nope' is not in manifest.json",
+			'GET /v1/d: every browser route belongs to one feature (set feature)',
+		]);
+		expect(messages(report, 'routes.permission')).toEqual(["GET /v1/b: permission 'nope.read' is not in manifest.json"]);
+		expect(messages(report, 'routes.auth')).toHaveLength(1);
+		expect(messages(report, 'routes.dynamic')).toEqual([
+			'write path as string literals so the route can be checked and documented',
+			'write the route without spreads and method as string literals so the route can be checked and documented',
+			'write method, path, auth as string literals so the route can be checked and documented',
+		]);
+		// the new routes are not in openapi.json yet
+		expect(rules(report)).toContain('assets.openapi');
+
+		const bare = await project();
+		await edit(bare, 'api/routes.js', (text) =>
+			text
+				.replace("path: '/widget.js'", "path: '/script.js'")
+				.replace("path: '/docs',\n\t\tauth: 'none'", "path: '/docs',\n\t\tauth: 'server'"),
+		);
+		const shape = await validateProject(bare);
+		expect(rules(shape)).toEqual(expect.arrayContaining(['routes.widget-script', 'routes.docs', 'routes.feature']));
+	});
+
+	it('checks widget texts', async () => {
+		const dir = await project();
+		await put(dir, 'strings/de.json', '{}\n');
+		await edit(dir, 'strings/en.json', (text) =>
+			text.replace('"form.title": "Leave us a note"', '"form.title": "Leave {us a note", "bad key": "x", "form.count": 3'),
+		);
+		await edit(dir, 'ui/note-form.js', (text) => text.replace("t('form.submit')", "t('form.missing')"));
+		const report = await validateProject(dir);
+		expect(rules(report)).toEqual(
+			expect.arrayContaining(['strings.file', 'strings.placeholders', 'strings.invalid', 'strings.unknown-key']),
+		);
+		expect(messages(report, 'strings.invalid')).toHaveLength(2);
+
+		const broken = await project();
+		await put(broken, 'strings/en.json', '{ nope');
+		expect(rules(await validateProject(broken))).toContain('strings.invalid');
+		const notObject = await project();
+		await put(notObject, 'strings/en.json', '[]');
+		expect(messages(await validateProject(notObject), 'strings.invalid')).toEqual(['texts must be a JSON object']);
+		const none = await project();
+		await rm(path.join(none, 'strings/en.json'));
+		expect(rules(await validateProject(none))).not.toContain('strings.unknown-key');
+	});
+
+	it('checks .env.example and vercel.json', async () => {
+		const dir = await project();
+		await edit(dir, '.env.example', (text) => `${text}export PORTAL_URL=x\n`);
+		await put(dir, 'vercel.json', JSON.stringify({ crons: [{ path: '/v1/x', schedule: '* * * * *' }] }));
+		const report = await validateProject(dir);
+		expect(messages(report, 'env.example')).toEqual([
+			'must list exactly MONGODB_URI, CONNECT_SECRET, ENCRYPTION_KEY (found: MONGODB_URI, CONNECT_SECRET, ENCRYPTION_KEY, PORTAL_URL)',
+		]);
+		expect(rules(report)).toContain('vercel.crons');
+		const empty = await project();
+		await put(empty, '.env.example', '# nothing\n');
+		await put(empty, 'vercel.json', '{ nope');
+		const second = await validateProject(empty);
+		expect(messages(second, 'env.example')[0]).toContain('found: none');
+		expect(rules(second)).not.toContain('vercel.crons');
+	});
+
+	it('reports import direction, packages, unresolved and outside imports, and DOM globals in core/', async () => {
 		const dir = await project();
 		await edit(
 			dir,
 			'core/notes.js',
 			(text) =>
-				`import { render } from '../ui/notes.js';\nimport fs from 'node:fs';\nimport x from './missing.js';\nimport y from '../../outside.js';\n${text}`,
+				`import { element } from '../ui/dom.js';\nimport fs from 'node:fs';\nimport x from './missing.js';\nimport y from '../../outside.js';\nimport texts from '../strings/en.json' with { type: 'json' };\nexport const w = () => window.location;\n${text}`,
 		);
-		await edit(dir, 'ui/notes.js', (text) => `import { DEFAULT_CONFIG } from '../core/notes.js';\n${text}`);
-		await edit(dir, 'api/notes.js', (text) => `import { render } from '../ui/notes.js';\n${text}`);
 		await edit(
 			dir,
-			'headless/notes.js',
-			(text) => `import { createElementRuntime } from '@ss/web/element';\nimport { boot } from '@ss/web/loader';\n${text}`,
+			'ui/dom.js',
+			(text) => `import { createNotesStore } from '../adapters/notes-store.js';\nimport React from 'react';\n${text}`,
 		);
+		await edit(dir, 'adapters/notes-store.js', (text) => `import { createRoutes } from '../api/routes.js';\n${text}`);
+		await edit(
+			dir,
+			'api/docs.js',
+			(text) => `import Page from '../app/dashboard/page.js';\nimport lodash from 'lodash';\nimport fs from 'fs';\n${text}`,
+		);
+		await put(dir, 'app/globals.css', "@import 'tailwindcss';\n@import '../../outside.css';\n@import './local.css';\n");
+		await put(dir, 'tests/extra.test.js', "import x from '../../elsewhere.js';\n");
 		const report = await validateProject(dir);
-		expect(report.ok).toBe(false);
-		const found = report.problems.map((problem) => `${problem.file}:${problem.line}:${problem.rule}`);
-		expect(found).toEqual(
-			expect.arrayContaining([
-				'core/notes.js:1:imports.direction',
-				'core/notes.js:2:imports.package',
-				'core/notes.js:3:imports.unresolved',
-				'core/notes.js:4:imports.outside',
-				'ui/notes.js:1:imports.direction',
-				'api/notes.js:1:imports.direction',
-				'headless/notes.js:2:imports.package',
-			]),
-		);
-		expect(found).not.toContain('headless/notes.js:1:imports.package'); // the headless runtime is allowed
-		expect(formatValidation(report)).toMatch(/error +core\/notes\.js:1 {2}imports\.direction/);
-	});
-
-	it('keeps every import inside the project: tests, app/, root files and stylesheets included', async () => {
-		const dir = await project();
-		await edit(dir, 'tests/api.test.js', (text) => `import { createPortal } from '../../../platform/src/portal.js';\n${text}`);
-		await edit(dir, 'next.config.js', (text) => `export { x } from '../loyalty/next.config.js';\n${text}`);
-		await edit(dir, 'app/page.js', (text) => `const other = await import('../../other/app/page.js');\n${text}`);
-		await mkdir(path.join(dir, 'app'), { recursive: true });
-		await writeFile(
-			path.join(dir, 'app/globals.css'),
-			"@import 'tailwindcss';\n/* @source '../../ignored'; */\n@source '../node_modules/@ss/ui/src';\n@source '../../../packages/ui/src';\n@import url('../../shared.css');\n",
-		);
-		const report = await validateProject(dir);
-		const found = report.problems.filter((problem) => problem.rule === 'imports.outside');
-		expect(found.map((problem) => `${problem.file}:${problem.line}`)).toEqual([
-			'app/globals.css:4',
-			'app/globals.css:5',
-			'app/page.js:1',
-			'next.config.js:1',
-			'tests/api.test.js:1',
+		const byRule = (/** @type {string} */ rule) =>
+			report.problems.filter((p) => p.rule === rule).map((p) => `${p.file}:${p.line}`);
+		expect(byRule('imports.direction')).toEqual([
+			'adapters/notes-store.js:1',
+			'api/docs.js:1',
+			'core/notes.js:1',
+			'core/notes.js:5',
+			'ui/dom.js:1',
 		]);
-		expect(found[0]?.message).toMatch(/its own repository/);
-		// unlayered files only need to stay inside: unresolved or any package imports are theirs to decide
-		expect(report.problems.filter((problem) => problem.file === 'tests/api.test.js')).toHaveLength(1);
+		expect(byRule('imports.package')).toEqual(['core/notes.js:2', 'ui/dom.js:2']);
+		expect(byRule('imports.unresolved')).toEqual(['core/notes.js:3']);
+		expect(byRule('imports.outside')).toEqual(['app/globals.css:2', 'core/notes.js:4', 'tests/extra.test.js:1']);
+		expect(byRule('core.dom')).toEqual(['core/notes.js:6']);
+		expect(byRule('package.missing')).toEqual(['api/docs.js:2']);
+		expect(messages(report, 'imports.direction')[0]).toMatch(/adapters\/ must not import from api\/.*JSON data/);
 	});
 
-	it('checks the package wiring of a pack: tooling dev dependencies and scripts', async () => {
-		const dir = await project('pack');
+	it('checks the package wiring', async () => {
+		const dir = await project();
 		await edit(dir, 'package.json', (text) => {
 			const pkg = JSON.parse(text);
-			delete pkg.devDependencies['@ss/config'];
-			pkg.dependencies['@ss/cli'] = pkg.devDependencies['@ss/cli'];
+			delete pkg.dependencies['@ss/app-kit'];
 			delete pkg.devDependencies['@ss/cli'];
-			delete pkg.scripts.typecheck;
-			delete pkg.dependencies['@ss/contracts'];
+			delete pkg.scripts.validate;
 			return JSON.stringify(pkg);
 		});
 		const report = await validateProject(dir);
-		expect(report.problems.map((problem) => `${problem.severity}:${problem.rule}:${problem.message}`)).toEqual([
-			"error:package.dependency:dependencies must include '@ss/contracts'",
-			"warning:package.devDependency:devDependencies should include '@ss/config'",
-			'warning:package.script:scripts.typecheck is missing',
-		]);
+		expect(rules(report)).toEqual(expect.arrayContaining(['package.dependency', 'package.devDependency', 'package.script']));
+		expect(report.problems.find((p) => p.rule === 'package.script')?.severity).toBe('warning');
+		expect(messages(report, 'package.missing')[0]).toContain("'@ss/app-kit' is imported");
+
+		const broken = await project();
+		await put(broken, 'package.json', '{ nope');
+		expect(rules(await validateProject(broken))).toContain('package.dependency');
+		const none = await project();
+		await rm(path.join(none, 'package.json'));
+		expect(rules(await validateProject(none))).not.toContain('package.dependency');
 	});
 
-	it('reports DOM globals in headless/core and hard-coded colours in ui', async () => {
+	it('checks the server shape', async () => {
 		const dir = await project();
-		await edit(dir, 'headless/notes.js', (text) => `${text}\nexport const size = () => window.innerWidth;\n`);
-		await edit(dir, 'core/notes.js', (text) => `${text}\nexport const store = () => localStorage;\n`);
-		await edit(dir, 'ui/notes.js', (text) => `${text}\nexport const accent = '#ff0000';\n`);
-		await writeFile(path.join(dir, 'ui/extra.css'), '/* #000 in a comment is fine */\n.x { color: rgb(0 0 0); }\n');
-		await writeFile(path.join(dir, 'ui/tokens.css'), ':root { --ss-color-text: #111; }\n');
-		const report = await validateProject(dir);
-		expect(rules(report).filter((rule) => rule === 'headless.dom')).toHaveLength(2);
-		expect(
-			report.problems.filter((problem) => problem.rule === 'ui.colour').map((problem) => `${problem.file}:${problem.line}`),
-		).toEqual(['ui/extra.css:2', expect.stringMatching(/^ui\/notes\.js:\d+$/)]);
-	});
-
-	it('checks string keys, catalogs and placeholders', async () => {
-		const dir = await project();
-		await edit(dir, 'ui/notes.js', (text) => text.replace("t('notes.empty')", "t('notes.nope')"));
-		await writeFile(
-			path.join(dir, 'strings/fr.json'),
-			JSON.stringify({ 'notes.error.text_too_long': 'Au plus {limit} caractères', 'notes.extra': 'x' }),
-		);
-		await writeFile(path.join(dir, 'strings/bad.json'), '[1]');
-		await writeFile(path.join(dir, 'strings/broken.json'), '{ nope');
-		await writeFile(path.join(dir, 'strings/typed.json'), JSON.stringify({ 'ok.key': 1 }));
-		const report = await validateProject(dir);
-		expect(rules(report)).toEqual(
-			expect.arrayContaining(['strings.unknown-key', 'strings.placeholders', 'strings.extra-key', 'strings.invalid']),
-		);
-		expect(report.problems.filter((problem) => problem.rule === 'strings.invalid')).toHaveLength(3);
-	});
-
-	it('checks manifest refs, schema problems and module references', async () => {
-		const dir = await project();
-		await edit(dir, 'manifest.json', (text) =>
-			text
-				.replace('"headless/notes.js#createNotes"', '"headless/notes.js#createMissing"')
-				.replace('"ui/notes.js#render"', '"ui/gone.js#render"')
-				.replace('"strings": "strings/en.json"', '"strings": "strings/zz.json"'),
-		);
-		let report = await validateProject(dir);
-		expect(rules(report)).toEqual(expect.arrayContaining(['module.export', 'module.missing', 'strings.missing-file']));
-
-		await edit(dir, 'manifest.json', (text) => text.replace('"schemas/notes.features.json"', '"../escape.json"'));
-		report = await validateProject(dir);
-		expect(rules(report)).toContain('manifest.ref');
-
-		await edit(dir, 'manifest.json', (text) => text.replace('"../escape.json"', '"schemas/none.json#/x"'));
-		report = await validateProject(dir);
-		expect(report.problems.find((problem) => problem.rule === 'manifest.ref')?.message).toMatch(/cannot read/);
-
-		await edit(dir, 'manifest.json', (text) => text.replace('"schemas/none.json#/x"', '"schemas/notes.features.json#/nope"'));
-		report = await validateProject(dir);
-		expect(report.problems.find((problem) => problem.rule === 'manifest.ref')?.message).toMatch(/pointer not found/);
-
-		await edit(dir, 'manifest.json', (text) =>
-			text
-				.replace('"schemas/notes.features.json#/nope"', '"schemas/notes.features.json"')
-				.replace('"version": "0.1.0"', '"version": "one"'),
-		);
-		report = await validateProject(dir);
-		expect(rules(report)).toContain('manifest.pattern');
-		expect(report.problems.find((problem) => problem.rule === 'manifest.pattern')?.pointer).toBe('/product/version');
-
-		await writeFile(path.join(dir, 'manifest.json'), '{ broken');
-		report = await validateProject(dir);
-		expect(rules(report)).toContain('manifest.read');
-	});
-
-	it('reports warnings without failing, and semantic manifest problems (mode rules)', async () => {
-		const dir = await project();
-		await edit(dir, 'package.json', (text) => text.replace('"validate":', '"validate-x":'));
-		let report = await validateProject(dir);
-		expect(report.ok).toBe(true);
-		expect(report.problems.map((problem) => `${problem.severity}:${problem.rule}`)).toEqual(['warning:package.script']);
-		expect(formatValidation(report)).toContain('1 warning');
-
-		await edit(dir, 'manifest.json', (text) => text.replace('"renderer": "ui/notes.js#render"', '"renderer": null'));
-		report = await validateProject(dir);
-		expect(rules(report)).toContain('manifest.modeARequiresRenderer');
-	});
-
-	it('checks anatomy, OpenAPI coverage, package wiring and event schemas', async () => {
-		const dir = await project();
-		await rm(path.join(dir, 'app/dashboard/[[...section]]/page.js'));
-		await rm(path.join(dir, 'schemas/events'), { recursive: true });
-		await edit(dir, 'openapi.json', (text) => text.replaceAll('"/v1/notes', '"/v1/other'));
-		await edit(dir, 'package.json', (text) =>
-			text.replace('"@ss/app-kit"', '"@ss/app-kit-renamed"').replace('"validate":', '"validate-x":'),
-		);
-		let report = await validateProject(dir);
-		expect(report.problems.filter((problem) => problem.rule === 'anatomy.missing').map((problem) => problem.file)).toEqual([
-			'app/dashboard/[[...section]]/page.js',
-		]);
-		expect(rules(report)).toEqual(
-			expect.arrayContaining(['openapi.resource', 'package.dependency', 'package.script', 'events.schema']),
-		);
-
-		await writeFile(path.join(dir, 'openapi.json'), JSON.stringify({ openapi: '3.0.0', paths: {} }));
-		report = await validateProject(dir);
-		expect(rules(report)).toContain('openapi.invalid');
-	});
-
-	it('keeps a service product within 2 server entry points, without outputFileTracingIncludes, with fresh assets', async () => {
-		const dir = await project();
-		expect(await serverEntries(await filesOf(dir))).toEqual([
-			'app/api/[...path]/route.js',
-			'app/dashboard/[[...section]]/page.js',
-		]);
-		// a static page needs no function; a dynamic page or another route handler does
-		await mkdir(path.join(dir, 'app/about'), { recursive: true });
-		await writeFile(path.join(dir, 'app/about/page.js'), 'export default function About() {\n\treturn null;\n}\n');
-		expect(rules(await validateProject(dir))).not.toContain('server.entries');
-		await mkdir(path.join(dir, 'app/ping'), { recursive: true });
-		await writeFile(path.join(dir, 'app/ping/route.js'), "export const GET = () => new Response('ok');\n");
-		let report = await validateProject(dir);
-		expect(report.ok).toBe(false);
-		expect(report.problems.find((problem) => problem.rule === 'server.entries')?.message).toContain('3 server entry points');
-		await rm(path.join(dir, 'app/ping'), { recursive: true });
-		await mkdir(path.join(dir, 'app/inbox/[id]'), { recursive: true });
-		await writeFile(path.join(dir, 'app/inbox/[id]/page.js'), 'export default function Inbox() {\n\treturn null;\n}\n');
-		expect(rules(await validateProject(dir))).toContain('server.entries');
-		await rm(path.join(dir, 'app/inbox'), { recursive: true });
-		await writeFile(path.join(dir, 'proxy.js'), "export { proxy } from '@ss/app-kit/proxy';\n");
-		expect(rules(await validateProject(dir))).toContain('server.entries');
-		await rm(path.join(dir, 'proxy.js'));
-
+		await put(dir, 'app/other/route.js', 'export const GET = () => new Response();\n');
+		await put(dir, 'app/[slug]/page.js', 'export default function Page() { return null; }\n');
+		await put(dir, 'app/static/page.js', 'export default function Page() { return null; }\n');
+		await put(dir, 'proxy.js', 'export const proxy = () => {};\n');
 		await edit(dir, 'next.config.js', (text) =>
-			text.replace('const config = {', "const config = {\n\toutputFileTracingIncludes: { '/**': ['./manifest.json'] },"),
+			text.replace('poweredByHeader: false,', 'poweredByHeader: false, outputFileTracingIncludes: {},'),
 		);
-		report = await validateProject(dir);
-		expect(report.problems.filter((problem) => problem.rule === 'server.tracing').map((problem) => problem.file)).toEqual([
-			'next.config.js',
+		const files = await projectFiles(dir);
+		expect(await serverEntries(files)).toEqual([
+			'app/[slug]/page.js',
+			'app/api/[...path]/route.js',
+			'app/other/route.js',
+			'proxy.js',
 		]);
-		await edit(dir, 'next.config.js', (text) => text.replace(/\n\toutputFileTracingIncludes: [^\n]*/, ''));
-
-		await edit(dir, 'strings/en.json', (text) => text);
-		expect(rules(await validateProject(dir))).not.toContain('server.assets');
-		await writeFile(path.join(dir, 'strings/fr.json'), await readFile(path.join(dir, 'strings/en.json'), 'utf8'));
-		report = await validateProject(dir);
-		expect(rules(report)).toContain('server.assets');
-		expect((await writeAssets(dir, { check: true })).upToDate).toBe(false);
-		expect((await writeAssets(dir)).upToDate).toBe(false);
-		expect((await writeAssets(dir)).upToDate).toBe(true);
-		expect(await readFile(path.join(dir, 'app/_lib/assets.js'), 'utf8')).toContain('strings: { en: strings0, fr: strings1 }');
-		expect(rules(await validateProject(dir))).not.toContain('server.assets');
+		const report = await validateProject(dir);
+		expect(rules(report)).toEqual(expect.arrayContaining(['server.entries', 'server.tracing']));
 	});
 
-	it('refuses any vercel.json cron (event-driven only)', async () => {
+	it('checks that the generated files are up to date', async () => {
 		const dir = await project();
-		await writeFile(
-			path.join(dir, 'vercel.json'),
-			JSON.stringify({ framework: 'nextjs', crons: [{ path: '/cron/a', schedule: '15 3 * * *' }] }),
-		);
+		await edit(dir, 'openapi.json', (text) => text.replace('"3.1.0"', '"3.0.0"'));
+		await edit(dir, 'api/widget-script.js', (text) => `${text}// edited\n`);
 		const report = await validateProject(dir);
-		expect(report.ok).toBe(false);
-		expect(report.problems.filter((p) => p.rule === 'vercel.crons').map((p) => p.pointer)).toEqual(['/crons']);
-		await writeFile(path.join(dir, 'vercel.json'), JSON.stringify({ framework: 'nextjs', crons: [] }));
-		expect(rules(await validateProject(dir))).toContain('vercel.crons');
-		await writeFile(path.join(dir, 'vercel.json'), JSON.stringify({ framework: 'nextjs' }));
-		expect(rules(await validateProject(dir))).not.toContain('vercel.crons');
-		await writeFile(path.join(dir, 'vercel.json'), '{ not json');
-		expect(rules(await validateProject(dir))).not.toContain('vercel.crons');
+		expect(report.problems.filter((p) => p.rule.startsWith('assets.')).map((p) => `${p.rule} ${p.file}`)).toEqual([
+			'assets.widget api/widget-script.js',
+			'assets.openapi openapi.json',
+		]);
+		expect(await writeAssets(dir, { check: true })).toEqual([
+			{ file: 'openapi.json', upToDate: false },
+			{ file: 'api/widget-script.js', upToDate: false },
+		]);
+		await writeAssets(dir);
+		expect((await validateProject(dir)).problems).toEqual([]);
+
+		const unbundled = await project();
+		await edit(unbundled, 'ui/widget.js', (text) => `${text}\nexport const broken = (;\n`);
+		expect(messages(await validateProject(unbundled), 'assets.widget')[0]).toMatch(/cannot be bundled/);
+		const noEntry = await project();
+		await rm(path.join(noEntry, 'ui/entry.js'));
+		expect(messages(await validateProject(noEntry), 'assets.widget')[0]).toMatch(/ui\/entry\.js .* is required/);
+		const unparsable = await project();
+		await put(unparsable, 'openapi.json', '{ nope');
+		expect(rules(await validateProject(unparsable))).toContain('assets.openapi');
 	});
 
-	it('reports an unknown kind with the common anatomy only', async () => {
-		const dir = path.join(root, 'empty');
-		await mkdir(dir, { recursive: true });
-		const report = await validateProject(dir);
-		expect(rules(report)).toContain('manifest.read');
-		expect(report.problems.filter((problem) => problem.rule === 'anatomy.missing')).toHaveLength(9);
-		expect(formatValidation(report)).toMatch(/✖ \d+ errors/);
+	it('accepts a product without widgets', async () => {
+		const dir = await project();
+		await edit(dir, 'manifest.json', (text) => {
+			const manifest = JSON.parse(text);
+			return JSON.stringify({ ...manifest, widgetScriptUrl: null, widgets: [] }, null, '\t');
+		});
+		await rm(path.join(dir, 'ui/entry.js'));
+		await rm(path.join(dir, 'api/widget-script.js'));
+		await edit(dir, 'api/routes.js', (text) =>
+			text.replace("import { WIDGET_SCRIPT } from './widget-script.js';", "const WIDGET_SCRIPT = '';"),
+		);
+		expect(await writeAssets(dir, { check: true })).toEqual([{ file: 'openapi.json', upToDate: true }]);
+		expect((await validateProject(dir)).problems).toEqual([]);
 	});
 });
 
 describe('helpers', () => {
-	it('classifies layers, packages and relative imports', () => {
+	it('resolve layers, packages and imports', () => {
 		expect(layerOf('core/a.js')).toBe('core');
 		expect(layerOf('manifest.json')).toBe('.');
-		expect(packageOf('@ss/app-kit/sub')).toBe('@ss/app-kit');
-		expect(packageOf('react/jsx')).toBe('react');
+		expect(packageOf('@ss/app-kit/widget')).toBe('@ss/app-kit');
+		expect(packageOf('next/server.js')).toBe('next');
 		expect(packageOf('node:fs')).toBe('node:fs');
 		const files = new Set(['core/a.js', 'core/b/index.js']);
-		expect(resolveImport('core/x.js', './a', files)).toEqual({ inside: true, target: 'core/a.js' });
-		expect(resolveImport('core/x.js', './b', files)).toEqual({ inside: true, target: 'core/b/index.js' });
-		expect(resolveImport('core/x.js', '../../y', files)).toEqual({ inside: false, target: null });
+		expect(resolveImport('api/x.js', '../core/a', files)).toEqual({ inside: true, target: 'core/a.js' });
+		expect(resolveImport('api/x.js', '../core/b', files)).toEqual({ inside: true, target: 'core/b/index.js' });
+		expect(resolveImport('api/x.js', '../../x.js', files)).toEqual({ inside: false, target: null });
 	});
 
-	it('resolves JSON pointers and bundles nested refs with siblings', async () => {
-		expect(resolvePointer({ a: [{ 'b/c': 1 }] }, '/a/0/b~1c')).toEqual({ found: true, value: 1 });
-		expect(resolvePointer({ a: 1 }, 'a')).toEqual({ found: false });
-		expect(resolvePointer({ a: 1 }, '')).toEqual({ found: true, value: { a: 1 } });
+	it('loads manifests with $refs and resolves pointers', async () => {
 		const dir = path.join(root, 'refs');
-		await mkdir(path.join(dir, 'schemas'), { recursive: true });
-		await writeFile(
-			path.join(dir, 'manifest.json'),
+		await put(dir, 'schemas/a.json', JSON.stringify({ defs: { one: { type: 'object', 'a/b': 1, 'c~d': 2 } }, list: [5] }));
+		await put(
+			dir,
+			'manifest.json',
 			JSON.stringify({
-				elements: [
-					{ features: { $ref: 'schemas/a.json', title: 'T' } },
-					{ features: { $ref: 'schemas/loop.json' } },
-					{ features: { $ref: 'x.yaml' } },
-				],
+				a: { $ref: 'schemas/a.json#/defs/one', extra: true },
+				b: [{ $ref: 'schemas/a.json#/list/0' }],
+				c: { $ref: 'schemas/missing.json' },
+				d: { $ref: 'schemas/a.json#/nope' },
+				e: { $ref: 'https://example.com/x.json' },
 			}),
 		);
-		await writeFile(
-			path.join(dir, 'schemas/a.json'),
-			JSON.stringify({ type: 'object', properties: { p: { $ref: 'schemas/b.json#/node' } } }),
-		);
-		await writeFile(path.join(dir, 'schemas/b.json'), JSON.stringify({ node: { type: 'integer' } }));
-		await writeFile(path.join(dir, 'schemas/loop.json'), JSON.stringify({ $ref: 'schemas/loop.json' }));
 		const loaded = await loadManifest(dir);
-		expect(/** @type {any} */ (loaded.manifest).elements[0].features).toEqual({
-			type: 'object',
-			title: 'T',
-			properties: { p: { type: 'integer' } },
-		});
-		expect(loaded.refs).toEqual(['schemas/a.json', 'schemas/b.json', 'schemas/loop.json']);
-		expect(loaded.problems.map((problem) => problem.message)).toEqual(
-			expect.arrayContaining([expect.stringMatching(/nests too deeply/), expect.stringMatching(/project-relative \.json/)]),
+		expect(loaded.ok).toBe(false);
+		expect(loaded.refs).toEqual(['schemas/a.json']);
+		expect(loaded.manifest).toMatchObject({ a: { type: 'object', extra: true }, b: [5] });
+		expect(loaded.problems.map((p) => p.rule)).toEqual(['manifest.ref', 'manifest.ref', 'manifest.ref']);
+		expect(resolvePointer({ 'a/b': 1, 'c~d': 2 }, '/a~1b')).toEqual({ found: true, value: 1 });
+		expect(resolvePointer({ 'c~d': 2 }, '/c~0d')).toEqual({ found: true, value: 2 });
+		expect(resolvePointer({}, 'x')).toEqual({ found: false });
+		expect(resolvePointer([1], '/3')).toEqual({ found: false });
+		expect(resolvePointer({ a: 1 }, '')).toEqual({ found: true, value: { a: 1 } });
+		await put(dir, 'deep.json', JSON.stringify({ x: { $ref: 'deep.json' } }));
+		expect((await loadManifest(dir, { file: 'deep.json' })).problems[0]?.message).toMatch(/nests too deeply/);
+	});
+
+	it('renders OpenAPI from any manifest', () => {
+		const doc = /** @type {any} */ (
+			renderOpenapi({
+				manifest: null,
+				routes: [
+					{
+						file: 'api/a.js',
+						line: 1,
+						method: 'DELETE',
+						path: '/v1/items/:itemId',
+						auth: 'server',
+						feature: 'items',
+
+						idempotent: true,
+					},
+					{
+						file: 'api/a.js',
+						line: 2,
+						method: 'GET',
+						path: '/v1/x',
+						auth: 'ticket',
+						permission: 'x.read',
+
+						idempotent: false,
+					},
+					{ file: 'api/a.js', line: 3, method: 'GET', path: '/docs', auth: 'none', idempotent: false },
+				],
+			})
 		);
+		expect(doc.info).toEqual({ title: 'Product API', version: '0.0.0' });
+		expect(doc.servers).toEqual([{ url: '/' }]);
+		expect(doc.paths['/v1/items/{itemId}'].delete.parameters.map((/** @type {any} */ p) => p.name)).toEqual([
+			'itemId',
+			'Idempotency-Key',
+		]);
+		expect(doc.paths['/v1/x'].get).toMatchObject({ 'x-ss-permission': 'x.read', security: [{ ticket: [] }] });
+		expect(doc.paths['/v1/x'].get['x-ss-feature']).toBeUndefined();
+		expect(doc.paths['/docs']).toBeUndefined();
+	});
+});
+
+describe('generated files on disk', () => {
+	it('are readable by the product (openapi.json as JSON)', async () => {
+		const openapi = JSON.parse(await readFile(path.join(base, 'openapi.json'), 'utf8'));
+		expect(openapi.openapi).toBe('3.1.0');
 	});
 });

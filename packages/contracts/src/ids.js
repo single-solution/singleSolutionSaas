@@ -1,28 +1,19 @@
 /**
  * Identifier formats and domain normalisation.
  *
- * Platform ids are `<prefix>_<random>` where `<random>` is 128 random bits in lowercase Crockford base32 (26 chars).
+ * Ids are `<prefix>_<random>` where `<random>` is 128 random bits in lowercase Crockford base32 (26 chars).
  * They are opaque: consumers must never parse meaning out of the random part.
  * @module
  */
 import { domainToASCII } from 'node:url';
 import { isIP } from 'node:net';
 
-/** Prefixes of platform-issued ids. */
+/** Prefixes of Portal-issued ids. */
 export const ID_PREFIXES = Object.freeze({
-	subscription: 'sub',
 	website: 'web',
 	merchant: 'mer',
-	event: 'evt',
+	admin: 'adm',
 	request: 'req',
-	product: 'prd',
-	customer: 'cus',
-	item: 'itm',
-	order: 'ord',
-	session: 'ses',
-	file: 'fil',
-	consentRecord: 'cns',
-	customField: 'cfd',
 });
 
 /** Lowercase Crockford base32 alphabet (no i, l, o, u). */
@@ -161,7 +152,7 @@ export const normaliseDomain = (input, options = {}) => {
 	host = host.replace(/:\d*$/, '');
 	if (host.endsWith('.')) host = host.slice(0, -1);
 	if (host === '') return fail('empty', 'Domain is empty.');
-	if (host.startsWith('*')) return fail('wildcard', 'Wildcards are not accepted; use allowSubdomains instead.');
+	if (host.startsWith('*')) return fail('wildcard', 'Wildcards are not accepted; a website is one exact domain.');
 	const ascii = domainToASCII(host);
 	if (ascii === '') return fail('invalid_domain', 'Not a valid domain name.');
 	if (isIP(ascii) !== 0) return ipResult(ascii, options);
@@ -178,16 +169,15 @@ export const normaliseDomain = (input, options = {}) => {
 };
 
 /**
- * True when `host` equals `domain`, or is a subdomain of it and `allowSubdomains` is set. Both are normalised first.
+ * True when `host` and `domain` normalise to the same domain (exact match only: a website is one exact domain).
  * @param {string} host
  * @param {string} domain
- * @param {{ allowSubdomains?: boolean, allowLocal?: boolean }} [options]
+ * @param {{ allowLocal?: boolean }} [options]
  * @returns {boolean}
  */
 export const hostMatchesDomain = (host, domain, options = {}) => {
 	const allowLocal = options.allowLocal ?? false;
 	const h = normaliseDomain(host, { allowLocal });
 	const d = normaliseDomain(domain, { allowLocal });
-	if (!h.ok || !d.ok) return false;
-	return h.value === d.value || (options.allowSubdomains === true && h.value.endsWith(`.${d.value}`));
+	return h.ok && d.ok && h.value === d.value;
 };

@@ -1,8 +1,11 @@
 /**
- * Next.js App Router adapter: `export const { GET, POST, PATCH, DELETE } = toNextRoute(handler)` in a catch-all
- * `route.js`. A leading `/api` is stripped so routes are declared as `/v1/...` whether Next serves them under
- * `/api/v1/...` (e.g. through a `/v1/:path*` → `/api/v1/:path*` rewrite) or directly. Pass Next's `after` (`import { after } from 'next/server.js'`) so the usage and
- * events a request queued (and its website's due retries) are sent after the response.
+ * Next.js App Router adapter. In the product's catch-all `app/api/[...path]/route.js`:
+ *
+ *   export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(product.handler(routes), { after });
+ *
+ * with `after` from `next/server`, so the kit's work after a response (reports, business.json, activity copies) runs
+ * after it. A leading `/api` is stripped, so routes are declared as `/v1/...`, `/sso`, `/.well-known/...` and
+ * `/widget.js` while rewrites send them to `/api/...`.
  * @module
  */
 import { rememberScheduler } from './handler.js';

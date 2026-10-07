@@ -3,40 +3,42 @@
  * @module
  */
 import { commonSchema } from './common.js';
-import { featureMetaSchema } from './feature-schema.js';
+import { settingsMetaSchema } from './settings-schema.js';
 import { manifestSchema } from './manifest.js';
-import { entitlementDocumentSchema } from './entitlement-document.js';
 import {
-	eventEnvelopeSchema,
-	customEventDataSchema,
-	elementUiEventDataSchema,
-	catalogueEventDataSchemas,
-	elementEventDataSchemas,
-} from './event-envelope.js';
-import { placementSchema } from './placement.js';
+	directorySchema,
+	featureReportSchema,
+	noticeSchema,
+	priceReportSchema,
+	revocationsSchema,
+	statusResponseSchema,
+	websitesPageSchema,
+} from './product-api.js';
+import { activityCopySchema, dataRightsRequestSchema } from './cross-product.js';
 import { problemSchema } from './problem.js';
 import { deepFreeze } from '../util.js';
 
 export * from './schema-ids.js';
 export * from './common.js';
-export * from './feature-schema.js';
+export * from './settings-schema.js';
 export * from './manifest.js';
-export * from './entitlement-document.js';
-export * from './event-envelope.js';
-export * from './placement.js';
+export * from './product-api.js';
+export * from './cross-product.js';
 export * from './problem.js';
 
 /** Every built-in schema, in dependency-free registration order. */
 export const ALL_SCHEMAS = deepFreeze([
 	commonSchema,
-	featureMetaSchema,
+	settingsMetaSchema,
 	manifestSchema,
-	entitlementDocumentSchema,
-	eventEnvelopeSchema,
-	customEventDataSchema,
-	elementUiEventDataSchema,
-	...catalogueEventDataSchemas(),
-	...elementEventDataSchemas(),
-	placementSchema,
+	priceReportSchema,
+	featureReportSchema,
+	statusResponseSchema,
+	websitesPageSchema,
+	revocationsSchema,
+	directorySchema,
+	noticeSchema,
+	dataRightsRequestSchema,
+	activityCopySchema,
 	problemSchema,
 ]);

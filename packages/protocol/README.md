@@ -1,243 +1,117 @@
 # @ss/protocol
 
-App Protocol primitives shared by the Portal and every product (PLAN.md §8, §11, Part E §5 and §10).
+Signing and verification shared by the Portal and every product (PLAN.md Part 0: 0.4.3 launches, 0.4.4 tokens, 0.4.5
+tickets, 0.4.12 Product ↔ Portal contract).
 
 - JavaScript ESM, functional (no classes), JSDoc-typed, `tsc --checkJs --strict`.
-- **EdDSA (Ed25519) only**, every signature carries a `kid`, keys are published as JWKS.
-- Time (`now`), randomness (`randomBytes`) and state (replay stores, nonce stores, burn functions, revocation lists) are
-  always passed in, so every rule can be tested deterministically.
-- Every failure throws a `ProtocolError` with a stable `code` (see `ERROR_CODES`). Messages never contain tokens, keys
-  or secrets, so they are safe to log.
+- **EdDSA (Ed25519) only**. Every signature carries a `kid`; keys are published as JWKS.
+- Time (`now`), randomness (`randomBytes`) and state (replay stores, `consume`, `isRevoked`) are passed in, so every
+  rule can be tested deterministically.
+- Every failure throws a `ProtocolError` with a stable `code` (`ERROR_CODES`). Messages never contain tokens, keys or
+  secrets, so they are safe to log.
 - No URLs, issuers or audiences are hard-coded: they are all parameters.
 
-| Module               | Exports                                                                                                                                                                                                                                                                                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `keys.js`            | `generateSigningKey`, `createSigner`, `importPublicKey`, `importPrivateKey`, `exportPublicJwk`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`                                                                                                                                                                                             |
-| `launch.js`          | `issueLaunch`, `verifyLaunch`, `kindScopeViolation`, `LAUNCH_KINDS`, `LAUNCH_TYP`, TTL constants                                                                                                                                                                                                                                                           |
-| `assertion.js`       | `signAssertion`, `verifyAssertion`, `ASSERTION_TYP`, `MAX_ASSERTION_LIFETIME_SECONDS`                                                                                                                                                                                                                                                                      |
-| `replay.js`          | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                                                                                                                                                                                                                      |
-| `website-keys.js`    | `issueWebsiteKey`, `verifyWebsiteKey`, `originAllowed`, `normalizeDomain`, `hashSecretKey`, `compareSecretKey`                                                                                                                                                                                                                                             |
-| `entitlement-doc.js` | `signEntitlementDocument`, `verifyEntitlementDocument`, `DEFAULT_GRACE_MS`                                                                                                                                                                                                                                                                                 |
-| `events.js`          | `signEvent`, `verifyEvent`, `EVENT_HEADERS`                                                                                                                                                                                                                                                                                                                |
-| `registration.js`    | shared-secret connect: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `generateConnectSecret`, `isConnectSecret`, `hashManifest`, `canonicalUrl`, `CONNECT_PATH`, `CONNECT_TIMESTAMP_HEADER`, `CONNECT_SIGNATURE_HEADER`, `CONNECT_TOLERANCE_SECONDS`, `MIN_CONNECT_SECRET_LENGTH` |
-| `errors.js`          | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                                                                                                                                    |
+| Module            | Exports                                                                                                                                                                                                                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `keys.js`         | `generateSigningKey`, `signingKeyFromSeed`, `parseSigningKeys`, `formatSigningKey`, `createSigner`, `importPublicKey`, `importPrivateKey`, `exportPublicJwk`, `toPublicJwk`, `createJwks`, `createKeyResolver`, `thumbprint`                                                                       |
+| `tokens.js`       | `issueToken`, `verifyToken`, `TOKEN_TYP`, `TOKEN_KINDS`, `normalizeDomain`, `canonicalOrigin`, `isLocalOrigin`, `originAllowed`, `ticketOriginAllowed`, `isProductId`, `PRODUCT_ID_PATTERN`                                                                                                        |
+| `tickets.js`      | `issueTicket`, `verifyTicket`, `TICKET_TYP`, `TICKET_TTL_SECONDS`, `PERMISSION_KEY_PATTERN`                                                                                                                                                                                                        |
+| `launch.js`       | `issueLaunch`, `verifyLaunch`, `launchViolation`, `LAUNCH_KINDS`, `LAUNCH_ADMIN_ROLES`, `LAUNCH_TYP`, `DEFAULT_LAUNCH_TTL_SECONDS`, `MAX_LAUNCH_TTL_SECONDS`                                                                                                                                       |
+| `assertion.js`    | `signAssertion`, `verifyAssertion`, `ASSERTION_TYP`, `MAX_ASSERTION_LIFETIME_SECONDS`                                                                                                                                                                                                              |
+| `notices.js`      | `signNotice`, `verifyNotice`, `NOTICE_PATH`, `NOTICE_TYPES`, `NOTICE_HEADERS`, `NOTICE_TOLERANCE_SECONDS`                                                                                                                                                                                          |
+| `registration.js` | connect handshake: `createConnectRequest` / `verifyConnectResponse` (Portal), `verifyConnectRequest` / `createConnectResponse` (product), `generateConnectSecret`, `isConnectSecret`, `canonicalUrl`, `CONNECT_PATH`, `CONNECT_*_HEADER`, `CONNECT_TOLERANCE_SECONDS`, `MIN_CONNECT_SECRET_LENGTH` |
+| `replay.js`       | `createMemoryReplayStore` (tests only), `consumeWith`                                                                                                                                                                                                                                              |
+| `errors.js`       | `createProtocolError`, `isProtocolError`, `ERROR_CODES`                                                                                                                                                                                                                                            |
+| `encoding.js`     | `canonicalJson`                                                                                                                                                                                                                                                                                    |
 
-## Token types
+## What is signed
 
-Every signed object has its own JOSE `typ`, and each verifier accepts only its own, so a token of one kind can never be
-replayed as another (a launch as an assertion, an entitlement document as a website key, …).
+Every signed object has its own JOSE `typ`, and each verifier accepts only its own, so one kind can never be replayed
+as another (a ticket as a token, a launch as an assertion, …).
 
-| Object               | `typ`                   | Lifetime                             | Replay protection                   |
-| -------------------- | ----------------------- | ------------------------------------ | ----------------------------------- |
-| Launch               | `ss-launch+jwt`         | 60 s default, ≤ 300 s                | `consume(jti)` — single use         |
-| Client assertion     | `ss-assertion+jwt`      | ≤ 300 s                              | replay store on `iss\|jti`          |
-| Website key          | `ss-website-key+jws`    | optional `exp`; revocable by `keyId` | n/a (bearer credential)             |
-| Entitlement document | `ss-entitlement+jws`    | `validUntil` + offline grace         | n/a (idempotent state)              |
-| Connect request      | HMAC, `ss-connect.v1`   | timestamp ± 5 min                    | nonce TTL record (product)          |
-| Connect answer       | HMAC, `ss-connected.v1` | timestamp ± 5 min                    | echoes the Portal's request nonce   |
-| Event delivery       | detached, `SS-*` header | `SS-Timestamp` ± 300 s               | replay store on `timestamp\|sha256` |
+| Object           | Signed by         | `typ` / label            | Lifetime                    | Replay protection                    |
+| ---------------- | ----------------- | ------------------------ | --------------------------- | ------------------------------------ |
+| Browser token    | Portal            | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
+| Server token     | Portal            | `ss-token+jws`           | no expiry; revoked by `jti` | n/a (bearer credential)              |
+| Ticket           | product (own key) | `ss-ticket+jws`          | exactly 15 min              | bound to origin; ends with its `tid` |
+| Launch           | Portal            | `ss-launch+jwt`          | 60 s default, ≤ 300 s       | `consume(jti)`: single use           |
+| Client assertion | product (its key) | `ss-assertion+jwt`       | ≤ 300 s                     | replay store on `iss\|jti`           |
+| Notice           | Portal            | detached, `ss-notice.v1` | `SS-Timestamp` ± 300 s      | replay store on `timestamp\|sha256`  |
+| Connect request  | HMAC              | `ss-connect.v1`          | timestamp ± 5 min           | nonce record (product)               |
+| Connect answer   | HMAC              | `ss-connected.v1`        | timestamp ± 5 min           | echoes the Portal's request nonce    |
 
-Common JWS rules (`jws.js`): header must be `alg: EdDSA` (no `none`, no HMAC, no RSA) with a `kid` and the expected
-`typ`; `jwk`, `jku`, `x5u`, `x5c`, `x5t`, `crit`, `b64`, `zip` are refused, so a token can never tell the verifier
-where to find its key; the length is capped before parsing; `jose.compactVerify` runs with `algorithms: ['EdDSA']`.
+Common JWS rules (`jws.js`): the header must be `alg: EdDSA` with a `kid` and the expected `typ`; `jwk`, `jku`, `x5u`,
+`x5c`, `x5t`, `crit`, `b64`, `zip` are refused, so a token can never tell the verifier where to find its key; the
+length is capped before parsing; `jose.compactVerify` runs with `algorithms: ['EdDSA']`.
+
+## Browser and server tokens
+
+`issueToken({ signer, issuer, websiteId, domain, productId, kind })` signs exactly
+`{ iss, jti, websiteId, domain, productId, kind, iat }`: no expiry, environment, scopes or address. `domain` is
+normalised with `normalizeDomain` (lower-case punycode; scheme, port, path, wildcards, IP literals, `localhost` and
+single-label names refused).
+
+`verifyToken({ token, keyResolver, issuer, productId, kind?, isRevoked? })` checks the signature against the pinned
+Portal keys, `typ`, issuer, product, kind and the revocation list. Every failure throws `invalid_token` with the same
+message, so callers cannot tell a forged token from a revoked one or one for another product.
+
+Origins:
+
+- `canonicalOrigin(value)` → `scheme://host[:port]` (lower-case, default port dropped) or `null` (userinfo, any path,
+  whitespace, control characters and backslashes refused).
+- `isLocalOrigin(origin)`: `http(s)://localhost`, `*.localhost`, `127.0.0.1` or `[::1]` on any port.
+- `originAllowed({ origin, domain })` (browser tokens): only `https://<exact domain>` on the default port, or a local
+  origin. No subdomains, no Referer fallback; a missing Origin is refused.
+- `ticketOriginAllowed(origin)` (tickets): any `https://` origin, or a local origin.
+
+## Tickets
+
+`issueTicket({ signer, productId, websiteId, user: { id, name, email }, origin, permissions, tokenId })` →
+`{ ticket, expiresAt, claims }` with claims `{ iss: productId, aud: productId, sub: user.id, websiteId, user, origin,
+permissions, tid: tokenId, iat, nbf, exp: iat + 900, jti }`. `tid` is the `jti` of the server token the ticket was
+made with. `verifyTicket({ ticket, keyResolver, productId, origin, isRevoked? })` checks signature, `typ`, audience,
+time, that the request Origin equals the ticket's origin, and that `tid` is not revoked; every failure is
+`invalid_token`.
+
+## Launches
+
+`issueLaunch({ signer, issuer, audience, kind, sessionExpiresAt, branding, support, merchant? | admin?, ttlSeconds? })`.
+A merchant launch carries `merchant: { id, name, websites: [{ websiteId, domain }], websiteId }` (the website to open
+must be in the list); an admin launch carries `admin: { id, name, role: 'owner' | 'support', websiteId | null }`. Never
+both. `sub` is the merchant or admin id. `verifyLaunch({ token, keyResolver, audience, issuer, consume })` checks
+signature, issuer, audience, time, the launch rules (`invalid_launch`), that `sessionExpiresAt` has not passed, and
+consumes the `jti` once.
+
+## Notices
+
+Portal → product at `POST <base>/.well-known/ss-events`, with `SS-Timestamp`, `SS-Signature`
+(`v1;kid=<kid>;sig=<base64url>`, up to four entries for dual-signing) and the hint `SS-Key-Id`. The signed message is
+`ss-notice.v1.<timestamp>.<hex sha256(raw body)>`. `verifyNotice` checks the timestamp (± 300 s), the signature, the
+replay store, then the body: `status.changed`, `token.revoked` and `website.deleted` need `websiteId`;
+`sessions.revoked` needs `subject`; nothing else is allowed. It returns the checked body.
+
+## Connect handshake
+
+1. Portal: `createConnectRequest({ secret, productUrl, portalUrl, jwks, priceListVersion })` → `POST
+   <base>/.well-known/ss-connect` with body `{ portalUrl, jwks, baseUrl, nonce, priceListVersion }` and an HMAC of
+   `CONNECT_SECRET` over timestamp and body (the secret is never sent).
+2. Product: `verifyConnectRequest` (HMAC in constant time, ± 5 min), check the nonce against a replay store, pin
+   `portalUrl` and the Portal keys, keep `baseUrl` as its own address, then
+   `createConnectResponse({ secret, productId, nonce, publicJwk, manifest, prices })` (HMAC under a second label).
+3. Portal: `verifyConnectResponse({ secret, headers, body, nonce })` → `{ productId, publicJwk, manifest, prices }`.
+   The caller checks `manifest` and `prices` with `@ss/contracts`.
 
 ## Keys, JWKS and rotation
 
-```
-Portal                                       Product
-  │ generateSigningKey({kid:'portal-2026-10'})  │
-  │ publish JWKS { keys:[old(exp=T+overlap), new] }
-  │──────────── GET /.well-known/jwks.json ────▶│ createKeyResolver({ fetchJwks, cacheTtlMs })
-  │ sign with new kid                           │ token.kid unknown → refetch (≤ 1 per minRefreshIntervalMs)
-  │                                             │ old kid valid until its exp, then key_retired
-  │ compromise → revoke kid                     │ revokedKids / isRevoked → revoked_key, immediately
-```
+- `createKeyResolver({ jwks | fetchJwks, cacheTtlMs, minRefreshIntervalMs, maxStaleMs, revokedKids, isRevoked })`
+  caches a JWKS, refetches on an unknown `kid` (at most once per `minRefreshIntervalMs`), keeps the last-known keys for
+  `maxStaleMs` when a refetch fails, and refuses revoked kids at once.
+- JWK members may carry `nbf`/`exp` (seconds) for rotation overlap windows: publish the new key ahead of time, keep the
+  old one until the overlap ends; each is refused outside its window.
+- `signingKeyFromSeed` / `parseSigningKeys` read keys in their environment form `kid:seed[,kid:seed…]`.
 
-- `createKeyResolver` caches the JWKS for `cacheTtlMs` (default 5 min), refetches when it sees an unknown `kid`, but at
-  most once per `minRefreshIntervalMs` (default 30 s), so forged kids cannot make it hammer the Portal.
-- **Overlap window**: JWK members may carry `nbf`/`exp` (seconds). Publish the new key ahead of time with `nbf`, keep
-  the old one with `exp` = end of overlap. Both verify during the overlap; each is refused outside its window.
-- **Portal outage**: if a refetch fails, last-known keys keep working until `maxStaleMs` (default 24 h) after the last
-  successful fetch, then `jwks_unavailable`. This matches "product runtime unaffected by Portal outage" (§12).
-- **Revocation** is checked on every resolve and beats everything else. Duplicate kids in a JWKS are ambiguous and are
-  dropped entirely.
-- `Signer` is `{ kid, alg, sign(bytes) }`, so a KMS/HSM signer can replace `createSigner(privateJwk)`. Private keys
-  are imported non-extractable.
+## Replay stores
 
-## SSO launch
-
-```
-Browser              Portal                                   Product
-  │ "Open Coupons"    │                                          │
-  │──────────────────▶│ issueLaunch({ kind, user, scope,         │
-  │                   │   subscriptions, aud: appId, ttl 60s })  │
-  │◀── 302 product/sso?launch=<jwt> ─────────────────────────────│
-  │─────────────────────────────────────────────────────────────▶│ verifyLaunch({ issuer, audience: appId,
-  │                                                              │   keyResolver(Portal JWKS), consume })
-  │                                                              │ → sets its own session; jti consumed
-  │◀────────────────────────────── dashboard ────────────────────│
-```
-
-Checks: signature and `typ`; `iss` and `aud` are exact string matches (no audience arrays); `exp`/`nbf`/`iat` with a
-5 s skew; `exp − iat ≤ 300 s` even if the Portal signed something longer; kind/scope rules; then `consume(jti)`, which
-must be atomic and shared across instances (see replay stores below).
-
-Kind/scope rules (`kindScopeViolation`), enforced both when issuing and when verifying:
-
-| kind       | must carry                                                                        |
-| ---------- | --------------------------------------------------------------------------------- |
-| `merchant` | `scope.merchantId`                                                                |
-| `admin`    | `scope.all: true` (app-wide) **or** `scope.merchantId` (+ `scope.subscriptions?`) |
-
-`LAUNCH_KINDS` is `['merchant', 'admin']`; any other kind is refused.
-
-`scope.all: true` (app-wide management, e.g. platform staff administering the product itself) is allowed only for
-`admin` and is exclusive: next to it only `permissions` may appear (no `merchantId`, `websiteId(s)`, `subscriptions`).
-`scope.subscriptions`, when present on any kind, must be a list of non-empty ids. The JSDoc types `LaunchScope`,
-`LaunchUser` and `LaunchClaims` are exported from the package index.
-
-## Client assertions (product → Portal)
-
-```
-Product                                               Portal
-  │ signAssertion({ appId, audience, ttl ≤ 300s })      │
-  │── Authorization: Bearer <assertion> ───────────────▶│ verifyAssertion({ keyResolverForApp, audience, replayStore })
-  │                                                     │  1. peek iss → keys registered for that app only
-  │                                                     │  2. signature, typ, iss = sub = appId, aud, jti ≥ 16 chars
-  │                                                     │  3. time, lifetime ≤ 300 s, replay store `iss|jti`
-```
-
-Keys are looked up per app (from the peeked `iss`), so an app can only authenticate as itself: a token signed by app A
-but claiming `iss: B` is checked against B's keys and fails.
-
-**Replay stores**: interface `{ seen(id, expiresAtMs) → boolean | Promise<boolean> }` (true = already seen). Production
-must use a store shared by every instance, with atomic insert-if-absent and TTL — for example a MongoDB collection with
-a unique `_id` and a TTL index on `expiresAt` (duplicate-key error = seen) or Redis `SET id 1 NX PXAT expiresAt`.
-`createMemoryReplayStore` is for tests; when full it fails closed. `consumeWith(store)` adapts a store to the launch
-`consume(jti)` shape.
-
-## Website keys
-
-Format: `pk_live_<jws>`, `pk_test_<jws>`, `sk_live_<jws>`, `sk_test_<jws>`. Claims:
-`{ v, kind, websiteId, merchantId, domain, allowSubdomains, env, scopes[], keyId, iat, exp? }`; the signing `kid` is in
-the JWS header and is returned by `verifyWebsiteKey`. The prefix must agree with the signed `kind` and `env`, so a
-`pk_` cannot be relabelled `sk_` or a test key relabelled live.
-
-```
-Browser (pk_)            Product                                   Portal
-  │── Bearer pk_live_… ──▶│ verifyWebsiteKey (offline, Portal JWKS)   │
-  │   Origin: https://…   │ revocations (cached list, ≤ 5 min) ◀──────│ revoked keyIds
-  │                       │ originAllowed({ origin, referer, domain,  │
-  │                       │   allowSubdomains, env })                 │
-Server (sk_)              │                                           │
-  │── Bearer sk_live_… ──▶│ verifyWebsiteKey({ expectedKind: 'sk' })  │
-```
-
-**Decision for `sk_`: signed token, verified offline, plus server-side revocation by `keyId`.**
-
-- For: products verify without a Portal call per request (latency, cost, and Portal outages do not stop products, §6.4
-  and §12); the binding (websiteId, merchantId, env, scopes) is authenticated, so `X-SS-Website` can never override it.
-- Against: a leaked `sk_` stays usable until the revocation list reaches every product (bounded by its cache TTL) or
-  until `exp`, whereas an opaque random key checked online dies instantly.
-- Mitigations: revocation list cache ≤ 5 min (aligned with entitlement freshness), optional `exp`, least-privilege
-  `scopes`, test/live separation, a recognisable `sk_` prefix for secret scanners, and the Portal stores only
-  `hashSecretKey({ key, pepper })` (HMAC-SHA-256 with a pepper kept outside the database) and shows the key once;
-  `compareSecretKey` compares in constant time. The claims inside an `sk_` are readable by whoever holds it, and
-  contain nothing secret.
-- Signing-key compromise is handled by kid revocation, which invalidates every website key signed with that kid at
-  once; website keys should be re-issued on Portal key rotation.
-
-**`pk_` keys are public.** `originAllowed` ties browser traffic to the bound domain, but `Origin`/`Referer` are
-forgeable by non-browser clients, so a `pk_` must only unlock browser-safe, rate-limited operations.
-
-`originAllowed` rules:
-
-- `Origin` is authoritative when present; `Referer` is used only when `Origin` is absent; a mismatching `Origin` is
-  never rescued by a matching `Referer`; `null` origins are refused.
-- `https` only. In the `test` env, `http(s)` origins on `localhost`, `*.localhost`, `127.0.0.1` and `[::1]` are always
-  accepted; in `live` they never are.
-- Parsed with the WHATWG URL parser; userinfo, whitespace, control characters and backslashes are refused; an Origin
-  with a path, query or fragment is refused; ports are ignored.
-- Hosts are compared as lower-case punycode with any trailing dot removed: an exact match, or with `allowSubdomains`
-  a match on `.` + domain. `evil-example.com`, `example.com.evil.com`, `example.comm` and Cyrillic look-alikes never
-  match; `www.` is not implied.
-
-## Entitlement documents
-
-```
-Portal                                 Product
-  │ signEntitlementDocument(payload)     │
-  │── GET /v1/entitlement (pull) ───────▶│ verifyEntitlementDocument({ keyResolver, expectedDomain, graceMs })
-  │                                      │  now ≤ validUntil            → { stale: false }
-  │     (Portal unreachable)             │  validUntil < now ≤ +grace   → { stale: true }  keep serving, retry refresh
-  │                                      │  now > validUntil + grace    → expired (hard stop)
-```
-
-The payload schema belongs to `@ss/contracts`; this module needs only `validUntil` (ISO-8601, required) and optionally
-`validFrom`, `issuedAt` and `domain`. `expectedDomain` compares normalised punycode hosts. The default grace is 24 h
-(`DEFAULT_GRACE_MS`), the fixed offline grace products apply.
-
-## Signed events and webhooks
-
-```
-Portal / Event Hub                                         Product
-  │ headers = signEvent({ signer(s), body, timestamp })      │
-  │── POST /.well-known/ss-events ─────────────────────────▶ │ verifyEvent({ headers, rawBody, keyResolver,
-  │   SS-Timestamp: 1790812800                               │   replayStore, toleranceSec: 300 })
-  │   SS-Signature: v1;kid=portal-2;sig=<b64url>             │  1. |now − ts| ≤ 300 s
-  │   SS-Key-Id: portal-2                                    │  2. Ed25519 over "ss-event.v1.<ts>.<sha256hex(body)>"
-  │                                                          │  3. replay store on "<ts>|<sha256>" until ts + 300 s
-```
-
-- Signed message: `ss-event.v1.${timestamp}.${hex(sha256(rawBody))}`. The `ss-event.v1.` prefix separates it from JWS
-  signing inputs made with the same key; hashing the body keeps the message small.
-- `SS-Signature` may hold up to four comma-separated entries so the sender can dual-sign during key rotation; the
-  verifier accepts the delivery when any entry verifies under a trusted, unrevoked key.
-- `SS-Key-Id` is a routing and logging hint only; verification uses the `kid` inside each signature entry.
-- Always verify the raw bytes before parsing JSON. Duplicate headers are treated as missing.
-- Event signatures cover the body only, so use them only for deliveries to one fixed endpoint (the product's
-  declared events endpoint).
-
-## Connect (shared secret + pinned URLs)
-
-```
-Deployer / staff       Portal                                              Product (MONGODB_URI + CONNECT_SECRET)
-  │ Add product: URL + secret ─▶│                                           │
-  │                     │ createConnectRequest({ secret, portalUrl, jwks,   │
-  │                     │   appId, baseUrl })                               │
-  │                     │── POST <url>/.well-known/ss-connect ─────────────▶│ verifyConnectRequest({ secret, headers,
-  │                     │   SS-Connect-Timestamp: <unix s>                  │   rawBody })
-  │                     │   SS-Connect-Signature: hex HMAC-SHA256(secret,   │  a. HMAC in constant time
-  │                     │     "ss-connect.v1|<ts>|<body>")                  │  b. |now − ts| ≤ 5 min
-  │                     │   { portalUrl, jwks, appId, baseUrl, nonce }      │  c. nonce unused (TTL record)
-  │                     │                                                   │ generate an Ed25519 key if none,
-  │                     │                                                   │ pin portalUrl + Portal JWKS, appId, baseUrl
-  │                     │◀── 200 createConnectResponse ─────────────────────│
-  │                     │   same headers, label "ss-connected.v1"           │
-  │                     │   { appId, nonce, publicJwk, manifest }           │
-  │                     │ verifyConnectResponse({ secret, headers, rawBody, │
-  │                     │   nonce }) → store app, pin baseUrl + publicJwk   │
-```
-
-- **The secret.** `CONNECT_SECRET` is a random string of at least `MIN_CONNECT_SECRET_LENGTH` (32) characters
-  (`generateConnectSecret`, `isConnectSecret`), set by the deployer on the product and typed into the Portal once. It is
-  never sent; the Portal never stores it. Without it the product answers 503.
-- **Binding.** Both signatures cover the exact body, so a proxy cannot swap the Portal URL, keys, base URL, manifest or
-  product key; the answer echoes the nonce, so it cannot be replayed into another connection. `CONNECT_TOLERANCE_SECONDS`
-  is 300.
-- **Pinning.** The product keeps the Portal URL and keys; the Portal pins the product's base URL and key. From then on
-  both sides trust only each other's keys (client assertions, launches, entitlements, events).
-- **Reconnect.** Connecting again with the right secret replaces the binding (same app for the same URL). To lock a
-  Portal out, change `CONNECT_SECRET` and connect from the right Portal.
-- Errors: `malformed` (shape, headers, JWKS, nonce), `signature` (HMAC), `replay` (nonce), `expired` (±5 min).
-
-## Testing
-
-```
-pnpm check   # in this folder: format, lint, typecheck, vitest with coverage
-```
-
-The tests cover happy paths and every rejection path: expiry, not-yet-valid, wrong `aud`/`iss`/`kid`/`typ`, tampered
-payloads and signatures, forged keys that reuse a kid, replayed `jti`s and events, revoked and retired keys, rotation
-overlap, more than 50 origin cases, stale entitlements inside and past the grace window, and the full connection
-matrix.
+`createMemoryReplayStore` is for tests only. In production use a store shared by every instance (serverless functions
+share no memory) with an atomic insert-if-absent and a TTL, for example a MongoDB collection with a unique `_id` and a
+TTL index on `expiresAt`. `consumeWith(store)` adapts it to the `consume(jti, expiresAtMs)` shape of `verifyLaunch`.

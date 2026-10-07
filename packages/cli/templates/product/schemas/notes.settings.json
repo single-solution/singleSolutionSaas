@@ -1,0 +1,14 @@
+{
+	"type": "object",
+	"additionalProperties": false,
+	"properties": {
+		"maxLength": {
+			"type": "integer",
+			"title": "Longest note (characters)",
+			"description": "Visitors cannot send longer notes.",
+			"default": 500,
+			"minimum": 20,
+			"maximum": 2000
+		}
+	}
+}

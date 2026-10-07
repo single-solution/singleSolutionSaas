@@ -1,7 +1,16 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { consumeWith, createMemoryReplayStore, issueLaunch, kindScopeViolation, verifyLaunch } from '../src/index.js';
+import {
+	consumeWith,
+	createJwks,
+	createKeyResolver,
+	createMemoryReplayStore,
+	issueLaunch,
+	launchViolation,
+	verifyLaunch,
+} from '../src/index.js';
 import { signCompact } from '../src/jws.js';
 import {
+	T0,
 	createClock,
 	decodeSegment,
 	expectCode,
@@ -13,7 +22,20 @@ import {
 } from './helpers.js';
 
 const ISS = 'https://portal.test';
-const AUD = 'app_coupons';
+const AUD = 'chat';
+const SESSION_END = new Date(T0 + 12 * 3_600_000).toISOString();
+const branding = { name: 'Single Solution', accent: '#4f46e5', logoUrl: 'https://portal.test/branding/logo?v=1' };
+const support = { email: 'help@portal.test', phone: '+1 555 0100', whatsapp: '+1 555 0101' };
+const merchant = {
+	id: 'mer_1',
+	name: 'Shop',
+	websites: [
+		{ websiteId: 'web_1', domain: 'shop.com' },
+		{ websiteId: 'web_2', domain: 'www.shop.com' },
+	],
+	websiteId: 'web_2',
+};
+const admin = { id: 'adm_1', name: 'Ann', role: /** @type {const} */ ('support'), websiteId: null };
 
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
 let portal;
@@ -34,11 +56,11 @@ const issue = (clock, overrides = {}) =>
 		signer: portal.signer,
 		issuer: ISS,
 		audience: AUD,
-		subject: 'usr_1',
 		kind: 'merchant',
-		user: { id: 'usr_1', email: 'a@example.com' },
-		scope: { merchantId: 'mer_1', websiteId: 'web_1' },
-		subscriptions: [{ id: 'sub_1', elements: ['codes'] }],
+		sessionExpiresAt: SESSION_END,
+		branding,
+		support,
+		merchant,
 		now: clock.now,
 		randomBytes: seededRandom(),
 		...overrides,
@@ -60,20 +82,46 @@ const verify = (clock, token, overrides = {}) =>
 		...overrides,
 	});
 
-describe('launch tokens', () => {
-	it('issues a 60 s single-use launch and verifies it', async () => {
+/**
+ * Sign arbitrary launch claims with the Portal key.
+ * @param {Record<string, unknown>} payload
+ */
+const signRaw = (payload) => signCompact({ signer: portal.signer, typ: 'ss-launch+jwt', payload });
+
+describe('launches', () => {
+	it('issues a 60 s single-use merchant launch and verifies it', async () => {
 		const clock = createClock();
 		const { token, claims } = await issue(clock);
 		expect(claims.exp - claims.iat).toBe(60);
+		expect(claims.sub).toBe('mer_1');
+		expect(claims).not.toHaveProperty('admin');
 		expect(decodeSegment(token, 0)).toEqual({ alg: 'EdDSA', kid: 'portal-1', typ: 'ss-launch+jwt' });
 		const verified = await verify(clock, token);
 		expect(verified).toMatchObject({
 			kind: 'merchant',
-			sub: 'usr_1',
-			scope: { merchantId: 'mer_1' },
-			subscriptions: [{ id: 'sub_1' }],
+			sub: 'mer_1',
+			merchant,
+			branding,
+			support,
+			sessionExpiresAt: SESSION_END,
 		});
 		expect(verified.jti.length).toBeGreaterThan(10);
+	});
+
+	it('issues an admin launch with or without a website', async () => {
+		const clock = createClock();
+		const defaults = await issue(clock, { kind: 'admin', merchant: undefined, admin });
+		expect(await verify(clock, defaults.token)).toMatchObject({ kind: 'admin', sub: 'adm_1', admin });
+		const picked = await issue(clock, {
+			kind: 'admin',
+			merchant: undefined,
+			admin: { ...admin, role: 'owner', websiteId: 'web_9' },
+			support: { email: '', phone: '' },
+			branding: { ...branding, logoUrl: null },
+			jti: 'launch-jti-0001',
+		});
+		expect(picked.claims.jti).toBe('launch-jti-0001');
+		expect((await verify(clock, picked.token)).admin).toEqual({ ...admin, role: 'owner', websiteId: 'web_9' });
 	});
 
 	it('rejects a replayed jti', async () => {
@@ -84,7 +132,7 @@ describe('launch tokens', () => {
 		await expectCode(verify(clock, token, { consume }), 'replay');
 	});
 
-	it('rejects expired, not-yet-valid and over-long tokens', async () => {
+	it('rejects expired, not-yet-valid and over-long launches, and ended Portal sessions', async () => {
 		const clock = createClock();
 		const { token } = await issue(clock);
 		clock.advance(66_000);
@@ -92,18 +140,17 @@ describe('launch tokens', () => {
 		const future = createClock(clock.now() + 3_600_000);
 		const { token: fromFuture } = await issue(future);
 		await expectCode(verify(clock, fromFuture), 'not_yet_valid');
-		const long = await signCompact({
-			signer: portal.signer,
-			typ: 'ss-launch+jwt',
-			payload: { ...(await issue(clock)).claims, exp: Math.floor(clock.now() / 1000) + 3600 },
-		});
+		const long = await signRaw({ ...(await issue(clock)).claims, exp: Math.floor(clock.now() / 1000) + 3600 });
 		await expectCode(verify(clock, long), 'lifetime_too_long');
+		const ended = await signRaw({ ...(await issue(clock)).claims, sessionExpiresAt: new Date(clock.now() - 1).toISOString() });
+		await expectCode(verify(clock, ended), 'expired');
+		await expectCode(issue(clock, { sessionExpiresAt: new Date(clock.now()).toISOString() }), 'invalid_launch');
 	});
 
 	it('rejects wrong audience, issuer, kid, signature, type and tampering', async () => {
 		const clock = createClock();
 		const { token } = await issue(clock);
-		await expectCode(verify(clock, token, { audience: 'app_other' }), 'audience');
+		await expectCode(verify(clock, token, { audience: 'growth' }), 'audience');
 		await expectCode(verify(clock, token, { issuer: 'https://evil.test' }), 'issuer');
 		await expectCode(verify(clock, token, { keyResolver: staticResolver([]) }), 'unknown_kid');
 		await expectCode(verify(clock, token, { keyResolver: staticResolver([attacker.publicJwk]) }), 'signature');
@@ -111,7 +158,7 @@ describe('launch tokens', () => {
 		await expectCode(
 			verify(
 				clock,
-				tamperSegment(token, 1, (p) => ({ ...p, scope: { merchantId: 'mer_2' } })),
+				tamperSegment(token, 1, (p) => ({ ...p, merchant: { ...p.merchant, websiteId: 'web_1' } })),
 			),
 			'signature',
 		);
@@ -129,16 +176,13 @@ describe('launch tokens', () => {
 			),
 			'wrong_type',
 		);
-		const forged = await (await issue(clock, { signer: attacker.signer })).token;
-		await expectCode(verify(clock, forged), 'signature');
-		const aud = await issueLaunch({ ...(await baseIssue(clock)), audience: 'app_other' });
-		await expectCode(verify(clock, aud.token), 'audience');
+		await expectCode(verify(clock, (await issue(clock, { signer: attacker.signer })).token), 'signature');
+		await expectCode(verify(clock, (await issue(clock, { audience: 'growth' })).token), 'audience');
 	});
 
 	it('rejects a revoked signing key', async () => {
 		const clock = createClock();
 		const { token } = await issue(clock);
-		const { createKeyResolver, createJwks } = await import('../src/index.js');
 		const keyResolver = createKeyResolver({ jwks: createJwks([portal.publicJwk]), revokedKids: ['portal-1'] });
 		await expectCode(verify(clock, token, { keyResolver }), 'revoked_key');
 	});
@@ -156,101 +200,59 @@ describe('launch tokens', () => {
 	it('rejects malformed claims even when correctly signed', async () => {
 		const clock = createClock();
 		const { claims } = await issue(clock);
-		/** @param {Record<string, unknown>} payload */
-		const sign = (payload) => signCompact({ signer: portal.signer, typ: 'ss-launch+jwt', payload });
-		await expectCode(verify(clock, await sign({ ...claims, sub: '' })), 'malformed');
-		await expectCode(verify(clock, await sign({ ...claims, jti: undefined })), 'malformed');
-		await expectCode(verify(clock, await sign({ ...claims, exp: undefined })), 'malformed');
-		await expectCode(verify(clock, await sign({ ...claims, iat: undefined })), 'malformed');
-		await expectCode(verify(clock, await sign({ ...claims, iat: 'x' })), 'malformed');
-		await expectCode(verify(clock, await sign({ ...claims, nbf: 'x' })), 'malformed');
-		await expectCode(verify(clock, await sign({ ...claims, exp: claims.iat })), 'malformed');
-		await expectCode(verify(clock, await sign({ ...claims, nbf: claims.iat + 30 })), 'not_yet_valid');
-		await expectCode(verify(clock, await sign({ ...claims, kind: 'root' })), 'kind_scope');
+		await expectCode(verify(clock, await signRaw({ ...claims, jti: undefined })), 'malformed');
+		await expectCode(verify(clock, await signRaw({ ...claims, exp: undefined })), 'malformed');
+		await expectCode(verify(clock, await signRaw({ ...claims, iat: undefined })), 'malformed');
+		await expectCode(verify(clock, await signRaw({ ...claims, nbf: 'x' })), 'malformed');
+		await expectCode(verify(clock, await signRaw({ ...claims, exp: claims.iat })), 'malformed');
+		await expectCode(verify(clock, await signRaw({ ...claims, nbf: claims.iat + 30 })), 'not_yet_valid');
+		await expectCode(verify(clock, await signRaw({ ...claims, kind: 'finance' })), 'invalid_launch');
+		await expectCode(verify(clock, await signRaw({ ...claims, sub: 'mer_2' })), 'invalid_launch');
+		await expectCode(verify(clock, await signRaw({ ...claims, admin })), 'invalid_launch');
 	});
 });
 
-/** @param {ReturnType<typeof createClock>} clock */
-const baseIssue = async (clock) => ({
-	signer: portal.signer,
-	issuer: ISS,
-	audience: AUD,
-	subject: 'usr_1',
-	kind: /** @type {const} */ ('merchant'),
-	user: { id: 'usr_1' },
-	scope: { merchantId: 'mer_1' },
-	now: clock.now,
-});
-
-describe('launch kind/scope rules', () => {
-	it.each([
-		['merchant', { scope: { merchantId: 'm' } }],
-		['admin', { scope: { merchantId: 'm', permissions: ['orders.read'] }, user: { id: 'staff_1', roles: ['support'] } }],
-		['admin', { scope: { all: true } }],
-		['admin', { scope: { all: true, permissions: ['apps.manage'] } }],
-		['admin', { scope: { merchantId: 'm', subscriptions: ['sub_1', 'sub_2'] } }],
-		['merchant', { scope: { merchantId: 'm', subscriptions: [] } }],
-	])('accepts a valid %s launch', async (kind, extra) => {
+describe('launch rules', () => {
+	/** @type {Array<[string, Record<string, unknown>]>} */
+	const refused = [
+		['an unknown kind', { kind: 'root' }],
+		['a merchant launch without merchant', { merchant: undefined }],
+		['a merchant that is not an object', { merchant: 'mer_1' }],
+		['a merchant without a name', { merchant: { ...merchant, name: '' } }],
+		['a merchant without websites', { merchant: { ...merchant, websites: [] } }],
+		['a website entry without a domain', { merchant: { ...merchant, websites: [{ websiteId: 'web_2' }] } }],
+		['a website outside the list', { merchant: { ...merchant, websiteId: 'web_3' } }],
+		['both merchant and admin', { admin }],
+		['an admin launch without admin', { kind: 'admin', merchant: undefined }],
+		['an admin without an id', { kind: 'admin', merchant: undefined, admin: { ...admin, id: '' } }],
+		['a finance admin', { kind: 'admin', merchant: undefined, admin: { ...admin, role: 'finance' } }],
+		['an admin website that is not a string', { kind: 'admin', merchant: undefined, admin: { ...admin, websiteId: 7 } }],
+		['a session end that is not ISO UTC', { sessionExpiresAt: '2026-10-01 12:00' }],
+		['a session end that is no date', { sessionExpiresAt: '2026-19-45T99:00:00Z' }],
+		['missing branding', { branding: undefined }],
+		['branding without a name', { branding: { ...branding, name: '' } }],
+		['a bad accent', { branding: { ...branding, accent: 'indigo' } }],
+		['a bad logo URL', { branding: { ...branding, logoUrl: 'javascript:alert(1)' } }],
+		['a logo URL with userinfo', { branding: { ...branding, logoUrl: 'https://u:p@x.test/logo' } }],
+		['a logo URL that is not a URL', { branding: { ...branding, logoUrl: 'not a url' } }],
+		['missing support', { support: null }],
+		['support without phone', { support: { email: 'a@b.c' } }],
+		['support with a bad whatsapp', { support: { ...support, whatsapp: 5 } }],
+	];
+	it.each(refused)('refuses to issue %s', async (_name, extra) => {
 		const clock = createClock();
-		const { token } = await issueLaunch({
-			...(await baseIssue(clock)),
-			kind: /** @type {any} */ (kind),
-			.../** @type {any} */ (extra),
-		});
-		const claims = await verify(clock, token);
-		expect(claims.kind).toBe(kind);
+		await expectCode(issue(clock, extra), 'invalid_launch');
 	});
 
-	it.each([
-		['merchant without merchantId', { kind: 'merchant', scope: {} }],
-		['demo (removed kind)', { kind: 'demo', scope: {} }],
-		['admin without scope', { kind: 'admin', scope: {} }],
-		['admin with all and a merchant', { kind: 'admin', scope: { all: true, merchantId: 'm' } }],
-		['admin with all and subscriptions', { kind: 'admin', scope: { all: true, subscriptions: ['s'] } }],
-		['admin with all: false', { kind: 'admin', scope: { all: false, merchantId: 'm' } }],
-		['admin with all: "yes"', { kind: 'admin', scope: { all: 'yes' } }],
-		['merchant with all', { kind: 'merchant', scope: { all: true, merchantId: 'm' } }],
-		['subscriptions not a list', { kind: 'admin', scope: { merchantId: 'm', subscriptions: 'sub_1' } }],
-		['subscriptions with an empty id', { kind: 'admin', scope: { merchantId: 'm', subscriptions: [''] } }],
-		['unknown kind', { kind: 'root' }],
-		['missing user id', { user: {} }],
-	])('refuses to issue %s', async (_name, extra) => {
-		const clock = createClock();
-		await expectCode(issueLaunch({ ...(await baseIssue(clock)), .../** @type {any} */ (extra) }), 'kind_scope');
-	});
-
-	it.each([['admin with no scope', { kind: 'admin', scope: undefined }]])(
-		'rejects a signed launch with %s',
-		async (_name, extra) => {
-			const clock = createClock();
-			const { claims } = await issueLaunch(await baseIssue(clock));
-			const token = await signCompact({ signer: portal.signer, typ: 'ss-launch+jwt', payload: { ...claims, ...extra } });
-			await expectCode(verify(clock, token), 'kind_scope');
-		},
-	);
-
-	it('kindScopeViolation returns null for valid claims', () => {
-		expect(kindScopeViolation({ kind: 'merchant', user: { id: 'u' }, scope: { merchantId: 'm' } })).toBeNull();
-		expect(kindScopeViolation({ kind: 'merchant', user: { id: 'u' } })).toBe('scope is required');
-		expect(kindScopeViolation({ kind: 'merchant', user: { id: 'u' }, scope: {} })).toBe(
-			'merchant launch requires scope.merchantId',
+	it('launchViolation explains each rule and returns null for valid claims', () => {
+		const base = { kind: 'merchant', sub: 'mer_1', merchant, sessionExpiresAt: SESSION_END, branding, support };
+		expect(launchViolation(base)).toBeNull();
+		expect(launchViolation({ ...base, merchant: { ...merchant, websiteId: 'x' } })).toBe(
+			'merchant.websiteId must be one of merchant.websites',
 		);
-	});
-
-	it('kindScopeViolation explains admin scope violations', () => {
-		const user = { id: 'u' };
-		expect(kindScopeViolation({ kind: 'admin', user, scope: { all: true } })).toBeNull();
-		expect(kindScopeViolation({ kind: 'admin', user, scope: { merchantId: 'm', subscriptions: ['s'] } })).toBeNull();
-		expect(kindScopeViolation({ kind: 'admin', user, scope: {} })).toBe('admin launch requires scope.all or scope.merchantId');
-		expect(kindScopeViolation({ kind: 'admin', user, scope: { all: true, websiteId: 'w' } })).toBe(
-			'scope.all excludes scope.websiteId',
+		expect(launchViolation({ ...base, kind: 'admin', merchant: undefined, admin: { ...admin, role: 'finance' } })).toBe(
+			'admin.role must be owner or support',
 		);
-		expect(kindScopeViolation({ kind: 'admin', user, scope: { all: 1 } })).toBe('scope.all must be true');
-		expect(kindScopeViolation({ kind: 'merchant', user, scope: { all: true, merchantId: 'm' } })).toBe(
-			'scope.all is only allowed for admin launches',
-		);
-		expect(kindScopeViolation({ kind: 'admin', user, scope: { merchantId: 'm', subscriptions: [1] } })).toBe(
-			'scope.subscriptions must be a list of ids',
-		);
+		expect(launchViolation({ ...base, kind: 'admin', sub: 'adm_1', merchant: undefined, admin })).toBeNull();
 	});
 });

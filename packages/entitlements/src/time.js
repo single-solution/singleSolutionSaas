@@ -1,13 +1,12 @@
 /**
- * Instant helpers. Every instant inside this package is an integer number of milliseconds since the
- * Unix epoch (UTC). Public functions accept `number | string | Date` and normalise with {@link toMs}.
+ * UTC hour helpers. Instants are integer milliseconds since the Unix epoch (UTC); {@link toMs} turns a number, an
+ * ISO-8601 string or a `Date` into one.
  */
 
 /** @typedef {number | string | Date} Instant */
 
-export const MINUTE_MS = 60_000;
+/** Milliseconds in one hour. */
 export const HOUR_MS = 3_600_000;
-export const DAY_MS = 86_400_000;
 
 /**
  * Normalises an instant to epoch milliseconds. Throws on invalid input.
@@ -21,15 +20,6 @@ export const toMs = (instant, label = 'instant') => {
 		throw new RangeError(`${label} is not a valid instant: ${String(instant)}`);
 	return Math.trunc(ms);
 };
-
-/**
- * Like {@link toMs} but maps `null`/`undefined` to `fallback`.
- * @param {Instant | null | undefined} instant
- * @param {number} fallback
- * @param {string} [label]
- * @returns {number}
- */
-export const toMsOr = (instant, fallback, label) => (instant === null || instant === undefined ? fallback : toMs(instant, label));
 
 /**
  * Start of the UTC hour containing `ms`.

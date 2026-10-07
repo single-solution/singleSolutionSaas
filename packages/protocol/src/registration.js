@@ -1,32 +1,28 @@
 /**
- * Connect-secret onboarding (Portal → product).
+ * The connect handshake (PLAN 0.4.12 row 1): Portal → product, once per product and again on Reconnect.
  *
- * The deployer gives the product a random `CONNECT_SECRET` (≥ 32 characters) and types the product URL and that secret
- * into the Portal (Admin → Apps → Add product). The Portal then
+ * The deployer gives the product a random `CONNECT_SECRET` (at least 32 characters) and an Owner types the product URL
+ * and that secret into Portal → Products. The Portal then
  *   1. calls `POST <productUrl>/.well-known/ss-connect` with the JSON body
- *      `{ portalUrl, jwks, appId, baseUrl, nonce }` and the headers `SS-Connect-Timestamp: <unix seconds>` and
- *      `SS-Connect-Signature: <hex HMAC-SHA256(secret, "ss-connect.v1|<timestamp>|<exact body>")>` — the secret itself
- *      is never sent;
- *   2. the product (`verifyConnectRequest`) checks the HMAC in constant time and the timestamp (±5 min), rejects a
- *      reused nonce, generates its Ed25519 key if it has none, records the Portal URL, appId and base URL, pins the
- *      Portal keys and answers (`createConnectResponse`) `{ appId, nonce, publicJwk, manifest }`, HMAC-signed with the
- *      same secret under another label (`ss-connected.v1|…`), so a request cannot be reflected as an answer;
- *   3. the Portal (`verifyConnectResponse`) checks that answer (HMAC, timestamp, nonce and appId echo, key, manifest)
- *      and stores the app with its base URL and public key pinned. The Portal never stores the secret.
+ *      `{ portalUrl, jwks, baseUrl, nonce, priceListVersion }` and the headers `SS-Connect-Timestamp: <unix seconds>`
+ *      and `SS-Connect-Signature: <hex HMAC-SHA256(secret, "ss-connect.v1|<timestamp>|<exact body>")>`; the secret
+ *      itself is never sent. `priceListVersion` is the Portal's last accepted price-list version for that product (0
+ *      when none);
+ *   2. the product (`verifyConnectRequest`) checks the HMAC in constant time and the timestamp (±5 min), refuses a
+ *      reused nonce, generates its Ed25519 key if it has none, pins the Portal URL and keys, stores the base URL it was
+ *      connected with as its own address, and answers (`createConnectResponse`)
+ *      `{ productId, nonce, publicJwk, manifest, prices }`, HMAC-signed with the same secret under another label
+ *      (`ss-connected.v1|…`), so a request cannot be reflected as an answer;
+ *   3. the Portal (`verifyConnectResponse`) checks the answer (HMAC, timestamp, nonce echo, product id format, key) and
+ *      stores the product with its base URL and public key pinned. Manifest and price-list shapes are checked by the
+ *      caller with `@ss/contracts`. The Portal never stores the secret.
  * Whoever holds the secret is the authority: connecting again replaces the binding.
  */
 import { createProtocolError } from './errors.js';
-import {
-	canonicalJson,
-	constantTimeEqual,
-	getHeader,
-	hmacSha256Hex,
-	randomId,
-	defaultRandomBytes,
-	sha256Hex,
-} from './encoding.js';
-import { thumbprint, toPublicJwk } from './keys.js';
+import { constantTimeEqual, defaultRandomBytes, getHeader, hmacSha256Hex, randomId } from './encoding.js';
+import { toPublicJwk } from './keys.js';
 import { isObject, nowSeconds } from './jws.js';
+import { isProductId } from './tokens.js';
 
 /** @typedef {import('./keys.js').PublicJwk} PublicJwk */
 
@@ -44,19 +40,6 @@ const REQUEST_LABEL = 'ss-connect.v1';
 const RESPONSE_LABEL = 'ss-connected.v1';
 const SIGNATURE = /^[0-9a-f]{64}$/;
 const TIMESTAMP = /^\d{1,12}$/;
-
-/**
- * SHA-256 (hex) of the canonical JSON of a manifest.
- * @param {unknown} manifest
- * @returns {string}
- */
-export const hashManifest = (manifest) => {
-	try {
-		return sha256Hex(canonicalJson(manifest));
-	} catch {
-		throw createProtocolError('invalid_argument', 'manifest must be JSON-serialisable');
-	}
-};
 
 /**
  * Canonicalise a URL for pinning comparisons (lower-case scheme/host, default port dropped, no trailing slash, no
@@ -161,9 +144,16 @@ const checkedNonce = (nonce) => {
 };
 
 /**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+const isVersion = (value) => Number.isSafeInteger(value) && /** @type {number} */ (value) >= 0;
+
+/**
  * Portal side: the connect request to a product.
- * @param {{ secret: string, productUrl: string, portalUrl: string, jwks: { keys: unknown[] }, appId: string,
- *   now?: () => number, randomBytes?: (length: number) => Uint8Array }} params
+ * @param {{ secret: string, productUrl: string, portalUrl: string, jwks: { keys: unknown[] }, priceListVersion: number,
+ *   now?: () => number, randomBytes?: (length: number) => Uint8Array }} params `priceListVersion`: the last accepted
+ *   price-list version for this product, 0 when none.
  * @returns {{ url: string, baseUrl: string, headers: Record<string, string>, body: string, nonce: string }}
  */
 export const createConnectRequest = ({
@@ -171,29 +161,28 @@ export const createConnectRequest = ({
 	productUrl,
 	portalUrl,
 	jwks,
-	appId,
+	priceListVersion,
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
 }) => {
 	const key = requireSecret(secret);
 	const baseUrl = canonicalUrl(productUrl);
-	if (typeof appId !== 'string' || appId.length === 0) throw createProtocolError('invalid_argument', 'appId is required');
+	if (!isVersion(priceListVersion)) throw createProtocolError('invalid_argument', 'priceListVersion must be an integer >= 0');
 	const nonce = randomId(randomBytes);
-	const body = JSON.stringify({ portalUrl: canonicalUrl(portalUrl), jwks, appId, baseUrl, nonce });
+	const body = JSON.stringify({ portalUrl: canonicalUrl(portalUrl), jwks, baseUrl, nonce, priceListVersion });
 	return { url: `${baseUrl}${CONNECT_PATH}`, baseUrl, headers: signedHeaders(REQUEST_LABEL, key, body, now), body, nonce };
 };
 
 /**
  * Product side: verify a connect request (check the nonce against a replay store afterwards).
  * @param {{ secret: string, headers: Headers | Record<string, string | string[] | undefined>, body: string, now?: () => number }} params
- * @returns {{ portalUrl: string, jwks: { keys: PublicJwk[] }, appId: string, baseUrl: string, nonce: string }}
+ * @returns {{ portalUrl: string, jwks: { keys: PublicJwk[] }, baseUrl: string, nonce: string, priceListVersion: number }}
  */
 export const verifyConnectRequest = ({ secret, headers, body, now = Date.now }) => {
 	const parsed = verifySigned(REQUEST_LABEL, { secret: requireSecret(secret), headers, body, now });
 	if (!isObject(parsed.jwks) || !Array.isArray(parsed.jwks.keys) || parsed.jwks.keys.length === 0)
 		throw createProtocolError('malformed', 'jwks is invalid');
-	if (typeof parsed.appId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(parsed.appId))
-		throw createProtocolError('malformed', 'appId is invalid');
+	if (!isVersion(parsed.priceListVersion)) throw createProtocolError('malformed', 'priceListVersion is invalid');
 	/** @type {{ keys: PublicJwk[] }} */
 	let jwks;
 	/** @type {string} */
@@ -207,31 +196,38 @@ export const verifyConnectRequest = ({ secret, headers, body, now = Date.now }) 
 	} catch {
 		throw createProtocolError('malformed', 'portalUrl, baseUrl or jwks is invalid');
 	}
-	return { portalUrl, jwks, appId: parsed.appId, baseUrl, nonce: checkedNonce(parsed.nonce) };
+	return { portalUrl, jwks, baseUrl, nonce: checkedNonce(parsed.nonce), priceListVersion: parsed.priceListVersion };
 };
 
 /**
  * Product side: the signed answer.
- * @param {{ secret: string, appId: string, nonce: string, publicJwk: PublicJwk, manifest: unknown, now?: () => number }} params
+ * @param {{ secret: string, productId: string, nonce: string, publicJwk: PublicJwk, manifest: unknown, prices: unknown,
+ *   now?: () => number }} params `prices`: `{ version, features: [{ key, name, description, dependsOn,
+ *   millicreditsPerHour }] }`, the product's current price list.
  * @returns {{ headers: Record<string, string>, body: string }}
  */
-export const createConnectResponse = ({ secret, appId, nonce, publicJwk, manifest, now = Date.now }) => {
-	const body = JSON.stringify({ appId, nonce, publicJwk: toPublicJwk(publicJwk), manifest });
-	return { headers: signedHeaders(RESPONSE_LABEL, requireSecret(secret), body, now), body };
+export const createConnectResponse = ({ secret, productId, nonce, publicJwk, manifest, prices, now = Date.now }) => {
+	const key = requireSecret(secret);
+	if (!isProductId(productId)) throw createProtocolError('invalid_argument', 'productId is invalid');
+	if (!isObject(manifest) || !isObject(prices))
+		throw createProtocolError('invalid_argument', 'manifest and prices are required');
+	const body = JSON.stringify({ productId, nonce: checkedNonce(nonce), publicJwk: toPublicJwk(publicJwk), manifest, prices });
+	return { headers: signedHeaders(RESPONSE_LABEL, key, body, now), body };
 };
 
 /**
  * Portal side: verify the product's answer.
  * @param {{ secret: string, headers: Headers | Record<string, string | string[] | undefined>, body: string, nonce: string,
- *   appId: string, now?: () => number }} params
- * @returns {Promise<{ publicJwk: PublicJwk, thumbprint: string, manifest: unknown }>}
+ *   now?: () => number }} params
+ * @returns {{ productId: string, publicJwk: PublicJwk, manifest: Record<string, unknown>, prices: Record<string, unknown> }}
  */
-export const verifyConnectResponse = async ({ secret, headers, body, nonce, appId, now = Date.now }) => {
+export const verifyConnectResponse = ({ secret, headers, body, nonce, now = Date.now }) => {
 	const parsed = verifySigned(RESPONSE_LABEL, { secret: requireSecret(secret), headers, body, now });
-	if (typeof parsed.nonce !== 'string' || !constantTimeEqual(parsed.nonce, nonce))
+	if (typeof parsed.nonce !== 'string' || typeof nonce !== 'string' || !constantTimeEqual(parsed.nonce, nonce))
 		throw createProtocolError('replay', 'answer does not echo the request nonce');
-	if (parsed.appId !== appId) throw createProtocolError('subject', 'answer is for another appId');
+	if (!isProductId(parsed.productId)) throw createProtocolError('malformed', 'productId is invalid');
 	if (!isObject(parsed.manifest)) throw createProtocolError('malformed', 'manifest is missing');
+	if (!isObject(parsed.prices)) throw createProtocolError('malformed', 'prices are missing');
 	/** @type {PublicJwk} */
 	let publicJwk;
 	try {
@@ -239,5 +235,5 @@ export const verifyConnectResponse = async ({ secret, headers, body, nonce, appI
 	} catch {
 		throw createProtocolError('malformed', 'publicJwk is invalid');
 	}
-	return { publicJwk, thumbprint: await thumbprint(publicJwk), manifest: parsed.manifest };
+	return { productId: parsed.productId, publicJwk, manifest: parsed.manifest, prices: parsed.prices };
 };

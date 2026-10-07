@@ -1,14 +1,7 @@
+import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import {
-	IDENTITY_MAX_AGE_MS,
-	createIdentity,
-	createRequestHandler,
-	defineRoute,
-	identityTokenOf,
-	verifyIdentityToken,
-} from '../src/index.js';
-import { createTestIdentityIssuer } from '../src/testing.js';
-import { T0, entitle, setup, websiteKey } from './helpers.js';
+import { IDENTITY_MAX_AGE_MS, verifyIdentityToken } from '../src/identity.js';
+import { T0, setup } from './helpers.js';
 
 const NOW_S = Math.floor(T0 / 1000);
 const ISSUER = 'https://login.shop.example.com/';
@@ -16,22 +9,55 @@ const ISSUER = 'https://login.shop.example.com/';
 const claims = (over = {}) => ({ iss: ISSUER, sub: 'cust-42', email: 'a@example.com', iat: NOW_S, exp: NOW_S + 600, ...over });
 const now = () => T0;
 
+/**
+ * A merchant's own login for tests: a key pair, the issuer settings and `sign(claims, header?)`.
+ * @param {{ alg?: 'EdDSA' | 'ES256' | 'RS256', kid?: string, audience?: string }} [options]
+ */
+const createIssuer = ({ alg = 'EdDSA', kid = 'site-key-1', audience } = {}) => {
+	const pair =
+		alg === 'EdDSA'
+			? generateKeyPairSync('ed25519')
+			: alg === 'ES256'
+				? generateKeyPairSync('ec', { namedCurve: 'P-256' })
+				: generateKeyPairSync('rsa', { modulusLength: 2048 });
+	const jwk = /** @type {Record<string, string>} */ (pair.publicKey.export({ format: 'jwk' }));
+	const section = {
+		issuer: ISSUER,
+		jwks: [{ ...jwk, kid, alg, use: 'sig' }],
+		...(audience ? { audience } : {}),
+		claimMap: { subject: 'sub', email: 'email', phone: 'phone_number' },
+	};
+	/** @param {unknown} value */
+	const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+	return {
+		section,
+		/** @param {Record<string, unknown>} payload @param {Record<string, unknown>} [header] */
+		sign: (payload, header = {}) => {
+			const input = `${b64({ alg, kid, typ: 'JWT', ...header })}.${b64(payload)}`;
+			const signature = cryptoSign(
+				alg === 'EdDSA' ? null : 'sha256',
+				Buffer.from(input),
+				alg === 'ES256' ? { key: pair.privateKey, dsaEncoding: 'ieee-p1363' } : pair.privateKey,
+			);
+			return `${input}.${signature.toString('base64url')}`;
+		},
+	};
+};
+
 describe('verifyIdentityToken', () => {
 	it.each(/** @type {const} */ (['EdDSA', 'ES256', 'RS256']))('accepts %s tokens and maps the claims', (alg) => {
-		const issuer = createTestIdentityIssuer({ alg });
+		const issuer = createIssuer({ alg });
 		const payload = claims({ phone_number: '+96550000000', tier: { name: 'gold' } });
 		const result = verifyIdentityToken(issuer.sign(payload), issuer.section, { now });
 		expect(result).toEqual({
 			ok: true,
 			identity: { subject: 'cust-42', email: 'a@example.com', phone: '+96550000000', issuer: ISSUER, claims: payload },
 		});
-		const identity = /** @type {any} */ (result).identity;
-		expect(Object.isFrozen(identity.claims) && Object.isFrozen(identity.claims.tier)).toBe(true);
 	});
 
 	it('refuses every malformed, mismatched, expired or forged token with a stable code', () => {
-		const issuer = createTestIdentityIssuer({ audience: 'shop-web' });
-		const other = createTestIdentityIssuer({ kid: 'site-key-1' });
+		const issuer = createIssuer({ audience: 'shop-web' });
+		const other = createIssuer({ kid: 'site-key-1' });
 		const ok = issuer.sign(claims({ aud: ['x', 'shop-web'] }));
 		expect(verifyIdentityToken(ok, issuer.section, { now }).ok).toBe(true);
 		const [h, p] = ok.split('.');
@@ -71,108 +97,45 @@ describe('verifyIdentityToken', () => {
 		// a corrupted signature never throws
 		expect(verifyIdentityToken(`${h}.${p}.AAAA`, issuer.section, { now })).toEqual({ ok: false, code: 'signature' });
 	});
+});
 
-	it('reads the token from SS-Identity or the beacon body', () => {
-		expect(identityTokenOf({ headers: new Headers({ 'ss-identity': ' tok ' }) }, { identity: 'body' })).toBe('tok');
-		expect(identityTokenOf({ headers: new Headers() }, { identity: 'body' })).toBe('body');
-		expect(identityTokenOf({ headers: new Headers() }, { identity: 7 })).toBeNull();
-		expect(identityTokenOf({ headers: new Headers() })).toBeNull();
-		const identity = createIdentity({ now });
-		expect(identity.verify({ headers: new Headers() }, { doc: null })).toEqual({ ok: false, code: 'identity_missing' });
-		expect(identity.verify({ headers: new Headers({ 'ss-identity': 't' }) }, { doc: /** @type {any} */ ({}) })).toEqual({
+describe('identity.verify (issuer from Connections)', () => {
+	it('verifies sign-ins with the keys of the issuer kept in a connection', async () => {
+		const issuer = createIssuer({ audience: 'shop-web' });
+		const connections = { login: { label: 'Your login', kind: 'secret', neededBy: ['notes'], secretField: 'audience' } };
+		const { product, websiteId, session, dash, handlers } = await setup({ connections });
+		let keysServed = 0;
+		handlers['https://login.shop.example.com'] = async () => {
+			keysServed += 1;
+			return new Response(JSON.stringify({ keys: issuer.section.jwks }), { status: 200 });
+		};
+		const token = issuer.sign(claims({ aud: 'shop-web' }));
+		expect(await product.identity.verify({ websiteId, token, connection: 'login' })).toEqual({
 			ok: false,
 			code: 'identity_not_configured',
 		});
-		const issuer = createTestIdentityIssuer();
-		expect(identity.verifyToken(issuer.sign(claims()), issuer.section).ok).toBe(true);
-	});
-});
-
-describe('route option identity', () => {
-	it('rejects identity on routes without website auth or entitlement', () => {
-		const handler = () => ({});
-		expect(() => defineRoute({ method: 'GET', path: '/x', auth: 'none', identity: 'optional', handler })).toThrow(
-			/website auth/,
-		);
-		expect(() =>
-			defineRoute({ method: 'GET', path: '/x', auth: 'website', entitlement: false, identity: 'required', handler }),
-		).toThrow(/website auth/);
-		expect(() =>
-			defineRoute({ method: 'GET', path: '/x', auth: 'website', identity: /** @type {any} */ ('yes'), handler }),
-		).toThrow(/required' or 'optional/);
-	});
-
-	it('puts the verified customer on ctx.identity (required → 401, optional → null with a reason)', async () => {
-		const { portal, product } = await setup();
-		const issuer = createTestIdentityIssuer();
-		await entitle(portal, { identity: issuer.section });
-		const pk = await websiteKey(portal);
-		const handle = createRequestHandler(product, [
-			defineRoute({
-				method: 'GET',
-				path: '/v1/me',
-				auth: 'website',
-				identity: 'required',
-				handler: (ctx) => ({ identity: ctx.identity }),
-			}),
-			defineRoute({
-				method: 'POST',
-				path: '/v1/beacon',
-				auth: 'website',
-				identity: 'optional',
-				handler: (ctx) => ({ identity: ctx.identity, problem: ctx.identityProblem }),
-			}),
-		]);
-		const base = 'https://coupons.example.dev';
-		const headers = { authorization: `Bearer ${pk}`, origin: 'https://shop.example.com' };
-		/** @param {string} path @param {RequestInit} [init] */
-		const call = async (path, init = {}) => {
-			const res = await handle(new Request(`${base}${path}`, init));
-			return { status: res.status, json: await res.json(), headers: res.headers };
-		};
-		const token = issuer.sign(claims());
-		const me = await call('/v1/me', { headers: { ...headers, 'ss-identity': token } });
-		expect(me.status).toBe(200);
-		expect(me.json.identity).toMatchObject({
-			subject: 'cust-42',
-			email: 'a@example.com',
-			issuer: ISSUER,
-			claims: { sub: 'cust-42' },
+		const cookie = await session({ kind: 'merchant' });
+		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/login`, {
+			value: {
+				issuer: ISSUER,
+				jwksUrl: 'https://login.shop.example.com/jwks.json',
+				audience: 'shop-web',
+				emailClaim: 'email',
+				phoneClaim: 'phone',
+			},
 		});
-		const missing = await call('/v1/me', { headers });
-		expect([missing.status, missing.json.type]).toEqual([401, expect.stringMatching(/identity_required$/)]);
-		const forged = createTestIdentityIssuer().sign(claims());
-		const invalid = await call('/v1/me', { headers: { ...headers, 'ss-identity': forged } });
-		expect([invalid.status, invalid.json.type, invalid.json.detail]).toEqual([
-			401,
-			expect.stringMatching(/identity_invalid$/),
-			expect.stringContaining('signature'),
-		]);
-		// sendBeacon-style body identity
-		const beacon = await call('/v1/beacon', {
-			method: 'POST',
-			headers: { ...headers, 'content-type': 'application/json' },
-			body: JSON.stringify({ identity: token }),
+		expect(await product.identity.verify({ websiteId, token, connection: 'login' })).toMatchObject({
+			ok: true,
+			identity: { subject: 'cust-42', email: 'a@example.com' },
 		});
-		expect(beacon.json).toMatchObject({
-			identity: { subject: 'cust-42', email: 'a@example.com', issuer: ISSUER },
-			problem: null,
+		expect(await product.identity.verify({ websiteId, token: 'x.y.z', connection: 'login' })).toMatchObject({ ok: false });
+		expect(keysServed).toBe(1);
+		await dash(cookie, 'PUT', `/v1/dashboard/websites/${websiteId}/connections/login`, {
+			value: { issuer: ISSUER, jwksUrl: 'https://unknown.example.com/jwks.json', subjectClaim: 'email' },
 		});
-		const anonymous = await call('/v1/beacon', {
-			method: 'POST',
-			headers: { ...headers, 'ss-identity': 'wt1.legacy.token' },
+		expect(await product.identity.verify({ websiteId, token, connection: 'login' })).toEqual({
+			ok: false,
+			code: 'unknown_key',
 		});
-		expect(anonymous.json).toEqual({ identity: null, problem: 'malformed' });
-		// the browser may send SS-Identity cross-origin
-		const preflight = await handle(
-			new Request(`${base}/v1/me`, { method: 'OPTIONS', headers: { origin: 'https://shop.example.com' } }),
-		);
-		expect(preflight.headers.get('access-control-allow-headers')).toContain('ss-identity');
-
-		// a website without an identity issuer
-		await entitle(portal, { version: 2 });
-		product.entitlements.invalidate('web_0123456789abcdefghjkmnpq');
-		const unconfigured = await call('/v1/me', { headers: { ...headers, 'ss-identity': token } });
-		expect([unconfigured.status, unconfigured.json.detail]).toEqual([401, expect.stringContaining('no identity issuer')]);
 	});
 });

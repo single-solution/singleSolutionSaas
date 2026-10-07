@@ -1,13 +1,13 @@
 {
 	"name": "@ss/app-kit",
-	"version": "0.1.0",
-	"description": "Everything a service product needs to follow the Product Standard: registration, launches, website keys, entitlements with offline grace, usage reporting, events, client-owned data access, connectors, audit.",
+	"version": "0.2.0",
+	"description": "The kit every product is built on: Portal connection, tokens and tickets, status checks, notices, price and feature reports, settings, widget texts and theme, encrypted connections, the merchant database guard, business.json, data rights, activity log, Recent changes, the product dashboard API and the widget mount.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {
 		".": "./src/index.js",
 		"./testing": "./src/testing.js",
-		"./proxy": "./src/proxy.js",
+		"./widget": "./src/widget.js",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -29,9 +29,9 @@
 				"types": "./types/src/testing.d.ts",
 				"default": "./src/testing.js"
 			},
-			"./proxy": {
-				"types": "./types/src/proxy.d.ts",
-				"default": "./src/proxy.js"
+			"./widget": {
+				"types": "./types/src/widget.d.ts",
+				"default": "./src/widget.js"
 			},
 			"./package.json": "./package.json"
 		}
@@ -60,6 +60,7 @@
 		"@types/node": "^22.20.4",
 		"@vitest/coverage-v8": "^3.2.7",
 		"eslint": "^9.39.5",
+		"jsdom": "^26.1.0",
 		"mongodb-memory-server": "^10.4.3",
 		"prettier": "^3.9.9",
 		"typescript": "~5.9.3",

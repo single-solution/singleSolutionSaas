@@ -5,9 +5,7 @@ import {
 	formatCreditsPerHour,
 	formatDate,
 	formatDateTime,
-	formatHours,
 	formatNumber,
-	formatUnitPrice,
 	humanize,
 	parseCredits,
 } from '../src/format.js';
@@ -29,8 +27,6 @@ describe('money formatting (credits from millicredits, ≤ 3 decimals)', () => {
 		expect(formatCredits(undefined)).toBe('—');
 		expect(formatCreditsPerHour(1250)).toBe('1.25 credits/h');
 		expect(formatCreditsPerHour(null)).toBe('—');
-		expect(formatUnitPrice(10, 1, 'redemption')).toBe('0.01 credits / redemption');
-		expect(formatUnitPrice(1, 1000, 'token')).toBe('0.001 credits / 1,000 tokens');
 	});
 	it('parses typed amounts into integer millicredits', () => {
 		expect(parseCredits('12')).toEqual({ ok: true, value: 12000 });
@@ -40,19 +36,14 @@ describe('money formatting (credits from millicredits, ≤ 3 decimals)', () => {
 		expect(parseCredits('-1').ok).toBe(false);
 		expect(parseCredits('').ok).toBe(false);
 	});
-	it('formats hours, dates, numbers and codes', () => {
-		expect(formatHours(null)).toBe('No spend');
-		expect(formatHours(0)).toBe('0 h');
-		expect(formatHours(5.25)).toBe('5.3 h');
-		expect(formatHours(72)).toBe('3 days');
-		expect(formatHours(Number.POSITIVE_INFINITY)).toBe('—');
+	it('formats dates, numbers and codes', () => {
 		expect(formatDateTime('2026-10-01T10:05:00Z')).toBe('01 Oct 2026, 10:05 UTC');
 		expect(formatDateTime(null)).toBe('—');
 		expect(formatDateTime('nope')).toBe('—');
 		expect(formatDate(new Date(Date.UTC(2026, 0, 2)))).toBe('02 Jan 2026');
 		expect(formatNumber(12345)).toBe('12,345');
 		expect(formatNumber(undefined)).toBe('—');
-		expect(humanize('spend_cap')).toBe('Spend cap');
+		expect(humanize('low_balance')).toBe('Low balance');
 		expect(humanize(null)).toBe('');
 	});
 });

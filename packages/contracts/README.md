@@ -1,124 +1,112 @@
 # @ss/contracts
 
-Versioned JSON Schemas (2020-12) and validators that bind the Portal and every product (SSPS v1): product manifest,
-element feature schemas, entitlement document payload, event envelope + standard events, placement, and RFC 9457
-problem details. Pure, functional ESM; the only dependencies are `ajv` and `ajv-formats`.
+Versioned JSON Schemas (2020-12) and validators that bind the Portal and every product (PLAN.md Part 0: 0.4.9,
+0.4.11, 0.4.12, 0.4.13): the product manifest and its settings schemas, the Product ↔ Portal wire shapes,
+business.json, the cross-product data-rights and activity shapes, ids and RFC 9457 problems. Pure, functional ESM; the
+only dependencies are `ajv` and `ajv-formats`.
 
-## API
+## Results
+
+Every validator returns `{ ok: true, value }` or `{ ok: false, problems: [{ path, message, keyword }] }`. `path` is a
+JSON Pointer; `keyword` is the failing schema keyword or a semantic rule id from `RULES`. The named functions use one
+lazily created validator; `createValidator({ schemas })` makes another with extra schemas (each with a string `$id`)
+that may `$ref` the common definitions (`urn:ss:contracts:v1:common#/$defs/<name>`).
+
+## Manifest
 
 ```js
-import {
-	createValidator, // ({ schemas?, events? }) → { validate(id, value), has, validateManifest, validateEntitlementDocument,
-	//                  validateEvent, validatePlacement, validateFeatureConfig }
-	validateManifest,
-	validateEntitlementDocument,
-	validateEvent,
-	validatePlacement,
-	validateFeatureConfig,
-	checkManifest,
-	checkFeatureSchema,
-	checkEntitlementDocument,
-	checkPlacement, // pure semantic checks → problems[]
-	isTimeZone,
-	isLanguageTag,
-	actorAllowedForKeyKind, // (kind: 'pk' | 'sk', actorType) → boolean
-	KEY_KINDS, // ['pk', 'sk']
-	WEBSITE_KEY_ACTORS, // { pk: ['customer', 'anonymous'], sk: ['customer', 'anonymous', 'staff', 'merchant'] }
-	problem,
-	createProblemFactory,
-	PROBLEM_CODES, // RFC 9457
-	createId,
-	isId,
-	parseId,
-	ID_PREFIXES,
-	normaliseDomain,
-	hostMatchesDomain,
-	SCHEMA_IDS,
-	ALL_SCHEMAS,
-	STANDARD_EVENT_DATA,
-	MILLICREDITS_PER_CREDIT,
-} from '@ss/contracts';
+import { validateManifest, manifestPriceList } from '@ss/contracts';
 
-const result = validateManifest(json); // { ok: true, value } | { ok: false, problems: [{ path, message, keyword }] }
-const errors = createProblemFactory({ baseUri: 'https://errors.example.dev' });
-if (!result.ok) return errors.fromValidation(result.problems, { code: 'invalid_manifest', requestId });
+const result = validateManifest(json);
+const prices = manifestPriceList(json); // { version: 1, features: [{ key, name, description, dependsOn, millicreditsPerHour: 0 }] }
 ```
 
-- `path` is a JSON Pointer; `keyword` is the failing schema keyword or a semantic rule id (`MANIFEST_RULES`, `DOCUMENT_RULES`).
-- Each validator owns one Ajv instance (strict, `allErrors`, formats) and compiles each schema once. The named helpers use a
-  lazily created process-wide validator. Product events are added with `createValidator({ events: { 'coupon.redeemed@1': schema } })`.
-- Schema ids are URNs: `urn:ss:contracts:v1:<name>`; standard event data: `urn:ss:contracts:v1:event:<type@v>`.
+`manifest.json` has exactly `id`, `name`, `version` (semver), `endpoints: { base, dashboard }`, `widgetScriptUrl`
+(or `null`), `docsUrl`, `features: [{ key, name, description, dependsOn, settings }]`,
+`permissions: [{ key, name, feature }]` and `widgets: [{ key, feature, kind: 'visitor' | 'admin' }]`. Rules:
 
-## Wave-1 additions (F.18)
+- `id` matches `^[a-z][a-z0-9-]{1,30}$` (the six products are `PRODUCT_IDS`).
+- Feature keys `^[a-z][a-z0-9_]{0,39}$`, unique; `dependsOn` keys exist, no self-dependency, no cycles.
+- Permission keys `^[a-z][a-z0-9_.]{0,63}$`, unique, and their feature exists. Widget keys unique, feature exists.
+- `widgetScriptUrl` is `null` exactly when there are no widgets.
+- `endpoints.base` is an https URL (http only on `localhost`, `*.localhost`, `127.0.0.1`, `[::1]`);
+  `endpoints.dashboard`, `docsUrl` and `widgetScriptUrl` are a path (`/docs`) or such a URL.
+- Every feature's `settings` is a valid settings schema (below), defaults included.
 
-- Manifest: product `reads` (`slug` or `{ product, scopes? }`,
-  `readsOf(manifest)` normalises; rules `selfRead`, `duplicateRead`, `readScope`), element `stringKeys` (exact keys or
-  `prefix*`), element `requires.optionalResources` (rule `optionalResourceRequired`).
-- Feature kind `placement` (`FEATURE_KINDS`, `PLACEMENT_MEMBERS`, keyword `x-placement: { members }`, plan bound
-  `x-plan.<plan>.members`; rule `featurePlacement`): a top-level object feature validated by `validateFeatureConfig`
-  against the placement v1 schema (`$ref`) plus `checkPlacement`.
+## Settings schemas
 
-## Conventions
+A feature's settings are `{ type: 'object', properties: { <setting>: <node> }, additionalProperties?: false }`. Each
+setting has `type` (`string`, `integer`, `number`, `boolean`, `array`), `title` and `default`, and may add
+`description`, `minimum` / `maximum` (the hard maximums of limits), `maxLength`, `enum`, `format`, `items` (lists, item
+`type` plus `minimum`, `maximum`, `maxLength`, `enum`, `format`) and `x-ui` (`widget`, `group`, `order`, `help`,
+`placeholder`). Keywords must fit the type, lists need `items`, defaults and enum values must be valid.
 
-- **Credits** are **millicredits (1 credit = 1000)** everywhere — manifest prices and the ledger. A metered price is `perUnit`
-  millicredits per `per` units.
-- **Per-plan bounds** live only in feature schemas (`x-plan: { <plan>: { default, max } }`); `plans[]` list `elements` (included, on by default) and `addons` (allowed, off by default); anything else is unavailable on that plan.
-- **Feature metadata**: `x-kind` (flag|quota|limit|rate|config); quotas need `x-period` (hour|day|week|month) and may set
-  `x-hardStop`, `x-unit`; rates need `x-per` (second|minute|hour) and may set `x-unit`.
-- **Events**: every consumed entry — an exact `type@v` or a glob such as `custom.*` / `order.*@1` (`isEventGlob`; a
-  version-less glob matches every version) — needs an `events.subscribe:<glob>` scope that covers it; published types must be in the product namespace
-  (`<slug>.*`, `-` → `_`) or be standard events covered by an `events.publish:<glob>` scope.
-- **Event scopes**: the envelope has an optional `scope`, either `'website'` (the default) or `'platform'`.
-  Website-scoped events require `websiteId`. Platform-scoped events concern a product or the platform as a whole and
-  must not carry one. Each catalogued type has a fixed scope (`eventScopeOf(type)`), and `validateEvent` refuses a
-  mismatch at `/scope` (rule `eventScope`). `CORE_SCOPED_EVENTS` is currently `['manifest.accepted@1']`, so it is
-  sent with `scope: 'platform'` and no `websiteId`. A sentinel website id is refused. JSDoc types:
-  `EventEnvelope` (website), `PlatformEventEnvelope` and `AnyEventEnvelope`.
-- **Catalogue additions (v1, additive):** order lifecycle events accept an optional `customer` identity reference
-  `{ customerId?, subject?, email?, phone? }`; `order.completed@1` / `order.cancelled@1` also accept `number`,
-  `customerId`, `currency`, `lines`, `amounts` like `order.placed@1` (`lines`/`amounts` require `currency`), and
-  `order.refunded@1` richer lines and `amounts`. Element UI events `<element>.shown@1` and `<element>.action@1`
-  (`ELEMENT_EVENT_DATA`) and `loader.element_failed@1` (with `phase`) are catalogued. Problem codes `identity_required`
-  and `identity_invalid` are standard.
-- **Identity section** (bring-your-own identity): an entitlement document may carry `identity: { issuer, jwks (1–5
-public JWKs: OKP Ed25519, EC P-256, RSA ≥ 2048; no private members), audience?, claimMap: { subject, email?,
-phone? } }` (`identitySectionSchema`, rule `duplicateIdentityKey`).
-- **Website section**: an entitlement document may carry `website: { timeZone?, language?, currency? }`
-  (`websiteSectionSchema`, closed): an IANA time zone name (rule `timezone` checks the runtime knows it), a BCP-47
-  language tag (rule `languageTag`, `isLanguageTag`) and an ISO-4217 currency. The Portal fills it from the website's
-  settings in every document of the website; products use it as their default time zone, language and store currency.
-- **Resource requirements**: element `requires.resources` stands on its own and gates only that element
-  (`resource_missing` while a kind is not connected). Product-level `requires.resources` means **always required**:
-  every subscription needs those kinds, whatever elements are enabled, so a missing one disables every element. List a
-  kind at product level only when every element needs it. The kinds a product may resolve are the union of both
-  levels: `database`, `storage`, `ai`, `messaging`, `payments`.
-- **Catalog events** (website-scoped, additive v1): `item.created@1` (`itemId`, `title` required), `item.updated@1`
-  (`itemId` required, optional `changed[]`) carry an item snapshot `{ itemId, title, status?, brand?, collections?
-(ids/handles), attributes? (≤ 50 scalar or scalar-array values), currency?, variants?: [{ variantId, price, sku?,
-title?, attributes?, compareAtPrice?, cost?, inventory? }] }`: variant amounts are integer minor units in the item's
-  one `currency`, required with `variants` (no per-variant currency). `item.deleted@1` is `{ itemId, reason? }`.
-  `inventory.changed@1` gains optional `sku`, `available`, `previousAvailable` (sellable = on hand − reserved;
-  `quantity`/`previousQuantity` stay on hand) and `reason`; `price.changed@1` gains optional `sku`, `compareAtPrice`,
-  `previousCompareAtPrice` (money objects) and `reason` (`reason` is a snake_case code such as `restock`, `sale`).
-- **Key kind on delivery**: the envelope's optional `context.keyKind` (`'pk' | 'sk'`, `KEY_KINDS`) records which website
-  key an event was ingested with. Only the Portal Event Hub sets it, on delivery; producers cannot set it (the Portal
-  strips any value it receives). It is absent on events that did not come through a website key (product-published,
-  Portal control events, imports), so consumers treat a missing `keyKind` as "not from a website key".
-- **Website-event actor rule**: events ingested with a `pk_` key may only carry actor `customer` or `anonymous`; with
-  an `sk_` key any actor except `product` and `system` (those are reserved for products' own publishing and the
-  Portal). The Portal refuses others (`actor_not_allowed`); `actorAllowedForKeyKind(kind, actorType)` /
-  `WEBSITE_KEY_ACTORS` state the rule.
-- **Element packs** have no endpoints or admin launch, only modes A/B, no `api.resources`, and only `graph.*` /
-  `events.publish:*` scopes. Service products need `endpoints.base` and `endpoints.events`; their only capabilities
-  are `adminLaunch` and `identityIssuer`.
-- **Money** is integer minor units + ISO-4217 code. Several amounts sharing a context (cart, order) use one `currency` and
-  integer `*Amount` fields; standalone values use `{ amount, currency }`.
-- **Time** is ISO-8601 UTC with `Z`; durations are ISO-8601 (`P365D`, `PT24H`); time zones are IANA names.
-- **Ids** are opaque strings; platform ids are `<prefix>_<26 lowercase Crockford base32 chars>`.
-- **Domains** are stored normalised (lowercase ASCII/punycode, no scheme/port/path/trailing dot).
+- `checkSettingsSchema(schema)` → problems (empty when valid).
+- `validateSettingValue(schema, key, value)` → result for one value; unknown keys are refused.
+- `validateSettings(schema, values)` → result for an object holding any subset of the settings.
+
+## Product ↔ Portal shapes (0.4.12)
+
+| Validator                | Shape                                                                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `validatePriceReport`    | `{ version ≥ 1, features: [{ key, name, description, dependsOn, millicreditsPerHour integer ≥ 0 }] }`, unique keys, deps exist |
+| `validateFeatureReport`  | `{ version ≥ 1, on: unique feature keys, adminId, adminName }`                                                                 |
+| `validateStatusResponse` | `{ websiteId, merchantId, merchantName, domain, status, graceEndsAt, todayMillicredits, featuresVersion, validUntil }`         |
+| `validateWebsitesPage`   | `{ items: [{ websiteId, domain, merchantId, merchantName, status }], cursor: string \| null }`                                 |
+| `validateRevocations`    | `{ tokenIds: string[], cursor: string \| null }`                                                                               |
+| `validateDirectory`      | `{ baseUrl }` (https, or http on a local host)                                                                                 |
+| `validateNotice`         | `{ type, websiteId }` for `status.changed`, `token.revoked`, `website.deleted`; `{ type, subject }` for `sessions.revoked`     |
+
+Times are ISO-8601 UTC strings (`Z`) and must be real instants; `graceEndsAt` is set exactly while the status is
+`grace`. Money is integer millicredits.
+
+Vocabularies: `PRODUCT_STATUSES` (`active`, `grace`, `stopped`, `suspended`, `removed`), `MERCHANT_STATUSES`
+(`active`, `low_balance`, `grace`, `stopped`, `suspended`), `ADMIN_ROLES` (`owner`, `support`, `finance`),
+`DASHBOARD_ROLES` (`owner`, `support`), `NOTICE_TYPES`, `PRODUCT_IDS`, `PRODUCT_UNAVAILABLE_REASONS`.
+
+## business.json (0.4.9)
+
+`validateBusinessJson(value)` returns the normalised `{ name, logo, email, phone, address, country, timeZone }`. Only
+`name` is required (a missing or invalid name fails the whole file); any other invalid field becomes `null`. `logo`
+must be an https URL, `country` an ISO 3166-1 alpha-2 code (returned upper-case), `timeZone` an IANA name the runtime
+knows (returned in canonical form). `BUSINESS_JSON_TEMPLATE` is the example every product's docs ship.
+
+## Cross-product shapes (0.4.11, provisional)
+
+- `validateDataRightsRequest`: `{ user: { id?, email?, phone? } }` with at least one member. Answers: export
+  `{ records }`, delete `{ deleted, anonymised }` (types `DataRightsExport`, `DataRightsDelete`).
+- `validateActivityCopy`: `{ websiteId, productId, actor: { kind, id, name? }, action, target, at }`.
+
+## Problems (RFC 9457)
+
+```js
+import { createProblemFactory } from '@ss/contracts';
+
+const problems = createProblemFactory({ baseUri: 'https://errors.example.dev' });
+problems.create('feature_off', { detail: 'Notes is off' });
+problems.create('product_unavailable', { reason: 'stopped' }); // reason: stopped | suspended | removed
+problems.fromValidation(result.problems, { code: 'invalid_manifest' });
+```
+
+Codes include `invalid_token` (401), `product_unavailable` (403, with `reason`), `feature_off` (403),
+`database_not_connected` (403), `website_not_found` (404), `portal_unreachable` (503) and the generic HTTP ones
+(`PROBLEM_CODES`). Products may add their own codes with `createProblemFactory({ baseUri, codes })`.
+
+## Ids and domains
+
+`createId(prefix)` → `<prefix>_<26 lowercase Crockford base32 chars>` (128 random bits); `ID_PREFIXES` lists the
+Portal's (`web`, `mer`, `adm`, `req`). `isId`, `parseId`. `normaliseDomain(input, { allowLocal?, isPublicSuffix? })`
+returns `{ ok, value }` or `{ ok: false, code, message }`: lower-case punycode, no scheme, port, path or trailing dot;
+IP literals, `localhost` and single-label names refused. `hostMatchesDomain(host, domain)` compares exactly.
+
+## Testing entry
+
+`@ss/contracts/testing` returns fresh fixtures: `manifest()` (product `notes`: two features with a dependency, a
+permission, a visitor and an admin widget), `priceReport()`, `statusResponse()`, `businessJson()`, plus the ids
+`WEBSITE` and `MERCHANT`.
 
 ## Versioning
 
-Additive only within v1: new optional properties, new enum values only where consumers must already tolerate unknowns,
-new schemas, new problem codes. Objects are closed (`additionalProperties: false`), so validators (the Portal) upgrade before
-producers emit new fields. Anything else is breaking and ships as `urn:ss:contracts:v2:*` alongside v1.
+Additive only within v1: new optional members, new schemas, new problem codes. Objects are closed
+(`additionalProperties: false`), so validators upgrade before producers send new members. Anything else ships as
+`urn:ss:contracts:v2:*` alongside v1.

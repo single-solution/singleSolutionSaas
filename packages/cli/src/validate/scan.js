@@ -1,7 +1,7 @@
 /**
  * A deliberately small static scanner for JavaScript sources: it strips comments and blanks string contents (keeping
- * offsets, so line numbers stay exact), then answers the questions `ss app validate` asks: which modules are imported,
- * which DOM globals are touched, which colour literals appear, which string keys are used and which names are exported.
+ * offsets, so line numbers stay exact), then answers the questions `ss app validate` and `ss app assets` ask: which
+ * modules are imported, which DOM globals are touched, which widget-text keys are used and which routes are defined.
  * It is a lexer, not a parser: good enough for linting conventions, never used for security decisions.
  * @module
  */
@@ -231,7 +231,7 @@ export const findCssReferences = (css) => {
 	});
 };
 
-/** Browser globals that must never appear in `core/` or `headless/`. */
+/** Browser globals that must never appear in `core/` (pure logic). */
 export const DOM_GLOBALS = Object.freeze([
 	'window',
 	'document',
@@ -257,33 +257,8 @@ const DOM_PATTERN = new RegExp(`(?<![\\w$.])(${DOM_GLOBALS.join('|')})(?![\\w$])
 export const findDomGlobals = ({ blank }) =>
 	[...blank.matchAll(DOM_PATTERN)].map((match) => ({ name: match[1] ?? '', line: lineOf(blank, match.index ?? 0) }));
 
-const COLOUR_PATTERNS = [
-	/(?<![\w&])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])/g,
-	/\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\s*\(/gi,
-];
-
 /**
- * Colour literals in a text fragment.
- * @param {string} text
- * @returns {{ value: string, index: number }[]}
- */
-export const colourLiterals = (text) =>
-	COLOUR_PATTERNS.flatMap((pattern) =>
-		[...text.matchAll(new RegExp(pattern))].map((match) => ({ value: match[0], index: match.index ?? 0 })),
-	).sort((a, b) => a.index - b.index);
-
-/**
- * Hard-coded colours inside string and template literals of a JS source.
- * @param {Lexed} lexed
- * @returns {{ value: string, line: number }[]}
- */
-export const findColours = ({ source, strings }) =>
-	strings.flatMap((literal) =>
-		colourLiterals(literal.value).map(({ value, index }) => ({ value, line: lineOf(source, literal.start + 1 + index) })),
-	);
-
-/**
- * String-catalog keys used through the `t('key')` convention.
+ * Widget-text keys used through the `t('key')` convention (`strings/en.json`).
  * @param {Lexed} lexed
  * @returns {{ key: string, line: number }[]}
  */
@@ -294,25 +269,68 @@ export const findStringKeys = ({ code }) =>
 	}));
 
 /**
- * Names exported by a module (declarations and export lists; `export default` is reported as `default`).
- * @param {Lexed} lexed
- * @returns {Set<string>}
+ * @typedef {object} RouteMember
+ * @property {boolean} literal the value is a plain string literal, `true` or `false`
+ * @property {string | boolean} value the literal value, or the source text when not literal
  */
-export const findExports = ({ code }) => {
-	/** @type {Set<string>} */
-	const names = new Set();
-	for (const match of code.matchAll(/\bexport\s+(?:async\s+)?(?:const|let|var|function\s*\*?|class)\s+([A-Za-z_$][\w$]*)/g))
-		names.add(match[1] ?? '');
-	for (const match of code.matchAll(/\bexport\s*\{([^}]*)\}/g)) {
-		for (const part of (match[1] ?? '').split(',')) {
-			const name = part
-				.trim()
-				.split(/\s+as\s+/)
-				.at(-1)
-				?.trim();
-			if (name) names.add(name);
-		}
-	}
-	if (/\bexport\s+default\b/.test(code)) names.add('default');
-	return names;
+
+/**
+ * @typedef {object} RouteCall
+ * @property {number} line
+ * @property {Record<string, RouteMember>} members top-level members of the definition object
+ * @property {boolean} spread the object spreads another value (`...x`), so its members cannot be known
+ */
+
+const ROUTE_CALL = /(?<![\w$.])defineRoute\s*\(\s*\{/g;
+const MEMBER = /^([A-Za-z_$][\w$]*)\s*:\s*([\s\S]*)$/;
+const STRING_VALUE = /^(['"])((?:(?!\1)[^\\\n])*)\1$/;
+
+/**
+ * @param {string} text
+ * @returns {RouteMember}
+ */
+const memberValue = (text) => {
+	const string = STRING_VALUE.exec(text);
+	if (string) return { literal: true, value: string[2] ?? '' };
+	if (text === 'true' || text === 'false') return { literal: true, value: text === 'true' };
+	return { literal: false, value: text };
 };
+
+/**
+ * Route definitions: every `defineRoute({ … })` call with the top-level members of its object literal. Only plain
+ * literals can be checked, so products write `method`, `path`, `auth`, `feature` and `permission` as string literals.
+ * @param {Lexed} lexed
+ * @returns {RouteCall[]}
+ */
+export const findRoutes = ({ code, blank }) =>
+	[...blank.matchAll(ROUTE_CALL)].map((match) => {
+		const open = (match.index ?? 0) + match[0].length - 1;
+		/** @type {Array<[number, number]>} */
+		const parts = [];
+		let depth = 0;
+		let start = open + 1;
+		let i = open + 1;
+		for (; i < blank.length; i += 1) {
+			const ch = blank[i];
+			if (ch === '{' || ch === '[' || ch === '(') depth += 1;
+			else if (ch === '}' || ch === ']' || ch === ')') {
+				if (depth === 0) break;
+				depth -= 1;
+			} else if (ch === ',' && depth === 0) {
+				parts.push([start, i]);
+				start = i + 1;
+			}
+		}
+		parts.push([start, i]);
+		/** @type {Record<string, RouteMember>} */
+		const members = {};
+		let spread = false;
+		for (const [from, to] of parts) {
+			const text = code.slice(from, to).trim();
+			if (text.startsWith('...')) spread = true;
+			const member = MEMBER.exec(text);
+			if (member) members[member[1] ?? ''] = memberValue((member[2] ?? '').trim());
+			else if (/^[A-Za-z_$][\w$]*$/.test(text)) members[text] = { literal: false, value: text };
+		}
+		return { line: lineOf(code, open), members, spread };
+	});

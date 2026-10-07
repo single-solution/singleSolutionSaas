@@ -1,89 +1,102 @@
 /**
- * `ss app validate` — manifest (schema + semantics, with local `$ref`s bundled), anatomy (Part E §2), manifest ↔ code
- * consistency (headless/renderer modules and exports, strings, OpenAPI resources), import direction
- * (`ui → headless → core`, `api → core`), no DOM globals in `headless/` and `core/`, no hard-coded colours in `ui/`,
- * string keys that exist in the catalog (scanned in the sources, never in build output), each element's string slice
- * (`stringKeys`), package wiring and the service deployment shape.
+ * `ss app validate` — checks a product against the product standard (PLAN 0.4.13, 0.11, F.17, F.19):
+ *
+ * - the layout: the folders `core/ api/ adapters/ ui/ app/ strings/ schemas/ tests/ docs/` and the files every product
+ *   needs (`anatomy.missing`);
+ * - `manifest.json` (local `$ref`s bundled) against `@ss/contracts` `validateManifest` (`manifest.*`);
+ * - the routes in `api/`: every route has a valid auth, every browser-token, server-token and ticket route belongs to
+ *   a feature of the manifest, permissions exist, and the widget script and the docs are public routes
+ *   (`routes.*`);
+ * - `strings/en.json`, the only widget-text file: flat keys, text values, well-formed `{placeholders}`, and every
+ *   `t('key')` used in the code exists (`strings.*`);
+ * - `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY` (`env.example`), and `vercel.json`
+ *   declares no crons (`vercel.crons`);
+ * - import direction: api → core | adapters, adapters → core, ui → core, app → api | adapters | core | strings, never
+ *   the reverse; core stays pure and DOM-free; no import leaves the product folder (`imports.*`, `core.dom`);
+ * - package wiring: the kit and the tooling are dependencies, the standard scripts exist, and every imported package
+ *   is listed in package.json (`package.*`);
+ * - the deployment shape (at most two server functions: the API route and the dashboard page) and the generated files
+ *   (`openapi.json`, `api/widget-script.js`) being up to date (`server.*`, `assets.*`).
  * @module
  */
-import { readFile } from 'node:fs/promises';
+import { builtinModules } from 'node:module';
 import path from 'node:path';
 import { validateManifest } from '@ss/contracts';
-import { isObject, parseJson, walk } from '../fsutil.js';
+import { isObject, parseJson } from '../fsutil.js';
 import { loadManifest, problemOf } from '../manifest.js';
-import { ASSETS_FILE, renderAssets } from '../assets.js';
-import {
-	colourLiterals,
-	findColours,
-	findCssReferences,
-	findDomGlobals,
-	findExports,
-	findImports,
-	findStringKeys,
-	lex,
-} from './scan.js';
+import { OPENAPI_FILE, WIDGET_ENTRY, assetStates } from '../assets.js';
+import { projectFiles } from '../project.js';
+import { scanRoutes } from '../routes.js';
+import { findCssReferences, findDomGlobals, findImports, findStringKeys, lex } from './scan.js';
 
 /** @typedef {import('../manifest.js').Problem} Problem */
+/** @typedef {import('../project.js').ProjectFiles} ProjectFiles */
+/** @typedef {import('../routes.js').ScannedRoute} ScannedRoute */
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 
-/** Files and folders every project needs; folders end with `/`. */
-export const ANATOMY = Object.freeze({
-	common: Object.freeze([
-		'manifest.json',
-		'package.json',
-		'README.md',
-		'core/',
-		'headless/',
-		'ui/',
-		'strings/en.json',
-		'schemas/',
-		'tests/',
-	]),
-	service: Object.freeze([
-		'openapi.json',
-		'api/',
-		'adapters/',
-		'.env.example',
-		'vercel.json',
-		'next.config.js',
-		'app/api/[...path]/route.js',
-		'app/dashboard/[[...section]]/page.js',
-		'app/_lib/assets.js',
-	]),
-	pack: Object.freeze([]),
-});
+/** Folders (ending with `/`) and files every product has (PLAN 0.4.13, F.17). */
+export const ANATOMY = Object.freeze([
+	'core/',
+	'api/',
+	'adapters/',
+	'ui/',
+	'app/',
+	'strings/',
+	'schemas/',
+	'tests/',
+	'docs/',
+	'manifest.json',
+	'package.json',
+	'README.md',
+	'openapi.json',
+	'strings/en.json',
+	'.env.example',
+	'.gitignore',
+	'vercel.json',
+	'next.config.js',
+	'app/api/[...path]/route.js',
+	'app/dashboard/page.js',
+]);
+
+/** The variables a product reads, and the only names its `.env.example` lists (PLAN 0.11). */
+export const ENV_NAMES = Object.freeze(['MONGODB_URI', 'CONNECT_SECRET', 'ENCRYPTION_KEY']);
 
 /** Marker for project-root files (e.g. `manifest.json`) as import targets. */
 const ROOT = '.';
 
+/** Folders holding data files (JSON) that code may import as data: texts, settings schemas, docs and root files. */
+const DATA_LAYERS = Object.freeze(['strings', 'schemas', 'docs', ROOT]);
+
 /**
- * Import-direction policy per layer: the layers a file may import from and the bare packages it may use
- * (`null` = any package). An entry with a subpath (`@ss/web/element`) admits exactly that subpath, a bare name the whole
- * package. `core/` is pure (no I/O, no framework); `headless/` builds on `core/` and may use the headless element runtime
- * `@ss/web/element` (no DOM); `ui/` only on `headless/`.
- * @type {Readonly<Record<string, { layers: readonly string[], packages: readonly string[] | null }>>}
+ * Import direction per layer: the layers a file may import code from, whether it may import data files (`.json` in
+ * strings/, schemas/, docs/ or the root) and the packages it may use (`null` = any listed package). An entry with a
+ * subpath (`@ss/app-kit/widget`) admits exactly that subpath, a bare name the whole package. `core/` is pure logic;
+ * `ui/` is bundled into the browser script.
+ * @type {Readonly<Record<string, { layers: readonly string[], data: boolean, packages: readonly string[] | null }>>}
  */
 export const IMPORT_POLICY = Object.freeze({
-	core: { layers: ['core'], packages: ['@ss/rules', '@ss/contracts'] },
-	headless: {
-		layers: ['headless', 'core', 'strings', 'schemas'],
-		packages: ['@ss/rules', '@ss/contracts', '@ss/web/element'],
-	},
-	ui: { layers: ['ui', 'headless', 'strings'], packages: ['@ss/web', '@ss/ui'] },
-	api: { layers: ['api', 'core', 'adapters', 'strings', 'schemas'], packages: null },
-	adapters: { layers: ['adapters', 'core', 'schemas', 'strings', ROOT], packages: null },
-	jobs: { layers: ['jobs', 'core', 'adapters'], packages: null },
+	core: { layers: ['core'], data: false, packages: ['@ss/contracts', '@ss/rules'] },
+	api: { layers: ['api', 'core', 'adapters'], data: true, packages: null },
+	adapters: { layers: ['adapters', 'core'], data: true, packages: null },
+	ui: { layers: ['ui', 'core'], data: false, packages: ['@ss/app-kit/widget', '@ss/web'] },
+	app: { layers: ['app', 'api', 'adapters', 'core', 'strings'], data: true, packages: null },
 });
+
+/** Auth modes of `defineRoute`. */
+const AUTH_MODES = Object.freeze(['browser', 'server', 'ticket', 'dashboard', 'none']);
+/** Auth modes of website routes, which belong to exactly one feature. */
+const WEBSITE_AUTH = Object.freeze(['browser', 'server', 'ticket']);
 
 const CODE_FILE = /\.(?:m?js|cjs|jsx)$/;
 const CSS_FILE = /\.css$/;
-const UI_FILE = /\.(?:m?js|jsx|css|html)$/;
 const STRING_KEY = /^[A-Za-z][\w.-]*$/;
-const PLACEHOLDER = /\{([A-Za-z_]\w*)\}/g;
-const LANGUAGE_FILE = /^strings\/([a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*)\.json$/;
+const BRACES = /[{}]/g;
+const PLACEHOLDER = /\{[A-Za-z][A-Za-z0-9_]{0,63}\}/g;
+const ENV_LINE = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/;
+const BUILTINS = new Set(builtinModules);
 
 /**
- * Layer of a project-relative path (`core`, `ui`, …, `.` for root files, `''` for others).
+ * Layer of a project-relative path (`core`, `ui`, …, `.` for root files).
  * @param {string} relative
  * @returns {string}
  */
@@ -117,43 +130,6 @@ export const packageOf = (specifier) => {
 };
 
 /**
- * @param {string} text
- * @returns {string[]}
- */
-const placeholders = (text) => [...new Set([...text.matchAll(PLACEHOLDER)].map((match) => match[1] ?? ''))].sort();
-
-/**
- * @typedef {object} ProjectFiles
- * @property {string} dir
- * @property {string[]} list
- * @property {Set<string>} set
- * @property {(relative: string) => Promise<string>} read cached text reader
- */
-
-/**
- * @param {string} dir
- * @returns {Promise<ProjectFiles>}
- */
-const projectFiles = async (dir) => {
-	const list = await walk(dir);
-	/** @type {Map<string, Promise<string>>} */
-	const cache = new Map();
-	return {
-		dir,
-		list,
-		set: new Set(list),
-		read: (relative) => {
-			let text = cache.get(relative);
-			if (text === undefined) {
-				text = readFile(path.join(dir, relative), 'utf8');
-				cache.set(relative, text);
-			}
-			return text;
-		},
-	};
-};
-
-/**
  * @param {ProjectFiles} files
  * @param {string} entry `dir/` or a file
  * @returns {boolean}
@@ -162,21 +138,18 @@ const present = (files, entry) =>
 	entry.endsWith('/') ? files.list.some((file) => file.startsWith(entry)) : files.set.has(entry);
 
 /**
- * Anatomy check.
+ * The layout every product has.
  * @param {ProjectFiles} files
- * @param {'service' | 'pack' | null} kind
  * @returns {Problem[]}
  */
-export const checkAnatomy = (files, kind) =>
-	[...ANATOMY.common, ...(kind === null ? [] : ANATOMY[kind])]
-		.filter((entry) => !present(files, entry))
-		.map((entry) =>
-			problemOf({
-				rule: 'anatomy.missing',
-				file: entry,
-				message: `${entry.endsWith('/') ? 'folder' : 'file'} '${entry}' is required${kind ? ` for ${kind} products` : ''}`,
-			}),
-		);
+export const checkAnatomy = (files) =>
+	ANATOMY.filter((entry) => !present(files, entry)).map((entry) =>
+		problemOf({
+			rule: 'anatomy.missing',
+			file: entry,
+			message: `${entry.endsWith('/') ? 'folder' : 'file'} '${entry}' is required`,
+		}),
+	);
 
 /**
  * @param {string} file
@@ -191,6 +164,9 @@ const outside = (file, line, specifier) =>
 		line,
 		message: `'${specifier}' points outside the project (a project is its own repository: use a package import)`,
 	});
+
+/** @param {string} layer */
+const layerName = (layer) => (layer === ROOT ? 'the project root' : `${layer}/`);
 
 /**
  * Imports of every source file and stylesheet stay inside the project (tests, app/ and root files included: the
@@ -225,13 +201,17 @@ export const checkImports = async (files) => {
 					continue;
 				}
 				const targetLayer = layerOf(target);
-				if (!policy.layers.includes(targetLayer)) {
+				const data = policy.data && target.endsWith('.json') && DATA_LAYERS.includes(targetLayer);
+				if (!policy.layers.includes(targetLayer) && !data) {
 					problems.push(
 						problemOf({
 							rule: 'imports.direction',
 							file,
 							line,
-							message: `${layer}/ must not import from ${targetLayer === ROOT ? 'the project root' : `${targetLayer}/`} ('${specifier}'); allowed: ${policy.layers.map((name) => (name === ROOT ? 'root' : `${name}/`)).join(', ')}`,
+							message: `${layer}/ must not import from ${layerName(targetLayer)} ('${specifier}'); allowed: ${[
+								...policy.layers.map(layerName),
+								...(policy.data ? ['JSON data in strings/, schemas/, docs/ and the root'] : []),
+							].join(', ')}`,
 						}),
 					);
 				}
@@ -256,427 +236,118 @@ export const checkImports = async (files) => {
 };
 
 /**
- * No DOM globals in `core/` and `headless/`.
+ * `core/` is pure logic: no DOM globals.
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
-export const checkDomFree = async (files) => {
+export const checkCorePure = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
 	for (const file of files.list) {
-		const layer = layerOf(file);
-		if ((layer !== 'core' && layer !== 'headless') || !CODE_FILE.test(file)) continue;
-		for (const { name, line } of findDomGlobals(lex(await files.read(file)))) {
-			problems.push(
-				problemOf({ rule: 'headless.dom', file, line, message: `'${name}' is a DOM global; ${layer}/ must stay DOM-free` }),
-			);
-		}
+		if (layerOf(file) !== 'core' || !CODE_FILE.test(file)) continue;
+		for (const { name, line } of findDomGlobals(lex(await files.read(file))))
+			problems.push(problemOf({ rule: 'core.dom', file, line, message: `'${name}' is a DOM global; core/ is pure logic` }));
 	}
 	return problems;
 };
 
 /**
- * No hard-coded colours in `ui/` (design tokens only). `ui/tokens.*` may define token fallbacks.
- * @param {ProjectFiles} files
- * @returns {Promise<Problem[]>}
- */
-export const checkColours = async (files) => {
-	/** @type {Problem[]} */
-	const problems = [];
-	for (const file of files.list) {
-		if (layerOf(file) !== 'ui' || !UI_FILE.test(file) || /^ui\/(?:.*\/)?tokens\.[a-z]+$/.test(file)) continue;
-		const text = await files.read(file);
-		const found = CODE_FILE.test(file)
-			? findColours(lex(text))
-			: colourLiterals(text.replace(/\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->/g, (comment) => comment.replace(/[^\n]/g, ' '))).map(
-					({ value, index }) => ({ value, line: text.slice(0, index).split('\n').length }),
-				);
-		for (const { value, line } of found) {
-			problems.push(
-				problemOf({
-					rule: 'ui.colour',
-					file,
-					line,
-					message: `hard-coded colour '${value}'; use design tokens (var(--ss-…))`,
-				}),
-			);
-		}
-	}
-	return problems;
-};
-
-/**
- * @typedef {object} Catalogs
- * @property {Map<string, Record<string, string>>} byFile valid catalogs by file
- * @property {Problem[]} problems
- */
-
-/**
- * Load and check every `strings/*.json` catalog.
- * @param {ProjectFiles} files
- * @returns {Promise<Catalogs>}
- */
-const loadCatalogs = async (files) => {
-	/** @type {Problem[]} */
-	const problems = [];
-	/** @type {Map<string, Record<string, string>>} */
-	const byFile = new Map();
-	for (const file of files.list.filter((name) => /^strings\/[^/]+\.json$/.test(name))) {
-		const parsed = parseJson(await files.read(file));
-		if (!parsed.ok || !isObject(parsed.value)) {
-			problems.push(
-				problemOf({ rule: 'strings.invalid', file, message: parsed.ok ? 'catalog must be a JSON object' : parsed.message }),
-			);
-			continue;
-		}
-		/** @type {Record<string, string>} */
-		const catalog = {};
-		for (const [key, value] of Object.entries(parsed.value)) {
-			if (!STRING_KEY.test(key) || typeof value !== 'string') {
-				problems.push(
-					problemOf({
-						rule: 'strings.invalid',
-						file,
-						pointer: `/${key}`,
-						message: `'${key}' must be a string entry with a simple key`,
-					}),
-				);
-			} else catalog[key] = value;
-		}
-		byFile.set(file, catalog);
-	}
-	const base = byFile.get('strings/en.json');
-	if (base !== undefined) {
-		for (const [file, catalog] of byFile) {
-			if (file === 'strings/en.json' || !LANGUAGE_FILE.test(file)) continue;
-			for (const [key, value] of Object.entries(catalog)) {
-				const source = base[key];
-				if (source === undefined) {
-					problems.push(
-						problemOf({
-							severity: 'warning',
-							rule: 'strings.extra-key',
-							file,
-							pointer: `/${key}`,
-							message: `'${key}' is not in strings/en.json`,
-						}),
-					);
-				} else if (placeholders(source).join() !== placeholders(value).join()) {
-					problems.push(
-						problemOf({
-							rule: 'strings.placeholders',
-							file,
-							pointer: `/${key}`,
-							message: `placeholders {${placeholders(value).join('}, {')}} differ from strings/en.json {${placeholders(source).join('}, {')}}`,
-						}),
-					);
-				}
-			}
-		}
-	}
-	return { byFile, problems };
-};
-
-/**
- * Keys referenced through `t('key')` must exist in the default catalog(s).
- * @param {ProjectFiles} files
- * @param {Catalogs} catalogs
- * @param {readonly string[]} catalogFiles default-language catalogs referenced by the manifest (fallback `strings/en.json`)
- * @returns {Promise<Problem[]>}
- */
-export const checkStringKeys = async (files, catalogs, catalogFiles) => {
-	/** @type {Set<string>} */
-	const known = new Set();
-	for (const file of catalogFiles) for (const key of Object.keys(catalogs.byFile.get(file) ?? {})) known.add(key);
-	/** @type {Problem[]} */
-	const problems = [];
-	for (const file of files.list) {
-		if (!['core', 'headless', 'ui', 'api', 'app', 'jobs', 'adapters'].includes(layerOf(file)) || !CODE_FILE.test(file))
-			continue;
-		for (const { key, line } of findStringKeys(lex(await files.read(file)))) {
-			if (!known.has(key)) {
-				problems.push(
-					problemOf({
-						rule: 'strings.unknown-key',
-						file,
-						line,
-						message: `string '${key}' is not in ${catalogFiles.join(', ')}`,
-					}),
-				);
-			}
-		}
-	}
-	return problems;
-};
-
-/**
- * Relative import closure of a module (the source files an element renders from).
- * @param {ProjectFiles} files
- * @param {string} entry
- * @returns {Promise<string[]>}
- */
-const importClosure = async (files, entry) => {
-	/** @type {Set<string>} */
-	const seen = new Set();
-	/** @param {string} file */
-	const visit = async (file) => {
-		if (seen.has(file)) return;
-		seen.add(file);
-		if (!CODE_FILE.test(file)) return;
-		for (const { specifier } of findImports(lex(await files.read(file)))) {
-			if (!specifier.startsWith('.')) continue;
-			const { target } = resolveImport(file, specifier, files.set);
-			if (target !== null) await visit(target);
-		}
-	};
-	await visit(entry);
-	return [...seen];
-};
-
-/**
- * Manifest ↔ code: headless/renderer module refs, exports and strings files.
- * @param {ProjectFiles} files
- * @param {Manifest} manifest
- * @returns {Promise<Problem[]>}
- */
-export const checkModules = async (files, manifest) => {
-	/** @type {Problem[]} */
-	const problems = [];
-	for (const [index, element] of manifest.elements.entries()) {
-		for (const field of /** @type {const} */ (['headless', 'renderer'])) {
-			const ref = element[field];
-			if (typeof ref !== 'string') continue;
-			const [file = '', name = ''] = ref.split('#');
-			const pointer = `/elements/${index}/${field}`;
-			if (!files.set.has(file)) {
-				problems.push(
-					problemOf({
-						rule: 'module.missing',
-						file: 'manifest.json',
-						pointer,
-						message: `${field} module '${file}' does not exist`,
-					}),
-				);
-				continue;
-			}
-			const expected = field === 'headless' ? 'headless/' : 'ui/';
-			if (!file.startsWith(expected)) {
-				problems.push(
-					problemOf({
-						rule: 'module.layer',
-						file: 'manifest.json',
-						pointer,
-						message: `${field} module must live in ${expected}`,
-					}),
-				);
-			}
-			if (!findExports(lex(await files.read(file))).has(name)) {
-				problems.push(
-					problemOf({ rule: 'module.export', file, message: `'${name}' is not exported (referenced by ${pointer})` }),
-				);
-			}
-		}
-		if (typeof element.strings === 'string' && !files.set.has(element.strings)) {
-			problems.push(
-				problemOf({
-					rule: 'strings.missing-file',
-					file: 'manifest.json',
-					pointer: `/elements/${index}/strings`,
-					message: `'${element.strings}' does not exist`,
-				}),
-			);
-		}
-	}
-	return problems;
-};
-
-/**
- * Whether a string key falls in an element's slice (`stringKeys`: exact keys or `prefix*`; default `<key>.*`).
- * @param {readonly string[]} patterns
- * @param {string} key
+ * Placeholders of a text: well-formed `{name}` only; any other brace is a problem.
+ * @param {string} text
  * @returns {boolean}
  */
-export const inStringSlice = (patterns, key) =>
-	patterns.some((pattern) => (pattern.endsWith('*') ? key.startsWith(pattern.slice(0, -1)) : key === pattern));
+const placeholdersWellFormed = (text) => text.replace(PLACEHOLDER, '').match(BRACES) === null;
 
 /**
- * Elements that take their strings from the product catalogs (`strings/<lang>.json`, sliced at compile time) must
- * list every key their modules render in `stringKeys` (default `<key>.*`), or the website shows the bare key. A key
- * in another element's slice counts as that element's (modules shared by several elements render each one's text).
+ * Widget texts (PLAN 0.4.10): `strings/en.json` is the only file, a flat object of texts with well-formed
+ * `{placeholders}`; every `t('key')` the code uses exists in it.
  * @param {ProjectFiles} files
- * @param {Manifest} manifest
  * @returns {Promise<Problem[]>}
  */
-export const checkStringSlices = async (files, manifest) => {
+export const checkStrings = async (files) => {
 	/** @type {Problem[]} */
 	const problems = [];
-	const sliced = manifest.elements.filter((element) => typeof element.strings !== 'string' && element.modes.includes('A'));
-	// a module shared by several elements renders each one's keys: a key in a sibling's slice is that sibling's text
-	const anySlice = sliced.flatMap((element) => element.stringKeys ?? [`${element.key}.*`]);
-	for (const [index, element] of manifest.elements.entries()) {
-		if (!sliced.includes(element)) continue;
-		const patterns = element.stringKeys ?? [`${element.key}.*`];
-		/** @type {Set<string>} */
-		const reported = new Set();
-		for (const ref of [element.headless, element.renderer]) {
-			const file = typeof ref === 'string' ? (ref.split('#')[0] ?? '') : '';
-			if (!files.set.has(file)) continue;
-			for (const member of await importClosure(files, file)) {
-				if (!CODE_FILE.test(member)) continue;
-				for (const { key } of findStringKeys(lex(await files.read(member)))) {
-					if (inStringSlice(patterns, key) || inStringSlice(anySlice, key) || reported.has(key)) continue;
-					reported.add(key);
-					problems.push(
-						problemOf({
-							severity: 'warning',
-							rule: 'strings.slice',
-							file: 'manifest.json',
-							pointer: `/elements/${index}/stringKeys`,
-							message: `${element.key} renders '${key}' (${member}) outside its stringKeys ${patterns.join(', ')}`,
-						}),
-					);
-				}
-			}
-		}
-	}
-	return problems;
-};
-
-/**
- * Service products: OpenAPI 3.1 document present and documents every Mode C resource.
- * @param {ProjectFiles} files
- * @param {Manifest} manifest
- * @returns {Promise<Problem[]>}
- */
-export const checkServiceContract = async (files, manifest) => {
-	/** @type {Problem[]} */
-	const problems = [];
-	if (files.set.has('openapi.json')) {
-		const parsed = parseJson(await files.read('openapi.json'));
-		const doc = parsed.ok ? parsed.value : null;
-		if (!isObject(doc) || typeof doc.openapi !== 'string' || !doc.openapi.startsWith('3.1') || !isObject(doc.paths)) {
-			problems.push(
-				problemOf({ rule: 'openapi.invalid', file: 'openapi.json', message: 'must be an OpenAPI 3.1 document with paths' }),
-			);
-		} else {
-			const paths = Object.keys(doc.paths);
-			for (const [index, element] of manifest.elements.entries()) {
-				if (!element.modes.includes('C')) continue;
-				for (const resource of element.api?.resources ?? []) {
-					if (
-						!paths.some(
-							(p) => p === `/v1/${resource}` || p.startsWith(`/v1/${resource}/`) || p.startsWith(`/v1/${resource}:`),
-						)
-					) {
-						problems.push(
-							problemOf({
-								rule: 'openapi.resource',
-								file: 'openapi.json',
-								message: `resource '${resource}' of element '${element.key}' (/elements/${index}) is not documented under /v1/${resource}`,
-							}),
-						);
-					}
-				}
-			}
-		}
-	}
-	return problems;
-};
-
-/**
- * package.json wiring every project needs to work on its own (in the monorepo and once split into its own repository):
- * the kit it is built on, its tooling (`@ss/cli`, `@ss/config`) and its scripts.
- */
-export const PACKAGE_WIRING = Object.freeze({
-	service: Object.freeze({
-		dependencies: Object.freeze(['@ss/app-kit', '@ss/contracts']),
-		devDependencies: Object.freeze(['@ss/cli', '@ss/config']),
-		scripts: Object.freeze(['dev', 'build', 'start', 'check', 'test', 'lint', 'typecheck', 'format:check', 'validate']),
-	}),
-	pack: Object.freeze({
-		dependencies: Object.freeze(['@ss/contracts']),
-		devDependencies: Object.freeze(['@ss/cli', '@ss/config']),
-		scripts: Object.freeze(['check', 'test', 'lint', 'typecheck', 'format:check', 'validate']),
-	}),
-});
-
-/**
- * package.json wiring: required dependencies (errors), tooling dev dependencies and scripts (warnings).
- * @param {ProjectFiles} files
- * @param {'service' | 'pack'} kind
- * @returns {Promise<Problem[]>}
- */
-export const checkPackageWiring = async (files, kind) => {
-	if (!files.set.has('package.json')) return [];
-	const parsed = parseJson(await files.read('package.json'));
-	const pkg = parsed.ok && isObject(parsed.value) ? parsed.value : {};
-	/** @param {unknown} value */
-	const keys = (value) => (isObject(value) ? value : {});
-	const wiring = PACKAGE_WIRING[kind];
-	const deps = keys(pkg.dependencies);
-	const devDeps = keys(pkg.devDependencies);
-	const scripts = keys(pkg.scripts);
-	return [
-		...wiring.dependencies
-			.filter((name) => !Object.hasOwn(deps, name))
-			.map((name) =>
-				problemOf({ rule: 'package.dependency', file: 'package.json', message: `dependencies must include '${name}'` }),
-			),
-		...wiring.devDependencies
-			.filter((name) => !Object.hasOwn(devDeps, name) && !Object.hasOwn(deps, name))
-			.map((name) =>
-				problemOf({
-					severity: 'warning',
-					rule: 'package.devDependency',
-					file: 'package.json',
-					message: `devDependencies should include '${name}'`,
-				}),
-			),
-		...wiring.scripts
-			.filter((name) => !Object.hasOwn(scripts, name))
-			.map((name) =>
-				problemOf({
-					severity: 'warning',
-					rule: 'package.script',
-					file: 'package.json',
-					message: `scripts.${name} is missing`,
-				}),
-			),
-	];
-};
-
-/**
- * Product events published in the product namespace should ship a data schema at `schemas/events/<type@v>.json`.
- * @param {ProjectFiles} files
- * @param {Manifest} manifest
- * @returns {Problem[]}
- */
-export const checkEventSchemas = (files, manifest) => {
-	const namespace = `${manifest.product.slug.replace(/-/g, '_')}.`;
-	return (manifest.events?.publishes ?? [])
-		.filter((type) => type.startsWith(namespace) && !files.set.has(`schemas/events/${type}.json`))
-		.map((type) =>
+	for (const file of files.list.filter((name) => name.startsWith('strings/') && name !== 'strings/en.json')) {
+		problems.push(
 			problemOf({
-				severity: 'warning',
-				rule: 'events.schema',
-				file: `schemas/events/${type}.json`,
-				message: `data schema for '${type}' is missing`,
+				rule: 'strings.file',
+				file,
+				message: 'strings/en.json is the only text file: merchants change or translate texts per website in Settings → Texts',
 			}),
 		);
+	}
+	if (!files.set.has('strings/en.json')) return problems;
+	const file = 'strings/en.json';
+	const parsed = parseJson(await files.read(file));
+	if (!parsed.ok || !isObject(parsed.value)) {
+		problems.push(
+			problemOf({ rule: 'strings.invalid', file, message: parsed.ok ? 'texts must be a JSON object' : parsed.message }),
+		);
+		return problems;
+	}
+	const known = new Set();
+	for (const [key, value] of Object.entries(parsed.value)) {
+		if (!STRING_KEY.test(key) || typeof value !== 'string') {
+			problems.push(
+				problemOf({
+					rule: 'strings.invalid',
+					file,
+					pointer: `/${key}`,
+					message: `'${key}' must be a text with a simple key`,
+				}),
+			);
+			continue;
+		}
+		known.add(key);
+		if (!placeholdersWellFormed(value)) {
+			problems.push(
+				problemOf({
+					rule: 'strings.placeholders',
+					file,
+					pointer: `/${key}`,
+					message: `'${key}' has a brace that is not a placeholder: write placeholders as {name} (letters, digits, _)`,
+				}),
+			);
+		}
+	}
+	for (const source of files.list) {
+		if (!['core', 'api', 'adapters', 'ui', 'app'].includes(layerOf(source)) || !CODE_FILE.test(source)) continue;
+		for (const { key, line } of findStringKeys(lex(await files.read(source)))) {
+			if (!known.has(key))
+				problems.push(
+					problemOf({ rule: 'strings.unknown-key', file: source, line, message: `text '${key}' is not in strings/en.json` }),
+				);
+		}
+	}
+	return problems;
 };
 
 /**
- * @typedef {object} ValidationReport
- * @property {boolean} ok no errors (warnings allowed)
- * @property {string} dir
- * @property {unknown} manifest bundled manifest (null when unreadable)
- * @property {Problem[]} problems sorted by file, line
- * @property {{ errors: number, warnings: number, files: number }} summary
+ * `.env.example` lists exactly the three variables a product reads (PLAN 0.11).
+ * @param {ProjectFiles} files
+ * @returns {Promise<Problem[]>}
  */
+export const checkEnvExample = async (files) => {
+	if (!files.set.has('.env.example')) return [];
+	const names = (await files.read('.env.example'))
+		.split('\n')
+		.map((line) => ENV_LINE.exec(line.trim())?.[1])
+		.filter((name) => name !== undefined);
+	const same = names.length === ENV_NAMES.length && ENV_NAMES.every((name) => names.includes(name));
+	return same
+		? []
+		: [
+				problemOf({
+					rule: 'env.example',
+					file: '.env.example',
+					message: `must list exactly ${ENV_NAMES.join(', ')} (found: ${names.join(', ') || 'none'})`,
+				}),
+			];
+};
 
 /**
- * `vercel.json` declares no crons (PLAN F.19: event-driven only, no scheduled or background processing). Work happens
- * on the request or event that causes it, on read, or from a dashboard button.
+ * `vercel.json` declares no crons (PLAN F.19: no scheduled or background work). Work happens on the request that
+ * causes it, on read, or from a dashboard button.
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
@@ -691,12 +362,161 @@ export const checkCrons = async (files) => {
 			file: 'vercel.json',
 			pointer: '/crons',
 			message:
-				'crons are not allowed: run work on the request or event that causes it, treat expiries on read, or add a dashboard button',
+				'crons are not allowed: run work on the request that causes it, treat expiries on read, or add a dashboard button',
 		}),
 	];
 };
 
-/** Server entry points a service product may have (Vercel Hobby deploys at most 12 functions per project). */
+/**
+ * Routes ↔ manifest: valid auth; every website route (browser, server, ticket) belongs to a feature of the manifest,
+ * through `feature` or its ticket `permission`; the widget script (one public script for every website, PLAN 0.4.10)
+ * and the docs are public routes.
+ * @param {readonly ScannedRoute[]} routes
+ * @param {Manifest} manifest
+ * @returns {Problem[]}
+ */
+export const checkRoutes = (routes, manifest) => {
+	/** @type {Problem[]} */
+	const problems = [];
+	const features = new Set(manifest.features.map((feature) => feature.key));
+	const permissions = new Set(manifest.permissions.map((permission) => permission.key));
+	for (const route of routes) {
+		const where = { file: route.file, line: route.line };
+		const name = `${route.method} ${route.path}`;
+		if (!AUTH_MODES.includes(route.auth)) {
+			problems.push(
+				problemOf({ rule: 'routes.auth', ...where, message: `${name}: auth must be one of ${AUTH_MODES.join(', ')}` }),
+			);
+			continue;
+		}
+		if (route.feature !== undefined && !features.has(route.feature))
+			problems.push(
+				problemOf({
+					rule: 'routes.feature',
+					...where,
+					message: `${name}: feature '${route.feature}' is not in manifest.json`,
+				}),
+			);
+		if (route.permission !== undefined && !permissions.has(route.permission))
+			problems.push(
+				problemOf({
+					rule: 'routes.permission',
+					...where,
+					message: `${name}: permission '${route.permission}' is not in manifest.json`,
+				}),
+			);
+		if (WEBSITE_AUTH.includes(route.auth) && route.feature === undefined && route.permission === undefined)
+			problems.push(
+				problemOf({
+					rule: 'routes.feature',
+					...where,
+					message: `${name}: every ${route.auth} route belongs to one feature (set feature${route.auth === 'ticket' ? ' or permission' : ''})`,
+				}),
+			);
+	}
+	/** @param {string} where */
+	const publicRoute = (where) => routes.some((route) => route.method === 'GET' && route.path === where && route.auth === 'none');
+	const script = manifest.widgetScriptUrl;
+	if (script !== null && script.startsWith('/') && !publicRoute(script))
+		problems.push(
+			problemOf({
+				rule: 'routes.widget-script',
+				file: 'api/',
+				message: `widgetScriptUrl is ${script}: serve the widgets' script publicly with a GET ${script} route (auth none, the same for every website)`,
+			}),
+		);
+	const docs = manifest.docsUrl;
+	if (docs.startsWith('/') && !publicRoute(docs))
+		problems.push(
+			problemOf({
+				rule: 'routes.docs',
+				file: 'api/',
+				message: `docsUrl is ${docs}: serve the docs publicly with a GET ${docs} route (auth none)`,
+			}),
+		);
+	return problems;
+};
+
+/**
+ * package.json wiring every product needs to work on its own (in the monorepo and once split into its own repository):
+ * the kit it is built on, its tooling (`@ss/cli`, `@ss/config`) and its scripts (F.17).
+ */
+export const PACKAGE_WIRING = Object.freeze({
+	dependencies: Object.freeze(['@ss/app-kit']),
+	devDependencies: Object.freeze(['@ss/cli', '@ss/config']),
+	scripts: Object.freeze(['check', 'test', 'lint', 'typecheck', 'format', 'format:check', 'dev', 'build', 'start', 'validate']),
+});
+
+/**
+ * package.json wiring: required dependencies and imported packages (errors), tooling dev dependencies and scripts
+ * (warnings).
+ * @param {ProjectFiles} files
+ * @returns {Promise<Problem[]>}
+ */
+export const checkPackageWiring = async (files) => {
+	if (!files.set.has('package.json')) return [];
+	const parsed = parseJson(await files.read('package.json'));
+	const pkg = parsed.ok && isObject(parsed.value) ? parsed.value : {};
+	/** @param {unknown} value */
+	const keys = (value) => (isObject(value) ? value : {});
+	const deps = keys(pkg.dependencies);
+	const devDeps = keys(pkg.devDependencies);
+	const scripts = keys(pkg.scripts);
+	const listed = new Set([
+		...Object.keys(deps),
+		...Object.keys(devDeps),
+		...Object.keys(keys(pkg.peerDependencies)),
+		...Object.keys(keys(pkg.optionalDependencies)),
+		...(typeof pkg.name === 'string' ? [pkg.name] : []),
+	]);
+	/** @type {Problem[]} */
+	const problems = [
+		...PACKAGE_WIRING.dependencies
+			.filter((name) => !Object.hasOwn(deps, name))
+			.map((name) =>
+				problemOf({ rule: 'package.dependency', file: 'package.json', message: `dependencies must include '${name}'` }),
+			),
+		...PACKAGE_WIRING.devDependencies
+			.filter((name) => !Object.hasOwn(devDeps, name) && !Object.hasOwn(deps, name))
+			.map((name) =>
+				problemOf({
+					severity: 'warning',
+					rule: 'package.devDependency',
+					file: 'package.json',
+					message: `devDependencies should include '${name}'`,
+				}),
+			),
+		...PACKAGE_WIRING.scripts
+			.filter((name) => !Object.hasOwn(scripts, name))
+			.map((name) =>
+				problemOf({
+					severity: 'warning',
+					rule: 'package.script',
+					file: 'package.json',
+					message: `scripts.${name} is missing`,
+				}),
+			),
+	];
+	for (const file of files.list) {
+		if (!CODE_FILE.test(file)) continue;
+		for (const { specifier, line } of findImports(lex(await files.read(file)))) {
+			if (specifier.startsWith('.') || specifier.startsWith('node:') || BUILTINS.has(specifier)) continue;
+			const name = packageOf(specifier);
+			if (!listed.has(name))
+				problems.push(
+					problemOf({
+						rule: 'package.missing',
+						file,
+						line,
+						message: `'${name}' is imported but not listed in package.json (a unit imports only the packages it lists)`,
+					}),
+				);
+		}
+	}
+	return problems;
+};
+
+/** Server functions a product has: the API route handler and the dashboard page (PLAN 0.9, Vercel Hobby). */
 export const MAX_SERVER_ENTRIES = 2;
 
 const ROUTE_FILE = /^(?:src\/)?app\/(?:.*\/)?route\.(?:m?js|jsx|ts|tsx)$/;
@@ -722,10 +542,9 @@ export const serverEntries = async (files) => {
 };
 
 /**
- * Deployment shape of a service product (Vercel Hobby): at most {@link MAX_SERVER_ENTRIES} server entry points (one
- * route handler behind next.config.js rewrites and one dashboard page; the misconfiguration check runs in both, so no
- * proxy function), no `outputFileTracingIncludes` (it
- * defeats function grouping; runtime files are bundled through `app/_lib/assets.js`), and that module up to date.
+ * Deployment shape: at most {@link MAX_SERVER_ENTRIES} server entry points (the route handler behind next.config.js
+ * rewrites and the dashboard page; no proxy) and no `outputFileTracingIncludes` (runtime files are imported as
+ * modules).
  * @param {ProjectFiles} files
  * @returns {Promise<Problem[]>}
  */
@@ -738,7 +557,7 @@ export const checkServerShape = async (files) => {
 			problemOf({
 				rule: 'server.entries',
 				file: 'app/',
-				message: `${entries.length} server entry points (at most ${MAX_SERVER_ENTRIES}: one route handler behind next.config.js rewrites and one dashboard page; no proxy): ${entries.join(', ')}`,
+				message: `${entries.length} server entry points (at most ${MAX_SERVER_ENTRIES}: app/api/[...path]/route.js behind next.config.js rewrites and the dashboard page; no proxy): ${entries.join(', ')}`,
 			}),
 		);
 	}
@@ -748,25 +567,58 @@ export const checkServerShape = async (files) => {
 				problemOf({
 					rule: 'server.tracing',
 					file,
-					message: 'outputFileTracingIncludes is not allowed: import runtime files as modules (app/_lib/assets.js)',
-				}),
-			);
-		}
-	}
-	if (files.list.some((file) => file.startsWith('app/'))) {
-		const current = files.set.has(ASSETS_FILE) ? await files.read(ASSETS_FILE) : null;
-		if (current !== null && current !== (await renderAssets(files.dir))) {
-			problems.push(
-				problemOf({
-					rule: 'server.assets',
-					file: ASSETS_FILE,
-					message: 'out of date with manifest.json, schemas/ or strings/: run ss app assets',
+					message: 'outputFileTracingIncludes is not allowed: import runtime files as modules',
 				}),
 			);
 		}
 	}
 	return problems;
 };
+
+/**
+ * The generated files (`openapi.json`, `api/widget-script.js`) match the sources.
+ * @param {ProjectFiles} files
+ * @param {Manifest | null} manifest
+ * @returns {Promise<Problem[]>}
+ */
+export const checkAssets = async (files, manifest) => {
+	if (manifest !== null && manifest.widgets.length > 0 && !files.set.has(WIDGET_ENTRY))
+		return [
+			problemOf({
+				rule: 'assets.widget',
+				file: WIDGET_ENTRY,
+				message: `the manifest has widgets: ${WIDGET_ENTRY} (default export: start the widgets with their config) is required`,
+			}),
+		];
+	try {
+		return (await assetStates(files.dir))
+			.filter((state) => !state.upToDate)
+			.map((state) =>
+				problemOf({
+					rule: state.file === OPENAPI_FILE ? 'assets.openapi' : 'assets.widget',
+					file: state.file,
+					message: 'out of date with the sources: run ss app assets',
+				}),
+			);
+	} catch (error) {
+		return [
+			problemOf({
+				rule: 'assets.widget',
+				file: WIDGET_ENTRY,
+				message: `the widgets cannot be bundled: ${/** @type {Error} */ (error).message.split('\n')[0]}`,
+			}),
+		];
+	}
+};
+
+/**
+ * @typedef {object} ValidationReport
+ * @property {boolean} ok no errors (warnings allowed)
+ * @property {string} dir
+ * @property {unknown} manifest bundled manifest (null when unreadable)
+ * @property {Problem[]} problems sorted by file, line
+ * @property {{ errors: number, warnings: number, files: number }} summary
+ */
 
 /**
  * Validate a project directory.
@@ -794,38 +646,22 @@ export const validateProject = async (dir) => {
 					}),
 				);
 			}
-			if (isObject(loaded.manifest) && Array.isArray(loaded.manifest.elements) && isObject(loaded.manifest.product))
-				manifest = /** @type {Manifest} */ (loaded.manifest);
 		}
 	}
-	const rawKind = isObject(loaded.manifest) && isObject(loaded.manifest.product) ? loaded.manifest.product.kind : null;
-	const kind = rawKind === 'service' || rawKind === 'pack' ? rawKind : null;
-	const catalogs = await loadCatalogs(files);
-	// the product catalog strings/en.json plus any legacy per-element catalog
-	const defaultCatalogs = /** @type {string[]} */ ([
-		...new Set([
-			'strings/en.json',
-			...(manifest ? manifest.elements.map((element) => element.strings).filter((file) => typeof file === 'string') : []),
-		]),
-	]);
+	const scanned = await scanRoutes(files);
 	problems.push(
-		...checkAnatomy(files, kind),
+		...checkAnatomy(files),
 		...(await checkImports(files)),
-		...(await checkDomFree(files)),
-		...(await checkColours(files)),
-		...catalogs.problems,
-		...(await checkStringKeys(files, catalogs, defaultCatalogs)),
+		...(await checkCorePure(files)),
+		...(await checkStrings(files)),
+		...(await checkEnvExample(files)),
 		...(await checkCrons(files)),
+		...scanned.problems,
+		...(manifest === null ? [] : checkRoutes(scanned.routes, manifest)),
+		...(await checkPackageWiring(files)),
+		...(await checkServerShape(files)),
+		...(await checkAssets(files, manifest)),
 	);
-	if (manifest !== null && Array.isArray(manifest.elements)) {
-		problems.push(
-			...(await checkModules(files, manifest)),
-			...checkEventSchemas(files, manifest),
-			...(await checkStringSlices(files, manifest)),
-		);
-		if (kind === 'service') problems.push(...(await checkServiceContract(files, manifest)), ...(await checkServerShape(files)));
-		if (kind !== null) problems.push(...(await checkPackageWiring(files, kind)));
-	}
 	problems.sort((a, b) => a.file.localeCompare(b.file) || (a.line ?? 0) - (b.line ?? 0) || a.rule.localeCompare(b.rule));
 	const errors = problems.filter((problem) => problem.severity === 'error').length;
 	return {

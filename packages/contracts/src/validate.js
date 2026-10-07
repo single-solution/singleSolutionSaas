@@ -6,27 +6,29 @@
 import Ajv2020Module from 'ajv/dist/2020.js';
 import addFormatsModule from 'ajv-formats';
 import { ALL_SCHEMAS } from './schemas/index.js';
-import { SCHEMA_IDS, eventDataSchemaId } from './schemas/schema-ids.js';
-import { FEATURE_EXTENSION_KEYWORDS } from './schemas/feature-schema.js';
+import { SCHEMA_IDS } from './schemas/schema-ids.js';
+import { SETTING_EXTENSION_KEYWORDS } from './schemas/settings-schema.js';
 import {
-	CUSTOM_EVENT_PREFIX,
-	ELEMENT_EVENT_DATA,
-	ELEMENT_UI_EVENT_MAX_BYTES,
-	elementEventDataSchemaId,
-	eventScopeOf,
-	isElementUiEvent,
-} from './schemas/event-envelope.js';
-import { PATTERNS } from './schemas/common.js';
-import { checkManifest } from './manifest-semantics.js';
-import { checkEntitlementDocument, checkPlacement } from './document-semantics.js';
-import { escapePointerToken, isPlainObject } from './util.js';
+	RULES,
+	at,
+	checkActivityCopy,
+	checkDirectory,
+	checkManifest,
+	checkPriceReport,
+	checkSettingsRules,
+	checkStatusResponse,
+} from './semantics.js';
+import { escapePointerToken, isPlainObject, pointer } from './util.js';
 
 /** @typedef {import('./types.js').ValidationProblem} ValidationProblem */
 /**
  * @template T
  * @typedef {import('./types.js').ValidationResult<T>} ValidationResult
  */
+/** @typedef {import('./types.js').SettingsSchema} SettingsSchema */
+/** @typedef {import('./types.js').Manifest} Manifest */
 /** @typedef {import('ajv').ErrorObject} AjvError */
+/** @typedef {import('ajv').ValidateFunction} ValidateFunction */
 
 // ajv and ajv-formats are CommonJS; under NodeNext their default export is the module object at type level.
 const Ajv2020 = /** @type {typeof Ajv2020Module.default} */ (/** @type {unknown} */ (Ajv2020Module));
@@ -82,19 +84,26 @@ const result = (value, problems) =>
 /**
  * @typedef {object} ValidatorOptions
  * @property {ReadonlyArray<Record<string, unknown>>} [schemas] extra schemas (each needs a string `$id`)
- * @property {Readonly<Record<string, Record<string, unknown>>>} [events] extra event data schemas keyed by `type@v` (product events)
  */
 
 /**
  * @typedef {object} Validator
  * @property {(schemaId: string, value: unknown) => ValidationResult<unknown>} validate validate against any registered schema id
  * @property {(schemaId: string) => boolean} has whether a schema id is registered
- * @property {(value: unknown) => ValidationResult<import('./types.js').Manifest>} validateManifest schema + semantic checks
- * @property {(value: unknown) => ValidationResult<import('./types.js').EntitlementDocument>} validateEntitlementDocument schema + semantic checks
- * @property {(value: unknown) => ValidationResult<import('./types.js').EventEnvelope>} validateEvent envelope, then `data` by `type@v`
- * @property {(value: unknown) => ValidationResult<import('./types.js').Placement>} validatePlacement schema + semantic checks
- * @property {(featureSchema: import('./types.js').FeatureSchema, value: unknown) => ValidationResult<Record<string, unknown>>} validateFeatureConfig
- *   validate element configuration against its (manifest-validated) feature schema
+ * @property {(schema: unknown) => ValidationProblem[]} checkSettingsSchema settings meta-schema, keyword fit, defaults and enum values
+ * @property {(schema: SettingsSchema, key: string, value: unknown) => ValidationResult<unknown>} validateSettingValue one setting value
+ * @property {(schema: SettingsSchema, values: unknown) => ValidationResult<Record<string, unknown>>} validateSettings
+ *   an object of setting values (any subset of the settings; unknown keys refused)
+ * @property {(value: unknown) => ValidationResult<Manifest>} validateManifest schema, semantic rules and every settings schema
+ * @property {(value: unknown) => ValidationResult<import('./types.js').PriceList>} validatePriceReport
+ * @property {(value: unknown) => ValidationResult<import('./types.js').FeatureReport>} validateFeatureReport
+ * @property {(value: unknown) => ValidationResult<import('./types.js').StatusResponse>} validateStatusResponse
+ * @property {(value: unknown) => ValidationResult<import('./types.js').WebsitesPage>} validateWebsitesPage
+ * @property {(value: unknown) => ValidationResult<import('./types.js').Revocations>} validateRevocations
+ * @property {(value: unknown) => ValidationResult<import('./types.js').Directory>} validateDirectory
+ * @property {(value: unknown) => ValidationResult<import('./types.js').Notice>} validateNotice
+ * @property {(value: unknown) => ValidationResult<import('./types.js').DataRightsRequest>} validateDataRightsRequest
+ * @property {(value: unknown) => ValidationResult<import('./types.js').ActivityCopy>} validateActivityCopy
  */
 
 /**
@@ -102,65 +111,39 @@ const result = (value, problems) =>
  * @param {ValidatorOptions} [options]
  * @returns {Validator}
  */
-export const createValidator = ({ schemas = [], events = {} } = {}) => {
+export const createValidator = ({ schemas = [] } = {}) => {
 	const ajv = new Ajv2020({ strict: true, allErrors: true, allowUnionTypes: true });
 	addFormats(ajv);
-	for (const keyword of FEATURE_EXTENSION_KEYWORDS) ajv.addKeyword({ keyword });
+	for (const keyword of SETTING_EXTENSION_KEYWORDS) ajv.addKeyword({ keyword });
 	for (const schema of ALL_SCHEMAS) ajv.addSchema(/** @type {import('ajv').AnySchemaObject} */ (schema));
 	for (const schema of schemas) {
 		if (typeof schema.$id !== 'string') throw new TypeError('Every extra schema needs a string $id.');
 		ajv.addSchema(schema);
 	}
-	const eventPattern = new RegExp(PATTERNS.eventType);
-	for (const [type, schema] of Object.entries(events)) {
-		if (!eventPattern.test(type) || type.startsWith(CUSTOM_EVENT_PREFIX))
-			throw new TypeError(`Invalid product event type: ${type}`);
-		ajv.addSchema({ ...schema, $id: eventDataSchemaId(type) });
-	}
 
-	/** @type {WeakMap<object, import('ajv').ValidateFunction>} */
-	const featureValidators = new WeakMap();
+	/** @type {WeakMap<object, ValidateFunction>} */
+	const compiled = new WeakMap();
 
 	/**
-	 * The schema Ajv compiles for a feature schema: `placement` features become a `$ref` to the placement v1 schema
-	 * (members narrowed by `x-placement.members`).
-	 * @param {import('./types.js').FeatureSchema} featureSchema
+	 * Compile (once per object) a setting node or a settings values schema.
+	 * @param {object} key cache key (the schema object it was built from)
+	 * @param {() => Record<string, unknown>} build
+	 * @returns {ValidateFunction}
 	 */
-	const compilable = (featureSchema) => {
-		const properties = /** @type {Record<string, Record<string, unknown>>} */ ({ ...featureSchema.properties });
-		let changed = false;
-		for (const [name, node] of Object.entries(properties)) {
-			if (!isPlainObject(node) || node['x-kind'] !== 'placement') continue;
-			const rest = Object.fromEntries(Object.entries(node).filter(([key]) => key !== 'properties'));
-			const members = isPlainObject(node['x-placement']) ? node['x-placement'].members : undefined;
-			properties[name] = {
-				...rest,
-				$ref: SCHEMA_IDS.placement,
-				...(Array.isArray(members) ? { propertyNames: { enum: [...members] } } : {}),
-			};
-			changed = true;
+	const compile = (key, build) => {
+		let fn = compiled.get(key);
+		if (fn === undefined) {
+			fn = ajv.compile(build());
+			compiled.set(key, fn);
 		}
-		return changed ? { ...featureSchema, properties } : featureSchema;
+		return fn;
 	};
 
 	/**
-	 * Semantic placement checks (time zones, schedule windows) of the placement values in a configuration.
-	 * @param {import('./types.js').FeatureSchema} featureSchema
-	 * @param {unknown} value
-	 * @returns {ValidationProblem[]}
+	 * @param {Record<string, unknown>} node
+	 * @returns {ValidateFunction}
 	 */
-	const placementProblems = (featureSchema, value) => {
-		if (!isPlainObject(value)) return [];
-		/** @type {ValidationProblem[]} */
-		const out = [];
-		for (const [name, node] of Object.entries(featureSchema.properties ?? {})) {
-			if (!isPlainObject(node) || node['x-kind'] !== 'placement' || !isPlainObject(value[name])) continue;
-			const prefix = `/${escapePointerToken(name)}`;
-			for (const problem of checkPlacement(/** @type {import('./types.js').Placement} */ (value[name])))
-				out.push({ ...problem, path: `${prefix}${problem.path}` });
-		}
-		return out;
-	};
+	const compileNode = (node) => compile(node, () => node);
 
 	/**
 	 * Compiled validator for an id, or undefined for unknown or malformed ids.
@@ -192,107 +175,101 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 	/** @type {Validator['validate']} */
 	const validate = (schemaId, value) => result(value, run(schemaId, value));
 
-	/** @type {Validator['validateFeatureConfig']} */
-	const validateFeatureConfig = (featureSchema, value) => {
-		let fn = featureValidators.get(featureSchema);
-		if (fn === undefined) {
-			fn = ajv.compile(/** @type {import('ajv').AnySchemaObject} */ (compilable(featureSchema)));
-			featureValidators.set(featureSchema, fn);
+	/**
+	 * Run a schema, then (only when it passes) its semantic check.
+	 * @template T
+	 * @param {string} schemaId
+	 * @param {(value: T) => ValidationProblem[]} [semantic]
+	 * @returns {(value: unknown) => ValidationResult<T>}
+	 */
+	const validator = (schemaId, semantic) => (value) => {
+		const problems = run(schemaId, value);
+		const typed = /** @type {T} */ (value);
+		return result(typed, problems.length > 0 || semantic === undefined ? problems : semantic(typed));
+	};
+
+	/**
+	 * Keyword fit, defaults and enum values of a settings schema that passed the meta-schema.
+	 * @param {SettingsSchema} schema
+	 * @param {Array<string | number>} path
+	 * @returns {ValidationProblem[]}
+	 */
+	const settingsProblems = (schema, path) => {
+		const out = checkSettingsRules(schema, path);
+		if (out.length > 0) return out;
+		for (const [key, node] of Object.entries(schema.properties)) {
+			const nodePath = [...path, 'properties', key];
+			const fn = compileNode(/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (node)));
+			if (!fn(node.default))
+				for (const problem of problemsFromAjv(fn.errors, pointer([...nodePath, 'default'])))
+					out.push({ ...problem, keyword: RULES.settingDefault, message: `default ${problem.message}` });
+			if (node.enum !== undefined) {
+				const { enum: options, ...rest } = node;
+				const plain = compile(options, () => /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (rest)));
+				for (const [index, option] of options.entries())
+					if (!plain(option)) out.push(at([...nodePath, 'enum', index], RULES.settingEnum, 'does not fit the setting'));
+			}
 		}
-		const ok = fn(value);
-		return result(
-			/** @type {Record<string, unknown>} */ (value),
-			ok ? placementProblems(featureSchema, value) : problemsFromAjv(fn.errors),
-		);
+		return out;
+	};
+
+	/** @type {Validator['checkSettingsSchema']} */
+	const checkSettingsSchema = (schema) => {
+		const problems = run(SCHEMA_IDS.settingsSchema, schema);
+		return problems.length > 0 ? problems : settingsProblems(/** @type {SettingsSchema} */ (schema), []);
+	};
+
+	/**
+	 * @param {unknown} schema
+	 * @returns {schema is SettingsSchema}
+	 */
+	const usable = (schema) => isPlainObject(schema) && isPlainObject(schema.properties);
+
+	const unusable = Object.freeze([at([], RULES.settingsSchema, 'is not a settings schema')]);
+
+	/** @type {Validator['validateSettingValue']} */
+	const validateSettingValue = (schema, key, value) => {
+		if (!usable(schema)) return result(value, unusable);
+		if (!Object.hasOwn(schema.properties, key)) return result(value, [at([key], 'unknownSetting', 'is not a setting')]);
+		const fn = compileNode(/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (schema.properties[key])));
+		return result(value, fn(value) ? [] : problemsFromAjv(fn.errors, pointer([key])));
+	};
+
+	/** @type {Validator['validateSettings']} */
+	const validateSettings = (schema, values) => {
+		const typed = /** @type {Record<string, unknown>} */ (values);
+		if (!usable(schema)) return result(typed, unusable);
+		const fn = compile(schema, () => ({ type: 'object', additionalProperties: false, properties: schema.properties }));
+		return result(typed, fn(values) ? [] : problemsFromAjv(fn.errors));
 	};
 
 	/** @type {Validator['validateManifest']} */
 	const validateManifest = (value) => {
 		const problems = run(SCHEMA_IDS.manifest, value);
-		if (problems.length > 0) return result(/** @type {import('./types.js').Manifest} */ (value), problems);
-		const manifest = /** @type {import('./types.js').Manifest} */ (value);
+		const manifest = /** @type {Manifest} */ (value);
+		if (problems.length > 0) return result(manifest, problems);
 		const semantic = checkManifest(manifest);
-		if (semantic.length === 0) {
-			for (const [index, element] of manifest.elements.entries()) {
-				if (element.features === undefined) continue;
-				try {
-					const defaults = Object.fromEntries(
-						Object.entries(element.features.properties).map(([name, node]) => [name, node.default]),
-					);
-					const checked = validateFeatureConfig(element.features, defaults);
-					if (!checked.ok) {
-						for (const problem of checked.problems) {
-							const [, feature = '', ...rest] = problem.path.split('/');
-							const tail = rest.length > 0 ? `/${rest.join('/')}` : '';
-							semantic.push({ ...problem, path: `/elements/${index}/features/properties/${feature}/default${tail}` });
-						}
-					}
-				} catch (error) {
-					semantic.push({
-						path: `/elements/${index}/features`,
-						keyword: 'featureCompile',
-						message: `feature schema does not compile: ${/** @type {Error} */ (error).message}`,
-					});
-				}
-			}
-		}
+		for (const [index, feature] of manifest.features.entries())
+			semantic.push(...settingsProblems(feature.settings, ['features', index, 'settings']));
 		return result(manifest, semantic);
-	};
-
-	/** @type {Validator['validateEntitlementDocument']} */
-	const validateEntitlementDocument = (value) => {
-		const problems = run(SCHEMA_IDS.entitlementDocument, value);
-		const doc = /** @type {import('./types.js').EntitlementDocument} */ (value);
-		return result(doc, problems.length > 0 ? problems : checkEntitlementDocument(doc));
-	};
-
-	/** @type {Validator['validateEvent']} */
-	const validateEvent = (value) => {
-		const problems = run(SCHEMA_IDS.eventEnvelope, value);
-		const event = /** @type {import('./types.js').EventEnvelope} */ (value);
-		if (problems.length > 0) return result(event, problems);
-		const scope = /** @type {import('./types.js').AnyEventEnvelope} */ (event).scope ?? 'website';
-		const expectedScope = eventScopeOf(event.type);
-		if (scope !== expectedScope) {
-			return result(event, [
-				{ path: '/scope', keyword: 'eventScope', message: `${event.type} is a ${expectedScope}-scoped event` },
-			]);
-		}
-		let dataId = event.type.startsWith(CUSTOM_EVENT_PREFIX) ? eventDataSchemaId('custom.*') : eventDataSchemaId(event.type);
-		// An element UI event is recognised only when the envelope names the emitting element (context.element).
-		if (!has(dataId) && isElementUiEvent(event.type) && event.context?.element === event.type.split('.')[0]) {
-			if (JSON.stringify(event.data).length > ELEMENT_UI_EVENT_MAX_BYTES) {
-				return result(event, [
-					{
-						path: '/data',
-						keyword: 'maxSize',
-						message: `must serialize to at most ${ELEMENT_UI_EVENT_MAX_BYTES} characters`,
-					},
-				]);
-			}
-			const verb = event.type.slice(event.type.indexOf('.') + 1);
-			dataId = Object.hasOwn(ELEMENT_EVENT_DATA, verb) ? elementEventDataSchemaId(verb) : eventDataSchemaId('element-ui');
-		}
-		if (!has(dataId))
-			return result(event, [{ path: '/type', keyword: 'eventType', message: `unknown event type '${event.type}'` }]);
-		return result(event, run(dataId, event.data, '/data'));
-	};
-
-	/** @type {Validator['validatePlacement']} */
-	const validatePlacement = (value) => {
-		const problems = run(SCHEMA_IDS.placement, value);
-		const placement = /** @type {import('./types.js').Placement} */ (value);
-		return result(placement, problems.length > 0 ? problems : checkPlacement(placement));
 	};
 
 	return Object.freeze({
 		validate,
 		has,
+		checkSettingsSchema,
+		validateSettingValue,
+		validateSettings,
 		validateManifest,
-		validateEntitlementDocument,
-		validateEvent,
-		validatePlacement,
-		validateFeatureConfig,
+		validatePriceReport: validator(SCHEMA_IDS.priceReport, checkPriceReport),
+		validateFeatureReport: /** @type {Validator['validateFeatureReport']} */ (validator(SCHEMA_IDS.featureReport)),
+		validateStatusResponse: validator(SCHEMA_IDS.statusResponse, checkStatusResponse),
+		validateWebsitesPage: /** @type {Validator['validateWebsitesPage']} */ (validator(SCHEMA_IDS.websitesPage)),
+		validateRevocations: /** @type {Validator['validateRevocations']} */ (validator(SCHEMA_IDS.revocations)),
+		validateDirectory: validator(SCHEMA_IDS.directory, checkDirectory),
+		validateNotice: /** @type {Validator['validateNotice']} */ (validator(SCHEMA_IDS.notice)),
+		validateDataRightsRequest: /** @type {Validator['validateDataRightsRequest']} */ (validator(SCHEMA_IDS.dataRightsRequest)),
+		validateActivityCopy: validator(SCHEMA_IDS.activityCopy, checkActivityCopy),
 	});
 };
 
@@ -308,33 +285,36 @@ export const getDefaultValidator = () => {
 	return defaultValidator;
 };
 
-/**
- * Validate a manifest (schema + semantics) with the default validator.
- * @param {unknown} value
- */
+/** @param {unknown} value */
 export const validateManifest = (value) => getDefaultValidator().validateManifest(value);
-
+/** @param {unknown} schema */
+export const checkSettingsSchema = (schema) => getDefaultValidator().checkSettingsSchema(schema);
 /**
- * Validate an entitlement document payload with the default validator.
+ * @param {SettingsSchema} schema
+ * @param {string} key
  * @param {unknown} value
  */
-export const validateEntitlementDocument = (value) => getDefaultValidator().validateEntitlementDocument(value);
-
+export const validateSettingValue = (schema, key, value) => getDefaultValidator().validateSettingValue(schema, key, value);
 /**
- * Validate a standard or custom event (envelope + data) with the default validator.
- * @param {unknown} value
+ * @param {SettingsSchema} schema
+ * @param {unknown} values
  */
-export const validateEvent = (value) => getDefaultValidator().validateEvent(value);
-
-/**
- * Validate a placement with the default validator.
- * @param {unknown} value
- */
-export const validatePlacement = (value) => getDefaultValidator().validatePlacement(value);
-
-/**
- * Validate element configuration against a feature schema with the default validator.
- * @param {import('./types.js').FeatureSchema} featureSchema
- * @param {unknown} value
- */
-export const validateFeatureConfig = (featureSchema, value) => getDefaultValidator().validateFeatureConfig(featureSchema, value);
+export const validateSettings = (schema, values) => getDefaultValidator().validateSettings(schema, values);
+/** @param {unknown} value */
+export const validatePriceReport = (value) => getDefaultValidator().validatePriceReport(value);
+/** @param {unknown} value */
+export const validateFeatureReport = (value) => getDefaultValidator().validateFeatureReport(value);
+/** @param {unknown} value */
+export const validateStatusResponse = (value) => getDefaultValidator().validateStatusResponse(value);
+/** @param {unknown} value */
+export const validateWebsitesPage = (value) => getDefaultValidator().validateWebsitesPage(value);
+/** @param {unknown} value */
+export const validateRevocations = (value) => getDefaultValidator().validateRevocations(value);
+/** @param {unknown} value */
+export const validateDirectory = (value) => getDefaultValidator().validateDirectory(value);
+/** @param {unknown} value */
+export const validateNotice = (value) => getDefaultValidator().validateNotice(value);
+/** @param {unknown} value */
+export const validateDataRightsRequest = (value) => getDefaultValidator().validateDataRightsRequest(value);
+/** @param {unknown} value */
+export const validateActivityCopy = (value) => getDefaultValidator().validateActivityCopy(value);

@@ -16,17 +16,16 @@ export const schemaId = (name) => `${SCHEMA_ID_PREFIX}${name}`;
 /** Every schema id, keyed by short name. */
 export const SCHEMA_IDS = Object.freeze({
 	common: schemaId('common'),
-	featureSchema: schemaId('feature-schema'),
+	settingsSchema: schemaId('settings-schema'),
 	manifest: schemaId('manifest'),
-	entitlementDocument: schemaId('entitlement-document'),
-	eventEnvelope: schemaId('event-envelope'),
-	placement: schemaId('placement'),
+	priceReport: schemaId('price-report'),
+	featureReport: schemaId('feature-report'),
+	statusResponse: schemaId('status-response'),
+	websitesPage: schemaId('websites-page'),
+	revocations: schemaId('revocations'),
+	directory: schemaId('directory'),
+	notice: schemaId('notice'),
+	dataRightsRequest: schemaId('data-rights-request'),
+	activityCopy: schemaId('activity-copy'),
 	problem: schemaId('problem'),
 });
-
-/**
- * Schema id of a standard event data schema (`order.placed@1` → `urn:ss:contracts:v1:event:order.placed@1`).
- * @param {string} typeAtVersion
- * @returns {string}
- */
-export const eventDataSchemaId = (typeAtVersion) => schemaId(`event:${typeAtVersion}`);

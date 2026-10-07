@@ -40,45 +40,20 @@ export const defaultRandomBytes = (length) => globalThis.crypto.getRandomValues(
 export const randomToken = (randomBytes, bytes = 16) => toBase64Url(randomBytes(bytes));
 
 /**
- * Deterministic JSON (keys sorted recursively) for fingerprints.
- * @param {unknown} value
+ * Merchant database collection prefix of a product: `ss_<product id with - → _>_`.
+ * @param {string} productId
  * @returns {string}
  */
-export const stableJson = (value) => {
-	if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
-	if (isObject(value)) {
-		const keys = Object.keys(value).sort();
-		return `{${keys
-			.filter((key) => value[key] !== undefined)
-			.map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
-			.join(',')}}`;
-	}
-	return JSON.stringify(value) ?? 'null';
-};
+export const collectionPrefix = (productId) => `ss_${productId.replace(/-/g, '_')}_`;
 
 /**
- * Collection-safe product namespace: `ss_<slug with - → _>_`.
- * @param {string} slug
- * @returns {string}
+ * A copy of an object without some members.
+ * @template {Record<string, any>} T
+ * @param {T} value
+ * @param {ReadonlyArray<string>} keys
+ * @returns {Record<string, any>}
  */
-export const collectionPrefix = (slug) => `ss_${slug.replace(/-/g, '_')}_`;
-
-/**
- * Promise-returning single-flight: concurrent calls with the same key share one in-flight promise.
- * @template T
- * @returns {(key: string, run: () => Promise<T>) => Promise<T>}
- */
-export const createSingleFlight = () => {
-	/** @type {Map<string, Promise<T>>} */
-	const inflight = new Map();
-	return (key, run) => {
-		const existing = inflight.get(key);
-		if (existing) return existing;
-		const promise = run().finally(() => inflight.delete(key));
-		inflight.set(key, promise);
-		return promise;
-	};
-};
+export const omit = (value, keys) => Object.fromEntries(Object.entries(value).filter(([key]) => !keys.includes(key)));
 
 /**
  * Error with a stable machine `code` (and optional HTTP-ish `status`), safe to log.
@@ -102,26 +77,3 @@ export const kitError = (code, message, details) => {
  */
 export const isKitError = (error, code) =>
 	error instanceof Error && error.name === 'AppKitError' && (code === undefined || /** @type {any} */ (error).code === code);
-
-/**
- * Case-insensitive header read from a `Headers` instance or a plain record (arrays / duplicates → undefined).
- * @param {Headers | Record<string, string | string[] | undefined> | undefined} headers
- * @param {string} name
- * @returns {string | undefined}
- */
-export const readHeader = (headers, name) => {
-	if (!headers) return undefined;
-	if (typeof (/** @type {Headers} */ (headers).get) === 'function') {
-		return /** @type {Headers} */ (headers).get(name) ?? undefined;
-	}
-	const lower = name.toLowerCase();
-	/** @type {string | undefined} */
-	let found;
-	let count = 0;
-	for (const [key, value] of Object.entries(/** @type {Record<string, string | string[] | undefined>} */ (headers))) {
-		if (key.toLowerCase() !== lower || value === undefined) continue;
-		count += 1;
-		found = Array.isArray(value) ? (value.length === 1 ? value[0] : undefined) : value;
-	}
-	return count === 1 ? found : undefined;
-};

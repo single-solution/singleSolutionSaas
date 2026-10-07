@@ -3,6 +3,7 @@
  * configurable base (e.g. `https://errors.example.dev/`). The base is never hardcoded here.
  * @module
  */
+import { PRODUCT_UNAVAILABLE_REASONS } from './constants.js';
 
 /**
  * @typedef {object} ProblemError
@@ -20,6 +21,7 @@
  * @property {string} [detail] explanation of this occurrence
  * @property {string} [instance] URI reference of this occurrence
  * @property {string} [requestId] correlation id
+ * @property {ProductUnavailableReason} [reason] `product_unavailable` only: stopped, suspended or removed
  * @property {ReadonlyArray<ProblemError>} [errors] field-level errors
  */
 
@@ -31,8 +33,11 @@
  * @property {string} [detail]
  * @property {string} [instance]
  * @property {string} [requestId]
+ * @property {ProductUnavailableReason} [reason]
  * @property {ReadonlyArray<ProblemError>} [errors]
  */
+
+/** @typedef {import('./constants.js').ProductUnavailableReason} ProductUnavailableReason */
 
 /** @typedef {{ readonly status: number, readonly title: string }} ProblemCodeDefinition */
 
@@ -42,16 +47,13 @@ export const PROBLEM_CODES = Object.freeze({
 	unsupported_version: Object.freeze({ status: 400, title: 'Unsupported contract version' }),
 	unauthorized: Object.freeze({ status: 401, title: 'Authentication required' }),
 	invalid_credentials: Object.freeze({ status: 401, title: 'Invalid or expired credentials' }),
-	identity_required: Object.freeze({ status: 401, title: 'Customer identity required' }),
-	identity_invalid: Object.freeze({ status: 401, title: 'Invalid or expired customer identity' }),
-	credits_exhausted: Object.freeze({ status: 402, title: 'Credits exhausted' }),
-	spend_cap_reached: Object.freeze({ status: 402, title: 'Spend cap reached' }),
+	invalid_token: Object.freeze({ status: 401, title: 'Invalid token' }),
 	forbidden: Object.freeze({ status: 403, title: 'Forbidden' }),
-	scope_missing: Object.freeze({ status: 403, title: 'Required scope not granted' }),
-	origin_not_allowed: Object.freeze({ status: 403, title: 'Origin not allowed for this key' }),
-	element_disabled: Object.freeze({ status: 403, title: 'Element not enabled' }),
-	subscription_inactive: Object.freeze({ status: 403, title: 'Subscription not active' }),
+	product_unavailable: Object.freeze({ status: 403, title: 'Product unavailable for this website' }),
+	feature_off: Object.freeze({ status: 403, title: 'Feature is off' }),
+	database_not_connected: Object.freeze({ status: 403, title: 'Database not connected' }),
 	not_found: Object.freeze({ status: 404, title: 'Not found' }),
+	website_not_found: Object.freeze({ status: 404, title: 'Website not found' }),
 	method_not_allowed: Object.freeze({ status: 405, title: 'Method not allowed' }),
 	conflict: Object.freeze({ status: 409, title: 'Conflict' }),
 	idempotency_conflict: Object.freeze({ status: 409, title: 'Idempotency key reused with a different request' }),
@@ -61,16 +63,13 @@ export const PROBLEM_CODES = Object.freeze({
 	unsupported_media_type: Object.freeze({ status: 415, title: 'Unsupported media type' }),
 	validation_failed: Object.freeze({ status: 422, title: 'Validation failed' }),
 	invalid_manifest: Object.freeze({ status: 422, title: 'Invalid manifest' }),
-	invalid_event: Object.freeze({ status: 422, title: 'Invalid event' }),
-	unknown_event_type: Object.freeze({ status: 422, title: 'Unknown event type' }),
-	resource_missing: Object.freeze({ status: 424, title: 'Required client resource missing' }),
 	idempotency_key_required: Object.freeze({ status: 428, title: 'Idempotency-Key header required' }),
 	rate_limited: Object.freeze({ status: 429, title: 'Too many requests' }),
-	quota_exhausted: Object.freeze({ status: 429, title: 'Quota exhausted' }),
 	internal_error: Object.freeze({ status: 500, title: 'Internal error' }),
 	not_implemented: Object.freeze({ status: 501, title: 'Not implemented' }),
 	upstream_error: Object.freeze({ status: 502, title: 'Upstream error' }),
 	unavailable: Object.freeze({ status: 503, title: 'Service unavailable' }),
+	portal_unreachable: Object.freeze({ status: 503, title: 'Portal unreachable' }),
 	timeout: Object.freeze({ status: 504, title: 'Upstream timeout' }),
 });
 
@@ -93,9 +92,11 @@ const normaliseError = (error) =>
  * @param {ProblemInput} input
  * @returns {Readonly<Problem>}
  */
-export const problem = ({ type, title, status, detail, instance, requestId, errors }) => {
+export const problem = ({ type, title, status, detail, instance, requestId, reason, errors }) => {
 	if (!Number.isInteger(status) || status < 100 || status > 599) throw new RangeError(`Invalid problem status: ${status}`);
 	if (typeof title !== 'string' || title.length === 0) throw new TypeError('Problem title is required.');
+	if (reason !== undefined && !PRODUCT_UNAVAILABLE_REASONS.includes(reason))
+		throw new TypeError(`Invalid problem reason: ${JSON.stringify(reason)}`);
 	return Object.freeze({
 		type: type ?? 'about:blank',
 		title,
@@ -103,6 +104,7 @@ export const problem = ({ type, title, status, detail, instance, requestId, erro
 		...(detail === undefined ? {} : { detail }),
 		...(instance === undefined ? {} : { instance }),
 		...(requestId === undefined ? {} : { requestId }),
+		...(reason === undefined ? {} : { reason }),
 		...(errors === undefined || errors.length === 0 ? {} : { errors: Object.freeze(errors.map(normaliseError)) }),
 	});
 };
@@ -160,6 +162,8 @@ export const createProblemFactory = ({ baseUri, codes = {} }) => {
 	/** @type {ProblemFactory['create']} */
 	const create = (code, overrides = {}) => {
 		const definition = definitionOf(code);
+		if ((code === 'product_unavailable') !== (overrides.reason !== undefined))
+			throw new TypeError('`reason` is required for product_unavailable and allowed only there.');
 		return problem({ title: definition.title, status: definition.status, ...overrides, type: `${base}${code}` });
 	};
 

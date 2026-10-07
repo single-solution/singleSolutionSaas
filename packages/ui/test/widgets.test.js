@@ -91,7 +91,7 @@ describe('buttons and fields', () => {
 			<div>
 				<Input label="E-mail" help="We never share it" error="Enter an e-mail address." required suffix="@" />
 				<TextArea label="Notes" />
-				<Select label="Plan" placeholder="Pick one" options={[{ value: 'a', label: 'A' }]} defaultValue="" />
+				<Select label="Size" placeholder="Pick one" options={[{ value: 'a', label: 'A' }]} defaultValue="" />
 			</div>,
 		);
 		const email = byLabel(container, 'E-mail');
@@ -104,7 +104,7 @@ describe('buttons and fields', () => {
 		]);
 		expect(container.textContent).toContain('@');
 		expect(byLabel(container, 'Notes').tagName).toBe('TEXTAREA');
-		expect(byLabel(container, 'Plan').querySelectorAll('option')).toHaveLength(2);
+		expect(byLabel(container, 'Size').querySelectorAll('option')).toHaveLength(2);
 	});
 
 	it('Checkbox, Switch, RadioGroup and CheckboxGroup report changes', () => {
@@ -167,7 +167,7 @@ describe('display', () => {
 				<Card title="Card" subtitle="Sub" actions={<span>act</span>}>
 					body
 				</Card>
-				<StatusBadge status="spend_cap" />
+				<StatusBadge status="low_balance" />
 				<StatusBadge status="unknown_status" label="Custom" />
 				<Callout tone="danger" title="Bad">
 					Broken
@@ -180,17 +180,17 @@ describe('display', () => {
 				<Skeleton lines={3} />
 				<Spinner label="Loading" />
 				<Stat label="Balance" value="12 credits" hint="low" tone="warning" icon="wallet" />
-				<KeyValueList items={[{ label: 'Plan', value: 'basic' }]} columns={3} />
+				<KeyValueList items={[{ label: 'Domain', value: 'shop.com' }]} columns={3} />
 				<Breadcrumbs items={[{ label: 'Home', href: '/' }, { label: 'Here' }]} />
 			</div>,
 		);
 		expect(container.querySelector('h1')?.textContent).toContain('Websites');
-		expect(container.textContent).toContain('Spend cap');
+		expect(container.textContent).toContain('Low balance');
 		expect(container.textContent).toContain('Custom');
 		expect(allByRole(container, 'alert').length).toBeGreaterThanOrEqual(2);
 		expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
 		expect(container.querySelector('nav[aria-label="Breadcrumb"] [aria-current="page"]')?.textContent).toBe('Here');
-		expect(container.querySelector('dl dt')?.textContent).toBe('Plan');
+		expect(container.querySelector('dl dt')?.textContent).toBe('Domain');
 	});
 
 	it('Meter exposes its value; Stepper marks the current step', () => {

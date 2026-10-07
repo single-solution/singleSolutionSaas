@@ -1,15 +1,13 @@
 /**
- * @ss/web — the browser SDK: website events and identity federation (`client`), the headless element runtime
- * (`element`), default-renderer helpers (`renderer`) and the Loader runtime (`loader`). Every export is side-effect free
- * and tree-shakes; `@ss/rules` is only reached through `./audience.js`.
+ * @ss/web — helpers a product may bundle into its own `widget.js`: the DOM-free widget core (`widget`) and safe DOM
+ * helpers for a ready-made UI (`renderer`). Every export is side-effect free and tree-shakes.
  * @module
  */
-export { createClient, DEFAULT_EVENT_CATEGORIES, NECESSARY } from './client.js';
 export {
 	CLIENT_PROBLEMS,
-	createElementApi,
+	createApiClient,
 	createStore,
-	defineElement,
+	defineWidget,
 	err,
 	formatString,
 	isResult,
@@ -18,7 +16,7 @@ export {
 	parseProblem,
 	problem,
 	resolveStrings,
-} from './element.js';
+} from './widget.js';
 export {
 	ATTRIBUTES,
 	HTML_TAGS,
@@ -40,23 +38,13 @@ export {
 	trapFocus,
 	uniqueId,
 } from './renderer.js';
-export { DEFAULT_BREAKPOINTS, deviceOf, inSchedule, localTime, matchPath, matchPlacement, matchReferrer } from './placement.js';
-export { createFrequency } from './frequency.js';
-export { boot } from './loader.js';
-export { createUseElement } from './adapters/react.js';
 
-/** @typedef {import('./client.js').Client} Client */
-/** @typedef {import('./client.js').ClientOptions} ClientOptions */
-/** @typedef {import('./client.js').EventEnvelope} EventEnvelope */
-/** @typedef {import('./element.js').Problem} Problem */
-/** @typedef {import('./element.js').FieldProblem} FieldProblem */
-/** @typedef {import('./element.js').ElementDefinition} ElementDefinition */
-/** @typedef {import('./element.js').HeadlessElement} HeadlessElement */
-/** @typedef {import('./element.js').ElementApi} ElementApi */
-/** @typedef {import('./loader.js').Bundle} Bundle */
-/** @typedef {import('./loader.js').BootOptions} BootOptions */
-/** @typedef {import('./loader.js').LoaderInstance} LoaderInstance */
+/** @typedef {import('./widget.js').Problem} Problem */
+/** @typedef {import('./widget.js').FieldProblem} FieldProblem */
+/** @typedef {import('./widget.js').WidgetDefinition} WidgetDefinition */
+/** @typedef {import('./widget.js').HeadlessWidget} HeadlessWidget */
+/** @typedef {import('./widget.js').ApiClient} ApiClient */
 /**
  * @template T
- * @typedef {import('./element.js').Result<T>} Result
+ * @typedef {import('./widget.js').Result<T>} Result
  */

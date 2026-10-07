@@ -22,8 +22,8 @@ describe('ids', () => {
 	});
 
 	it('is deterministic with injected randomness', () => {
-		const zeros = createId('sub', { randomBytes: (n) => new Uint8Array(n) });
-		expect(zeros).toBe(`sub_${'0'.repeat(26)}`);
+		const zeros = createId('adm', { randomBytes: (n) => new Uint8Array(n) });
+		expect(zeros).toBe(`adm_${'0'.repeat(26)}`);
 		const ones = createId('mer', { randomBytes: (n) => new Uint8Array(n).fill(255) });
 		expect(ones).toBe(`mer_${'z'.repeat(25)}w`);
 	});
@@ -42,23 +42,21 @@ describe('ids', () => {
 	});
 
 	it('checks and parses ids', () => {
-		const id = createId('evt');
+		const id = createId('req');
 		expect(isId(id)).toBe(true);
-		expect(isId(id, 'evt')).toBe(true);
+		expect(isId(id, 'req')).toBe(true);
 		expect(isId(id, 'web')).toBe(false);
-		expect(isId('evt_short')).toBe(false);
+		expect(isId('req_short')).toBe(false);
 		expect(isId(42)).toBe(false);
-		expect(parseId(id)).toEqual({ prefix: 'evt', random: id.slice(4) });
+		expect(parseId(id)).toEqual({ prefix: 'req', random: id.slice(4) });
 		expect(parseId('nope')).toBeNull();
 	});
 
-	it('generated ids satisfy the entitlement schema patterns', () => {
+	it('generated ids satisfy the opaque id pattern of the wire shapes', () => {
 		const v = getDefaultValidator();
 		const common = `${SCHEMA_IDS.common}#/$defs/`;
-		expect(v.validate(`${common}websiteId`, createId(ID_PREFIXES.website)).ok).toBe(true);
-		expect(v.validate(`${common}merchantId`, createId(ID_PREFIXES.merchant)).ok).toBe(true);
-		expect(v.validate(`${common}subscriptionId`, createId(ID_PREFIXES.subscription)).ok).toBe(true);
-		expect(v.validate(`${common}subscriptionId`, createId(ID_PREFIXES.website)).ok).toBe(false);
+		for (const prefix of Object.values(ID_PREFIXES)) expect(v.validate(`${common}opaqueId`, createId(prefix)).ok).toBe(true);
+		expect(ID_PREFIXES).toEqual({ website: 'web', merchant: 'mer', admin: 'adm', request: 'req' });
 	});
 });
 
@@ -159,11 +157,10 @@ describe('normaliseDomain', () => {
 });
 
 describe('hostMatchesDomain', () => {
-	it('matches exact hosts and optional subdomains', () => {
+	it('matches exact hosts only', () => {
 		expect(hostMatchesDomain('https://Shop.Example.com/x', 'shop.example.com')).toBe(true);
 		expect(hostMatchesDomain('www.shop.example.com', 'shop.example.com')).toBe(false);
-		expect(hostMatchesDomain('www.shop.example.com', 'shop.example.com', { allowSubdomains: true })).toBe(true);
-		expect(hostMatchesDomain('evilshop.example.com', 'shop.example.com', { allowSubdomains: true })).toBe(false);
+		expect(hostMatchesDomain('evilshop.example.com', 'shop.example.com')).toBe(false);
 		expect(hostMatchesDomain('localhost', 'localhost')).toBe(false);
 		expect(hostMatchesDomain('localhost:3000', 'localhost', { allowLocal: true })).toBe(true);
 	});

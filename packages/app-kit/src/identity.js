@@ -1,30 +1,28 @@
 /**
- * Bring-your-own customer identity (PLAN §5.3, F.14): products accept the website's own login tokens as the
- * end-customer identity. The website's issuer, its public keys (≤ 5), the expected audience and the claim map arrive
- * inline in the signed entitlement document (`identity` section), so verification is offline.
+ * Sign-ins from a merchant's own login (PLAN 0.4.6): a product that accepts them reads the issuer from one of its
+ * Connections, never from the Portal. The connection value is `{ issuer, jwksUrl, audience?, subjectClaim?,
+ * emailClaim?, phoneClaim? }`; the public keys are fetched from `jwksUrl` through `@ss/net` and cached for 10 minutes.
  *
- * `verify(request, { doc, body })` reads `SS-Identity: <JWT>` (or, for `sendBeacon` bodies, `body.identity`) and
- * checks: compact JWS with `alg` ∈ EdDSA | ES256 | RS256 matching the key type (`none`, HMAC and header-borne keys
- * `jwk/jku/x5u/x5c` and `crit` refused), the key by `kid` (or the only compatible key), `iss` = issuer, `aud` contains
- * the audience when one is configured, `exp` (required) in the future, `nbf` reached, `iat` (required) not in the
- * future and at most 24 h old (60 s clock skew). The result maps the claims through `claimMap`:
- * `{ subject, email?, phone?, issuer, claims }`, where `claims` is the full verified payload (deep-frozen), so products
- * can read issuer-specific claims (e.g. a membership tier) without decoding the token again.
+ * A token is a compact JWS with `alg` EdDSA, ES256 or RS256 matching the key type (`none`, HMAC, header-borne keys and
+ * `crit` refused), signed by a key of the issuer (by `kid`, or the only compatible key), with `iss` = issuer, `aud`
+ * containing the audience when one is set, `exp` (required) in the future, `nbf` reached and `iat` (required) not in
+ * the future and at most 24 hours old (60 s skew). A sign-in only says who the person is; it never authorises admin
+ * actions.
  * @module
  */
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
+import { isObject } from './util.js';
 
-/** @typedef {import('@ss/contracts').EntitlementDocument} EntitlementDocument */
-/** @typedef {import('@ss/contracts').IdentitySection} IdentitySection */
+/**
+ * @typedef {{ issuer: string, jwks: Array<Record<string, any>>, audience?: string,
+ *   claimMap: { subject: string, email?: string, phone?: string } }} IssuerSettings
+ */
 
-/** Request header carrying the customer token. */
-export const IDENTITY_HEADER = 'ss-identity';
 /** Tokens older than this (`now - iat`) are refused. */
 export const IDENTITY_MAX_AGE_MS = 24 * 60 * 60_000;
-/** Allowed clock skew for `exp`, `nbf` and `iat`. */
-export const IDENTITY_SKEW_MS = 60_000;
-/** Longest accepted token. */
-export const IDENTITY_MAX_TOKEN_LENGTH = 8192;
+const IDENTITY_SKEW_MS = 60_000;
+const MAX_TOKEN_LENGTH = 8192;
+const KEYS_TTL_MS = 10 * 60_000;
 
 /** `alg` → key type and node:crypto parameters. */
 const ALGORITHMS = Object.freeze({
@@ -36,14 +34,11 @@ const REFUSED_HEADERS = Object.freeze(['jwk', 'jku', 'x5u', 'x5c', 'x5t', 'x5t#S
 const SEGMENT = /^[A-Za-z0-9_-]*$/;
 
 /**
- * @typedef {{ subject: string, email?: string, phone?: string, issuer: string, claims: Readonly<Record<string, unknown>> }} CustomerIdentity
+ * @typedef {{ subject: string, email?: string, phone?: string, issuer: string, claims: Readonly<Record<string, unknown>> }} SignIn
  * @typedef {'identity_missing' | 'identity_not_configured' | 'malformed' | 'algorithm' | 'unknown_key' | 'signature'
  *   | 'issuer' | 'audience' | 'expired' | 'not_yet_valid' | 'too_old' | 'subject'} IdentityFailure
- * @typedef {{ ok: true, identity: CustomerIdentity } | { ok: false, code: IdentityFailure }} IdentityResult
+ * @typedef {{ ok: true, identity: SignIn } | { ok: false, code: IdentityFailure }} IdentityResult
  */
-
-/** @param {unknown} value @returns {value is Record<string, any>} */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * @param {string} segment
@@ -85,16 +80,16 @@ const claimOf = (claims, name) => {
 };
 
 /**
- * Verify one customer token against a document's identity section (pure apart from `now`).
+ * Verify one sign-in token against an issuer (pure apart from `now`).
  * @param {unknown} token
- * @param {IdentitySection | null | undefined} section
+ * @param {IssuerSettings | null | undefined} section
  * @param {{ now?: () => number }} [options]
  * @returns {IdentityResult}
  */
 export const verifyIdentityToken = (token, section, { now = Date.now } = {}) => {
 	if (!section) return { ok: false, code: 'identity_not_configured' };
 	if (typeof token !== 'string' || token.length === 0) return { ok: false, code: 'identity_missing' };
-	if (token.length > IDENTITY_MAX_TOKEN_LENGTH) return { ok: false, code: 'malformed' };
+	if (token.length > MAX_TOKEN_LENGTH) return { ok: false, code: 'malformed' };
 	const parts = token.split('.');
 	if (parts.length !== 3 || !parts.every((part) => SEGMENT.test(part)) || !parts[0] || !parts[1] || !parts[2])
 		return { ok: false, code: 'malformed' };
@@ -160,35 +155,57 @@ export const verifyIdentityToken = (token, section, { now = Date.now } = {}) => 
 };
 
 /**
- * The customer token of a request: the `SS-Identity` header, else `body.identity` (`sendBeacon` body auth).
- * @param {Request | { headers: Headers }} request
- * @param {unknown} [body]
- * @returns {string | null}
+ * @param {{ connections: import('./connections.js').Connections, send: import('./connections.js').OutboundSend,
+ *   now: () => number }} options
  */
-export const identityTokenOf = (request, body) => {
-	const header = request.headers.get(IDENTITY_HEADER);
-	if (header !== null && header.trim().length > 0) return header.trim();
-	if (isObject(body) && typeof body.identity === 'string' && body.identity.length > 0) return body.identity;
-	return null;
+export const createIdentity = ({ connections, send, now }) => {
+	/** @type {Map<string, { jwks: Array<Record<string, any>>, until: number }>} */
+	const keys = new Map();
+
+	/** @param {string} url */
+	const keysOf = async (url) => {
+		const cached = keys.get(url);
+		if (cached && cached.until > now()) return cached.jwks;
+		const response = await send(url, { headers: { accept: 'application/json' }, redirect: 'error', maxBytes: 64 * 1024 });
+		const json = response.status === 200 ? JSON.parse(response.body.toString('utf8')) : null;
+		const jwks = isObject(json) && Array.isArray(json.keys) ? json.keys.filter(isObject).slice(0, 10) : [];
+		keys.set(url, { jwks, until: now() + KEYS_TTL_MS });
+		return jwks;
+	};
+
+	return Object.freeze({
+		/**
+		 * Verify a sign-in token of a website against the issuer kept in the connection `connection`.
+		 * @param {{ websiteId: string, token: unknown, connection: string }} input
+		 * @returns {Promise<IdentityResult>}
+		 */
+		verify: async ({ websiteId, token, connection }) => {
+			const value = await connections.value(websiteId, connection);
+			if (!isObject(value) || typeof value.issuer !== 'string' || typeof value.jwksUrl !== 'string')
+				return { ok: false, code: 'identity_not_configured' };
+			/** @type {Array<Record<string, any>>} */
+			let jwks;
+			try {
+				jwks = await keysOf(value.jwksUrl);
+			} catch {
+				return { ok: false, code: 'unknown_key' };
+			}
+			return verifyIdentityToken(
+				token,
+				{
+					issuer: value.issuer,
+					jwks,
+					...(typeof value.audience === 'string' ? { audience: value.audience } : {}),
+					claimMap: {
+						subject: typeof value.subjectClaim === 'string' ? value.subjectClaim : 'sub',
+						...(typeof value.emailClaim === 'string' ? { email: value.emailClaim } : {}),
+						...(typeof value.phoneClaim === 'string' ? { phone: value.phoneClaim } : {}),
+					},
+				},
+				{ now },
+			);
+		},
+	});
 };
 
-/**
- * @param {{ now?: () => number }} [options]
- */
-export const createIdentity = ({ now = Date.now } = {}) =>
-	Object.freeze({
-		/**
-		 * Verify the customer identity of a request against the website's entitlement document.
-		 * @param {Request | { headers: Headers }} request
-		 * @param {{ doc: EntitlementDocument | null | undefined, body?: unknown }} context
-		 * @returns {IdentityResult}
-		 */
-		verify: (request, { doc, body } = { doc: null }) => {
-			const token = identityTokenOf(request, body);
-			if (!doc?.identity) return { ok: false, code: token ? 'identity_not_configured' : 'identity_missing' };
-			return verifyIdentityToken(token, doc.identity, { now });
-		},
-		verifyToken: (/** @type {unknown} */ token, /** @type {IdentitySection | null | undefined} */ section) =>
-			verifyIdentityToken(token, section, { now }),
-	});
 /** @typedef {ReturnType<typeof createIdentity>} Identity */

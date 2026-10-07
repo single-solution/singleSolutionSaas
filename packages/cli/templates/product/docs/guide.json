@@ -1,0 +1,16 @@
+{
+	"title": "{{name}} docs",
+	"intro": "{{name}} works on your website through widgets and an API. Your website's tokens are in the Portal: open the website, then Install and tokens. The browser token is public and goes into your pages; the server token is secret and stays on your server.",
+	"localhost": "Testing on your own computer: the browser token also works on pages served from localhost, *.localhost, 127.0.0.1 or [::1], on any port, over http or https. These pages use your website's real database, keys and providers, so what you do there is real (notes are saved for real). There is no test mode.",
+	"install": "Add the script to the pages of your website and place the visitor widget where it should appear. Widgets render nothing while their feature is off or the product is stopped.",
+	"admin": "Admin widgets run in your own admin with a ticket. Include the script without data-token, place the admin widget and register your ticket function. The widget calls it at start and 1 minute before the ticket expires; your server checks the user's sign-in and role every time.",
+	"tickets": "Your server asks for a ticket with the server token (never send the server token to a browser). The origin is the address of your admin page: any https origin, or a local one while testing. Tickets last 15 minutes and carry only the permissions of switched-on features.",
+	"business": "Every product reads your business basics from https://<your domain>/.well-known/business.json. Only name is required; without the file the name is your domain and the time zone is UTC.",
+	"api": "Every route answers JSON; errors are RFC 9457 problems with a stable code. Lists are paged with cursor and limit. Routes of a feature that is off answer 403 feature_off.",
+	"features": {
+		"notes": [
+			"Visitors leave a short note with an optional e-mail address. The longest note is a setting (Settings in the product dashboard).",
+			"Your staff read the notes in your admin with the inbox widget (permission notes.read), and your server can read them with GET /v1/notes and the server token."
+		]
+	}
+}

@@ -21,10 +21,8 @@
  *   | 'issuer'
  *   | 'subject'
  *   | 'replay'
- *   | 'kind_scope'
- *   | 'revoked'
- *   | 'env_mismatch'
- *   | 'domain_mismatch'} ProtocolErrorCode
+ *   | 'invalid_launch'
+ *   | 'invalid_token'} ProtocolErrorCode
  */
 
 /**
@@ -51,10 +49,8 @@ export const ERROR_CODES = Object.freeze(
 		'issuer',
 		'subject',
 		'replay',
-		'kind_scope',
-		'revoked',
-		'env_mismatch',
-		'domain_mismatch',
+		'invalid_launch',
+		'invalid_token',
 	]),
 );
 

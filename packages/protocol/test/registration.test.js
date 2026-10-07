@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
 	CONNECT_PATH,
@@ -16,7 +17,11 @@ import { createClock, expectThrowCode, makeKey } from './helpers.js';
 const PORTAL = 'https://portal.test';
 const BASE = 'https://coupons.example.com';
 const SECRET = 'a'.repeat(40);
-const manifest = { ssps: '1', product: { slug: 'coupons' }, endpoints: { base: BASE } };
+const manifest = { id: 'coupons', name: 'Coupons', endpoints: { base: BASE } };
+const prices = {
+	version: 1,
+	features: [{ key: 'codes', name: 'Codes', description: 'd', dependsOn: [], millicreditsPerHour: 0 }],
+};
 
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
 let portal;
@@ -33,7 +38,14 @@ describe('connect secret', () => {
 		expect(isConnectSecret(secret)).toBe(true);
 		expect(isConnectSecret('short')).toBe(false);
 		expectThrowCode(
-			() => createConnectRequest({ secret: 'short', productUrl: BASE, portalUrl: PORTAL, jwks: { keys: [] }, appId: 'app_1' }),
+			() =>
+				createConnectRequest({
+					secret: 'short',
+					productUrl: BASE,
+					portalUrl: PORTAL,
+					jwks: { keys: [] },
+					priceListVersion: 0,
+				}),
 			'invalid_argument',
 		);
 	});
@@ -41,13 +53,13 @@ describe('connect secret', () => {
 
 describe('connect handshake', () => {
 	/** @param {ReturnType<typeof createClock>} clock */
-	const start = (clock) =>
+	const start = (clock, priceListVersion = 3) =>
 		createConnectRequest({
 			secret: SECRET,
 			productUrl: `${BASE}/`,
 			portalUrl: PORTAL,
 			jwks: createJwks([portal.publicJwk]),
-			appId: 'app_1',
+			priceListVersion,
 			now: clock.now,
 		});
 
@@ -58,42 +70,99 @@ describe('connect handshake', () => {
 		expect(request.body).not.toContain(SECRET);
 		expect(JSON.stringify(request.headers)).not.toContain(SECRET);
 		const verified = verifyConnectRequest({ secret: SECRET, headers: request.headers, body: request.body, now: clock.now });
-		expect(verified).toMatchObject({ portalUrl: PORTAL, appId: 'app_1', baseUrl: BASE, nonce: request.nonce });
+		expect(verified).toEqual({
+			portalUrl: PORTAL,
+			jwks: { keys: [portal.publicJwk] },
+			baseUrl: BASE,
+			nonce: request.nonce,
+			priceListVersion: 3,
+		});
+		expect(JSON.parse(request.body)).not.toHaveProperty('appId');
 		expect(verified.jwks.keys[0]?.kid).toBe('portal-1');
 
 		const answer = createConnectResponse({
 			secret: SECRET,
-			appId: 'app_1',
+			productId: 'coupons',
 			nonce: verified.nonce,
-			publicJwk: product.publicJwk,
+			publicJwk: product.privateJwk,
 			manifest,
+			prices,
 			now: clock.now,
 		});
-		const accepted = await verifyConnectResponse({
+		expect(answer.body).not.toContain(product.privateJwk.d);
+		const accepted = verifyConnectResponse({
 			secret: SECRET,
 			headers: answer.headers,
 			body: answer.body,
 			nonce: request.nonce,
-			appId: 'app_1',
 			now: clock.now,
 		});
-		expect(accepted.publicJwk.kid).toBe('product-1');
-		expect(accepted.manifest).toEqual(manifest);
-		const check = (/** @type {Record<string, unknown>} */ change) =>
+		expect(accepted).toEqual({ productId: 'coupons', publicJwk: product.publicJwk, manifest, prices });
+		const check = (/** @type {Record<string, unknown>} */ change) => () =>
 			verifyConnectResponse({
 				secret: SECRET,
 				headers: answer.headers,
 				body: answer.body,
 				nonce: request.nonce,
-				appId: 'app_1',
 				now: clock.now,
 				...change,
 			});
-		await expect(check({ nonce: 'another-nonce-0123' })).rejects.toMatchObject({ code: 'replay' });
-		await expect(check({ appId: 'app_2' })).rejects.toMatchObject({ code: 'subject' });
-		await expect(check({ secret: 'b'.repeat(40) })).rejects.toMatchObject({ code: 'signature' });
+		expectThrowCode(check({ nonce: 'another-nonce-0123' }), 'replay');
+		expectThrowCode(check({ nonce: undefined }), 'replay');
+		expectThrowCode(check({ secret: 'b'.repeat(40) }), 'signature');
 		// a request cannot be reflected as an answer
-		await expect(check({ headers: request.headers, body: request.body })).rejects.toMatchObject({ code: 'signature' });
+		expectThrowCode(check({ headers: request.headers, body: request.body }), 'signature');
+	});
+
+	it('checks the answer members', () => {
+		const clock = createClock();
+		const nonce = 'n'.repeat(22);
+		const resign = (/** @type {Record<string, unknown>} */ members) => {
+			const body = JSON.stringify({ productId: 'coupons', nonce, publicJwk: product.publicJwk, manifest, prices, ...members });
+			const timestamp = String(Math.floor(clock.now() / 1000));
+			const signature = createHmac('sha256', SECRET).update(`ss-connected.v1|${timestamp}|${body}`).digest('hex');
+			return () =>
+				verifyConnectResponse({
+					secret: SECRET,
+					headers: { 'SS-Connect-Timestamp': timestamp, 'SS-Connect-Signature': signature },
+					body,
+					nonce,
+					now: clock.now,
+				});
+		};
+		expect(resign({})()).toMatchObject({ productId: 'coupons' });
+		expectThrowCode(resign({ productId: 'App_1' }), 'malformed');
+		expectThrowCode(resign({ manifest: null }), 'malformed');
+		expectThrowCode(resign({ prices: [] }), 'malformed');
+		expectThrowCode(resign({ publicJwk: { kty: 'EC' } }), 'malformed');
+		expectThrowCode(
+			() => createConnectResponse({ secret: SECRET, productId: 'Bad', nonce, publicJwk: product.publicJwk, manifest, prices }),
+			'invalid_argument',
+		);
+		expectThrowCode(
+			() =>
+				createConnectResponse({
+					secret: SECRET,
+					productId: 'coupons',
+					nonce,
+					publicJwk: product.publicJwk,
+					manifest,
+					prices: 1,
+				}),
+			'invalid_argument',
+		);
+		expectThrowCode(
+			() =>
+				createConnectResponse({
+					secret: SECRET,
+					productId: 'coupons',
+					nonce: 'x',
+					publicJwk: product.publicJwk,
+					manifest,
+					prices,
+				}),
+			'malformed',
+		);
 	});
 
 	it('refuses tampering, other secrets and stale requests', () => {
@@ -102,10 +171,42 @@ describe('connect handshake', () => {
 		const verify = (/** @type {Record<string, unknown>} */ change) => () =>
 			verifyConnectRequest({ secret: SECRET, headers: request.headers, body: request.body, now: clock.now, ...change });
 		expectThrowCode(verify({ headers: {} }), 'malformed');
+		expectThrowCode(() => start(clock, -1), 'invalid_argument');
+		expectThrowCode(() => start(clock, 1.5), 'invalid_argument');
 		expectThrowCode(verify({ secret: 'b'.repeat(40) }), 'signature');
-		expectThrowCode(verify({ body: request.body.replace('app_1', 'app_2') }), 'signature');
+		expectThrowCode(verify({ body: request.body.replace('"priceListVersion":3', '"priceListVersion":4') }), 'signature');
 		clock.advance(301_000);
 		expectThrowCode(verify({}), 'expired');
+	});
+
+	it('refuses signed requests with bad members', () => {
+		const clock = createClock();
+		/** @param {Record<string, unknown>} members */
+		const signed = (members) => {
+			const body = JSON.stringify({
+				portalUrl: PORTAL,
+				jwks: createJwks([portal.publicJwk]),
+				baseUrl: BASE,
+				nonce: 'n'.repeat(22),
+				priceListVersion: 0,
+				...members,
+			});
+			const timestamp = String(Math.floor(clock.now() / 1000));
+			const signature = createHmac('sha256', SECRET).update(`ss-connect.v1|${timestamp}|${body}`).digest('hex');
+			return () =>
+				verifyConnectRequest({
+					secret: SECRET,
+					headers: { 'SS-Connect-Timestamp': timestamp, 'SS-Connect-Signature': signature },
+					body,
+					now: clock.now,
+				});
+		};
+		expect(signed({})()).toMatchObject({ priceListVersion: 0 });
+		expectThrowCode(signed({ priceListVersion: -1 }), 'malformed');
+		expectThrowCode(signed({ priceListVersion: undefined }), 'malformed');
+		expectThrowCode(signed({ jwks: { keys: [] } }), 'malformed');
+		expectThrowCode(signed({ portalUrl: 'ftp://x' }), 'malformed');
+		expectThrowCode(signed({ nonce: 'short' }), 'malformed');
 	});
 
 	it('canonicalises URLs for pinning', () => {

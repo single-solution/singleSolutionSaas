@@ -1,22 +1,20 @@
 /**
- * Client-owned data (PLAN §1a, Part E §7). The merchant's database is resolved per website through the Portal
- * (`resolveResource({ websiteId, kind: 'database' })` → short-lived `{ uri, dbName? }` descriptor, never cached past
- * `expiresAt`) and opened with a pooled `MongoClient`:
+ * The merchant database (PLAN 0.4.8, 0.10): the `database` connection of each website (a MongoDB connection string,
+ * stored encrypted in Connections), opened with a small pooled `MongoClient` whose every DNS answer goes through the
+ * `@ss/net` guarded lookup.
  *
- * - pools are keyed by a hash of the URI and kept on `globalThis` so warm serverless invocations reuse them; they
- *   are small (`maxPoolSize` 3 by default, {@link CLIENT_DB_POOL_SIZE}) and closed after `idleMs` without use;
- * - collections are namespaced `ss_<slug with - → _>_<name>`;
- * - a tenant guard rejects any read/update/delete/aggregate whose filter (or first `$match`) does not pin
- *   `websiteId` to this website, refuses cross-collection aggregation stages, forbids changing `websiteId`, and stamps
- *   `websiteId`, `createdAt`, `updatedAt` and `schemaVersion` on writes;
- * - `ensureIndexes` is idempotent (memoised per pool) and requires `websiteId` first in every index (TTL indexes
- *   excepted, which must be single-field);
- * - `migrate` runs lazy, versioned steps per website under a lock document with a lease.
+ * - Pools are keyed by a hash of the URI and kept on `globalThis` so warm serverless invocations reuse them; they are
+ *   small ({@link CLIENT_DB_POOL_SIZE}) and closed when unused for `idleMs` (checked when the next website is served).
+ * - Collections are `ss_<product id>_<name>`.
+ * - The tenant guard refuses any read, update, delete or aggregate whose filter (or first `$match`) does not pin
+ *   `websiteId` to this website by equality (no `$in`), refuses cross-collection aggregation stages, forbids changing
+ *   `websiteId`, and stamps `websiteId`, `merchantId`, `createdAt` and `updatedAt` on inserts.
+ * - `ensureIndexes` is idempotent per pool and requires `websiteId` first in every index (TTL indexes excepted).
  * @module
  */
-import { createOutboundPolicy, guardedLookup, isSafeMongoUri } from '@ss/net';
+import { guardedLookup, isSafeMongoUri } from '@ss/net';
 import { MongoClient } from 'mongodb';
-import { collectionPrefix, createSingleFlight, isObject, kitError, randomToken, sha256Hex } from './util.js';
+import { collectionPrefix, isObject, kitError, sha256Hex } from './util.js';
 
 /** Connections per merchant database per instance (serverless instances multiply it; clusters may be free tiers). */
 export const CLIENT_DB_POOL_SIZE = 3;
@@ -54,19 +52,11 @@ const DENIED_STAGES = new Set([
  */
 
 /**
- * @typedef {object} MigrationStep
- * @property {number} version positive integer, strictly increasing
- * @property {string} [name]
- * @property {(scope: WebsiteData) => Promise<void>} up must be idempotent per website (it may be retried after a crash)
- */
-
-/**
  * @typedef {object} WebsiteData
  * @property {string} websiteId
  * @property {string} prefix
  * @property {(name: string) => GuardedCollection} collection
  * @property {(defs: Parameters<typeof planIndexes>[0]) => Promise<{ created: string[] }>} ensureIndexes array of definitions or `{ [collection]: [...] }`
- * @property {(steps: MigrationStep[]) => Promise<{ version: number, applied: number[] }>} migrate
  * @property {<T>(fn: (session: import('mongodb').ClientSession) => Promise<T>) => Promise<T>} transaction
  */
 
@@ -185,11 +175,11 @@ export const guardUpdate = (update, websiteId, at, op) => {
 /**
  * Stamp tenant and audit fields on a new document.
  * @param {unknown} doc
- * @param {{ websiteId: string, at: Date, schemaVersion: number, stamp: Record<string, unknown> }} context
+ * @param {{ websiteId: string, at: Date, stamp: Record<string, unknown> }} context
  * @param {string} op
  * @returns {Document}
  */
-export const stampInsert = (doc, { websiteId, at, schemaVersion, stamp }, op) => {
+export const stampInsert = (doc, { websiteId, at, stamp }, op) => {
 	if (!isObject(doc)) throw tenantError(op, 'a document object is required');
 	if (doc.websiteId !== undefined && doc.websiteId !== websiteId)
 		throw tenantError(op, 'the document belongs to another website');
@@ -197,19 +187,18 @@ export const stampInsert = (doc, { websiteId, at, schemaVersion, stamp }, op) =>
 	const out = { ...stamp, ...doc, websiteId };
 	out.createdAt ??= at;
 	out.updatedAt ??= at;
-	out.schemaVersion ??= schemaVersion;
 	return out;
 };
 
 /**
  * Wrap a driver collection with the tenant guard.
  * @param {import('mongodb').Collection<any>} collection
- * @param {{ websiteId: string, now: () => number, schemaVersion: () => number, stamp: Record<string, unknown> }} context
+ * @param {{ websiteId: string, now: () => number, stamp: Record<string, unknown> }} context
  */
-export const guardCollection = (collection, { websiteId, now, schemaVersion, stamp }) => {
+export const guardCollection = (collection, { websiteId, now, stamp }) => {
 	const at = () => new Date(now());
 	/** @param {unknown} doc @param {string} op */
-	const insertDoc = (doc, op) => stampInsert(doc, { websiteId, at: at(), schemaVersion: schemaVersion(), stamp }, op);
+	const insertDoc = (doc, op) => stampInsert(doc, { websiteId, at: at(), stamp }, op);
 	/** @param {unknown} filter @param {string} op */
 	const f = (filter, op) => guardFilter(filter, websiteId, op);
 	/** @param {unknown} update @param {string} op */
@@ -318,23 +307,6 @@ export const planIndexes = (input) => {
 };
 
 /**
- * Validate migration steps (positive, strictly increasing integer versions).
- * @param {MigrationStep[]} steps
- * @returns {number} target version (0 when there are no steps)
- */
-export const targetVersion = (steps) => {
-	if (!Array.isArray(steps)) throw kitError('invalid_migration', 'migration steps must be an array');
-	let last = 0;
-	for (const step of steps) {
-		if (!isObject(step) || !Number.isSafeInteger(step.version) || step.version <= last || typeof step.up !== 'function') {
-			throw kitError('invalid_migration', 'migration versions must be increasing positive integers with an up() function');
-		}
-		last = step.version;
-	}
-	return last;
-};
-
-/**
  * @typedef {object} PoolEntry
  * @property {Promise<MongoClient>} client
  * @property {number} lastUsed
@@ -349,67 +321,37 @@ const poolRegistry = () => {
 
 /**
  * @param {{
- *   portal: { resolveResource: (input: { websiteId: string, kind: 'database' }) => Promise<{ descriptor: Record<string, unknown>, expiresAt: string }> },
- *   slug: string,
+ *   productId: string,
+ *   uriOf: (websiteId: string) => Promise<string | null>,
  *   now?: () => number,
- *   randomBytes: (length: number) => Uint8Array,
  *   logger: Logger,
+ *   policy: import('@ss/net').OutboundPolicy,
  *   createClient?: (uri: string, options: import('mongodb').MongoClientOptions) => MongoClient,
- *   clientOptions?: import('mongodb').MongoClientOptions,
- *   outbound?: import('@ss/net').OutboundPolicyOptions,
  *   idleMs?: number,
  *   indexes?: IndexDefinition[],
- *   migrations?: MigrationStep[],
- *   lockLeaseMs?: number,
- *   lockWaitMs?: number,
- *   sleep?: (ms: number) => Promise<void>,
- *   autoSweep?: boolean,
- * }} options `indexes` / `migrations` are applied lazily on the first `forWebsite` of each website per instance.
+ * }} options `uriOf` reads the website's `database` connection; `indexes` are created on a website's first use per
+ *   instance
  */
 export const createData = ({
-	portal,
-	slug,
+	productId,
+	uriOf,
 	now = Date.now,
-	randomBytes,
 	logger,
+	policy,
 	createClient = (uri, options) => new MongoClient(uri, options),
-	clientOptions = {},
 	idleMs = 5 * 60_000,
 	indexes = [],
-	migrations = [],
-	lockLeaseMs = 60_000,
-	lockWaitMs = 30_000,
-	sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-	autoSweep = true,
-	outbound = {},
 }) => {
-	// SSRF guard for the merchant database: the URI is vetted before connecting and every host the driver dials
-	// (seed list, SRV answers, discovered replica-set members) is resolved through the guarded lookup.
-	const policy = createOutboundPolicy(outbound);
 	const lookup = guardedLookup(policy);
-	const prefix = collectionPrefix(slug);
-	const owner = randomToken(randomBytes, 9);
-	const defaultTarget = targetVersion(migrations);
+	const prefix = collectionPrefix(productId);
 	planIndexes(indexes);
-	/** @type {Map<string, { uri: string, dbName: string | undefined, expiresAt: number }>} */
-	const descriptors = new Map();
 	/** @type {Set<string>} */
 	const indexed = new Set();
-	/** @type {Map<string, number>} */
-	const migrated = new Map();
-	/** @type {Map<string, Promise<void>>} */
-	const prepared = new Map();
-	const resolveOnce =
-		/** @type {(key: string, run: () => Promise<{ uri: string, dbName: string | undefined, expiresAt: number }>) => Promise<{ uri: string, dbName: string | undefined, expiresAt: number }>} */ (
-			createSingleFlight()
-		);
 	const pools = poolRegistry();
-	/**
-	 * Close pools unused for longer than `idleMs`.
-	 * @param {{ idleMs?: number }} [options]
-	 */
-	const closeIdle = async ({ idleMs: limit = idleMs } = {}) => {
-		const cutoff = now() - limit;
+
+	/** Close pools unused for longer than `idleMs`. */
+	const closeIdle = async () => {
+		const cutoff = now() - idleMs;
 		const closing = [];
 		for (const [key, entry] of pools) {
 			if (entry.lastUsed > cutoff) continue;
@@ -417,33 +359,6 @@ export const createData = ({
 			closing.push(entry.client.then((client) => client.close()).catch(() => {}));
 		}
 		await Promise.all(closing);
-		return closing.length;
-	};
-
-	/** @param {string} websiteId */
-	const descriptorFor = async (websiteId) => {
-		const cached = descriptors.get(websiteId);
-		if (cached && cached.expiresAt - 5_000 > now()) return cached;
-		return resolveOnce(websiteId, async () => {
-			const { descriptor, expiresAt } = await portal.resolveResource({ websiteId, kind: 'database' });
-			const uri = descriptor.uri;
-			if (typeof uri !== 'string' || !/^mongodb(\+srv)?:\/\//.test(uri)) {
-				throw kitError('resource_invalid', 'database descriptor has no mongodb uri');
-			}
-			const safe = isSafeMongoUri(uri, policy);
-			if (!safe.ok) {
-				logger.warn('client database refused by the outbound policy', { code: safe.code, reason: safe.reason });
-				throw kitError('resource_invalid', `client database refused (${safe.reason})`, { reason: safe.code });
-			}
-			const expires = Date.parse(expiresAt);
-			const entry = {
-				uri,
-				dbName: typeof descriptor.dbName === 'string' ? descriptor.dbName : undefined,
-				expiresAt: Number.isNaN(expires) ? now() : expires,
-			};
-			descriptors.set(websiteId, entry);
-			return entry;
-		});
 	};
 
 	/** @param {string} uri */
@@ -457,16 +372,15 @@ export const createData = ({
 				maxIdleTimeMS: 60_000,
 				serverSelectionTimeoutMS: 5_000,
 				connectTimeoutMS: 5_000,
-				appName: `ss-${slug}`,
-				...clientOptions,
+				appName: `ss-${productId}`,
 				lookup: /** @type {any} */ (lookup),
 			};
 			const connecting = Promise.resolve()
 				.then(() => createClient(uri, options).connect())
 				.catch((error) => {
 					pools.delete(key);
-					logger.error('client database connection failed', { code: error?.code ?? error?.name ?? 'error' });
-					throw kitError('resource_unavailable', 'client database is unreachable');
+					logger.warn('merchant database unreachable', { code: error?.code ?? error?.name ?? 'error' });
+					throw kitError('database_unreachable', 'the merchant database cannot be reached');
 				});
 			entry = { client: connecting, lastUsed: now() };
 			pools.set(key, entry);
@@ -476,31 +390,27 @@ export const createData = ({
 	};
 
 	/**
-	 * Guarded access to one website's data in the merchant database.
+	 * Guarded access to one website's data in the merchant database. Throws `database_not_connected` when the website
+	 * has no `database` connection.
 	 * @param {string} websiteId
-	 * @param {{ merchantId?: string, env?: 'live' | 'test' }} [stampFields] also stamped on inserts when given
+	 * @param {{ merchantId?: string }} [stampFields] stamped on inserts when given
 	 * @returns {Promise<WebsiteData>}
 	 */
-	const forWebsite = async (websiteId, stampFields = {}) => {
-		if (typeof websiteId !== 'string' || websiteId.length === 0) throw kitError('invalid_argument', 'websiteId is required');
-		const { uri, dbName } = await descriptorFor(websiteId);
-		// pools unused for `idleMs` are closed when the next website is served (no timer)
-		if (autoSweep && idleMs > 0) void closeIdle();
+	const forWebsite = async (websiteId, { merchantId } = {}) => {
+		const uri = await uriOf(websiteId);
+		if (!uri) throw kitError('database_not_connected', 'the merchant database is not connected');
+		if (idleMs > 0) void closeIdle();
 		const { key, client: clientPromise } = clientFor(uri);
 		const client = await clientPromise;
-		const db = client.db(dbName);
+		const db = client.db();
 		const scopeKey = `${key}|${db.databaseName}`;
-		const schemaVersion = Math.max(1, defaultTarget);
-		/** @type {Record<string, unknown>} */
-		const stamp = {};
-		if (stampFields.merchantId) stamp.merchantId = stampFields.merchantId;
-		if (stampFields.env) stamp.env = stampFields.env;
+		const stamp = merchantId ? { merchantId } : {};
 
 		/** @param {string} name */
 		const collection = (name) => {
 			if (typeof name !== 'string' || !NAME.test(name))
 				throw kitError('invalid_argument', `invalid collection name: ${String(name)}`);
-			return guardCollection(db.collection(`${prefix}${name}`), { websiteId, now, schemaVersion: () => schemaVersion, stamp });
+			return guardCollection(db.collection(`${prefix}${name}`), { websiteId, now, stamp });
 		};
 
 		/** @type {WebsiteData['ensureIndexes']} */
@@ -519,65 +429,6 @@ export const createData = ({
 			return { created };
 		};
 
-		/** @type {WebsiteData['migrate']} */
-		const migrate = async (steps) => {
-			const target = targetVersion(steps);
-			const memo = `${scopeKey}|${websiteId}`;
-			if ((migrated.get(memo) ?? -1) >= target) return { version: target, applied: [] };
-			const state = db.collection(`${prefix}migrations`);
-			const deadline = now() + lockWaitMs;
-			/** @type {Document | null} */
-			let doc = await state.findOne(/** @type {any} */ ({ _id: websiteId }));
-			if (doc && doc.version >= target) {
-				migrated.set(memo, doc.version);
-				return { version: doc.version, applied: [] };
-			}
-			for (;;) {
-				try {
-					doc = await state.findOneAndUpdate(
-						/** @type {any} */ ({ _id: websiteId, $or: [{ lock: null }, { 'lock.until': { $lte: new Date(now()) } }] }),
-						{ $set: { lock: { owner, until: new Date(now() + lockLeaseMs) } }, $setOnInsert: { websiteId, version: 0 } },
-						{ upsert: true, returnDocument: 'after' },
-					);
-					if (doc) break;
-				} catch (error) {
-					if (/** @type {any} */ (error)?.code !== 11000) throw error;
-				}
-				const current = await state.findOne(/** @type {any} */ ({ _id: websiteId }));
-				if (current && current.version >= target) {
-					migrated.set(memo, current.version);
-					return { version: current.version, applied: [] };
-				}
-				if (now() >= deadline) throw kitError('migration_locked', 'another instance is migrating this website');
-				await sleep(200);
-			}
-			/** @type {number[]} */
-			const applied = [];
-			let version = Number(doc.version ?? 0);
-			try {
-				for (const step of steps) {
-					if (step.version <= version) continue;
-					await step.up(scope);
-					const result = await state.updateOne(/** @type {any} */ ({ _id: websiteId, 'lock.owner': owner }), {
-						$set: { version: step.version, updatedAt: new Date(now()), 'lock.until': new Date(now() + lockLeaseMs) },
-						$push: /** @type {any} */ ({
-							history: { version: step.version, name: step.name ?? null, at: new Date(now()) },
-						}),
-					});
-					if (result.matchedCount === 0) throw kitError('migration_lock_lost', 'migration lock was lost');
-					version = step.version;
-					applied.push(step.version);
-					logger.info('migration applied', { websiteId, version: step.version, name: step.name });
-				}
-			} finally {
-				await state
-					.updateOne(/** @type {any} */ ({ _id: websiteId, 'lock.owner': owner }), { $set: { lock: null } })
-					.catch(() => {});
-			}
-			migrated.set(memo, version);
-			return { version, applied };
-		};
-
 		/** @type {WebsiteData['transaction']} */
 		const transaction = async (fn) => {
 			const session = client.startSession();
@@ -593,23 +444,34 @@ export const createData = ({
 			}
 		};
 
-		/** @type {WebsiteData} */
-		const scope = Object.freeze({ websiteId, prefix, collection, ensureIndexes, migrate, transaction });
+		if (indexes.length > 0) await ensureIndexes(indexes);
+		return Object.freeze({ websiteId, prefix, collection, ensureIndexes, transaction });
+	};
 
-		if (indexes.length > 0 || migrations.length > 0) {
-			const memo = `${scopeKey}|${websiteId}`;
-			let ready = prepared.get(memo);
-			if (!ready) {
-				ready = (async () => {
-					if (indexes.length > 0) await ensureIndexes(indexes);
-					if (migrations.length > 0) await migrate(migrations);
-				})();
-				prepared.set(memo, ready);
-				ready.catch(() => prepared.delete(memo));
-			}
-			await ready;
+	/**
+	 * Test a MongoDB connection string: refused by the outbound policy, or connect and ping (5 s).
+	 * @param {string} uri
+	 * @returns {Promise<{ ok: true } | { ok: false, message: string }>}
+	 */
+	const testUri = async (uri) => {
+		const safe = isSafeMongoUri(uri, policy);
+		if (!safe.ok) return { ok: false, message: `This address is not allowed (${safe.reason}).` };
+		/** @type {MongoClient | null} */
+		let client = null;
+		try {
+			client = await createClient(uri, {
+				serverSelectionTimeoutMS: 5_000,
+				connectTimeoutMS: 5_000,
+				maxPoolSize: 1,
+				lookup: /** @type {any} */ (lookup),
+			}).connect();
+			await client.db().command({ ping: 1 });
+			return { ok: true };
+		} catch {
+			return { ok: false, message: 'The database cannot be reached with this connection string.' };
+		} finally {
+			await client?.close().catch(() => {});
 		}
-		return scope;
 	};
 
 	/** Close every pool this process opened (tests, graceful shutdown). */
@@ -619,14 +481,7 @@ export const createData = ({
 		await Promise.all(entries.map((entry) => entry.client.then((client) => client.close()).catch(() => {})));
 	};
 
-	return Object.freeze({
-		forWebsite,
-		prefix,
-		closeIdle,
-		closeAll,
-		/** Forget the cached descriptor of a website (e.g. after `resource.revoked`). */
-		forget: (/** @type {string} */ websiteId) => {
-			descriptors.delete(websiteId);
-		},
-	});
+	return Object.freeze({ forWebsite, testUri, prefix, closeAll });
 };
+
+/** @typedef {ReturnType<typeof createData>} Data */

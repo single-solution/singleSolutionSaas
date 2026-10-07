@@ -1,6 +1,7 @@
 /**
- * Loads a project's `manifest.json` and bundles local `$ref`s so element `features` are delivered inline (PLAN F.3).
- * Only project-relative JSON files are followed (`schemas/x.json` or `schemas/x.json#/pointer`); anything else is a problem.
+ * Loads a project's `manifest.json` and bundles local `$ref`s, so each feature's `settings` schema kept in `schemas/`
+ * is inline, as the kit and the Portal take it. Only project-relative JSON files are followed (`schemas/x.json` or
+ * `schemas/x.json#/pointer`); anything else is a problem.
  * @module
  */
 import path from 'node:path';

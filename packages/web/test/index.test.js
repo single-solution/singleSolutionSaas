@@ -1,37 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import * as sdk from '../src/index.js';
-import { boot } from '../src/loader.js';
+import * as web from '../src/index.js';
 
 describe('@ss/web entry point', () => {
-	it('exports the public API', () => {
-		for (const name of [
-			'createClient',
-			'defineElement',
-			'mountHeadless',
-			'createStore',
-			'createElementApi',
-			'ok',
-			'err',
-			'parseProblem',
-			'h',
-			'tokens',
-			'slot',
-			'reserveSpace',
-			'prefersReducedMotion',
-			'trapFocus',
-			'liveRegion',
-			'button',
-			'matchPlacement',
-			'boot',
-			'createUseElement',
-		])
-			expect(typeof (/** @type {Record<string, unknown>} */ (sdk)[name]), name).not.toBe('undefined');
-		expect(sdk).not.toHaveProperty('evaluateAudience'); // @ss/rules only via ./audience.js
-	});
-
-	it('boot tolerates a missing bundle', () => {
-		const loader = boot(/** @type {any} */ ({ websiteId: 'web_x', env: 'test', window: null }));
-		expect(loader.list()).toEqual([]);
-		loader.destroy();
+	it('exports only the widget and renderer helpers', () => {
+		expect(Object.keys(web).sort()).toEqual(
+			[
+				'ATTRIBUTES',
+				'CLIENT_PROBLEMS',
+				'HTML_TAGS',
+				'SVG_TAGS',
+				'VISUALLY_HIDDEN',
+				'button',
+				'createApiClient',
+				'createH',
+				'createStore',
+				'defineWidget',
+				'err',
+				'focusFirst',
+				'focusables',
+				'formatString',
+				'h',
+				'isResult',
+				'liveRegion',
+				'mountHeadless',
+				'ok',
+				'parseProblem',
+				'prefersReducedMotion',
+				'problem',
+				'reserveSpace',
+				'resolveStrings',
+				'safeCssValue',
+				'safeUrl',
+				'saveFocus',
+				'slot',
+				'tokens',
+				'trapFocus',
+				'uniqueId',
+			].sort(),
+		);
 	});
 });

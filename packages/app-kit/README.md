@@ -1,203 +1,72 @@
 # @ss/app-kit
 
-Everything a **service product** needs to follow the Product Standard (PLAN.md Part E): shared-secret Portal connect, SSO launches,
-website keys, entitlements with offline grace, exactly-once usage reporting, signed events, client-owned data access,
-connectors that run on the merchant's own credentials, audit and a framework-agnostic HTTP layer with RFC 9457
-problems. The binding API is [`API.md`](./API.md); this file is the quickstart.
+The kit every product is built on (PLAN.md Part 0: 0.4, 0.4.12, 0.8.1). One `createProduct` call wires everything a
+product must do the same way as every other product; the product adds its own routes, widgets and dashboard pages.
+The exact API is in [API.md](./API.md).
 
-- JavaScript ESM, functional, JSDoc-typed. Every side effect (fetch, clock, randomness, logger, stores, Mongo client) is
-  injected, with defaults.
-- All cryptography and validation come from `@ss/protocol` and `@ss/contracts`, and S3 SigV4 and SSRF-safe outbound
-  networking come from `@ss/net`. The kit re-implements none of it. `presignUrl` and `signHeaders` remain as thin
-  wrappers over `@ss/net` `presignV4` and `signV4`.
-- Connector calls to merchant providers (AI, messaging, object stores) go through `@ss/net` `safeFetch` under the
-  `outbound` policy. They accept only public https destinations, and every DNS answer is vetted at connect time. For a
-  local MinIO or a mock provider in development, set `outbound: { allowHosts: ['localhost'] }`. The same policy guards the
-  merchant database: the URI must pass `isSafeMongoUri`, otherwise it is refused with `resource_invalid`, and the
-  `MongoClient` connects through `guardedLookup`. The allowlist is
-  ignored in production.
-- `GET /.well-known/ss-app.json` serves the manifest (with the connected base URL), unsigned, cacheable for 5 minutes.
-- Offline grace is fixed: `OFFLINE_GRACE_MS` (24 h) of serving from the last verified documents, Portal JWKS and
-  revocation list while the Portal is unreachable.
-- Platform-scoped control events (`scope: 'platform'`, no `websiteId`, e.g. `manifest.accepted@1`) are accepted and
-  deduplicated under `platform`.
-- The kit never writes to the console. Pass a logger (`createLogger({ level, write })` gives JSON lines). Fields that look
-  like credentials (`uri`, `apiKey`, `secretAccessKey`, `token`, `authorization`, `descriptor`, …) are redacted.
+## What the kit does
 
-## Quickstart
+- **Connection** — answers the Portal's signed connect handshake at `POST /.well-known/ss-connect`, pins the Portal URL
+  and keys, keeps its own address and product key, and answers its manifest and price list.
+- **Tokens and tickets** — verifies browser tokens (only from `https://<exact domain>` or a local origin, CORS for that
+  origin) and server tokens (refused with an Origin header) offline against the Portal keys and the revocation list;
+  issues 15-minute tickets bound to one origin for admin widgets (`POST /v1/tickets`).
+- **Status** — fetches the status of the product on each website when a request needs it (cached until `validUntil`,
+  at most 5 minutes, together with the revocation list), obeys it (`product_unavailable` with a reason), turns an
+  ended grace period into stopped, and keeps the last status for 24 hours while the Portal cannot be reached.
+- **Notices** — `POST /.well-known/ss-events`: `status.changed` (the status is fetched again right after the answer; a
+  `removed` status turns the website's switches off, so a re-add starts with every feature off), `token.revoked`,
+  `sessions.revoked`, `website.deleted`.
+- **Reports** — price reports (Prices screen, and once after a deploy that changed the feature list) and feature
+  reports (Features screen); switches are saved only after the Portal accepts.
+- **Settings** — one value per website × setting with global defaults and schema defaults; widget texts with the same
+  placeholders as the English text; the theme (colours, font, radius, mode, custom CSS). Every change goes to Recent
+  changes.
+- **Connections** — the merchant's database, storage, provider keys and pasted tokens, encrypted with a key derived
+  from `ENCRYPTION_KEY`, write-only, tested live when saved. `callProduct` calls another product with a pasted token.
+- **Merchant database** — guarded access (`websiteId` on every query, no cross-collection stages, inserts stamped
+  with `websiteId` and `merchantId`) to collections `ss_<product id>_<name>`.
+- **business.json**, **data rights** (`POST /v1/data-rights/export|delete`), the **activity log** with copies to
+  Accounts, **Recent changes**.
+- **Product dashboard** — `GET /sso?launch=` sessions, the switcher, roles and the dashboard API every product's
+  `app/` pages call.
+- **Widgets** — the product serves one public `widget.js` (the same bytes for every website). With the page's
+  `data-token` it fetches the website's widget config (`GET /v1/widget/config`, browser token; admin widgets
+  `GET /v1/widget/admin/config` with a ticket): texts, theme, custom CSS, switched-on features and the product's
+  widget settings. `@ss/app-kit/widget` mounts a widget into an open Shadow DOM with the theme and custom CSS.
+- **Testing** — `@ss/app-kit/testing` has a fake Portal, an Accounts double, an in-process network and the memory
+  store.
 
-```js
-// lib/product.js
-import { MongoClient } from 'mongodb';
-import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
-import manifest from '../manifest.json' with { type: 'json' };
+There is no background work: everything runs inside a request or right after it (Next.js `after`). The kit has no
+health or status endpoints.
 
-const env = configFromEnv(); // MONGODB_URI + CONNECT_SECRET: the Portal connects at /.well-known/ss-connect; kept in that database
-const controlDb = new MongoClient(env.productDbUri, { maxPoolSize: 5 }).db(); // the product's OWN small DB
+## Environment
 
-export const product = createProduct({
-	manifest,
-	stores: createMongoStores({ db: controlDb }), // omit in development → in-memory stores
-	connectSecret: env.connectSecret,
-	logger: createLogger({ level: env.logLevel }),
-	data: {
-		indexes: [{ collection: 'coupons', keys: { websiteId: 1, code: 1 }, unique: true }],
-		migrations: [{ version: 1, name: 'init', up: async (scope) => {} }],
-	},
-	strings: { en: { apply: 'Apply' }, pt: { apply: 'Aplicar' } },
-});
-```
+Exactly three variables (PLAN 0.11): `MONGODB_URI` (the product database), `CONNECT_SECRET` and `ENCRYPTION_KEY` (each
+at least 32 characters). `configFromEnv()` reads them and returns problems that name the variable, never its value; a
+product with problems answers every route with 503.
 
-```js
-// lib/routes.js
-import { created, defineRoute, paginate, problem, standardRoutes } from '@ss/app-kit';
-import { product } from './product.js';
+## Wiring a product into Next.js
 
-const routes = [
-	...standardRoutes(product), // /v1/entitlement, /v1/config, /v1/events, /v1/strings,
-	//                             /.well-known/ss-{app.json,events,connect}, /sso
-	defineRoute({
-		method: 'GET',
-		path: '/v1/coupons',
-		auth: 'website', // pk_/sk_ key, offline-verified, origin-checked (pk_), revocation-checked
-		scopes: ['coupons.read'],
-		element: 'codes', // 403 element_disabled unless enabled in the signed entitlement
-		handler: async (ctx) => {
-			const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url });
-			const scope = await ctx.product.data.forWebsite(ctx.websiteId);
-			const items = await scope
-				.collection('coupons') // → ss_<slug>_coupons in the MERCHANT's database
-				.find({ websiteId: ctx.websiteId, ...(page.after ? { code: { $gt: page.after } } : {}) })
-				.sort({ code: 1 })
-				.limit(page.fetchLimit)
-				.toArray();
-			return page.respond(items, (c) => c.code); // body { items, nextCursor, hasMore } + Link: <…>; rel="next"
-		},
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/coupons',
-		auth: 'website',
-		keyKind: 'sk',
-		element: 'codes',
-		idempotent: true, // a repeated Idempotency-Key within 24 h → 409 duplicate_request
-		rateLimit: { limit: 60, windowMs: 60_000 },
-		handler: async (ctx) => {
-			if (typeof ctx.body?.code !== 'string') return problem('validation_failed', 'code is required');
-			const max = product.entitlements.feature(ctx.entitlement.doc, 'codes.maxActive');
-			const scope = await ctx.product.data.forWebsite(ctx.websiteId, ctx.website);
-			const { insertedId } = await scope.collection('coupons').insertOne({ code: ctx.body.code, max });
-			await ctx.product.usage.record({
-				websiteId: ctx.websiteId,
-				subscriptionId: ctx.entitlement.doc.subscriptionId,
-				unit: 'redemption',
-				quantity: 1,
-				idempotencyKey: `coupon:${insertedId}`,
-			});
-			return created({ id: String(insertedId) }, { location: `/v1/coupons/${insertedId}` });
-		},
-	}),
-];
-
-export const handle = product.handler(routes); // (Request) → Promise<Response>
-```
+The product's Next.js app has two functions: the catch-all route below (every kit and product route, reached through
+rewrites of `/.well-known/*`, `/sso`, `/widget.js`, `/docs` and `/v1/*` to `/api/*`) and the dashboard page, which
+calls the dashboard API from the browser.
 
 ```js
-// app/[[...path]]/route.js (Next.js App Router)
-import { toNextRoute } from '@ss/app-kit';
-import { handle } from '../../lib/routes.js';
-import { after } from 'next/server.js';
-export const { GET, POST, PUT, PATCH, DELETE, OPTIONS } = toNextRoute(handle, { after }); // OPTIONS = CORS preflight
+// app/api/[...path]/route.js
+import { after } from 'next/server';
+import { configFromEnv, createProduct, toNextRoute } from '@ss/app-kit';
+import manifest from '../../../manifest.json' with { type: 'json' };
+import strings from '../../../strings/en.json' with { type: 'json' };
+import { routes } from '../../../api/routes.js';
+
+const { config, problems } = configFromEnv();
+const product = createProduct({ manifest, strings, config, problems });
+export const { GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS } = toNextRoute(product.handler(routes), { after });
 ```
 
-Nothing runs on a timer (PLAN F.19: event-driven only). Usage and events are sent on requests: an event is sent
-inside the request that publishes it, and after a request (Next `after()` when passed to `toNextRoute`, else in the
-background of the request) the kit sends the usage and events queued on this instance and the due retries of the
-request's website — a send that failed is retried by the next request of this product for that website.
-`usage.flush()`, `outbox.flush()` and `product.flush()` remain for explicit use. `createProduct({ background: { mode: 'on' | 'off' } })`
-(`off` under `NODE_ENV=test`).
+## Checks
 
-Products have no crons and no periodic work: anything with an expiry is treated as expired when read and cleaned up
-when touched (or by a MongoDB TTL index), and work that must be started without a customer request runs on the event
-that makes it relevant or from a dashboard button. The control-database client takes `configFromEnv().productDbOptions`
-(pool of 5); merchant database pools hold 3 connections per instance and are closed
-when idle (checked when the next website is served).
-
-Route handlers receive `ctx = { website, websiteId, query, searchParams, body, params, idempotencyKey, request, session,
-entitlement, … }`. `query` holds the first value of each parameter; `searchParams` has all of them. `toNextRoute` strips a
-leading `/api`, so routes are declared as `/v1/...` behind the usual `/v1/:path* → /api/v1/:path*` rewrite.
-
-`product.portal.publishEvent({ websiteId, type, data, idempotencyKey })` builds the full envelope (`id` derived from
-`(websiteId, type, idempotencyKey)`, `occurredAt`, `env` from the website's entitlement, `actor: product`, `context`) and
-puts it in a **durable outbox** (control store, idempotent by event id): it is sent at once when the Portal answers and
-otherwise retried with backoff within a bounded retry window; Portal rejections and events past the window are dropped
-with an error log. A Portal outage shorter than the window never loses or throws the event.
-
-`product.portal.requestIdentityIssuer({ websiteId, issuer, jwksUrl, audience, claimMap })` asks the Portal to make the
-product the website's identity issuer (`PUT /v1/product/websites/:websiteId/identity`; the manifest must declare
-`capabilities.identityIssuer: true`). It resolves `{ status: 'pending', request }` until the merchant approves the
-request in the Portal, then `{ status: 'active', issuer }` for the same body, so it is safe to call again; a refusal
-(no subscription, capability missing, JWKS unusable) throws `portal_error` with the HTTP `status`.
-
-`product.outbound.fetch(url, init)` is the SSRF-guarded fetch (`@ss/net` `safeFetch` under the product's outbound
-policy) for merchant-chosen URLs such as knowledge pages or webhooks.
-
-Route `rateLimit.limit` may be a function of the request (`(ctx) => feature(ctx.entitlement.doc, 'x.perMinute')`), and
-`bucket` shares one window between routes. `problem(code, detail, { extensions })` adds RFC 9457 extension members.
-`paginate` accepts compound keyset keys (`keyOf` returns an array). `ctx.identity.claims` is the full verified payload.
-`product.usage.record` takes `subscriptionId` from the entitlement when it is omitted.
-
-**Connection**: deploy with `MONGODB_URI` and `CONNECT_SECRET` (≥ 32 chars), then Portal → Admin → Apps → Add product
-with the product URL and that secret. The Portal calls `POST /.well-known/ss-connect` (HMAC-signed, the secret is never
-sent); the product generates its key and pins the Portal URL and keys in its control database. Connecting again with
-the secret replaces the binding. See API.md (Connection).
-
-## What each part does
-
-| Part                                 | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `handleConnect({headers, rawBody})`  | `POST /.well-known/ss-connect`: `@ss/protocol` `verifyConnectRequest` (HMAC with `CONNECT_SECRET`, constant time, ±5 min, nonce single-use), generates the product key if none, stores the connection and the Portal JWKS in the control database and answers `createConnectResponse`. 503 without a secret. Connecting again with the secret replaces the binding.                                                                                                                                                                                                                                                                                                |
-| `events.handle({headers, rawBody})`  | Verifies the raw bytes (`verifyEvent`, ±300 s, replay store), validates the envelope, deduplicates on the event `id` and dispatches to `events.on(type, fn)` handlers (`name@v`, `name` or `*`). A failing handler answers 500 and the id is forgotten, so the retry runs. Built in: `entitlement.changed` → refresh, `key.revoked` → revoke, `resource.changed` → drop cached credentials.                                                                                                                                                                                                                                                                        |
-| `launch.verify / exchange / session` | `verifyLaunch` (single use via the shared replay store; optional Portal-side burn). Kinds map to roles (`ROLE_OF_KIND`): `merchant` → `merchant`, `admin` → `platform_admin`. `exchange` creates an opaque session (`ses_…`, 8 h by default).                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `keys.verify(auth, opts)`            | Offline `verifyWebsiteKey` plus the revocation list (refreshed by a verification when older than ≤ 5 min, pushed by events, shared through the store), `originAllowed` for `pk_`, and required scopes (`coupons.*` globs). It **fails closed** (`unavailable`) when revocations could not be synced for longer than `OFFLINE_GRACE_MS`; concurrent cold requests await the single in-flight sync.                                                                                                                                                                                                                                                                  |
-| `entitlements.forWebsite(id)`        | Signed document from the Portal, verified with `verifyEntitlementDocument` and validated with `@ss/contracts`. It is fresh for 5 min, single-flight per website, and versions never go backwards; `invalidate(id)` forces a fetch on the next read. If the Portal is down, the last verified copy (memory, then the shared store) is served with `stale: true` until `validUntil + OFFLINE_GRACE_MS`. 404/410 from the Portal → `not_subscribed`. `can` / `feature` / `config` / `featuresOf` read the canonical document.                                                                                                                                         |
-| `identity.verify(request, { doc })`  | Bring-your-own customer identity: the website's own login JWT from `SS-Identity` (or a beacon body's `identity`) verified offline against the issuer keys inline in the entitlement document (EdDSA/ES256/RS256, `iss`, `aud`, `exp`, `nbf`, `iat` ≤ 24 h). Route option `identity: 'required' \| 'optional'` fills `ctx.identity` `{ subject, email?, phone?, issuer }`.                                                                                                                                                                                                                                                                                          |
-| `idempotent: true` (handler)         | A repeated `Idempotency-Key` for the same website (or session) and route within 24 h answers 409 `duplicate_request` without running the handler. Only the hashed key and its expiry are stored (`replay` store), no bodies; a 5xx forgets the key. Routes without the flag ignore the header.                                                                                                                                                                                                                                                                                                                                                                     |
-| `usage.record / flush`               | Durable queue keyed by `idempotencyKey`; a key stays unique even after it is sent (35-day retention). `flush` leases due records, posts batches with the same keys, acks `accepted`/`duplicate`, dead-letters `rejected`, and backs off exponentially with jitter on failure.                                                                                                                                                                                                                                                                                                                                                                                      |
-| `data.forWebsite(id, stamp?)`        | Resolves `{ uri }` through `portal.resolveResource(kind: 'database')` and never keeps it past `expiresAt`. Pooled `MongoClient` (maxPoolSize 5, kept on `globalThis`, idle pools closed) and `ss_<slug>_` prefixes. The **tenant guard** requires `websiteId` in every filter and first `$match`, refuses `$where` and cross-collection stages, forbids changing `websiteId`, and stamps `websiteId/createdAt/updatedAt/schemaVersion`. Also provides `ensureIndexes`, `migrate` and `transaction`.                                                                                                                                                                |
-| `connectors.*(websiteId)`            | Credentials come from `resolveResource` and are cached ≤ `expiresAt`. `storage`: S3-compatible presigned PUT/GET plus signed HEAD/DELETE, with keys confined to `<prefix><slug>/<websiteId>/`. `ai` / `messaging`: built-ins keyed as the Portal resolves them — `generic-http` (alias `http`; https only, relative paths only) and, for messaging, `smtp` (nodemailer, TLS required outside allowlisted dev hosts, vetted IPs, timeouts). Storage keys are always relative (`fullKey()` gives the object key); `presignPut` signs `content-length`. `payments`: interface only — register adapters with `connectors: { payments: { stripe: (ctx) => adapter } }`. |
-| `audit.record(entry)`                | Appends to `ss_<slug>_audit` in the merchant database (or to an injected `auditSink`). `before`/`after` never reach logs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `handler(routes, opts)`              | Request id (header or generated), 404/405/CORS preflight, body cap (413), auth, entitlement and element gating, rate limit (429 with `RateLimit-*`), JSON (415/400), duplicate refusal (409 for `idempotent: true` routes), RFC 9457 problems with a configurable type base.                                                                                                                                                                                                                                                                                                                                                                                       |
-| `sweepStaleUploads(input)`           | Cron helper for presigned uploads that were never confirmed: per website, finds records past their `staleAt` (bounded, oldest first), deletes the object from the merchant's bucket when present, then deletes (or marks) the record with a compare-and-set. Returns `{ scanned, deleted, missing, failed }`; failures stay for the next run.                                                                                                                                                                                                                                                                                                                      |
-
-### Auth modes
-
-- `website` — `Authorization: Bearer pk_…|sk_…`. `ctx.website` is the key binding, which `X-SS-Website` can never override. The
-  entitlement is loaded into `ctx.entitlement` (`stale` is also exposed as the `SS-Entitlement-Stale` header).
-- `launch` — dashboard session from the `ss_session` cookie or `Bearer ses_…`. `roles` restricts access. The website is the
-  session's only website or `X-SS-Website`, which must be within the session scope.
-- `none`.
-
-### Stores
-
-`createMongoStores({ db, prefix = 'ss_kit_' })` puts everything in the product's **own** control database. It never
-touches a merchant database. Collections: replay, nonce, entitlements, usage_queue, event_outbox, revocations, state (the Portal
-connection, generated secrets, revocation cursor, last Portal JWKS), sessions, rate_limits. The event outbox is the one place
-an envelope is held, until it is delivered or dropped. Unique `_id` and TTL indexes are created lazily. The
-in-memory stores (the default) are per-process and are for development only.
-
-## Testing your product
-
-`@ss/app-kit/testing` exports `createFakePortal()`: a Portal built from `@ss/protocol` primitives that signs entitlement
-documents, website keys, launches and events, verifies your client assertions, deduplicates usage, serves revocations and
-resource descriptors, records identity-issuer requests (`identityRequests`, `decideIdentityRequest(websiteId,
-'approve' | 'reject')`), and can simulate outages (`setDown(true)`, `failNext(path, status)`). `portal.connect({ productUrl, secret, fetch })` connects
-a product to it. Pass `portal.fetch` as `fetch`. Test and development only.
-
-```
-pnpm check   # in this folder: format, lint, typecheck, vitest with coverage
-```
-
-The integration tests use `MongoMemoryReplSet` for the tenant guard, indexes, migrations (including concurrent runs and
-lock waits), transactions and both store implementations. They also include a two-instance scenario on shared Mongo
-stores (duplicate refusal, launch replay, revocation propagation, usage exactly once, a cold instance serving stale during an outage).
+`pnpm check` runs Prettier, ESLint, `tsc --checkJs --strict` and the tests with coverage (90 % lines and functions,
+85 % branches). MongoDB tests use the shared in-memory replica set (`@ss/config` `mongo: true`); widget tests run in
+jsdom.

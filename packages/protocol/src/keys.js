@@ -1,7 +1,7 @@
 /**
  * Ed25519 signing keys, JWK/JWKS helpers and a rotating, caching key resolver.
  *
- * All signatures in the App Protocol are EdDSA over Ed25519 (RFC 8037). Keys are identified by `kid`. Private keys are
+ * All signatures in this protocol are EdDSA over Ed25519 (RFC 8037). Keys are identified by `kid`. Private keys are
  * wrapped in a `Signer` whose only capability is `sign(bytes)`, so a KMS/HSM-backed signer can be dropped in.
  */
 import { createPrivateKey } from 'node:crypto';
@@ -9,7 +9,7 @@ import { calculateJwkThumbprint, exportJWK, generateKeyPair, importJWK } from 'j
 import { createProtocolError } from './errors.js';
 
 /**
- * Public Ed25519 JWK as published in a JWKS. `nbf`/`exp` (seconds since epoch) are optional App Protocol extensions
+ * Public Ed25519 JWK as published in a JWKS. `nbf`/`exp` (seconds since epoch) are optional protocol extensions
  * that bound when a key may verify signatures (rotation overlap windows).
  * @typedef {{ kty: 'OKP', crv: 'Ed25519', x: string, kid: string, alg: 'EdDSA', use: 'sig', nbf?: number, exp?: number }} PublicJwk
  */

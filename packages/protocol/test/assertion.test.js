@@ -6,11 +6,11 @@ import { createClock, expectCode, makeKey, seededRandom, staticResolver, tamperS
 const AUD = 'https://portal.test/v1/token';
 
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
-let app;
+let product;
 /** @type {Awaited<ReturnType<typeof makeKey>>} */
 let other;
 beforeAll(async () => {
-	app = await makeKey('app-key-1');
+	product = await makeKey('product-key-1');
 	other = await makeKey('other-key-1');
 });
 
@@ -22,10 +22,10 @@ beforeAll(async () => {
 const verify = (clock, token, overrides = {}) =>
 	verifyAssertion({
 		token,
-		keyResolverForApp: (appId) =>
-			appId === 'app_coupons'
-				? staticResolver([app.publicJwk])
-				: appId === 'app_other'
+		keyResolverForProduct: (productId) =>
+			productId === 'coupons'
+				? staticResolver([product.publicJwk])
+				: productId === 'other'
 					? staticResolver([other.publicJwk])
 					: null,
 		audience: AUD,
@@ -40,8 +40,8 @@ const verify = (clock, token, overrides = {}) =>
  */
 const sign = (clock, overrides = {}) =>
 	signAssertion({
-		signer: app.signer,
-		appId: 'app_coupons',
+		signer: product.signer,
+		productId: 'coupons',
 		audience: AUD,
 		now: clock.now,
 		randomBytes: seededRandom(),
@@ -49,12 +49,12 @@ const sign = (clock, overrides = {}) =>
 	});
 
 describe('client assertions', () => {
-	it('signs and verifies iss=sub=appId', async () => {
+	it('signs and verifies iss=sub=productId', async () => {
 		const clock = createClock();
 		const token = await sign(clock);
-		const { appId, claims } = await verify(clock, token);
-		expect(appId).toBe('app_coupons');
-		expect(claims).toMatchObject({ iss: 'app_coupons', sub: 'app_coupons', aud: AUD });
+		const { productId, claims } = await verify(clock, token);
+		expect(productId).toBe('coupons');
+		expect(claims).toMatchObject({ iss: 'coupons', sub: 'coupons', aud: AUD });
 		expect(claims.exp - claims.iat).toBe(60);
 	});
 
@@ -75,25 +75,26 @@ describe('client assertions', () => {
 		await expectCode(sign(clock, { ttlSeconds: 301 }), 'invalid_argument');
 		const iat = Math.floor(clock.now() / 1000);
 		const long = await signCompact({
-			signer: app.signer,
+			signer: product.signer,
 			typ: 'ss-assertion+jwt',
-			payload: { iss: 'app_coupons', sub: 'app_coupons', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 301 },
+			payload: { iss: 'coupons', sub: 'coupons', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 301 },
 		});
 		await expectCode(verify(clock, long), 'lifetime_too_long');
 	});
 
-	it('rejects unknown app, impersonating another app, wrong aud, sub != iss, tampering and short jti', async () => {
+	it('rejects unknown product, impersonating another product, wrong aud, sub != iss, tampering and short jti', async () => {
 		const clock = createClock();
-		await expectCode(verify(clock, await sign(clock, { appId: 'app_unknown' })), 'issuer');
-		// signed by app_coupons but claims app_other → other's keys don't know this kid
-		await expectCode(verify(clock, await sign(clock, { appId: 'app_other' })), 'unknown_kid');
+		await expectCode(verify(clock, await sign(clock, { productId: 'unknown' })), 'issuer');
+		// signed by coupons but claims other → other's keys don't know this kid
+		await expectCode(verify(clock, await sign(clock, { productId: 'other' })), 'unknown_kid');
+		await expectCode(sign(clock, { productId: 'Bad_Id' }), 'invalid_argument');
 		await expectCode(verify(clock, await sign(clock), { audience: 'https://portal.test/other' }), 'audience');
 		const token = await sign(clock);
 		await expectCode(verify(clock, tamperSignature(token)), 'signature');
 		await expectCode(
 			verify(
 				clock,
-				tamperSegment(token, 1, (p) => ({ ...p, iss: 'app_other', sub: 'app_other' })),
+				tamperSegment(token, 1, (p) => ({ ...p, iss: 'other', sub: 'other' })),
 			),
 			'unknown_kid',
 		);
@@ -105,22 +106,23 @@ describe('client assertions', () => {
 			'issuer',
 		);
 		const iat = Math.floor(clock.now() / 1000);
-		const base = { iss: 'app_coupons', sub: 'app_coupons', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 60 };
+		const base = { iss: 'coupons', sub: 'coupons', aud: AUD, jti: 'j'.repeat(20), iat, exp: iat + 60 };
 		/** @param {Record<string, unknown>} payload */
-		const raw = (payload) => signCompact({ signer: app.signer, typ: 'ss-assertion+jwt', payload });
+		const raw = (payload) => signCompact({ signer: product.signer, typ: 'ss-assertion+jwt', payload });
 		await expectCode(verify(clock, await raw({ ...base, sub: 'someone' })), 'subject');
 		await expectCode(verify(clock, await raw({ ...base, jti: 'short' })), 'malformed');
 		await expectCode(verify(clock, await raw({ ...base, aud: [AUD] })), 'audience');
 		await expectCode(verify(clock, await sign(clock), { replayStore: undefined }), 'invalid_argument');
 	});
 
-	it('rejects an app key revoked in the app resolver', async () => {
+	it('rejects a product key revoked in the product resolver', async () => {
 		const clock = createClock();
 		const { createKeyResolver, createJwks } = await import('../src/index.js');
 		const token = await sign(clock);
 		await expectCode(
 			verify(clock, token, {
-				keyResolverForApp: () => createKeyResolver({ jwks: createJwks([app.publicJwk]), revokedKids: ['app-key-1'] }),
+				keyResolverForProduct: () =>
+					createKeyResolver({ jwks: createJwks([product.publicJwk]), revokedKids: ['product-key-1'] }),
 			}),
 			'revoked_key',
 		);

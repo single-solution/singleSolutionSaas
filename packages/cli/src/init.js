@@ -1,60 +1,39 @@
 /**
- * `ss app init <dir> --kind service|pack --slug <slug> --name <name>` — generates a project from the templates:
- * `templates/shared` (core, headless, ui, strings, schemas, unit tests) overlaid by `templates/<kind>`.
- * Files and paths may contain `{{slug}}`, `{{name}}`, `{{namespace}}` (slug with `-` → `_`) and `{{sdkVersion}}`.
- * `_gitignore` is written as `.gitignore`. Outside a pnpm workspace `templates/standalone` (the pnpm settings and
- * `.nvmrc` a repository of its own needs) is added; inside one (e.g. `products/` of the monorepo) the workspace's apply.
+ * `ss app init <dir> --id <id> --name <name>` — generates a product in the PLAN 0.4.13 layout from
+ * `templates/product`: `core/ api/ adapters/ ui/ app/ strings/ schemas/ tests/ docs/`, the manifest, the Next.js
+ * wiring (one API route and the dashboard page), the tooling config from `@ss/config` and a sample feature `notes`
+ * (a visitor widget, an admin widget with a ticket permission, one setting, widget texts and public docs).
  *
- * `--minimal` (service products): the `notes` sample ({@link NOTES_SAMPLE_FILES}) is left out and
- * `templates/minimal/service` is overlaid instead: one placeholder Mode C element `status` (`GET /v1/status`,
- * no database, no events) because a product needs at least one element. The project still passes
- * `ss app validate` and its own tests.
+ * Template files and paths may contain `{{id}}`, `{{name}}`, `{{global}}` (the widget's browser global,
+ * `SS<Product>`), `{{baseUrl}}` and `{{sdkVersion}}`. `_gitignore` is written as `.gitignore`. Outside a pnpm workspace
+ * `templates/standalone` (the pnpm settings and `.nvmrc` a repository of its own needs) is added; inside one (e.g.
+ * `products/` of the monorepo) the workspace's apply. `openapi.json` and `api/widget-script.js` are then generated
+ * (`ss app assets`), and `.env.local` (git-ignored) gets fresh development secrets.
  * @module
  */
+import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { generateConnectSecret } from '@ss/protocol';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PATTERNS } from '@ss/contracts';
 import { exists, walk } from './fsutil.js';
-import { ASSETS_FILE, writeAssets } from './assets.js';
+import { writeAssets } from './assets.js';
 
 /** Root of the bundled templates. */
 export const TEMPLATES_DIR = fileURLToPath(new URL('../templates/', import.meta.url));
 
-/** Product kinds `init` can generate. */
-export const INIT_KINDS = Object.freeze(/** @type {const} */ (['service', 'pack']));
+/** Product ids (manifest `id`, PLAN 0.4.13). */
+export const PRODUCT_ID = /^[a-z][a-z0-9-]{1,30}$/;
 
-/**
- * Template files (source paths, before placeholder substitution) that belong to the `notes` sample only; `--minimal`
- * leaves them out. The manifest, openapi.json, strings, api/routes.js, docs and README are
- * replaced by the minimal overlay instead.
- */
-export const NOTES_SAMPLE_FILES = Object.freeze([
-	'core/notes.js',
-	'headless/notes.js',
-	'ui/notes.js',
-	'schemas/notes.features.json',
-	'tests/core.test.js',
-	'tests/headless.test.js',
-	'tests/ui.test.js',
-	'tests/helpers.js',
-	'api/notes.js',
-	'api/events.js',
-	'adapters/db.js',
-	'schemas/events/{{namespace}}.note_created@1.json',
-	'tests/api.test.js',
-	'tests/memory-collection.js',
-]);
+/** Where a new product's manifest says it lives until its deployment address is set. */
+export const DEFAULT_BASE_URL = 'http://localhost:3000';
 
 /**
  * @typedef {object} InitOptions
  * @property {string} dir target directory (created; must be empty or absent)
- * @property {'service' | 'pack'} kind
- * @property {string} slug product slug (SSPS slug pattern)
+ * @property {string} id product id (manifest `id`)
  * @property {string} name display name (1–80 chars)
+ * @property {string} [baseUrl] the product's address for `manifest.endpoints.base` (default {@link DEFAULT_BASE_URL})
  * @property {string} [sdkVersion] version range for `@ss/*` dependencies (default `workspace:^`)
- * @property {boolean} [minimal] service only: leave out the `notes` sample (one placeholder element instead)
  * @property {boolean} [standalone] add the files of a repository of its own (default: when `dir` is not inside a pnpm
  *   workspace)
  * @property {string} [templatesDir]
@@ -72,21 +51,52 @@ export const fill = (text, values) =>
 	);
 
 /**
+ * The browser global of a product's widgets (PLAN 0.4.10: `window.SS<Product>`), e.g. `order-notes` → `SSOrderNotes`.
+ * @param {string} id
+ * @returns {string}
+ */
+export const globalNameOf = (id) =>
+	`SS${id
+		.split('-')
+		.filter((part) => part.length > 0)
+		.map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+		.join('')}`;
+
+/**
+ * @param {unknown} value
+ * @returns {boolean} an https origin, or http on a local host
+ */
+const isBaseUrl = (value) => {
+	if (typeof value !== 'string') return false;
+	try {
+		const url = new URL(value);
+		const local = /^(?:localhost|.+\.localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname);
+		return (
+			(url.protocol === 'https:' || (url.protocol === 'http:' && local)) &&
+			url.origin === value &&
+			url.username === '' &&
+			url.password === ''
+		);
+	} catch {
+		return false;
+	}
+};
+
+/**
  * Check init options; returns error messages (empty when valid).
  * @param {Partial<InitOptions>} options
  * @returns {string[]}
  */
-export const checkInitOptions = ({ dir, kind, slug, name, minimal }) => {
+export const checkInitOptions = ({ dir, id, name, baseUrl = DEFAULT_BASE_URL }) => {
 	/** @type {string[]} */
 	const errors = [];
 	if (typeof dir !== 'string' || dir.length === 0) errors.push('a target directory is required');
-	if (!INIT_KINDS.includes(/** @type {'service' | 'pack'} */ (kind))) errors.push('--kind must be service or pack');
-	if (typeof slug !== 'string' || slug.length < 2 || slug.length > 40 || !new RegExp(PATTERNS.slug).test(slug))
-		errors.push('--slug must be 2–40 chars of lowercase letters/digits separated by - or _ (e.g. notes-pro)');
+	if (typeof id !== 'string' || !PRODUCT_ID.test(id))
+		errors.push('--id must be 2–31 lowercase letters, digits or - and start with a letter (e.g. notes)');
 	if (typeof name !== 'string' || name.trim().length === 0 || name.length > 80) errors.push('--name must be 1–80 characters');
-	else if (/[{}"\\<>\n\r`]/.test(name)) errors.push('--name must not contain { } " \\ < > ` or line breaks');
-	if (minimal === true && kind === 'pack')
-		errors.push('--minimal is for service products (a pack element is the sample: it needs a headless core and renderer)');
+	else if (/[{}"\\<>\n\r`$]/.test(name)) errors.push('--name must not contain { } " \\ < > ` $ or line breaks');
+	if (!isBaseUrl(baseUrl))
+		errors.push('--base-url must be an origin: https://<host>, or http on localhost, *.localhost, 127.0.0.1 or [::1]');
 	return errors;
 };
 
@@ -102,22 +112,24 @@ export const insideWorkspace = async (dir) => {
 	return parent === current ? false : insideWorkspace(parent);
 };
 
+/** @param {number} bytes */
+const secret = (bytes) => randomBytes(bytes).toString('base64url');
+
 /**
- * Generate a project.
+ * Generate a product.
  * @param {InitOptions} options
- * @returns {Promise<{ dir: string, files: string[] }>} files written (relative)
+ * @returns {Promise<{ dir: string, files: string[] }>} files written (relative, sorted)
  */
 export const initApp = async ({
 	dir,
-	kind,
-	slug,
+	id,
 	name,
+	baseUrl = DEFAULT_BASE_URL,
 	sdkVersion = 'workspace:^',
-	minimal = false,
 	standalone,
 	templatesDir = TEMPLATES_DIR,
 }) => {
-	const errors = checkInitOptions({ dir, kind, slug, name, minimal });
+	const errors = checkInitOptions({ dir, id, name, baseUrl });
 	if (errors.length > 0) throw Object.assign(new Error(errors.join('; ')), { code: 'invalid_options' });
 	const target = path.resolve(dir);
 	try {
@@ -126,16 +138,13 @@ export const initApp = async ({
 	} catch (error) {
 		if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') throw error;
 	}
-	const values = { slug, name: name.trim(), namespace: slug.replace(/-/g, '_'), sdkVersion };
+	const values = { id, name: name.trim(), global: globalNameOf(id), baseUrl, sdkVersion };
+	const own = standalone ?? !(await insideWorkspace(path.dirname(target)));
 	/** @type {Map<string, string>} destination → source */
 	const plan = new Map();
-	const skip = new Set(minimal ? NOTES_SAMPLE_FILES : []);
-	const own = standalone ?? !(await insideWorkspace(path.dirname(target)));
-	const layers = [...(minimal ? ['shared', kind, `minimal/${kind}`] : ['shared', kind]), ...(own ? ['standalone'] : [])];
-	for (const layer of layers) {
+	for (const layer of ['product', ...(own ? ['standalone'] : [])]) {
 		const root = path.join(templatesDir, layer);
 		for (const file of await walk(root, { ignore: new Set(['node_modules']) })) {
-			if (skip.has(file)) continue;
 			const destination = fill(file, values)
 				.split('/')
 				.map((part) => (part === '_gitignore' ? '.gitignore' : part))
@@ -149,15 +158,13 @@ export const initApp = async ({
 		await writeFile(out, fill(await readFile(source, 'utf8'), values));
 	}
 	const files = [...plan.keys()];
-	if (kind === 'service') {
-		// the manifest, feature schemas and strings bundled into the Next.js server build (regenerated by `prebuild`)
-		await writeAssets(target);
-		files.push(ASSETS_FILE);
-		// local development secret (git-ignored); deployments set their own CONNECT_SECRET
-		await writeFile(path.join(target, '.env.local'), `MONGODB_URI=\nCONNECT_SECRET=${generateConnectSecret()}\n`, {
-			mode: 0o600,
-		});
-		files.push('.env.local');
-	}
+	for (const { file } of await writeAssets(target)) if (!files.includes(file)) files.push(file);
+	// development secrets (git-ignored); each deployment sets its own
+	await writeFile(
+		path.join(target, '.env.local'),
+		`MONGODB_URI=\nCONNECT_SECRET=${secret(32)}\nENCRYPTION_KEY=${secret(32)}\n`,
+		{ mode: 0o600 },
+	);
+	files.push('.env.local');
 	return { dir: target, files: files.sort() };
 };

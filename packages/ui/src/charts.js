@@ -67,7 +67,7 @@ export function BarChart({ data, label, format = String, height = 160, className
 }
 
 /**
- * Horizontal bars for shares of a total (e.g. spend per element).
+ * Horizontal bars for shares of a total (e.g. credits per product).
  * @param {{ data: Datum[], label: string, format?: (value: number) => string, className?: string, emptyText?: string }} props
  */
 export function ShareBars({ data, label, format = String, className, emptyText = 'Nothing to show yet.' }) {

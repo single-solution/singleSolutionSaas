@@ -1,6 +1,6 @@
 /**
- * JSDoc type definitions for the v1 contracts. This module has no runtime exports besides an empty marker; import the
- * types with `@typedef {import('@ss/contracts/src/types.js').Manifest} Manifest` or via the package index.
+ * JSDoc type definitions for the v1 contracts. This module has no runtime exports; import the types with
+ * `@typedef {import('@ss/contracts').Manifest} Manifest`.
  * @module
  */
 
@@ -8,7 +8,7 @@
  * @typedef {object} ValidationProblem
  * @property {string} path JSON Pointer into the validated value (`''` = root)
  * @property {string} message human-readable explanation
- * @property {string} keyword schema keyword or semantic rule id
+ * @property {string} keyword schema keyword or semantic rule id (`RULES`)
  */
 
 /**
@@ -16,212 +16,129 @@
  * @typedef {{ readonly ok: true, readonly value: T } | { readonly ok: false, readonly problems: ReadonlyArray<ValidationProblem> }} ValidationResult
  */
 
-/** @typedef {'A' | 'B' | 'C'} Mode */
-/** @typedef {'database' | 'storage' | 'ai' | 'messaging' | 'payments'} ResourceKind */
-/** @typedef {'string' | 'integer' | 'number' | 'boolean' | 'array' | 'object'} FeatureType */
-/**
- * @typedef {'paths' | 'selectors' | 'pageTypes' | 'devices' | 'referrers' | 'schedule' | 'consent' | 'triggers' |
- *   'frequency' | 'audience'} PlacementMember
- */
+/** @typedef {'string' | 'integer' | 'number' | 'boolean' | 'array'} SettingType */
 
 /**
- * @typedef {object} FeatureNode
- * @property {FeatureType} type
- * @property {string} [title]
- * @property {string} [description]
- * @property {unknown} [default]
- * @property {unknown[]} [enum]
- * @property {unknown} [const]
+ * A list item of a list setting.
+ * @typedef {object} SettingItem
+ * @property {'string' | 'integer' | 'number' | 'boolean'} type
  * @property {number} [minimum]
  * @property {number} [maximum]
- * @property {number} [exclusiveMinimum]
- * @property {number} [exclusiveMaximum]
- * @property {number} [multipleOf]
- * @property {number} [minLength]
  * @property {number} [maxLength]
- * @property {string} [pattern]
+ * @property {unknown[]} [enum]
  * @property {string} [format]
- * @property {FeatureNode} [items]
- * @property {number} [minItems]
- * @property {number} [maxItems]
- * @property {boolean} [uniqueItems]
- * @property {Record<string, FeatureNode>} [properties]
- * @property {string[]} [required]
- * @property {false} [additionalProperties]
- * @property {Record<string, unknown>} [x-ui]
- * @property {Record<string, { default?: unknown, max?: number | boolean, members?: PlacementMember[] }>} [x-plan]
- *   `members`: placement features only — the placement members the plan may set
- * @property {boolean} [x-lock]
- * @property {'flag' | 'quota' | 'limit' | 'rate' | 'config' | 'placement'} [x-kind]
- * @property {{ members?: PlacementMember[] }} [x-placement] placement features: the members the element supports
- * @property {'hour' | 'day' | 'week' | 'month'} [x-period] quota reset period (required for quotas)
- * @property {boolean} [x-hardStop] quota: block at the limit (true) or allow overage (false)
- * @property {string} [x-unit] quota/rate: counted unit, e.g. `redemption`
- * @property {'second' | 'minute' | 'hour'} [x-per] rate window (required for rates)
  */
 
 /**
- * @typedef {object} FeatureSchema
+ * One setting of a feature.
+ * @typedef {object} SettingNode
+ * @property {SettingType} type
+ * @property {string} title
+ * @property {unknown} default
+ * @property {string} [description]
+ * @property {number} [minimum]
+ * @property {number} [maximum] the hard maximum of a limit
+ * @property {number} [maxLength]
+ * @property {unknown[]} [enum]
+ * @property {string} [format]
+ * @property {SettingItem} [items]
+ * @property {{ widget?: string, group?: string, order?: number, help?: string, placeholder?: string }} [x-ui]
+ */
+
+/**
+ * @typedef {object} SettingsSchema
  * @property {'object'} type
- * @property {string} [title]
- * @property {string} [description]
- * @property {Record<string, FeatureNode>} properties
- * @property {string[]} [required]
+ * @property {Record<string, SettingNode>} properties
  * @property {false} [additionalProperties]
  */
 
 /**
- * @typedef {object} MeteredPrice
- * @property {string} unit
- * @property {number} perUnit integer millicredits per `per` units
- * @property {number} [per] units priced together (default 1)
- * @property {Record<string, number>} [included] included units per plan code
- */
-
-/**
- * @typedef {object} ManifestElement
- * @property {string} key
+ * @typedef {object} ManifestFeature
+ * @property {string} key permanent feature key
  * @property {string} name
- * @property {string} [description]
- * @property {Mode[]} modes
- * @property {boolean} [stateful]
- * @property {{ hourly: number, metered?: MeteredPrice[] }} price hourly in integer millicredits
- * @property {string[]} [dependsOn]
- * @property {{ resources?: ResourceKind[], optionalResources?: ResourceKind[] }} [requires] `optionalResources`
- *   are used when connected and never disable the element
- * @property {FeatureSchema} [features]
- * @property {string} [strings] legacy per-element catalog file (one language)
- * @property {string[]} [stringKeys] keys (or `prefix*`) of the product catalogs `strings/<lang>.json` the element renders
- * @property {boolean} [placement]
- * @property {string[]} [rules]
- * @property {string[]} [hooks]
- * @property {string[]} [customFields]
- * @property {{ resources?: string[] }} [api]
- * @property {string | null} [headless]
- * @property {string | null} [renderer]
- * @property {string[]} [variants]
- * @property {string[]} [slots]
- * @property {{ role?: string, labels?: boolean, keyboard?: boolean, reducedMotion?: boolean }} [a11y]
+ * @property {string} description one line
+ * @property {string[]} dependsOn keys of the features it needs
+ * @property {SettingsSchema} settings
  */
 
-/**
- * @typedef {object} ManifestPlan
- * @property {string} code
- * @property {string} [name]
- * @property {string[]} elements included and on by default
- * @property {string[]} [addons] allowed, off by default
- * @property {string} [description]
- */
+/** @typedef {{ key: string, name: string, feature: string }} ManifestPermission */
+/** @typedef {{ key: string, feature: string, kind: 'visitor' | 'admin' }} ManifestWidget */
 
 /**
  * @typedef {object} Manifest
- * @property {'1'} ssps
- * @property {{ slug: string, name: string, kind: 'service' | 'pack', version: string, category: string, description?: string }} product
- * @property {{ base: string, dashboard?: string, events?: string }} [endpoints]
- * @property {{ adminLaunch?: boolean, identityIssuer?: boolean }} [capabilities]
- * @property {string[]} [scopes]
- * @property {{ resources?: ResourceKind[] }} [requires]
- * @property {Array<string | { product: string, scopes?: string[] }>} [reads] service products whose public read API
- *   the elements call (the Loader passes an API client per active product)
- * @property {{ consumes?: string[], publishes?: string[] }} [events]
- * @property {ManifestElement[]} elements
- * @property {ManifestPlan[]} [plans]
- * @property {{ version: string, effectiveFrom: string }} priceBook
- * @property {number} [trialHours]
- * @property {Record<string, string>} [retention] ISO-8601 durations per collection
+ * @property {string} id product id
+ * @property {string} name
+ * @property {string} version semver
+ * @property {{ base: string, dashboard: string }} endpoints
+ * @property {string | null} widgetScriptUrl null exactly when there are no widgets
+ * @property {string} docsUrl
+ * @property {ManifestFeature[]} features
+ * @property {ManifestPermission[]} permissions
+ * @property {ManifestWidget[]} widgets
  */
 
 /**
- * @typedef {'active' | 'paused' | 'suspended' | 'spend_cap' | 'quota_exhausted' | 'resource_missing'} RuntimeState
+ * @typedef {object} PriceListFeature
+ * @property {string} key
+ * @property {string} name
+ * @property {string} description
+ * @property {string[]} dependsOn
+ * @property {number} millicreditsPerHour integer ≥ 0
  */
 
 /**
- * @typedef {object} EntitlementDocument
- * @property {string} subscriptionId
+ * Price list; also the price report body (`PUT /v1/product/prices`).
+ * @typedef {{ version: number, features: PriceListFeature[] }} PriceList
+ */
+
+/** @typedef {{ version: number, on: string[], adminId: string, adminName: string }} FeatureReport */
+
+/**
+ * @typedef {object} StatusResponse
  * @property {string} websiteId
  * @property {string} merchantId
+ * @property {string} merchantName
  * @property {string} domain
- * @property {boolean} allowSubdomains
- * @property {'live' | 'test'} env
- * @property {string} productSlug
- * @property {string} [planCode]
- * @property {string} priceBookVersion
- * @property {number} version
- * @property {string} issuedAt ISO-8601 UTC
- * @property {string} validFrom ISO-8601 UTC
- * @property {string} validUntil ISO-8601 UTC
- * @property {Record<string, { enabled: boolean, reason?: string }>} elements
- * @property {Record<string, { value: unknown, source: string, locked: boolean, reason?: string }>} features keyed `<element>.<feature>`
- * @property {Record<string, Record<string, unknown>>} config
- * @property {{ state: RuntimeState, reason?: string }} runtime
- * @property {Array<{ kind: ResourceKind, ref: string, status: 'connected' | 'missing' | 'failing' | 'revoked' }>} resources
- * @property {{ prefix: string }} dataScope
- * @property {IdentitySection} [identity] the website's own customer identity issuer (bring-your-own identity)
- * @property {WebsiteSection} [website] website defaults filled by the Portal (time zone, language, currency)
+ * @property {import('./constants.js').ProductStatus} status
+ * @property {string | null} graceEndsAt ISO-8601 UTC, null outside grace
+ * @property {number} todayMillicredits
+ * @property {number} featuresVersion last accepted feature-report version
+ * @property {string} validUntil ISO-8601 UTC; cache at most until then
  */
 
 /**
- * @typedef {object} WebsiteSection website settings copied into every document of the website (all optional)
- * @property {string} [timeZone] IANA time zone name, e.g. `Europe/Berlin`
- * @property {string} [language] BCP-47 language tag, e.g. `en` or `pt-BR`
- * @property {string} [currency] ISO-4217 code, e.g. `EUR`
+ * @typedef {{ websiteId: string, domain: string, merchantId: string, merchantName: string,
+ *   status: import('./constants.js').ProductStatus }} WebsiteRow
  */
+/** @typedef {{ items: WebsiteRow[], cursor: string | null }} WebsitesPage */
+/** @typedef {{ tokenIds: string[], cursor: string | null }} Revocations */
+/** @typedef {{ baseUrl: string }} Directory */
+/** @typedef {{ type: import('./constants.js').NoticeType, websiteId?: string, subject?: string }} Notice */
 
 /**
- * @typedef {object} IdentityJwk public signature key of an identity issuer
- * @property {'OKP' | 'EC' | 'RSA'} kty
- * @property {string} kid
- * @property {'EdDSA' | 'ES256' | 'RS256'} [alg]
- * @property {'sig'} [use]
- * @property {'Ed25519' | 'P-256'} [crv]
- * @property {string} [x]
- * @property {string} [y]
- * @property {string} [n]
- * @property {string} [e]
+ * business.json, normalised: missing or invalid optional fields are `null`.
+ * @typedef {object} BusinessInfo
+ * @property {string} name
+ * @property {string | null} logo https URL
+ * @property {string | null} email
+ * @property {string | null} phone
+ * @property {string | null} address
+ * @property {string | null} country ISO 3166-1 alpha-2, upper case
+ * @property {string | null} timeZone IANA name
  */
 
-/**
- * @typedef {object} IdentitySection
- * @property {string} issuer `iss` of customer tokens
- * @property {IdentityJwk[]} jwks issuer public keys (≤ 5)
- * @property {string} [audience] required `aud` when set
- * @property {{ subject: string, email?: string, phone?: string }} claimMap claim names
- */
+/** @typedef {{ user: { id?: string, email?: string, phone?: string } }} DataRightsRequest */
+/** @typedef {{ records: Record<string, unknown> }} DataRightsExport */
+/** @typedef {{ deleted: number, anonymised: number }} DataRightsDelete */
 
 /**
- * @typedef {object} EventEnvelope
- * @property {string} id
- * @property {string} type `name@version`
- * @property {'website'} [scope] default `website` (see {@link PlatformEventEnvelope} for platform-scoped events)
+ * @typedef {object} ActivityCopy
  * @property {string} websiteId
- * @property {'live' | 'test'} env
- * @property {string} occurredAt
- * @property {string} idempotencyKey
- * @property {{ type: string, id?: string }} actor
- * @property {Record<string, unknown>} data
- * @property {{ element?: string, keyKind?: 'pk' | 'sk' } & Record<string, unknown>} [context] `keyKind` is set by the
- *   Portal Event Hub on delivery (the kind of website key the event was ingested with); producers never set it
- */
-
-/**
- * A platform-scoped event (e.g. `manifest.accepted@1`): `scope: 'platform'` and no `websiteId`.
- * @typedef {Omit<EventEnvelope, 'scope' | 'websiteId'> & { scope: 'platform', websiteId?: undefined }} PlatformEventEnvelope
- */
-
-/** @typedef {EventEnvelope | PlatformEventEnvelope} AnyEventEnvelope */
-
-/**
- * @typedef {object} Placement
- * @property {{ include?: string[], exclude?: string[] }} [paths]
- * @property {Array<{ selector: string, position?: string }>} [selectors]
- * @property {string[]} [pageTypes]
- * @property {string[]} [devices]
- * @property {{ include?: string[], exclude?: string[] }} [referrers]
- * @property {{ timezone: string, from?: string, until?: string, windows?: Array<{ days?: string[], start: string, end: string }> }} [schedule]
- * @property {string[]} [consent]
- * @property {Array<Record<string, unknown> & { type: string }>} [triggers]
- * @property {Record<string, number | string>} [frequency]
- * @property {string} [audience]
+ * @property {string} productId
+ * @property {{ kind: string, id: string, name?: string }} actor
+ * @property {string} action
+ * @property {string} target
+ * @property {string} at ISO-8601 UTC
  */
 
 export {};

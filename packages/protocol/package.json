@@ -1,7 +1,7 @@
 {
 	"name": "@ss/protocol",
 	"version": "0.1.0",
-	"description": "App Protocol primitives: Ed25519 keys/JWKS, launch tokens, client assertions, website keys, signed entitlement documents, registration handshake, event signatures, replay protection.",
+	"description": "Signing and verification shared by the Portal and every product: Ed25519 keys and JWKS, browser and server tokens, tickets, launches, client assertions, notices, the connect handshake and replay protection.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {

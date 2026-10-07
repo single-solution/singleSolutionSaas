@@ -1,75 +1,61 @@
-Describes the build before PLAN.md Part 0 (2026-10-07); where they differ, Part 0 wins.
-
 # Single Solution — developer guide
 
-Single Solution is a **Portal** plus independent **products** (micro-apps). Client websites use the products through
-a drop-in UI, a headless UI or a plain HTTP API. Each product is a separate app with its own hosting and deploy.
-The Portal handles merchants, websites, credits, keys and billing. Products handle the features.
+Single Solution is a **Portal** plus six separately hosted **products** (Accounts, Ecommerce, Chat, Notifications,
+Payments, Growth). Each product offers an API plus ready-made widgets and has its own setup dashboard. The Portal is
+where our admins manage merchants, websites, products on websites, tokens and credits, and where merchants see their
+websites, tokens, install code, usage and credits and open product dashboards.
 
-This file covers how to build. `PLAN.md` covers what is built and why.
+This file covers how to build. `PLAN.md` Part 0 is the binding plan: what is built and why.
 
 ## Repository
 
-| Folder      | What it is                                                               | Deployed?                     |
-| ----------- | ------------------------------------------------------------------------ | ----------------------------- |
-| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API          | Yes, one deployment           |
-| `products/` | The **products** we sell (`chatbot`, `coupons`, `loyalty`, …)            | Yes, one deployment each      |
-| `packages/` | **Shared code** used by the Portal and the products (published packages) | No, built into the apps above |
-| `e2e/`      | **System tests**: every product against the real Portal (`@ss/e2e`)      | No                            |
+| Folder      | What it is                                                                                                 | Deployed?                     |
+| ----------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `platform/` | The **Portal**: merchant console, admin console (`/admin`), API                                            | Yes, one deployment           |
+| `products/` | The **products**. Today only `products/chatbot`, the starting point for Chat (left out of CI until step 8) | Yes, one deployment each      |
+| `packages/` | The **shared kit** used by the Portal and the products (published packages)                                | No, built into the apps above |
+| `e2e/`      | **System tests**: products against the real Portal (`@ss/e2e`)                                             | No                            |
+| `parked/`   | The old product folders, kept for reference until their replacement ships (PLAN 0.12 step 4)               | No, outside the workspace     |
 
 ### Each folder is its own repository
 
 Everything lives in one repository for now, but every **unit** — `platform/`, each `products/*`, each `packages/*`
-— is built as if it were a repository of its own, so it can be split out later with no code changes beyond swapping
-`workspace:^` ranges for published versions (`pnpm publish` does that for packages).
+— is built as if it were a repository of its own, so it can be split out later with no code change beyond swapping
+`workspace:^` ranges for published versions.
 
-- A unit never imports another unit by path. It depends on it as a package (`@ss/ui`, `@ss/cli`,
-  `@ss/platform/testing`, …) listed in its own `package.json` with a `workspace:^` range. Test helpers that other
-  units need are public exports (`@ss/contracts/testing`, `@ss/ui/testing`, the `@ss/cli` API).
-- A unit has its own tooling config built from `@ss/config` (`eslint.config.js`, `tsconfig.json`,
-  `vitest.config.js`, the `prettier` key), its own scripts (`check`, `test`, `lint`, `typecheck`, `format:check`;
-  `dev`/`build`/`start` for deployables), its own README, `.gitignore` and, for deployables, `.env.example` and
-  `vercel.json`. Its coverage thresholds are met by its own tests.
-- Tests that need two or more deployables (a product against the real Portal) live in `e2e/`, never in a unit.
-- `ss app validate` refuses a product import or stylesheet reference that leaves the product folder
-  (`imports.outside`), and checks the package wiring.
-- Packages are published as written (JavaScript with JSDoc). `pnpm pack` / `pnpm publish` first run `prepack`
-  (`build:types`: `tsc` writes `.d.ts` files from the JSDoc into `types/`), and `publishConfig.exports` adds the
-  `types` condition, so a consumer outside the monorepo type-checks against the published package. In the monorepo
-  the sources are read directly.
-- The root only orchestrates: workspace scripts, CI and the docs.
+- A unit never imports another unit by path. It depends on it as a package listed in its own `package.json`
+  (`workspace:^`). Test helpers other units need are public exports (`@ss/app-kit/testing`, `@ss/contracts/testing`,
+  `@ss/ui/testing`, `@ss/platform/testing`, the `@ss/cli` API).
+- A unit has its own tooling config built from `@ss/config`, its own scripts (`check`, `test`, `lint`, `typecheck`,
+  `format`, `format:check`; `dev`/`build`/`start` for deployables, `validate` for products), its own README,
+  `.gitignore` and, for deployables, `.env.example` and `vercel.json`. Its coverage thresholds (90 % lines, 90 %
+  functions, 85 % branches) are met by its own tests.
+- Tests that need two or more deployables live in `e2e/`.
+- Packages are published as written (JavaScript with JSDoc); `prepack` writes `.d.ts` files from the JSDoc.
+- The root only orchestrates: workspace scripts, CI and the docs. `parked/` is outside the workspace, CI and the
+  root scripts.
 
-To split a unit: copy its folder into a new repository, replace each `workspace:^` with the published version, add
-the repository files the root provides today (`.nvmrc`, a `pnpm-workspace.yaml` with the `allowBuilds` list, a CI
-workflow), then `pnpm install && pnpm check` (and `pnpm build` for a deployable).
+## Shared kit
 
-Shared packages:
-
-| Package            | Use it for                                                                                     |
-| ------------------ | ---------------------------------------------------------------------------------------------- |
-| `@ss/app-kit`      | **Every product is built on this.** Portal connection, keys, billing, client resources, events |
-| `@ss/contracts`    | The shared formats: manifest, entitlement document, events, error problems                     |
-| `@ss/cli` (`ss`)   | Create, validate and build a product (`ss app init`, `ss app validate`, `ss pack build`)       |
-| `@ss/web`          | The script a client website adds to load products on its pages                                 |
-| `@ss/ui`           | Shared React components and theme                                                              |
-| `@ss/entitlements` | Works out what a website may use (plans, elements, features, limits)                           |
-| `@ss/rules`        | The small condition language (`rules@1`) used in settings                                      |
-| `@ss/protocol`     | Signing and verifying keys, launches, entitlement documents and events                         |
-| `@ss/net`          | Safe outbound HTTP (blocks private networks, pins DNS)                                         |
-| `@ss/config`       | The shared tooling: ESLint, TypeScript, Prettier and Vitest presets, the test MongoDB setup    |
-
-Each folder has its own `README.md` with its reference. `packages/app-kit/API.md` is the binding product API.
+| Package            | What it holds                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `@ss/protocol`     | Signing: browser and server tokens, tickets, launches, notices, client assertions and the connect handshake                              |
+| `@ss/contracts`    | The product manifest, settings schemas, the Portal ↔ product shapes, business.json, problem codes and ids                                |
+| `@ss/app-kit`      | Everything a product needs: connect, status cache, notices, reports, tokens, tickets, settings, connections, dashboard API, widget mount |
+| `@ss/entitlements` | Money units (millicredits), UTC hours and hashing used by the Portal's ledger                                                            |
+| `@ss/net`          | Safe outbound calls to addresses a merchant or admin entered                                                                             |
+| `@ss/ui`           | Console and dashboard components (light and dark)                                                                                        |
+| `@ss/web`          | Small browser helpers a product may bundle into its own `widget.js`                                                                      |
+| `@ss/rules`        | The `rules@1` expression language, optional inside a product                                                                             |
+| `@ss/cli`          | `ss app init`, `ss app validate`, `ss app assets`                                                                                        |
+| `@ss/config`       | Shared ESLint, TypeScript, Prettier and Vitest config                                                                                    |
 
 ## Setup
 
-Needs Node 22+ (`.nvmrc`) and pnpm 11. Each deployable has a short `.env.example`: the Portal needs only its database
-and file storage, a product its database and `CONNECT_SECRET`.
+Needs Node 22+ (`.nvmrc`) and pnpm 11.
 
 ```bash
 pnpm install
-```
-
-```bash
 pnpm check
 ```
 
@@ -80,268 +66,90 @@ in-memory MongoDB, so they need no database.
 | Command (from the root)                      | What it runs                                                         |
 | -------------------------------------------- | -------------------------------------------------------------------- |
 | `pnpm check`                                 | the root files' format check, then every unit's `check`              |
-| `pnpm --filter <unit> check`                 | one unit, e.g. `pnpm --filter @ss/product-loyalty check`             |
+| `pnpm --filter <unit> check`                 | one unit, e.g. `pnpm --filter @ss/app-kit check`                     |
 | `pnpm test` / `pnpm lint` / `pnpm typecheck` | that step in every unit                                              |
 | `pnpm format` / `pnpm format:check`          | Prettier in every unit and on the root files                         |
 | `pnpm test:all`                              | every unit's tests in one Vitest run (projects), sharing one MongoDB |
 | `pnpm validate`                              | `ss app validate` in every product                                   |
 
-Inside a unit's folder the same scripts run that unit alone (`pnpm check`, `pnpm test`, …).
-
 Run the Portal locally (from `platform/`):
 
 ```bash
 pnpm db:memory
-```
-
-```bash
 pnpm env:dev > .env.local && pnpm dev
 ```
 
 The Portal runs on http://localhost:4000. Open http://localhost:4000/login and create the first admin (name, e-mail,
-password): you become the Owner. Keys and secrets are generated in the database on first start.
+password): you become the Owner.
 
 ## Building a product
 
 ```bash
-pnpm exec ss app init products/my-app --kind service --slug my_app --name "My App"
+pnpm exec ss app init products/<id> --id <id> --name "<Name>"
+pnpm exec ss app validate products/<id>
 ```
 
-Add `--minimal` to start without the sample feature. A product's settings are its own database (`MONGODB_URI`;
-empty in development = in memory) and `CONNECT_SECRET` (any random string of at least 32 characters). Run the Portal
-(above) and the product (`pnpm dev`, port 3000), then connect them like in production: Admin → Apps → **Add product**
-with `http://localhost:3000` and the secret (plain http to localhost is allowed outside production with
-`OUTBOUND_DEV_ALLOW_HOSTS=localhost,127.0.0.1`), switch it to **Active**, and subscribe a test website from the merchant
-console.
-
-Before a product ships:
-
-```bash
-pnpm exec ss app validate products/my-app
-```
-
-Validate checks the files: manifest, layout, imports, strings, API docs and package wiring.
-
-The browser part of an element pack, and the widgets (mode-A `headless/` + `ui/` modules) of a service product, are
-built with:
-
-```bash
-pnpm exec ss pack build products/my-app
-```
-
-`build` bundles the manifest's modules (minified ES modules, shared chunks) and the string catalogs into `dist/pack`
-with a `descriptor.json` (every asset's path, SHA-256 and size). Upload that folder in Admin → Apps: **Add pack** for a
-new pack, **Upload pack version** on a pack, **Upload widgets** on a connected service product. The Portal checks every
-asset against the descriptor, serves them from `/w/packs/…` and recompiles the script of every subscribed website.
-
-### Product layout
-
-```
-manifest.json    what the product is: elements, features, plans, prices (credits per hour), events, resources
-openapi.json     the HTTP API (every route documented)
-schemas/         one *.features.json per element: its settings and their limits
-strings/         all user-facing text, per language (en.json first; elements slice it with stringKeys). No text in code.
-core/            pure logic: plain functions, data in, data out. No I/O, no DOM, no network.
-adapters/        the only code that talks to the outside: database, AI, messaging, storage, Portal
-api/             routes: read input, call core, use adapters, return a result
-headless/        UI logic without the DOM, for merchants who build their own UI
-ui/              drop-in UI that renders headless/ with the website's theme
-app/             thin Next.js wiring only (routes call app-kit)
-jobs/            trigger-run handlers (on an event, on read, or from a dashboard button); nothing is scheduled
-tests/           Vitest tests (the Portal end-to-end test lives in e2e/)
-eslint.config.js, tsconfig.json, vitest.config.js   tooling, built from @ss/config
-docs/guide.md    short guide for developers using the product
-```
-
-Imports only go one way: `app → api → core/adapters`, and `ui → headless → core`. `core/` imports nothing with side
-effects. `ss app validate` enforces this.
+`ss app init` generates the product standard of PLAN 0.4.13: `core/` (pure logic), `api/` (routes), `adapters/`
+(merchant database, providers, the Portal), `ui/` (widgets), `app/` (the dashboard), `strings/` (English texts),
+`schemas/` (settings schemas), `tests/` and `docs/`, plus `manifest.json`, `openapi.json` and a `.env.example` listing
+exactly `MONGODB_URI`, `CONNECT_SECRET` and `ENCRYPTION_KEY`. Imports go from api to core or adapters, from adapters
+to core and from ui to core, never the reverse; `ss app validate` enforces this. Every API route belongs to exactly one
+feature and works only while that feature is on. Products start with every feature at price 0 and off; an Owner sets
+prices in the product's Prices screen.
 
 ## How we write code
 
-**Language: JavaScript (ESM), typed with JSDoc and checked by TypeScript (`tsc --checkJs --strict`).** This gives the
-safety of TypeScript with no build step. Files run as written, stack traces match the source, and there is nothing to
-compile. Use `.js` files with JSDoc types; do not add `.ts` files.
-
-**Functional and simple.**
-
-- Functions and plain objects only. No classes, `this` or inheritance (lint enforces this).
-- Build things with factories: `createX({ deps })` returns an object of functions. Pass dependencies in (db, clock,
-  random, fetch) and never import them as globals. This makes everything testable without mocks.
-- Do not change inputs. Return new values instead (`no-param-reassign`, `prefer-const`).
-- Keep logic pure in `core/`, and push I/O to the edges (`adapters/`, `api/`).
-- Expected failures are values, not exceptions. Return a result or an RFC 9457 problem with
-  `problem(code, detail)`. Throw only for bugs.
-- Small files, small functions, clear names. Write a comment only when the _why_ is not obvious.
-- No `console`. Use the injected logger, which redacts secrets.
-- Add a dependency only when it removes real work. Prefer Node built-ins (`crypto`, `fetch`, `URL`).
-
-**Nothing hardcoded.**
-
-- Text goes in `strings/`.
-- Prices, limits and switches go in `manifest.json` and `schemas/`.
-- Colours come from theme tokens (`--ss-*`).
-- URLs and secrets come from environment variables.
-- No country, currency, language or time zone is assumed. Use the website's settings from the entitlement document.
+- **JavaScript (ESM), typed with JSDoc and checked by TypeScript** (`tsc --checkJs --strict`). No `.ts` files.
+- **Functional and simple**: functions and plain objects only (no classes, `this` or inheritance; lint enforces
+  this); factories `createX({ deps })` with injected db, clock, randomness and fetch; inputs never changed; logic pure
+  in `core/`, I/O at the edges.
+- Expected failures are values: RFC 9457 problems with a stable code. Throw only for bugs.
+- No `console`: use the injected logger, which redacts secrets.
+- **Nothing hardcoded**: texts in `strings/` (every widget word is editable per website), settings in `schemas/`,
+  colours from the theme, secrets from environment variables. No country, currency, language or time zone is
+  assumed: business basics come from the website's `business.json`, the rest from the product's settings.
 
 ## Security rules
 
-1. **Clients bring their own resources.** Products never hold client data or credentials. They get the client's
-   database, storage, AI or messaging connection from app-kit (`data.forWebsite`, `connectors`), only when needed and
-   only for a short time.
-2. **Every request is verified.**
-   - Website keys (`pk_` for browsers, `sk_` for servers) are verified offline by app-kit and only work on their own
-     domain.
-   - Event deliveries from the Portal are signed.
-   - Never accept a key, website id or customer id from the request body without app-kit checking it.
-3. **Elements and features are enforced on the server.** app-kit reads the signed entitlement document. An element
-   that is switched off answers 403 in every mode, whatever the UI does.
-4. **Outbound calls** go through `product.outbound.fetch` (`@ss/net`). It blocks internal addresses and DNS
-   rebinding.
-5. **Validate all input** with the schemas, and cap sizes. Never build queries from raw input.
-6. **Secrets** live only in environment variables, never in git, logs or responses. `.env*` files are git-ignored.
-7. **Money** is integer millicredits (1 credit = 1000). Usage is reported per started hour and is idempotent. Never
-   use floats for money.
+1. **Merchants bring their own resources.** Business data lives only in the merchant's own database, connected in each
+   product's Connections. Connection values are encrypted with the product's `ENCRYPTION_KEY` and never returned.
+2. **Every request is verified.** Browser tokens work only from `https://<exact domain>` and localhost; server tokens
+   are refused when sent with an Origin header; tickets work only from the origin they were made for. Notices from the
+   Portal are signed.
+3. **Features are enforced on the server**: a route of a feature that is off answers 403 `feature_off`.
+4. **Outbound calls** to any address a merchant or admin entered go through `@ss/net`.
+5. **Secrets** live only in environment variables and encrypted fields, never in git, logs or responses.
+6. **Money** is integer millicredits (1 credit = 1000); only the Portal's clock counts.
 
 ## Fast and light
 
-- Keep the browser UI small: minified ES modules loaded lazily by the Loader, shared code in chunks loaded once.
-- Prefer static and cacheable responses. API responses that hold private data are `no-store`.
-- **Nothing runs on its own** (PLAN F.19): no crons, no timers, no polling, no periodic or throttled background loops.
-  Work happens inside, or right after (`after()`), the request or event that caused it, and only for what that request
-  touched. Usage and events a request produced are sent right after it; a failed send retries on the next request.
-- Anything with an expiry is treated as expired when read and cleaned up when touched; data that can simply disappear
-  gets a MongoDB TTL index. Work a merchant must start (a crawl, a catch-up) is a dashboard button.
-- Use events (`events.publish`, consumed through `/.well-known/ss-events`) and short-lived caches.
-- Use one indexed query rather than many. Every query must have an index declared in `adapters/db.js`.
+- **Nothing runs on its own**: no crons, timers or background loops. Work happens inside, or right after, the request
+  that caused it. Products keep each website's status for at most 5 minutes; the Portal settles a merchant when a
+  product fetches a status or a Portal page shows that merchant.
+- Anything with an expiry is judged when read; data that can simply disappear gets a MongoDB TTL index.
 
 ## Testing
 
-- Vitest, with coverage targets of 90% lines and functions and 85% branches, met by each unit on its own
-  (`defineUnitConfig` in `@ss/config/vitest`).
-- Test `core/` with plain inputs and outputs. Test `api/` through the real HTTP handler with app-kit's fake Portal
-  (`@ss/app-kit/testing`) and the in-memory MongoDB (`mongo: true` in the unit's `vitest.config.js`).
-- Every product has a system test against the real Portal in `e2e/tests/<product>-portal.test.js` (it imports
-  `@ss/platform/testing` and the product's `./platform` and `./routes` exports, served through app-kit).
-
-```bash
-pnpm --filter @ss/product-my-app test
-```
-
-```bash
-pnpm --filter @ss/e2e test
-```
+- Vitest, coverage 90 % lines and functions and 85 % branches per unit.
+- Test `core/` with plain inputs and outputs; test `api/` through the real handler with the kit's fake Portal
+  (`@ss/app-kit/testing`) and the in-memory MongoDB.
+- `e2e/` checks the Portal ↔ product contract against the real Portal with a test product generated by
+  `ss app init` (`e2e/fixtures/`).
 
 ## Deploying (any Node 22 host + MongoDB Atlas)
 
-The Portal and every service product run on **any Node 22 host** that runs Next.js (a server with `next build` +
-`next start`, a container, or a serverless platform), on any domain. The environment holds only database and storage
-connections; every other key and secret is generated inside the apps (a product also gets its `CONNECT_SECRET`). The Portal's
-address is simply the one it is opened at. One MongoDB Atlas cluster (M0 works) serves all of them. Each deployable is one folder:
+Deploying is done by the owner. Each deployable has its own database and its own environment variables (PLAN 0.11),
+set for Production only; preview deployments never use the production database.
 
-| Deployable              | Folder                                | What it is                                                                                                                                |
-| ----------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Portal                  | `platform`                            | Merchant console, admin console, API, website script delivery                                                                             |
-| One per service product | `products/<name>`                     | aftersales, alerts, catalog, chatbot, checkout, configurator, coupons, deals, grades, loyalty, orders, reviews, search, signups, wishlist |
-| —                       | `products/pdp`, `products/storefront` | **Not deployed.** These are element packs, uploaded into the Portal from Admin → Apps (step 5)                                            |
+| Deployable   | Variables                                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| Portal       | `MONGODB_URI`, `PORTAL_URL` (its final https address), `ENCRYPTION_KEY` (≥ 32 random characters)      |
+| Each product | `MONGODB_URI`, `CONNECT_SECRET` (≥ 32 random characters), `ENCRYPTION_KEY` (≥ 32, different for each) |
 
-On Vercel, for example, create one project per deployable from the same repository with its folder as **Root
-Directory**.
+1. Deploy the Portal (Vercel root `platform/`), open `/login` and create the first Owner straight away.
+2. Deploy a product (Vercel root `products/<id>`), then in the Portal: Products → **Add product** with the product's
+   URL and its `CONNECT_SECRET`, then **Set active**.
+3. Add a merchant, a website and the product on the website; the merchant copies the install code and tokens from
+   the website's **Install and tokens** tab.
 
-**Production and preview never share a database** (PLAN 0.12 step 1). Set each project's `MONGODB_URI` (and every
-other variable) for the **Production** environment only. **Preview** deployments either get their own variables
-pointing at a separate database and database user (for example `ss_portal_preview`), or none at all, so a preview
-build fails at start instead of touching production data. Never tick Preview on a production variable. No `.env` file
-with real values is kept in the repository folder: `.gitignore` ignores every `.env*` file except `.env.example`.
-
-**Vercel Hobby limits and how each is met** (measured on `next build`; kept as low as possible, not just under):
-
-- **Functions per deployment (limit 12).** Each product deploys **2**: one route handler (`app/api/[...path]`, which
-  `next.config.js` rewrites `/v1/*`, `/.well-known/*`, `/sso` and product paths to, URLs
-  unchanged) and one dashboard page (`app/dashboard/[[...section]]`); `/` is static and there is no proxy (the route
-  handler answers 503 `misconfigured` itself, the dashboard shows the reasons). The **Portal** deploys **5**: the API
-  catch-all (also `/w/*`, `/.well-known/jwks.json`), one console page, one admin page,
-  `_not-found` and the CSP-nonce proxy. `ss app validate` fails a product with more than 2 server entry points or with
-  `outputFileTracingIncludes`; runtime files are bundled through the generated `app/_lib/assets.js` (`prebuild`).
-- **Function size (limit 250 MB).** Traced server files per function: products 4.1–4.4 MB, Portal 4.5 MB (API) and
-  5.1 MB (each console page); the proxy 1.6 MB. No test or CLI code is traced.
-- **Request body (limit 4.5 MB).** Every body cap is at most 3.9 MB (JSON default 1 MB; CSV/JSON imports 3.9 MB; Portal
-  pack uploads 2 MB); photos and files go straight to storage with presigned URLs.
-- **Duration.** No `maxDuration` is needed: work after a response is bounded (Portal jobs 8 s,
-  staff "Retry now" 8 s and 100 deliveries, products one batch per queue and website), outbound calls time out in
-  5–15 s, and there are no crons.
-
-**How it works** (PLAN F.19: event-driven only):
-
-- **Nothing to schedule.** No deployable has a cron (`ss app validate` refuses one), no
-  `CRON_SECRET`, no timer, no polling and no background loop. Running nothing costs nothing.
-- **Work happens when something happens.** An ingested event is delivered right after the request that ingested it; a
-  failed delivery is retried when the next event goes to that product or the product next calls the Portal (or staff
-  press "Retry now"). Billing is checked on use: opening a Portal page that shows a merchant charges its
-  hours since the last check, writes complete UTC days and works out low balance, grace and stop (PLAN 0.5.7). Products
-  treat expiries on read, clean up when rows are touched (or by TTL indexes) and put merchant-started work behind
-  dashboard buttons. Connectors are checked when saved or resolved.
-- **Offline documents.** A product holding a still-valid entitlement document (10 minutes, plus its cache) may keep
-  serving until it next refreshes it; a change therefore takes effect within minutes, without any timer.
-- **Small connection pools.** About 15 deployments share M0's ~500 connections, so pools are a fixed 5 per instance (Portal
-  and products), merchant databases 3, and clients are cached on
-  `globalThis` and reused across requests.
-
-### 1. Atlas
-
-Create **one cluster** (a replica set, so transactions work). Give every deployable its own database and its own
-database user: `ss_portal` for the Portal, and `ss_<product>` for each product's small control database. Client data
-never goes here; merchants connect their own databases in the Portal. Allow your hosts' addresses under **Network
-Access** (`0.0.0.0/0` for hosts without fixed IPs; every user has its own password and only its own database).
-
-### 2. Storage for the Portal's delivery files
-
-Website scripts and pack files are stored in an S3-compatible bucket (Cloudflare R2, AWS S3, …). Create one bucket
-and an access key limited to it. **Optional to start:** the Portal runs with only `MONGODB_URI`, `PORTAL_URL` and `ENCRYPTION_KEY`; until the `STORAGE_*`
-variables are set, only the website-script and pack routes answer 503.
-
-### 3. Portal
-
-Set `MONGODB_URI`, `PORTAL_URL` (the Portal's https address, exactly the one products pinned) and `ENCRYPTION_KEY`
-(random, at least 32 characters) as production-only variables → deploy → open `<PORTAL_URL>/login` → **create the
-first admin**. You are now the Owner; turn on two-step sign-in in **My account**. Do it right after deploying: until
-an admin exists, whoever opens the login first becomes the Owner.
-Set `NODE_ENV=production` where the host does not set it, and the storage variables when you want website scripts:
-
-| Variable                    | Value                                                                       |
-| --------------------------- | --------------------------------------------------------------------------- |
-| `MONGODB_URI`               | the Atlas URI for `ss_portal`                                               |
-| `PORTAL_URL`                | the Portal's address, e.g. `https://portal.example.com` (no path)           |
-| `ENCRYPTION_KEY`            | random, at least 32 characters (`openssl rand -base64 32`)                  |
-| `STORAGE_ENDPOINT`          | the bucket's S3 endpoint (R2: `https://<account>.r2.cloudflarestorage.com`) |
-| `STORAGE_REGION`            | `auto` (the default; the bucket's region on AWS)                            |
-| `STORAGE_BUCKET`            | the bucket from step 2                                                      |
-| `STORAGE_ACCESS_KEY_ID`     | the bucket's access key                                                     |
-| `STORAGE_SECRET_ACCESS_KEY` | its secret                                                                  |
-
-Mail is set later in Admin → Settings. Indexes and migrations run by themselves.
-
-### 4. Each service product
-
-Set `MONGODB_URI` (its Atlas database from step 1) and `CONNECT_SECRET` (a random string of at least 32 characters,
-e.g. `openssl rand -hex 32`) and deploy. Then Portal → **Admin → Apps → Add product** → the product URL and that
-secret → **Connect**. The product generates its key and pins the Portal; switch it to **Active** in the Portal, and
-merchants can subscribe. If it has widgets, build them (`ss pack build products/<name>`) and **Upload widgets** on its
-app page. The **Portal** deployment is unchanged.
-
-### 5. Element packs (pdp, storefront)
-
-Packs have no server; their files are uploaded into the Portal and served from it:
-
-```bash
-pnpm exec ss pack build products/pdp
-```
-
-Then Admin → Apps → **Add pack** → pick `products/pdp/dist/pack` → switch it to **Active**. Repeat for
-`products/storefront`. A new version is the same upload (**Upload pack version** on the app page).
-
-### After launch
-
-- Indexes and migrations apply themselves on the first request after a deploy. Moving a product or
-  reconnecting: Add product again with its URL and `CONNECT_SECRET` (same URL = same app). To lock a Portal out,
-  change `CONNECT_SECRET` and connect again from the right Portal.
-- There is no cron or worker to set up anywhere, on any host.
+Changing `PORTAL_URL` means reconnecting every product (Products → Reconnect).

@@ -1,0 +1,141 @@
+/**
+ * The public docs at `/docs` (PLAN 0.4.10): per-feature guides with their routes and widgets, the widget snippets,
+ * the ticket server snippet (Node.js fetch and cURL), the business.json template, the localhost note and the API
+ * reference from `openapi.json`. Plain HTML; every value is escaped.
+ * @module
+ */
+import { BUSINESS_JSON_TEMPLATE } from '@ss/contracts';
+import guide from '../docs/guide.json' with { type: 'json' };
+import openapi from '../openapi.json' with { type: 'json' };
+import { WIDGET_ATTRIBUTE, WIDGET_GLOBAL } from '../core/widgets.js';
+import { manifest } from '../adapters/product.js';
+
+/** @param {unknown} value */
+const escape = (value) => String(value).replace(/[&<>"']/g, (ch) => `&#${/** @type {string} */ (ch).charCodeAt(0)};`);
+
+/** @param {string} code */
+const block = (code) => `<pre><code>${escape(code)}</code></pre>`;
+
+/** @param {string} text */
+const para = (text) => `<p>${escape(text)}</p>`;
+
+/** @typedef {{ 'x-ss-auth'?: string, 'x-ss-feature'?: string, 'x-ss-permission'?: string, summary?: string }} Operation */
+
+/** Every documented operation: `[method, path, operation]`. */
+const operations = () =>
+	Object.entries(/** @type {Record<string, Record<string, Operation>>} */ (/** @type {unknown} */ (openapi.paths))).flatMap(
+		([path, methods]) =>
+			Object.entries(methods).map(([method, operation]) => /** @type {const} */ ([method.toUpperCase(), path, operation])),
+	);
+
+/** @param {ReturnType<typeof operations>} rows */
+const routeTable = (rows) =>
+	`<table><thead><tr><th>Route</th><th>Auth</th><th>Feature</th></tr></thead><tbody>${rows
+		.map(
+			([method, path, operation]) =>
+				`<tr><td><code>${escape(`${method} ${path}`)}</code>${operation.summary ? ` ${escape(operation.summary)}` : ''}</td><td>${escape(
+					`${operation['x-ss-auth'] ?? ''}${operation['x-ss-permission'] ? ` (${operation['x-ss-permission']})` : ''}`,
+				)}</td><td>${escape(operation['x-ss-feature'] ?? 'always')}</td></tr>`,
+		)
+		.join('')}</tbody></table>`;
+
+/**
+ * The docs page.
+ * @param {{ base: string }} input the product's address (snippets point at it)
+ * @returns {string}
+ */
+export const renderDocs = ({ base }) => {
+	const features = /** @type {Record<string, string[]>} */ (/** @type {unknown} */ (guide.features));
+	/** @param {'visitor' | 'admin'} kind */
+	const places = (kind) =>
+		manifest.widgets
+			.filter((widget) => widget.kind === kind)
+			.map((widget) => `<div ${WIDGET_ATTRIBUTE}="${widget.key}"></div>`);
+	const visitorSnippet = [
+		`<script src="${base}/widget.js" data-token="YOUR_BROWSER_TOKEN" async></script>`,
+		...places('visitor'),
+	].join('\n');
+	const adminSnippet = [
+		`<script src="${base}/widget.js"></script>`,
+		...places('admin'),
+		'<script>',
+		`  window.${WIDGET_GLOBAL}.admin({`,
+		'    // your own server route (below): it checks the signed-in user, then asks for a ticket',
+		"    getTicket: () => fetch('/api/ss-ticket', { method: 'POST' }).then((response) => response.json()),",
+		'  });',
+		'</script>',
+	].join('\n');
+	const permissions = manifest.permissions.map((permission) => permission.key);
+	const ticketBody = {
+		user: { id: 'u_1', name: 'Sam Staff', email: 'sam@example.com' },
+		permissions,
+		origin: 'https://admin.example.com',
+	};
+	const nodeSnippet = [
+		"// your server, after checking the user's sign-in and role (Node.js 18+, also inside a Next.js route handler)",
+		`const response = await fetch('${base}/v1/tickets', {`,
+		"  method: 'POST',",
+		"  headers: { authorization: `Bearer ${process.env.SS_SERVER_TOKEN}`, 'content-type': 'application/json' },",
+		'  body: JSON.stringify({',
+		'    user: { id: user.id, name: user.name, email: user.email },',
+		`    permissions: ${JSON.stringify(permissions)},`,
+		"    origin: 'https://admin.example.com', // the address of your admin page",
+		'  }),',
+		'});',
+		'const { ticket, expiresAt } = await response.json(); // answer this to getTicket()',
+	].join('\n');
+	const curlSnippet = [
+		`curl -X POST '${base}/v1/tickets' \\`,
+		'  -H "Authorization: Bearer $SS_SERVER_TOKEN" \\',
+		"  -H 'Content-Type: application/json' \\",
+		`  -d '${JSON.stringify(ticketBody)}'`,
+	].join('\n');
+	const rows = operations();
+	const featureSections = manifest.features.map((feature) => {
+		const widgets = manifest.widgets.filter((widget) => widget.feature === feature.key);
+		return [
+			`<section id="feature-${escape(feature.key)}"><h3>${escape(feature.name)}</h3>`,
+			para(feature.description),
+			...(features[feature.key] ?? []).map(para),
+			`<ul>${widgets.map((widget) => `<li>${escape(widget.kind)} widget <code>${escape(`${WIDGET_ATTRIBUTE}="${widget.key}"`)}</code></li>`).join('')}</ul>`,
+			routeTable(rows.filter(([, , operation]) => operation['x-ss-feature'] === feature.key)),
+			'</section>',
+		].join('');
+	});
+	return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escape(guide.title)}</title>
+<style>
+body { font: 16px/1.6 system-ui, sans-serif; max-width: 860px; margin: 0 auto; padding: 24px 16px; color: CanvasText; background: Canvas; }
+pre { overflow-x: auto; padding: 12px; border: 1px solid GrayText; border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; } th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid GrayText; }
+</style>
+</head>
+<body>
+<h1>${escape(guide.title)}</h1>
+${para(guide.intro)}
+<p><strong>Local testing.</strong> ${escape(guide.localhost)}</p>
+<h2>Features</h2>
+${featureSections.join('\n')}
+<h2>Install the widgets</h2>
+${para(guide.install)}
+${block(visitorSnippet)}
+<h2>Admin widgets and tickets</h2>
+${para(guide.admin)}
+${block(adminSnippet)}
+${para(guide.tickets)}
+${block(nodeSnippet)}
+${block(curlSnippet)}
+<h2>business.json</h2>
+${para(guide.business)}
+${block(JSON.stringify(BUSINESS_JSON_TEMPLATE, null, 2))}
+<h2>API reference</h2>
+${para(guide.api)}
+${routeTable(rows)}
+</body>
+</html>
+`;
+};

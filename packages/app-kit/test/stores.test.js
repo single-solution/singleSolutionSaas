@@ -1,229 +1,87 @@
+import { MongoClient } from 'mongodb';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createMemoryStores, createMongoStores } from '../src/index.js';
-import { createClock } from './helpers.js';
-import { startMongo } from './mongo.js';
+import { createMemoryStore, createMongoStore } from '../src/index.js';
+import { freshDb } from './helpers.js';
 
-/** @type {Awaited<ReturnType<typeof startMongo>>} */
-let mongo;
-let dbCounter = 0;
-
+/** @type {MongoClient} */
+let client;
 beforeAll(async () => {
-	mongo = await startMongo();
-}, 120_000);
-
+	client = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
+});
 afterAll(async () => {
-	await mongo?.stop();
+	await client.close();
 });
 
-const factories = {
-	memory: (/** @type {() => number} */ now) => createMemoryStores({ now }),
-	mongo: (/** @type {() => number} */ now) => {
-		dbCounter += 1;
-		return createMongoStores({ db: mongo.client.db(`stores_${dbCounter}`), now });
-	},
-};
+/** @type {Array<[string, (now: () => number) => import('../src/index.js').Store]>} */
+const kinds = [
+	['memory', (now) => createMemoryStore({ now })],
+	['mongo', (now) => createMongoStore({ db: client.db(freshDb('store')), now })],
+];
 
-const record = (/** @type {string} */ key) => ({
-	idempotencyKey: key,
-	websiteId: 'web_1',
-	subscriptionId: 'sub_1',
-	unit: 'redemption',
-	quantity: 1,
-	occurredAt: '2026-10-01T10:00:00.000Z',
-});
-
-describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
-	it('replay: first sight false, then true, expiry and forget', async () => {
-		const clock = createClock();
-		const { replay, nonce } = factory(clock.now);
-		expect(await replay.seen('a', clock.now() + 1000)).toBe(false);
-		expect(await replay.seen('a', clock.now() + 1000)).toBe(true);
-		expect(await nonce.seen('a', clock.now() + 1000)).toBe(false);
-		clock.advance(2000);
-		expect(await replay.seen('a', clock.now() + 1000)).toBe(false);
-		await replay.forget('a');
-		expect(await replay.seen('a', clock.now() + 1000)).toBe(false);
+describe.each(kinds)('%s store', (_name, make) => {
+	it('gets, puts, inserts if absent and deletes documents', async () => {
+		let t = 1000;
+		const store = make(() => t);
+		expect(await store.get('state', 'a')).toBeNull();
+		expect(await store.insert('state', 'a', { v: 1 })).toBe(true);
+		expect(await store.insert('state', 'a', { v: 2 })).toBe(false);
+		expect(await store.get('state', 'a')).toEqual({ v: 1 });
+		await store.put('state', 'a', { v: 3, nested: { x: [1] } });
+		expect(await store.get('state', 'a')).toEqual({ v: 3, nested: { x: [1] } });
+		await store.delete('state', 'a');
+		expect(await store.get('state', 'a')).toBeNull();
+		// expired documents vanish and can be taken over
+		await store.put('sessions', 's1', { subject: 'x', expiresAt: 2000 });
+		expect(await store.get('sessions', 's1')).toMatchObject({ subject: 'x' });
+		t = 2000;
+		expect(await store.get('sessions', 's1')).toBeNull();
+		expect(await store.insert('sessions', 's1', { subject: 'y', expiresAt: 5000 })).toBe(true);
+		expect(await store.get('sessions', 's1')).toMatchObject({ subject: 'y' });
 	});
 
-	it('settings insert once, read back and delete', async () => {
-		const { settings } = factory(Date.now);
-		expect(await settings.get('connection')).toBeNull();
-		expect(await settings.insert('connection', { appId: 'app_1', nested: { a: 1 } })).toBe(true);
-		expect(await settings.insert('connection', { appId: 'app_2' })).toBe(false);
-		expect(await settings.get('connection')).toEqual({ appId: 'app_1', nested: { a: 1 } });
-		await settings.delete('connection');
-		expect(await settings.get('connection')).toBeNull();
-		expect(await settings.insert('connection', { appId: 'app_3' })).toBe(true);
+	it('lists newest first by equality filters (arrays match members) and deletes by filter', async () => {
+		const store = make(() => 1000);
+		await store.put('changes', 'c1', { websiteId: 'w1', at: 1 });
+		await store.put('changes', 'c2', { websiteId: 'w1', at: 3 });
+		await store.put('changes', 'c3', { websiteId: null, at: 2 });
+		await store.put('changes', 'c4', { websiteId: 'w2', at: 4 });
+		expect((await store.list('changes', { websiteId: 'w1' })).map((d) => d.at)).toEqual([3, 1]);
+		expect((await store.list('changes', { websiteId: null })).map((d) => d.at)).toEqual([2]);
+		expect(await store.list('changes', { websiteId: 'w1' }, { limit: 1 })).toHaveLength(1);
+		await store.put('sessions', 's1', { subject: 'a', websiteIds: ['w1', 'w2'] });
+		await store.put('sessions', 's2', { subject: 'b', websiteIds: ['w3'] });
+		await store.put('sessions', 's3', { subject: 'old', websiteIds: ['w1'], expiresAt: 500 });
+		expect((await store.list('sessions', { websiteIds: 'w1' })).map((d) => d.subject)).toEqual(['a']);
+		expect(await store.deleteWhere('sessions', { websiteIds: 'w2' })).toBe(1);
+		expect(await store.deleteWhere('changes', { websiteId: 'w1' })).toBe(2);
+		expect(await store.list('changes', {})).toHaveLength(2);
 	});
 
-	it('entitlements keep the newest version', async () => {
-		const { entitlements } = factory(Date.now);
-		expect(await entitlements.get('w')).toBeNull();
-		expect(await entitlements.put('w', { token: 't2', version: 2, fetchedAt: 1 })).toBe(true);
-		expect(await entitlements.put('w', { token: 't1', version: 1, fetchedAt: 2 })).toBe(false);
-		expect(await entitlements.put('w', { token: 't2b', version: 2, fetchedAt: 3 })).toBe(true);
-		expect(await entitlements.get('w')).toEqual({ token: 't2b', version: 2, fetchedAt: 3 });
-		await entitlements.delete('w');
-		expect(await entitlements.get('w')).toBeNull();
-	});
-
-	it('usage queue: unique keys, leases, ack, retry, dead letter', async () => {
-		const clock = createClock();
-		const { usageQueue } = factory(clock.now);
-		expect(await usageQueue.enqueue(record('k1'))).toEqual({ inserted: true });
-		expect(await usageQueue.enqueue(record('k1'))).toEqual({ inserted: false });
-		await usageQueue.enqueue(record('k2'));
-		await usageQueue.enqueue(record('k3'));
-		const first = await usageQueue.lease({ now: clock.now(), limit: 2, leaseMs: 1000, owner: 'a' });
-		expect(first).toHaveLength(2);
-		expect(first[0]).toMatchObject({ websiteId: 'web_1', unit: 'redemption', quantity: 1, attempts: 0, status: 'pending' });
-		const second = await usageQueue.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'b' });
-		expect(second.map((r) => r.idempotencyKey)).toEqual(
-			['k1', 'k2', 'k3'].filter((k) => !first.some((r) => r.idempotencyKey === k)),
-		);
-		expect(await usageQueue.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'c' })).toEqual([]);
-		await usageQueue.ack([first[0]?.idempotencyKey ?? ''], { now: clock.now(), retainMs: 10_000 });
-		await usageQueue.retry([first[1]?.idempotencyKey ?? ''], {
-			now: clock.now(),
-			nextAttemptAt: clock.now() + 5000,
-			error: 'x',
-		});
-		await usageQueue.deadLetter([second[0]?.idempotencyKey ?? ''], { now: clock.now(), error: 'rejected' });
-		await usageQueue.ack([], { now: clock.now(), retainMs: 1 });
-		await usageQueue.retry([], { now: clock.now(), nextAttemptAt: 0, error: 'x' });
-		await usageQueue.deadLetter([], { now: clock.now(), error: 'x' });
-		await usageQueue.ack(['missing'], { now: clock.now(), retainMs: 1 });
-		await usageQueue.retry(['missing'], { now: clock.now(), nextAttemptAt: 0, error: 'x' });
-		await usageQueue.deadLetter(['missing'], { now: clock.now(), error: 'x' });
-		expect(await usageQueue.stats()).toEqual({ pending: 1, sent: 1, dead: 1 });
-		// sent records still dedupe
-		expect(await usageQueue.enqueue(record(first[0]?.idempotencyKey ?? ''))).toEqual({ inserted: false });
-		clock.advance(5000);
-		const retried = await usageQueue.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'd' });
-		expect(retried).toHaveLength(1);
-		expect(retried[0]).toMatchObject({ attempts: 1, lastError: 'x' });
-	});
-
-	it('queues lease only one website’s due records when asked', async () => {
-		const clock = createClock();
-		const { usageQueue, eventOutbox } = factory(clock.now);
-		await usageQueue.enqueue(record('w1'));
-		await usageQueue.enqueue({ ...record('w2'), websiteId: 'web_2' });
-		const only = await usageQueue.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'a', websiteId: 'web_2' });
-		expect(only.map((r) => r.idempotencyKey)).toEqual(['w2']);
-		await eventOutbox.enqueue({ id: 'e1', envelope: { id: 'e1', websiteId: 'web_1' } });
-		await eventOutbox.enqueue({ id: 'e2', envelope: { id: 'e2', websiteId: 'web_2' } });
-		const events = await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'a', websiteId: 'web_1' });
-		expect(events.map((e) => e.id)).toEqual(['e1']);
-	});
-
-	it('event outbox: unique ids, leases, ack drops the envelope, retry, retention', async () => {
-		const clock = createClock();
-		const { eventOutbox } = factory(clock.now);
-		const envelope = (/** @type {string} */ id) => ({ id, type: 'coupon_box.created@1', data: { n: 1 } });
-		expect(await eventOutbox.enqueue({ id: 'e1', envelope: envelope('e1') })).toEqual({ inserted: true });
-		expect(await eventOutbox.enqueue({ id: 'e1', envelope: envelope('e1') })).toEqual({ inserted: false });
-		await eventOutbox.enqueue({ id: 'e2', envelope: envelope('e2') });
-		await eventOutbox.enqueue({ id: 'e3', envelope: envelope('e3') });
-		const first = await eventOutbox.lease({ now: clock.now(), limit: 2, leaseMs: 1000, owner: 'a' });
-		expect(first).toHaveLength(2);
-		expect(first[0]).toMatchObject({ attempts: 0, status: 'pending', envelope: { type: 'coupon_box.created@1' } });
-		const second = await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'b' });
-		expect(second).toHaveLength(1);
-		expect(await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'c' })).toEqual([]);
-		await eventOutbox.ack([first[0]?.id ?? ''], { now: clock.now(), retainMs: 10_000 });
-		await eventOutbox.retry([first[1]?.id ?? ''], { now: clock.now(), nextAttemptAt: clock.now() + 5000, error: 'x' });
-		for (const op of /** @type {const} */ (['ack', 'retry'])) {
-			await /** @type {any} */ (eventOutbox)[op]([], { now: 0, retainMs: 1, nextAttemptAt: 0, error: 'x' });
-			await /** @type {any} */ (eventOutbox)[op](['missing'], { now: 0, retainMs: 1, nextAttemptAt: 0, error: 'x' });
-		}
-		expect(await eventOutbox.stats()).toEqual({ pending: 2, sent: 1 });
-		expect(await eventOutbox.enqueue({ id: first[0]?.id ?? '', envelope: envelope('x') })).toEqual({ inserted: false });
-		clock.advance(5000);
-		const retried = await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'd' });
-		expect(retried.map((e) => e.id)).toContain(first[1]?.id);
-		expect(retried.find((e) => e.id === first[1]?.id)).toMatchObject({ attempts: 1, lastError: 'x' });
-	});
-
-	it('revocations accumulate with the cursor', async () => {
-		const { revocations } = factory(Date.now);
-		expect(await revocations.get()).toEqual({ keyIds: [], cursor: null, syncedAt: null });
-		await revocations.add(['k1', 'k2'], { cursor: '2', syncedAt: 100 });
-		await revocations.add(['k2', 'k3']);
-		await revocations.add([], { cursor: '3' });
-		const state = await revocations.get();
-		expect(state.keyIds.sort()).toEqual(['k1', 'k2', 'k3']);
-		expect(state).toMatchObject({ cursor: '3', syncedAt: 100 });
-	});
-
-	it('sessions expire', async () => {
-		const clock = createClock();
-		const { sessions } = factory(clock.now);
-		await sessions.create('s1', { role: 'merchant' }, clock.now() + 1000);
-		expect(await sessions.get('s1')).toEqual({ role: 'merchant' });
-		expect(await sessions.get('nope')).toBeNull();
-		clock.advance(1001);
-		expect(await sessions.get('s1')).toBeNull();
-		await sessions.create('s2', {}, clock.now() + 1000);
-		await sessions.delete('s2');
-		expect(await sessions.get('s2')).toBeNull();
-	});
-
-	it('rate limits count per window', async () => {
-		const clock = createClock();
-		const { rateLimits } = factory(clock.now);
-		expect((await rateLimits.hit('k', 1000, clock.now())).count).toBe(1);
-		const second = await rateLimits.hit('k', 1000, clock.now());
-		expect(second.count).toBe(2);
-		expect(second.resetAt).toBeGreaterThan(clock.now());
-		clock.advance(1000);
-		expect((await rateLimits.hit('k', 1000, clock.now())).count).toBe(1);
-	});
-
-	it('portal keys keep the last JWKS', async () => {
-		const { portalKeys } = factory(Date.now);
-		expect(await portalKeys.get()).toBeNull();
-		await portalKeys.put({ keys: [1] }, 5);
-		await portalKeys.put({ keys: [2] }, 6);
-		expect(await portalKeys.get()).toEqual({ jwks: { keys: [2] }, fetchedAt: 6 });
+	it('records replays, forgets them and counts fixed windows', async () => {
+		let t = 1000;
+		const store = make(() => t);
+		expect(await store.seen('n1', 2000)).toBe(false);
+		expect(await store.seen('n1', 2000)).toBe(true);
+		await store.forget('n1');
+		expect(await store.seen('n1', 2000)).toBe(false);
+		t = 2500;
+		expect(await store.seen('n1', 9000)).toBe(false);
+		expect(await store.hit('k', 60_000, 1000)).toEqual({ count: 1, resetAt: 60_000 });
+		expect(await store.hit('k', 60_000, 2000)).toEqual({ count: 2, resetAt: 60_000 });
+		expect(await store.hit('k', 60_000, 61_000)).toEqual({ count: 1, resetAt: 120_000 });
 	});
 });
 
-describe('mongo stores specifics', () => {
-	it('creates TTL indexes once and rejects a missing db', async () => {
-		const db = mongo.client.db('stores_indexes');
-		const stores = createMongoStores({ db, prefix: 'kit_' });
-		await stores.ensureIndexes();
-		await stores.ensureIndexes();
-		const indexes = await db.collection('kit_replay').indexes();
-		expect(indexes.find((index) => index.name === 'ttl')).toMatchObject({ expireAfterSeconds: 0 });
-		expect(stores.collections.usageQueue).toBe('kit_usage_queue');
-		expect(() => createMongoStores(/** @type {any} */ ({}))).toThrow(TypeError);
+describe('mongo store', () => {
+	it('needs a database and knows its collections', () => {
+		expect(() => createMongoStore({ db: /** @type {any} */ (null) })).toThrow(/Db/);
+		const store = createMongoStore({ db: client.db(freshDb('store')) });
+		return expect(store.get(/** @type {any} */ ('nope'), 'x')).rejects.toThrow(/unknown collection/);
 	});
 
-	it('retries index creation after a failure and surfaces other errors', async () => {
-		let fail = true;
-		/** @type {any} */
-		const db = {
-			collection: () => ({
-				createIndex: async () => {
-					if (fail) throw new Error('down');
-				},
-				insertOne: async () => {
-					throw Object.assign(new Error('other'), { code: 1 });
-				},
-				updateOne: async () => {
-					throw Object.assign(new Error('other'), { code: 1 });
-				},
-			}),
-		};
-		const stores = createMongoStores({ db });
-		await expect(stores.ensureIndexes()).rejects.toThrow('down');
-		fail = false;
-		await stores.ensureIndexes();
-		await expect(stores.replay.seen('x', 1)).rejects.toThrow('other');
-		await expect(stores.settings.insert('x', {})).rejects.toThrow('other');
-		await expect(stores.entitlements.put('x', { token: 't', version: 1, fetchedAt: 1 })).rejects.toThrow('other');
-		await expect(stores.usageQueue.enqueue(record('x'))).rejects.toThrow('other');
+	it('fills a memory store past its window cap without growing forever', async () => {
+		const store = createMemoryStore({ now: () => 0 });
+		for (let i = 0; i < 10_002; i += 1) await store.hit(`k${i}`, 1000, i < 10_000 ? 0 : 5000);
+		expect((await store.hit('k10001', 1000, 5000)).count).toBe(2);
 	});
 });

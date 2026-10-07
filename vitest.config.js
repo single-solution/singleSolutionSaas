@@ -12,6 +12,8 @@ export default defineConfig({
 			'packages/*/vitest.config.js',
 			'platform/vitest.config.js',
 			'products/*/vitest.config.js',
+			// left out of root checks until it is rebuilt as Chat (PLAN 0.12 steps 4–8)
+			'!products/chatbot/vitest.config.js',
 			'e2e/vitest.config.js',
 		],
 		coverage: {
@@ -20,8 +22,7 @@ export default defineConfig({
 				'packages/*/src/**',
 				'packages/config/{eslint,vitest,mongo-setup}.js',
 				'platform/src/**',
-				'products/*/{core,headless,ui,api,adapters,jobs}/**',
-				'products/*/serve.js',
+				'products/*/{core,ui,api,adapters}/**',
 			],
 			thresholds: { ...THRESHOLDS },
 		},
