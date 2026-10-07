@@ -1,10 +1,10 @@
 /**
- * HTTP routes of the `config` module: merchant console (website subscriptions, merchant-wide app defaults,
- * templates) and admin console (platform policies, admin overrides, locks). Thin adapters over the service.
+ * HTTP routes of the `config` module: merchant console (website subscriptions) and admin console (platform policies,
+ * admin overrides, locks). Thin adapters over the service.
  * Admin writes (overrides, locks, rollbacks, platform policies) need the staff permission `platform.config.write`.
  * @module
  */
-import { created, defineRoute, ok } from '../../infra/http.js';
+import { defineRoute, ok } from '../../infra/http.js';
 
 /** @typedef {import('./service.js').ConfigService} ConfigService */
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
@@ -12,8 +12,6 @@ import { created, defineRoute, ok } from '../../infra/http.js';
 
 const CONSOLE = /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'staff']);
 const SUB = '/v1/merchants/:merchantId/websites/:websiteId/subscriptions/:subscriptionId/config';
-const MERCHANT_APP = '/v1/merchants/:merchantId/apps/:appId/config';
-const TEMPLATES = '/v1/merchants/:merchantId/config/templates';
 const ADMIN_SUB = '/v1/admin/subscriptions/:subscriptionId/config';
 const PLATFORM = '/v1/admin/config/platform/:appId';
 
@@ -22,7 +20,7 @@ const PLATFORM = '/v1/admin/config/platform/:appId';
  * @param {RequestContext} c
  */
 const P = (c) =>
-	/** @type {{ merchantId: string, websiteId: string, subscriptionId: string, appId: string, templateId: string, scheduleId: string, experimentId: string }} */ (
+	/** @type {{ merchantId: string, websiteId: string, subscriptionId: string, appId: string }} */ (
 		/** @type {unknown} */ (c.params)
 	);
 
@@ -48,19 +46,6 @@ const pageOf = (c) => ({
 	cursor: c.query.cursor ?? null,
 	limit: c.query.limit === undefined ? 20 : /^\d{1,3}$/.test(c.query.limit) ? Number(c.query.limit) : 0,
 });
-
-/**
- * Per-website write check for template application (website-scoped grants).
- * @param {RequestContext} c
- */
-const canWriteWebsite = (c) => (/** @type {string} */ websiteId) => {
-	try {
-		c.authorize('config.write', { merchantId: P(c).merchantId, websiteId });
-		return true;
-	} catch {
-		return false;
-	}
-};
 
 /**
  * @param {ConfigService} service
@@ -130,7 +115,6 @@ export const configRoutes = (service) => [
 		path: `${SUB}/preview`,
 		auth: CONSOLE,
 		permission: 'config.write',
-		idempotent: false,
 		handler: async (c) => {
 			const { level, rest } = split(c.body);
 			return ok(
@@ -144,246 +128,6 @@ export const configRoutes = (service) => [
 			);
 		},
 	}),
-	defineRoute({
-		method: 'GET',
-		path: `${SUB}/schedules`,
-		auth: CONSOLE,
-		permission: 'config.read',
-		handler: async (c) =>
-			ok(
-				await service.listSchedules({
-					target: { subscriptionId: P(c).subscriptionId },
-					level: 'website',
-					scope: subScope(c),
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: `${SUB}/schedules`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) => {
-			const { reason, rest } = split(c.body);
-			const change = typeof rest.change === 'object' && rest.change !== null ? rest.change : {};
-			return created(
-				await service.schedule({
-					change: { ...change, target: { subscriptionId: P(c).subscriptionId }, level: 'website', reason },
-					at: rest.at,
-					scope: subScope(c),
-					...meta(c),
-				}),
-			);
-		},
-	}),
-	defineRoute({
-		method: 'DELETE',
-		path: `${SUB}/schedules/:scheduleId`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) =>
-			ok(
-				await service.cancelSchedule({
-					merchantId: P(c).merchantId,
-					scheduleId: P(c).scheduleId,
-					scope: subScope(c),
-					...meta(c),
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: `${SUB}/experiments`,
-		auth: CONSOLE,
-		permission: 'config.read',
-		handler: async (c) => ok(await service.listExperiments({ subscriptionId: P(c).subscriptionId, scope: subScope(c) })),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: `${SUB}/experiments`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) =>
-			created(
-				await service.createExperiment({
-					subscriptionId: P(c).subscriptionId,
-					experiment: c.body,
-					scope: subScope(c),
-					...meta(c),
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: `${SUB}/experiments/:experimentId/start`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) =>
-			ok(
-				await service.startExperiment({
-					subscriptionId: P(c).subscriptionId,
-					experimentId: P(c).experimentId,
-					scope: subScope(c),
-					...meta(c),
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: `${SUB}/experiments/:experimentId/stop`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) =>
-			ok(
-				await service.stopExperiment({
-					subscriptionId: P(c).subscriptionId,
-					experimentId: P(c).experimentId,
-					applyVariant: split(c.body).rest.applyVariant,
-					scope: subScope(c),
-					...meta(c),
-				}),
-			),
-	}),
-
-	// ---------------------------------------------------------------- merchant-wide defaults for an app
-	defineRoute({
-		method: 'GET',
-		path: MERCHANT_APP,
-		auth: CONSOLE,
-		permission: 'config.read',
-		handler: async (c) =>
-			ok(await service.getLayer({ target: { merchantId: P(c).merchantId, appId: P(c).appId }, level: 'merchant' })),
-	}),
-	defineRoute({
-		method: 'PATCH',
-		path: MERCHANT_APP,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) => {
-			const { reason, change } = split(c.body);
-			return ok(
-				await service.applyChange({
-					target: { merchantId: P(c).merchantId, appId: P(c).appId },
-					level: 'merchant',
-					change,
-					reason,
-					...meta(c),
-				}),
-			);
-		},
-	}),
-	defineRoute({
-		method: 'GET',
-		path: `${MERCHANT_APP}/history`,
-		auth: CONSOLE,
-		permission: 'config.read',
-		handler: async (c) =>
-			ok(await service.history({ merchantId: P(c).merchantId, appId: P(c).appId }, { level: 'merchant', ...pageOf(c) })),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: `${MERCHANT_APP}/rollback`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) => {
-			const { reason, rest } = split(c.body);
-			return ok(
-				await service.rollback({
-					target: { merchantId: P(c).merchantId, appId: P(c).appId },
-					level: 'merchant',
-					version: rest.version,
-					reason,
-					...meta(c),
-				}),
-			);
-		},
-	}),
-
-	// ---------------------------------------------------------------- templates
-	defineRoute({
-		method: 'GET',
-		path: TEMPLATES,
-		auth: CONSOLE,
-		permission: 'config.read',
-		handler: async (c) => ok(await service.listTemplates({ merchantId: P(c).merchantId, appId: c.query.appId ?? null })),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: TEMPLATES,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) => {
-			const { rest } = split(c.body);
-			return created(
-				await service.saveTemplate({
-					merchantId: P(c).merchantId,
-					appId: rest.appId,
-					name: rest.name,
-					settings: rest.settings,
-					...meta(c),
-				}),
-			);
-		},
-	}),
-	defineRoute({
-		method: 'GET',
-		path: `${TEMPLATES}/:templateId`,
-		auth: CONSOLE,
-		permission: 'config.read',
-		handler: async (c) => ok(await service.getTemplate({ merchantId: P(c).merchantId, templateId: P(c).templateId })),
-	}),
-	defineRoute({
-		method: 'PUT',
-		path: `${TEMPLATES}/:templateId`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) => {
-			const { rest } = split(c.body);
-			return ok(
-				await service.updateTemplate({
-					merchantId: P(c).merchantId,
-					templateId: P(c).templateId,
-					name: rest.name,
-					settings: rest.settings,
-					version: rest.version,
-					...meta(c),
-				}),
-			);
-		},
-	}),
-	defineRoute({
-		method: 'POST',
-		path: `${TEMPLATES}/:templateId/apply`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) =>
-			ok(
-				await service.applyTemplate({
-					merchantId: P(c).merchantId,
-					templateId: P(c).templateId,
-					websiteIds: split(c.body).rest.websiteIds,
-					canWrite: canWriteWebsite(c),
-					...meta(c),
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: `${TEMPLATES}/:templateId/push`,
-		auth: CONSOLE,
-		permission: 'config.write',
-		handler: async (c) =>
-			ok(
-				await service.pushTemplate({
-					merchantId: P(c).merchantId,
-					templateId: P(c).templateId,
-					all: split(c.body).rest.all === true,
-					canWrite: canWriteWebsite(c),
-					...meta(c),
-				}),
-			),
-	}),
-
 	// ---------------------------------------------------------------- admin: overrides and locks per subscription
 	defineRoute({
 		method: 'GET',
@@ -417,13 +161,10 @@ export const configRoutes = (service) => [
 		permission: 'platform.config.write',
 		handler: async (c) => {
 			const { reason, level, rest } = split(c.body);
-			const lvl = level ?? 'admin';
-			const target =
-				lvl === 'merchant' ? await merchantTargetOf(service, P(c).subscriptionId) : { subscriptionId: P(c).subscriptionId };
 			return ok(
 				await service.applyChange({
-					target,
-					level: lvl,
+					target: { subscriptionId: P(c).subscriptionId },
+					level: level ?? 'admin',
 					change: {
 						locks: {
 							...(rest.elements === undefined ? {} : { elements: rest.elements }),
@@ -512,13 +253,3 @@ export const configRoutes = (service) => [
 		},
 	}),
 ];
-
-/**
- * The merchant/app target of a subscription (staff locks on merchant-wide defaults).
- * @param {ConfigService} service
- * @param {string} subscriptionId
- */
-const merchantTargetOf = async (service, subscriptionId) => {
-	const { merchantId, appId } = await service.describeSubscription(subscriptionId);
-	return { merchantId, appId };
-};

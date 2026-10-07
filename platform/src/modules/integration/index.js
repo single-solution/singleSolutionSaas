@@ -1,6 +1,6 @@
 /**
  * The `integration` module: Event Hub (website and product events, dedupe, fan-out, signed deliveries with
- * retries, DLQ and replay, delivery logs) and Portal control events. See `service.js` for the flow.
+ * retries) and Portal control events. See `service.js` for the flow.
  * @module
  */
 import { defineModule } from '../../infra/modules.js';
@@ -22,7 +22,7 @@ export const createIntegrationModule = (options = {}) =>
 			[DELIVER_JOB]: (payload, { job, signal }) => ctx.service('integration').runDelivery(payload, { job, signal }),
 		}),
 		ports: (ctx) => ({
-			// a product calling the Portal (entitlements, usage, heartbeat, any product API) retries its due deliveries
+			// a product calling the Portal (entitlements, usage, any product API) retries its due deliveries
 			productCalled: (appId) => ctx.service('integration').deliverDueFor(appId),
 		}),
 	});

@@ -35,8 +35,8 @@ import { PageProblem, websiteLabel } from './common.js';
 /** Roles an owner/admin can assign (owner is transferred, not assigned). */
 export const ROLES = Object.freeze([
 	{ value: 'admin', label: 'Admin — everything except ownership' },
-	{ value: 'billing', label: 'Billing — credits, statements, spend policies' },
-	{ value: 'developer', label: 'Developer — keys, resources, deliveries, configuration' },
+	{ value: 'billing', label: 'Billing — credits, statements, spend cap' },
+	{ value: 'developer', label: 'Developer — keys, resources, configuration' },
 	{ value: 'editor', label: 'Editor — element settings and content' },
 ]);
 

@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { JSDOM } from './dom.js';
 import { createOutboundPolicy } from '@ss/net';
 import { loadEnv, parseAssetStorage } from '../../../src/infra/config.js';
 import { assetType, checkUpload, isAssetPath, mediaType, sha256Hex } from '../../../src/modules/delivery/core/assets.js';
 import {
 	bundleData,
-	checkBudget,
 	compilePlacement,
 	featureDefaults,
 	keyConflicts,
@@ -16,16 +14,6 @@ import {
 	selectElements,
 	versionedLoader,
 } from '../../../src/modules/delivery/core/compile.js';
-import {
-	decodePage,
-	injectPreview,
-	inlineScript,
-	isHtml,
-	previewHeaders,
-	signPreviewToken,
-	targetUrl,
-	verifyPreviewToken,
-} from '../../../src/modules/delivery/core/preview.js';
 import {
 	createAssetStorage,
 	createFileStorage,
@@ -55,10 +43,6 @@ const packSource = (overrides = {}) => ({
 	apiBase: null,
 	assets: new Map(packAssets().map((a) => [a.path, a])),
 	strings: new Map([['strings/en.json', { 'bar.label': 'Notice', bad: 3 }]]),
-	gzipBytes: new Map([
-		['headless/bar.js', 300],
-		['ui/bar.js', 200],
-	]),
 	...overrides,
 });
 
@@ -71,9 +55,12 @@ const serviceSource = (overrides = {}) => ({
 	manifest: serviceManifest(),
 	document: doc(),
 	apiBase: 'https://chat.example.net',
-	assets: new Map(),
+	assets: new Map(packAssets().map((a) => [a.path, a])),
 	strings: new Map(),
-	gzipBytes: new Map(),
+	widgets: {
+		version: 3,
+		elements: new Map([['launcher', { key: 'launcher', headless: 'headless/bar.js#createBar', renderer: 'ui/bar.js#render' }]]),
+	},
 	...overrides,
 });
 
@@ -95,8 +82,13 @@ describe('element selection matrix', () => {
 			strings: { 'bar.label': 'Notice' },
 			headless: { path: 'headless/bar.js', name: 'createBar' },
 			renderer: { path: 'ui/bar.js', name: 'render' },
-			actualGzipBytes: 500,
-			budgetKb: 6,
+			moduleVersion: 1,
+			api: null,
+		});
+		expect(selectElements([serviceSource()]).selected[0]).toMatchObject({
+			moduleVersion: 3,
+			api: 'https://chat.example.net',
+			readScopes: ['chat-box.read', 'chat-box.write'],
 		});
 		for (const state of ['paused', 'suspended', 'spend_cap', 'quota_exhausted', 'resource_missing'])
 			expect(keysOf(selectElements([packSource({ document: doc({ runtime: { state, reason: 'x' } }) })]))).toEqual([]);
@@ -111,31 +103,16 @@ describe('element selection matrix', () => {
 		expect(missing.warnings).toEqual([{ code: 'assets_missing', appId: PACK, key: 'bar', detail: 'not uploaded: ui/bar.js' }]);
 		const noBase = selectElements([serviceSource({ apiBase: 'http://chat.example.net' })]);
 		expect(noBase.warnings[0]?.code).toBe('no_api_base');
+		const noWidgets = selectElements([serviceSource({ widgets: null })]);
+		expect(noWidgets).toEqual({
+			selected: [],
+			warnings: [
+				{ code: 'widgets_missing', appId: SERVICE, key: 'launcher', detail: 'no widgets are uploaded for this element' },
+			],
+		});
 		const manifest = packManifest();
 		/** @type {any} */ (manifest.elements[0]).renderer = null;
 		expect(selectElements([packSource({ manifest })]).warnings[0]?.code).toBe('no_modules');
-	});
-
-	it('applies preview candidates over the current set or alone', () => {
-		const candidates = { elements: [{ appId: SERVICE, key: 'launcher', config: { greeting: 'Hey' } }] };
-		const unsubscribed = serviceSource({ document: null });
-		const current = selectElements([packSource(), unsubscribed], candidates);
-		expect(keysOf(current)).toEqual(['bar', 'launcher']);
-		expect(current.selected[1]?.config).toEqual({ greeting: 'Hey' });
-		expect(keysOf(selectElements([packSource(), unsubscribed], { base: 'empty', ...candidates }))).toEqual(['launcher']);
-		// candidates of an inactive subscription or without mode A are refused with a warning
-		const paused = selectElements([packSource({ document: doc({ runtime: { state: 'paused', reason: 'x' } }) })], {
-			base: 'empty',
-			elements: [{ appId: PACK, key: 'bar' }],
-		});
-		expect(paused.warnings[0]?.code).toBe('inactive');
-		const modeB = selectElements([packSource()], { base: 'empty', elements: [{ appId: PACK, key: 'tip' }] });
-		expect(modeB.warnings[0]?.code).toBe('no_mode_a');
-		const unknown = selectElements([packSource()], { elements: [{ appId: PACK, key: 'nope' }] });
-		expect(unknown.warnings[0]?.code).toBe('unknown_element');
-		// unsubscribed packs use the product defaults
-		const defaults = selectElements([packSource({ document: null })], { elements: [{ appId: PACK, key: 'bar' }] });
-		expect(defaults.selected[0]?.config).toEqual({ message: 'Free shipping today' });
 	});
 
 	it('namespaces element keys per product: two products may deliver the same key (F.18)', () => {
@@ -194,7 +171,11 @@ describe('compiler helpers', () => {
 		});
 		expect(data.elements.map((e) => e.key)).toEqual(['bar', 'launcher']);
 		expect(data.elements[0]).toMatchObject({ headless: { path: `packs/${PACK}/1/headless/bar.js`, name: 'createBar' } });
-		expect(data.elements[1]).toMatchObject({ stub: 'ss-element-stub@2', api: 'https://chat.example.net' });
+		expect(data.elements[1]).toMatchObject({
+			headless: { path: `packs/${SERVICE}/3/headless/bar.js`, name: 'createBar' },
+			renderer: { path: `packs/${SERVICE}/3/ui/bar.js`, name: 'render' },
+			api: 'https://chat.example.net',
+		});
 		const a = versionedLoader({ data, core: 'var __ssr={start(){}};', audience: null });
 		const b = versionedLoader({
 			data: bundleData({
@@ -215,28 +196,6 @@ describe('compiler helpers', () => {
 		expect(c.text).toContain(',{audience:__ssa.evaluateAudienceProgram}');
 		const changed = versionedLoader({ data: { ...data, key: 'pk_live_y' }, core: 'var __ssr={start(){}};', audience: null });
 		expect(changed.version).not.toBe(a.version);
-	});
-
-	it('checks the budget: loader + Σ budget.js ≤ limit, and declared ≥ shipped', () => {
-		const el = (/** @type {string} */ key, /** @type {number} */ budgetKb, actualGzipBytes = 0) => ({
-			appId: PACK,
-			slug: 's',
-			key,
-			budgetKb,
-			actualGzipBytes,
-		});
-		expect(checkBudget({ loaderGzipBytes: 15 * 1024, limitKb: 60, elements: [el('a', 20), el('b', 25)] })).toEqual({
-			ok: true,
-			report: { limitKb: 60, loaderKb: 15, elementsKb: 45, sharedKb: 0, totalKb: 60, shared: [] },
-			offenders: [],
-		});
-		const over = checkBudget({ loaderGzipBytes: 15 * 1024 + 1, limitKb: 60, elements: [el('a', 20), el('b', 25), el('c', 0)] });
-		expect(over.ok).toBe(false);
-		expect(over.offenders.map((o) => o.path)).toEqual(['/elements/b', '/elements/a']);
-		const shipped = checkBudget({ loaderGzipBytes: 1024, limitKb: 60, elements: [el('a', 1, 2048)] });
-		expect(shipped.offenders).toEqual([
-			{ path: '/elements/a', code: 'over_declared', message: 's/a ships 2 KB gzip but declares budget.js 1 KB' },
-		]);
 	});
 });
 
@@ -267,87 +226,6 @@ describe('asset rules', () => {
 			'size_mismatch',
 			'sha256_mismatch',
 		]);
-	});
-});
-
-describe('preview rules', () => {
-	const key = Buffer.alloc(32, 9);
-
-	it('signs and verifies short-lived tokens', () => {
-		const token = signPreviewToken(key, { previewId: 'prv_1', merchantId: 'mer_1', websiteId: 'web_1', exp: 2000 });
-		expect(verifyPreviewToken(key, token, 1000)).toEqual({
-			previewId: 'prv_1',
-			merchantId: 'mer_1',
-			websiteId: 'web_1',
-			exp: 2000,
-		});
-		expect(verifyPreviewToken(key, token, 2000)).toBeNull();
-		expect(verifyPreviewToken(Buffer.alloc(32, 1), token, 1000)).toBeNull();
-		expect(verifyPreviewToken(key, `${token}x`, 1000)).toBeNull();
-		expect(verifyPreviewToken(key, 42, 1000)).toBeNull();
-		const [payload, sig] = token.split('.');
-		const other = Buffer.from(JSON.stringify({ p: 'prv_1', m: 'mer_2', w: 'web_1', e: 2000 })).toString('base64url');
-		expect(verifyPreviewToken(key, `${other}.${sig}`, 1000)).toBeNull();
-		expect(payload).toBeTruthy();
-	});
-
-	it('keeps target URLs on the website origin', () => {
-		const origin = 'https://shop.example.com';
-		expect(targetUrl(origin, '/a/b', '?q=1')?.href).toBe('https://shop.example.com/a/b?q=1');
-		expect(targetUrl(origin, '/a#frag')?.href).toBe('https://shop.example.com/a');
-		for (const bad of [
-			'//evil.example/',
-			'https://evil.example/',
-			'relative',
-			'/a\\b',
-			'/a b',
-			'/\u0000',
-			`/${'a'.repeat(2001)}`,
-		])
-			expect(targetUrl(origin, bad)).toBeNull();
-		expect(targetUrl(origin, '/@evil.example')?.origin).toBe(origin);
-		expect(isHtml('text/html; charset=utf-8')).toBe(true);
-		expect(isHtml('application/xhtml+xml')).toBe(true);
-		expect(isHtml('image/svg+xml')).toBe(false);
-		expect(isHtml(undefined)).toBe(false);
-		expect(decodePage(Buffer.from([0xe9]), 'text/html; charset=ISO-8859-1')).toBe('é');
-		expect(decodePage(Buffer.from('é'), 'text/html')).toBe('é');
-	});
-
-	it('injects into documents with or without head/body, parsed by a real HTML parser', () => {
-		const script = 'var s = "</script><!-- x";';
-		for (const html of [
-			'<html><head><title>T</title></head><body><p>x</p></body></html>',
-			'<HTML><HEAD lang="en"></HEAD><BODY data-x="1">y</BODY></HTML>',
-			'<p>fragment only</p>',
-			'<html><body>no head</body></html>',
-		]) {
-			const out = injectPreview({ html, pageUrl: 'https://shop.example.com/a?b="c"', script, nonce: 'abc' });
-			const dom = new JSDOM(out);
-			const doc = dom.window.document;
-			expect(doc.querySelectorAll('base')).toHaveLength(1);
-			expect(doc.querySelector('base')?.getAttribute('href')).toBe('https://shop.example.com/a?b="c"');
-			expect(doc.querySelectorAll('script')).toHaveLength(1);
-			expect(doc.querySelector('script')?.textContent).toBe(inlineScript(script));
-			expect(doc.querySelector('script')?.getAttribute('nonce')).toBe('abc');
-			expect(doc.getElementById('ss-preview-ribbon')?.textContent).toBe('Preview');
-		}
-		expect(inlineScript('a</SCRIPT>b<!--c')).toBe('a<\\/SCRIPT>b<\\!--c');
-	});
-
-	it('sets a sandboxed, strict, uncacheable response policy', () => {
-		const headers = previewHeaders({
-			nonce: 'n1',
-			origin: 'http://localhost:3000',
-			portalOrigin: 'https://portal.test',
-			connectOrigins: ['https://chat.example.net', 'https://portal.test'],
-		});
-		const csp = headers['content-security-policy'];
-		expect(csp).toContain("script-src 'nonce-n1' 'strict-dynamic'");
-		expect(csp).toContain('default-src https: data: blob: http://localhost:3000');
-		expect(csp).toContain('connect-src https://portal.test https://chat.example.net');
-		expect(csp).toContain("frame-ancestors 'self'");
-		expect(headers['x-robots-tag']).toContain('noindex');
 	});
 });
 
@@ -484,11 +362,8 @@ describe('STORAGE_* configuration', () => {
 			prefix: 'a/b/',
 		});
 
-		expect(loadEnv(await testEnv()).delivery).toEqual({ storage: null, budgetKb: 60 });
-		expect(loadEnv(await testEnv({ STORAGE_DIR: ':memory:' })).delivery).toEqual({
-			storage: { kind: 'memory' },
-			budgetKb: 60,
-		});
+		expect(loadEnv(await testEnv()).delivery).toEqual({ storage: null });
+		expect(loadEnv(await testEnv({ STORAGE_DIR: ':memory:' })).delivery).toEqual({ storage: { kind: 'memory' } });
 		const prod = await testEnv({ NODE_ENV: 'production' });
 		expect(() => loadEnv({ ...prod, STORAGE_DIR: ':memory:' })).toThrow(
 			/S3-compatible bucket \(STORAGE_BUCKET\) in production/,

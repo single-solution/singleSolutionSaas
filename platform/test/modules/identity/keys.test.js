@@ -18,7 +18,7 @@ const site = async (h, domain = 'shop.example.com') => {
 
 /** @param {Awaited<ReturnType<typeof boot>>} h @param {string} key @param {Record<string, string>} [headers] */
 const whoami = (h, key, headers = {}) =>
-	h.call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${key}`, ...headers } });
+	h.call('GET', '/v1/test/whoami', { headers: { authorization: `Bearer ${key}`, ...headers } });
 
 /** @param {Awaited<ReturnType<typeof boot>>} h @param {string} [since] */
 const revocations = async (h, since) =>
@@ -222,7 +222,7 @@ describe('website keys', () => {
 		expect((await revocations(h)).json.keyIds).toEqual([old.keyId]);
 		// products learn it from the revocation list they refresh when verifying keys; no job, no event
 		expect(h.integration.events).toEqual([]);
-		expect(await h.portal.shared.jobs.stats()).toMatchObject({ queued: 0 });
+		expect(await h.db.collection('platform_jobs').countDocuments({ status: 'queued' })).toBe(0);
 		const list = (await s.client.get(s.base)).json.items;
 		expect(list.map((/** @type {any} */ k) => [k.keyId, k.status])).toEqual(
 			expect.arrayContaining([

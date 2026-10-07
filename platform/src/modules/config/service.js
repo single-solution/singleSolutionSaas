@@ -1,6 +1,6 @@
 /**
- * Public service of the `config` module: layered overrides (platform, merchant, website, admin) with immutable
- * versions, rollback, locks, templates, scheduled changes, experiments and dry-run previews.
+ * Public service of the `config` module: layered overrides (platform, website, admin) with immutable versions,
+ * rollback, locks and dry-run previews.
  *
  * The module stores and returns layers in exactly the `@ss/entitlements` `resolveEntitlement` `layers` shape; it never
  * resolves precedence or clamps to plan maxima (commerce does). Every value is validated against the pinned manifest's
@@ -11,12 +11,10 @@
  * repaired by the next read-for-write of that target (the latest version record is authoritative).
  * @module
  */
-import { createId, validateFeatureConfig } from '@ss/contracts';
-import { isProblem, problem } from '../../infra/http.js';
+import { validateFeatureConfig } from '@ss/contracts';
+import { problem } from '../../infra/http.js';
 import { diffStates, lockedTouches, touchedKeys } from './core/diff.js';
-import { toRuntimeExperiment, validateExperiment } from './core/experiments.js';
-import { parseName, parseReason, parseScheduleAt } from './core/schedule.js';
-import { applyOps, decodeState, emptyState, encodeState, isRecord, opsOf, withoutLocks } from './core/state.js';
+import { applyOps, decodeState, emptyState, encodeState, isRecord } from './core/state.js';
 import { STAFF_LEVELS, actorMayLock, actorMayWrite, parseTarget, targetKey } from './core/targets.js';
 import { indexManifest, validateEntries } from './core/validate.js';
 import { createConfigRepo } from './repo.js';
@@ -54,8 +52,6 @@ import { createConfigRepo } from './repo.js';
  * @property {string | null} [ip]
  */
 
-/** Scheduled changes applied per read of a merchant's configuration, at most (F.19: applied on read, no job). */
-export const DUE_SCHEDULES_PER_READ = 20;
 const MAX_ATTEMPTS = 5;
 const MANIFEST_CACHE = 100;
 
@@ -77,40 +73,30 @@ const isNotFound = (error) => {
 };
 
 /**
- * Compact, client-safe description of a failure (per-website template results, failed schedules).
- * @param {unknown} error
- * @returns {{ code: string, detail?: string, errors?: unknown[] } | null} null for unexpected (non-problem) errors
+ * Optional free-text reason (required for staff levels): trimmed, 1..500 characters.
+ * @param {unknown} reason
+ * @param {boolean} required
+ * @returns {{ ok: true, value: string | null } | { ok: false, message: string }}
  */
-const problemSummary = (error) => {
-	if (isProblem(error)) {
-		return {
-			code: error.code,
-			...(error.detail === undefined ? {} : { detail: error.detail }),
-			...(error.errors === undefined ? {} : { errors: error.errors }),
-		};
+export const parseReason = (reason, required) => {
+	if (reason === undefined || reason === null || reason === '') {
+		return required
+			? { ok: false, message: 'a reason is required for staff overrides and policies' }
+			: { ok: true, value: null };
 	}
-	if (isRecord(error) && typeof (/** @type {any} */ (error).status) === 'number' && /** @type {any} */ (error).status < 500) {
-		const doc = /** @type {any} */ (error);
-		const code =
-			typeof doc.code === 'string'
-				? doc.code
-				: String(doc.type ?? 'error')
-						.split('/')
-						.pop();
-		return { code, ...(typeof doc.detail === 'string' ? { detail: doc.detail } : {}) };
-	}
-	return null;
+	if (typeof reason !== 'string' || reason.trim().length === 0 || reason.length > 500)
+		return { ok: false, message: 'reason must be 1..500 characters' };
+	return { ok: true, value: reason.trim() };
 };
 
 /**
- * Snapshot of an actor kept on version records and schedules (no roles or grants).
+ * Snapshot of an actor kept on version records (no roles or grants).
  * @param {Actor} actor
  */
 const actorRef = (actor) => ({
 	type: actor.type,
 	id: actor.id,
 	...(actor.merchantId ? { merchantId: actor.merchantId } : {}),
-	...(actor.via ? { via: { type: actor.via.type, id: actor.via.id } } : {}),
 });
 
 /**
@@ -120,15 +106,13 @@ const actorRef = (actor) => ({
 const publicTarget = (r) =>
 	r.level === 'platform'
 		? { level: 'platform', appId: r.appId }
-		: r.level === 'merchant'
-			? { level: 'merchant', merchantId: /** @type {string} */ (r.merchantId), appId: r.appId }
-			: {
-					level: r.level,
-					subscriptionId: /** @type {string} */ (r.subscriptionId),
-					merchantId: /** @type {string} */ (r.merchantId),
-					appId: r.appId,
-					websiteId: /** @type {string} */ (r.websiteId),
-				};
+		: {
+				level: r.level,
+				subscriptionId: /** @type {string} */ (r.subscriptionId),
+				merchantId: /** @type {string} */ (r.merchantId),
+				appId: r.appId,
+				websiteId: /** @type {string} */ (r.websiteId),
+			};
 
 /**
  * @param {ModuleContext} ctx
@@ -200,16 +184,6 @@ export const createConfigService = (ctx) => {
 				level: 'platform',
 				key: targetKey(ref),
 				merchantId: null,
-				appId: ref.appId,
-				subscriptionId: null,
-				websiteId: null,
-				manifestVersion: null,
-			};
-		} else if (ref.level === 'merchant') {
-			resolved = {
-				level: 'merchant',
-				key: targetKey(ref),
-				merchantId: ref.merchantId,
 				appId: ref.appId,
 				subscriptionId: null,
 				websiteId: null,
@@ -308,40 +282,11 @@ export const createConfigService = (ctx) => {
 				if (typeof commerce.invalidate === 'function') await commerce.invalidate(r.subscriptionId);
 				return;
 			}
-			if (r.level === 'merchant') {
-				for (const subscriptionId of await merchantAppSubscriptions(/** @type {string} */ (r.merchantId), r.appId)) {
-					if (typeof commerce.invalidate === 'function') await commerce.invalidate(subscriptionId);
-				}
-				return;
-			}
 			if (typeof commerce.invalidateApp === 'function') await commerce.invalidateApp(r.appId);
 			else ctx.logger.warn('platform policy changed but commerce exposes no invalidateApp', { appId: r.appId });
 		} catch (error) {
 			ctx.logger.warn('commerce invalidation failed', { error, target: r.key });
 		}
-	};
-
-	/**
-	 * Subscriptions of one merchant for one app (identity websites × commerce subscriptions).
-	 * @param {string} merchantId
-	 * @param {string} appId
-	 * @returns {Promise<string[]>}
-	 */
-	const merchantAppSubscriptions = async (merchantId, appId) => {
-		const identity = optional('identity');
-		const commerce = optional('commerce');
-		if (!identity?.listWebsites || !commerce?.subscriptionsForWebsite) return [];
-		const listed = await identity.listWebsites(merchantId);
-		const websites = Array.isArray(listed) ? listed : Array.isArray(listed?.items) ? listed.items : [];
-		/** @type {string[]} */
-		const out = [];
-		for (const website of websites) {
-			const subs = await commerce.subscriptionsForWebsite(website.websiteId);
-			for (const sub of Array.isArray(subs) ? subs : (subs?.items ?? [])) {
-				if (sub.appId === appId) out.push(sub.subscriptionId ?? sub.id);
-			}
-		}
-		return out;
 	};
 
 	/**
@@ -376,30 +321,23 @@ export const createConfigService = (ctx) => {
 	};
 
 	/**
-	 * Commit a change as a new immutable version (idempotent per `changeKey`), audit it and invalidate commerce.
+	 * Commit a change as a new immutable version, audit it and invalidate commerce.
 	 * @param {object} input
 	 * @param {Resolved} input.r
 	 * @param {(state: LayerState) => ({ ok: true, next: LayerState } | { ok: false, errors: FieldError[] })} input.build
 	 * @param {Actor} input.actor
 	 * @param {string | null} input.reason
-	 * @param {'change' | 'rollback' | 'template' | 'scheduled' | 'experiment'} input.kind
-	 * @param {string} [input.changeKey]
+	 * @param {'change' | 'rollback'} input.kind
 	 * @param {Record<string, unknown>} [input.extra] stored on the version record
 	 * @param {string | null} [input.requestId]
 	 * @param {string | null} [input.ip]
 	 */
-	const commit = async ({ r, build, actor, reason, kind, changeKey, extra = {}, requestId = null, ip = null }) => {
+	const commit = async ({ r, build, actor, reason, kind, extra = {}, requestId = null, ip = null }) => {
 		const at = location(r);
 		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
-			if (changeKey) {
-				const done = await repo.findByChangeKey(at, changeKey);
-				if (done)
-					return { target: publicTarget(r), version: done.version, diff: done.diff ?? [], unchanged: false, replayed: true };
-			}
 			const current = await loadCurrent(r);
 			const { next, diff, manifestVersion } = await planChange({ r, actor, current: current.state, build });
-			if (diff.length === 0)
-				return { target: publicTarget(r), version: current.version, diff, unchanged: true, replayed: false };
+			if (diff.length === 0) return { target: publicTarget(r), version: current.version, diff, unchanged: true };
 			const version = current.version + 1;
 			const stored = encodeState(next);
 			const record = {
@@ -416,14 +354,13 @@ export const createConfigService = (ctx) => {
 				reason,
 				manifestVersion,
 				at: new Date(ctx.now()),
-				...(changeKey ? { changeKey } : {}),
 				...extra,
 			};
-			if (!(await repo.insertVersion(at, record))) continue; // a concurrent writer took this version (or change key)
+			if (!(await repo.insertVersion(at, record))) continue; // a concurrent writer took this version
 			await repo.writeLayer(at, layerDoc(r, version, stored, record.actor));
 			await ctx.audit.record({
 				actor,
-				action: `config.${kind === 'change' ? 'changed' : kind === 'rollback' ? 'rolled_back' : `${kind}_applied`}`,
+				action: kind === 'change' ? 'config.changed' : 'config.rolled_back',
 				target: { type: 'config_layer', id: r.key, merchantId: r.merchantId, websiteId: r.websiteId },
 				before: { version: current.version },
 				after: { version, diff },
@@ -432,7 +369,7 @@ export const createConfigService = (ctx) => {
 				reason,
 			});
 			await invalidate(r);
-			return { target: publicTarget(r), version, diff, unchanged: false, replayed: false };
+			return { target: publicTarget(r), version, diff, unchanged: false };
 		}
 		throw fail('conflict', 'The configuration changed concurrently; retry.');
 	};
@@ -451,31 +388,16 @@ export const createConfigService = (ctx) => {
 
 	/**
 	 * Apply a change (elements / features / config / locks) to one layer.
-	 * @param {RequestMeta & { target: unknown, level?: Level, change: unknown, reason?: unknown, scope?: Scope, changeKey?: string,
-	 *   kind?: 'change' | 'template' | 'scheduled' | 'experiment', extra?: Record<string, unknown> }} input
+	 * @param {RequestMeta & { target: unknown, level?: Level, change: unknown, reason?: unknown, scope?: Scope }} input
 	 */
-	const applyChange = async ({
-		target,
-		level,
-		change,
-		reason,
-		scope,
-		actor,
-		requestId,
-		ip,
-		changeKey,
-		kind = 'change',
-		extra,
-	}) => {
+	const applyChange = async ({ target, level, change, reason, scope, actor, requestId, ip }) => {
 		const r = await resolveTarget(target, level, scope);
 		return commit({
 			r,
 			build: (state) => applyOps(state, change),
 			actor,
 			reason: reasonFor(r.level, actor, reason),
-			kind,
-			...(changeKey ? { changeKey } : {}),
-			...(extra ? { extra } : {}),
+			kind: 'change',
 			requestId: requestId ?? null,
 			ip: ip ?? null,
 		});
@@ -538,7 +460,7 @@ export const createConfigService = (ctx) => {
 	};
 
 	/**
-	 * Layers of a subscription in the `@ss/entitlements` shape, plus running experiments (`runtime.experiments`).
+	 * Layers of a subscription in the `@ss/entitlements` shape.
 	 * @param {string} subscriptionId
 	 * @param {{ merchantId?: string, appId?: string }} [hint] commerce may pass what it already knows (saves a round trip)
 	 */
@@ -547,29 +469,22 @@ export const createConfigService = (ctx) => {
 			typeof hint.merchantId === 'string' && typeof hint.appId === 'string'
 				? { merchantId: hint.merchantId, appId: hint.appId }
 				: await subscriptionInfo(subscriptionId);
-		await applyDue(info.merchantId);
 		const keys = {
 			platform: targetKey({ level: 'platform', appId: info.appId }),
-			merchant: targetKey({ level: 'merchant', merchantId: info.merchantId, appId: info.appId }),
 			website: targetKey({ level: 'website', subscriptionId }),
 			admin: targetKey({ level: 'admin', subscriptionId }),
 		};
-		const [platformDocs, tenantDocs, running] = await Promise.all([
+		const [platformDocs, tenantDocs] = await Promise.all([
 			repo.getLayers(null, [keys.platform]),
-			repo.getLayers(info.merchantId, [keys.merchant, keys.website, keys.admin]),
-			repo.listExperiments(info.merchantId, subscriptionId, 'running'),
+			repo.getLayers(info.merchantId, [keys.website, keys.admin]),
 		]);
 		const byKey = new Map([...platformDocs, ...tenantDocs].map((doc) => [doc._id, doc]));
 		/** @param {string} key */
 		const stateOf = (key) => decodeState(byKey.get(key)?.state);
 		return {
 			platform: stateOf(keys.platform),
-			merchant: stateOf(keys.merchant),
 			website: stateOf(keys.website),
 			admin: stateOf(keys.admin),
-			experiments: running
-				.map((doc) => toRuntimeExperiment({ experimentId: String(doc._id), element: doc.element, variants: doc.variants }))
-				.sort((a, b) => (a.id < b.id ? -1 : 1)),
 		};
 	};
 
@@ -611,8 +526,6 @@ export const createConfigService = (ctx) => {
 			diff: doc.diff ?? [],
 			manifestVersion: doc.manifestVersion ?? null,
 			...(doc.rollbackOf === undefined ? {} : { rollbackOf: doc.rollbackOf }),
-			...(doc.templateId === undefined ? {} : { templateId: doc.templateId, templateVersion: doc.templateVersion }),
-			...(doc.scheduleId === undefined ? {} : { scheduleId: doc.scheduleId }),
 		}));
 		const last = items.at(-1);
 		return { target: publicTarget(r), items, nextCursor: docs.length > n && last ? String(last.version) : null };
@@ -648,500 +561,6 @@ export const createConfigService = (ctx) => {
 		});
 	};
 
-	// ------------------------------------------------------------------------------------------------- templates
-
-	/**
-	 * Template settings: website-level elements/features/config only (no locks).
-	 * @param {string} appId
-	 * @param {unknown} settings
-	 */
-	const templateState = async (appId, settings) => {
-		if (isRecord(settings) && /** @type {Record<string, unknown>} */ (settings).locks !== undefined)
-			throw fail('validation_failed', 'Templates cannot carry locks.', [
-				{ path: '/settings/locks', message: 'locks are staff-only', code: 'lock_forbidden' },
-			]);
-		const built = applyOps(emptyState(), settings);
-		if (!built.ok)
-			throw fail(
-				'validation_failed',
-				'The template settings are invalid.',
-				built.errors.map((e) => ({ ...e, path: `/settings${e.path}` })),
-			);
-		const locked = diffStates(emptyState(), built.next).filter((d) => /** @type {any} */ (d.after)?.locked === true);
-		/** @type {FieldError[]} */
-		const errors = locked.map((d) => ({
-			path: `/settings/${d.kind}/${d.key}/locked`,
-			message: 'locks are staff-only',
-			code: 'lock_forbidden',
-		}));
-		const { index } = await manifestFor(appId, null);
-		const state = withoutLocks(built.next);
-		errors.push(
-			...validateEntries({
-				index,
-				state,
-				keys: { elements: Object.keys(state.elements), features: Object.keys(state.features) },
-				validateFeatureConfig,
-			}).map((e) => ({ ...e, path: `/settings${e.path}` })),
-		);
-		if (errors.length > 0) throw fail('validation_failed', 'The template settings are invalid.', errors);
-		return state;
-	};
-
-	/** @param {any} doc */
-	const templateView = (doc) => ({
-		templateId: String(doc._id),
-		merchantId: doc.merchantId,
-		appId: doc.appId,
-		name: doc.name,
-		version: doc.version,
-		settings: decodeState(doc.settings),
-		applications: Object.entries(doc.applications ?? {}).map(([websiteId, a]) => ({ websiteId, .../** @type {object} */ (a) })),
-		createdAt: doc.createdAt,
-		updatedAt: doc.updatedAt,
-	});
-
-	/**
-	 * @param {RequestMeta & { merchantId: string, appId: string, name: unknown, settings: unknown }} input
-	 */
-	const saveTemplate = async ({ merchantId, appId, name, settings, actor, requestId, ip }) => {
-		if (!actorMayWrite(actor?.type, 'website')) throw fail('forbidden', 'Not allowed to save templates.');
-		const target = parseTarget({ merchantId, appId }, 'merchant');
-		if (!target.ok) throw fail('validation_failed', 'merchantId and appId are required.', target.errors);
-		const parsedName = parseName(name);
-		if (!parsedName.ok)
-			throw fail('validation_failed', parsedName.message, [
-				{ path: '/name', message: parsedName.message, code: 'invalid_name' },
-			]);
-		const state = await templateState(appId, settings);
-		const templateId = createId('cft', { randomBytes: ctx.randomBytes });
-		const doc = {
-			_id: templateId,
-			appId,
-			name: parsedName.value,
-			version: 1,
-			settings: encodeState(state),
-			applications: {},
-			createdBy: actorRef(actor),
-		};
-		await repo.insertTemplate(merchantId, doc);
-		await ctx.audit.record({
-			actor,
-			action: 'config.template_saved',
-			target: { type: 'config_template', id: templateId, merchantId },
-			after: { name: doc.name, appId, version: 1, settings: state },
-			requestId: requestId ?? null,
-			ip: ip ?? null,
-		});
-		return templateView({ ...doc, merchantId });
-	};
-
-	/**
-	 * New template version (re-push it with {@link pushTemplate}).
-	 * @param {RequestMeta & { merchantId: string, templateId: string, name?: unknown, settings?: unknown, version?: number }} input
-	 */
-	const updateTemplate = async ({ merchantId, templateId, name, settings, version, actor, requestId, ip }) => {
-		if (!actorMayWrite(actor?.type, 'website')) throw fail('forbidden', 'Not allowed to change templates.');
-		const existing = await repo.getTemplate(merchantId, templateId);
-		if (!existing) throw fail('not_found', 'No such template.');
-		if (version !== undefined && version !== existing.version) throw fail('conflict', 'The template was changed meanwhile.');
-		/** @type {Record<string, unknown>} */
-		const set = { version: existing.version + 1, updatedBy: actorRef(actor) };
-		if (name !== undefined) {
-			const parsedName = parseName(name);
-			if (!parsedName.ok)
-				throw fail('validation_failed', parsedName.message, [
-					{ path: '/name', message: parsedName.message, code: 'invalid_name' },
-				]);
-			set.name = parsedName.value;
-		}
-		if (settings !== undefined) set.settings = encodeState(await templateState(existing.appId, settings));
-		const updated = await repo.updateTemplate(merchantId, templateId, existing.version, set);
-		if (!updated) throw fail('conflict', 'The template was changed meanwhile.');
-		await ctx.audit.record({
-			actor,
-			action: 'config.template_updated',
-			target: { type: 'config_template', id: templateId, merchantId },
-			before: { version: existing.version },
-			after: {
-				version: set.version,
-				...(set.name ? { name: set.name } : {}),
-				...(settings === undefined ? {} : { settings: decodeState(set.settings) }),
-			},
-			requestId: requestId ?? null,
-			ip: ip ?? null,
-		});
-		return templateView(updated);
-	};
-
-	/** @param {{ merchantId: string, templateId: string }} input */
-	const getTemplate = async ({ merchantId, templateId }) => {
-		const doc = await repo.getTemplate(merchantId, templateId);
-		if (!doc) throw fail('not_found', 'No such template.');
-		return templateView(doc);
-	};
-
-	/** @param {{ merchantId: string, appId?: string | null }} input */
-	const listTemplates = async ({ merchantId, appId = null }) => ({
-		items: (await repo.listTemplates(merchantId, appId)).map(templateView),
-	});
-
-	/**
-	 * Apply a template to websites as a normal versioned website-level change each; per-website results.
-	 * @param {RequestMeta & { templateId: string, websiteIds: unknown, merchantId?: string, canWrite?: (websiteId: string) => boolean }} input
-	 */
-	const applyTemplate = async ({ templateId, websiteIds, merchantId, canWrite, actor, requestId, ip }) => {
-		const doc = merchantId ? await repo.getTemplate(merchantId, templateId) : await repo.findTemplateAnyMerchant(templateId);
-		if (!doc) throw fail('not_found', 'No such template.');
-		const ids = Array.isArray(websiteIds) ? [...new Set(websiteIds)] : null;
-		if (
-			!ids ||
-			ids.length === 0 ||
-			ids.length > 100 ||
-			ids.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 80)
-		)
-			throw fail('validation_failed', 'websiteIds must be 1..100 website ids.', [
-				{ path: '/websiteIds', message: 'invalid websiteIds', code: 'invalid_websites' },
-			]);
-		const owner = /** @type {string} */ (doc.merchantId);
-		const state = decodeState(doc.settings);
-		const identity = optional('identity');
-		const commerce = optional('commerce');
-		/** @type {Array<Record<string, unknown>>} */
-		const results = [];
-		for (const websiteId of /** @type {string[]} */ (ids)) {
-			try {
-				if (canWrite && !canWrite(websiteId)) throw fail('forbidden', 'Missing permission config.write on this website.');
-				if (identity?.getWebsite) {
-					/** @type {any} */
-					let website = null;
-					try {
-						website = await identity.getWebsite(websiteId);
-					} catch (error) {
-						if (!isNotFound(error)) throw error;
-					}
-					if (!website || website.merchantId !== owner) throw fail('not_found', 'No such website.');
-				}
-				if (!commerce?.subscriptionsForWebsite) throw fail('unavailable', 'Subscriptions are not available.');
-				const listed = await commerce.subscriptionsForWebsite(websiteId);
-				const subs = Array.isArray(listed) ? listed : (listed?.items ?? []);
-				const sub = subs.find((/** @type {any} */ s) => s.appId === doc.appId && s.status !== 'cancelled');
-				if (!sub) throw fail('not_found', 'The website has no subscription to this app.');
-				const subscriptionId = String(sub.subscriptionId ?? sub.id);
-				const result = await applyChange({
-					target: { subscriptionId },
-					level: 'website',
-					change: opsOf(state),
-					reason: `template ${doc.name} v${doc.version}`,
-					scope: { merchantId: owner, websiteId },
-					actor,
-					requestId,
-					ip,
-					kind: 'template',
-					extra: { templateId, templateVersion: doc.version },
-				});
-				await repo.recordApplication(owner, templateId, websiteId, {
-					subscriptionId,
-					templateVersion: doc.version,
-					version: result.version,
-					at: new Date(ctx.now()),
-				});
-				results.push({
-					websiteId,
-					subscriptionId,
-					status: result.unchanged ? 'unchanged' : 'applied',
-					version: result.version,
-				});
-			} catch (error) {
-				const summary = problemSummary(error);
-				if (summary === null) {
-					ctx.logger.error('template application failed', { error, templateId, websiteId });
-					results.push({ websiteId, status: 'failed', error: { code: 'internal_error' } });
-				} else results.push({ websiteId, status: 'failed', error: summary });
-			}
-		}
-		const failed = results.filter((r) => r.status === 'failed').length;
-		return { templateId, templateVersion: doc.version, applied: results.length - failed, failed, results };
-	};
-
-	/**
-	 * Re-push the current template version to every website it was applied to with an older version (`all` = every one).
-	 * @param {RequestMeta & { merchantId: string, templateId: string, all?: boolean, canWrite?: (websiteId: string) => boolean }} input
-	 */
-	const pushTemplate = async ({ merchantId, templateId, all = false, canWrite, actor, requestId, ip }) => {
-		const doc = await repo.getTemplate(merchantId, templateId);
-		if (!doc) throw fail('not_found', 'No such template.');
-		const websiteIds = Object.entries(doc.applications ?? {})
-			.filter(([, a]) => all || /** @type {any} */ (a).templateVersion < doc.version)
-			.map(([websiteId]) => websiteId);
-		if (websiteIds.length === 0) return { templateId, templateVersion: doc.version, applied: 0, failed: 0, results: [] };
-		return applyTemplate({ templateId, websiteIds, merchantId, ...(canWrite ? { canWrite } : {}), actor, requestId, ip });
-	};
-
-	// ------------------------------------------------------------------------------------------------- schedules
-
-	/** @param {any} doc */
-	const scheduleView = (doc) => ({
-		scheduleId: String(doc._id),
-		target: doc.target,
-		at: doc.at,
-		status: doc.status,
-		change: JSON.parse(doc.change),
-		reason: doc.reason ?? null,
-		createdBy: doc.createdBy,
-		...(doc.version === undefined ? {} : { version: doc.version }),
-		...(doc.error === undefined ? {} : { error: doc.error }),
-		...(doc.appliedAt === undefined ? {} : { appliedAt: doc.appliedAt }),
-	});
-
-	/**
-	 * Store a change to apply later (validated now and again when applied). It is applied on read (F.19: no job): the
-	 * first read of the merchant's configuration at or after `at` (a document refresh, a console read) applies it.
-	 * @param {RequestMeta & { change: unknown, at: unknown, scope?: Scope }} input
-	 */
-	const schedule = async ({ change, at, scope, actor, requestId, ip }) => {
-		if (!isRecord(change))
-			throw fail('validation_failed', 'change must be an object.', [
-				{ path: '/change', message: 'change must be an object', code: 'invalid_change' },
-			]);
-		const { target, level, reason, ...ops } = /** @type {Record<string, any>} */ (change);
-		const r = await resolveTarget(target, level, scope);
-		if (r.merchantId === null)
-			throw fail('validation_failed', 'Platform policies cannot be scheduled.', [
-				{ path: '/change/target', message: 'platform level', code: 'invalid_target' },
-			]);
-		const when = parseScheduleAt(at, ctx.now());
-		if (!when.ok) throw fail('validation_failed', when.message, [{ path: '/at', message: when.message, code: 'invalid_at' }]);
-		const why = reasonFor(r.level, actor, reason);
-		await planChange({ r, actor, current: (await loadCurrent(r)).state, build: (state) => applyOps(state, ops) });
-		const scheduleId = createId('cfs', { randomBytes: ctx.randomBytes });
-		const doc = {
-			_id: scheduleId,
-			targetKey: r.key,
-			target: publicTarget(r),
-			change: JSON.stringify(ops),
-			at: new Date(when.value),
-			status: 'pending',
-			reason: why,
-			createdBy: actorRef(actor),
-		};
-		const merchantId = /** @type {string} */ (r.merchantId);
-		await repo.insertSchedule(merchantId, doc);
-		await ctx.audit.record({
-			actor,
-			action: 'config.scheduled',
-			target: { type: 'config_layer', id: r.key, merchantId, websiteId: r.websiteId },
-			after: { scheduleId, at: doc.at, change: ops },
-			requestId: requestId ?? null,
-			ip: ip ?? null,
-			reason: why,
-		});
-		return scheduleView({ ...doc, merchantId });
-	};
-
-	/**
-	 * Apply a scheduled change exactly once (version change key `schedule:<id>`).
-	 * @param {{ scheduleId: string, merchantId: string }} payload
-	 */
-	const applyScheduled = async ({ scheduleId, merchantId }) => {
-		const doc = await repo.getSchedule(merchantId, scheduleId);
-		if (!doc) return { status: 'missing' };
-		if (doc.status !== 'pending' && doc.status !== 'applying') return { status: doc.status };
-		const claimed = await repo.transitionSchedule(merchantId, scheduleId, ['pending', 'applying'], { status: 'applying' });
-		if (!claimed) return { status: 'skipped' };
-		const actor = /** @type {Actor} */ (doc.createdBy);
-		try {
-			const result = await applyChange({
-				target: doc.target,
-				level: doc.target.level,
-				change: JSON.parse(doc.change),
-				reason: doc.reason ?? `scheduled change ${scheduleId}`,
-				actor,
-				changeKey: `schedule:${scheduleId}`,
-				kind: 'scheduled',
-				extra: { scheduleId },
-			});
-			await repo.transitionSchedule(merchantId, scheduleId, ['applying'], {
-				status: 'applied',
-				version: result.version,
-				appliedAt: new Date(ctx.now()),
-			});
-			return { status: 'applied', version: result.version };
-		} catch (error) {
-			const summary = problemSummary(error);
-			if (summary === null || summary.code === 'unavailable' || summary.code === 'conflict') throw error; // retried
-			await repo.transitionSchedule(merchantId, scheduleId, ['applying'], { status: 'failed', error: summary });
-			return { status: 'failed', error: summary };
-		}
-	};
-
-	/** @type {Set<string>} merchants whose due changes this instance is applying (an apply re-reads the layers) */
-	const applying = new Set();
-
-	/**
-	 * Apply the merchant's scheduled changes whose time has come, oldest first (bounded). Runs when the merchant's
-	 * configuration is read; failures are logged and the change is tried again on the next read.
-	 * @param {string} merchantId
-	 */
-	const applyDue = async (merchantId) => {
-		if (applying.has(merchantId)) return;
-		applying.add(merchantId);
-		try {
-			for (const doc of await repo.dueSchedules(merchantId, new Date(ctx.now()), DUE_SCHEDULES_PER_READ)) {
-				try {
-					await applyScheduled({ scheduleId: String(doc._id), merchantId });
-				} catch (error) {
-					ctx.logger.warn('scheduled change not applied yet', { scheduleId: String(doc._id), error });
-				}
-			}
-		} finally {
-			applying.delete(merchantId);
-		}
-	};
-
-	/**
-	 * @param {RequestMeta & { merchantId: string, scheduleId: string, scope?: Scope }} input
-	 */
-	const cancelSchedule = async ({ merchantId, scheduleId, scope, actor, requestId, ip }) => {
-		const doc = await repo.getSchedule(merchantId, scheduleId);
-		if (!doc || (scope?.websiteId !== undefined && doc.target.websiteId !== scope.websiteId))
-			throw fail('not_found', 'No such scheduled change.');
-		if (!actorMayWrite(actor?.type, doc.target.level)) throw fail('forbidden', 'Not allowed to cancel this change.');
-		const updated = await repo.transitionSchedule(merchantId, scheduleId, ['pending'], {
-			status: 'cancelled',
-			cancelledBy: actorRef(actor),
-		});
-		if (!updated) throw fail('conflict', `The scheduled change is already ${doc.status}.`);
-		await ctx.audit.record({
-			actor,
-			action: 'config.schedule_cancelled',
-			target: { type: 'config_layer', id: doc.targetKey, merchantId, websiteId: doc.target.websiteId ?? null },
-			before: { scheduleId, status: doc.status },
-			after: { scheduleId, status: 'cancelled' },
-			requestId: requestId ?? null,
-			ip: ip ?? null,
-		});
-		return scheduleView(updated);
-	};
-
-	/** @param {{ target: unknown, level?: Level, scope?: Scope }} input */
-	const listSchedules = async ({ target, level, scope }) => {
-		const r = await resolveTarget(target, level, scope);
-		if (r.merchantId === null) return { items: [] };
-		await applyDue(r.merchantId);
-		return { items: (await repo.listSchedules(r.merchantId, r.key)).map(scheduleView) };
-	};
-
-	// ----------------------------------------------------------------------------------------------- experiments
-
-	/** @param {any} doc */
-	const experimentView = (doc) => ({
-		experimentId: String(doc._id),
-		subscriptionId: doc.subscriptionId,
-		websiteId: doc.websiteId,
-		appId: doc.appId,
-		element: doc.element,
-		...(doc.name === undefined ? {} : { name: doc.name }),
-		variants: doc.variants,
-		metric: doc.metric,
-		status: doc.status,
-		...(doc.startedAt ? { startedAt: doc.startedAt } : {}),
-		...(doc.stoppedAt ? { stoppedAt: doc.stoppedAt } : {}),
-		...(doc.winner ? { winner: doc.winner } : {}),
-	});
-
-	/**
-	 * @param {RequestMeta & { subscriptionId: string, experiment: unknown, scope?: Scope }} input
-	 */
-	const createExperiment = async ({ subscriptionId, experiment, scope, actor, requestId, ip }) => {
-		const r = await resolveTarget({ subscriptionId }, 'website', scope);
-		if (!actorMayWrite(actor?.type, 'website')) throw fail('forbidden', 'Not allowed to create experiments.');
-		const { index } = await manifestFor(r.appId, r.manifestVersion);
-		const checked = validateExperiment({ index, input: experiment, validateFeatureConfig });
-		if (!checked.ok) throw fail('validation_failed', 'The experiment is invalid.', checked.errors);
-		const merchantId = /** @type {string} */ (r.merchantId);
-		const doc = {
-			_id: createId('exp', { randomBytes: ctx.randomBytes }),
-			subscriptionId,
-			websiteId: r.websiteId,
-			appId: r.appId,
-			...checked.value,
-			status: 'draft',
-			createdBy: actorRef(actor),
-		};
-		await repo.insertExperiment(merchantId, doc);
-		await ctx.audit.record({
-			actor,
-			action: 'config.experiment_created',
-			target: { type: 'config_experiment', id: doc._id, merchantId, websiteId: r.websiteId },
-			after: checked.value,
-			requestId: requestId ?? null,
-			ip: ip ?? null,
-		});
-		return experimentView(doc);
-	};
-
-	/**
-	 * @param {RequestMeta & { subscriptionId: string, experimentId: string, to: 'running' | 'stopped', applyVariant?: unknown, scope?: Scope }} input
-	 */
-	const transitionExperiment = async ({ subscriptionId, experimentId, to, applyVariant, scope, actor, requestId, ip }) => {
-		const r = await resolveTarget({ subscriptionId }, 'website', scope);
-		if (!actorMayWrite(actor?.type, 'website')) throw fail('forbidden', 'Not allowed to change experiments.');
-		const merchantId = /** @type {string} */ (r.merchantId);
-		const doc = await repo.getExperiment(merchantId, experimentId);
-		if (!doc || doc.subscriptionId !== subscriptionId) throw fail('not_found', 'No such experiment.');
-		/** @type {any} */
-		let variant = null;
-		if (to === 'stopped' && applyVariant !== undefined && applyVariant !== null) {
-			variant = doc.variants.find((/** @type {any} */ v) => v.key === applyVariant);
-			if (!variant)
-				throw fail('validation_failed', 'Unknown variant.', [
-					{ path: '/applyVariant', message: 'unknown variant', code: 'invalid_variant' },
-				]);
-		}
-		const t = new Date(ctx.now());
-		const from = to === 'running' ? ['draft'] : ['draft', 'running'];
-		const set =
-			to === 'running'
-				? { status: 'running', startedAt: t }
-				: { status: 'stopped', stoppedAt: t, ...(variant ? { winner: variant.key } : {}) };
-		const updated = await repo.transitionExperiment(merchantId, experimentId, from, set);
-		if (updated === 'conflict') throw fail('conflict', `Another experiment is already running on ${doc.element}.`);
-		if (!updated) throw fail('conflict', `The experiment is already ${doc.status}.`);
-		await ctx.audit.record({
-			actor,
-			action: to === 'running' ? 'config.experiment_started' : 'config.experiment_stopped',
-			target: { type: 'config_experiment', id: experimentId, merchantId, websiteId: r.websiteId },
-			before: { status: doc.status },
-			after: { status: to, ...(variant ? { winner: variant.key } : {}) },
-			requestId: requestId ?? null,
-			ip: ip ?? null,
-		});
-		/** @type {unknown} */
-		let applied = null;
-		if (variant) {
-			applied = await applyChange({
-				target: { subscriptionId },
-				level: 'website',
-				change: { config: { [doc.element]: variant.config } },
-				reason: `experiment ${experimentId} winner ${variant.key}`,
-				scope,
-				actor,
-				requestId,
-				ip,
-				kind: 'experiment',
-				extra: { experimentId },
-			});
-		} else await invalidate(r);
-		return { ...experimentView(updated), ...(applied ? { applied } : {}) };
-	};
-
-	/** @param {{ subscriptionId: string, scope?: Scope }} input */
-	const listExperiments = async ({ subscriptionId, scope }) => {
-		const r = await resolveTarget({ subscriptionId }, 'website', scope);
-		return { items: (await repo.listExperiments(/** @type {string} */ (r.merchantId), subscriptionId)).map(experimentView) };
-	};
-
 	// --------------------------------------------------------------------------------------------------- preview
 
 	/**
@@ -1151,15 +570,9 @@ export const createConfigService = (ctx) => {
 	 */
 	const preview = async ({ subscriptionId, change, level = 'website', actor, scope }) => {
 		const sub = await resolveTarget({ subscriptionId }, 'website', scope);
-		const target =
-			level === 'platform'
-				? { appId: sub.appId }
-				: level === 'merchant'
-					? { merchantId: sub.merchantId, appId: sub.appId }
-					: { subscriptionId };
-		const r = level === 'website' ? sub : await resolveTarget(target, level);
+		const r =
+			level === 'website' ? sub : await resolveTarget(level === 'platform' ? { appId: sub.appId } : { subscriptionId }, level);
 		if (r.level === 'platform') r.manifestVersion = sub.manifestVersion;
-		if (r.level === 'merchant') r.manifestVersion = sub.manifestVersion;
 		const current = await loadCurrent(r);
 		const { next, diff } = await planChange({ r, actor, current: current.state, build: (state) => applyOps(state, change) });
 		const layers = {
@@ -1181,23 +594,6 @@ export const createConfigService = (ctx) => {
 		overview,
 		history,
 		rollback,
-		saveTemplate,
-		updateTemplate,
-		getTemplate,
-		listTemplates,
-		applyTemplate,
-		pushTemplate,
-		schedule,
-		applyScheduled,
-		applyDue,
-		cancelSchedule,
-		listSchedules,
-		createExperiment,
-		/** @param {Parameters<typeof transitionExperiment>[0] extends infer T ? Omit<T, 'to'> : never} input */
-		startExperiment: (input) => transitionExperiment({ ...input, to: 'running' }),
-		/** @param {Parameters<typeof transitionExperiment>[0] extends infer T ? Omit<T, 'to'> : never} input */
-		stopExperiment: (input) => transitionExperiment({ ...input, to: 'stopped' }),
-		listExperiments,
 		preview,
 	};
 };

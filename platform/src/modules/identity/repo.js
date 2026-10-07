@@ -30,7 +30,7 @@ import { C } from './schema.js';
  * @property {(actor: Actor | AuditActor, action: string, target: { type: string, id: string, merchantId?: string | null, websiteId?: string | null }, extra?: { before?: unknown, after?: unknown, reason?: string | null, meta?: Meta }) => Promise<string>} audit
  */
 
-/** @typedef {{ type: 'staff' | 'merchant_user' | 'product' | 'system', id: string, via?: { type: 'staff', id: string } | null }} AuditActor */
+/** @typedef {{ type: 'staff' | 'merchant_user' | 'product' | 'system', id: string }} AuditActor */
 
 /**
  * @param {ModuleContext} ctx
@@ -41,8 +41,6 @@ export const createRepo = (ctx) => {
 	/** @type {MutableOps} */ const merchants = ctx.collection(C.merchants);
 	/** @type {MutableOps} */ const tokens = ctx.collection(C.tokens);
 	/** @type {MutableOps} */ const domains = ctx.collection(C.domains);
-	/** @type {MutableOps} */ const partners = ctx.collection(C.partners);
-	/** @type {MutableOps} */ const developers = ctx.collection(C.developers);
 	/** @type {TenantRepository} */ const memberships = ctx.collection(C.memberships);
 	/** @type {TenantRepository} */ const invites = ctx.collection(C.invites);
 	/** @type {TenantRepository} */ const websites = ctx.collection(C.websites);
@@ -63,8 +61,6 @@ export const createRepo = (ctx) => {
 		merchants,
 		tokens,
 		domains,
-		partners,
-		developers,
 		memberships: scoped(memberships),
 		invites: scoped(invites),
 		websites: scoped(websites),
@@ -132,7 +128,7 @@ export const createRepo = (ctx) => {
  */
 export const auditActor = (actor) => {
 	const type = actor.type === 'staff' || actor.type === 'merchant_user' || actor.type === 'product' ? actor.type : 'system';
-	return { type, id: actor.id, ...(actor.via ? { via: actor.via } : {}) };
+	return { type, id: actor.id };
 };
 
 /** System actor for calls from other modules or jobs that pass none. */

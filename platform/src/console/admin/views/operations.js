@@ -1,31 +1,15 @@
 'use client';
 /**
  * Operations pages: connector status across merchants (status and check reports only — the staff API never
- * returns credentials or masked previews) and the hash-chained audit log with per-scope chain verification.
+ * returns credentials or masked previews) and the audit log search.
  * @module
  */
-import { useState } from 'react';
-import {
-	Badge,
-	Button,
-	Callout,
-	Card,
-	Input,
-	PageHeader,
-	Select,
-	StatusBadge,
-	Table,
-	formatDateTime,
-	formatNumber,
-	humanize,
-} from '@ss/ui';
+import { Badge, Button, Input, PageHeader, Select, StatusBadge, Table, formatDateTime, formatNumber, humanize } from '@ss/ui';
 import { Link } from '../../link.js';
-import { adminFetch, usePagedList } from '../client.js';
+import { usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { CONNECTOR_KINDS, CONNECTOR_STATUSES } from '../loaders.js';
 import { ActionProblem, ActorLabel, AdminProblem, IdChip } from './common.js';
-
-/** @typedef {import('@ss/ui').Problem} Problem */
 
 /**
  * Short summary of a connector check report (`checks[]` of `{ name, ok, code? }`): passed count and failing steps.
@@ -156,137 +140,56 @@ export function AuditView(props) {
 	const ok = props.ok === true;
 	const f = ok ? props.filter : {};
 	const list = usePagedList((cursor) => (ok ? adminApi.audit({ ...f, cursor }) : null), ok ? props.page : null);
-	const [scope, setScope] = useState(f.scope ?? 'global');
-	const [verifying, setVerifying] = useState(false);
-	const [result, setResult] = useState(/** @type {any} */ (null));
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	if (!ok) return <AdminProblem problem={props.problem} />;
-	const verify = async () => {
-		setVerifying(true);
-		setProblem(null);
-		setResult(null);
-		const r = await adminFetch(adminApi.auditVerification(scope.trim()));
-		setVerifying(false);
-		if (r.ok) setResult(r.data);
-		else setProblem(r.problem);
-	};
 	return (
 		<div className="space-y-6">
-			<PageHeader
-				title="Audit log"
-				subtitle="Append-only, hash-chained per scope (global for platform actions, merchant:<id> per merchant)."
+			<PageHeader title="Audit log" subtitle="Append-only record of every staff and merchant action." />
+			<form method="get" action="/admin/audit" className="flex flex-wrap items-end gap-3" aria-label="Filter the audit log">
+				<Input label="Actor id" name="actorId" defaultValue={f.actorId ?? ''} className="font-mono" fieldClassName="w-48" />
+				<Input
+					label="Target id"
+					name="targetId"
+					defaultValue={f.targetId ?? ''}
+					className="font-mono"
+					fieldClassName="w-48"
+				/>
+				<Input
+					label="Action"
+					name="action"
+					defaultValue={f.action ?? ''}
+					placeholder="credits.added · credits.*"
+					className="font-mono"
+					fieldClassName="w-48"
+				/>
+				<Button type="submit" variant="secondary">
+					Search
+				</Button>
+			</form>
+			<Table
+				caption="Audit entries"
+				rows={list.items}
+				rowKey={(a) => a.auditId}
+				empty="No entries match."
+				hasMore={Boolean(list.cursor)}
+				loadingMore={list.loading}
+				onLoadMore={() => void list.more()}
+				columns={[
+					{ key: 'at', header: 'When', rowHeader: true, render: (a) => formatDateTime(a.at) },
+					{ key: 'action', header: 'Action', render: (a) => <span className="font-mono text-xs">{a.action}</span> },
+					{ key: 'actor', header: 'Actor', render: (a) => <ActorLabel actor={a.actor} /> },
+					{
+						key: 'target',
+						header: 'Target',
+						render: (a) => (
+							<span className="text-xs">
+								{a.target?.type} <span className="font-mono">{a.target?.id}</span>
+							</span>
+						),
+					},
+					{ key: 'reason', header: 'Reason', render: (a) => a.reason ?? '—' },
+				]}
 			/>
-			<Card
-				title="Verify a chain"
-				subtitle="Recomputes every hash of the scope; an edited, deleted or reordered entry breaks it.">
-				<form
-					className="flex flex-wrap items-end gap-3"
-					onSubmit={(e) => {
-						e.preventDefault();
-						void verify();
-					}}>
-					<Input
-						label="Scope"
-						value={scope}
-						onChange={(e) => setScope(e.currentTarget.value)}
-						className="font-mono"
-						placeholder="global or merchant:mer_…"
-						fieldClassName="min-w-0 flex-1 sm:max-w-md"
-					/>
-					<Button type="submit" variant="secondary" loading={verifying}>
-						Verify
-					</Button>
-				</form>
-				{result ? (
-					<Callout
-						className="mt-3"
-						tone={result.ok ? 'success' : 'danger'}
-						title={result.ok ? 'Chain intact' : 'Chain broken'}>
-						{formatNumber(result.entries)} entries, head seq {formatNumber(result.seq)}
-						{result.broken ? ` · first broken link at seq ${result.broken.seq} (${humanize(result.broken.reason)})` : ''}
-					</Callout>
-				) : null}
-				<div className="mt-3">
-					<ActionProblem problem={problem} />
-				</div>
-			</Card>
-			{
-				<>
-					<form
-						method="get"
-						action="/admin/audit"
-						className="flex flex-wrap items-end gap-3"
-						aria-label="Filter the audit log">
-						<Input
-							label="Scope"
-							name="scope"
-							defaultValue={f.scope ?? ''}
-							placeholder="global · merchant:mer_…"
-							className="font-mono"
-							fieldClassName="w-64"
-						/>
-						<Input
-							label="Actor id"
-							name="actorId"
-							defaultValue={f.actorId ?? ''}
-							className="font-mono"
-							fieldClassName="w-48"
-						/>
-						<Input
-							label="Target id"
-							name="targetId"
-							defaultValue={f.targetId ?? ''}
-							className="font-mono"
-							fieldClassName="w-48"
-						/>
-						<Input
-							label="Action"
-							name="action"
-							defaultValue={f.action ?? ''}
-							placeholder="credits.added · credits.*"
-							className="font-mono"
-							fieldClassName="w-48"
-						/>
-						<Button type="submit" variant="secondary">
-							Search
-						</Button>
-					</form>
-					<Table
-						caption="Audit entries"
-						rows={list.items}
-						rowKey={(a) => a.auditId ?? a.id ?? `${a.scope}:${a.seq}`}
-						empty="No entries match."
-						hasMore={Boolean(list.cursor)}
-						loadingMore={list.loading}
-						onLoadMore={() => void list.more()}
-						columns={[
-							{ key: 'at', header: 'When', rowHeader: true, render: (a) => formatDateTime(a.at) },
-							{ key: 'action', header: 'Action', render: (a) => <span className="font-mono text-xs">{a.action}</span> },
-							{ key: 'actor', header: 'Actor', render: (a) => <ActorLabel actor={a.actor} /> },
-							{
-								key: 'target',
-								header: 'Target',
-								render: (a) => (
-									<span className="text-xs">
-										{a.target?.type} <span className="font-mono">{a.target?.id}</span>
-									</span>
-								),
-							},
-							{ key: 'reason', header: 'Reason', render: (a) => a.reason ?? '—' },
-							{
-								key: 'chain',
-								header: 'Chain',
-								render: (a) => (
-									<span className="font-mono text-[11px] text-muted" title={a.hash}>
-										{a.scope}#{a.seq}
-									</span>
-								),
-							},
-						]}
-					/>
-					<ActionProblem problem={list.problem} />
-				</>
-			}
+			<ActionProblem problem={list.problem} />
 		</div>
 	);
 }

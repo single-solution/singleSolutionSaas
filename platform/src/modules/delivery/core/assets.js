@@ -1,6 +1,6 @@
 /**
- * Pack asset rules (pure): which files may be uploaded, how large, and how they are checked against the signed
- * bundle descriptor the catalog stored (`assets: [{ path, sha256, size, contentType? }]`).
+ * Asset rules (pure): which files may be uploaded, how large, and how they are checked against the bundle descriptor
+ * of the pack version or widget bundle (`assets: [{ path, sha256, size, contentType? }]`).
  * @module
  */
 import { createHash } from 'node:crypto';
@@ -76,7 +76,7 @@ export const checkUpload = ({ path, bytes, contentType, declared }) => {
 		return { errors, contentType: '' };
 	}
 	if (!declared) {
-		errors.push({ path: '/path', code: 'not_in_descriptor', message: `${path} is not listed in the signed descriptor` });
+		errors.push({ path: '/path', code: 'not_in_descriptor', message: `${path} is not listed in the descriptor` });
 		return { errors, contentType: type.contentType };
 	}
 	const sent = mediaType(contentType);
@@ -89,6 +89,6 @@ export const checkUpload = ({ path, bytes, contentType, declared }) => {
 	if (bytes.byteLength !== declared.size)
 		errors.push({ path: '/body', code: 'size_mismatch', message: `the descriptor declares ${declared.size} bytes` });
 	if (sha256Hex(bytes) !== declared.sha256)
-		errors.push({ path: '/body', code: 'sha256_mismatch', message: 'the body does not match the signed sha256' });
+		errors.push({ path: '/body', code: 'sha256_mismatch', message: 'the body does not match the declared sha256' });
 	return { errors, contentType: type.contentType };
 };

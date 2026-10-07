@@ -1,9 +1,9 @@
 /**
  * Billing composition (pure): turns `@ss/entitlements` settlement plans into ledger drafts, metered inputs, burn
- * rates and spend-cap decisions. All amounts are integer millicredits.
+ * rates and the spend-cap look-ahead. All amounts are integer millicredits.
  * @module
  */
-import { burnRate, findPriceBook, planMeteredSettlement, priceBookResolver, spendCapDecision } from '@ss/entitlements';
+import { burnRate, findPriceBook, planMeteredSettlement, priceBookResolver } from '@ss/entitlements';
 
 /** @typedef {ReturnType<typeof import('@ss/entitlements').normaliseProduct>} Product */
 /** @typedef {Product['priceBooks'][number]} PriceBook */
@@ -118,71 +118,9 @@ export const bookOrThrow = (product, version) => {
 };
 
 /**
- * @typedef {object} SpendPolicy
- * @property {'website' | 'merchant'} scope
- * @property {string | null} websiteId
- * @property {'day' | 'month'} window
- * @property {number} limit
- * @property {string} timeZone
- */
-
-/**
  * Hours of burn a cap decision looks ahead. Settlement runs after the hour, so when caps are evaluated the hour in
  * progress is already committed (it has active instants and will be billed in full); pausing now only saves the hours
  * after it. Pausing when `spent + 2 × burn > limit` therefore keeps the period's spend within the cap (F.1 "use the
  * upcoming hour's cost to pause first"), and the same condition decides resuming, so holds never flap.
  */
 export const SPEND_LOOKAHEAD_HOURS = 2;
-
-/**
- * Spend-cap decisions per website of one merchant. A website pauses when one of its own caps, or a merchant cap,
- * would be exceeded by the committed and next hours (`upcoming` = {@link SPEND_LOOKAHEAD_HOURS} × the website's or the
- * merchant's hourly burn).
- * @param {{ merchantId: string, policies: readonly SpendPolicy[], entries: readonly { at: Date | string | number, amount: number,
- *   websiteId: string | null }[], burnByWebsite: Readonly<Record<string, number>>, now: number }} input
- * @returns {Record<string, { pause: boolean, resumeAt: string | null }>}
- */
-export const spendDecisions = ({ merchantId, policies, entries, burnByWebsite, now }) => {
-	const spend = entries.map((e) => ({
-		at: e.at instanceof Date ? e.at.getTime() : e.at,
-		amount: e.amount,
-		merchantId,
-		...(e.websiteId ? { websiteId: e.websiteId } : {}),
-	}));
-	const merchantCaps = policies
-		.filter((p) => p.scope === 'merchant')
-		.map((p) => ({
-			scope: /** @type {const} */ ('merchant'),
-			scopeId: merchantId,
-			window: p.window,
-			limit: p.limit,
-			timeZone: p.timeZone,
-		}));
-	const totalBurn = Object.values(burnByWebsite).reduce((s, n) => s + n, 0);
-	const merchantDecision = spendCapDecision({
-		caps: merchantCaps,
-		entries: spend,
-		now,
-		upcoming: SPEND_LOOKAHEAD_HOURS * totalBurn,
-	});
-	/** @type {Record<string, { pause: boolean, resumeAt: string | null }>} */
-	const out = {};
-	for (const [websiteId, burn] of Object.entries(burnByWebsite)) {
-		const caps = policies
-			.filter((p) => p.scope === 'website' && p.websiteId === websiteId)
-			.map((p) => ({
-				scope: /** @type {const} */ ('website'),
-				scopeId: websiteId,
-				window: p.window,
-				limit: p.limit,
-				timeZone: p.timeZone,
-			}));
-		const own = spendCapDecision({ caps, entries: spend, now, upcoming: SPEND_LOOKAHEAD_HOURS * burn });
-		const pause = own.shouldPause || merchantDecision.shouldPause;
-		const ends = [own.resumeAt, merchantDecision.resumeAt]
-			.filter((x) => x !== null)
-			.map((x) => Date.parse(/** @type {string} */ (x)));
-		out[websiteId] = { pause, resumeAt: pause && ends.length > 0 ? new Date(Math.max(...ends)).toISOString() : null };
-	}
-	return out;
-};

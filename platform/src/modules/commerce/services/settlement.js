@@ -9,13 +9,13 @@
  * inserts, a manual force — settles every hour exactly once; the cursor only moves after the append succeeded.
  *
  * After a merchant's subscriptions are settled: balance ≤ 0 pauses all of them (`insufficient_credits`), a positive
- * balance releases that hold; spend caps are evaluated with the next hour's burn (`spend_cap` hold until the window
- * resets or the cap is raised).
+ * balance releases that hold; the merchant's monthly spend cap is evaluated with the next hours' burn (`spend_cap`
+ * hold until the UTC month ends or the cap is raised or removed).
  * @module
  */
 import { createId } from '@ss/contracts';
-import { HOUR_MS, ceilHour, floorHour, periodBounds, planSettlement } from '@ss/entitlements';
-import { bookOrThrow, meteredDraft, settlementDraft, spendDecisions, subscriptionBurn } from '../core/billing.js';
+import { HOUR_MS, ceilHour, floorHour, periodBounds, planSettlement, spendCapDecision } from '@ss/entitlements';
+import { SPEND_LOOKAHEAD_HOURS, bookOrThrow, meteredDraft, settlementDraft, subscriptionBurn } from '../core/billing.js';
 import { settlementCatalog, unitPeriod } from '../core/catalog.js';
 import { CHARGE_TYPES } from '../core/ledger.js';
 import { pauseReasonOf, pinAt, runsNextHour, timelineEvents } from '../core/subscription.js';
@@ -192,47 +192,54 @@ export const createSettlement = ({ ctx, repo, deps, ledger, subscriptions }) => 
 	};
 
 	/**
-	 * Evaluate spend caps of a merchant and add/release `spend_cap` holds.
+	 * Charges of the merchant's current UTC month as spend entries (`amount` positive).
+	 * @param {string} merchantId @param {number} now
+	 * @returns {Promise<{ at: Date, amount: number }[]>}
+	 */
+	const monthCharges = async (merchantId, now) => {
+		const d = new Date(now);
+		const charges = await repo
+			.ledgerOf(merchantId)
+			.find(
+				{
+					merchantId,
+					type: { $in: [...CHARGE_TYPES] },
+					periodStart: { $gte: new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)) },
+				},
+				{ projection: { amount: 1, periodStart: 1 } },
+			)
+			.toArray();
+		return charges.map((e) => ({ at: e.periodStart, amount: -e.amount || 0 }));
+	};
+
+	/**
+	 * Evaluate the merchant's monthly spend cap and add/release the `spend_cap` hold on its live subscriptions. It pauses
+	 * when the month's spend plus {@link SPEND_LOOKAHEAD_HOURS} of the merchant's burn would exceed the cap, until the
+	 * month ends.
 	 * @param {string} merchantId
 	 */
 	const evaluateSpend = async (merchantId) => {
 		const subs = await repo.subscriptionsOfMerchant(merchantId, { live: true });
-		const policies = await repo.policiesOf(merchantId);
+		const cap = await repo.spendCapOf(merchantId);
 		const now = ctx.now();
-		if (policies.length === 0) {
-			for (const sub of subs)
-				if (sub.holds.includes('spend_cap'))
-					await subscriptions.setHold(sub, 'spend_cap', false, { actor: SYSTEM_ACTOR, reason: 'spend_cap_removed' });
-			return { paused: 0 };
+		/** @type {{ shouldPause: boolean, resumeAt: string | null }} */
+		let decision = { shouldPause: false, resumeAt: null };
+		if (cap) {
+			let burn = 0;
+			for (const sub of subs) burn += await burnOf(sub, now, { ignoreSpendCap: true });
+			decision = spendCapDecision({
+				cap: { limit: cap.limit },
+				entries: await monthCharges(merchantId, now),
+				now,
+				upcoming: SPEND_LOOKAHEAD_HOURS * burn,
+			});
 		}
-		const windowStart = Math.min(
-			...policies.map((p) => periodBounds({ unit: p.window, timeZone: p.timeZone ?? 'UTC', at: now }).start),
-		);
-		const charges = await repo
-			.ledgerOf(merchantId)
-			.find(
-				{ merchantId, type: { $in: [...CHARGE_TYPES] }, periodStart: { $gte: new Date(windowStart) } },
-				{ projection: { amount: 1, websiteId: 1, periodStart: 1 } },
-			)
-			.toArray();
-		/** @type {Record<string, number>} */
-		const burnByWebsite = {};
-		for (const sub of subs)
-			burnByWebsite[sub.websiteId] = (burnByWebsite[sub.websiteId] ?? 0) + (await burnOf(sub, now, { ignoreSpendCap: true }));
-		const decisions = spendDecisions({
-			merchantId,
-			policies: /** @type {any} */ (policies),
-			entries: charges.map((e) => ({ at: e.periodStart, amount: -e.amount || 0, websiteId: e.websiteId ?? null })),
-			burnByWebsite,
-			now,
-		});
 		let paused = 0;
 		for (const sub of subs) {
-			const decision = decisions[sub.websiteId] ?? { pause: false, resumeAt: null };
-			if (decision.pause && !sub.holds.includes('spend_cap')) paused += 1;
-			await subscriptions.setHold(sub, 'spend_cap', decision.pause, {
+			if (decision.shouldPause && !sub.holds.includes('spend_cap')) paused += 1;
+			await subscriptions.setHold(sub, 'spend_cap', decision.shouldPause, {
 				actor: SYSTEM_ACTOR,
-				reason: 'spend_cap',
+				reason: cap ? 'spend_cap' : 'spend_cap_removed',
 				resumeAt: decision.resumeAt,
 			});
 		}
@@ -308,6 +315,7 @@ export const createSettlement = ({ ctx, repo, deps, ledger, subscriptions }) => 
 		planFor,
 		applyBalanceRules,
 		evaluateSpend,
+		monthCharges,
 		burnOf,
 		raiseAlert,
 		catalogFor,

@@ -17,8 +17,6 @@ export const C = Object.freeze({
 	websites: 'identity_websites',
 	domains: 'identity_domains',
 	keys: 'identity_website_keys',
-	partners: 'identity_partners',
-	developers: 'identity_developers',
 	notes: 'identity_merchant_notes',
 	issuers: 'identity_issuers',
 	issuerRequests: 'identity_issuer_requests',
@@ -101,18 +99,6 @@ export const collections = Object.freeze([
 		description: 'Website key metadata (sk_: HMAC only; pk_: nothing) and revocation schedule. `_id` = keyId.',
 		tenant: 'merchant',
 		indexes: [{ keys: { merchantId: 1, websiteId: 1, createdAt: -1 } }, { keys: { revokeAt: 1, _id: 1 } }],
-	}),
-	defineCollection({
-		module: 'identity',
-		name: C.partners,
-		description: 'Partners (agencies) with merchant grants.',
-		indexes: [{ keys: { email: 1 }, unique: true }, { keys: { 'grants.merchantId': 1 } }],
-	}),
-	defineCollection({
-		module: 'identity',
-		name: C.developers,
-		description: 'Developers (product builders) with app grants.',
-		indexes: [{ keys: { email: 1 }, unique: true }, { keys: { 'grants.appId': 1 } }],
 	}),
 	defineCollection({
 		module: 'identity',

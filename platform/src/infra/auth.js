@@ -282,8 +282,6 @@ export const findRecoveryCode = (code, hashes, secret) => {
  * @property {string[]} roles
  * @property {Array<{ websiteId: string, roles: string[] }>} grants
  * @property {boolean} mfa second factor completed
- * @property {{ type: 'staff', id: string, name?: string | null } | null} via impersonating staff member
- * @property {boolean} [api] a staff API token (`Authorization: Bearer sst_…`, F.18) rather than a browser session
  * @property {Date} createdAt
  * @property {Date} lastSeenAt
  * @property {Date} expiresAt min(idle expiry, absolute expiry)
@@ -298,9 +296,6 @@ export const findRecoveryCode = (code, hashes, secret) => {
  * @property {string[]} [roles]
  * @property {Array<{ websiteId: string, roles: string[] }>} [grants]
  * @property {boolean} [mfa]
- * @property {{ type: 'staff', id: string, name?: string | null } | null} [via]
- * @property {boolean} [api] a staff API token (never a cookie)
- * @property {number} [absoluteMs] shorter absolute lifetime (e.g. impersonation ≤ 1 h)
  * @property {string | null} [ip]
  * @property {string | null} [userAgent]
  */
@@ -320,8 +315,6 @@ const toSession = (doc) =>
 		roles: doc.roles ?? [],
 		grants: doc.grants ?? [],
 		mfa: doc.mfa === true,
-		via: doc.via ?? null,
-		api: doc.api === true,
 		createdAt: doc.createdAt,
 		lastSeenAt: doc.lastSeenAt,
 		expiresAt: doc.expireAt,
@@ -350,8 +343,7 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 		if (typeof input.subject !== 'string' || input.subject.length === 0)
 			throw platformError('invalid_argument', 'subject is required');
 		const t = now();
-		const absolute =
-			input.absoluteExpiresAt ?? new Date(t + Math.min(input.absoluteMs ?? policy.absoluteMs, policy.absoluteMs));
+		const absolute = input.absoluteExpiresAt ?? new Date(t + policy.absoluteMs);
 		const token = randomToken(randomBytes, 32);
 		const doc = {
 			_id: idOf(token),
@@ -361,8 +353,6 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 			roles: input.roles ?? [],
 			grants: input.grants ?? [],
 			mfa: input.mfa === true,
-			via: input.via ?? null,
-			...(input.api === true ? { api: true } : {}),
 			ip: input.ip ?? null,
 			userAgent: input.userAgent ? String(input.userAgent).slice(0, 256) : null,
 			createdAt: input.createdAt ?? new Date(t),
@@ -426,7 +416,6 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 				roles: changes.roles ?? doc.roles,
 				grants: changes.grants ?? doc.grants,
 				mfa: changes.mfa ?? doc.mfa,
-				via: doc.via,
 				ip: doc.ip,
 				userAgent: doc.userAgent,
 				createdAt: doc.createdAt,
@@ -541,7 +530,6 @@ export const actorFromSession = (session) =>
 				roles: session.roles,
 				grants: session.grants,
 				...(session.merchantId ? { merchantId: session.merchantId } : {}),
-				...(session.via ? { via: session.via } : {}),
 			};
 
 // ---------------------------------------------------------------------------------------------------------------

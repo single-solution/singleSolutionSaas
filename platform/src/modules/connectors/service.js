@@ -1,6 +1,6 @@
 /**
  * Public service of the `connectors` module: client-owned resources (PLAN §1a) — the merchant's own database,
- * storage, AI, messaging, payments and analytics credentials.
+ * storage, AI, messaging and payments credentials.
  *
  * Custody rules (binding):
  * - credentials are validated server-side (`core/schemas.js`), sealed with `ctx.envelope` under
@@ -9,8 +9,8 @@
  * - they are opened only to run a connection check and at `resolve` time, for a product with an active subscription
  *   on the website whose accepted manifest requires the kind; every resolve (granted or denied) is audited without
  *   secrets;
- * - rotation keeps the previous sealed version for 24 h (rollback); revocation deletes all sealed material and stops
- *   resolution at once;
+ * - editing replaces the sealed credentials in place (re-sealed, re-checked); deleting removes the record and its
+ *   sealed material and stops resolution at once;
  * - every outbound call of a check goes through the `@ss/net` SSRF guard (URL policy + guarded DNS lookup).
  * @module
  */
@@ -33,7 +33,6 @@ import { ASSIGNMENTS, CONNECTORS } from './schema.js';
 /** @typedef {import('mongodb').Document} Document */
 /** @typedef {{ actor: Actor | { type: 'system', id: string }, requestId?: string | null, ip?: string | null }} Caller */
 
-export const ROLLBACK_WINDOW_MS = 24 * 60 * 60_000;
 export const HEALTH_INTERVAL_MS = 50 * 60_000;
 const SYSTEM = Object.freeze({ type: /** @type {const} */ ('system'), id: 'connectors.health_check' });
 
@@ -73,36 +72,27 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	 * Merchant-facing presentation (masked preview, never sealed material).
 	 * @param {Document} doc
 	 */
-	const present = (doc) => {
-		const until =
-			doc.previous?.expiresAt instanceof Date && doc.previous.expiresAt.getTime() > ctx.now() ? doc.previous.expiresAt : null;
-		return {
-			connectorId: String(doc._id),
-			merchantId: doc.merchantId,
-			kind: doc.kind,
-			provider: doc.provider,
-			label: doc.label,
-			websiteIds: [...(doc.websiteIds ?? [])],
-			status: doc.status,
-			lastCheckAt: iso(doc.lastCheckAt),
-			lastCheckReport: doc.lastCheckReport ?? null,
-			preview: doc.status === 'revoked' ? null : (doc.preview ?? null),
-			rollbackAvailableUntil: iso(until),
-			createdAt: iso(doc.createdAt),
-			rotatedAt: iso(doc.rotatedAt),
-			revokedAt: iso(doc.revokedAt),
-		};
-	};
+	const present = (doc) => ({
+		...presentStatus(doc),
+		preview: doc.preview ?? null,
+	});
 	/**
-	 * Staff presentation: status only.
+	 * Staff presentation: status only (no preview).
 	 * @param {Document} doc
 	 */
-	const presentStatus = (doc) => {
-		const { preview, rollbackAvailableUntil, ...rest } = present(doc);
-		void preview;
-		void rollbackAvailableUntil;
-		return rest;
-	};
+	const presentStatus = (doc) => ({
+		connectorId: String(doc._id),
+		merchantId: doc.merchantId,
+		kind: doc.kind,
+		provider: doc.provider,
+		label: doc.label,
+		websiteIds: [...(doc.websiteIds ?? [])],
+		status: doc.status,
+		lastCheckAt: iso(doc.lastCheckAt),
+		lastCheckReport: doc.lastCheckReport ?? null,
+		createdAt: iso(doc.createdAt),
+		updatedAt: iso(doc.updatedAt),
+	});
 	/** @param {Document} doc */
 	const summary = (doc) => ({
 		kind: doc.kind,
@@ -187,12 +177,10 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	/**
 	 * @param {string} merchantId
 	 * @param {unknown} connectorId
-	 * @param {{ live?: boolean }} [options] live = refuse revoked connectors
 	 */
-	const load = async (merchantId, connectorId, { live = false } = {}) => {
+	const load = async (merchantId, connectorId) => {
 		const doc = typeof connectorId === 'string' && isId(connectorId, 'con') ? await repo.get(merchantId, connectorId) : null;
 		if (!doc) throw problem('not_found', 'No such connector.');
-		if (live && doc.status === 'revoked') throw problem('conflict', 'The connector is revoked.');
 		return doc;
 	};
 
@@ -298,10 +286,8 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 			lastCheckReport: null,
 			sealed: seal(merchantId, connectorId, checked.credentials),
 			preview: previewOf(checked.kind, checked.provider, checked.credentials),
-			previous: null,
 			version: 1,
-			rotatedAt: null,
-			revokedAt: null,
+			updatedAt: null,
 			createdBy: caller.actor.id,
 		};
 		await repo.insert(merchantId, doc);
@@ -328,12 +314,11 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 		const ref = refOf(input);
 		const doc =
 			ref !== null
-				? await load(ref.merchantId, ref.connectorId, { live: true })
+				? await load(ref.merchantId, ref.connectorId)
 				: typeof input === 'string' && isId(input, 'con')
 					? await repo.findAcross(input)
 					: null;
 		if (!doc) throw problem('not_found', 'No such connector.');
-		if (doc.status === 'revoked') throw problem('conflict', 'The connector is revoked.');
 		const result = await check(doc);
 		const caller = /** @type {Partial<Caller>} */ (typeof input === 'object' ? input : {});
 		if (caller.actor)
@@ -344,95 +329,15 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	};
 
 	/**
-	 * Replace the credentials (same kind and provider), keep the previous version for 24 h, re-test.
-	 * @param {{ merchantId: string, connectorId: string, credentials: unknown } & Caller} input
-	 */
-	const rotate = async ({ merchantId, connectorId, credentials, ...caller }) => {
-		// expired rollback copies of old credentials are dropped whenever credentials are rotated
-		await repo.purgeExpiredPrevious(new Date(ctx.now()));
-		const doc = await load(merchantId, connectorId, { live: true });
-		const checked = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, policy);
-		if (!checked.ok) throw invalid('The credentials are invalid.', checked.errors);
-		const at = new Date(ctx.now());
-		const updated = await repo.update(merchantId, connectorId, doc.version, {
-			sealed: seal(merchantId, connectorId, checked.credentials),
-			preview: previewOf(checked.kind, checked.provider, checked.credentials),
-			previous: {
-				sealed: doc.sealed,
-				preview: doc.preview,
-				rotatedAt: at,
-				expiresAt: new Date(at.getTime() + ROLLBACK_WINDOW_MS),
-			},
-			rotatedAt: at,
-		});
-		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
-		await audit(caller, 'connectors.rotated', updated, { after: summary(updated) });
-		const result = await check(updated);
-		return { connector: present(result.doc), report: result.report };
-	};
-
-	/**
-	 * Restore the credentials replaced by the last rotation (within 24 h), re-test.
-	 * @param {{ merchantId: string, connectorId: string } & Caller} input
-	 */
-	const rollback = async ({ merchantId, connectorId, ...caller }) => {
-		const doc = await load(merchantId, connectorId, { live: true });
-		const previous = doc.previous;
-		if (!previous?.sealed || !(previous.expiresAt instanceof Date) || previous.expiresAt.getTime() <= ctx.now())
-			throw problem('gone', 'No previous credentials to roll back to (they are kept for 24 hours).');
-		const updated = await repo.update(merchantId, connectorId, doc.version, {
-			sealed: previous.sealed,
-			preview: previous.preview,
-			previous: null,
-			rotatedAt: new Date(ctx.now()),
-		});
-		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
-		await audit(caller, 'connectors.rolled_back', updated, { after: summary(updated) });
-		const result = await check(updated);
-		return { connector: present(result.doc), report: result.report };
-	};
-
-	/**
-	 * Revoke: delete every sealed copy, release website assignments, stop resolution. Idempotent.
-	 * @param {{ merchantId: string, connectorId: string, reason?: string | null } & Caller} input
-	 */
-	const revoke = async ({ merchantId, connectorId, reason = null, ...caller }) => {
-		let doc = await load(merchantId, connectorId);
-		if (doc.status === 'revoked') return { connector: present(doc) };
-		/** @type {Document | null} */
-		let updated = null;
-		for (let attempt = 0; attempt < 3 && !updated; attempt += 1) {
-			updated = await repo.update(merchantId, connectorId, doc.version, {
-				status: 'revoked',
-				sealed: null,
-				previous: null,
-				revokedAt: new Date(ctx.now()),
-			});
-			if (!updated) doc = await load(merchantId, connectorId);
-		}
-		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
-		await repo.releaseAll(merchantId, connectorId);
-		await audit(caller, 'connectors.revoked', updated, { before: summary(doc), after: summary(updated), reason });
-		await notify(changesFor(updated, updated.websiteIds ?? [], 'revoked'));
-		return { connector: present(updated) };
-	};
-
-	/**
-	 * Delete a connector record (revoking it first).
+	 * Delete a connector: release its websites and drop the record with its sealed credentials.
 	 * @param {{ merchantId: string, connectorId: string } & Caller} input
 	 */
 	const remove = async ({ merchantId, connectorId, ...caller }) => {
-		const { connector } = await revoke({ merchantId, connectorId, ...caller });
-		await repo.remove(merchantId, connectorId);
-		await audit(
-			caller,
-			'connectors.deleted',
-			{ _id: connectorId, merchantId },
-			{ before: { kind: connector.kind, label: connector.label } },
-		);
-		await notify(
-			connector.websiteIds.map((websiteId) => ({ websiteId, kind: connector.kind, status: 'missing', ref: connectorId })),
-		);
+		const doc = await load(merchantId, connectorId);
+		await repo.releaseAll(merchantId, String(doc._id));
+		await repo.remove(merchantId, String(doc._id));
+		await audit(caller, 'connectors.deleted', doc, { before: summary(doc) });
+		await notify(changesFor(doc, doc.websiteIds ?? [], 'missing'));
 	};
 
 	/**
@@ -440,7 +345,7 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	 * @param {{ merchantId: string, connectorId: string, websiteIds: unknown } & Caller} input
 	 */
 	const assign = async ({ merchantId, connectorId, websiteIds, ...caller }) => {
-		const doc = await load(merchantId, connectorId, { live: true });
+		const doc = await load(merchantId, connectorId);
 		const websites = validateWebsiteIds(websiteIds);
 		if (!websites.ok) throw invalid('The websites are invalid.', websites.errors);
 		await checkWebsites(merchantId, websites.value);
@@ -464,17 +369,35 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	};
 
 	/**
-	 * Rename a connector.
-	 * @param {{ merchantId: string, connectorId: string, label: unknown } & Caller} input
+	 * Edit a connector: rename it and/or replace its credentials (same kind and provider; re-sealed and re-checked).
+	 * @param {{ merchantId: string, connectorId: string, label?: unknown, credentials?: unknown } & Caller} input
 	 */
-	const update = async ({ merchantId, connectorId, label, ...caller }) => {
+	const update = async ({ merchantId, connectorId, label, credentials, ...caller }) => {
 		const doc = await load(merchantId, connectorId);
-		const name = validateLabel(label);
-		if (!name.ok) throw invalid('The connector is invalid.', name.errors);
-		const updated = await repo.update(merchantId, connectorId, doc.version, { label: name.value }, { bump: false });
+		if (label === undefined && credentials === undefined)
+			throw invalid('Nothing to change.', [{ path: '', message: 'send a label and/or credentials' }]);
+		/** @type {Document} */
+		const set = { updatedAt: new Date(ctx.now()) };
+		if (label !== undefined) {
+			const name = validateLabel(label);
+			if (!name.ok) throw invalid('The connector is invalid.', name.errors);
+			set.label = name.value;
+		}
+		if (credentials !== undefined) {
+			const checked = validateCredentials({ kind: doc.kind, provider: doc.provider, credentials }, policy);
+			if (!checked.ok) throw invalid('The credentials are invalid.', checked.errors);
+			set.sealed = seal(merchantId, String(doc._id), checked.credentials);
+			set.preview = previewOf(checked.kind, checked.provider, checked.credentials);
+		}
+		const updated = await repo.update(merchantId, String(doc._id), doc.version, set);
 		if (!updated) throw problem('conflict', 'The connector changed meanwhile; retry.');
-		await audit(caller, 'connectors.updated', updated, { before: { label: doc.label }, after: { label: name.value } });
-		return { connector: present(updated) };
+		await audit(caller, 'connectors.updated', updated, {
+			before: { label: doc.label },
+			after: { label: updated.label, ...(credentials === undefined ? {} : { accessReplaced: true }) },
+		});
+		if (credentials === undefined) return { connector: present(updated) };
+		const result = await check(updated);
+		return { connector: present(result.doc), report: result.report };
 	};
 
 	/**
@@ -538,16 +461,7 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 		const docs = await repo.forWebsite(merchantId, websiteId);
 		/** @type {Map<string, Document>} */
 		const byKind = new Map();
-		for (const doc of docs) {
-			const current = byKind.get(doc.kind);
-			const better =
-				!current ||
-				(current.status === 'revoked' && doc.status !== 'revoked') ||
-				(current.status === 'revoked' &&
-					doc.status === 'revoked' &&
-					(doc.revokedAt?.getTime?.() ?? 0) > (current.revokedAt?.getTime?.() ?? 0));
-			if (better) byKind.set(doc.kind, doc);
-		}
+		for (const doc of docs) if (!byKind.has(doc.kind)) byKind.set(doc.kind, doc);
 		return [...byKind.values()]
 			.map((doc) => ({ kind: String(doc.kind), ref: String(doc._id), status: String(doc.status) }))
 			.sort((a, b) => KINDS.indexOf(/** @type {any} */ (a.kind)) - KINDS.indexOf(/** @type {any} */ (b.kind)));
@@ -623,7 +537,7 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 		const decision = decideResolve({ appId, websiteId: w, kind: k, subscriptions, manifest, needs });
 		if (!decision.ok) throw await deny(decision.reason, merchantId, forbidden);
 		const doc = await repo.assigned(merchantId, w, k);
-		if (!doc || doc.status === 'revoked' || !doc.sealed || !(doc.websiteIds ?? []).includes(w))
+		if (!doc || !doc.sealed || !(doc.websiteIds ?? []).includes(w))
 			throw await deny(
 				'resource_missing',
 				merchantId,
@@ -664,9 +578,6 @@ export const createConnectorsService = (ctx, { policy, probes }) => {
 	return {
 		create,
 		test,
-		rotate,
-		rollback,
-		revoke,
 		remove,
 		assign,
 		update,

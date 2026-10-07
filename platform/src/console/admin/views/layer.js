@@ -208,7 +208,7 @@ export function LayerEditor({ title, subtitle, manifest, layer, effective = null
 					{elementMode !== 'inherit' ? (
 						<Switch
 							label="Lock the element switch"
-							description="Lower levels (merchant, website) cannot change it."
+							description="Lower levels (website overrides) cannot change it."
 							checked={elementLocked}
 							disabled={!canWrite}
 							onChange={setElementLocked}
@@ -237,9 +237,7 @@ export function LayerEditor({ title, subtitle, manifest, layer, effective = null
 						/>
 						<fieldset className="space-y-2 rounded-xl border border-line p-4">
 							<legend className="px-1 text-xs font-semibold uppercase tracking-wider text-muted">Locks</legend>
-							<p className="text-xs text-muted">
-								A locked value wins over every lower level (merchant defaults, website overrides, experiments).
-							</p>
+							<p className="text-xs text-muted">A locked value wins over every lower level (website overrides).</p>
 							{fields.map((f) => {
 								const key = `${element.key}.${f.name}`;
 								const locked = locks[f.name] ?? layer.features[key]?.locked === true;

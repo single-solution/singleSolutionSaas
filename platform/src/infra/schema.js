@@ -59,23 +59,21 @@ export const INFRA_COLLECTIONS = Object.freeze([
 	defineCollection({
 		module: 'platform',
 		name: COLLECTIONS.audit,
-		description: 'Append-only, hash-chained audit log (one chain per scope: global and per merchant).',
+		description: 'Append-only audit log.',
 		appendOnly: true,
 		timestamps: false,
 		indexes: [
-			{ keys: { scope: 1, seq: 1 }, name: 'chain', unique: true, partialFilterExpression: { scope: { $type: 'string' } } },
 			{ keys: { merchantId: 1, at: -1, _id: -1 } },
 			{ keys: { 'target.id': 1, at: -1 } },
 			{ keys: { 'actor.id': 1, at: -1 } },
 			{ keys: { action: 1, at: -1 } },
-			{ keys: { scope: 1, at: -1, _id: -1 } },
 			{ keys: { at: -1, _id: -1 } },
 		],
 	}),
 	defineCollection({
 		module: 'platform',
 		name: COLLECTIONS.jobs,
-		description: 'Job queue with leases, retries and dead letters.',
+		description: 'Job queue with leases and retries.',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 0 },
 		indexes: [

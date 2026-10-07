@@ -6,9 +6,9 @@
 import { isDuplicateKey } from '../../infra/util.js';
 
 /** @typedef {import('../../infra/db.js').MutableOps} MutableOps */
-/** @typedef {import('@ss/contracts').Manifest} Manifest */
-/** @typedef {import('./core/lifecycle.js').AppStatus} AppStatus */
-/** @typedef {import('./core/lifecycle.js').VersionStatus} VersionStatus */
+/** @typedef {'active' | 'inactive'} AppStatus */
+/** @typedef {'uploading' | 'accepted' | 'superseded'} VersionStatus */
+/** @typedef {{ path: string, sha256: string, size: number, contentType?: string }} AssetMeta */
 
 /**
  * @typedef {object} AppDoc
@@ -16,12 +16,9 @@ import { isDuplicateKey } from '../../infra/util.js';
  * @property {string} slug
  * @property {'service' | 'pack'} kind
  * @property {AppStatus} status
- * @property {Date | null} sunsetAt
- * @property {{ production: { baseUrl: string } | null, staging: { baseUrl: string } | null }} environments
- * @property {number} currentVersion
- * @property {number | null} pendingVersion
+ * @property {string | null} baseUrl connected production base URL (service products)
+ * @property {number | null} currentVersion null until a pack's first version is ready
  * @property {number} latestVersion highest version number allocated
- * @property {{ lastHeartbeatAt: Date | null, lastSeenAt?: Date | null, version: string | null, status: string | null, queues: Record<string, number> | null } | null} health
  * @property {string} createdBy
  * @property {Date} [createdAt]
  * @property {Date} [updatedAt]
@@ -36,13 +33,9 @@ import { isDuplicateKey } from '../../infra/util.js';
  * @property {string} manifestHash SHA-256 hex of the canonical JSON
  * @property {string} productVersion manifest `product.version`
  * @property {VersionStatus} status
- * @property {'registration' | 'connection' | 'refresh' | 'upload'} source
- * @property {unknown} diff
- * @property {boolean} breaking
- * @property {Array<{ path: string, sha256: string, size: number, contentType?: string }> | null} assets packs only
- * @property {{ kid: string, alg: string, sig: string } | null} signature packs only
+ * @property {'connection' | 'upload'} source
+ * @property {AssetMeta[] | null} assets packs only
  * @property {string} submittedBy
- * @property {{ by: string, at: Date, reason: string | null } | null} review
  * @property {Date} [createdAt]
  */
 
@@ -53,10 +46,6 @@ import { isDuplicateKey } from '../../infra/util.js';
  * @property {string} kid
  * @property {import('@ss/protocol').PublicJwk} publicJwk
  * @property {string} thumbprint
- * @property {'active' | 'revoked'} status
- * @property {Date | null} notAfter
- * @property {string} source `connection` | `registration` | `rotation` | `upload`
- * @property {{ at: Date, by: string, reason: string } | null} revoked
  * @property {Date} [createdAt]
  */
 
@@ -102,11 +91,11 @@ export const createCatalogRepo = ({ apps, versions, keys, launches }) =>
 		/**
 		 * Reserve the next version number.
 		 * @param {string} appId
-		 * @returns {Promise<number | null>}
+		 * @returns {Promise<number>}
 		 */
 		nextVersion: async (appId) => {
 			const doc = await apps.findOneAndUpdate({ _id: appId }, { $inc: { latestVersion: 1 } }, { returnDocument: 'after' });
-			return doc ? Number(doc.latestVersion) : null;
+			return Number(doc?.latestVersion);
 		},
 		/**
 		 * @param {{ status?: string[], kind?: string, after?: string | null, limit: number }} query
@@ -141,47 +130,41 @@ export const createCatalogRepo = ({ apps, versions, keys, launches }) =>
 				: /** @type {VersionDoc[]} */ (
 						await versions.find({ _id: { $in: refs.map((r) => versionId(r.appId, r.version)) } }).toArray()
 					),
-		/** @param {string} appId @param {{ before?: number | null, limit: number }} page @returns {Promise<VersionDoc[]>} */
-		listVersions: async (appId, { before, limit }) =>
+		/** Newest first, without manifests. @param {string} appId @param {number} limit @returns {Promise<VersionDoc[]>} */
+		listVersions: async (appId, limit) =>
 			/** @type {VersionDoc[]} */ (
-				await versions
-					.find(
-						{ appId, ...(before ? { version: { $lt: before } } : {}) },
-						{ sort: { version: -1 }, limit, projection: { manifestJson: 0 } },
-					)
-					.toArray()
+				await versions.find({ appId }, { sort: { version: -1 }, limit, projection: { manifestJson: 0 } }).toArray()
 			),
 		/**
 		 * @param {string} appId
 		 * @param {number} version
 		 * @param {VersionStatus} from
-		 * @param {Record<string, unknown>} set
+		 * @param {VersionStatus} to
 		 * @returns {Promise<boolean>}
 		 */
-		setVersionStatus: async (appId, version, from, set) =>
-			(await versions.updateOne({ _id: versionId(appId, version), status: from }, { $set: set })).modifiedCount === 1,
+		setVersionStatus: async (appId, version, from, to) =>
+			(await versions.updateOne({ _id: versionId(appId, version), status: from }, { $set: { status: to } })).modifiedCount ===
+			1,
+		/** Older uploads that never completed are superseded by a newer one. @param {string} appId @param {number} below */
+		supersedeUploads: async (appId, below) => {
+			await versions.updateMany({ appId, status: 'uploading', version: { $lt: below } }, { $set: { status: 'superseded' } });
+		},
 
 		// --- keys
-		/** @param {KeyDoc} doc @returns {Promise<boolean>} false when the kid exists */
+		/** @param {KeyDoc} doc (a kid already stored is kept) */
 		insertKey: async (doc) => {
 			try {
 				await keys.insertOne(doc);
-				return true;
 			} catch (error) {
-				if (isDuplicateKey(error)) return false;
-				throw error;
+				if (!isDuplicateKey(error)) throw error;
 			}
 		},
 		/** @param {string} appId @returns {Promise<KeyDoc[]>} */
 		keys: async (appId) => /** @type {KeyDoc[]} */ (await keys.find({ appId }, { sort: { createdAt: 1, _id: 1 } }).toArray()),
-		/** @param {string} appId @param {Date} notAfter */
-		limitActiveKeys: async (appId, notAfter) => {
-			await keys.updateMany({ appId, status: 'active', notAfter: null }, { $set: { notAfter } });
+		/** Remove every key of the app but `kid`. @param {string} appId @param {string} kid */
+		dropOtherKeys: async (appId, kid) => {
+			await keys.deleteMany({ appId, kid: { $ne: kid } });
 		},
-		/** @param {string} appId @param {string} kid @param {{ at: Date, by: string, reason: string }} revoked */
-		revokeKey: async (appId, kid, revoked) =>
-			(await keys.updateOne({ _id: keyId(appId, kid), status: 'active' }, { $set: { status: 'revoked', revoked } }))
-				.modifiedCount === 1,
 
 		// --- launches
 		/** @param {{ _id: string, appId: string, kind: string, subject: string, merchantId: string | null, actor: string | null, expireAt: Date }} doc */

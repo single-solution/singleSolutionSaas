@@ -97,8 +97,9 @@ describe('commerce routes and tenant isolation', () => {
 			['GET', `/v1/merchants/${M1}/balance`, undefined],
 			['GET', `/v1/merchants/${M1}/meter`, undefined],
 			['GET', `/v1/merchants/${M1}/statement`, undefined],
-			['GET', `/v1/merchants/${M1}/spend-policies`, undefined],
-			['POST', `/v1/merchants/${M1}/spend-policies`, { scope: 'merchant', window: 'day', limit: 1 }],
+			['GET', `/v1/merchants/${M1}/spend-cap`, undefined],
+			['PUT', `/v1/merchants/${M1}/spend-cap`, { limit: 1 }],
+			['DELETE', `/v1/merchants/${M1}/spend-cap`, undefined],
 		])) {
 			const res = await h.call(method, path, {
 				headers: { ...owner2, ...(method === 'POST' ? idem() : {}) },
@@ -165,18 +166,15 @@ describe('commerce routes and tenant isolation', () => {
 		expect(full.json.openingBalanceMillicredits).toBe(0);
 		expect(full.json.closingBalanceMillicredits).toBe(balance.json.balanceMillicredits);
 
-		// spend policies
-		const policy = await h.call('POST', `/v1/merchants/${M1}/spend-policies`, {
-			headers: { ...billing1, ...idem() },
-			body: { scope: 'website', websiteId: W2, window: 'month', limit: 1_000_000 },
-		});
-		expect(policy.status).toBe(201);
-		const policyPath = `/v1/merchants/${M1}/spend-policies/${policy.json.policy.policyId}`;
-		expect((await h.call('PUT', policyPath, { headers: owner2, body: { limit: 5 } })).status).toBe(403);
-		expect((await h.call('PUT', policyPath, { headers: billing1, body: { limit: 5 } })).json.policy.limitMillicredits).toBe(5);
-		expect((await h.call('GET', `/v1/merchants/${M1}/spend-policies`, { headers: owner1 })).json.items).toHaveLength(1);
-		expect((await h.call('DELETE', policyPath, { headers: owner2 })).status).toBe(403);
-		expect((await h.call('DELETE', policyPath, { headers: billing1 })).status).toBe(204);
+		// monthly spend cap
+		const cap = `/v1/merchants/${M1}/spend-cap`;
+		expect((await h.call('PUT', cap, { headers: owner2, body: { limit: 5 } })).status).toBe(403);
+		expect((await h.call('PUT', cap, { headers: billing1, body: { limit: 0 } })).status).toBe(422);
+		expect((await h.call('PUT', cap, { headers: billing1, body: { limit: 1_000_000 } })).json.limit).toBe(1_000_000);
+		expect((await h.call('GET', cap, { headers: owner1 })).json).toMatchObject({ limit: 1_000_000, reached: false });
+		expect((await h.call('DELETE', cap, { headers: owner2 })).status).toBe(403);
+		expect((await h.call('DELETE', cap, { headers: billing1 })).status).toBe(204);
+		expect((await h.call('GET', cap, { headers: owner1 })).json.limit).toBeNull();
 
 		// admin: staff only, permission checked
 		const credit = (/** @type {Record<string, string>} */ who, /** @type {string} */ segment, /** @type {unknown} */ body) =>

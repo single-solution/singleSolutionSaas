@@ -26,7 +26,7 @@ export const STAFF_PASSWORD_MIN = 12;
 export const safeAdminNext = (next) =>
 	typeof next === 'string' && /^\/admin(?:[/?#]|$)/.test(next) && !next.startsWith('//') && !next.includes('\\')
 		? next
-		: adminRoutes.dashboard();
+		: adminRoutes.merchants();
 
 /**
  * @param {{ title: string, subtitle?: import('react').ReactNode, children: import('react').ReactNode,

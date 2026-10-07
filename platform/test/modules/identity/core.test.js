@@ -15,7 +15,6 @@ import {
 	presentInvite,
 	presentMember,
 	presentMerchant,
-	presentParty,
 	presentStaff,
 	presentUser,
 	presentWebsite,
@@ -75,9 +74,6 @@ describe('inputs: fields', () => {
 		expect(I.recoveryCode(1).ok).toBe(false);
 		expect(I.bool(true).ok).toBe(true);
 		expect(I.bool('true').ok).toBe(false);
-		expect(I.appId('app_notes').ok).toBe(true);
-		expect(I.appId('A').ok).toBe(false);
-		expect(I.appId(1).ok).toBe(false);
 	});
 	it('roles and grants', () => {
 		const merchant = I.roles(I.ASSIGNABLE_MERCHANT_ROLES);
@@ -186,9 +182,6 @@ describe('inputs: objects', () => {
 			['websiteTransfer', { toMerchantId: 'mer_0123456789', reason: 'r' }],
 			['staffCreate', { email: 'a@b.co', roles: ['support'], name: 'N' }],
 			['staffUpdate', { status: 'disabled' }],
-			['party', { name: 'N', email: 'a@b.co' }],
-			['partnerGrant', { merchantId: 'mer_0123456789', roles: ['billing'] }],
-			['developerGrant', { appId: 'app_x' }],
 		]);
 		for (const [name, body] of ok) expect(/** @type {any} */ (I.inputs[name])(body).ok, name).toBe(true);
 		for (const name of /** @type {Array<keyof typeof I.inputs>} */ (Object.keys(I.inputs)))
@@ -390,10 +383,6 @@ describe('presentation', () => {
 		});
 		expect(presentMember({ userId: 'usr_1' }, null)).toMatchObject({ email: null, roles: [], grants: [], status: 'unknown' });
 		expect(presentInvite({ _id: 'inv_1', email: 'e', status: 'pending' })).toMatchObject({ roles: [], grants: [] });
-		expect(presentParty({ _id: 'prt_1', name: 'P', email: 'e', status: 'active' }, 'partnerId')).toMatchObject({
-			partnerId: 'prt_1',
-			grants: [],
-		});
 	});
 });
 

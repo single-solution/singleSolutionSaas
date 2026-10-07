@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 /**
- * Merchant Console in the browser (jsdom), part 3 — keys, resources (connectors), deliveries, credits and spend
- * policies against a live in-process Portal: keys created (shown once, then only the hint), rotated and revoked;
- * connectors created per kind with client validation, tested, rotated, rotation undone, assigned to websites,
- * revoked and deleted; deliveries filtered, paged and replayed; the credits statement with filters; spend caps
- * created, edited and removed.
+ * Merchant Console in the browser (jsdom), part 3 — keys, resources (connectors), credits and the spend cap against
+ * a live in-process Portal: keys created (shown once, then only the hint), rotated and revoked; connectors created
+ * per kind with client validation, tested, edited (label, new credentials), assigned to websites and deleted; the
+ * credits statement with filters; the monthly spend cap set, changed and removed.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
@@ -12,8 +11,7 @@ import { closeMongoClients } from '../../src/infra/db.js';
 import * as loaders from '../../src/console/loaders.js';
 import { KeysView } from '../../src/console/views/keys.js';
 import { CheckReport, ConnectorsView, providerLabel } from '../../src/console/views/connectors.js';
-import { DeliveriesView } from '../../src/console/views/deliveries.js';
-import { CreditsView, SpendPoliciesView } from '../../src/console/views/credits.js';
+import { CreditsView, SpendCapView } from '../../src/console/views/credits.js';
 import { byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
@@ -23,6 +21,7 @@ import {
 	clickEl,
 	createWorld,
 	dialog,
+	fill,
 	fillDialog,
 	press,
 	pressDialog,
@@ -54,8 +53,8 @@ const withToasts = (node) => render(<ToastProvider durationMs={600_000}>{node}</
 /** `YYYY-MM-DD` `days` from today (UTC). @param {number} days */
 const day = (days) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 
-describe('merchant console interactions (jsdom): keys, resources, deliveries, credits', () => {
-	it('drives keys, connectors, deliveries, credits and spend policies against a live Portal', async () => {
+describe('merchant console interactions (jsdom): keys, resources, credits', () => {
+	it('drives keys, connectors, credits and the spend cap against a live Portal', async () => {
 		const restore = quiet();
 		const world = await createWorld({ db: mongo.db('merchant_ui_3') });
 		const appId = await world.seedPack();
@@ -199,9 +198,9 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 
 		// a connector assigned only to the test twin (so "Show all" appears on the live website)
 		const twinConnector = await b.api.post(`/v1/merchants/${merchantId}/connectors`, {
-			kind: 'analytics',
-			provider: 'ga',
-			credentials: { ids: { measurementId: 'G-TEST' } },
+			kind: 'ai',
+			provider: 'openai',
+			credentials: { apiKey: 'sk-test-1' },
 			websiteIds: [twinId],
 		});
 		expect(twinConnector.ok).toBe(true);
@@ -211,22 +210,26 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Test')[0]));
 		await until(() => shows('Check failed') || shows('Check passed'));
 		world.probe.ok = true;
-		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Rotate credentials')[0]));
-		await pressDialog('Rotate');
-		await until(() => dialog().querySelector('[role="alert"]'));
-		const rotateFields = [...dialog().querySelectorAll('input, textarea')];
-		for (const el of rotateFields)
-			if (/** @type {HTMLInputElement} */ (el).type !== 'checkbox') type(el, 'publishableKey=pk_2');
-		await pressDialog('Rotate');
-		await until(() => shows('Credentials rotated') || b.calls.some((c) => c.path.endsWith('/rotate') && c.status >= 400));
-		await settle(2);
-		if (document.querySelector('[role="dialog"]')) await pressDialog('Cancel');
-		await until(() => buttons('Undo rotation').length > 0 || true);
-		if (buttons('Undo rotation').length > 0) {
-			await clickEl(/** @type {HTMLButtonElement} */ (buttons('Undo rotation')[0]));
-			await pressDialog('Restore previous credentials');
-			await until(() => shows('Previous credentials restored'));
-		}
+		// edit: an empty form changes nothing locally; a new label alone; then new credentials (re-checked)
+		/** @param {string} name the connector row showing `name` */
+		const rowOf = (name) =>
+			/** @type {HTMLElement} */ ([...document.querySelectorAll('li')].find((li) => li.textContent?.includes(name)));
+		await clickEl(button('Edit', rowOf('Main DB')));
+		fillDialog('Label', '');
+		await pressDialog('Save');
+		expect(shows('Enter a label or new credentials.')).toBe(true);
+		fillDialog('Label', 'Renamed');
+		await pressDialog('Save');
+		await until(() => shows('Connector updated'));
+		await until(() => rowOf('Renamed'));
+		await clickEl(button('Edit', rowOf('Renamed')));
+		expect(byLabel(dialog(), 'Label').value).toBe('Renamed');
+		fillDialog('Connection string', 'mongodb+srv://shop:other@cluster0.example.net/shop?tls=true');
+		await pressDialog('Save');
+		await until(() => b.calls.filter((c) => c.method === 'PATCH' && c.status === 200).length >= 2);
+		const patched = b.calls.filter((c) => c.method === 'PATCH').at(-1);
+		expect(patched?.body?.report?.ok).toBe(true);
+		await until(() => !document.querySelector('[role="dialog"]'));
 		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Websites')[0]));
 		await check('shop.example.com (test)', dialog());
 		await pressDialog('Save');
@@ -251,13 +254,10 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 			await until(() => !document.querySelector('[role="dialog"]'));
 		}
 		await press('Only this website');
-		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Revoke')[0]));
-		await pressDialog('Revoke now');
-		await until(() => shows('Resource revoked'));
 		await until(() => buttons('Delete').length > 0);
 		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Delete')[0]));
 		await pressDialog('Delete');
-		await until(() => shows('Resource deleted'));
+		await until(() => shows('Connector deleted'));
 		cleanup();
 		// stale page: actions on a deleted connector show the problem
 		const stale = await resources();
@@ -270,8 +270,6 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 			status: 'connected',
 			websiteIds: [websiteId],
 			createdAt: new Date().toISOString(),
-			rotatedAt: new Date().toISOString(),
-			rollbackAvailableUntil: new Date(Date.now() + 3_600_000).toISOString(),
 			preview: { host: 'cluster0.example.net', dbName: null },
 			lastCheckReport: {
 				ok: false,
@@ -289,14 +287,14 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 		await pressDialog('Save');
 		await until(() => b.calls.some((c) => c.path.endsWith(`${ghost.connectorId}/websites`) && c.status >= 400));
 		await pressDialog('Cancel');
-		await press('Undo rotation');
-		await pressDialog('Restore previous credentials');
+		await press('Delete');
+		await pressDialog('Delete');
 		await until(() => dialog().querySelector('[role="alert"]'));
 		await pressDialog('Cancel');
-		await press('Rotate credentials');
+		await press('Edit');
 		fillDialog('Connection string', 'mongodb+srv://a:b@cluster0.example.net/x?tls=true');
-		await pressDialog('Rotate');
-		await until(() => b.calls.some((c) => c.path.endsWith(`${ghost.connectorId}/rotate`) && c.status >= 400));
+		await pressDialog('Save');
+		await until(() => b.calls.some((c) => c.method === 'PATCH' && c.path.endsWith(ghost.connectorId) && c.status >= 400));
 		await pressDialog('Cancel');
 		await press('Test');
 		await until(() => b.calls.some((c) => c.path.endsWith(`${ghost.connectorId}/test`) && c.status >= 400));
@@ -306,49 +304,6 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 		cleanup();
 		expect(providerLabel('mongodb')).toBe('MongoDB');
 		expect(providerLabel('my-gateway')).toMatch(/gateway/i);
-
-		// ---------------------------------------------------------------- deliveries
-		const deliveries = await loaders.loadDeliveries(b.api, merchantId, websiteId);
-		if (!deliveries.ok) throw new Error('deliveries');
-		const dead = {
-			deliveryId: 'dlv_0000000000000000000000000z',
-			type: 'order.placed@1',
-			kind: 'control',
-			appId,
-			status: 'dead',
-			attempts: 8,
-			replays: 1,
-			lastErrorCode: 'http_500',
-			lastHttpStatus: 500,
-			createdAt: new Date().toISOString(),
-		};
-		withToasts(
-			<DeliveriesView
-				{...deliveries}
-				deliveries={{
-					items: [
-						dead,
-						{ ...dead, deliveryId: 'dlv_1', status: 'delivered', replays: 2, lastErrorCode: null, lastHttpStatus: null },
-					],
-					nextCursor: 'cursor-1',
-				}}
-			/>,
-		);
-		expect(shows('(+1 replay)') && shows('(+2 replays)')).toBe(true);
-		await press('Replay');
-		await until(() => b.calls.some((c) => c.path.endsWith(`${dead.deliveryId}/replay`)));
-		await until(() => document.querySelector('[role="alert"], .text-danger'));
-		await press('Load more');
-		await until(() => b.calls.some((c) => c.path.includes('/deliveries?') && c.path.includes('cursor')));
-		await settle(2);
-		type(byLabel(document, 'Status'), 'dead');
-		await until(() => shows('No dead deliveries.'));
-		type(byLabel(document, 'Status'), '');
-		await settle(2);
-		cleanup();
-		render(<DeliveriesView ok={false} problem={{ status: 404, title: 'Not found', code: 'not_found' }} />);
-		expect(shows('Not found')).toBe(true);
-		cleanup();
 
 		// ---------------------------------------------------------------- credits statement with filters
 		render(<CreditsView {...await loaders.loadCredits(b.api, merchantId, { from: day(-30), to: day(1), websiteId })} />);
@@ -402,64 +357,47 @@ describe('merchant console interactions (jsdom): keys, resources, deliveries, cr
 		render(<CreditsView ok={false} problem={{ status: 403, title: 'Forbidden', code: 'forbidden' }} />);
 		cleanup();
 
-		// ---------------------------------------------------------------- spend policies
-		withToasts(<SpendPoliciesView {...await loaders.loadSpendPolicies(b.api, merchantId)} />);
-		expect(shows('No caps yet')).toBe(true);
-		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Add cap')[0]));
-		await pressDialog('Save');
-		expect(dialog().querySelector('[role="alert"]')).not.toBeNull();
-		await check('One website', dialog());
-		type(byLabel(dialog(), 'Website'), '');
-		fillDialog('Cap', '50');
-		await pressDialog('Save');
-		expect(shows('Choose a website.')).toBe(true);
-		type(byLabel(dialog(), 'Website'), websiteId);
-		await check('Per day', dialog());
-		type(byLabel(dialog(), 'Time zone'), 'Europe/Berlin');
-		await pressDialog('Save');
-		await until(() => shows('Cap created'));
-		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Add cap')[0]));
-		fillDialog('Cap', '1000000000000000');
-		await pressDialog('Save');
+		// ---------------------------------------------------------------- spend cap
+		withToasts(<SpendCapView {...await loaders.loadSpendCap(b.api, merchantId)} />);
+		expect(shows('No cap')).toBe(true);
+		expect(buttons('Remove cap')).toHaveLength(0);
+		fill('Monthly cap', '0');
+		await press('Save');
+		expect(shows('Enter an amount above zero.')).toBe(true);
+		fill('Monthly cap', 'abc');
+		await press('Save');
+		expect(b.calls.some((c) => c.method === 'PUT' && c.path.endsWith('/spend-cap'))).toBe(false);
+		fill('Monthly cap', '50');
+		await press('Save');
+		await until(() => shows('Spend cap saved'));
+		await until(() => shows('50 credits'));
+		const put = b.calls.find((c) => c.method === 'PUT' && c.path.endsWith('/spend-cap'));
+		expect(put?.status).toBe(200);
+		fill('Monthly cap', '1000000000000000');
+		await press('Save');
 		await settle(2);
-		if (document.querySelector('[role="dialog"]')) await pressDialog('Cancel');
-		await until(() => buttons('Edit').length > 0);
-		await press('Edit');
-		expect(shows('only the amount and time zone can change')).toBe(true);
-		fillDialog('Cap', '75');
-		await pressDialog('Save');
-		await until(() => shows('Cap updated'));
-		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Remove')[0]));
+		await press('Remove cap');
 		await pressDialog('Remove cap');
-		await until(() => shows('Cap removed'));
+		await until(() => shows('Spend cap removed'));
+		await until(() => shows('No cap'));
 		cleanup();
-		// stale page: removing a removed cap shows the problem
-		const policies = await loaders.loadSpendPolicies(b.api, merchantId);
-		if (!policies.ok) throw new Error('policies');
+		// a reached cap is explained; removing an already removed cap is harmless or shows the problem
+		const cap = await loaders.loadSpendCap(b.api, merchantId);
+		if (!cap.ok) throw new Error('spend cap');
 		withToasts(
-			<SpendPoliciesView
-				{...policies}
-				policies={[
-					{
-						policyId: 'spp_0000000000000000000000000z',
-						scope: 'website',
-						websiteId: 'web_gone',
-						window: 'month',
-						limitMillicredits: 1000,
-						timeZone: 'UTC',
-					},
-				]}
+			<SpendCapView
+				{...cap}
+				cap={{ limit: 1000, spent: 1000, remaining: 0, reached: true, periodEnd: new Date().toISOString() }}
+				meter={{ burnRatePerHour: 1000 }}
 			/>,
 		);
-		await press('Remove');
+		expect(shows('The spend cap is reached') && shows('Current spend')).toBe(true);
+		await press('Remove cap');
 		await pressDialog('Remove cap');
-		await until(() => dialog().querySelector('[role="alert"]'));
-		await pressDialog('Cancel');
-		await press('Edit');
-		await pressDialog('Save');
-		await until(() => b.calls.some((c) => c.method === 'PUT' && c.path.includes('/spend-policies/') && c.status >= 400));
+		await until(() => b.calls.filter((c) => c.method === 'DELETE' && c.path.endsWith('/spend-cap')).length >= 2);
+		await settle(2);
 		cleanup();
-		render(<SpendPoliciesView ok={false} problem={{ status: 403, title: 'Forbidden', code: 'forbidden' }} />);
+		render(<SpendCapView ok={false} problem={{ status: 403, title: 'Forbidden', code: 'forbidden' }} />);
 		expect(shows('No access')).toBe(true);
 		restore();
 	});

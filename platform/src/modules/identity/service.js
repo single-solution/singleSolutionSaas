@@ -11,7 +11,6 @@
 import { createJwks, createKeyResolver, createSigner, toPublicJwk } from '@ss/protocol';
 import { createAccounts } from './accounts.js';
 import { createAdmin } from './admin.js';
-import { createImpersonation } from './impersonation.js';
 import { createIssuers } from './issuers.js';
 import { createIssuerRequests } from './issuer-requests.js';
 import { C } from './schema.js';
@@ -119,7 +118,6 @@ export const createIdentityService = (ctx, options = {}) => {
 		staffSetupLink: accounts.staffSetupLink,
 		staffWelcomeTtlMs: accounts.STAFF_WELCOME_TTL_MS,
 	});
-	const impersonation = createImpersonation(deps, { loadMerchant: teams.loadMerchant });
 
 	/**
 	 * `sessionActor` port: the live actor of a session, or null when the account or membership is gone.
@@ -134,8 +132,7 @@ export const createIdentityService = (ctx, options = {}) => {
 		}
 		const user = await repo.users.findOne({ _id: session.subject });
 		if (!user || user.status !== 'active') return null;
-		const via = session.via ? { via: session.via } : {};
-		if (!session.merchantId) return { type: 'merchant_user', id: session.subject, roles: [], grants: [], ...via };
+		if (!session.merchantId) return { type: 'merchant_user', id: session.subject, roles: [], grants: [] };
 		const membership = await repo.memberships
 			.of(session.merchantId)
 			.findOne({ merchantId: session.merchantId, userId: session.subject });
@@ -146,7 +143,6 @@ export const createIdentityService = (ctx, options = {}) => {
 			merchantId: session.merchantId,
 			roles: [...membership.roles],
 			grants: membership.grants.map((/** @type {any} */ g) => ({ websiteId: g.websiteId, roles: [...g.roles] })),
-			...via,
 		};
 	};
 
@@ -168,8 +164,6 @@ export const createIdentityService = (ctx, options = {}) => {
 		updateWebsiteSettings: websites.updateSettings,
 		deleteWebsite: websites.deleteWebsite,
 		transferWebsite: websites.transferWebsite,
-		getPartner: admin.partners.get,
-		getDeveloper: admin.developers.get,
 		getStaff: admin.getStaff,
 		hasStaff: admin.hasStaff,
 		/** Public keys that verify website keys (published by the infra in the Portal JWKS). */
@@ -195,7 +189,6 @@ export const createIdentityService = (ctx, options = {}) => {
 		issuers,
 		issuerRequests,
 		admin,
-		impersonation,
 		mailer,
 	};
 };

@@ -1,7 +1,7 @@
 'use client';
 /**
  * Subscription configuration: per-element SchemaForm (plan bounds, locks, reset to inherited), preview diff,
- * save; scheduled changes; experiments.
+ * save.
  * @module
  */
 import { useMemo, useState } from 'react';
@@ -10,23 +10,15 @@ import {
 	Button,
 	Callout,
 	Card,
-	ConfirmDialog,
-	Dialog,
 	EmptyState,
 	Form,
 	FormActions,
 	FormError,
 	Input,
-	RadioGroup,
 	SchemaForm,
 	Select,
-	StatusBadge,
-	TextArea,
 	changedNames,
-	describeProblem,
 	fieldErrors,
-	fieldsOf,
-	formatDateTime,
 	lockLabel,
 	useToast,
 	validateValues,
@@ -66,7 +58,7 @@ export const effectiveValues = (element, effective) => {
 
 /**
  * Locks of an element's features: locked in the resolved document by anyone but the website itself, or locked in
- * a higher layer (platform policy, admin, merchant defaults).
+ * a higher layer (platform policy, admin).
  * @param {any} element
  * @param {any} effective preview document
  * @param {any} layers configuration layers
@@ -85,7 +77,6 @@ export const featureLocks = (element, effective, layers) => {
 		for (const [level, source] of /** @type {const} */ ([
 			['admin', 'admin_override'],
 			['platform', 'platform_policy'],
-			['merchant', 'merchant_default'],
 		])) {
 			if (layers?.[level]?.features?.[key]?.locked === true) {
 				locks[name] = { label: lockLabel(source) };
@@ -220,7 +211,7 @@ export function ConfigurePanel({ merchantId, website, subscription, product, ove
 			const { [name]: _gone, ...rest } = d[element.key] ?? {};
 			return { ...d, [element.key]: rest };
 		});
-		toast.show({ title: 'Setting reset', description: 'It now follows your plan and organisation defaults.' });
+		toast.show({ title: 'Setting reset', description: 'It now follows your plan defaults.' });
 		await onSaved();
 	};
 
@@ -319,7 +310,7 @@ export function ConfigurePanel({ merchantId, website, subscription, product, ove
 						<li>
 							<Badge tone="info">Plan max</Badge> the highest value your plan allows.
 						</li>
-						<li>Locked settings are set by the platform, an admin or your organisation and cannot be changed here.</li>
+						<li>Locked settings are set by the platform or an admin and cannot be changed here.</li>
 						<li>Reset removes this website's override so the setting follows defaults again.</li>
 					</ul>
 				</Card>
@@ -353,474 +344,5 @@ function PreviewDiff({ preview, element }) {
 					</Callout>
 				))}
 		</div>
-	);
-}
-
-/**
- * Scheduled configuration changes.
- * @param {{ merchantId: string, website: any, subscription: any, product: any, schedules: any[],
- *   onChanged: () => Promise<void> | void }} props
- */
-export function SchedulesPanel({ merchantId, website, subscription, product, schedules, onChanged }) {
-	const toast = useToast();
-	const base = `${api.config(merchantId, website.websiteId, subscription.subscriptionId)}/schedules`;
-	const [open, setOpen] = useState(false);
-	const [what, setWhat] = useState(/** @type {'feature' | 'element'} */ ('feature'));
-	const elements = /** @type {any[]} */ (product?.elements ?? []);
-	const features = elements.flatMap((e) =>
-		fieldsOf(e.features).map((f) => ({ value: `${e.key}.${f.name}`, label: `${e.name} · ${f.title}`, node: f.node })),
-	);
-	const [featureKey, setFeatureKey] = useState(features[0]?.value ?? '');
-	const [elementKey, setElementKey] = useState(elements[0]?.key ?? '');
-	const [enabled, setEnabled] = useState('on');
-	const [valueText, setValueText] = useState('');
-	const [at, setAt] = useState('');
-	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [busy, setBusy] = useState(false);
-	const [cancelling, setCancelling] = useState(/** @type {any} */ (null));
-
-	const create = async () => {
-		/** @type {Record<string, string>} */
-		const local = {};
-		/** @type {unknown} */
-		let value;
-		if (what === 'feature') {
-			const node = features.find((f) => f.value === featureKey)?.node;
-			try {
-				value = node?.type === 'string' && !/^".*"$/.test(valueText.trim()) ? valueText : JSON.parse(valueText);
-			} catch {
-				local.value = 'Enter a JSON value: a number, true/false, "text", [list] or {object}.';
-			}
-		}
-		const when = at ? new Date(at) : null;
-		if (!when || Number.isNaN(when.getTime())) local.at = 'Choose a date and time.';
-		else if (when.getTime() <= Date.now()) local.at = 'Choose a time in the future.';
-		setErrors(local);
-		if (Object.keys(local).length > 0 || !when) return;
-		setBusy(true);
-		setProblem(null);
-		const change =
-			what === 'feature' ? { features: { [featureKey]: { value } } } : { elements: { [elementKey]: enabled === 'on' } };
-		const result = await apiFetch(base, { method: 'POST', body: { change, at: when.toISOString() } });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			const fe = fieldErrors(result.problem);
-			setErrors({ ...(fe.at ? { at: fe.at } : {}) });
-			return;
-		}
-		setOpen(false);
-		setValueText('');
-		setAt('');
-		toast.show({ title: 'Change scheduled', description: `Applies at ${formatDateTime(when.toISOString())}.` });
-		await onChanged();
-	};
-	const cancel = async () => {
-		setBusy(true);
-		const result = await apiFetch(`${base}/${encodeURIComponent(cancelling.scheduleId)}`, { method: 'DELETE' });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setCancelling(null);
-		toast.show({ title: 'Scheduled change cancelled' });
-		await onChanged();
-	};
-
-	return (
-		<Card
-			title="Scheduled changes"
-			subtitle="Apply a setting or switch an element at a set time (validated again when it applies)."
-			padded={false}
-			actions={
-				<Button size="sm" onClick={() => setOpen(true)}>
-					Schedule a change
-				</Button>
-			}>
-			{schedules.length === 0 ? (
-				<div className="p-5">
-					<EmptyState
-						compact
-						icon="clock"
-						title="Nothing scheduled"
-						description="Plan a promotion or a seasonal change ahead of time."
-					/>
-				</div>
-			) : (
-				<ul className="divide-y divide-line">
-					{schedules.map((s) => (
-						<li key={s.scheduleId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-							<div className="min-w-0 space-y-0.5">
-								<p className="text-sm font-semibold text-fg">{formatDateTime(s.at)}</p>
-								<p className="break-words font-mono text-xs text-muted">{scheduleSummary(s.change)}</p>
-								{s.error ? (
-									<p className="text-xs text-danger">
-										{typeof s.error === 'string' ? s.error : (s.error.message ?? 'Failed')}
-									</p>
-								) : null}
-							</div>
-							<div className="flex items-center gap-2">
-								<StatusBadge status={s.status} />
-								{s.status === 'pending' ? (
-									<Button variant="ghost" size="sm" onClick={() => setCancelling(s)}>
-										Cancel
-									</Button>
-								) : null}
-							</div>
-						</li>
-					))}
-				</ul>
-			)}
-			<Dialog
-				open={open}
-				onClose={() => setOpen(false)}
-				title="Schedule a change"
-				footer={
-					<>
-						<Button variant="secondary" onClick={() => setOpen(false)}>
-							Close
-						</Button>
-						<Button onClick={() => void create()} loading={busy}>
-							Schedule
-						</Button>
-					</>
-				}>
-				<RadioGroup
-					legend="What"
-					inline
-					value={what}
-					onChange={(v) => setWhat(v === 'element' ? 'element' : 'feature')}
-					options={[
-						{ value: 'feature', label: 'Change a setting', disabled: features.length === 0 },
-						{ value: 'element', label: 'Switch an element' },
-					]}
-				/>
-				{what === 'feature' ? (
-					<>
-						<Select
-							label="Setting"
-							value={featureKey}
-							onChange={(e) => setFeatureKey(e.currentTarget.value)}
-							options={features}
-						/>
-						<TextArea
-							label="New value"
-							rows={2}
-							className="font-mono"
-							value={valueText}
-							onChange={(e) => setValueText(e.currentTarget.value)}
-							help="Text as is; numbers, true/false, lists and objects as JSON."
-							error={errors.value}
-						/>
-					</>
-				) : (
-					<>
-						<Select
-							label="Element"
-							value={elementKey}
-							onChange={(e) => setElementKey(e.currentTarget.value)}
-							options={elements.map((e) => ({ value: e.key, label: e.name }))}
-						/>
-						<RadioGroup
-							legend="Switch"
-							inline
-							value={enabled}
-							onChange={setEnabled}
-							options={[
-								{ value: 'on', label: 'On' },
-								{ value: 'off', label: 'Off' },
-							]}
-						/>
-					</>
-				)}
-				<Input
-					label="When (your local time)"
-					type="datetime-local"
-					value={at}
-					onChange={(e) => setAt(e.currentTarget.value)}
-					error={errors.at}
-					required
-				/>
-				<FormError problem={problem} fields={['at']} />
-			</Dialog>
-			<ConfirmDialog
-				open={Boolean(cancelling)}
-				onClose={() => setCancelling(null)}
-				onConfirm={() => void cancel()}
-				busy={busy}
-				title="Cancel this scheduled change?"
-				confirmLabel="Cancel change"
-				cancelLabel="Keep it"
-				danger
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">{cancelling ? scheduleSummary(cancelling.change) : null}</p>
-			</ConfirmDialog>
-		</Card>
-	);
-}
-
-/** @param {any} change */
-const scheduleSummary = (change) => {
-	const parts = [];
-	for (const [k, v] of Object.entries(change?.elements ?? {})) parts.push(`${k} ${v === true || v?.enabled ? 'on' : 'off'}`);
-	for (const [k, v] of Object.entries(change?.features ?? {}))
-		parts.push(`${k} = ${v === null ? 'reset' : JSON.stringify(/** @type {any} */ (v)?.value)}`);
-	return parts.join(', ') || 'Change';
-};
-
-/**
- * Experiments (A/B variants of an element's experimentable settings).
- * @param {{ merchantId: string, website: any, subscription: any, product: any, experiments: any[],
- *   onChanged: () => Promise<void> | void }} props
- */
-export function ExperimentsPanel({ merchantId, website, subscription, product, experiments, onChanged }) {
-	const toast = useToast();
-	const base = `${api.config(merchantId, website.websiteId, subscription.subscriptionId)}/experiments`;
-	const candidates = /** @type {any[]} */ (product?.elements ?? []).filter((e) =>
-		Object.values(/** @type {Record<string, any>} */ (e.features?.properties ?? {})).some((n) => n['x-experiment'] === true),
-	);
-	const [open, setOpen] = useState(false);
-	const [form, setForm] = useState({
-		name: '',
-		element: candidates[0]?.key ?? '',
-		metric: 'order.placed@1',
-		weightA: '50',
-		weightB: '50',
-		configA: '{}',
-		configB: '{}',
-	});
-	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [busy, setBusy] = useState(/** @type {string | null} */ (null));
-	const [stopping, setStopping] = useState(/** @type {any} */ (null));
-	const [winner, setWinner] = useState('');
-	/** @param {keyof typeof form} key */
-	const bind = (key) => ({
-		value: form[key],
-		onChange: (/** @type {import('react').ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>} */ e) => {
-			const value = e.currentTarget.value;
-			setForm((f) => ({ ...f, [key]: value }));
-		},
-		error: errors[key],
-	});
-	const experimentable = (/** @type {string} */ key) =>
-		Object.entries(/** @type {Record<string, any>} */ (candidates.find((c) => c.key === key)?.features?.properties ?? {}))
-			.filter(([, n]) => n['x-experiment'] === true)
-			.map(([name]) => name);
-
-	const create = async () => {
-		/** @type {Record<string, string>} */
-		const local = {};
-		/** @param {string} text @param {string} field */
-		const parse = (text, field) => {
-			try {
-				const v = JSON.parse(text || '{}');
-				if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('object');
-				return v;
-			} catch {
-				local[field] = 'Enter a JSON object of setting values, e.g. {"allowStacking": true}.';
-				return {};
-			}
-		};
-		const configA = parse(form.configA, 'configA');
-		const configB = parse(form.configB, 'configB');
-		const weightA = Number(form.weightA);
-		const weightB = Number(form.weightB);
-		if (!Number.isInteger(weightA) || weightA < 1) local.weightA = 'Whole number of 1 or more.';
-		if (!Number.isInteger(weightB) || weightB < 1) local.weightB = 'Whole number of 1 or more.';
-		if (!/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+(@[1-9][0-9]*)?$/.test(form.metric))
-			local.metric = 'An event type such as order.placed@1.';
-		setErrors(local);
-		if (Object.keys(local).length > 0) return;
-		setBusy('create');
-		setProblem(null);
-		const result = await apiFetch(base, {
-			method: 'POST',
-			body: {
-				...(form.name.trim() ? { name: form.name.trim() } : {}),
-				element: form.element,
-				metric: form.metric,
-				variants: [
-					{ key: 'a', weight: weightA, config: configA },
-					{ key: 'b', weight: weightB, config: configB },
-				],
-			},
-		});
-		setBusy(null);
-		if (!result.ok) {
-			setProblem(result.problem);
-			const fe = fieldErrors(result.problem);
-			setErrors({
-				...(fe.metric ? { metric: fe.metric } : {}),
-				...(fe.name ? { name: fe.name } : {}),
-				...(Object.keys(fe).find((k) => k.startsWith('variants.0'))
-					? { configA: /** @type {string} */ (Object.entries(fe).find(([k]) => k.startsWith('variants.0'))?.[1]) }
-					: {}),
-				...(Object.keys(fe).find((k) => k.startsWith('variants.1'))
-					? { configB: /** @type {string} */ (Object.entries(fe).find(([k]) => k.startsWith('variants.1'))?.[1]) }
-					: {}),
-			});
-			return;
-		}
-		setOpen(false);
-		toast.show({ title: 'Experiment created', description: 'Start it when you are ready.' });
-		await onChanged();
-	};
-	/** @param {any} experiment @param {'start' | 'stop'} action @param {string} [applyVariant] */
-	const transition = async (experiment, action, applyVariant) => {
-		setBusy(experiment.experimentId);
-		setProblem(null);
-		const result = await apiFetch(`${base}/${encodeURIComponent(experiment.experimentId)}/${action}`, {
-			method: 'POST',
-			body: action === 'stop' && applyVariant ? { applyVariant } : {},
-		});
-		setBusy(null);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return false;
-		}
-		toast.show({ title: action === 'start' ? 'Experiment started' : 'Experiment stopped' });
-		await onChanged();
-		return true;
-	};
-
-	return (
-		<Card
-			title="Experiments"
-			subtitle="Split visitors between variants of an element's settings and measure an event."
-			padded={false}
-			actions={
-				<Button size="sm" onClick={() => setOpen(true)} disabled={candidates.length === 0}>
-					New experiment
-				</Button>
-			}>
-			{problem && !open && !stopping ? (
-				<div className="px-5 pt-4">
-					<FormError problem={problem} />
-				</div>
-			) : null}
-			{experiments.length === 0 ? (
-				<div className="p-5">
-					<EmptyState
-						compact
-						icon="activity"
-						title={candidates.length === 0 ? 'No element of this product supports experiments' : 'No experiments yet'}
-						description={candidates.length === 0 ? undefined : 'Compare two variants and keep the winner.'}
-					/>
-				</div>
-			) : (
-				<ul className="divide-y divide-line">
-					{experiments.map((x) => (
-						<li key={x.experimentId} className="space-y-2 px-5 py-4">
-							<div className="flex flex-wrap items-center justify-between gap-3">
-								<div className="min-w-0">
-									<p className="text-sm font-semibold text-fg">{x.name ?? `${x.element} experiment`}</p>
-									<p className="text-xs text-muted">
-										Element {x.element} · metric <span className="font-mono">{x.metric}</span>
-										{x.winner ? ` · winner ${x.winner}` : ''}
-									</p>
-								</div>
-								<div className="flex items-center gap-2">
-									<StatusBadge status={x.status} />
-									{x.status === 'draft' ? (
-										<Button size="sm" onClick={() => void transition(x, 'start')} loading={busy === x.experimentId}>
-											Start
-										</Button>
-									) : null}
-									{x.status === 'running' ? (
-										<Button
-											size="sm"
-											variant="secondary"
-											onClick={() => {
-												setWinner('');
-												setStopping(x);
-											}}>
-											Stop
-										</Button>
-									) : null}
-								</div>
-							</div>
-							<ul className="flex flex-wrap gap-2">
-								{
-									/** @type {any[]} */ (x.variants ?? []).map((v) => (
-										<li key={v.key}>
-											<Badge tone="neutral">
-												{v.key} · weight {v.weight}
-												{Object.keys(v.config ?? {}).length > 0 ? ` · ${JSON.stringify(v.config)}` : ''}
-											</Badge>
-										</li>
-									))
-								}
-							</ul>
-						</li>
-					))}
-				</ul>
-			)}
-			<Dialog
-				open={open}
-				onClose={() => setOpen(false)}
-				title="New experiment"
-				description="Experiments start as drafts. Only settings marked as experimentable can vary."
-				footer={
-					<>
-						<Button variant="secondary" onClick={() => setOpen(false)}>
-							Close
-						</Button>
-						<Button onClick={() => void create()} loading={busy === 'create'}>
-							Create draft
-						</Button>
-					</>
-				}>
-				<Input label="Name (optional)" maxLength={120} {...bind('name')} />
-				<Select
-					label="Element"
-					options={candidates.map((c) => ({ value: c.key, label: c.name }))}
-					{...bind('element')}
-					help={`Experimentable settings: ${experimentable(form.element).join(', ') || 'none'}.`}
-				/>
-				<Input
-					label="Success metric (event type)"
-					className="font-mono"
-					{...bind('metric')}
-					help="For example order.placed@1."
-				/>
-				<div className="grid gap-4 sm:grid-cols-2">
-					<div className="space-y-3">
-						<Input label="Variant A weight" type="number" min={1} max={10000} {...bind('weightA')} />
-						<TextArea label="Variant A settings" rows={3} className="font-mono text-xs" {...bind('configA')} />
-					</div>
-					<div className="space-y-3">
-						<Input label="Variant B weight" type="number" min={1} max={10000} {...bind('weightB')} />
-						<TextArea label="Variant B settings" rows={3} className="font-mono text-xs" {...bind('configB')} />
-					</div>
-				</div>
-				<FormError problem={problem} fields={['name', 'metric', 'element']} />
-			</Dialog>
-			<ConfirmDialog
-				open={Boolean(stopping)}
-				onClose={() => setStopping(null)}
-				onConfirm={async () => {
-					if (await transition(stopping, 'stop', winner || undefined)) setStopping(null);
-				}}
-				busy={busy === stopping?.experimentId}
-				title="Stop this experiment?"
-				confirmLabel="Stop experiment"
-				error={problem ? describeProblem(problem) : null}>
-				<RadioGroup
-					legend="Then"
-					value={winner}
-					onChange={setWinner}
-					options={[
-						{ value: '', label: 'Keep the current settings' },
-						.../** @type {any[]} */ (stopping?.variants ?? []).map((v) => ({
-							value: v.key,
-							label: `Apply variant ${v.key} to everyone`,
-						})),
-					]}
-				/>
-			</ConfirmDialog>
-		</Card>
 	);
 }

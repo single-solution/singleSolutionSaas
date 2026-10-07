@@ -1,7 +1,7 @@
 'use client';
 /**
  * Merchant-wide money: credits (balance, meter, hours remaining, statement with filters, low-balance warning)
- * and spend policies (daily/monthly caps per merchant or website). Everything is shown in credits from integer
+ * and the monthly spend cap. Everything is shown in credits from integer
  * millicredits; amounts typed by people are parsed with at most 3 decimals.
  * @module
  */
@@ -11,13 +11,9 @@ import {
 	Callout,
 	Card,
 	ConfirmDialog,
-	Dialog,
-	EmptyState,
 	FormError,
-	Icon,
 	Input,
 	PageHeader,
-	RadioGroup,
 	Select,
 	Stat,
 	Table,
@@ -169,265 +165,128 @@ function Total({ label, value, signed = false }) {
 }
 
 /**
- * @param {any} props loader result of `loadSpendPolicies`
+ * The organisation's optional monthly spend cap (UTC calendar month, all websites).
+ * @param {any} props loader result of `loadSpendCap`
  */
-export function SpendPoliciesView(props) {
+export function SpendCapView(props) {
 	const toast = useToast();
 	const ok = props.ok === true;
-	const { data, reload } = useResource(ok ? api.spendPolicies(props.merchantId) : null, { items: ok ? props.policies : [] });
-	const [editing, setEditing] = useState(/** @type {null | { policy?: any }} */ (null));
-	const [form, setForm] = useState({ scope: 'merchant', websiteId: '', window: 'month', limit: '', timeZone: 'UTC' });
-	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
+	const { data, reload } = useResource(ok ? api.spendCap(props.merchantId) : null, ok ? props.cap : null);
+	const [limit, setLimit] = useState(ok && typeof props.cap?.limit === 'number' ? plainCredits(props.cap.limit) : '');
+	const [error, setError] = useState(/** @type {string | undefined} */ (undefined));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [busy, setBusy] = useState(false);
-	const [deleting, setDeleting] = useState(/** @type {any} */ (null));
+	const [busy, setBusy] = useState(/** @type {null | 'save' | 'remove'} */ (null));
+	const [removing, setRemoving] = useState(false);
 	if (!ok) return <PageProblem problem={props.problem} />;
-	const { merchantId, websites, meter } = props;
-	const policies = /** @type {any[]} */ (data.items ?? []);
-	const zones = (() => {
-		try {
-			return typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : ['UTC'];
-		} catch {
-			return ['UTC'];
-		}
-	})();
+	const { merchantId, meter } = props;
+	const cap = /** @type {any} */ (data);
+	const hasCap = typeof cap?.limit === 'number';
 
-	/** @param {any} [policy] */
-	const open = (policy) => {
-		setErrors({});
-		setProblem(null);
-		setForm(
-			policy
-				? {
-						scope: policy.scope,
-						websiteId: policy.websiteId ?? '',
-						window: policy.window,
-						limit: creditsNumber(policy.limitMillicredits).replace(/,/g, ''),
-						timeZone: policy.timeZone,
-					}
-				: {
-						scope: 'merchant',
-						websiteId: websites.find((/** @type {any} */ w) => w.env === 'live')?.websiteId ?? '',
-						window: 'month',
-						limit: '',
-						timeZone: 'UTC',
-					},
-		);
-		setEditing(policy ? { policy } : {});
-	};
 	const save = async () => {
-		const amount = parseCredits(form.limit);
-		/** @type {Record<string, string>} */
-		const local = {};
-		if (!amount.ok) local.limit = amount.message;
-		if (form.scope === 'website' && !form.websiteId) local.websiteId = 'Choose a website.';
-		setErrors(local);
-		if (!amount.ok || Object.keys(local).length > 0) return;
-		setBusy(true);
-		setProblem(null);
-		const policy = editing?.policy;
-		const result = policy
-			? await apiFetch(`${api.spendPolicies(merchantId)}/${encodeURIComponent(policy.policyId)}`, {
-					method: 'PUT',
-					body: { limit: amount.value, timeZone: form.timeZone },
-				})
-			: await apiFetch(api.spendPolicies(merchantId), {
-					method: 'POST',
-					body: {
-						scope: form.scope,
-						...(form.scope === 'website' ? { websiteId: form.websiteId } : {}),
-						window: form.window,
-						limit: amount.value,
-						timeZone: form.timeZone,
-					},
-				});
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			setErrors(fieldErrors(result.problem));
+		const amount = parseCredits(limit);
+		if (!amount.ok || amount.value <= 0) {
+			setError(amount.ok ? 'Enter an amount above zero.' : amount.message);
 			return;
 		}
-		setEditing(null);
-		toast.show({ title: policy ? 'Cap updated' : 'Cap created' });
+		setError(undefined);
+		setBusy('save');
+		setProblem(null);
+		const result = await apiFetch(api.spendCap(merchantId), { method: 'PUT', body: { limit: amount.value } });
+		setBusy(null);
+		if (!result.ok) {
+			setProblem(result.problem);
+			setError(fieldErrors(result.problem).limit);
+			return;
+		}
+		toast.show({ title: 'Spend cap saved' });
 		await reload();
 	};
 	const remove = async () => {
-		setBusy(true);
-		const result = await apiFetch(`${api.spendPolicies(merchantId)}/${encodeURIComponent(deleting.policyId)}`, {
-			method: 'DELETE',
-		});
-		setBusy(false);
+		setBusy('remove');
+		setProblem(null);
+		const result = await apiFetch(api.spendCap(merchantId), { method: 'DELETE' });
+		setBusy(null);
 		if (!result.ok) {
 			setProblem(result.problem);
 			return;
 		}
-		setDeleting(null);
-		toast.show({ title: 'Cap removed' });
+		setRemoving(false);
+		setLimit('');
+		toast.show({ title: 'Spend cap removed' });
 		await reload();
 	};
-	/** @param {any} p */
-	const scopeLabel = (p) =>
-		p.scope === 'merchant'
-			? 'All websites'
-			: websiteLabel(websites.find((/** @type {any} */ w) => w.websiteId === p.websiteId) ?? { domain: p.websiteId });
 
 	return (
 		<div className="space-y-6">
 			<PageHeader
-				title="Spend policies"
-				subtitle="Caps pause subscriptions before an hour would exceed them; they resume when the window resets."
-				actions={
-					<Button onClick={() => open()} icon={<Icon name="plus" size={14} />}>
-						Add cap
-					</Button>
-				}
+				title="Spend cap"
+				subtitle="One optional cap per calendar month (UTC) for all websites. Reaching it pauses subscriptions until the month ends."
 			/>
+			<div className="grid gap-4 sm:grid-cols-3">
+				<Stat label="Cap" value={hasCap ? formatCredits(cap.limit) : 'No cap'} icon="sliders" />
+				<Stat
+					label="Spent this month"
+					value={formatCredits(cap?.spent ?? 0)}
+					tone={cap?.reached ? 'warning' : 'neutral'}
+					hint={cap?.periodEnd ? `Resets ${formatDateTime(cap.periodEnd)}` : undefined}
+					icon="activity"
+				/>
+				<Stat label="Remaining" value={hasCap ? formatCredits(cap.remaining) : '—'} icon="wallet" />
+			</div>
+			{cap?.reached ? (
+				<Callout tone="warning" title="The spend cap is reached">
+					Subscriptions are paused until the month ends or the cap is raised. Paused time is never billed.
+				</Callout>
+			) : null}
 			{meter ? (
 				<p className="text-sm text-muted">
 					Current spend: <strong className="text-fg">{formatCreditsPerHour(meter.burnRatePerHour)}</strong> · about{' '}
-					<strong className="text-fg">{formatCredits(meter.burnRatePerHour * 24)}</strong> per day.
+					<strong className="text-fg">{formatCredits(meter.burnRatePerHour * 24 * 30)}</strong> per month.
 				</p>
 			) : null}
-			{problem && !editing && !deleting ? <FormError problem={problem} /> : null}
-			{policies.length === 0 ? (
-				<EmptyState
-					icon="sliders"
-					title="No caps yet"
-					description="Add a daily or monthly cap for the whole organisation or a single website."
-					action={<Button onClick={() => open()}>Add cap</Button>}
-				/>
-			) : (
-				<Table
-					caption="Spend caps"
-					rows={policies}
-					rowKey={(p) => p.policyId}
-					columns={[
-						{ key: 'scope', header: 'Applies to', rowHeader: true, render: scopeLabel },
-						{ key: 'window', header: 'Window', render: (p) => (p.window === 'day' ? 'Per day' : 'Per month') },
-						{
-							key: 'limit',
-							header: 'Cap',
-							align: 'right',
-							sortable: true,
-							sortValue: (p) => p.limitMillicredits,
-							render: (p) => <span className="tabular-nums">{formatCredits(p.limitMillicredits)}</span>,
-						},
-						{ key: 'timeZone', header: 'Time zone' },
-						{
-							key: 'actions',
-							header: <span className="sr-only">Actions</span>,
-							align: 'right',
-							render: (p) => (
-								<span className="inline-flex gap-1">
-									<Button size="sm" variant="ghost" onClick={() => open(p)}>
-										Edit
-									</Button>
-									<Button size="sm" variant="ghost" onClick={() => setDeleting(p)}>
-										Remove
-									</Button>
-								</span>
-							),
-						},
-					]}
-				/>
-			)}
-			<Dialog
-				open={Boolean(editing)}
-				onClose={() => setEditing(null)}
-				title={editing?.policy ? 'Edit cap' : 'Add a cap'}
-				footer={
-					<>
-						<Button variant="secondary" onClick={() => setEditing(null)}>
-							Cancel
+			<Card title={hasCap ? 'Change the cap' : 'Set a cap'}>
+				<form
+					className="flex flex-wrap items-end gap-3"
+					onSubmit={(e) => {
+						e.preventDefault();
+						void save();
+					}}>
+					<Input
+						label="Monthly cap"
+						inputMode="decimal"
+						value={limit}
+						onChange={(e) => setLimit(e.currentTarget.value)}
+						suffix="credits"
+						help="Up to 3 decimals."
+						error={error}
+						fieldClassName="w-56"
+						required
+					/>
+					<Button type="submit" loading={busy === 'save'}>
+						Save
+					</Button>
+					{hasCap ? (
+						<Button variant="ghost" onClick={() => setRemoving(true)}>
+							Remove cap
 						</Button>
-						<Button onClick={() => void save()} loading={busy}>
-							Save
-						</Button>
-					</>
-				}>
-				{editing?.policy ? (
-					<p className="text-sm text-muted">
-						{scopeLabel(editing.policy)} · {editing.policy.window === 'day' ? 'per day' : 'per month'} — only the amount and
-						time zone can change.
-					</p>
-				) : (
-					<>
-						<RadioGroup
-							legend="Applies to"
-							inline
-							value={form.scope}
-							onChange={(v) => setForm((f) => ({ ...f, scope: v }))}
-							options={[
-								{ value: 'merchant', label: 'All websites' },
-								{ value: 'website', label: 'One website' },
-							]}
-						/>
-						{form.scope === 'website' ? (
-							<Select
-								label="Website"
-								value={form.websiteId}
-								onChange={(e) => {
-									const v = e.currentTarget.value;
-									setForm((f) => ({ ...f, websiteId: v }));
-								}}
-								options={websites.map((/** @type {any} */ w) => ({ value: w.websiteId, label: websiteLabel(w) }))}
-								error={errors.websiteId}
-							/>
-						) : null}
-						<RadioGroup
-							legend="Window"
-							inline
-							value={form.window}
-							onChange={(v) => setForm((f) => ({ ...f, window: v }))}
-							options={[
-								{ value: 'day', label: 'Per day' },
-								{ value: 'month', label: 'Per month' },
-							]}
-						/>
-					</>
-				)}
-				<Input
-					label="Cap"
-					inputMode="decimal"
-					value={form.limit}
-					onChange={(e) => {
-						const v = e.currentTarget.value;
-						setForm((f) => ({ ...f, limit: v }));
-					}}
-					suffix="credits"
-					help="Up to 3 decimals. 0 pauses everything in scope."
-					error={errors.limit}
-					required
-				/>
-				<Select
-					label="Time zone"
-					value={form.timeZone}
-					onChange={(e) => {
-						const v = e.currentTarget.value;
-						setForm((f) => ({ ...f, timeZone: v }));
-					}}
-					options={[...new Set(['UTC', ...zones])].map((z) => ({ value: z, label: z }))}
-					help="When the day or month starts."
-					error={errors.timeZone}
-				/>
-				<FormError problem={problem} fields={['limit', 'timeZone', 'websiteId', 'scope', 'window']} />
-			</Dialog>
+					) : null}
+				</form>
+				{problem && !removing ? <FormError problem={problem} fields={['limit']} /> : null}
+			</Card>
 			<ConfirmDialog
-				open={Boolean(deleting)}
-				onClose={() => setDeleting(null)}
+				open={removing}
+				onClose={() => setRemoving(false)}
 				onConfirm={() => void remove()}
-				busy={busy}
+				busy={busy === 'remove'}
 				danger
-				title="Remove this cap?"
+				title="Remove the spend cap?"
 				confirmLabel="Remove cap"
 				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">
-					{deleting
-						? `${scopeLabel(deleting)} · ${formatCredits(deleting.limitMillicredits)} ${deleting.window === 'day' ? 'per day' : 'per month'}`
-						: null}
-					. Subscriptions paused only by this cap resume.
-				</p>
+				<p className="text-sm text-muted">Subscriptions paused only by the cap resume.</p>
 			</ConfirmDialog>
 		</div>
 	);
 }
+
+/** @param {number} millicredits */
+const plainCredits = (millicredits) => creditsNumber(millicredits).replace(/,/g, '');

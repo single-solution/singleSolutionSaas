@@ -1,11 +1,11 @@
 /**
- * Configuration targets: which layer of which subscription (or merchant/app, or app across merchants) a change
+ * Configuration targets: which layer of which subscription (or app across merchants) a change
  * addresses. Pure.
  * @module
  */
 
 /** Layer levels in precedence order (`@ss/entitlements` `LAYERS` without product and plan). */
-export const LEVELS = Object.freeze(/** @type {const} */ (['platform', 'merchant', 'website', 'admin']));
+export const LEVELS = Object.freeze(/** @type {const} */ (['platform', 'website', 'admin']));
 
 /** @typedef {typeof LEVELS[number]} Level */
 
@@ -13,9 +13,7 @@ export const LEVELS = Object.freeze(/** @type {const} */ (['platform', 'merchant
 export const STAFF_LEVELS = Object.freeze(new Set(['platform', 'admin']));
 
 /**
- * @typedef {{ level: 'platform', appId: string }
- *   | { level: 'merchant', merchantId: string, appId: string }
- *   | { level: 'website' | 'admin', subscriptionId: string }} TargetRef
+ * @typedef {{ level: 'platform', appId: string } | { level: 'website' | 'admin', subscriptionId: string }} TargetRef
  */
 
 /**
@@ -65,11 +63,6 @@ export const parseTarget = (input, level) => {
 			const appId = need('appId', APP, typeof input === 'string' ? input : raw.appId);
 			return errors.length > 0 ? { ok: false, errors } : { ok: true, value: { level: 'platform', appId } };
 		}
-		case 'merchant': {
-			const merchantId = need('merchantId', ID, raw.merchantId);
-			const appId = need('appId', APP, raw.appId);
-			return errors.length > 0 ? { ok: false, errors } : { ok: true, value: { level: 'merchant', merchantId, appId } };
-		}
 		default: {
 			const subscriptionId = need('subscriptionId', ID, typeof input === 'string' ? input : raw.subscriptionId);
 			return errors.length > 0
@@ -88,8 +81,6 @@ export const targetKey = (target) => {
 	switch (target.level) {
 		case 'platform':
 			return `platform:${target.appId}`;
-		case 'merchant':
-			return `merchant:${target.merchantId}:${target.appId}`;
 		default:
 			return `${target.level}:${target.subscriptionId}`;
 	}

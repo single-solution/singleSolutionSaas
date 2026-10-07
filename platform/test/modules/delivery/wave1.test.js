@@ -1,22 +1,25 @@
 /**
  * Delivery wave-1 changes (F.18): element keys namespaced per product, packs reading service products through a
- * Loader client (and the loader key's read scopes), per-website string overrides, shared-chunk budgets and the
- * language-sliced product catalogs.
+ * Loader client (and the loader key's read scopes), per-website string overrides and the language-sliced product
+ * catalogs.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { startMongo } from '../../helpers.js';
-import {
-	checkBudget,
-	elementStrings,
-	inSlice,
-	languageChain,
-	measureSelected,
-	readsFor,
-	selectElements,
-} from '../../../src/modules/delivery/core/compile.js';
+import { elementStrings, inSlice, languageChain, readsFor, selectElements } from '../../../src/modules/delivery/core/compile.js';
 import { checkStringOverride } from '../../../src/modules/delivery/core/strings.js';
-import { BIG, M1, PACK, SERVICE, W1, bootDelivery, packManifest } from './fixtures.js';
+import {
+	BIG,
+	M1,
+	PACK,
+	SERVICE,
+	STAFF_ACTOR,
+	W1,
+	WIDGET_FILES,
+	bootDelivery,
+	packManifest,
+	widgetDescriptor,
+} from './fixtures.js';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 120_000 });
 
@@ -52,6 +55,12 @@ describe('compiled bundles (F.18)', () => {
 		expect(before.status, before.text).toBe(200);
 		expect(before.json.warnings.map((/** @type {any} */ w) => w.code)).toContain('reads_inactive');
 		await t.subscribe(W1, SERVICE);
+		await t.service.registerWidgets({
+			appId: SERVICE,
+			descriptor: widgetDescriptor(),
+			actor: /** @type {any} */ (STAFF_ACTOR),
+		});
+		await t.uploadAll(SERVICE, 1, WIDGET_FILES);
 		const compiled = await t.request('POST', `${SITE}/delivery/compile`, { cookie: owner });
 		expect(compiled.status, compiled.text).toBe(200);
 		const alias = await t.request('GET', `/w/${W1}/loader.js`);
@@ -62,15 +71,12 @@ describe('compiled bundles (F.18)', () => {
 			'chat-box': 'https://chat.example.net',
 		});
 		expect(data.elements.find((/** @type {any} */ e) => e.key === 'launcher')).toMatchObject({ product: 'chat-box' });
-		// the loader key now also reads the chat product; the earlier key stays active for cached bundles
+		// the loader key now also reads (and, for the chat widgets, writes) the chat product; earlier keys stay active
 		const keys = [...t.world.keys.values()];
-		expect(keys).toHaveLength(2);
-		expect(keys.at(-1)?.scopes).toEqual(['events.write', 'elements.read', 'chat-box.read']);
+		expect(keys.at(-1)?.scopes).toEqual(['events.write', 'elements.read', 'chat-box.read', 'chat-box.write']);
 		expect(data.key).toBe(keys.at(-1)?.key);
 		const manifest = await t.request('GET', `/w/${W1}/${compiled.json.version}/manifest.json`);
 		expect(manifest.json.elements.find((/** @type {any} */ e) => e.slug === 'notice-bar').reads).toEqual(['chat-box']);
-		// the stub element ships no product code and takes none of the website budget
-		expect(manifest.json.elements.find((/** @type {any} */ e) => e.key === 'launcher').budgetKb).toBe(0);
 	});
 
 	it('applies per-website string overrides from the merchant console and recompiles', async () => {
@@ -121,16 +127,6 @@ describe('compiler helpers (F.18)', () => {
 			['strings/de.json', { 'bar.label': 'Hinweis' }],
 			['strings/de-CH.json', { 'bar.more': 'Mehr (CH)' }],
 		]),
-		gzipBytes: new Map([
-			['headless/bar.js', 300],
-			['ui/bar.js', 200],
-			['chunks/c.js', 2048],
-		]),
-		files: new Map([
-			['headless/bar.js', Buffer.from('import"./../chunks/c.js";export const createBar=1;')],
-			['ui/bar.js', Buffer.from('export const render=1;')],
-			['chunks/c.js', Buffer.from('export const c=1;')],
-		]),
 		...overrides,
 	});
 
@@ -177,11 +173,11 @@ describe('compiler helpers (F.18)', () => {
 			'bar.label': 'All',
 			'bar.more': 'DE',
 		});
-		const selected = selectElements([s], null, { language: 'de', overrides }).selected;
+		const selected = selectElements([s], { language: 'de', overrides }).selected;
 		expect(selected[0]?.strings).toMatchObject({ 'bar.label': 'All' });
 	});
 
-	it('finds read products and measures shared chunks once per product', () => {
+	it('finds read products', () => {
 		const pack = source({ manifest: { ...packManifest(), reads: [{ product: 'chat-box', scopes: ['chat-box.read'] }] } });
 		const chat = source({
 			appId: SERVICE,
@@ -196,27 +192,8 @@ describe('compiler helpers (F.18)', () => {
 			missing: [],
 		});
 		expect(readsFor(pack, [pack, { ...chat, document: { runtime: { state: 'paused' } } }]).missing).toEqual(['chat-box']);
-		const { selected } = selectElements([pack]);
-		const measured = measureSelected(selected, [pack]);
-		expect(measured.selected[0]?.actualGzipBytes).toBe(500);
-		expect(measured.shared).toEqual([
-			{ appId: PACK, slug: 'notice-bar', declaredKb: null, gzipBytes: 2048, modules: ['chunks/c.js'] },
-		]);
-		const declared = measureSelected(selected, [{ ...pack, manifest: { ...pack.manifest, budget: { shared: 1 } } }]);
-		const budget = checkBudget({ loaderGzipBytes: 1024, limitKb: 3, elements: declared.selected, shared: declared.shared });
-		expect(budget.offenders.map((o) => o.code)).toEqual(['shared_over_declared', 'budget', 'budget']);
-		expect(budget.report).toMatchObject({
-			sharedKb: 1,
-			shared: [{ slug: 'notice-bar', declaredKb: 1, measuredKb: 2, modules: 1 }],
-		});
-		const undeclared = checkBudget({
-			loaderGzipBytes: 1024,
-			limitKb: 60,
-			elements: measured.selected,
-			shared: measured.shared,
-		});
-		expect(undeclared).toMatchObject({ ok: true, report: { sharedKb: 2 } });
-		expect(measureSelected(selected, []).shared).toEqual([]);
+		const { selected } = selectElements([pack, chat]);
+		expect(selected[0]).toMatchObject({ reads: { 'chat-box': 'https://chat.example.net' }, readScopes: ['chat-box.read'] });
 	});
 
 	it('checks string override requests', () => {

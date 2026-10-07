@@ -1,7 +1,6 @@
 /**
  * The `identity` module: staff users (mandatory TOTP), merchants and their teams (roles, website-scoped grants,
- * invites, ownership), merchant self-signup with e-mail verification, password reset, partners, developers,
- * websites (domain claims, test twins, cooldown, transfers) and website keys (issue, rotate, revoke, revocation
+ * invites, ownership), merchant self-signup with e-mail verification, password reset, websites (domain claims, test twins, cooldown, transfers) and website keys (issue, rotate, revoke, revocation
  * list). Implements the `sessionActor` and `websiteKeyRevoked` ports.
  *
  * `createIdentityModule(options)` accepts the `mailer` port, dedicated website-key signing keys and a public-suffix

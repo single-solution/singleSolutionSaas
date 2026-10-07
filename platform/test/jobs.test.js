@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createLocks, createRegistry, createRepositories } from '../src/infra/db.js';
+import { createRegistry, createRepositories } from '../src/infra/db.js';
 import { backoffDelay, createJobs, permanentFailure } from '../src/infra/jobs.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from '../src/infra/schema.js';
 import { createClock, createTestLogger, startMongo } from './helpers.js';
@@ -23,8 +23,10 @@ const setup = async () => {
 	const r = createRepositories(db, registry, { now: clock.now });
 	const { logger, entries } = createTestLogger();
 	const jobs = createJobs({ repo: r.mutable(COLLECTIONS.jobs), now: clock.now, random: () => 0.5, logger });
-	const locks = createLocks(r.mutable(COLLECTIONS.locks), { now: clock.now });
-	return { clock, db, r, jobs, locks, logger, entries };
+	const raw = db.collection(COLLECTIONS.jobs);
+	/** @param {string} status */
+	const count = (status) => raw.countDocuments({ status });
+	return { clock, db, r, raw, count, jobs, logger, entries };
 };
 
 describe('backoffDelay', () => {
@@ -40,7 +42,7 @@ describe('backoffDelay', () => {
 
 describe('job queue', () => {
 	it('enqueues idempotently by key and validates input', async () => {
-		const { jobs } = await setup();
+		const { jobs, count } = await setup();
 		const first = await jobs.enqueue({ name: 'demo.send', payload: { a: 1 }, key: 'send:1' });
 		expect(first.inserted).toBe(true);
 		expect(await jobs.enqueue({ name: 'demo.send', payload: { a: 2 }, key: 'send:1' })).toEqual({
@@ -51,11 +53,11 @@ describe('job queue', () => {
 		await expect(jobs.enqueue({ name: 'Bad Name' })).rejects.toThrow();
 		await expect(jobs.enqueue({ name: 'demo.x', key: '' })).rejects.toThrow();
 		await expect(jobs.enqueue({ name: 'demo.x', maxAttempts: 0 })).rejects.toThrow();
-		expect(await jobs.stats()).toEqual({ queued: 2, running: 0, done: 0, dead: 0 });
+		expect(await count('queued')).toBe(2);
 	});
 
 	it('leases due jobs once, completes, and ignores lost leases', async () => {
-		const { jobs, clock } = await setup();
+		const { jobs, clock, count } = await setup();
 		await jobs.enqueue({ name: 'demo.later', runAt: clock.now() + 60_000 });
 		const { id } = await jobs.enqueue({ name: 'demo.now', payload: { n: 1 } });
 		const job = await jobs.lease({ leaseMs: 10_000 });
@@ -69,11 +71,11 @@ describe('job queue', () => {
 		expect(await jobs.complete(/** @type {any} */ (job))).toBe(false);
 		expect(await jobs.fail(/** @type {any} */ (job), new Error('late'))).toBe('lost');
 		expect(await jobs.complete(/** @type {any} */ (again))).toBe(true);
-		expect((await jobs.stats()).done).toBe(1);
+		expect(await count('done')).toBe(1);
 	});
 
-	it('retries with backoff, dead-letters after maxAttempts and replays', async () => {
-		const { jobs, clock, entries } = await setup();
+	it('retries with backoff and stops after maxAttempts or a permanent failure', async () => {
+		const { jobs, clock, entries, raw } = await setup();
 		const { id } = await jobs.enqueue({ name: 'demo.flaky', maxAttempts: 2 });
 		const first = /** @type {any} */ (await jobs.lease({ leaseMs: 1000 }));
 		expect(await jobs.fail(first, Object.assign(new Error('timeout'), { code: 'E_TIMEOUT' }))).toBe('retry');
@@ -81,32 +83,33 @@ describe('job queue', () => {
 		clock.advance(5000);
 		const second = /** @type {any} */ (await jobs.lease({ leaseMs: 1000 }));
 		expect(second.attempts).toBe(2);
-		expect(await jobs.fail(second, 'string failure')).toBe('dead');
-		expect(entries.some((e) => e.msg === 'job dead-lettered')).toBe(true);
-		const dead = await jobs.deadLetters({ name: 'demo.flaky' });
-		expect(dead).toEqual([expect.objectContaining({ id, attempts: 2, lastError: { message: 'string failure' } })]);
-		expect(await jobs.replay(id)).toBe(true);
-		expect(await jobs.replay(id)).toBe(false);
-		const replayed = /** @type {any} */ (await jobs.lease({ leaseMs: 1000 }));
-		expect(replayed.attempts).toBe(1);
-		expect(await jobs.fail(replayed, permanentFailure('invalid payload'))).toBe('dead');
-		expect((await jobs.deadLetters()).length).toBe(1);
+		expect(await jobs.fail(second, 'string failure')).toBe('failed');
+		expect(entries.some((e) => e.msg === 'job failed permanently')).toBe(true);
+		expect(await raw.findOne({ _id: /** @type {any} */ (id) })).toMatchObject({
+			status: 'failed',
+			attempts: 2,
+			lastError: { message: 'string failure' },
+		});
+		const other = await jobs.enqueue({ name: 'demo.invalid' });
+		const leased = /** @type {any} */ (await jobs.lease({ leaseMs: 1000 }));
+		expect(await jobs.fail(leased, permanentFailure('invalid payload'))).toBe('failed');
+		expect(await raw.findOne({ _id: /** @type {any} */ (other.id) })).toMatchObject({ status: 'failed', attempts: 1 });
 	});
 
-	it('dead-letters a job whose lease expired on its last attempt', async () => {
-		const { jobs, clock } = await setup();
+	it('fails a job whose lease expired on its last attempt', async () => {
+		const { jobs, clock, raw } = await setup();
 		await jobs.enqueue({ name: 'demo.crash', maxAttempts: 1 });
 		expect(await jobs.lease({ leaseMs: 1000 })).not.toBeNull();
 		clock.advance(2000);
 		expect(await jobs.lease({ leaseMs: 1000 })).toBeNull();
-		expect((await jobs.deadLetters())[0]?.lastError).toEqual({
+		expect((await raw.findOne({ status: 'failed' }))?.lastError).toEqual({
 			message: 'lease expired on the last attempt',
 			code: 'lease_expired',
 		});
 	});
 
 	it('runBatch drains handled jobs until empty or the deadline', async () => {
-		const { jobs, clock } = await setup();
+		const { jobs, clock, count } = await setup();
 		for (let i = 0; i < 4; i += 1) await jobs.enqueue({ name: 'demo.work', payload: { i } });
 		await jobs.enqueue({ name: 'demo.fail' });
 		await jobs.enqueue({ name: 'demo.unhandled' });
@@ -126,8 +129,8 @@ describe('job queue', () => {
 			concurrency: 2,
 		});
 		expect(seen.sort()).toEqual([0, 1, 2, 3]);
-		expect(stats).toMatchObject({ leased: 5, succeeded: 4, retried: 1, dead: 0, lost: 0, stoppedBy: 'empty' });
-		expect((await jobs.stats()).queued).toBe(2); // the retry + the unhandled job
+		expect(stats).toMatchObject({ leased: 5, succeeded: 4, retried: 1, failed: 0, lost: 0, stoppedBy: 'empty' });
+		expect(await count('queued')).toBe(2); // the retry + the unhandled job
 
 		// deadline: each job "takes" 10 s of the 25 s budget (2 s safety)
 		for (let i = 0; i < 5; i += 1) await jobs.enqueue({ name: 'demo.slow' });

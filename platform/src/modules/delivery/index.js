@@ -1,7 +1,6 @@
 /**
- * The `delivery` module (PLAN §4 delivery plane): pack asset storage, the per-website bundle compiler (immutable
- * versioned artefacts + atomically flipped alias), serving, snippets, rollback and the "try it on your site" preview
- * proxy. See `service.js`.
+ * The `delivery` module (PLAN §4 delivery plane): pack and widget asset storage, the per-website bundle compiler
+ * (immutable versioned artefacts + atomically flipped alias), serving and snippets. See `service.js`.
  *
  * `createDeliveryModule(options)` builds the definition with injected I/O (asset storage, outbound fetch, DNS
  * resolver, runtime) for tests and local development; `deliveryModule` is the production definition.
@@ -23,9 +22,7 @@ export const createDeliveryModule = (options = {}) =>
 		name: 'delivery',
 		collections,
 		problems: {
-			delivery_budget_exceeded: { status: 422, title: 'Website bundle budget exceeded' },
-			delivery_asset_mismatch: { status: 422, title: 'Asset does not match the signed descriptor' },
-			delivery_preview_refused: { status: 422, title: 'Preview refused' },
+			delivery_asset_mismatch: { status: 422, title: 'Asset does not match the uploaded descriptor' },
 		},
 		service: (ctx) => createDeliveryService(ctx, options),
 		routes: (ctx) => deliveryRoutes(/** @type {DeliveryService} */ (ctx.service('delivery'))),

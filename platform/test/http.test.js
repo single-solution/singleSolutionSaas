@@ -424,11 +424,13 @@ describe('request pipeline', () => {
 				method: 'POST',
 				path: '/v1/things',
 				auth: ['staff', 'product'],
+				idempotent: true,
 				handler: (ctx) => created({ n: (counter += 1), key: ctx.idempotencyKey }, { location: '/v1/things/1' }),
 			},
 			{ method: 'POST', path: '/v1/optional', auth: 'public', idempotent: 'optional', handler: () => ({ n: (counter += 1) }) },
-			{ method: 'POST', path: '/v1/never', auth: 'public', idempotent: false, handler: () => ({ n: (counter += 1) }) },
-			{ method: 'POST', path: '/v1/fails', auth: 'public', handler: () => problem('unavailable') },
+			// the default: no Idempotency-Key handling
+			{ method: 'POST', path: '/v1/never', auth: 'public', handler: () => ({ n: (counter += 1) }) },
+			{ method: 'POST', path: '/v1/fails', auth: 'public', idempotent: true, handler: () => problem('unavailable') },
 		]);
 		const app = { 'x-test-product': JSON.stringify({ type: 'product', id: 'app_1' }) };
 		expect((await call('POST', '/v1/things', { headers: app, body: { a: 1 } })).status).toBe(428);
@@ -575,7 +577,7 @@ describe('request pipeline', () => {
 	});
 
 	it('turns infrastructure failures into a 500 problem', async () => {
-		const { call } = build([{ method: 'POST', path: '/v1/x', auth: 'public', handler: () => ({}) }], {
+		const { call } = build([{ method: 'POST', path: '/v1/x', auth: 'public', idempotent: true, handler: () => ({}) }], {
 			idempotency: { begin: () => Promise.reject(new Error('db down')), complete: async () => {}, release: async () => {} },
 		});
 		const res = await call('POST', '/v1/x', { headers: { 'idempotency-key': 'k' } });

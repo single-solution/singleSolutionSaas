@@ -82,17 +82,3 @@ export const presentInvite = (i) => ({
 	expiresAt: iso(i.expiresAt),
 	createdAt: iso(i.createdAt),
 });
-
-/**
- * Partner or developer.
- * @param {Record<string, any>} p
- * @param {'partnerId' | 'developerId'} idKey
- */
-export const presentParty = (p, idKey) => ({
-	[idKey]: String(p._id),
-	name: p.name,
-	email: p.email,
-	status: p.status,
-	grants: (p.grants ?? []).map((/** @type {any} */ g) => ({ ...g, ...(g.at ? { at: iso(g.at) } : {}) })),
-	createdAt: iso(p.createdAt),
-});

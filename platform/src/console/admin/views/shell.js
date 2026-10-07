@@ -18,18 +18,6 @@ import { Roles, staffCan } from './common.js';
  */
 export const ADMIN_NAV = Object.freeze([
 	{
-		label: 'Platform',
-		items: [
-			{
-				href: adminRoutes.dashboard(),
-				label: 'Dashboard',
-				icon: 'activity',
-				permission: 'platform.merchants.read',
-				exact: true,
-			},
-		],
-	},
-	{
 		label: 'Customers',
 		items: [
 			{ href: '/admin/merchants', label: 'Merchants', icon: 'users', permission: 'platform.merchants.read' },
@@ -48,7 +36,6 @@ export const ADMIN_NAV = Object.freeze([
 	{
 		label: 'Operations',
 		items: [
-			{ href: '/admin/integration', label: 'Integration', icon: 'send', permission: 'platform.jobs.read' },
 			{ href: '/admin/connectors', label: 'Connectors', icon: 'plug', permission: 'platform.merchants.read' },
 			{ href: '/admin/audit', label: 'Audit log', icon: 'shield', permission: 'platform.audit.read' },
 		],

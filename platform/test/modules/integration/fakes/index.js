@@ -8,7 +8,7 @@ import { defineModule } from '../../../../src/infra/modules.js';
 /**
  * @typedef {{ websiteId: string, merchantId: string, domain: string, env: 'live' | 'test', status: string }} FakeWebsite
  * @typedef {{ appId: string, slug: string, kind: 'service' | 'pack', status: string, endpoints: Record<string, string> | null,
- *   environments: { production: string | null, staging: string | null } }} FakeApp
+ *   baseUrl: string | null }} FakeApp
  */
 
 export const createWorld = () => {
@@ -92,9 +92,8 @@ export const createWorld = () => {
 
 	/**
 	 * @param {{ appId: string, slug: string, consumes?: string[], publishes?: string[], scopes?: string[],
-	 *   endpoints?: Record<string, string> | null, status?: string, kind?: 'service' | 'pack',
-	 *   environments?: { production?: string | null, staging?: string | null } }} input
-	 *   `environments.production` defaults to `endpoints.base` (registration records the base as production)
+	 *   endpoints?: Record<string, string> | null, status?: string, kind?: 'service' | 'pack', baseUrl?: string | null }} input
+	 *   `baseUrl` (the connected production base) defaults to `endpoints.base`
 	 */
 	const addApp = ({
 		appId,
@@ -105,17 +104,9 @@ export const createWorld = () => {
 		endpoints = null,
 		status = 'active',
 		kind = 'service',
-		environments = {},
+		baseUrl = endpoints?.base ?? null,
 	}) => {
-		const production = environments.production === undefined ? (endpoints?.base ?? null) : environments.production;
-		state.apps.set(appId, {
-			appId,
-			slug,
-			kind,
-			status,
-			endpoints,
-			environments: { production, staging: environments.staging ?? null },
-		});
+		state.apps.set(appId, { appId, slug, kind, status, endpoints, baseUrl });
 		state.manifests.set(appId, {
 			product: { slug, name: slug, kind, version: '1.0.0' },
 			scopes,

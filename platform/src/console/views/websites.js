@@ -1,6 +1,7 @@
 'use client';
 /**
- * Websites list, website overview and onboarding (add the first website → connect resources).
+ * Websites list, website overview (with the install code) and onboarding (add the first website → connect
+ * resources).
  * @module
  */
 import { useState } from 'react';
@@ -10,6 +11,7 @@ import {
 	ButtonLink,
 	Callout,
 	Card,
+	CodeBlock,
 	ConfirmDialog,
 	Dialog,
 	EmptyState,
@@ -44,7 +46,6 @@ export const RESOURCE_KINDS = Object.freeze([
 	{ kind: 'ai', label: 'AI provider', help: 'Your own API key for AI features (you pay the provider directly).' },
 	{ kind: 'messaging', label: 'Messaging', help: 'Your e-mail/SMS/WhatsApp account for messages to customers.' },
 	{ kind: 'payments', label: 'Payments', help: 'Your payment gateway merchant account.' },
-	{ kind: 'analytics', label: 'Analytics', help: 'Your analytics and tag account ids.' },
 ]);
 
 /**
@@ -357,11 +358,33 @@ export function WebsiteSettingsCard({ merchantId, website, onSaved, fetcher = ap
 }
 
 /**
+ * The website's install code: the loader script tag (always the current version) to paste into every page.
+ * @param {{ snippet: any }} props `snippet`: `GET …/delivery/snippet` (null until the website has a compiled bundle)
+ */
+export function InstallCodeCard({ snippet }) {
+	const tag = typeof snippet?.alias?.tag === 'string' ? snippet.alias.tag : null;
+	return (
+		<Card title="Copy install code">
+			{tag ? (
+				<div className="space-y-2">
+					<CodeBlock code={tag} label="Install code" />
+					<p className="text-sm text-muted">
+						Paste this before <code>{'</head>'}</code> on every page of your site.
+					</p>
+				</div>
+			) : (
+				<p className="text-sm text-muted">Your install code appears here once the website is loaded.</p>
+			)}
+		</Card>
+	);
+}
+
+/**
  * @param {any} props loader result of `loadWebsiteOverview`
  */
 export function WebsiteOverviewView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const { website, catalog, resources, meter, issuerRequest } = props;
+	const { website, catalog, resources, meter, issuerRequest, snippet } = props;
 	const subs = /** @type {any[]} */ (props.subscriptions ?? []).filter((s) => s.status !== 'cancelled');
 	const lines = /** @type {any[]} */ (meter?.subscriptions ?? []).filter((l) => l.websiteId === website.websiteId);
 	const burn = lines.reduce((sum, l) => sum + (l.burnRatePerHour ?? 0), 0);
@@ -398,6 +421,7 @@ export function WebsiteOverviewView(props) {
 				/>
 				<Stat label="Resources" value={`${connected}/${resources.length}`} hint="Connected" icon="plug" />
 			</div>
+			<InstallCodeCard snippet={snippet} />
 			<Card
 				title="Subscriptions"
 				subtitle="Products on this website and what they cost per hour."

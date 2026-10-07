@@ -1,6 +1,6 @@
 /**
  * Public service of the `commerce` module (INTERFACES.md): subscriptions, element switches, entitlement documents,
- * usage, ledger, credits, settlement and spend caps. Other modules call it via
+ * usage, ledger, credits, settlement and the monthly spend cap. Other modules call it via
  * `ctx.service('commerce')`; failures are thrown as RFC 9457 problems (`infra/http.js` `problem`).
  * @module
  */
@@ -167,10 +167,9 @@ export const createCommerceService = (ctx) => {
 			return money.statement(merchantId, checked.value);
 		},
 		meter: money.meter,
-		listPolicies: money.listPolicies,
-		createPolicy: money.createPolicy,
-		updatePolicy: money.updatePolicy,
-		deletePolicy: money.deletePolicy,
+		spendCap: money.spendCap,
+		setSpendCap: money.setSpendCap,
+		removeSpendCap: money.removeSpendCap,
 		/** @param {string} merchantId */
 		verifyChain: (merchantId) => ledger.verify(merchantId),
 		/** @param {string} merchantId @param {{ afterSeq?: number | null, limit?: number }} [page] */

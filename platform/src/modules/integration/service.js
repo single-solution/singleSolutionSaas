@@ -9,10 +9,13 @@
  * response of the request that ingested the event (the job queue runs a job right after the request that enqueued
  * it; F.19: event-driven only, no cron, no drain) → a failed delivery stays queued with its next-attempt time and is
  * retried when there is a natural reason: the next delivery to the same product, and the next time that product calls
- * the Portal (`productCalled` port: entitlements, usage, heartbeat, any product API call) — only that product's due
+ * the Portal (`productCalled` port: entitlements, usage, any product API call) — only that product's due
  * deliveries, a few at a time — or when staff press "Retry now" for the product → after the attempts that span ~24 h
- * of backoff (or once the event is older than that window), DLQ (sealed, ≤ 7 days) → replay. Payloads never reach a
- * collection in clear text.
+ * of backoff (or once the event is older than that window), the delivery is marked `failed` (metadata only; the
+ * payload is dropped with the job). Payloads never reach a collection in clear text.
+ *
+ * Delivery target: the app's connected production base (`catalog.getApp().baseUrl`) + the manifest's
+ * `endpoints.events`; an app without a base fails with `no_endpoint`.
  * @module
  */
 import { createHash } from 'node:crypto';
@@ -22,23 +25,15 @@ import { signEvent } from '@ss/protocol';
 import { isProblem, problem } from '../../infra/http.js';
 import { afterResponse } from '../../infra/request-scope.js';
 import {
-	DELIVERY_STATUSES,
 	DELIVERY_TIMEOUT_MS,
 	attemptsForWindow,
 	classifyError,
 	classifyStatus,
-	decodeCursor,
-	deliveryView,
-	dlqExpiry,
-	encodeCursor,
-	deliveryTarget,
 	eventsEndpoint,
 	MAX_RESPONSE_BYTES,
-	parseLimit,
 	RETRY_WINDOW_MS,
 } from './core/delivery.js';
 import {
-	DELIVERABLE_APP_STATUSES,
 	buildControlEvent,
 	checkBatch,
 	checkProductEvent,
@@ -51,7 +46,7 @@ import {
 	routeOf,
 } from './core/events.js';
 import { createIntegrationRepo } from './repo.js';
-import { DEAD_LETTERS, DELIVERIES, EVENTS } from './schema.js';
+import { DELIVERIES, EVENTS } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
@@ -91,7 +86,7 @@ export const deliveryGroup = (appId) => `integration.app:${appId}`;
  *   default `ctx.config.outbound.allowHosts`; always empty in production
  * @property {import('@ss/net').Resolver} [resolve] DNS resolver of the outbound policy (tests)
  * @property {number} [timeoutMs] per-attempt delivery timeout (default 10 s)
- * @property {number} [maxAttempts] job attempts before the DLQ (default: spans 24 h of the queue's backoff)
+ * @property {number} [maxAttempts] job attempts before a delivery fails (default: spans 24 h of the queue's backoff)
  * @property {number} [routingCacheMs] how long a website's routing table is reused (default 10 s; 0 = never)
  */
 
@@ -119,8 +114,6 @@ export const createIntegrationService = (ctx, options = {}) => {
 	const repo = createIntegrationRepo({
 		events: ctx.collection(EVENTS),
 		deliveries: ctx.collection(DELIVERIES),
-		deadLetters: ctx.collection(DEAD_LETTERS),
-		now: ctx.now,
 	});
 	const maxAttempts = options.maxAttempts ?? attemptsForWindow();
 	const routingCacheMs = options.routingCacheMs ?? 10_000;
@@ -135,20 +128,6 @@ export const createIntegrationService = (ctx, options = {}) => {
 		...(options.resolve ? { resolve: options.resolve } : {}),
 	});
 	const log = ctx.logger;
-
-	/**
-	 * The `env` of a sealed event body (`live` | `test`), or null.
-	 * @param {string} body
-	 * @returns {'live' | 'test' | null}
-	 */
-	const envOf = (body) => {
-		try {
-			const env = JSON.parse(body)?.env;
-			return env === 'live' || env === 'test' ? env : null;
-		} catch {
-			return null;
-		}
-	};
 
 	const unavailable = () =>
 		problem('unavailable', 'Event routing is temporarily unavailable.', { headers: { 'retry-after': '5' } });
@@ -234,10 +213,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 	 * @param {string} websiteId
 	 * @param {string} eventId
 	 * @param {string} appId
-	 * @param {number} [replay]
 	 */
-	const jobKey = (websiteId, eventId, appId, replay) => {
-		const key = `deliver:${websiteId}:${eventId}:${appId}${replay ? `:replay:${replay}` : ''}`;
+	const jobKey = (websiteId, eventId, appId) => {
+		const key = `deliver:${websiteId}:${eventId}:${appId}`;
 		return key.length <= 256 ? key : `deliver:${sha256(key)}`;
 	};
 
@@ -301,7 +279,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 			idempotencyKey: event.idempotencyKey,
 			receivedAt: new Date(ctx.now()),
 			fanout: 'pending',
-			deliveries: { total: 0, delivered: 0, dead: 0 },
+			deliveries: { total: 0, delivered: 0, failed: 0 },
 		};
 		if (await repo.insertEvent(record)) {
 			await fanout(record, event, targets, kind);
@@ -414,8 +392,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		let manifest;
 		try {
 			const app = await catalog.getApp(appId);
-			if (!app || !DELIVERABLE_APP_STATUSES.includes(String(app.status)))
-				throw problem('forbidden', 'The product is not active.');
+			if (!isDeliverableApp(app)) throw problem('forbidden', 'Only service products publish events.');
 			manifest = await catalog.getManifest(appId);
 		} catch (error) {
 			if (isNotFound(error)) throw problem('forbidden', 'The product is not registered.');
@@ -568,9 +545,8 @@ export const createIntegrationService = (ctx, options = {}) => {
 		} catch {
 			return { ok: false, code: 'payload_unavailable', permanent: true };
 		}
-		// the registered environment (production, or staging for test websites), never the manifest's `endpoints.base`
-		const target = deliveryTarget(app.environments, envOf(body));
-		const endpoint = target ? eventsEndpoint({ base: target.base, events: app.endpoints?.events }) : null;
+		// the connected production base, never the manifest's self-declared `endpoints.base`
+		const endpoint = eventsEndpoint({ base: app.baseUrl, events: app.endpoints?.events });
 		if (!endpoint) return { ok: false, code: 'no_endpoint', permanent: true };
 		// https only, except for OUTBOUND_DEV_ALLOW_HOSTS outside production (the policy's allowlist is empty there)
 		if (!checkUrl(endpoint, policy).ok) return { ok: false, code: 'ssrf_blocked', permanent: true };
@@ -598,9 +574,9 @@ export const createIntegrationService = (ctx, options = {}) => {
 	};
 
 	/**
-	 * Job handler of `integration.deliver`. Idempotent: delivered/dead records are skipped. A failed attempt throws so
-	 * the queue retries with backoff; the last allowed attempt (or a permanent failure) moves the sealed payload to the
-	 * DLQ and completes the job.
+	 * Job handler of `integration.deliver`. Idempotent: delivered/failed records are skipped. A failed attempt throws so
+	 * the queue retries with backoff; the last allowed attempt (or a permanent failure) marks the delivery `failed`
+	 * (metadata only) and completes the job, dropping the sealed payload with it.
 	 * @param {unknown} payload `{ deliveryId, sealed }`
 	 * @param {{ job: Job, signal?: AbortSignal }} jobCtx
 	 * @returns {Promise<{ status: string, code?: string }>}
@@ -609,7 +585,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 		const input = /** @type {{ deliveryId?: unknown, sealed?: unknown }} */ (payload ?? {});
 		if (typeof input.deliveryId !== 'string' || typeof input.sealed !== 'string') return { status: 'invalid' };
 		const delivery = await repo.getDelivery(input.deliveryId);
-		if (!delivery || delivery.status === 'delivered' || delivery.status === 'dead') return { status: 'skipped' };
+		if (!delivery || delivery.status === 'delivered' || delivery.status === 'failed') return { status: 'skipped' };
 		const outcome = await attempt(delivery, input.sealed, signal);
 		const t = new Date(ctx.now());
 		const common = { lastAttemptAt: t, lastHttpStatus: outcome.ok ? outcome.status : (outcome.status ?? null) };
@@ -622,34 +598,18 @@ export const createIntegrationService = (ctx, options = {}) => {
 			if (changed) await repo.bump(delivery.eventRecordId, { delivered: 1 });
 			return { status: 'delivered' };
 		}
-		// dead-letter rules: a permanent failure, the last allowed attempt, or an event older than the retry window
+		// give-up rules: a permanent failure, the last allowed attempt, or an event older than the retry window
 		// (retries wait for a natural trigger, so a quiet product's deliveries can be due long after their backoff)
 		const expired = ctx.now() - new Date(job.createdAt).getTime() >= RETRY_WINDOW_MS;
 		if (outcome.permanent || job.attempts >= job.maxAttempts || expired) {
-			const expireAt = dlqExpiry(ctx.now(), delivery.payloadExpiresAt);
-			await repo.putDeadLetter({
-				_id: delivery._id,
-				websiteId: delivery.websiteId,
-				merchantId: delivery.merchantId ?? null,
-				appId: delivery.appId,
-				eventId: delivery.eventId,
-				type: delivery.type,
-				sealed: input.sealed,
-				attempts: (delivery.attempts ?? 0) + 1,
-				lastErrorCode: outcome.code,
-				expireAt,
-			});
 			const changed = await repo.updateDelivery(
 				delivery._id,
-				{
-					$set: { ...common, status: 'dead', deadAt: t, lastErrorCode: outcome.code, payloadExpiresAt: expireAt },
-					$inc: { attempts: 1 },
-				},
+				{ $set: { ...common, status: 'failed', failedAt: t, lastErrorCode: outcome.code }, $inc: { attempts: 1 } },
 				{ status: { $in: ['pending', 'retrying'] } },
 			);
-			if (changed) await repo.bump(delivery.eventRecordId, { dead: 1 });
-			log.warn('delivery dead-lettered', { deliveryId: delivery._id, appId: delivery.appId, code: outcome.code });
-			return { status: 'dead', code: outcome.code };
+			if (changed) await repo.bump(delivery.eventRecordId, { failed: 1 });
+			log.warn('delivery failed', { deliveryId: delivery._id, appId: delivery.appId, code: outcome.code });
+			return { status: 'failed', code: outcome.code };
 		}
 		await repo.updateDelivery(
 			delivery._id,
@@ -660,158 +620,7 @@ export const createIntegrationService = (ctx, options = {}) => {
 	};
 
 	// -----------------------------------------------------------------------------------------------------------
-	// Logs, DLQ, replay, metrics
-
-	/**
-	 * Throw `not_found` unless the website belongs to the merchant (merchant console tenant check).
-	 * @param {string} websiteId
-	 * @param {string} merchantId
-	 */
-	const assertWebsiteOf = async (websiteId, merchantId) => {
-		/** @type {any} */
-		let website = null;
-		try {
-			website = await ctx.service('identity').getWebsite(websiteId);
-		} catch (error) {
-			if (!isNotFound(error)) throw error;
-		}
-		if (!website || website.merchantId !== merchantId) throw problem('not_found', 'Unknown website.');
-	};
-
-	/**
-	 * @param {{ cursor?: string | null, limit?: unknown }} input
-	 */
-	const pageOf = ({ cursor, limit }) => {
-		const decoded = decodeCursor(cursor);
-		if (!decoded.ok) throw problem('bad_request', 'cursor is invalid');
-		const n = parseLimit(limit);
-		if (n === null) throw problem('bad_request', 'limit must be 1..200');
-		return { after: decoded.after, limit: n };
-	};
-
-	/**
-	 * @template T
-	 * @param {Array<Record<string, any>>} docs
-	 * @param {number} limit
-	 * @param {string} timeField
-	 * @param {(doc: Record<string, any>) => T} view
-	 */
-	const respond = (docs, limit, timeField, view) => {
-		const hasMore = docs.length > limit;
-		const slice = hasMore ? docs.slice(0, limit) : docs;
-		const last = slice[slice.length - 1];
-		return {
-			items: slice.map(view),
-			nextCursor: hasMore && last ? encodeCursor({ createdAt: last[timeField], _id: last._id }) : null,
-			hasMore,
-		};
-	};
-
-	/**
-	 * @param {unknown} status
-	 */
-	const statusFilter = (status) => {
-		if (status === undefined || status === null || status === '') return {};
-		if (!DELIVERY_STATUSES.includes(/** @type {any} */ (status))) throw problem('bad_request', 'status is invalid');
-		return { status };
-	};
-
-	/**
-	 * Delivery log of a website or an app (newest first, cursor pagination, no payloads). With `merchantId`, the
-	 * website must belong to that merchant.
-	 * @param {{ websiteId?: string, appId?: string, merchantId?: string, status?: string, cursor?: string | null, limit?: unknown }} input
-	 */
-	const deliveryLog = async ({ websiteId, appId, merchantId, status, cursor, limit }) => {
-		if (!websiteId && !appId) throw problem('bad_request', 'websiteId or appId is required');
-		if (merchantId) {
-			if (!websiteId) throw problem('bad_request', 'websiteId is required');
-			await assertWebsiteOf(websiteId, merchantId);
-		}
-		const page = pageOf({ cursor, limit });
-		const docs = await repo.listDeliveries(
-			{ ...(websiteId ? { websiteId } : {}), ...(appId ? { appId } : {}), ...statusFilter(status) },
-			{ after: page.after, limit: page.limit + 1 },
-		);
-		return respond(docs, page.limit, 'createdAt', deliveryView);
-	};
-
-	/**
-	 * Dead letters (staff): newest first, without the sealed payload.
-	 * @param {{ websiteId?: string, appId?: string, cursor?: string | null, limit?: unknown }} [input]
-	 */
-	const deadLetters = async ({ websiteId, appId, cursor, limit } = {}) => {
-		const page = pageOf({ cursor, limit });
-		const docs = await repo.listDeadLetters(
-			{ ...(websiteId ? { websiteId } : {}), ...(appId ? { appId } : {}) },
-			{ after: page.after, limit: page.limit + 1 },
-		);
-		return respond(docs, page.limit, 'deadAt', (doc) => ({
-			deliveryId: doc._id,
-			eventId: doc.eventId,
-			type: doc.type,
-			websiteId: doc.websiteId,
-			appId: doc.appId,
-			attempts: doc.attempts,
-			lastErrorCode: doc.lastErrorCode,
-			deadAt: doc.deadAt,
-			expiresAt: doc.expireAt,
-		}));
-	};
-
-	/**
-	 * Re-enqueue a dead delivery from its sealed DLQ copy (audited). Merchants pass `merchantId` (+ `websiteId`).
-	 * @param {string} deliveryId
-	 * @param {{ actor: Actor, merchantId?: string, websiteId?: string, requestId?: string | null, ip?: string | null }} context
-	 */
-	const replay = async (deliveryId, { actor, merchantId, websiteId, requestId = null, ip = null }) => {
-		const delivery = await repo.getDelivery(deliveryId);
-		if (!delivery || (websiteId && delivery.websiteId !== websiteId)) throw problem('not_found', 'Unknown delivery.');
-		if (merchantId) await assertWebsiteOf(delivery.websiteId, merchantId);
-		if (delivery.status !== 'dead')
-			throw problem('conflict', `The delivery is ${delivery.status}; only dead deliveries replay.`);
-		const letter = await repo.getDeadLetter(deliveryId);
-		if (!letter || (letter.expireAt instanceof Date && letter.expireAt.getTime() <= ctx.now()))
-			throw problem('gone', 'The payload of this delivery has expired.');
-		const replays = (delivery.replays ?? 0) + 1;
-		const changed = await repo.updateDelivery(
-			deliveryId,
-			{ $set: { status: 'pending', lastErrorCode: null, replayedAt: new Date(ctx.now()) }, $inc: { replays: 1 } },
-			{ status: 'dead' },
-		);
-		if (!changed) throw problem('conflict', 'The delivery is being replayed.');
-		await ctx.jobs.enqueue({
-			name: DELIVER_JOB,
-			key: jobKey(delivery.websiteId ?? GLOBAL_AAD_SCOPE, delivery.eventId, delivery.appId, replays),
-			payload: { deliveryId, sealed: letter.sealed },
-			maxAttempts,
-			dropPayload: true,
-		});
-		await repo.deleteDeadLetter(deliveryId);
-		await repo.bump(delivery.eventRecordId, { dead: -1 });
-		await ctx.audit.record({
-			actor: /** @type {any} */ (actor),
-			action: 'integration.delivery_replayed',
-			target: { type: 'delivery', id: deliveryId, merchantId: delivery.merchantId ?? null, websiteId: delivery.websiteId },
-			before: { status: 'dead' },
-			after: { status: 'pending', replays },
-			requestId,
-			ip,
-		});
-		return { deliveryId, status: 'pending', replays };
-	};
-
-	/**
-	 * Delivery counts per status (observability), optionally for one website or app.
-	 * @param {{ websiteId?: string, appId?: string }} [input]
-	 */
-	const metrics = async ({ websiteId, appId } = {}) => {
-		const match = { ...(websiteId ? { websiteId } : {}), ...(appId ? { appId } : {}) };
-		const rows = await repo.countByStatus(match);
-		/** @type {Record<string, number>} */
-		const deliveries = Object.fromEntries(DELIVERY_STATUSES.map((status) => [status, 0]));
-		for (const row of rows) if (Object.hasOwn(deliveries, row._id)) deliveries[row._id] = row.n;
-		return { deliveries, deadLetters: await repo.countDeadLetters(match) };
-	};
+	// Retries
 
 	/**
 	 * Attempt the deliveries of these jobs now (lease-safe: only due jobs with these keys are leased, so a concurrent
@@ -891,10 +700,6 @@ export const createIntegrationService = (ctx, options = {}) => {
 		deliverNow,
 		deliverDueFor,
 		retryNow,
-		deliveryLog,
-		deadLetters,
-		replay,
-		metrics,
 	};
 };
 /** @typedef {ReturnType<typeof createIntegrationService>} IntegrationService */

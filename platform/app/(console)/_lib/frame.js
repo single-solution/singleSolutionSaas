@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import { loadFrame } from '../../../src/console/loaders.js';
-import { loadImpersonation } from '../../../src/console/admin/loaders.js';
 import { ConsoleShell } from '../../../src/console/views/shell.js';
 import { consoleApi, consoleSession } from './server.js';
 
@@ -15,18 +14,14 @@ export async function ConsoleFrame({ children }) {
 		throw new Error(session.problem?.detail ?? 'The console is unavailable.');
 	}
 	const api = await consoleApi();
-	const [frame, impersonation] = await Promise.all([
-		session.merchantId ? loadFrame(api, session.merchantId) : { websites: [], meter: null, notifications: [] },
-		loadImpersonation(api),
-	]);
+	const frame = session.merchantId ? await loadFrame(api, session.merchantId) : { websites: [], meter: null, notifications: [] };
 	return (
 		<ConsoleShell
 			me={session.me}
 			merchantId={session.merchantId}
 			websites={frame.websites}
 			meter={frame.meter}
-			notifications={frame.notifications}
-			impersonation={impersonation}>
+			notifications={frame.notifications}>
 			{children}
 		</ConsoleShell>
 	);

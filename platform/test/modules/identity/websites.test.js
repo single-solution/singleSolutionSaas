@@ -459,51 +459,9 @@ describe('merchants (staff)', () => {
 		expect((await owner.patch(`/v1/merchants/${merchantId}`, { name: 'bad\u0001' })).status).toBe(422);
 	});
 
-	it('partners and developers: records and grants', async () => {
+	it('getStaff presents a staff user', async () => {
 		const h = await boot();
 		const root = await h.staffUser('root@example.com');
-		const a = await h.signupOwner('a@example.com');
-		const partner = await root.client.post('/v1/admin/partners', { name: 'Agency', email: 'Agency@Example.com' });
-		expect(partner.json).toMatchObject({ name: 'Agency', email: 'agency@example.com', status: 'active', grants: [] });
-		const { partnerId } = partner.json;
-		expect((await root.client.post('/v1/admin/partners', { name: 'Dup', email: 'agency@example.com' })).status).toBe(409);
-		expect(
-			(await root.client.post(`/v1/admin/partners/${partnerId}/grants`, { merchantId: 'mer_00000000000000000000000000' }))
-				.status,
-		).toBe(404);
-		const granted = await root.client.post(`/v1/admin/partners/${partnerId}/grants`, { merchantId: a.merchantId });
-		expect(granted.json.grants).toMatchObject([{ merchantId: a.merchantId, roles: ['admin'] }]);
-		const regranted = await root.client.post(`/v1/admin/partners/${partnerId}/grants`, {
-			merchantId: a.merchantId,
-			roles: ['billing'],
-		});
-		expect(regranted.json.grants).toMatchObject([{ merchantId: a.merchantId, roles: ['billing'] }]);
-		expect(await h.service.getPartner(partnerId)).toMatchObject({ partnerId, grants: [{ merchantId: a.merchantId }] });
-		expect((await root.client.get('/v1/admin/partners')).json.items).toHaveLength(1);
-		expect((await root.client.del(`/v1/admin/partners/${partnerId}/grants/${a.merchantId}`)).status).toBe(204);
-		expect((await root.client.del(`/v1/admin/partners/${partnerId}/grants/${a.merchantId}`)).status).toBe(404);
-		expect(
-			(await root.client.post('/v1/admin/partners/prt_00000000000000000000000000/grants', { merchantId: a.merchantId }))
-				.status,
-		).toBe(404);
-
-		const dev = await root.client.post('/v1/admin/developers', { name: 'Builder', email: 'dev@example.com' });
-		const { developerId } = dev.json;
-		expect((await root.client.post(`/v1/admin/developers/${developerId}/grants`, { appId: 'Bad App' })).status).toBe(422);
-		expect(
-			(await root.client.post(`/v1/admin/developers/${developerId}/grants`, { appId: 'app_notes' })).json.grants,
-		).toMatchObject([{ appId: 'app_notes' }]);
-		expect(await h.service.getDeveloper(developerId)).toMatchObject({ developerId, grants: [{ appId: 'app_notes' }] });
-		expect((await root.client.get('/v1/admin/developers')).json.items).toHaveLength(1);
-		expect((await root.client.del(`/v1/admin/developers/${developerId}/grants/app_notes`)).status).toBe(204);
-		await expect(h.service.getDeveloper('dev_00000000000000000000000000')).rejects.toMatchObject({ code: 'not_found' });
 		expect(await h.service.getStaff(root.staffId)).toMatchObject({ staffId: root.staffId, roles: ['superadmin'] });
-		const audit = await h.portal.shared.audit.list({ targetId: partnerId });
-		expect(audit.map((e) => e.action).sort()).toEqual([
-			'partner.created',
-			'partner.grant_revoked',
-			'partner.granted',
-			'partner.granted',
-		]);
 	});
 });

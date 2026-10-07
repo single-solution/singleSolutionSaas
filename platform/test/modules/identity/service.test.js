@@ -59,11 +59,9 @@ describe('identity service wiring', () => {
 		const { token } = await h.portal.shared.sessions.create({ kind: 'merchant', subject: owner.userId, merchantId: null });
 		const session = /** @type {any} */ (await h.portal.shared.sessions.get(token));
 		expect(await h.service.sessionActor(session)).toEqual({ type: 'merchant_user', id: owner.userId, roles: [], grants: [] });
-		const impersonated = { ...session, merchantId: owner.merchantId, via: { type: 'staff', id: 'stf_1' } };
-		expect(await h.service.sessionActor(impersonated)).toMatchObject({
+		expect(await h.service.sessionActor({ ...session, merchantId: owner.merchantId })).toMatchObject({
 			merchantId: owner.merchantId,
 			roles: ['owner'],
-			via: { id: 'stf_1' },
 		});
 		expect(await h.service.sessionActor({ ...session, merchantId: 'mer_00000000000000000000000000' })).toBeNull();
 		const users = h.portal.modules.context('identity').collection(C.users);

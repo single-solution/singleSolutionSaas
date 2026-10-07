@@ -10,8 +10,8 @@ export default function AdminNotFound() {
 				title="Page not found"
 				description="The admin page does not exist."
 				action={
-					<ButtonLink href="/admin" variant="primary">
-						Back to the dashboard
+					<ButtonLink href="/admin/merchants" variant="primary">
+						Back to merchants
 					</ButtonLink>
 				}
 			/>

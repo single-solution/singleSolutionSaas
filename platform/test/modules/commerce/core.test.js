@@ -48,20 +48,14 @@ import {
 	checkElementSwitch,
 	checkPlanChange,
 	checkReason,
-	checkSpendPolicy,
+	checkSpendCap,
 	checkStatementQuery,
 	checkSubscribe,
 	checkUsageBatch,
 	checkUsageRecord,
 } from '../../../src/modules/commerce/core/validate.js';
-import {
-	bookOrThrow,
-	meteredDraft,
-	settlementDraft,
-	spendDecisions,
-	subscriptionBurn,
-} from '../../../src/modules/commerce/core/billing.js';
-import { APP, M1, M2, W1, W2, couponsManifest, freeManifest } from './fixtures.js';
+import { bookOrThrow, meteredDraft, settlementDraft, subscriptionBurn } from '../../../src/modules/commerce/core/billing.js';
+import { APP, M1, M2, W1, couponsManifest, freeManifest } from './fixtures.js';
 
 const T = Date.parse('2026-10-01T10:00:00Z');
 const H = 3_600_000;
@@ -138,11 +132,7 @@ describe('ledger chain', () => {
 		expect(entryHash(e.prevHash, { ...rest, note: 'changed' })).not.toBe(hash);
 		expect(entryHash(e.prevHash, { ...rest, at: e.at.toISOString() })).toBe(hash);
 		expect(ledgerActor(null)).toBeNull();
-		expect(ledgerActor({ type: 'staff', id: 'a', via: { type: 'staff', id: 'b' } })).toEqual({
-			type: 'staff',
-			id: 'a',
-			via: { type: 'staff', id: 'b' },
-		});
+		expect(ledgerActor({ type: 'staff', id: 'a', ...{ roles: ['x'] } })).toEqual({ type: 'staff', id: 'a' });
 	});
 
 	it('validates drafts', () => {
@@ -358,7 +348,7 @@ describe('validation', () => {
 		expect(checkReason('x', 'dflt')).toMatchObject({ ok: false });
 	});
 
-	it('credit operations and spend policies', () => {
+	it('credit operations and the spend cap', () => {
 		expect(checkCreditOperation('credit', { amountMillicredits: 5, reference: 'r1', note: ' n ' })).toEqual({
 			ok: true,
 			value: { amountMillicredits: 5, reference: 'r1', note: 'n' },
@@ -375,22 +365,10 @@ describe('validation', () => {
 			ok: false,
 		});
 		expect(checkCreditOperation('credit', 'x')).toMatchObject({ ok: false });
-		expect(checkSpendPolicy({ scope: 'merchant', window: 'day', limit: 10 })).toEqual({
-			ok: true,
-			value: { scope: 'merchant', websiteId: null, window: 'day', limit: 10, timeZone: 'UTC' },
-		});
-		expect(
-			checkSpendPolicy({ scope: 'website', websiteId: W1, window: 'month', limit: 0, timeZone: 'Asia/Karachi' }),
-		).toMatchObject({
-			ok: true,
-			value: { websiteId: W1, timeZone: 'Asia/Karachi' },
-		});
-		expect(checkSpendPolicy({ scope: 'website', window: 'week', limit: -1, timeZone: 'Mars/Base' })).toMatchObject({
-			ok: false,
-		});
-		expect(checkSpendPolicy({ scope: 'merchant', websiteId: W1, window: 'day', limit: 1 })).toMatchObject({ ok: false });
-		expect(checkSpendPolicy({ scope: 'all', window: 'day', limit: 1, other: 1 })).toMatchObject({ ok: false });
-		expect(checkSpendPolicy(5)).toMatchObject({ ok: false });
+		expect(checkSpendCap({ limit: 10 })).toEqual({ ok: true, value: { limit: 10 } });
+		expect(checkSpendCap({ limit: 0 })).toMatchObject({ ok: false });
+		expect(checkSpendCap({ limit: 1, other: 1 })).toMatchObject({ ok: false });
+		expect(checkSpendCap(5)).toMatchObject({ ok: false });
 	});
 
 	it('statement queries', () => {
@@ -509,51 +487,6 @@ describe('billing composition', () => {
 				at: T,
 			}),
 		).toBe(0);
-	});
-
-	it('spend decisions per website and merchant', () => {
-		const policies = [
-			{
-				scope: /** @type {const} */ ('website'),
-				websiteId: W1,
-				window: /** @type {const} */ ('day'),
-				limit: 4000,
-				timeZone: 'UTC',
-			},
-		];
-		const entries = [
-			{ at: T, amount: 1500, websiteId: W1 },
-			{ at: T + H, amount: 1500, websiteId: W1 },
-			{ at: T, amount: 900, websiteId: W2 },
-		];
-		const now = T + 2 * H + 300_000;
-		const out = spendDecisions({ merchantId: M1, policies, entries, burnByWebsite: { [W1]: 1500, [W2]: 900 }, now });
-		expect(out[W1]).toEqual({ pause: true, resumeAt: '2026-10-02T00:00:00.000Z' });
-		expect(out[W2]).toEqual({ pause: false, resumeAt: null });
-		const merchantCap = [
-			{
-				scope: /** @type {const} */ ('merchant'),
-				websiteId: null,
-				window: /** @type {const} */ ('month'),
-				limit: 3900,
-				timeZone: 'UTC',
-			},
-		];
-		const all = spendDecisions({ merchantId: M1, policies: merchantCap, entries, burnByWebsite: { [W1]: 0, [W2]: 0 }, now });
-		expect(all[W1]?.pause).toBe(true);
-		expect(all[W2]?.resumeAt).toBe('2026-11-01T00:00:00.000Z');
-		expect(
-			spendDecisions({
-				merchantId: M1,
-				policies: [],
-				entries: [{ at: new Date(T), amount: 1, websiteId: null }],
-				burnByWebsite: { [W1]: 5 },
-				now,
-			})[W1],
-		).toEqual({
-			pause: false,
-			resumeAt: null,
-		});
 	});
 
 	it('exports the product normaliser', () => {

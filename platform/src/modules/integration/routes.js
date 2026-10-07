@@ -35,15 +35,6 @@ const ingestSubject = (ctx) => {
 /**
  * @param {RequestContext} ctx
  */
-const listQuery = (ctx) => ({
-	cursor: ctx.query.cursor ?? null,
-	limit: ctx.query.limit,
-	...(ctx.query.status ? { status: ctx.query.status } : {}),
-});
-
-/**
- * @param {RequestContext} ctx
- */
 const auditContext = (ctx) => ({
 	actor: /** @type {import('../../infra/rbac.js').Actor} */ (ctx.actor),
 	requestId: ctx.requestId,
@@ -72,7 +63,6 @@ export const integrationRoutes = (service) => [
 		method: 'POST',
 		path: '/v1/product/events',
 		auth: 'product',
-		idempotent: 'optional',
 		maxBodyBytes: INGEST_MAX_BODY,
 		handler: async (ctx) => {
 			const body = /** @type {Record<string, unknown> | undefined} */ (ctx.body);
@@ -85,64 +75,6 @@ export const integrationRoutes = (service) => [
 		},
 	}),
 	defineRoute({
-		method: 'GET',
-		path: '/v1/product/deliveries',
-		auth: 'product',
-		handler: async (ctx) =>
-			ok(await service.deliveryLog({ appId: /** @type {{ appId: string }} */ (ctx.app).appId, ...listQuery(ctx) })),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/merchants/:merchantId/websites/:websiteId/deliveries',
-		auth: ['merchant', 'staff'],
-		permission: 'websites.read',
-		handler: async (ctx) =>
-			ok(
-				await service.deliveryLog({
-					websiteId: ctx.params.websiteId,
-					merchantId: ctx.params.merchantId,
-					...listQuery(ctx),
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/merchants/:merchantId/websites/:websiteId/deliveries/:deliveryId/replay',
-		auth: ['merchant', 'staff'],
-		permission: 'websites.write',
-		handler: async (ctx) =>
-			ok(
-				await service.replay(String(ctx.params.deliveryId), {
-					...auditContext(ctx),
-					merchantId: ctx.params.merchantId,
-					websiteId: ctx.params.websiteId,
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/admin/deliveries',
-		auth: 'staff',
-		permission: 'platform.jobs.read',
-		resource: () => ({}),
-		handler: async (ctx) =>
-			ok(
-				await service.deliveryLog({
-					...(ctx.query.websiteId ? { websiteId: ctx.query.websiteId } : {}),
-					...(ctx.query.appId ? { appId: ctx.query.appId } : {}),
-					...listQuery(ctx),
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'POST',
-		path: '/v1/admin/deliveries/:deliveryId/replay',
-		auth: 'staff',
-		permission: 'platform.jobs.manage',
-		resource: () => ({}),
-		handler: async (ctx) => ok(await service.replay(String(ctx.params.deliveryId), auditContext(ctx))),
-	}),
-	defineRoute({
 		method: 'POST',
 		path: '/v1/admin/apps/:appId/deliveries/retry',
 		auth: 'staff',
@@ -150,35 +82,5 @@ export const integrationRoutes = (service) => [
 		resource: () => ({}),
 		idempotent: false,
 		handler: async (ctx) => ok(await service.retryNow(String(ctx.params.appId), auditContext(ctx))),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/admin/dead-letters',
-		auth: 'staff',
-		permission: 'platform.jobs.read',
-		resource: () => ({}),
-		handler: async (ctx) =>
-			ok(
-				await service.deadLetters({
-					...(ctx.query.websiteId ? { websiteId: ctx.query.websiteId } : {}),
-					...(ctx.query.appId ? { appId: ctx.query.appId } : {}),
-					cursor: ctx.query.cursor ?? null,
-					limit: ctx.query.limit,
-				}),
-			),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/admin/integration/metrics',
-		auth: 'staff',
-		permission: 'platform.jobs.read',
-		resource: () => ({}),
-		handler: async (ctx) =>
-			ok(
-				await service.metrics({
-					...(ctx.query.websiteId ? { websiteId: ctx.query.websiteId } : {}),
-					...(ctx.query.appId ? { appId: ctx.query.appId } : {}),
-				}),
-			),
 	}),
 ];

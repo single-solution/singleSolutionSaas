@@ -43,8 +43,8 @@ export function AdminProblem({ problem, title, back }) {
 				Sign in
 			</ButtonLink>
 		) : (
-			<ButtonLink as={Link} href={back?.href ?? adminRoutes.dashboard()} variant="secondary">
-				{back?.label ?? 'Back to the dashboard'}
+			<ButtonLink as={Link} href={back?.href ?? adminRoutes.merchants()} variant="secondary">
+				{back?.label ?? 'Back to merchants'}
 			</ButtonLink>
 		);
 	return (
@@ -123,7 +123,7 @@ export function Roles({ roles }) {
 }
 
 /**
- * Who did something (audit / history actor), with the impersonating staff member.
+ * Who did something (audit / history actor).
  * @param {{ actor: any }} props
  */
 export function ActorLabel({ actor }) {
@@ -132,11 +132,6 @@ export function ActorLabel({ actor }) {
 		<span className="inline-flex flex-wrap items-center gap-1">
 			<Badge>{String(actor.type ?? 'unknown').replace('merchant_user', 'merchant')}</Badge>
 			<span className="font-mono text-xs">{actor.id}</span>
-			{actor.via ? (
-				<Badge tone="warning" title="Impersonation">
-					via {actor.via.id}
-				</Badge>
-			) : null}
 		</span>
 	);
 }

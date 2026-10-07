@@ -269,14 +269,13 @@ describe('probes: storage, http, smtp, skipped kinds', () => {
 		});
 	});
 
-	it('payments and analytics are stored only', async () => {
+	it('payments are stored only', async () => {
 		expect(await probes.run('payments', 'stripe', { secretKey: 'x' })).toMatchObject({
 			ok: true,
 			skipped: true,
 			checks: [],
 			warnings: ['not_checked'],
 		});
-		expect((await probes.run('analytics', 'ga4', { ids: { m: 'G-1' } })).skipped).toBe(true);
 	});
 });
 

@@ -5,7 +5,7 @@
  * driven through their forms and dialogs: sign-up, e-mail verification, sign-in with the MFA challenge, password
  * reset, invite acceptance, onboarding, websites add/delete with typed confirmation, team invite/role/remove,
  * account rename/password/MFA enrol/recovery codes/disable/sessions, merchant and website switchers, sign-out and
- * the impersonation banner.
+ * the website's install code.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as hooks from 'next/dist/shared/lib/hooks-client-context.shared-runtime.js';
@@ -25,7 +25,7 @@ import {
 } from '../../src/console/views/auth.js';
 import { ConsoleShell } from '../../src/console/views/shell.js';
 import { TeamView } from '../../src/console/views/team.js';
-import { OnboardingView, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
+import { InstallCodeCard, OnboardingView, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
@@ -199,8 +199,29 @@ describe('merchant console interactions (jsdom): account, websites, team', () =>
 		expect(dialog().textContent).toMatch(/./);
 		cleanup();
 
-		render(<WebsiteOverviewView {...await loaders.loadWebsiteOverview(a.api, merchantId, twinId)} />);
+		const twinOverview = await loaders.loadWebsiteOverview(a.api, merchantId, twinId);
+		render(<WebsiteOverviewView {...twinOverview} />);
 		expect(shows('test twin')).toBe(true);
+		// nothing compiled yet: the install code (the stable loader URL) is already there
+		expect(twinOverview.ok && twinOverview.snippet).toMatchObject({ version: null, immutable: null });
+		expect(twinOverview.ok && twinOverview.snippet.alias.tag).toContain(`/w/${twinId}/loader.js`);
+		expect(shows('Copy install code') && shows('Paste this before </head> on every page of your site.')).toBe(true);
+		cleanup();
+		render(<InstallCodeCard snippet={null} />);
+		expect(shows('Your install code appears here once the website is loaded.')).toBe(true);
+		cleanup();
+		// the install code: the loader tag in a code block, copied to the clipboard
+		const tag = `<script src="https://portal.test/w/${twinId}/loader.js" crossorigin="anonymous" defer></script>`;
+		const writeText = vi.fn(async () => undefined);
+		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+		render(<InstallCodeCard snippet={{ alias: { tag } }} />);
+		expect(document.querySelector('code')?.textContent).toBe(tag);
+		expect(shows('Paste this before </head> on every page of your site.')).toBe(true);
+		await press('Copy');
+		expect(writeText).toHaveBeenCalledWith(tag);
+		await until(() => shows('Copied'));
+		vi.unstubAllGlobals();
+		a.use();
 		cleanup();
 
 		// ---------------------------------------------------------------- team: invite, accept, edit, remove, revoke
@@ -271,7 +292,7 @@ describe('merchant console interactions (jsdom): account, websites, team', () =>
 		await press('Edit');
 		expect(/** @type {HTMLInputElement} */ (byLabel(dialog(), 'Only some websites')).checked).toBe(true);
 		await check('All websites', dialog());
-		await check('Billing — credits, statements, spend policies', dialog());
+		await check('Billing — credits, statements, spend cap', dialog());
 		await pressDialog('Save');
 		await until(() => shows('Access updated'));
 		await press('Remove');
@@ -376,12 +397,7 @@ describe('merchant console interactions (jsdom): account, websites, team', () =>
 		const low = { balanceMillicredits: 5000, burnRatePerHour: 1000, hoursRemaining: 5, subscriptions: [] };
 		render(
 			<PathnameContext.Provider value={`/websites/${twinId}/keys`}>
-				<ConsoleShell
-					me={me2.me}
-					merchantId={me2.merchantId}
-					websites={frame.websites}
-					meter={low}
-					impersonation={{ staffId: 'stf_1', staffName: 'Help', expiresAt: new Date(Date.now() + 60_000).toISOString() }}>
+				<ConsoleShell me={me2.me} merchantId={me2.merchantId} websites={frame.websites} meter={low}>
 					<p>child</p>
 				</ConsoleShell>
 			</PathnameContext.Provider>,
@@ -394,7 +410,11 @@ describe('merchant console interactions (jsdom): account, websites, team', () =>
 		const target = me2.me.memberships.find((/** @type {any} */ m) => m.merchantId !== me2.merchantId).merchantId;
 		type(/** @type {HTMLSelectElement} */ (orgSelect), target);
 		await b.waitCall('POST', '/v1/me/merchant', (s) => s === 200);
-		await press('End impersonation');
+		await clickEl(
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('button')].find((x) => x.textContent?.includes('Sign out'))
+			),
+		);
 		await b.waitCall('POST', '/v1/auth/merchant/logout');
 		cleanup();
 		render(

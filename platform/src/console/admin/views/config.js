@@ -346,11 +346,7 @@ export function PoliciesView(props) {
 					onSave={save}
 				/>
 			) : (
-				<EmptyState
-					icon="sliders"
-					title="No accepted manifest"
-					description="Approve a manifest version before setting policies."
-				/>
+				<EmptyState icon="sliders" title="No accepted manifest" description="The app has no manifest yet." />
 			)}
 			<LayerHistory title="Policy history" history={history.data} canWrite={canWrite} onRollback={rollback} />
 		</div>

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createJwks, createKeyResolver, generateSigningKey, issueWebsiteKey, signAssertion } from '@ss/protocol';
 import { defineCollection } from '../src/infra/db.js';
-import { created, defineRoute, ok } from '../src/infra/http.js';
+import { created, defineRoute, ok, problem } from '../src/infra/http.js';
 import { defineModule } from '../src/infra/modules.js';
 import { COLLECTIONS } from '../src/infra/schema.js';
 import { systemModule } from '../src/modules/system/index.js';
@@ -43,6 +43,9 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 	defineModule({
 		name: 'probe',
 		collections: [defineCollection({ module: 'probe', name: 'probe_items', tenant: 'merchant' })],
+		migrations: [
+			{ id: '202610010000-probe-seed', description: 'No-op seed.', plan: async () => ['nothing'], up: async () => {} },
+		],
 		problems: { probe_failed: { status: 422, title: 'Probe failed' } },
 		service: (ctx) => {
 			const items = ctx.collection('probe_items');
@@ -72,6 +75,7 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 				path: '/v1/probe/merchants/:merchantId/items',
 				auth: ['staff', 'merchant'],
 				permission: 'config.write',
+				idempotent: true,
 				rateLimit: { limit: 5, windowMs: 60_000 },
 				handler: async (c) => {
 					const svc = ctx.service('probe');
@@ -80,6 +84,53 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 				},
 			}),
 			defineRoute({ method: 'GET', path: '/v1/probe/fail', auth: 'public', handler: () => ({ code: 'x' }) }),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/probe/info',
+				auth: 'public',
+				rateLimit: { limit: 120, windowMs: 60_000 },
+				handler: () => ok({ portalUrl: ctx.config.portalUrl }, { headers: { 'cache-control': 'public, max-age=30' } }),
+			}),
+			defineRoute({
+				method: 'GET',
+				path: '/v1/probe/whoami',
+				auth: ['staff', 'merchant', 'product', 'websiteKey'],
+				handler: (c) =>
+					ok({
+						authMode: c.authMode,
+						actor: c.actor,
+						...(c.session ? { session: { kind: c.session.kind, mfa: c.session.mfa } } : {}),
+						...(c.website
+							? {
+									website: {
+										websiteId: c.website.websiteId,
+										kind: c.website.kind,
+										env: c.website.env,
+										scopes: c.website.scopes,
+									},
+								}
+							: {}),
+					}),
+			}),
+			defineRoute({
+				method: 'PUT',
+				path: '/v1/probe/setting',
+				auth: 'staff',
+				permission: 'platform.settings.write',
+				handler: async (c) => {
+					const text = /** @type {any} */ (c.body)?.text;
+					if (typeof text !== 'string' || text === '') return problem('validation_failed', 'text is required');
+					await ctx.audit.record({
+						actor: /** @type {any} */ (c.actor),
+						action: 'probe.setting_set',
+						target: { type: 'setting', id: 'probe' },
+						after: { text },
+						requestId: c.requestId,
+						ip: c.ip,
+					});
+					return ok({ text });
+				},
+			}),
 			defineRoute({
 				method: 'GET',
 				path: '/v1/probe/foreign',
@@ -136,27 +187,22 @@ const login = async (portal, input) => {
 };
 
 describe('Portal end to end', () => {
-	it('boots, ensures indexes, migrates and serves public info, JWKS and health', async () => {
+	it('boots, ensures indexes, migrates and serves public routes and the JWKS', async () => {
 		const { portal, call } = await boot({ dbName: 'it_boot', db: mongo.db('it_boot', { fresh: true }) });
 		const indexes = await portal.ensureIndexes();
 		expect(indexes.created).toEqual(
 			expect.arrayContaining(['probe_items.tenant', `${COLLECTIONS.audit}.merchantId_1_at_-1__id_-1`]),
 		);
-		expect((await portal.migrate({ dryRun: true })).pending.map((p) => p.id)).toEqual(['202610010000-system-notice-default']);
-		expect((await portal.migrate()).applied).toEqual(['202610010000-system-notice-default']);
+		expect((await portal.migrate({ dryRun: true })).pending.map((p) => p.id)).toEqual(['202610010000-probe-seed']);
+		expect((await portal.migrate()).applied).toEqual(['202610010000-probe-seed']);
 		expect((await portal.migrate()).applied).toEqual([]);
 
-		const info = await call('GET', '/api/v1/system/info');
+		const info = await call('GET', '/api/v1/probe/info');
 		expect(info.status).toBe(200);
-		expect(info.json).toMatchObject({
-			portalUrl: PORTAL_URL,
-			jwksUrl: `${PORTAL_URL}/.well-known/jwks.json`,
-			modules: ['probe', 'system'],
-			notice: null,
-		});
+		expect(info.json).toEqual({ portalUrl: PORTAL_URL });
 		expect(info.headers.get('cache-control')).toBe('public, max-age=30');
 		expect(info.headers.get('ratelimit-limit')).toBe('120');
-		expect((await call('GET', '/v1/system/info')).status).toBe(200);
+		expect((await call('GET', '/v1/probe/info')).status).toBe(200);
 
 		const jwks = await portal.jwks().json();
 		// Portal keys and the dedicated website-key signing key, distinct kids
@@ -172,51 +218,49 @@ describe('Portal end to end', () => {
 		const support = await login(portal, { kind: 'staff', subject: 'stf_support', roles: ['support'], mfa: true });
 		const halfway = await login(portal, { kind: 'staff', subject: 'stf_new', roles: ['admin'], mfa: false });
 
-		const who = await call('GET', '/v1/system/whoami', { headers: { cookie: admin.cookie } });
+		const who = await call('GET', '/v1/probe/whoami', { headers: { cookie: admin.cookie } });
 		expect(who.json).toMatchObject({
 			authMode: 'staff',
 			actor: { type: 'staff', id: 'stf_admin', roles: ['admin'] },
 			session: { kind: 'staff', mfa: true },
 		});
-		expect((await call('GET', '/v1/system/whoami', { headers: { cookie: halfway.cookie } })).status).toBe(403);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: halfway.cookie } })).status).toBe(403);
 		expect(
 			(
-				await call('GET', '/v1/system/whoami', {
+				await call('GET', '/v1/probe/whoami', {
 					headers: { cookie: `${portal.shared.cookies.name('staff')}=${'x'.repeat(43)}` },
 				})
 			).status,
 		).toBe(401);
-		expect((await call('GET', '/v1/system/whoami')).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami')).status).toBe(401);
 
-		const body = { notice: { text: 'Maintenance tonight', level: 'warning' } };
-		expect((await call('PUT', '/v1/system/notice', { headers: { cookie: admin.cookie }, body })).status).toBe(403); // no Origin → CSRF
+		const body = { text: 'Maintenance tonight' };
+		expect((await call('PUT', '/v1/probe/setting', { headers: { cookie: admin.cookie }, body })).status).toBe(403); // no Origin → CSRF
 		expect(
-			(await call('PUT', '/v1/system/notice', { headers: { cookie: admin.cookie, origin: 'https://evil.test' }, body }))
+			(await call('PUT', '/v1/probe/setting', { headers: { cookie: admin.cookie, origin: 'https://evil.test' }, body }))
 				.status,
 		).toBe(403);
-		expect((await call('PUT', '/v1/system/notice', { headers: { cookie: support.cookie, ...SAME_ORIGIN }, body })).status).toBe(
+		expect((await call('PUT', '/v1/probe/setting', { headers: { cookie: support.cookie, ...SAME_ORIGIN }, body })).status).toBe(
 			403,
 		); // RBAC
-		const invalid = await call('PUT', '/v1/system/notice', {
+		const invalid = await call('PUT', '/v1/probe/setting', {
 			headers: { cookie: admin.cookie, ...SAME_ORIGIN },
-			body: { notice: { text: '' } },
+			body: { text: '' },
 		});
 		expect(invalid.status).toBe(422);
-		const saved = await call('PUT', '/v1/system/notice', {
-			headers: { cookie: admin.cookie, ...SAME_ORIGIN, 'x-request-id': 'req-notice' },
+		const saved = await call('PUT', '/v1/probe/setting', {
+			headers: { cookie: admin.cookie, ...SAME_ORIGIN, 'x-request-id': 'req-setting' },
 			body,
 		});
 		expect(saved.status).toBe(200);
-		expect((await call('GET', '/v1/system/info')).json.notice).toEqual(body.notice);
 
-		const entries = await portal.shared.audit.list({ targetId: 'notice' });
+		const entries = await portal.shared.audit.list({ targetId: 'probe' });
 		expect(entries).toHaveLength(1);
 		expect(entries[0]).toMatchObject({
-			action: 'system.notice_set',
-			actor: { type: 'staff', id: 'stf_admin', via: null },
-			before: null,
-			after: body.notice,
-			requestId: 'req-notice',
+			action: 'probe.setting_set',
+			actor: { type: 'staff', id: 'stf_admin' },
+			after: body,
+			requestId: 'req-setting',
 			merchantId: null,
 		});
 	});
@@ -266,7 +310,7 @@ describe('Portal end to end', () => {
 			).status,
 		).toBe(403);
 		expect(await /** @type {any} */ (portal.modules.service('probe')).count(MERCHANT_2)).toBe(0);
-		const who = await call('GET', '/v1/system/whoami', { headers: { cookie: editor.cookie } });
+		const who = await call('GET', '/v1/probe/whoami', { headers: { cookie: editor.cookie } });
 		expect(who.json.actor).toEqual({
 			type: 'merchant_user',
 			id: 'usr_editor',
@@ -285,20 +329,18 @@ describe('Portal end to end', () => {
 		const { createSigner } = await import('@ss/protocol');
 		const signer = createSigner(privateJwk);
 		const assertion = await signAssertion({ signer, appId: 'app_probe', audience: PORTAL_URL, now: clock.now });
-		const who = await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${assertion}` } });
+		const who = await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${assertion}` } });
 		expect(who.json).toEqual({ authMode: 'product', actor: { type: 'product', id: 'app_probe' } });
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${assertion}` } })).status).toBe(401); // replay
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${assertion}` } })).status).toBe(401); // replay
 		const wrongAudience = await signAssertion({ signer, appId: 'app_probe', audience: 'https://other.test', now: clock.now });
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${wrongAudience}` } })).status).toBe(
-			401,
-		);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${wrongAudience}` } })).status).toBe(401);
 		const unknownApp = await signAssertion({ signer, appId: 'app_other', audience: PORTAL_URL, now: clock.now });
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${unknownApp}` } })).status).toBe(401);
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: 'Bearer not-a-jwt' } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${unknownApp}` } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: 'Bearer not-a-jwt' } })).status).toBe(401);
 
-		const noPort = await boot({ dbName: 'it_product_noport', modules: [systemModule] });
+		const noPort = await boot({ dbName: 'it_product_noport', modules: [systemModule, probeModule()] });
 		const fresh = await signAssertion({ signer, appId: 'app_probe', audience: PORTAL_URL, now: noPort.clock.now });
-		expect((await noPort.call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${fresh}` } })).status).toBe(401);
+		expect((await noPort.call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${fresh}` } })).status).toBe(401);
 	});
 
 	it('website keys: offline verification, revocation port, origin and scopes', async () => {
@@ -323,34 +365,34 @@ describe('Portal end to end', () => {
 				})
 			).key;
 		const sk = await issue('sk');
-		const who = await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${sk}` } });
+		const who = await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${sk}` } });
 		expect(who.json).toEqual({
 			authMode: 'websiteKey',
 			actor: { type: 'website', id: 'key_sk', merchantId: MERCHANT },
 			website: { websiteId: WEBSITE, kind: 'sk', env: 'live', scopes: ['config.*'] },
 		});
 		const pk = await issue('pk');
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${pk}` } })).status).toBe(403); // no origin
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${pk}` } })).status).toBe(403); // no origin
 		expect(
 			(
-				await call('GET', '/v1/system/whoami', {
+				await call('GET', '/v1/probe/whoami', {
 					headers: { authorization: `Bearer ${pk}`, origin: 'https://evil.example.com' },
 				})
 			).status,
 		).toBe(403);
 		expect(
 			(
-				await call('GET', '/v1/system/whoami', {
+				await call('GET', '/v1/probe/whoami', {
 					headers: { authorization: `Bearer ${pk}`, origin: 'https://shop.example.com' },
 				})
 			).status,
 		).toBe(200);
 		revoked.add('key_sk');
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${sk}` } })).status).toBe(401);
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer sk_live_garbage` } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${sk}` } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer sk_live_garbage` } })).status).toBe(401);
 		// a token signed with the Portal (launch/document) key is not a website key
 		const portalSigned = await issue('sk', 'key_portal', portal.shared.keys.signer);
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${portalSigned}` } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${portalSigned}` } })).status).toBe(401);
 
 		// a key signed by someone else's key never verifies
 		const { privateJwk } = await generateSigningKey({ kid: 'portal-2026-10' });
@@ -365,11 +407,11 @@ describe('Portal end to end', () => {
 			scopes: [],
 			keyId: 'key_f',
 		});
-		expect((await call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${forged.key}` } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${forged.key}` } })).status).toBe(401);
 
 		// without a revocation port, website keys fail closed
 		const closed = await boot({ dbName: 'it_keys_closed', modules: [systemModule, probeModule({ withWebsitePort: false })] });
-		const res = await closed.call('GET', '/v1/system/whoami', { headers: { authorization: `Bearer ${sk}` } });
+		const res = await closed.call('GET', '/v1/probe/whoami', { headers: { authorization: `Bearer ${sk}` } });
 		expect([res.status, res.headers.get('retry-after')]).toEqual([503, '30']);
 	});
 
@@ -431,11 +473,13 @@ describe('Portal end to end', () => {
 		expect(scheduled).toHaveLength(1);
 		for (const task of scheduled.splice(0)) await task();
 		expect(one.entries.some((e) => e.msg === 'deferred task failed')).toBe(true);
-		expect(await jobs.stats()).toMatchObject({ done: 0, queued: 1 });
+		const raw = mongo.db('it_after').collection(COLLECTIONS.jobs);
+		const count = async (/** @type {string} */ status) => raw.countDocuments({ status });
+		expect([await count('done'), await count('queued')]).toEqual([0, 1]);
 		expect((await one.call('POST', '/v1/probe2/mark')).status).toBe(200);
 		for (const task of scheduled.splice(0)) await task();
 		// the job due now ran; the future one and the unrelated one still wait
-		expect(await jobs.stats()).toMatchObject({ done: 1, queued: 2 });
+		expect([await count('done'), await count('queued')]).toEqual([1, 2]);
 		// a product's request is followed by the productCalled port
 		await one.call('GET', '/v1/probe2/defer', { headers: { authorization: 'Bearer nope' } });
 		for (const task of scheduled.splice(0)) await task();
@@ -554,9 +598,9 @@ describe('sessions (Mongo)', () => {
 		clock.advance(config.sessions.staff.idleMs + 1);
 		expect(await sessions.get(live)).toBeNull(); // idle expiry
 
-		const a = await sessions.create({ kind: 'merchant', subject: 'usr_1', merchantId: MERCHANT, absoluteMs: 60_000 });
-		clock.advance(61_000);
-		expect(await sessions.get(a.token)).toBeNull(); // absolute expiry (shortened, e.g. impersonation)
+		const a = await sessions.create({ kind: 'merchant', subject: 'usr_1', merchantId: MERCHANT });
+		clock.advance(config.sessions.merchant.absoluteMs + 1);
+		expect(await sessions.get(a.token)).toBeNull(); // absolute expiry
 
 		const s1 = await sessions.create({ kind: 'merchant', subject: 'usr_2', merchantId: MERCHANT });
 		const s2 = await sessions.create({ kind: 'merchant', subject: 'usr_2', merchantId: MERCHANT });
@@ -585,16 +629,14 @@ describe('sessions (Mongo)', () => {
 						: { type: 'merchant_user', id: session.subject, merchantId: session.merchantId, roles: ['billing'] },
 			}),
 		});
-		const { portal, call } = await boot({ dbName: 'it_session_port', modules: [systemModule, identity] });
+		const { portal, call } = await boot({ dbName: 'it_session_port', modules: [systemModule, identity, probeModule()] });
 		const live = await login(portal, { kind: 'merchant', subject: 'usr_live', merchantId: MERCHANT, roles: ['owner'] });
-		expect((await call('GET', '/v1/system/whoami', { headers: { cookie: live.cookie } })).json.actor.roles).toEqual([
-			'billing',
-		]);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: live.cookie } })).json.actor.roles).toEqual(['billing']);
 		const gone = await login(portal, { kind: 'merchant', subject: 'usr_gone', merchantId: MERCHANT });
-		expect((await call('GET', '/v1/system/whoami', { headers: { cookie: gone.cookie } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: gone.cookie } })).status).toBe(401);
 		// a merchant cookie does not authenticate as staff
 		const staffName = portal.shared.cookies.name('staff');
-		expect((await call('GET', '/v1/system/whoami', { headers: { cookie: `${staffName}=${live.token}` } })).status).toBe(401);
+		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: `${staffName}=${live.token}` } })).status).toBe(401);
 		expect(portal.shared.cookies.set('merchant', live.token, 60)).toContain('__Host-ss_merchant=');
 		expect(portal.shared.cookies.clear('merchant')).toContain('Max-Age=0');
 	});
@@ -721,21 +763,30 @@ describe('runtime', () => {
 		});
 		// no setup step: the API answers at once, and the Portal URL is the request's origin
 		const portal = before;
-		const info = await portal.handle(
-			new Request('http://internal/v1/system/info', {
-				headers: { host: 'portal.example.test', 'x-forwarded-proto': 'https' },
+		const forwarded = { host: 'portal.example.test', 'x-forwarded-proto': 'https' };
+		const first = await portal.handle(
+			new Request('http://internal/v1/auth/staff/first-admin', {
+				method: 'POST',
+				headers: { ...forwarded, 'content-type': 'application/json' },
+				body: JSON.stringify({ password: 'a-long-enough-passphrase' }),
 			}),
 		);
-		expect((await info.json()).portalUrl).toBe('https://portal.example.test');
+		expect(first.status).toBe(201);
+		const [cookie = ''] = String(first.headers.get('set-cookie')).split(';');
+		expect(cookie).toMatch(/^__Host-ss_staff=/);
+		const settings = await portal.handle(
+			new Request('http://internal/v1/admin/system/settings', { headers: { ...forwarded, cookie } }),
+		);
+		expect((await settings.json()).portalUrl).toBe('https://portal.example.test');
 		expect((await import('node:fs')).existsSync(new URL('../app/setup/route.js', import.meta.url))).toBe(false);
 
-		const res = await portal.handle(new Request('https://portal.example.test/v1/system/info'));
+		const res = await portal.handle(new Request('https://portal.example.test/v1/catalog/products'));
 		expect(res.status).toBe(200);
 		expect(lines.some((line) => JSON.parse(line).msg === 'request')).toBe(true);
 
 		// the Next.js adapters delegate to the cached instance
 		const api = await import('../app/api/[...path]/route.js');
-		expect((await api.GET(new Request('https://portal.example.test/api/v1/system/info'))).status).toBe(200);
+		expect((await api.GET(new Request('https://portal.example.test/api/v1/catalog/products'))).status).toBe(200);
 		// /.well-known/jwks.json is rewritten to the same catch-all (GET/HEAD only)
 		const system = (/** @type {string} */ path, method = 'GET') =>
 			api[/** @type {'GET'} */ (method)](new Request(`https://portal.example.test/api${path}`, { method }));
@@ -744,7 +795,7 @@ describe('runtime', () => {
 		expect((await system('/.well-known/jwks.json', 'POST')).status).toBe(404);
 		resetPortal();
 		await expect(getPortal({ env: {} })).rejects.toThrow(/MONGODB_URI/);
-		const invalid = await system('/v1/system/info'); // config invalid
+		const invalid = await system('/v1/catalog/products'); // config invalid
 		expect(invalid.status).toBe(503);
 		expect((await invalid.json()).status).toBe('misconfigured');
 		resetPortal();
@@ -808,27 +859,6 @@ describe('infra hardening (Mongo)', () => {
 				.verifyWebsiteKey({ key: sk })
 				.catch((/** @type {any} */ e) => e.code),
 		).toBe('unavailable');
-	});
-
-	it('hash-chains audit entries and verifies them per scope', async () => {
-		const { portal, call } = await boot({ dbName: 'it_audit_chain' });
-		await portal.ensureIndexes();
-		const audit = portal.shared.audit;
-		const actor = /** @type {const} */ ({ type: 'staff', id: 'stf_1' });
-		await audit.record({ actor, action: 'staff.created', target: { type: 'staff', id: 'stf_2' } });
-		await audit.record({ actor, action: 'credits.adjusted', target: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT } });
-		await audit.record({ actor, action: 'credits.adjusted', target: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT } });
-		const staff = await login(portal, { kind: 'staff', subject: 'stf_9', roles: ['superadmin'], mfa: true });
-		const headers = { cookie: staff.cookie, ...SAME_ORIGIN };
-		const scope = encodeURIComponent(`merchant:${MERCHANT}`);
-		const verified = await call('GET', `/v1/admin/audit/verification?scope=${scope}`, { headers });
-		expect(verified.json).toMatchObject({ ok: true, entries: 2 });
-		const raw = mongo.db('it_audit_chain').collection(COLLECTIONS.audit);
-		await raw.updateOne({ merchantId: MERCHANT, seq: 1 }, { $set: { action: 'credits.refunded' } });
-		expect((await call('GET', `/v1/admin/audit/verification?scope=${scope}`, { headers })).json).toMatchObject({
-			ok: false,
-			broken: { seq: 1, reason: 'hash' },
-		});
 	});
 
 	it("idempotent 'no-store' routes keep only the status in the shared store", async () => {

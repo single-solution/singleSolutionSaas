@@ -79,9 +79,9 @@ export const packAssets = () =>
 
 /**
  * Notice-bar pack: `bar` (mode A, placement via the `placement` feature) and `tip` (mode B only, never delivered).
- * @param {{ budget?: number, placement?: Record<string, unknown> }} [options]
+ * @param {{ placement?: Record<string, unknown> }} [options]
  */
-export const packManifest = ({ budget = 6, placement = { paths: { include: ['/**'] } } } = {}) => ({
+export const packManifest = ({ placement = { paths: { include: ['/**'] } } } = {}) => ({
 	ssps: '1',
 	product: { slug: 'notice-bar', name: 'Notice bar', kind: 'pack', version: '1.0.0', category: 'content' },
 	elements: [
@@ -90,7 +90,6 @@ export const packManifest = ({ budget = 6, placement = { paths: { include: ['/**
 			name: 'Bar',
 			modes: ['A', 'B'],
 			price: { hourly: 0 },
-			budget: { js: budget },
 			placement: true,
 			strings: 'strings/en.json',
 			headless: 'headless/bar.js#createBar',
@@ -109,7 +108,7 @@ export const packManifest = ({ budget = 6, placement = { paths: { include: ['/**
 	priceBook: { version: 'v1', effectiveFrom: '2026-01-01T00:00:00Z' },
 });
 
-/** Chat service product: `launcher` (mode A → element stub) and `inbox` (mode C only). */
+/** Chat service product: `launcher` (mode A, delivered once its widgets are uploaded) and `inbox` (mode C only). */
 export const serviceManifest = () => ({
 	ssps: '1',
 	product: { slug: 'chat-box', name: 'Chat', kind: 'service', version: '1.0.0', category: 'engagement' },
@@ -120,7 +119,6 @@ export const serviceManifest = () => ({
 			name: 'Launcher',
 			modes: ['A', 'B', 'C'],
 			price: { hourly: 0 },
-			budget: { js: 5 },
 			placement: true,
 			headless: 'headless/launcher.js#createLauncher',
 			renderer: 'ui/launcher.js#render',
@@ -132,11 +130,11 @@ export const serviceManifest = () => ({
 	priceBook: { version: 'v1', effectiveFrom: '2026-01-01T00:00:00Z' },
 });
 
-/** A heavy pack (40 KB declared) to break the 60 KB budget together with the others. */
+/** A second pack (`gallery`, same modules). */
 export const bigManifest = () => ({
-	...packManifest({ budget: 40 }),
+	...packManifest(),
 	product: { slug: 'big-gallery', name: 'Gallery', kind: 'pack', version: '1.0.0', category: 'content' },
-	elements: [{ ...packManifest({ budget: 40 }).elements[0], key: 'gallery' }],
+	elements: [{ ...packManifest().elements[0], key: 'gallery' }],
 	plans: [{ code: 'free', name: 'Free', elements: ['gallery'] }],
 });
 
@@ -148,6 +146,7 @@ export const bigManifest = () => ({
  * @property {Map<string, Record<string, any>>} layers by subscriptionId
  * @property {Map<string, { keyId: string, websiteId: string, merchantId: string, kind: string, key: string, status: string, scopes: string[] }>} keys
  * @property {any[]} events
+ * @property {Array<{ appId: string, version: number }>} ready `catalog.versionReady` calls
  */
 
 /** @returns {World} */
@@ -178,21 +177,28 @@ export const createWorld = () => {
 			[
 				PACK,
 				{
-					app: { appId: PACK, slug: 'notice-bar', kind: 'pack', status: 'active', endpoints: null, currentVersion: 1 },
+					app: { appId: PACK, slug: 'notice-bar', kind: 'pack', status: 'active', baseUrl: null, currentVersion: 1 },
 					versions: new Map([[1, { manifest: packManifest(), status: 'accepted', assets: packAssets() }]]),
 				},
 			],
 			[
 				SERVICE,
 				{
-					app: { appId: SERVICE, slug: 'chat-box', kind: 'service', status: 'active', endpoints: null, currentVersion: 1 },
+					app: {
+						appId: SERVICE,
+						slug: 'chat-box',
+						kind: 'service',
+						status: 'active',
+						baseUrl: 'https://chat.example.net',
+						currentVersion: 1,
+					},
 					versions: new Map([[1, { manifest: serviceManifest(), status: 'accepted', assets: null }]]),
 				},
 			],
 			[
 				BIG,
 				{
-					app: { appId: BIG, slug: 'big-gallery', kind: 'pack', status: 'active', endpoints: null, currentVersion: 1 },
+					app: { appId: BIG, slug: 'big-gallery', kind: 'pack', status: 'active', baseUrl: null, currentVersion: 1 },
 					versions: new Map([[1, { manifest: bigManifest(), status: 'accepted', assets: packAssets() }]]),
 				},
 			],
@@ -200,6 +206,7 @@ export const createWorld = () => {
 		layers: new Map(),
 		keys: new Map(),
 		events: [],
+		ready: [],
 	};
 	return world;
 };
@@ -245,22 +252,17 @@ export const fakeModules = (world) => [
 				if (!v) throw problem('not_found', 'No such version.');
 				return structuredClone(v.manifest);
 			},
-			// F.16: the real catalog verifies format, module references and the signature with the product keys
-			verifyUiBundle: async (/** @type {{ appId: string, body: any }} */ { appId, body }) => {
-				const entry = world.apps.get(appId);
-				if (!entry || entry.app.kind !== 'service') throw problem('conflict', 'Only service products publish UI bundles.');
-				if (body?.signature?.sig === 'forged') throw problem('forbidden', 'The UI bundle signature does not verify.');
-				return {
-					descriptor: structuredClone(body.descriptor),
-					signature: { ...body.signature },
-					slug: entry.app.slug,
-					elements: structuredClone(body.descriptor.manifest.elements),
-				};
-			},
 			versionDetail: async (/** @type {string} */ appId, /** @type {number} */ version) => {
 				const v = world.apps.get(appId)?.versions.get(version);
 				if (!v) throw problem('not_found', 'No such version.');
 				return { appId, version, status: v.status, assets: structuredClone(v.assets), manifest: structuredClone(v.manifest) };
+			},
+			// the real catalog makes the uploaded version current (`manifest.accepted@1`, `commerce.invalidateApp`)
+			versionReady: async (/** @type {{ appId: string, version: number }} */ { appId, version }) => {
+				const entry = /** @type {any} */ (world.apps.get(appId));
+				entry.versions.get(version).status = 'accepted';
+				entry.app.currentVersion = version;
+				world.ready.push({ appId, version });
 			},
 		}),
 	}),
@@ -281,13 +283,12 @@ export const fakeModules = (world) => [
 
 /**
  * Boot a Portal with real commerce + delivery and the fakes.
- * @param {{ db: import('mongodb').Db, clock?: ReturnType<typeof createClock>, env?: Record<string, string>, budgetKb?: number,
+ * @param {{ db: import('mongodb').Db, clock?: ReturnType<typeof createClock>, env?: Record<string, string>,
  *   system?: Partial<import('../../../src/infra/config.js').SystemState>, delivery?: import('../../../src/modules/delivery/service.js').DeliveryOptions }} input
  */
-export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, budgetKb, system = {}, delivery = {} }) => {
+export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, system = {}, delivery = {} }) => {
 	const world = createWorld();
-	const base = await testConfig(env, system);
-	const config = budgetKb === undefined ? base : await testConfig(env, system, { delivery: { ...base.delivery, budgetKb } });
+	const config = await testConfig(env, system);
 	const { logger, entries } = createTestLogger();
 	const storage = delivery.storage === undefined ? createMemoryStorage() : delivery.storage;
 	const portal = createPortal({
@@ -349,10 +350,13 @@ export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, budg
 		};
 	};
 
-	/** Upload every pack file of an app version as staff. @param {string} appId @param {number} [version] */
-	const uploadAll = async (appId, version = 1) => {
+	/**
+	 * Upload files of an app version as staff (default: every pack file).
+	 * @param {string} appId @param {number} [version] @param {ReadonlyArray<string>} [paths]
+	 */
+	const uploadAll = async (appId, version = 1, paths = Object.keys(PACK_FILES)) => {
 		const staff = await cookie({ kind: 'staff', roles: ['admin'] });
-		for (const asset of packAssets()) {
+		for (const asset of packAssets().filter((a) => paths.includes(a.path))) {
 			const res = await request('PUT', `/v1/admin/packs/${appId}/versions/${version}/assets/${asset.path}`, {
 				raw: fileBytes(asset.path),
 				cookie: staff,
@@ -378,16 +382,16 @@ export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, budg
 	return { portal, world, commerce, service, storage, clock, logs: entries, cookie, request, uploadAll, subscribe, db };
 };
 
-/** UI bundle files of the chat service (the pack's module files, reused) and a descriptor body (F.16). */
-export const UI_FILES = Object.freeze(['headless/bar.js', 'ui/bar.js']);
-export const uiBundleBody = (/** @type {{ sig?: string }} */ { sig = 'A'.repeat(86) } = {}) => ({
-	descriptor: {
-		format: 'ss-pack-bundle@1',
-		manifest: {
-			product: { slug: 'chat-box', version: '1.1.0' },
-			elements: [{ key: 'launcher', headless: 'headless/bar.js#createBar', renderer: 'ui/bar.js#render' }],
-		},
-		assets: packAssets().filter((a) => UI_FILES.includes(a.path)),
+/** Widget files of the chat service (the pack's module files, reused) and its `ss pack build` descriptor. */
+export const WIDGET_FILES = Object.freeze(['headless/bar.js', 'ui/bar.js']);
+export const widgetDescriptor = () => ({
+	format: 'ss-pack-bundle@1',
+	manifest: {
+		...serviceManifest(),
+		elements: [
+			{ ...serviceManifest().elements[0], headless: 'headless/bar.js#createBar', renderer: 'ui/bar.js#render' },
+			serviceManifest().elements[1],
+		],
 	},
-	signature: { kid: 'chat-1', alg: 'EdDSA', sig },
+	assets: packAssets().filter((a) => WIDGET_FILES.includes(a.path)),
 });

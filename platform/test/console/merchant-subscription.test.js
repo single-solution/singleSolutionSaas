@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 /**
  * Merchant Console in the browser (jsdom), part 2 — products and subscriptions against a live in-process Portal:
- * catalog with plan comparison, balance check and subscribe, demo launch, element switches, configuration through
- * the SchemaForm (edit, preview diff, save, client and server validation mapped to fields, reset, locked fields
- * read-only), history rollback, schedules create/cancel, experiments create/start/stop, plan change,
- * pause/resume/cancel, and the usage page charts.
+ * catalog with plan comparison, balance check and subscribe, element switches, configuration through the SchemaForm
+ * (edit, preview diff, save, client and server validation mapped to fields, reset, locked fields read-only),
+ * history rollback, plan change, pause/resume/cancel, and the usage page charts.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '@ss/ui';
@@ -14,17 +13,15 @@ import { ProductsView } from '../../src/console/views/products.js';
 import { SubscriptionView } from '../../src/console/views/subscription.js';
 import { ConfigurePanel, diffLine } from '../../src/console/views/configure.js';
 import { UsageView } from '../../src/console/views/usage.js';
-import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
+import { byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
 	button,
 	buttons,
-	check,
 	clickEl,
 	createWorld,
 	dialog,
 	fill,
-	fillDialog,
 	press,
 	pressDialog,
 	quiet,
@@ -52,13 +49,6 @@ afterEach(() => {
 /** @param {import('react').ReactNode} node */
 const withToasts = (node) => render(<ToastProvider durationMs={600_000}>{node}</ToastProvider>);
 
-/** `datetime-local` value `hours` from now (local time). @param {number} hours */
-const localAt = (hours) => {
-	const d = new Date(Date.now() + hours * 3_600_000);
-	const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
 /** Switch of the element labelled `name`. @param {string} name */
 const switchOf = (name) => byLabel(document, name);
 
@@ -70,7 +60,7 @@ const radioStarting = (prefix, root = document) => {
 };
 
 describe('merchant console interactions (jsdom): products and subscriptions', () => {
-	it('subscribes, switches, configures, schedules, experiments and changes plan against a live Portal', async () => {
+	it('subscribes, switches, configures and changes plan against a live Portal', async () => {
 		const restore = quiet();
 		const world = await createWorld({ db: mongo.db('merchant_ui_2') });
 		const appId = await world.seedPack();
@@ -108,14 +98,12 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		const subscriptionId = /** @type {string} */ (subscribed.body.subscription.subscriptionId);
 		cleanup();
 
-		// a product with no plans, needing a resource, with a sandbox (demo) — subscribing again is refused
+		// a product with no plans, needing a resource — subscribing again is refused
 		const entry = /** @type {any} */ (products.catalog[0]);
 		const variant = {
 			...entry,
 			plans: [],
 			requires: ['database'],
-			status: 'deprecated',
-			capabilities: { ...(entry.capabilities ?? {}), sandbox: true },
 			price: { ...entry.price, metered: true, trialHours: 2 },
 		};
 		withToasts(
@@ -127,21 +115,7 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 			/>,
 		);
 		expect(shows('Needs your database connected')).toBe(true);
-		expect(shows('Deprecated') && shows('Free')).toBe(true);
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (buttons('Try demo')[0]).click();
-		});
-		await b.waitCall('POST', `/v1/merchants/${merchantId}/apps/${appId}/demo`);
-		await until(() => document.querySelectorAll('[role="alert"], [role="status"]').length > 0);
-		// a demo answered without a link says so
-		vi.stubGlobal('fetch', async (/** @type {any} */ input, /** @type {any} */ init) =>
-			String(input).endsWith('/demo') ? new Response('{}', { status: 200 }) : b.fetch(input, init),
-		);
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (buttons('Try demo')[0]).click();
-		});
-		await until(() => shows('The product did not return a launch link.'));
-		b.use();
+		expect(shows('Free')).toBe(true);
 		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Subscribe')[0]));
 		expect(shows('This product has no plans')).toBe(true);
 		expect(shows('Includes a trial of 2 hours.')).toBe(true);
@@ -236,74 +210,6 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		);
 		await settle(2);
 
-		// ---------------------------------------------------------------- schedules
-		await press('Schedules');
-		expect(shows('Nothing scheduled')).toBe(true);
-		await press('Schedule a change');
-		await pressDialog('Schedule');
-		expect(shows('Choose a date and time.')).toBe(true);
-		type(byLabel(dialog(), 'Setting'), 'bar.maxPerDay');
-		fillDialog('New value', 'abc');
-		fillDialog('When (your local time)', localAt(-2));
-		await pressDialog('Schedule');
-		expect(shows('Enter a JSON value')).toBe(true);
-		expect(shows('Choose a time in the future.')).toBe(true);
-		fillDialog('New value', '4');
-		fillDialog('When (your local time)', localAt(48));
-		await pressDialog('Schedule');
-		await until(() => shows('Change scheduled'));
-		await until(() => shows('bar.maxPerDay = 4'));
-		await press('Schedule a change');
-		await check('Switch an element', dialog());
-		type(byLabel(dialog(), 'Element'), 'badge');
-		await check('Off', dialog());
-		await check('On', dialog());
-		fillDialog('When (your local time)', localAt(72));
-		await pressDialog('Schedule');
-		await until(() => shows('badge on'));
-		// a change the server refuses (unknown setting)
-		await press('Schedule a change');
-		await check('Change a setting', dialog());
-		type(byLabel(dialog(), 'Setting'), 'bar.message');
-		fillDialog('New value', 'x'.repeat(500));
-		fillDialog('When (your local time)', localAt(30));
-		await pressDialog('Schedule');
-		await until(() => b.calls.some((c) => c.method === 'POST' && c.path.endsWith('/config/schedules') && c.status >= 400));
-		await pressDialog('Close');
-		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Cancel')[0]));
-		await pressDialog('Cancel change');
-		await until(() => shows('Scheduled change cancelled'));
-
-		// ---------------------------------------------------------------- experiments
-		await press('Experiments');
-		await press('New experiment');
-		fillDialog('Variant A weight', '0');
-		fillDialog('Success metric (event type)', 'bad metric');
-		fillDialog('Variant A settings', '[1]');
-		await pressDialog('Create draft');
-		expect(shows('Whole number of 1 or more.')).toBe(true);
-		expect(shows('An event type such as order.placed@1.')).toBe(true);
-		expect(shows('Enter a JSON object of setting values')).toBe(true);
-		fillDialog('Variant A weight', '50');
-		fillDialog('Success metric (event type)', 'order.placed@1');
-		fillDialog('Variant A settings', '{}');
-		fillDialog('Variant B settings', '{"tone": "warning"}');
-		await pressDialog('Create draft');
-		await until(() => b.calls.some((c) => c.method === 'POST' && c.path.endsWith('/config/experiments') && c.status >= 400));
-		fillDialog('Name (optional)', 'Copy test');
-		fillDialog('Variant B settings', '{"message": "Free returns"}');
-		await pressDialog('Create draft');
-		await until(() => shows('Experiment created'));
-		await until(() => shows('Copy test'));
-		await press('Start');
-		await until(() => shows('Experiment started'));
-		await until(() => buttons('Stop').length > 0);
-		await press('Stop');
-		await clickEl(radioStarting('Apply variant b', dialog()));
-		await pressDialog('Stop experiment');
-		await until(() => shows('Experiment stopped'));
-		await settle(2);
-
 		// ---------------------------------------------------------------- plan change
 		await press('Plan');
 		await clickEl(radioStarting('Plus', document.querySelector('[role="tabpanel"]') ?? document));
@@ -336,7 +242,7 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 				configProblem={{ status: 503, title: 'Unavailable', detail: 'Config is down.' }}
 			/>,
 		);
-		expect(shows('Raise the cap in Spend policies')).toBe(true);
+		expect(shows('Raise the spend cap')).toBe(true);
 		await press('Open in product');
 		await b.waitCall('POST', `/v1/merchants/${merchantId}/apps/${appId}/launch`);
 		await settle(2);

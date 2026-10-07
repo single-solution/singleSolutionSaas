@@ -1,10 +1,9 @@
-import { loadDashboard } from '../../../../src/console/admin/loaders.js';
-import { DashboardView } from '../../../../src/console/admin/views/dashboard.js';
-import { staffContext } from '../../_lib/server.js';
+import { redirect } from 'next/navigation';
+import { adminRoutes } from '../../../../src/console/admin/paths.js';
 
-export const metadata = { title: 'Platform health' };
+export const metadata = { title: 'Merchants' };
 
-export default async function PlatformHealthPage() {
-	const { api, staff } = await staffContext('/admin');
-	return <DashboardView {...await loadDashboard(api)} staff={staff} />;
+/** The admin home is the merchants list. */
+export default function AdminHome() {
+	redirect(adminRoutes.merchants());
 }

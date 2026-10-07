@@ -1,7 +1,7 @@
 'use client';
 /**
  * Product catalog of a website: products with their elements and prices in credits/hour, plan comparison,
- * "Try demo" (product launch) and subscribing with an hourly estimate and a balance check.
+ * and subscribing with an hourly estimate and a balance check.
  * @module
  */
 import { useState } from 'react';
@@ -15,7 +15,6 @@ import {
 	EmptyState,
 	FormError,
 	RadioGroup,
-	describeProblem,
 	formatCredits,
 	formatCreditsPerHour,
 	formatHours,
@@ -122,7 +121,6 @@ export function ProductsView(props) {
 	const [plan, setPlan] = useState(/** @type {string} */ (''));
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [demo, setDemo] = useState(/** @type {{ appId: string, problem: Problem | null, busy: boolean } | null} */ (null));
 	if (!props.ok) return <PageProblem problem={props.problem} />;
 	const { merchantId, website, catalog, subscriptions, balanceMillicredits, resources } = props;
 	const connected = new Set(/** @type {any[]} */ (resources).filter((r) => r.status === 'connected').map((r) => r.kind));
@@ -149,23 +147,6 @@ export function ProductsView(props) {
 		if (result.ok) window.location.assign(routes.subscription(website.websiteId, result.data.subscription.subscriptionId));
 		else setProblem(result.problem);
 	};
-	/** @param {any} product */
-	const tryDemo = async (product) => {
-		setDemo({ appId: product.appId, problem: null, busy: true });
-		const result = await apiFetch(api.demo(merchantId, product.appId), { method: 'POST', body: {} });
-		if (result.ok && typeof result.data?.url === 'string') {
-			window.location.assign(result.data.url);
-			return;
-		}
-		setDemo({
-			appId: product.appId,
-			problem: result.ok
-				? { detail: 'The product did not return a launch link.', code: 'launch_link_missing' }
-				: result.problem,
-			busy: false,
-		});
-	};
-
 	return (
 		<div className="space-y-6">
 			<WebsiteHeader website={website} active="products" />
@@ -187,7 +168,6 @@ export function ProductsView(props) {
 										<div className="flex flex-wrap gap-1.5">
 											<Badge>{humanize(product.category)}</Badge>
 											<Badge tone="info">{product.kind === 'pack' ? 'Element pack' : 'Service'}</Badge>
-											{product.status === 'deprecated' ? <Badge tone="warning">Deprecated</Badge> : null}
 											{sub ? (
 												<Badge tone="success" dot>
 													Subscribed
@@ -229,9 +209,6 @@ export function ProductsView(props) {
 										.
 									</Callout>
 								) : null}
-								{demo && demo.appId === product.appId && demo.problem ? (
-									<Callout tone="danger">{describeProblem(demo?.problem)}</Callout>
-								) : null}
 								<div className="mt-auto flex flex-wrap gap-2 pt-2">
 									{sub ? (
 										<ButtonLink
@@ -246,14 +223,6 @@ export function ProductsView(props) {
 									{product.plans.length > 0 ? (
 										<Button variant="secondary" onClick={() => setComparing(product)}>
 											Compare plans
-										</Button>
-									) : null}
-									{product.capabilities?.sandbox ? (
-										<Button
-											variant="ghost"
-											onClick={() => void tryDemo(product)}
-											loading={Boolean(demo && demo.appId === product.appId && demo.busy)}>
-											Try demo
 										</Button>
 									) : null}
 								</div>

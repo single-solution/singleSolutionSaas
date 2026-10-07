@@ -92,7 +92,6 @@ describe('credential schemas', () => {
 		});
 		expect(providersFor('database')).toEqual(['mongodb']);
 		expect(providersFor('payments')).toBeNull();
-		expect(providersFor('analytics')).toBeNull();
 	});
 
 	it('database', () => {
@@ -202,11 +201,13 @@ describe('credential schemas', () => {
 		});
 	});
 
-	it('payments and analytics', () => {
+	it('payments', () => {
 		expect(v('payments', 'stripe', { secretKey: SECRET, webhookSecret: 'whsec_x' }).ok).toBe(true);
 		expect(v('payments', 'stripe', {}).ok).toBe(false);
-		expect(v('analytics', 'ga4', { ids: { measurementId: 'G-ABC123' } }).ok).toBe(true);
-		expect(v('analytics', 'ga4', { ids: {} }).ok).toBe(false);
+		expect(v('analytics', 'ga4', { ids: { measurementId: 'G-ABC123' } })).toMatchObject({
+			ok: false,
+			errors: [{ path: '/kind' }],
+		});
 	});
 
 	it('never echoes submitted values in errors', () => {
@@ -295,7 +296,6 @@ describe('previews', () => {
 			apiKey: '…mnop',
 		});
 		expect(previewOf('payments', 'stripe', { secretKey: SECRET, a: 'x' })).toEqual({ fields: ['a', 'secretKey'] });
-		expect(previewOf('analytics', 'ga4', { ids: { measurementId: 'G-ABC' } })).toEqual({ ids: { measurementId: '••••' } });
 	});
 });
 
@@ -391,7 +391,6 @@ describe('descriptors (F.9 shapes)', () => {
 			provider: 'stripe',
 			credentials: { secretKey: 's' },
 		});
-		expect(descriptorOf('analytics', 'ga4', { ids: { m: 'G' } })).toEqual({ provider: 'ga4', ids: { m: 'G' } });
 	});
 });
 

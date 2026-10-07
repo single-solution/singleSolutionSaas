@@ -205,7 +205,6 @@ describe('connectors: create, check, mask', () => {
 			websiteIds: [WEB_A],
 			status: 'connected',
 			preview: { apiKey: `…${AI_KEY.slice(-4)}`, model: 'gpt-test' },
-			rollbackAvailableUntil: null,
 		});
 		expect(connector.connectorId).toMatch(/^con_/);
 		expect(created.headers.get('location')).toBe(`${base}/${connector.connectorId}`);
@@ -359,9 +358,6 @@ describe('connectors: tenant isolation and permissions', () => {
 			['PATCH', one, { label: 'x' }],
 			['DELETE', one],
 			['POST', `${one}/test`, {}],
-			['POST', `${one}/rotate`, { credentials: { apiKey: AI_KEY_2 } }],
-			['POST', `${one}/rollback`, {}],
-			['POST', `${one}/revoke`, {}],
 			['PUT', `${one}/websites`, { websiteIds: [] }],
 			['GET', `/v1/merchants/${MERCHANT}/websites/${WEB_A}/resources`],
 		]);
@@ -380,9 +376,6 @@ describe('connectors: tenant isolation and permissions', () => {
 			['PATCH', mine, { label: 'x' }],
 			['DELETE', mine],
 			['POST', `${mine}/test`, {}],
-			['POST', `${mine}/rotate`, { credentials: { apiKey: AI_KEY_2 } }],
-			['POST', `${mine}/rollback`, {}],
-			['POST', `${mine}/revoke`, {}],
 			['PUT', `${mine}/websites`, { websiteIds: [] }],
 			['GET', `/v1/merchants/${MERCHANT_2}/websites/${WEB_A}/resources`],
 		]))
@@ -395,11 +388,11 @@ describe('connectors: tenant isolation and permissions', () => {
 		// roles: editors cannot manage; developers can; website-scoped grants cannot manage merchant connectors
 		const editor = await merchant(MERCHANT, ['editor']);
 		expect((await call('GET', base, { headers: editor })).status).toBe(403);
-		expect((await call('POST', `${one}/revoke`, { headers: editor, body: {} })).status).toBe(403);
+		expect((await call('DELETE', one, { headers: editor })).status).toBe(403);
 		const billing = await merchant(MERCHANT, ['billing']);
 		expect((await call('GET', base, { headers: billing })).status).toBe(403);
 		const scoped = await merchant(MERCHANT, ['editor'], [{ websiteId: WEB_A, roles: ['developer'] }]);
-		expect((await call('POST', `${one}/revoke`, { headers: scoped, body: {} })).status).toBe(403);
+		expect((await call('DELETE', one, { headers: scoped })).status).toBe(403);
 		expect((await call('GET', `/v1/merchants/${MERCHANT}/websites/${WEB_A}/resources`, { headers: scoped })).status).toBe(200);
 		const developer = await merchant(MERCHANT, ['developer']);
 		expect((await call('PATCH', one, { headers: developer, body: { label: 'Main AI' } })).json.connector.label).toBe('Main AI');
@@ -407,7 +400,7 @@ describe('connectors: tenant isolation and permissions', () => {
 		expect((await call('PATCH', one, { headers: developer, body: [] })).status).toBe(400);
 		// CSRF on cookie mutations
 		const noOrigin = { cookie: owner.cookie };
-		expect((await call('POST', `${one}/revoke`, { headers: noOrigin, body: {} })).status).toBe(403);
+		expect((await call('DELETE', one, { headers: noOrigin })).status).toBe(403);
 	}, 60_000);
 
 	it('admin consoles see status only', async () => {
@@ -417,9 +410,9 @@ describe('connectors: tenant isolation and permissions', () => {
 		await call('POST', `/v1/merchants/${MERCHANT_2}/connectors`, {
 			headers: await merchant(MERCHANT_2),
 			body: {
-				kind: 'analytics',
-				provider: 'ga4',
-				credentials: { ids: { measurementId: 'G-SECRETISH1' } },
+				kind: 'payments',
+				provider: 'stripe',
+				credentials: { publishableKey: 'G-SECRETISH1' },
 				websiteIds: [WEB_C],
 			},
 		});
@@ -430,7 +423,6 @@ describe('connectors: tenant isolation and permissions', () => {
 		for (const item of list.json.items) {
 			expect(item).not.toHaveProperty('preview');
 			expect(item).not.toHaveProperty('sealed');
-			expect(item).not.toHaveProperty('rollbackAvailableUntil');
 		}
 		expect(list.text).not.toContain('G-SECRETISH1');
 		expect(
@@ -452,92 +444,70 @@ describe('connectors: tenant isolation and permissions', () => {
 	}, 30_000);
 });
 
-describe('connectors: rotation, rollback, revoke, assign, delete', () => {
-	it('rotates with a 24 h rollback and revokes in one step', async () => {
-		const { call, merchant, clock, state, db, resolve } = await boot('cn_rotate');
-		let owner = await merchant(MERCHANT);
+describe('connectors: edit, assign, delete', () => {
+	it('edits the label and replaces credentials in place, then deletes', async () => {
+		const { call, merchant, state, db, resolve } = await boot('cn_edit');
+		const owner = await merchant(MERCHANT);
 		const id = (await call('POST', base, { headers: owner, body: aiBody() })).json.connector.connectorId;
 		const one = `${base}/${id}`;
 		state.subscriptions.set(WEB_A, [{ subscriptionId: 'sub_chat_a', appId: APP, websiteId: WEB_A, status: 'active' }]);
+		const sealedBefore = String((await db.collection('connectors_connectors').findOne({ _id: id }))?.sealed);
 
-		expect((await call('POST', `${one}/rollback`, { headers: owner, body: {} })).status).toBe(410);
-		expect((await call('POST', `${one}/rotate`, { headers: owner, body: { credentials: { apiKey: 'x y' } } })).status).toBe(
-			422,
-		);
-		expect((await call('POST', `${one}/rotate`, { headers: owner, body: [] })).status).toBe(400);
-		// rotate to a key the provider does not accept: failing, previous kept
-		const rotated = await call('POST', `${one}/rotate`, {
+		expect((await call('PATCH', one, { headers: owner, body: {} })).status).toBe(422);
+		expect((await call('PATCH', one, { headers: owner, body: { credentials: { apiKey: 'x y' } } })).status).toBe(422);
+		// label only: no re-check
+		const renamed = await call('PATCH', one, { headers: owner, body: { label: 'Main AI' } });
+		expect(renamed.json).toEqual({ connector: expect.objectContaining({ label: 'Main AI', status: 'connected' }) });
+		// new credentials the provider does not accept: re-sealed, re-checked, failing
+		const replaced = await call('PATCH', one, {
 			headers: owner,
 			body: { credentials: { apiKey: AI_KEY_2, baseUrl: ai.baseUrl } },
 		});
-		expect(rotated.status).toBe(200);
-		expect(rotated.json.connector).toMatchObject({ status: 'failing', preview: { apiKey: `…${AI_KEY_2.slice(-4)}` } });
-		expect(rotated.json.connector.rollbackAvailableUntil).toBe(new Date(clock.now() + 24 * 3600_000).toISOString());
+		expect(replaced.status).toBe(200);
+		expect(replaced.json.connector).toMatchObject({
+			label: 'Main AI',
+			status: 'failing',
+			preview: { apiKey: `…${AI_KEY_2.slice(-4)}` },
+		});
+		expect(replaced.json.report).toMatchObject({ ok: false });
+		expect(replaced.json.connector.updatedAt).not.toBeNull();
 		expect(state.emitted.at(-1)).toMatchObject({ data: { status: 'failing', ref: id } });
 		expect(state.invalidated).toContain('sub_chat_a');
 		const raw = await db.collection('connectors_connectors').findOne({ _id: id });
-		expect(raw?.previous?.sealed).toMatch(/^ssenc1\./);
+		expect(String(raw?.sealed)).toMatch(/^ssenc1\./);
+		expect(String(raw?.sealed)).not.toBe(sealedBefore);
 		expect((await resolve({ websiteId: WEB_A, kind: 'ai' })).json.descriptor.apiKey).toBe(AI_KEY_2);
-
-		// roll back: the old key is restored and passes again
-		const back = await call('POST', `${one}/rollback`, { headers: owner, body: {} });
-		expect(back.json.connector).toMatchObject({
-			status: 'connected',
-			rollbackAvailableUntil: null,
-			preview: { apiKey: `…${AI_KEY.slice(-4)}` },
-		});
-		expect((await resolve({ websiteId: WEB_A, kind: 'ai' })).json.descriptor.apiKey).toBe(AI_KEY);
-		expect((await call('POST', `${one}/rollback`, { headers: owner, body: {} })).status).toBe(410);
-
-		// the rollback copy expires after 24 h
-		await call('POST', `${one}/rotate`, { headers: owner, body: { credentials: { apiKey: AI_KEY_2, baseUrl: ai.baseUrl } } });
-		clock.advance(24 * 3600_000 + 1);
-		owner = await merchant(MERCHANT); // the idle session expired meanwhile
-		expect((await call('POST', `${one}/rollback`, { headers: owner, body: {} })).status).toBe(410);
-		expect((await call('GET', one, { headers: owner })).json.connector.rollbackAvailableUntil).toBeNull();
+		// back to the working key
+		const fixed = await call('PATCH', one, { headers: owner, body: { credentials: { apiKey: AI_KEY, baseUrl: ai.baseUrl } } });
+		expect(fixed.json.connector.status).toBe('connected');
 
 		// manual test
 		const tested = await call('POST', `${one}/test`, { headers: owner, body: {} });
-		expect(tested.json).toMatchObject({ connector: { status: 'failing' }, report: { ok: false } });
+		expect(tested.json).toMatchObject({ connector: { status: 'connected' }, report: { ok: true } });
 
-		// revoke: sealed material gone, assignment released, resolution stops, event emitted
-		const revoked = await call('POST', `${one}/revoke`, { headers: owner, body: { reason: 'leaked' } });
-		expect(revoked.json.connector).toMatchObject({ status: 'revoked', preview: null });
-		expect(revoked.json.connector.revokedAt).not.toBeNull();
-		const after = await db.collection('connectors_connectors').findOne({ _id: id });
-		expect([after?.sealed, after?.previous]).toEqual([null, null]);
+		// delete: record and sealed material gone, assignment released, resolution stops, event emitted
+		expect((await call('DELETE', one, { headers: owner })).status).toBe(204);
+		expect(await db.collection('connectors_connectors').countDocuments({ _id: id })).toBe(0);
 		expect(await db.collection('connectors_assignments').countDocuments({ connectorId: id })).toBe(0);
 		expect(state.emitted.at(-1)).toEqual({
 			type: 'resource.changed@1',
-			data: { websiteId: WEB_A, kind: 'ai', status: 'revoked', ref: id },
+			data: { websiteId: WEB_A, kind: 'ai', status: 'missing', ref: id },
 			options: { websiteId: WEB_A },
 		});
 		expect((await resolve({ websiteId: WEB_A, kind: 'ai' })).status).toBe(424);
-		expect((await call('POST', `${one}/revoke`, { headers: owner, body: {} })).json.connector.status).toBe('revoked');
-		for (const [method, path, body] of /** @type {Array<[string, string, unknown]>} */ ([
-			['POST', `${one}/test`, {}],
-			['POST', `${one}/rotate`, { credentials: { apiKey: AI_KEY } }],
-			['POST', `${one}/rollback`, {}],
-			['PUT', `${one}/websites`, { websiteIds: [WEB_A] }],
-		]))
-			expect((await call(method, path, { headers: owner, body })).status).toBe(409);
+		expect((await call('DELETE', one, { headers: owner })).status).toBe(404);
+		expect((await call('PATCH', one, { headers: owner, body: { label: 'x' } })).status).toBe(404);
 		const audit = await db.collection('platform_audit').find({ 'target.id': id }).toArray();
 		expect(audit.map((a) => a.action)).toEqual(
-			expect.arrayContaining([
-				'connectors.created',
-				'connectors.rotated',
-				'connectors.rolled_back',
-				'connectors.tested',
-				'connectors.revoked',
-			]),
+			expect.arrayContaining(['connectors.created', 'connectors.updated', 'connectors.tested', 'connectors.deleted']),
 		);
-		expect(audit.find((a) => a.action === 'connectors.revoked')?.reason).toBe('leaked');
+		expect(audit.find((a) => a.after?.accessReplaced === true)).toBeDefined();
 		expect(
 			(await call('GET', `/v1/merchants/${MERCHANT}/websites/${WEB_A}/resources`, { headers: owner })).json.resources,
-		).toEqual([{ kind: 'ai', ref: id, status: 'revoked' }]);
+		).toEqual([]);
 
-		// a new connector may now take the website; status prefers the live one
-		state.failEmit.value = true; // emit failures are logged, never fatal
+		// a new connector may now take the website (emit failures are logged, never fatal)
+		state.failEmit.value = true;
 		const fresh = await call('POST', base, { headers: owner, body: aiBody() });
 		expect(fresh.status).toBe(201);
 		state.failEmit.value = false;
@@ -639,8 +609,8 @@ describe('connectors: resolve (F.9)', () => {
 			(await call('POST', '/v1/product/resources/resolve', { headers: owner, body: { websiteId: WEB_A, kind: 'ai' } })).status,
 		).toBe(401);
 		expect((await call('POST', '/v1/product/resources/resolve', { body: { websiteId: WEB_A, kind: 'ai' } })).status).toBe(401);
-		// revoked connector
-		await call('POST', `${base}/${aiId}/revoke`, { headers: owner, body: {} });
+		// deleted connector
+		await call('DELETE', `${base}/${aiId}`, { headers: owner });
 		expect((await resolve({ websiteId: WEB_A, kind: 'ai' })).status).toBe(424);
 
 		// audit: every resolve, granted or denied, without secrets
@@ -729,7 +699,7 @@ describe('connectors: sealing', () => {
 });
 
 describe('connectors: health checks on demand and on resolve', () => {
-	it('re-tests a stale connector on resolve, emits status changes and purges expired rollback copies on rotate', async () => {
+	it('re-tests a stale connector on resolve and emits status changes', async () => {
 		const { call, merchant, portal, clock, state, db } = await boot('cn_health');
 		const owner = await merchant(MERCHANT);
 		const flaky = await startFakeApi({ header: 'authorization', value: `Bearer ${AI_KEY}` });
@@ -739,27 +709,9 @@ describe('connectors: health checks on demand and on resolve', () => {
 				body: { ...aiBody([WEB_A]), credentials: { apiKey: AI_KEY, baseUrl: flaky.baseUrl } },
 			})
 		).json.connector.connectorId;
-		const pay = (
-			await call('POST', base, {
-				headers: owner,
-				body: { kind: 'payments', provider: 'stripe', credentials: { secretKey: PAY_SECRET }, websiteIds: [WEB_A] },
-			})
-		).json.connector.connectorId;
-		await call('POST', `${base}/${pay}/rotate`, { headers: owner, body: { credentials: { secretKey: `${PAY_SECRET}2` } } });
 		await flaky.close();
 		const svc = /** @type {any} */ (portal.modules.service('connectors'));
-
-		// a later rotation drops expired rollback copies of every connector
 		clock.advance(25 * 3600_000);
-		const later = await merchant(MERCHANT);
-		const created = await call('POST', base, {
-			headers: later,
-			body: { kind: 'payments', provider: 'stripe', credentials: { secretKey: PAY_SECRET }, websiteIds: [WEB_B] },
-		});
-		if (!created.json.connector) throw new Error(JSON.stringify(created.json));
-		const other = created.json.connector.connectorId;
-		await call('POST', `${base}/${other}/rotate`, { headers: later, body: { credentials: { secretKey: `${PAY_SECRET}3` } } });
-		expect((await db.collection('connectors_connectors').findOne({ _id: pay }))?.previous).toBeNull(); // expired rollback copy purged
 
 		// a resolve is the moment to re-check a connector whose last check is old: after the response
 		state.emitted.length = 0;

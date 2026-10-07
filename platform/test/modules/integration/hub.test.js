@@ -277,14 +277,6 @@ const seedApps = (world, base) => {
 		scopes: ['events.subscribe:*'],
 		endpoints: endpoints('paused'),
 	});
-	world.addApp({
-		appId: 'app_retired',
-		slug: 'retired',
-		status: 'retired',
-		consumes: ['page.viewed@1'],
-		scopes: ['events.subscribe:*'],
-		endpoints: endpoints('retired'),
-	});
 	world.addApp({ appId: 'app_pack', slug: 'pack', kind: 'pack', consumes: ['page.viewed@1'], scopes: ['events.subscribe:*'] });
 	world.addApp({
 		appId: 'app_orders',
@@ -301,7 +293,7 @@ const seedApps = (world, base) => {
 		scopes: ['events.subscribe:*'],
 		endpoints: endpoints('other'),
 	});
-	for (const appId of ['app_pages', 'app_any', 'app_v2', 'app_noscope', 'app_retired', 'app_pack', 'app_orders'])
+	for (const appId of ['app_pages', 'app_any', 'app_v2', 'app_noscope', 'app_pack', 'app_orders'])
 		world.subscribe(WEBSITE, appId);
 	world.subscribe(WEBSITE, 'app_paused', 'paused');
 	world.subscribe(WEBSITE, 'app_unknown');
@@ -326,7 +318,7 @@ const keysOf = (value, keys = []) => {
 
 describe('Event Hub ingest', () => {
 	it('accepts header-authenticated events, fans out by manifest and delivers signed events', async () => {
-		const { world, receiver, call, drain, key, db, svc } = await boot('int_fanout');
+		const { world, receiver, call, drain, key, db } = await boot('int_fanout');
 		seedApps(world, receiver.base);
 		const pk = await key('pk');
 		const a = pageViewed();
@@ -343,7 +335,7 @@ describe('Event Hub ingest', () => {
 		expect(res.json.accepted).toBe(1);
 
 		const stats = await drain();
-		expect(stats).toMatchObject({ succeeded: 2, retried: 0, dead: 0 });
+		expect(stats).toMatchObject({ succeeded: 2, retried: 0 });
 		const paths = receiver.received.map((r) => r.path).sort();
 		expect(paths).toEqual(['/any/.well-known/ss-events', '/pages/.well-known/ss-events']);
 		expect(receiver.received.every((r) => r.verified)).toBe(true);
@@ -359,16 +351,12 @@ describe('Event Hub ingest', () => {
 			env: 'live',
 			source: 'website',
 			fanout: 'done',
-			deliveries: { total: 2, delivered: 2, dead: 0 },
+			deliveries: { total: 2, delivered: 2, failed: 0 },
 		});
 
-		const log = await svc().deliveryLog({ websiteId: WEBSITE });
-		expect(log.items.map((i) => i.status)).toEqual(['delivered', 'delivered']);
-		expect(log.items[0]).toMatchObject({ eventId: a.id, attempts: 1, lastHttpStatus: 200, kind: 'event' });
-		expect(await svc().metrics({ websiteId: WEBSITE })).toEqual({
-			deliveries: { pending: 0, retrying: 0, delivered: 2, dead: 0 },
-			deadLetters: 0,
-		});
+		const log = await db.collection('integration_deliveries').find({ websiteId: WEBSITE }).toArray();
+		expect(log.map((i) => i.status)).toEqual(['delivered', 'delivered']);
+		expect(log[0]).toMatchObject({ eventId: a.id, attempts: 1, lastHttpStatus: 200, kind: 'event' });
 		// redelivering the same job is a no-op
 		expect(await drain()).toMatchObject({ leased: 0 });
 	});
@@ -420,12 +408,14 @@ describe('Event Hub ingest', () => {
 		expect(pagesHits()).toBe(1);
 		// another product calling the Portal does not touch app_pages' queue
 		receiver.respond(() => 200);
-		await call('GET', '/v1/product/deliveries', { headers: { authorization: await productAuth('app_orders') } });
+		/** @param {string} appId */
+		const productCall = async (appId) =>
+			call('POST', '/v1/product/events', { headers: { authorization: await productAuth(appId) }, body: { events: [] } });
+		await productCall('app_orders');
 		await run();
 		expect(pagesHits()).toBe(1);
 		// app_pages calls the Portal (any product API): its due delivery is retried right after
-		const res = await call('GET', '/v1/product/deliveries', { headers: { authorization: await productAuth('app_pages') } });
-		expect(res.status).toBe(200);
+		await productCall('app_pages');
 		await run();
 		expect(pagesHits()).toBe(2);
 		expect(await db.collection('integration_deliveries').findOne({ appId: 'app_pages' })).toMatchObject({
@@ -623,7 +613,7 @@ describe('Event Hub ingest', () => {
 			idempotencyKey: e.idempotencyKey,
 			receivedAt: new Date(),
 			fanout: 'pending',
-			deliveries: { total: 0, delivered: 0, dead: 0 },
+			deliveries: { total: 0, delivered: 0, failed: 0 },
 		});
 		const out = await svc().ingest({
 			website: { websiteId: WEBSITE, merchantId: MERCHANT, env: 'live', kind: 'sk' },
@@ -673,8 +663,8 @@ const portal = (call) => (/** @type {string} */ method, /** @type {string} */ pa
 	call(method, path, { headers: { origin, 'access-control-request-method': 'POST' } });
 
 describe('delivery pipeline', () => {
-	it('retries with backoff, dead-letters with a sealed payload and replays', async () => {
-		const { world, receiver, call, drain, key, clock, db, login } = await boot('int_retry', { options: { maxAttempts: 3 } });
+	it('retries with backoff, then marks the delivery failed (metadata only, payload dropped)', async () => {
+		const { world, receiver, call, drain, key, clock, db } = await boot('int_retry', { options: { maxAttempts: 3 } });
 		seedApps(world, receiver.base);
 		receiver.respond((path) => (path.startsWith('/pages') ? 500 : 200));
 		const sk = await key('sk');
@@ -689,81 +679,36 @@ describe('delivery pipeline', () => {
 		clock.advance(10 * 60_000);
 		expect(await drain()).toMatchObject({ retried: 1 });
 		clock.advance(10 * 60_000);
-		expect(await drain()).toMatchObject({ succeeded: 1 }); // last attempt → DLQ, job completes
-		const dead = await db.collection('integration_deliveries').findOne({ appId: 'app_pages' });
-		expect(dead).toMatchObject({ status: 'dead', attempts: 3, lastErrorCode: 'http_500' });
-		const letter = await db.collection('integration_dead_letters').findOne({ _id: /** @type {any} */ (dead?._id) });
-		expect(letter?.sealed).toMatch(/^ssenc1\./);
-		expect(letter?.expireAt.getTime()).toBe(clock.now() + 7 * 24 * 60 * 60_000);
-		expect(JSON.stringify(letter)).not.toContain(MARKER);
+		expect(await drain()).toMatchObject({ succeeded: 1 }); // last attempt → failed, job completes
+		const failed = await db.collection('integration_deliveries').findOne({ appId: 'app_pages' });
+		expect(failed).toMatchObject({ status: 'failed', attempts: 3, lastErrorCode: 'http_500' });
+		expect(failed?.failedAt).toBeInstanceOf(Date);
+		const done = await db.collection('platform_jobs').findOne({ key: { $regex: 'app_pages' } });
+		expect(done?.payload ?? null).toBeNull(); // the sealed payload is gone with the job
 		expect((await db.collection('integration_events').findOne({ eventId: e.id }))?.deliveries).toEqual({
 			total: 2,
 			delivered: 1,
-			dead: 1,
+			failed: 1,
 		});
-
-		const admin = await login({ kind: 'staff', subject: 'stf_admin', roles: ['admin'] });
-		const support = await login({ kind: 'staff', subject: 'stf_support', roles: ['support'] });
-		const list = await call('GET', '/v1/admin/dead-letters', { headers: { cookie: support } });
-		expect(list.status).toBe(200);
-		expect(list.json.items).toEqual([
-			expect.objectContaining({ deliveryId: dead?._id, appId: 'app_pages', lastErrorCode: 'http_500', attempts: 3 }),
-		]);
-		expect(JSON.stringify(list.json)).not.toContain('ssenc1');
-		expect((await call('GET', '/v1/admin/integration/metrics', { headers: { cookie: support } })).json).toEqual({
-			deliveries: { pending: 0, retrying: 0, delivered: 1, dead: 1 },
-			deadLetters: 1,
-		});
-		// support cannot replay; admin can
-		const replayPath = `/v1/admin/deliveries/${dead?._id}/replay`;
-		const idem = (/** @type {string} */ k) => ({ ...SAME_ORIGIN, 'idempotency-key': k });
-		expect((await call('POST', replayPath, { headers: { cookie: support, ...idem('r0') } })).status).toBe(403);
-		receiver.respond(() => 200);
-		const replayed = await call('POST', replayPath, { headers: { cookie: admin, ...idem('r1') } });
-		expect([replayed.status, replayed.json]).toEqual([200, { deliveryId: dead?._id, status: 'pending', replays: 1 }]);
-		expect(await db.collection('integration_dead_letters').countDocuments({})).toBe(0);
-		expect((await call('POST', replayPath, { headers: { cookie: admin, ...idem('r2') } })).status).toBe(409);
-		clock.advance(1_000);
-		expect(await drain()).toMatchObject({ succeeded: 1 });
-		expect(await db.collection('integration_deliveries').findOne({ _id: /** @type {any} */ (dead?._id) })).toMatchObject({
-			status: 'delivered',
-			attempts: 4,
-			replays: 1,
-		});
-		expect((await db.collection('integration_events').findOne({ eventId: e.id }))?.deliveries).toEqual({
-			total: 2,
-			delivered: 2,
-			dead: 0,
-		});
-		const audit = await db.collection('platform_audit').findOne({ action: 'integration.delivery_replayed' });
-		expect(audit).toMatchObject({ actor: { type: 'staff', id: 'stf_admin' }, target: { type: 'delivery', id: dead?._id } });
-		expect(
-			(await call('POST', '/v1/admin/deliveries/dlv_missing/replay', { headers: { cookie: admin, ...idem('r3') } })).status,
-		).toBe(404);
 		expect(receiver.received.filter((r) => r.path.startsWith('/pages')).every((r) => r.verified)).toBe(true);
 	});
 
-	it('refuses to replay an expired DLQ payload and keeps the first expiry', async () => {
-		const { world, receiver, call, drain, key, clock, db, svc } = await boot('int_expired', { options: { maxAttempts: 1 } });
+	it('gives up once the event is older than the retry window', async () => {
+		const { world, receiver, call, drain, key, clock, db } = await boot('int_window', { options: { maxAttempts: 100 } });
 		seedApps(world, receiver.base);
-		receiver.respond(() => 503);
+		receiver.respond((path) => (path.startsWith('/pages') ? 500 : 200));
 		const sk = await key('sk');
 		await call('POST', '/v1/events', { headers: { authorization: `Bearer ${sk}` }, body: { events: [pageViewed()] } });
 		await drain();
-		const [dead] = await db.collection('integration_deliveries').find({ status: 'dead' }).toArray();
-		const firstExpiry = /** @type {any} */ (dead).payloadExpiresAt;
-		const actor = /** @type {any} */ ({ type: 'staff', id: 'stf_admin', roles: ['admin'] });
-		await svc().replay(String(dead?._id), { actor });
-		clock.advance(60_000);
-		await drain();
-		const again = await db.collection('integration_dead_letters').findOne({ _id: /** @type {any} */ (dead?._id) });
-		expect(again?.expireAt.getTime()).toBe(firstExpiry.getTime());
-		clock.advance(8 * 24 * 60 * 60_000);
-		await expect(svc().replay(String(dead?._id), { actor })).rejects.toMatchObject({ code: 'gone' });
-		await expect(svc().replay(String(dead?._id), { actor, websiteId: WEBSITE_2 })).rejects.toMatchObject({ code: 'not_found' });
+		clock.advance(24 * 60 * 60_000);
+		expect(await drain()).toMatchObject({ succeeded: 1 });
+		expect(await db.collection('integration_deliveries').findOne({ appId: 'app_pages' })).toMatchObject({
+			status: 'failed',
+			attempts: 2,
+		});
 	});
 
-	it('delivers to the registered environment (staging for test websites), never the manifest base', async () => {
+	it('delivers to the connected production base, never the manifest base, whatever the app status', async () => {
 		const { world, receiver, call, drain, key, db } = await boot('int_targets');
 		const TEST_SITE = 'web_2123456789abcdefghjkmnpq';
 		world.state.websites.set(TEST_SITE, {
@@ -777,28 +722,30 @@ describe('delivery pipeline', () => {
 		const common = { consumes: ['page.viewed@1'], scopes: ['events.subscribe:*'] };
 		// the manifest claims another host: deliveries must ignore it
 		world.addApp({
-			appId: 'app_staged',
-			slug: 'staged',
+			appId: 'app_connected',
+			slug: 'connected',
 			...common,
 			endpoints: { base: 'https://claimed.example.com', events },
-			environments: { production: `${receiver.base}/prod`, staging: `${receiver.base}/staging` },
+			baseUrl: `${receiver.base}/prod`,
 		});
+		// inactive apps keep serving their existing subscriptions
 		world.addApp({
-			appId: 'app_prodonly',
-			slug: 'prodonly',
+			appId: 'app_inactive',
+			slug: 'inactive',
+			status: 'inactive',
 			...common,
 			endpoints: { base: 'https://claimed.example.com', events },
-			environments: { production: `${receiver.base}/prodonly` },
+			baseUrl: `${receiver.base}/inactive`,
 		});
 		world.addApp({
-			appId: 'app_noenv',
-			slug: 'noenv',
+			appId: 'app_nobase',
+			slug: 'nobase',
 			...common,
 			endpoints: { base: `${receiver.base}/manifest`, events },
-			environments: { production: null },
+			baseUrl: null,
 		});
 		for (const site of [WEBSITE, TEST_SITE])
-			for (const appId of ['app_staged', 'app_prodonly', 'app_noenv']) world.subscribe(site, appId);
+			for (const appId of ['app_connected', 'app_inactive', 'app_nobase']) world.subscribe(site, appId);
 		const live = await key('sk');
 		const test = await key('sk', { websiteId: TEST_SITE, domain: 'test.example.com', env: 'test', keyId: 'key_test' });
 		await call('POST', '/v1/events', { headers: { authorization: `Bearer ${live}` }, body: { events: [pageViewed()] } });
@@ -811,15 +758,15 @@ describe('delivery pipeline', () => {
 		await drain();
 		const paths = receiver.received.map((r) => `${r.event?.env}:${r.path}`).sort();
 		expect(paths).toEqual([
+			`live:/inactive${events}`,
 			`live:/prod${events}`,
-			`live:/prodonly${events}`,
-			`test:/prodonly${events}`, // no staging registered: production
-			`test:/staging${events}`,
+			`test:/inactive${events}`,
+			`test:/prod${events}`, // no staging: test websites go to production too
 		]);
-		const noenv = await db.collection('integration_deliveries').find({ appId: 'app_noenv' }).toArray();
-		expect(noenv.map((d) => [d.status, d.lastErrorCode])).toEqual([
-			['dead', 'no_endpoint'],
-			['dead', 'no_endpoint'],
+		const nobase = await db.collection('integration_deliveries').find({ appId: 'app_nobase' }).toArray();
+		expect(nobase.map((d) => [d.status, d.lastErrorCode])).toEqual([
+			['failed', 'no_endpoint'],
+			['failed', 'no_endpoint'],
 		]);
 	});
 
@@ -898,33 +845,33 @@ describe('delivery pipeline', () => {
 		);
 		expect(byApp).toEqual({
 			app_slow: ['retrying', 'timeout'],
-			app_private: ['dead', 'ssrf_blocked'],
-			app_metadata: ['dead', 'ssrf_blocked'],
-			app_http: ['dead', 'ssrf_blocked'],
-			app_localhost: ['dead', 'ssrf_blocked'],
-			app_rebind: ['dead', 'ssrf_blocked'],
-			app_dnsmeta: ['dead', 'ssrf_blocked'],
+			app_private: ['failed', 'ssrf_blocked'],
+			app_metadata: ['failed', 'ssrf_blocked'],
+			app_http: ['failed', 'ssrf_blocked'],
+			app_localhost: ['failed', 'ssrf_blocked'],
+			app_rebind: ['failed', 'ssrf_blocked'],
+			app_dnsmeta: ['failed', 'ssrf_blocked'],
 			app_redirect: ['retrying', 'http_307'],
-			app_userinfo: ['dead', 'ssrf_blocked'],
+			app_userinfo: ['failed', 'ssrf_blocked'],
 			app_nodns: ['retrying', 'dns_failed'],
-			app_noendpoint: ['dead', 'no_endpoint'],
+			app_noendpoint: ['failed', 'no_endpoint'],
 		});
 	});
 
-	it('dead-letters deliveries whose product disappeared and tolerates odd job payloads', async () => {
+	it('fails deliveries whose product disappeared and tolerates odd job payloads', async () => {
 		const { world, receiver, call, drain, key, db, svc } = await boot('int_gone');
 		seedApps(world, receiver.base);
 		const sk = await key('sk');
 		await call('POST', '/v1/events', { headers: { authorization: `Bearer ${sk}` }, body: { events: [pageViewed()] } });
 		world.state.apps.delete('app_pages');
-		/** @type {any} */ (world.state.apps.get('app_any')).status = 'retired';
+		/** @type {any} */ (world.state.apps.get('app_any')).kind = 'pack';
 		await drain();
 		const codes = (await db.collection('integration_deliveries').find({}).toArray()).map((d) => [d.appId, d.lastErrorCode]);
 		expect(Object.fromEntries(codes)).toEqual({ app_pages: 'app_unavailable', app_any: 'app_unavailable' });
 		const job = /** @type {any} */ ({ attempts: 1, maxAttempts: 3 });
 		expect(await svc().runDelivery(null, { job })).toEqual({ status: 'invalid' });
 		expect(await svc().runDelivery({ deliveryId: 'dlv_x', sealed: 's' }, { job })).toEqual({ status: 'skipped' });
-		// a tampered payload cannot be opened → DLQ
+		// a tampered payload cannot be opened → failed
 		const pending = await db.collection('integration_deliveries').insertOne({
 			_id: /** @type {any} */ ('dlv_tampered'),
 			websiteId: WEBSITE,
@@ -937,7 +884,7 @@ describe('delivery pipeline', () => {
 		});
 		void pending;
 		expect(await svc().runDelivery({ deliveryId: 'dlv_tampered', sealed: 'ssenc1.x.y.z' }, { job })).toEqual({
-			status: 'dead',
+			status: 'failed',
 			code: 'payload_unavailable',
 		});
 		world.state.failures.catalog = true;
@@ -956,7 +903,7 @@ describe('delivery pipeline', () => {
 		});
 	});
 
-	it('never persists payloads outside the sealed job and DLQ copies', async () => {
+	it('never persists payloads outside the sealed job, and drops it when the job ends', async () => {
 		const { world, receiver, call, drain, key, db } = await boot('int_nopayload', { options: { maxAttempts: 1 } });
 		seedApps(world, receiver.base);
 		receiver.respond((path) => (path.startsWith('/pages') ? 500 : 200));
@@ -972,18 +919,14 @@ describe('delivery pipeline', () => {
 			expect(j.payload.sealed).toMatch(/^ssenc1\./);
 		}
 		await drain();
-		for (const name of [
-			'integration_events',
-			'integration_deliveries',
-			'integration_dead_letters',
-			'platform_jobs',
-			'platform_idempotency',
-		]) {
+		for (const name of ['integration_events', 'integration_deliveries', 'platform_jobs', 'platform_idempotency']) {
 			const docs = await db.collection(name).find({}).toArray();
 			expect(JSON.stringify(docs)).not.toContain(MARKER);
 			if (name.startsWith('integration_')) expect(keysOf(docs)).not.toContain('data');
 		}
-		expect(await db.collection('integration_dead_letters').countDocuments({})).toBe(1);
+		expect(await db.collection('integration_deliveries').countDocuments({ status: 'failed' })).toBe(1);
+		const ended = await db.collection('platform_jobs').find({ name: 'integration.deliver' }).toArray();
+		expect(ended.every((j) => j.payload === undefined || j.payload === null)).toBe(true);
 	});
 });
 
@@ -1036,19 +979,17 @@ describe('product events', () => {
 			source: 'product',
 			publisherAppId: 'app_orders',
 		});
-		// the product reads its own delivery log only
-		const sync = await call('GET', '/v1/product/deliveries', { headers: { authorization: await productAuth('app_sync') } });
-		expect(sync.json.items.map((/** @type {any} */ i) => i.appId)).toEqual(['app_sync']);
+		expect(await db.collection('integration_deliveries').countDocuments({ appId: 'app_sync', status: 'delivered' })).toBe(1);
 	});
 
-	it('refuses inactive or unknown products and bad batches', async () => {
+	it('refuses packs, unknown products and bad batches', async () => {
 		const { world, receiver, call, productAuth } = await boot('int_product_bad');
 		seedApps(world, receiver.base);
-		world.addApp({ appId: 'app_pending', slug: 'pending', status: 'pending' });
+		world.addApp({ appId: 'app_packpub', slug: 'packpub', kind: 'pack' });
 		expect(
 			(
 				await call('POST', '/v1/product/events', {
-					headers: { authorization: await productAuth('app_pending') },
+					headers: { authorization: await productAuth('app_packpub') },
 					body: { events: [orderCompleted()] },
 				})
 			).status,
@@ -1115,17 +1056,7 @@ describe('control events', () => {
 		);
 		// every non-cancelled subscription, whether or not it lists the type in events.consumes
 		expect(site.appIds.sort()).toEqual(
-			[
-				'app_any',
-				'app_noscope',
-				'app_orders',
-				'app_pack',
-				'app_pages',
-				'app_paused',
-				'app_retired',
-				'app_unknown',
-				'app_v2',
-			].sort(),
+			['app_any', 'app_noscope', 'app_orders', 'app_pack', 'app_pages', 'app_paused', 'app_unknown', 'app_v2'].sort(),
 		);
 		const platform = await svc().emitControl(
 			'manifest.accepted@1',
@@ -1151,10 +1082,9 @@ describe('control events', () => {
 			actor: { type: 'system' },
 			context: { source: 'portal' },
 		});
-		const dead = await db.collection('integration_deliveries').find({ status: 'dead' }).toArray();
-		expect(dead.map((d) => [d.appId, d.lastErrorCode]).sort()).toEqual([
+		const failed = await db.collection('integration_deliveries').find({ status: 'failed' }).toArray();
+		expect(failed.map((d) => [d.appId, d.lastErrorCode]).sort()).toEqual([
 			['app_pack', 'app_unavailable'],
-			['app_retired', 'app_unavailable'],
 			['app_unknown', 'app_unavailable'],
 		]);
 		expect((await db.collection('integration_deliveries').findOne({ appId: 'app_orders', type: 'key.revoked@1' }))?.kind).toBe(
@@ -1193,98 +1123,5 @@ describe('control events', () => {
 				{ websiteId: 'web_9999999999abcdefghjkmnpq' },
 			),
 		).rejects.toMatchObject({ code: 'not_found' });
-	});
-});
-
-describe('delivery logs', () => {
-	it('isolates tenants and paginates', async () => {
-		const { world, receiver, call, drain, key, login, productAuth } = await boot('int_logs');
-		seedApps(world, receiver.base);
-		const sk = await key('sk');
-		const sk2 = await key('sk', { websiteId: WEBSITE_2, merchantId: MERCHANT_2, keyId: 'key_sk2' });
-		await call('POST', '/v1/events', {
-			headers: { authorization: `Bearer ${sk}` },
-			body: { events: [pageViewed(), pageViewed(), pageViewed()] },
-		});
-		await call('POST', '/v1/events', {
-			headers: { authorization: `Bearer ${sk2}` },
-			body: { events: [pageViewed({ websiteId: WEBSITE_2 })] },
-		});
-		await drain();
-		const owner = await login({ kind: 'merchant', subject: 'usr_a', merchantId: MERCHANT, roles: ['owner'] });
-		const ownPath = `/v1/merchants/${MERCHANT}/websites/${WEBSITE}/deliveries`;
-		const page1 = await call('GET', `${ownPath}?limit=4`, { headers: { cookie: owner } });
-		expect(page1.status).toBe(200);
-		expect(page1.json).toMatchObject({ hasMore: true, nextCursor: expect.any(String) });
-		expect(page1.json.items).toHaveLength(4);
-		const page2 = await call('GET', `${ownPath}?limit=4&cursor=${page1.json.nextCursor}`, { headers: { cookie: owner } });
-		expect(page2.json).toMatchObject({ hasMore: false, nextCursor: null });
-		expect(page2.json.items).toHaveLength(2);
-		const ids = [...page1.json.items, ...page2.json.items].map((/** @type {any} */ i) => i.deliveryId);
-		expect(new Set(ids).size).toBe(6);
-		expect(JSON.stringify(page1.json)).not.toContain(MARKER);
-		expect((await call('GET', `${ownPath}?status=delivered&limit=1`, { headers: { cookie: owner } })).json.items).toHaveLength(
-			1,
-		);
-		expect((await call('GET', `${ownPath}?status=bogus`, { headers: { cookie: owner } })).status).toBe(400);
-		expect((await call('GET', `${ownPath}?cursor=***`, { headers: { cookie: owner } })).status).toBe(400);
-		expect((await call('GET', `${ownPath}?limit=0`, { headers: { cookie: owner } })).status).toBe(400);
-		// another merchant's website under my merchant id → 404; under theirs → 403
-		expect(
-			(await call('GET', `/v1/merchants/${MERCHANT}/websites/${WEBSITE_2}/deliveries`, { headers: { cookie: owner } })).status,
-		).toBe(404);
-		expect(
-			(await call('GET', `/v1/merchants/${MERCHANT_2}/websites/${WEBSITE_2}/deliveries`, { headers: { cookie: owner } }))
-				.status,
-		).toBe(403);
-		expect(
-			(
-				await call('GET', `/v1/merchants/${MERCHANT}/websites/web_9999999999abcdefghjkmnpq/deliveries`, {
-					headers: { cookie: owner },
-				})
-			).status,
-		).toBe(404);
-		// merchant replay of another merchant's delivery is refused
-		const other = await login({ kind: 'merchant', subject: 'usr_b', merchantId: MERCHANT_2, roles: ['owner'] });
-		const theirs = (
-			await call('GET', `/v1/merchants/${MERCHANT_2}/websites/${WEBSITE_2}/deliveries`, { headers: { cookie: other } })
-		).json.items;
-		expect(theirs).toHaveLength(1);
-		const crossReplay = await call(
-			'POST',
-			`/v1/merchants/${MERCHANT}/websites/${WEBSITE}/deliveries/${theirs[0].deliveryId}/replay`,
-			{
-				headers: { cookie: owner, ...SAME_ORIGIN, 'idempotency-key': 'x1' },
-			},
-		);
-		expect(crossReplay.status).toBe(404);
-		const notDead = await call(
-			'POST',
-			`/v1/merchants/${MERCHANT_2}/websites/${WEBSITE_2}/deliveries/${theirs[0].deliveryId}/replay`,
-			{
-				headers: { cookie: other, ...SAME_ORIGIN, 'idempotency-key': 'x2' },
-			},
-		);
-		expect(notDead.status).toBe(409);
-		// staff see everything; products only their own app
-		const support = await login({ kind: 'staff', subject: 'stf_s', roles: ['support'] });
-		expect(
-			(await call('GET', `/v1/admin/deliveries?websiteId=${WEBSITE_2}`, { headers: { cookie: support } })).json.items,
-		).toHaveLength(1);
-		expect(
-			(await call('GET', '/v1/admin/deliveries?appId=app_pages', { headers: { cookie: support } })).json.items,
-		).toHaveLength(3);
-		expect((await call('GET', '/v1/admin/deliveries', { headers: { cookie: support } })).status).toBe(400);
-		expect((await call('GET', '/v1/admin/deliveries', { headers: { cookie: owner } })).status).toBe(401);
-		const mine = await call('GET', '/v1/product/deliveries', {
-			headers: { authorization: await productAuth('app_other_site') },
-		});
-		expect(mine.json.items.map((/** @type {any} */ i) => i.websiteId)).toEqual([WEBSITE_2]);
-		const metrics = await call('GET', `/v1/admin/integration/metrics?appId=app_pages`, { headers: { cookie: support } });
-		expect(metrics.json.deliveries.delivered).toBe(3);
-		const dl = await call('GET', `/v1/admin/dead-letters?websiteId=${WEBSITE}&appId=app_pages`, {
-			headers: { cookie: support },
-		});
-		expect(dl.json).toEqual({ items: [], nextCursor: null, hasMore: false });
 	});
 });

@@ -15,13 +15,11 @@ export const collections = Object.freeze([
 		tenant: 'merchant',
 		description:
 			'Client-owned resources: { _id: connectorId, merchantId, kind, provider, label, websiteIds, status, lastCheckAt, ' +
-			'lastCheckReport (no secrets), sealed (envelope, aad merchantId:connectorId), preview (masked), previous ' +
-			'(sealed rollback copy, 24 h), version, createdAt, rotatedAt, revokedAt }.',
+			'lastCheckReport (no secrets), sealed (envelope, aad merchantId:connectorId), preview (masked), version, ' +
+			'createdAt, updatedAt }.',
 		indexes: [
 			{ keys: { merchantId: 1, createdAt: -1, _id: -1 }, name: 'merchant_created' },
 			{ keys: { merchantId: 1, websiteIds: 1, kind: 1 }, name: 'merchant_website_kind' },
-			{ keys: { status: 1, lastCheckAt: 1 }, name: 'health' },
-			{ keys: { 'previous.expiresAt': 1 }, name: 'previous_expiry', sparse: true },
 		],
 	}),
 	defineCollection({

@@ -117,7 +117,7 @@ describe('rbac', () => {
 		expect(can(staff(['admin']), 'websites.write', { merchantId: MERCHANT })).toBe(true);
 		expect(can(staff(['support']), 'websites.read', { merchantId: MERCHANT })).toBe(true);
 		expect(can(staff(['support']), 'websites.write', { merchantId: MERCHANT })).toBe(false);
-		expect(can(staff(['support']), 'platform.impersonate')).toBe(false);
+		expect(can(staff(['support']), 'platform.staff.manage')).toBe(false);
 		expect(can(staff(['finance']), 'platform.credits.adjust')).toBe(true);
 		expect(can(staff(['finance']), 'config.write', { merchantId: MERCHANT })).toBe(false);
 		expect(can(staff(['nonexistent']), 'merchant.read')).toBe(false);

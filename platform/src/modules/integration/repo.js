@@ -1,6 +1,6 @@
 /**
  * Data access of the `integration` module (its own collections only). No function here accepts or stores an event
- * payload except the sealed DLQ copy.
+ * payload.
  * @module
  */
 
@@ -22,13 +22,13 @@ const isDuplicateKey = (error) => typeof error === 'object' && error !== null &&
  * @property {string} idempotencyKey
  * @property {Date} receivedAt
  * @property {'pending' | 'done'} fanout
- * @property {{ total: number, delivered: number, dead: number }} deliveries
+ * @property {{ total: number, delivered: number, failed: number }} deliveries
  */
 
 /**
- * @param {{ events: MutableOps, deliveries: MutableOps, deadLetters: MutableOps, now: () => number }} options
+ * @param {{ events: MutableOps, deliveries: MutableOps }} options
  */
-export const createIntegrationRepo = ({ events, deliveries, deadLetters, now }) => {
+export const createIntegrationRepo = ({ events, deliveries }) => {
 	/** @param {string} eventRecordId @param {Record<string, number>} inc */
 	const bump = (eventRecordId, inc) =>
 		events.updateOne(
@@ -74,7 +74,7 @@ export const createIntegrationRepo = ({ events, deliveries, deadLetters, now }) 
 		 */
 		ensureDelivery: async (input) => {
 			const filter = { websiteId: input.websiteId, eventId: input.eventId, appId: input.appId };
-			const set = { ...input, status: 'pending', attempts: 0, replays: 0, lastErrorCode: null };
+			const set = { ...input, status: 'pending', attempts: 0, lastErrorCode: null };
 			for (let attempt = 0; ; attempt += 1) {
 				try {
 					const doc = await deliveries.findOneAndUpdate(
@@ -99,53 +99,6 @@ export const createIntegrationRepo = ({ events, deliveries, deadLetters, now }) 
 		 */
 		updateDelivery: async (deliveryId, update, where = {}) =>
 			(await deliveries.updateOne({ _id: deliveryId, ...where }, update)).modifiedCount === 1,
-		/**
-		 * @param {Record<string, unknown>} filter
-		 * @param {{ after: { at: Date, id: string } | null, limit: number }} page
-		 */
-		listDeliveries: (filter, { after, limit }) =>
-			deliveries
-				.find({
-					...filter,
-					...(after ? { $or: [{ createdAt: { $lt: after.at } }, { createdAt: after.at, _id: { $lt: after.id } }] } : {}),
-				})
-				.sort({ createdAt: -1, _id: -1 })
-				.limit(limit)
-				.toArray(),
-		/** @param {Record<string, unknown>} match */
-		countByStatus: (match) =>
-			deliveries.aggregate([{ $match: match }, { $group: { _id: '$status', n: { $sum: 1 } } }]).toArray(),
-
-		/**
-		 * @param {{ _id: string, websiteId: string | null, merchantId: string | null, appId: string, eventId: string, type: string,
-		 *   sealed: string, attempts: number, lastErrorCode: string, expireAt: Date }} entry
-		 */
-		putDeadLetter: async (entry) => {
-			const t = new Date(now());
-			await deadLetters.replaceOne({ _id: entry._id }, { ...entry, deadAt: t, createdAt: t }, { upsert: true });
-		},
-		/** @param {string} deliveryId */
-		getDeadLetter: (deliveryId) => deadLetters.findOne({ _id: deliveryId }),
-		/** @param {string} deliveryId */
-		deleteDeadLetter: (deliveryId) => deadLetters.deleteOne({ _id: deliveryId }),
-		/**
-		 * @param {Record<string, unknown>} filter
-		 * @param {{ after: { at: Date, id: string } | null, limit: number }} page
-		 */
-		listDeadLetters: (filter, { after, limit }) =>
-			deadLetters
-				.find(
-					{
-						...filter,
-						...(after ? { $or: [{ deadAt: { $lt: after.at } }, { deadAt: after.at, _id: { $lt: after.id } }] } : {}),
-					},
-					{ projection: { sealed: 0 } },
-				)
-				.sort({ deadAt: -1, _id: -1 })
-				.limit(limit)
-				.toArray(),
-		/** @param {Record<string, unknown>} filter */
-		countDeadLetters: (filter) => deadLetters.countDocuments(filter),
 	});
 };
 /** @typedef {ReturnType<typeof createIntegrationRepo>} IntegrationRepo */

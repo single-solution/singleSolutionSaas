@@ -9,7 +9,6 @@ import { AppShell, Button, Callout, Icon, ToastProvider, formatCredits, formatHo
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { WEBSITE_TABS, routes } from '../paths.js';
-import { ImpersonationBanner } from '../admin/views/impersonation.js';
 
 /** Hours of credits left under which the banner warns. */
 export const LOW_BALANCE_HOURS = 24;
@@ -29,11 +28,9 @@ export const balanceState = (meter) => {
 
 /**
  * @param {{ me: any, merchantId: string | null, websites: any[], meter: any, children: import('react').ReactNode,
- *   notifications?: any[],
- *   impersonation?: { staffId: string, staffName?: string | null, expiresAt: string | null } | null }} props `impersonation`: the staff member
- *   acting as this user (session `via`) — shown as a banner on every page.
+ *   notifications?: any[] }} props
  */
-export function ConsoleShell({ me, merchantId, websites, meter, children, impersonation = null, notifications = [] }) {
+export function ConsoleShell({ me, merchantId, websites, meter, children, notifications = [] }) {
 	const pathname = usePathname() ?? '';
 	const match = /^\/websites\/(web_[0-9a-z]+)(?:\/([a-z-]+))?/.exec(pathname);
 	const currentWebsiteId = match?.[1] ?? null;
@@ -52,7 +49,7 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, impers
 			items: [
 				{ href: routes.websites(), label: 'Websites', icon: 'globe', current: is('/websites') && !current },
 				{ href: routes.credits(), label: 'Credits', icon: 'wallet', current: is('/credits') },
-				{ href: routes.spendPolicies(), label: 'Spend policies', icon: 'sliders', current: is('/spend-policies') },
+				{ href: routes.spendCap(), label: 'Spend cap', icon: 'sliders', current: is('/spend-policies') },
 				{ href: routes.team(), label: 'Team', icon: 'users', current: is('/team') },
 				{ href: routes.account(), label: 'Account', icon: 'user', current: is('/account') },
 			],
@@ -60,7 +57,7 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, impers
 	];
 	if (current) {
 		/** @type {Record<string, import('@ss/ui').IconName>} */
-		const icons = { overview: 'grid', products: 'box', usage: 'activity', keys: 'key', resources: 'plug', deliveries: 'send' };
+		const icons = { overview: 'grid', products: 'box', usage: 'activity', keys: 'key', resources: 'plug' };
 		sections.unshift({
 			label: current.env === 'test' ? `${current.domain} · test` : current.domain,
 			items: WEBSITE_TABS.map((t) => ({
@@ -133,9 +130,8 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, impers
 			</Callout>
 		) : null;
 	const banner =
-		impersonation || balanceBanner || requestBanner ? (
+		balanceBanner || requestBanner ? (
 			<div className="space-y-3">
-				<ImpersonationBanner impersonation={impersonation} userEmail={me?.user?.email ?? null} />
 				{balanceBanner}
 				{requestBanner}
 			</div>

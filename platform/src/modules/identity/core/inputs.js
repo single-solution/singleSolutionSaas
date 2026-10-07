@@ -32,7 +32,6 @@ const SCOPE = /^[a-z*][a-z0-9_.:*@-]{0,127}$/;
 const TOKEN = /^[A-Za-z0-9_-]{20,128}$/;
 const OTP = /^\d{6}$/;
 const RECOVERY = /^[a-z2-7]{5}-?[a-z2-7]{5}$/i;
-const APP_ID = /^[a-z][a-z0-9_-]{2,63}$/;
 
 /**
  * @template T
@@ -113,9 +112,6 @@ export const otp = (value) => (typeof value === 'string' && OTP.test(value.trim(
 /** @type {Field<string>} */
 export const recoveryCode = (value) =>
 	typeof value === 'string' && RECOVERY.test(value.trim()) ? okv(value.trim().toLowerCase()) : bad('is invalid');
-
-/** @type {Field<string>} */
-export const appId = (value) => (typeof value === 'string' && APP_ID.test(value) ? okv(value) : bad('must be an app id'));
 
 /** @type {Field<boolean>} */
 export const bool = (value) => (typeof value === 'boolean' ? okv(value) : bad('must be a boolean'));
@@ -417,16 +413,5 @@ export const inputs = Object.freeze({
 				status: { optional: oneOf(/** @type {const} */ (['active', 'disabled'])) },
 			})
 	),
-	party: /** @type {(b: unknown) => Parsed<{ name: string, email: string }>} */ ((b) => object(b, { name: text(120), email })),
-	partnerGrant: /** @type {(b: unknown) => Parsed<{ merchantId: string, roles?: string[] }>} */ (
-		(b) => object(b, { merchantId: idOf('mer'), roles: { optional: roles(ASSIGNABLE_MERCHANT_ROLES) } })
-	),
-	developerGrant: /** @type {(b: unknown) => Parsed<{ appId: string }>} */ ((b) => object(b, { appId })),
-	impersonate: /** @type {(b: unknown) => Parsed<{ userId: string, minutes: number, reason: string }>} */ (
-		(b) => object(b, { userId: idOf('usr'), minutes: int(1, 60), reason: text(500) })
-	),
 	note: /** @type {(b: unknown) => Parsed<{ body: string }>} */ ((b) => object(b, { body: text(2000) })),
-	apiToken: /** @type {(b: unknown) => Parsed<{ minutes: number, label?: string }>} */ (
-		(b) => object(b ?? {}, { minutes: int(5, 720), label: { optional: text(80) } })
-	),
 });

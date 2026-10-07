@@ -8,7 +8,7 @@ import { createIdentityModule } from '../../../src/modules/identity/index.js';
 import { systemModule } from '../../../src/modules/system/index.js';
 import { createPortal } from '../../../src/portal.js';
 import { PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../../helpers.js';
-import { fakeCatalog, fakeCommerce, fakeIntegration, memoryMailer } from './fakes/modules.js';
+import { fakeCatalog, fakeCommerce, fakeIntegration, memoryMailer, whoamiModule } from './fakes/modules.js';
 
 export { PORTAL_URL };
 
@@ -40,6 +40,7 @@ export const boot = async (options = {}) => {
 	const identity = createIdentityModule({ mailer, ...(options.identity ?? {}) });
 	const modules = [
 		systemModule,
+		whoamiModule,
 		identity,
 		catalog.module,
 		...(options.withCommerce === false ? [] : [commerce.module]),

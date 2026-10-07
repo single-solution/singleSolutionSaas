@@ -4,13 +4,14 @@
  * website and credits).
  */
 import { vi } from 'vitest';
-import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
+import { createHash, randomUUID } from 'node:crypto';
 import { totpCode } from '../../src/infra/auth.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
 import { createConnectorsModule } from '../../src/modules/connectors/index.js';
-import { BUNDLE_FORMAT } from '../../src/modules/catalog/core/bundle.js';
+import { createDeliveryModule } from '../../src/modules/delivery/index.js';
+import { createMemoryStorage } from '../../src/modules/delivery/storage.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import { act, byLabel, type } from '@ss/ui/testing';
 import { PORTAL_URL, createTestLogger, testConfig } from '../helpers.js';
@@ -176,7 +177,7 @@ export const browserOf = (portal) => {
 	return { jar, calls, fetch: fetchImpl, api, waitCall, use: () => vi.stubGlobal('fetch', fetchImpl) };
 };
 
-/** A pack with configurable features (experiments, plan bounds, lockable), two plans and an add-on. */
+/** A pack with configurable features (plan bounds, lockable), two plans and an add-on. */
 export const packManifest = () => ({
 	ssps: '1',
 	product: {
@@ -193,9 +194,7 @@ export const packManifest = () => ({
 			name: 'Notice bar',
 			modes: ['A', 'B'],
 			price: { hourly: 1250 },
-			budget: { js: 3 },
 			placement: true,
-			experiments: true,
 			headless: 'headless/bar.js#createBar',
 			renderer: 'ui/bar.js#render',
 			features: {
@@ -208,7 +207,6 @@ export const packManifest = () => ({
 						default: 'Hello',
 						maxLength: 140,
 						'x-kind': 'config',
-						'x-experiment': true,
 						'x-ui': { widget: 'textarea', group: 'Content', order: 1, help: 'Shown in the bar' },
 					},
 					tone: {
@@ -237,7 +235,6 @@ export const packManifest = () => ({
 			name: 'Trust badge',
 			modes: ['A', 'B'],
 			price: { hourly: 500 },
-			budget: { js: 2 },
 			placement: true,
 			headless: 'headless/badge.js#createBadge',
 			renderer: 'ui/badge.js#render',
@@ -254,6 +251,62 @@ export const packManifest = () => ({
 	],
 	priceBook: { version: '1', effectiveFrom: '2026-01-01T00:00:00.000Z' },
 });
+
+/**
+ * The Portal modules with in-memory platform asset storage (pack uploads).
+ * @template {{ name: string }} M
+ * @param {M[]} modules
+ */
+export const withMemoryStorage = (modules) =>
+	modules.map((m) => (m.name === 'delivery' ? /** @type {M} */ (createDeliveryModule({ storage: createMemoryStorage() })) : m));
+
+/** The pack's module files (their sha256 and size go into the descriptor). */
+const PACK_FILES = Object.freeze({
+	'headless/bar.js': 'export const createBar = () => ({});\n',
+	'ui/bar.js': 'export const render = () => undefined;\n',
+	'headless/badge.js': 'export const createBadge = () => ({});\n',
+	'ui/badge.js': 'export const render = () => undefined;\n',
+});
+
+/**
+ * Upload the pack as staff (`ss pack build` descriptor, then every missing asset's bytes) and activate it.
+ * @param {typeof fetch} staffFetch a signed-in staff browser's fetch
+ * @returns {Promise<string>} the appId
+ */
+export const uploadPack = async (staffFetch) => {
+	const files = Object.entries(PACK_FILES).map(([path, text]) => ({ path, bytes: new TextEncoder().encode(text) }));
+	const descriptor = {
+		format: 'ss-pack-bundle@1',
+		manifest: packManifest(),
+		assets: files.map(({ path, bytes }) => ({
+			path,
+			sha256: createHash('sha256').update(bytes).digest('hex'),
+			size: bytes.byteLength,
+			contentType: 'text/javascript',
+		})),
+	};
+	/** @param {string} path @param {RequestInit} init */
+	const call = async (path, init) => {
+		const response = await staffFetch(path, init);
+		const text = await response.text();
+		if (!response.ok) throw new Error(`${init.method} ${path}: ${response.status} ${text}`);
+		return text ? JSON.parse(text) : null;
+	};
+	const json = { 'content-type': 'application/json', 'idempotency-key': randomUUID() };
+	const uploaded = await call('/v1/admin/packs', { method: 'POST', headers: json, body: JSON.stringify({ descriptor }) });
+	for (const path of /** @type {string[]} */ (uploaded.missing ?? []))
+		await call(`${uploaded.uploadPath}${path}`, {
+			method: 'PUT',
+			headers: { 'content-type': 'text/javascript' },
+			body: /** @type {any} */ (files.find((f) => f.path === path)?.bytes),
+		});
+	await call(`/v1/admin/apps/${uploaded.appId}/status`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ status: 'active' }),
+	});
+	return /** @type {string} */ (uploaded.appId);
+};
 
 /**
  * A Portal with a recording mailer and controllable connector probes.
@@ -277,8 +330,14 @@ export const createWorld = async ({ db }) => {
 			warnings: probe.ok ? [] : ['tls_unverified'],
 		}),
 	});
-	const modules = defaultModules.map((m) =>
-		m.name === 'identity' ? createIdentityModule({ mailer }) : m.name === 'connectors' ? createConnectorsModule({ probes }) : m,
+	const modules = withMemoryStorage(
+		defaultModules.map((m) =>
+			m.name === 'identity'
+				? createIdentityModule({ mailer })
+				: m.name === 'connectors'
+					? createConnectorsModule({ probes })
+					: m,
+		),
 	);
 	const portal = createPortal({ config: await testConfig(), db, modules, logger: createTestLogger().logger });
 	await portal.ensureIndexes();
@@ -299,29 +358,7 @@ export const createWorld = async ({ db }) => {
 	await staff.api.post('/v1/auth/staff/mfa/confirm', { code: totpCode(enrol.ok ? enrol.data.secret : '', Date.now()) });
 
 	/** Upload and activate the pack. */
-	const seedPack = async () => {
-		const dev = await generateSigningKey({ kid: 'dev-1' });
-		const descriptor = /** @type {any} */ ({
-			format: BUNDLE_FORMAT,
-			manifest: packManifest(),
-			assets: [
-				{ path: 'headless/bar.js', sha256: 'a'.repeat(64), size: 1200, contentType: 'text/javascript' },
-				{ path: 'ui/bar.js', sha256: 'b'.repeat(64), size: 2400, contentType: 'text/javascript' },
-				{ path: 'headless/badge.js', sha256: 'c'.repeat(64), size: 900, contentType: 'text/javascript' },
-				{ path: 'ui/badge.js', sha256: 'd'.repeat(64), size: 1000, contentType: 'text/javascript' },
-			],
-		});
-		const uploaded = await staff.api.post('/v1/admin/packs', {
-			descriptor,
-			signature: await signBundle({ signer: createSigner(dev.privateJwk), descriptor }),
-			publicJwk: dev.publicJwk,
-		});
-		if (!uploaded.ok) throw new Error(`pack upload: ${JSON.stringify(uploaded.problem)}`);
-		const appId = uploaded.data.app.appId;
-		const activated = await staff.api.post(`/v1/admin/apps/${appId}/lifecycle`, { action: 'activate' });
-		if (!activated.ok) throw new Error('activate');
-		return /** @type {string} */ (appId);
-	};
+	const seedPack = () => uploadPack(staff.fetch);
 
 	/**
 	 * Sign a merchant up and verify it through the API (a signed-in browser).

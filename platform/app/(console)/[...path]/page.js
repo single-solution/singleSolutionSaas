@@ -14,16 +14,13 @@ import Login, { metadata as LoginMeta } from '../_views/login.js';
 import Onboarding, { metadata as OnboardingMeta } from '../_views/onboarding.js';
 import ResetPassword, { metadata as ResetPasswordMeta } from '../_views/reset-password.js';
 import Signup, { metadata as SignupMeta } from '../_views/signup.js';
-import SpendPolicies, { metadata as SpendPoliciesMeta } from '../_views/spend-policies.js';
+import SpendCap, { metadata as SpendCapMeta } from '../_views/spend-policies.js';
 import Team, { metadata as TeamMeta } from '../_views/team.js';
 import Websites, { metadata as WebsitesMeta } from '../_views/websites.js';
 import InvitesAccept, { metadata as InvitesAcceptMeta } from '../_views/invites-accept.js';
 import SignupVerify, { metadata as SignupVerifyMeta } from '../_views/signup-verify.js';
 import StaffResetPassword, { metadata as StaffResetPasswordMeta } from '../_views/staff-reset-password.js';
 import WebsitesWebsiteId, { metadata as WebsitesWebsiteIdMeta } from '../_views/websites-websiteId.js';
-import WebsitesWebsiteIdDeliveries, {
-	metadata as WebsitesWebsiteIdDeliveriesMeta,
-} from '../_views/websites-websiteId-deliveries.js';
 import WebsitesWebsiteIdIdentity, { metadata as WebsitesWebsiteIdIdentityMeta } from '../_views/websites-websiteId-identity.js';
 import WebsitesWebsiteIdKeys, { metadata as WebsitesWebsiteIdKeysMeta } from '../_views/websites-websiteId-keys.js';
 import WebsitesWebsiteIdProducts, { metadata as WebsitesWebsiteIdProductsMeta } from '../_views/websites-websiteId-products.js';
@@ -46,14 +43,13 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['onboarding'], Onboarding, OnboardingMeta, true],
 	[['reset-password'], ResetPassword, ResetPasswordMeta, false],
 	[['signup'], Signup, SignupMeta, false],
-	[['spend-policies'], SpendPolicies, SpendPoliciesMeta, true],
+	[['spend-policies'], SpendCap, SpendCapMeta, true],
 	[['team'], Team, TeamMeta, true],
 	[['websites'], Websites, WebsitesMeta, true],
 	[['invites', 'accept'], InvitesAccept, InvitesAcceptMeta, false],
 	[['signup', 'verify'], SignupVerify, SignupVerifyMeta, false],
 	[['staff', 'reset-password'], StaffResetPassword, StaffResetPasswordMeta, false],
 	[['websites', ':websiteId'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, true],
-	[['websites', ':websiteId', 'deliveries'], WebsitesWebsiteIdDeliveries, WebsitesWebsiteIdDeliveriesMeta, true],
 	[['websites', ':websiteId', 'identity'], WebsitesWebsiteIdIdentity, WebsitesWebsiteIdIdentityMeta, true],
 	[['websites', ':websiteId', 'keys'], WebsitesWebsiteIdKeys, WebsitesWebsiteIdKeysMeta, true],
 	[['websites', ':websiteId', 'products'], WebsitesWebsiteIdProducts, WebsitesWebsiteIdProductsMeta, true],

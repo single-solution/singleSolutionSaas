@@ -34,7 +34,6 @@ export const manifest = (version = '1.4.0') => ({
 			modes: ['C'],
 			price: { hourly: 1000 },
 			api: { resources: ['coupons'] },
-			experiments: true,
 			features: {
 				type: 'object',
 				additionalProperties: false,
@@ -53,7 +52,6 @@ export const manifest = (version = '1.4.0') => ({
 						title: 'Allow stacking',
 						default: false,
 						'x-kind': 'flag',
-						'x-experiment': true,
 					},
 					prefix: {
 						type: 'string',
@@ -61,7 +59,6 @@ export const manifest = (version = '1.4.0') => ({
 						default: 'SAVE',
 						maxLength: 12,
 						pattern: '^[A-Z0-9]*$',
-						'x-experiment': true,
 					},
 					note: { type: 'string', title: 'Internal note', default: '', maxLength: 50, 'x-lock': false },
 					window: {

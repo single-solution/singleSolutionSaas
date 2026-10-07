@@ -50,16 +50,15 @@ export const bootPortal = async ({
 	}
 
 	/**
-	 * @param {{ kind?: 'staff' | 'merchant', roles?: string[], subject?: string, merchantId?: string, via?: any }} [who]
+	 * @param {{ kind?: 'staff' | 'merchant', roles?: string[], subject?: string, merchantId?: string }} [who]
 	 */
-	const session = async ({ kind = 'staff', roles = ['admin'], subject = 'stf_alice', merchantId, via } = {}) => {
+	const session = async ({ kind = 'staff', roles = ['admin'], subject = 'stf_alice', merchantId } = {}) => {
 		const { token } = await portal.shared.sessions.create({
 			kind,
 			subject,
 			roles,
 			mfa: true,
 			...(merchantId ? { merchantId } : {}),
-			...(via ? { via } : {}),
 		});
 		return `${portal.shared.cookies.name(kind)}=${token}`;
 	};

@@ -32,8 +32,6 @@ afterAll(async () => {
 });
 
 const SUB = `/v1/merchants/${MER_A}/websites/${WEB_A1}/subscriptions/${SUB_A1}/config`;
-const MERCHANT_APP = `/v1/merchants/${MER_A}/apps/${APP}/config`;
-const TEMPLATES = `/v1/merchants/${MER_A}/config/templates`;
 const ADMIN = `/v1/admin/subscriptions/${SUB_A1}/config`;
 const PLATFORM = `/v1/admin/config/platform/${APP}`;
 
@@ -73,110 +71,11 @@ describe('merchant console routes', () => {
 		});
 		expect(preview.status).toBe(200);
 		expect(preview.json.preview.features['codes.maxActive']).toMatchObject({ value: 50, reason: 'clamped' });
-		const previewMerchant = await call('POST', `${SUB}/preview`, {
-			cookie: as.ownerA,
-			body: { level: 'merchant', change: {} },
+		const previewPlatform = await call('POST', `${SUB}/preview`, {
+			cookie: as.staff,
+			body: { level: 'platform', change: {} },
 		});
-		expect(previewMerchant.json.level).toBe('merchant');
-	});
-
-	it('schedules, lists and cancels changes; manages experiments', async () => {
-		const { call, clock } = app;
-		const at = new Date(clock.now() + 3_600_000).toISOString();
-		const scheduled = await call('POST', `${SUB}/schedules`, {
-			cookie: as.ownerA,
-			body: { change: { config: { codes: { prefix: 'LATER' } } }, at, reason: 'sale' },
-		});
-		expect(scheduled).toMatchObject({ status: 201, json: { status: 'pending' } });
-		const noChange = await call('POST', `${SUB}/schedules`, { cookie: as.ownerA, body: { at } });
-		expect(noChange.status).toBe(201);
-		const list = await call('GET', `${SUB}/schedules`, { cookie: as.ownerA });
-		expect(list.json.items).toHaveLength(2);
-		const cancelled = await call('DELETE', `${SUB}/schedules/${scheduled.json.scheduleId}`, { cookie: as.ownerA });
-		expect(cancelled.json.status).toBe('cancelled');
-
-		const created = await call('POST', `${SUB}/experiments`, {
-			cookie: as.ownerA,
-			body: {
-				element: 'codes',
-				metric: 'order.placed@1',
-				variants: [
-					{ key: 'a', weight: 1, config: { prefix: 'A' } },
-					{ key: 'b', weight: 1, config: { prefix: 'B' } },
-				],
-			},
-		});
-		expect(created.status).toBe(201);
-		const id = created.json.experimentId;
-		expect((await call('POST', `${SUB}/experiments/${id}/start`, { cookie: as.ownerA })).json.status).toBe('running');
-		expect((await call('GET', `${SUB}/experiments`, { cookie: as.ownerA })).json.items[0].status).toBe('running');
-		const stopped = await call('POST', `${SUB}/experiments/${id}/stop`, { cookie: as.ownerA, body: { applyVariant: 'a' } });
-		expect(stopped.json).toMatchObject({ status: 'stopped', winner: 'a' });
-	});
-
-	it('manages merchant-wide app defaults and templates', async () => {
-		const { call } = app;
-		const patched = await call('PATCH', MERCHANT_APP, { cookie: as.ownerA, body: { config: { codes: { prefix: 'MER' } } } });
-		expect(patched.json.version).toBe(1);
-		await call('PATCH', MERCHANT_APP, { cookie: as.ownerA, body: { config: { codes: { prefix: 'MER2' } } } });
-		expect((await call('GET', MERCHANT_APP, { cookie: as.ownerA })).json).toMatchObject({
-			version: 2,
-			state: { features: { 'codes.prefix': { value: 'MER2' } } },
-		});
-		expect((await call('GET', `${MERCHANT_APP}/history`, { cookie: as.ownerA })).json.items).toHaveLength(2);
-		expect((await call('POST', `${MERCHANT_APP}/rollback`, { cookie: as.ownerA, body: { version: 1 } })).json.version).toBe(3);
-		// a website-scoped editor cannot change merchant-wide defaults
-		expect((await call('PATCH', MERCHANT_APP, { cookie: as.editorA1, body: {} })).status).toBe(403);
-
-		const saved = await call('POST', TEMPLATES, {
-			cookie: as.ownerA,
-			body: { appId: APP, name: 'Base', settings: { config: { codes: { prefix: 'TPL' } } } },
-		});
-		expect(saved.status).toBe(201);
-		const tid = saved.json.templateId;
-		expect((await call('GET', `${TEMPLATES}?appId=${APP}`, { cookie: as.ownerA })).json.items).toHaveLength(1);
-		expect((await call('GET', `${TEMPLATES}/${tid}`, { cookie: as.ownerA })).json.name).toBe('Base');
-		const applied = await call('POST', `${TEMPLATES}/${tid}/apply`, {
-			cookie: as.ownerA,
-			body: { websiteIds: [WEB_A1, WEB_A2] },
-		});
-		expect(applied.json).toMatchObject({ applied: 2, failed: 0 });
-		const put = await call('PUT', `${TEMPLATES}/${tid}`, {
-			cookie: as.ownerA,
-			body: { name: 'Base v2', settings: { config: { codes: { prefix: 'TPL2' } } } },
-		});
-		expect(put.json.version).toBe(2);
-		const pushed = await call('POST', `${TEMPLATES}/${tid}/push`, { cookie: as.ownerA, body: {} });
-		expect(pushed.json.applied).toBe(2);
-	});
-
-	it('applies templates only to websites the actor may write (website-scoped grants)', async () => {
-		const { call } = app;
-		const staffSaved = await app.service.saveTemplate({
-			merchantId: MER_A,
-			appId: APP,
-			name: 'Scoped',
-			settings: { elements: { codes: true } },
-			actor: /** @type {any} */ ({ type: 'staff', id: 'stf_admin' }),
-		});
-		const limited = await app.login({
-			kind: 'merchant',
-			subject: 'usr_limited',
-			merchantId: MER_A,
-			roles: [],
-			grants: [{ websiteId: WEB_A1, roles: ['editor'] }],
-		});
-		// merchant-level template routes need a merchant-wide grant
-		expect(
-			(await call('POST', `${TEMPLATES}/${staffSaved.templateId}/apply`, { cookie: limited, body: { websiteIds: [WEB_A1] } }))
-				.status,
-		).toBe(403);
-		const merchantEditor = await app.login({ kind: 'merchant', subject: 'usr_med', merchantId: MER_A, roles: ['editor'] });
-		const ok = await call('POST', `${TEMPLATES}/${staffSaved.templateId}/apply`, {
-			cookie: merchantEditor,
-			body: { websiteIds: [WEB_A1, WEB_A2] },
-		});
-		expect(ok.json.results.map((/** @type {any} */ r) => r.status)).toEqual(['unchanged', 'applied']); // codes was already on for WEB_A1
+		expect(previewPlatform.json.level).toBe('platform');
 	});
 });
 
@@ -210,7 +109,7 @@ describe('admin console routes', () => {
 			cookie: as.staff,
 			body: { level: 'merchant', features: { 'codes.prefix': true }, elements: {} },
 		});
-		expect(lockMerchant.json.target).toMatchObject({ level: 'merchant', merchantId: MER_A });
+		expect(lockMerchant.status).toBe(422);
 		const lockAdmin = await call('PUT', `${ADMIN}/locks`, {
 			cookie: as.staff,
 			body: { features: { 'codes.maxActive': true }, reason: 'contract' },
@@ -260,39 +159,9 @@ describe('tenant isolation', () => {
 		['GET', '/history'],
 		['POST', '/rollback', { version: 0 }],
 		['POST', '/preview', { change: {} }],
-		['GET', '/schedules'],
-		['POST', '/schedules', { change: {}, at: '2027-01-01T00:00:00Z' }],
-		['DELETE', '/schedules/cfs_none'],
-		['GET', '/experiments'],
-		[
-			'POST',
-			'/experiments',
-			{
-				element: 'codes',
-				metric: 'order.placed@1',
-				variants: [
-					{ key: 'a', weight: 1 },
-					{ key: 'b', weight: 1 },
-				],
-			},
-		],
-		['POST', '/experiments/exp_none/start'],
-		['POST', '/experiments/exp_none/stop'],
 	];
 	/** @type {Array<[string, string, unknown?]>} */
-	const merchantRoutes = [
-		['GET', MERCHANT_APP],
-		['PATCH', MERCHANT_APP, {}],
-		['GET', `${MERCHANT_APP}/history`],
-		['POST', `${MERCHANT_APP}/rollback`, { version: 0 }],
-		['GET', TEMPLATES],
-		['POST', TEMPLATES, { appId: APP, name: 'x', settings: {} }],
-		['GET', `${TEMPLATES}/cft_x`],
-		['PUT', `${TEMPLATES}/cft_x`, {}],
-		['POST', `${TEMPLATES}/cft_x/apply`, { websiteIds: [WEB_A1] }],
-		['POST', `${TEMPLATES}/cft_x/push`, {}],
-		...subRoutes.map(([m, p, b]) => /** @type {[string, string, unknown?]} */ ([m, `${SUB}${p}`, b])),
-	];
+	const merchantRoutes = [...subRoutes.map(([m, p, b]) => /** @type {[string, string, unknown?]} */ ([m, `${SUB}${p}`, b]))];
 	/** @type {Array<[string, string, unknown?]>} */
 	const adminRoutes = [
 		['GET', ADMIN],
@@ -320,21 +189,6 @@ describe('tenant isolation', () => {
 				expect([method, `${base}${path}`, res.status]).toEqual([method, `${base}${path}`, 404]);
 			}
 		}
-		// a template of merchant A is invisible to merchant B, even with B's own paths
-		const t = await app.service.saveTemplate({
-			merchantId: MER_A,
-			appId: APP,
-			name: 'Secret',
-			settings: {},
-			actor: /** @type {any} */ ({ type: 'staff', id: 's' }),
-		});
-		const pathB = `/v1/merchants/${MER_B}/config/templates/${t.templateId}`;
-		expect((await app.call('GET', pathB, { cookie: as.ownerB })).status).toBe(404);
-		expect((await app.call('POST', `${pathB}/apply`, { cookie: as.ownerB, body: { websiteIds: [WEB_B1] } })).status).toBe(404);
-		expect((await app.call('GET', `/v1/merchants/${MER_B}/apps/${APP}/config`, { cookie: as.ownerB })).json.state).toEqual({
-			elements: {},
-			features: {},
-		});
 	});
 
 	it('a website-scoped editor is confined to its website', async () => {

@@ -1,8 +1,7 @@
 /**
- * The `config` module: layered configuration overrides (platform policy, merchant defaults, website overrides, admin
- * overrides) with immutable versions, rollback, staff locks, templates, scheduled changes, experiments and dry-run
- * previews. Commerce resolves the layers with `@ss/entitlements` (`layersFor`). Scheduled changes are applied when the
- * merchant's configuration is read at or after their time (F.19: no job, no timer).
+ * The `config` module: layered configuration overrides (platform policy, website overrides, admin overrides) with
+ * immutable versions, rollback, staff locks and dry-run previews. Commerce resolves the layers with `@ss/entitlements`
+ * (`layersFor`).
  * @module
  */
 import { defineModule } from '../../infra/modules.js';

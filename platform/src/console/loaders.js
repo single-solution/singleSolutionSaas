@@ -105,12 +105,13 @@ const websiteBase = async (api, merchantId, websiteId) => {
  * @param {string} websiteId
  */
 export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
-	const [{ website, catalog }, subscriptions, resources, meter, identity] = await Promise.all([
+	const [{ website, catalog }, subscriptions, resources, meter, identity, snippet] = await Promise.all([
 		websiteBase(api, merchantId, websiteId),
 		api.get(paths.subscriptions(merchantId, websiteId)),
 		api.get(paths.resources(merchantId, websiteId)),
 		api.get(paths.meter(merchantId)),
 		api.get(paths.identity(merchantId, websiteId)),
+		api.get(paths.snippet(merchantId, websiteId)),
 	]);
 	const failed = firstFailure(website);
 	if (failed) return failed;
@@ -124,6 +125,8 @@ export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
 		meter: orElse(meter, null),
 		// F.16: a product's pending request to become the identity issuer (shown as a notice)
 		issuerRequest: /** @type {any} */ (identity.ok ? (identity.data?.request ?? null) : null),
+		// the install code (404 until the website has a compiled bundle)
+		snippet: /** @type {any} */ (orElse(snippet, null)),
 	};
 };
 
@@ -163,19 +166,16 @@ export const loadProducts = async (api, merchantId, websiteId) => {
  */
 export const loadSubscription = async (api, merchantId, websiteId, subscriptionId) => {
 	const config = paths.config(merchantId, websiteId, subscriptionId);
-	const [website, subscription, overview, preview, history, schedules, experiments, meter, resources, balance] =
-		await Promise.all([
-			api.get(paths.website(merchantId, websiteId)),
-			api.get(paths.subscription(merchantId, subscriptionId)),
-			api.get(config),
-			api.post(`${config}/preview`, { change: {} }),
-			api.get(`${config}/history`),
-			api.get(`${config}/schedules`),
-			api.get(`${config}/experiments`),
-			api.get(paths.meter(merchantId)),
-			api.get(paths.resources(merchantId, websiteId)),
-			api.get(paths.balance(merchantId)),
-		]);
+	const [website, subscription, overview, preview, history, meter, resources, balance] = await Promise.all([
+		api.get(paths.website(merchantId, websiteId)),
+		api.get(paths.subscription(merchantId, subscriptionId)),
+		api.get(config),
+		api.post(`${config}/preview`, { change: {} }),
+		api.get(`${config}/history`),
+		api.get(paths.meter(merchantId)),
+		api.get(paths.resources(merchantId, websiteId)),
+		api.get(paths.balance(merchantId)),
+	]);
 	const failed = firstFailure(website, subscription);
 	if (failed) return failed;
 	const sub = /** @type {any} */ (subscription.ok ? subscription.data.subscription : null);
@@ -195,8 +195,6 @@ export const loadSubscription = async (api, merchantId, websiteId, subscriptionI
 		overview: orElse(overview, null),
 		effective: /** @type {any} */ (orElse(preview, { preview: null }).preview ?? null),
 		history: orElse(history, { items: [], nextCursor: null }),
-		schedules: /** @type {any[]} */ (orElse(schedules, { items: [] }).items ?? []),
-		experiments: /** @type {any[]} */ (orElse(experiments, { items: [] }).items ?? []),
 		meterLine: /** @type {any} */ (
 			(orElse(meter, { subscriptions: [] }).subscriptions ?? []).find(
 				(/** @type {any} */ l) => l.subscriptionId === subscriptionId,
@@ -318,30 +316,6 @@ export const loadResources = async (api, merchantId, websiteId) => {
 /**
  * @param {ConsoleApi} api
  * @param {string} merchantId
- * @param {string} websiteId
- * @param {{ status?: string }} [filter]
- */
-export const loadDeliveries = async (api, merchantId, websiteId, filter = {}) => {
-	const status = typeof filter.status === 'string' && /^[a-z_]{1,20}$/.test(filter.status) ? filter.status : null;
-	const [{ website, catalog }, deliveries] = await Promise.all([
-		websiteBase(api, merchantId, websiteId),
-		api.get(paths.deliveries(merchantId, websiteId, { status })),
-	]);
-	const failed = firstFailure(website, deliveries);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		website: website.ok ? website.data : null,
-		catalog,
-		deliveries: deliveries.ok ? deliveries.data : { items: [], nextCursor: null },
-		status,
-	};
-};
-
-/**
- * @param {ConsoleApi} api
- * @param {string} merchantId
  * @param {{ from?: string, to?: string, websiteId?: string }} [filter]
  */
 export const loadCredits = async (api, merchantId, filter = {}) => {
@@ -375,19 +349,14 @@ export const loadCredits = async (api, merchantId, filter = {}) => {
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
-export const loadSpendPolicies = async (api, merchantId) => {
-	const [policies, websites, meter] = await Promise.all([
-		api.get(paths.spendPolicies(merchantId)),
-		api.get(paths.websites(merchantId)),
-		api.get(paths.meter(merchantId)),
-	]);
-	const failed = firstFailure(policies);
+export const loadSpendCap = async (api, merchantId) => {
+	const [cap, meter] = await Promise.all([api.get(paths.spendCap(merchantId)), api.get(paths.meter(merchantId))]);
+	const failed = firstFailure(cap);
 	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
 		merchantId,
-		policies: /** @type {any[]} */ (policies.ok ? policies.data.items : []),
-		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
+		cap: /** @type {any} */ (cap.ok ? cap.data : null),
 		meter: orElse(meter, null),
 	};
 };

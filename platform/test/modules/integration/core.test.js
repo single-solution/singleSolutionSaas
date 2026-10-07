@@ -4,14 +4,7 @@ import {
 	attemptsForWindow,
 	classifyError,
 	classifyStatus,
-	decodeCursor,
-	deliveryView,
-	dlqExpiry,
-	encodeCursor,
-	deliveryTarget,
 	eventsEndpoint,
-	parseLimit,
-	DLQ_RETENTION_MS,
 } from '../../../src/modules/integration/core/delivery.js';
 import {
 	MAX_BATCH_BYTES,
@@ -52,13 +45,7 @@ describe('events endpoint', () => {
 		expect(eventsEndpoint({ base: 'https://a.example.com' })).toBeNull();
 		expect(eventsEndpoint({ base: 'https://a.example.com', events: 'x' })).toBeNull();
 		expect(eventsEndpoint(null)).toBeNull();
-		const environments = { production: 'https://p.example.com', staging: 'https://s.example.com' };
-		expect(deliveryTarget(environments, 'test')).toEqual({ base: 'https://s.example.com', environment: 'staging' });
-		expect(deliveryTarget(environments, 'live')).toEqual({ base: 'https://p.example.com', environment: 'production' });
-		expect(deliveryTarget(environments, null)).toEqual({ base: 'https://p.example.com', environment: 'production' });
-		expect(deliveryTarget({ production: 'https://p.example.com', staging: null }, 'test')?.environment).toBe('production');
-		expect(deliveryTarget({ production: null, staging: 'https://s.example.com' }, 'live')).toBeNull();
-		expect(deliveryTarget(null, 'live')).toBeNull();
+		expect(eventsEndpoint({ base: null, events: '/e' })).toBeNull();
 	});
 });
 
@@ -287,10 +274,8 @@ describe('control events and routing', () => {
 	});
 
 	it('knows which apps receive deliveries', () => {
-		expect(isDeliverableApp({ status: 'active', kind: 'service' })).toBe(true);
-		expect(isDeliverableApp({ status: 'deprecated', kind: 'service' })).toBe(true);
-		expect(isDeliverableApp({ status: 'retired', kind: 'service' })).toBe(false);
-		expect(isDeliverableApp({ status: 'active', kind: 'pack' })).toBe(false);
+		expect(isDeliverableApp({ kind: 'service' })).toBe(true);
+		expect(isDeliverableApp({ kind: 'pack' })).toBe(false);
 		expect(isDeliverableApp(null)).toBe(false);
 	});
 });
@@ -324,33 +309,5 @@ describe('delivery rules', () => {
 			['string', 'network_error', false],
 		];
 		for (const [error, code, permanent] of cases) expect(classifyError(error)).toEqual({ ok: false, code, permanent });
-	});
-
-	it('keeps DLQ payloads at most 7 days from the first dead-letter', () => {
-		expect(dlqExpiry(1000, null).getTime()).toBe(1000 + DLQ_RETENTION_MS);
-		const first = new Date(5);
-		expect(dlqExpiry(99_999, first)).toBe(first);
-	});
-
-	it('encodes cursors and limits', () => {
-		const cursor = encodeCursor({ createdAt: new Date(1234), _id: 'dlv_1' });
-		expect(decodeCursor(cursor)).toEqual({ ok: true, after: { at: new Date(1234), id: 'dlv_1' } });
-		expect(decodeCursor(null)).toEqual({ ok: true, after: null });
-		expect(decodeCursor('')).toEqual({ ok: true, after: null });
-		expect(decodeCursor('***')).toEqual({ ok: false });
-		expect(decodeCursor(Buffer.from('[1]').toString('base64url'))).toEqual({ ok: false });
-		expect(decodeCursor(Buffer.from('{').toString('base64url'))).toEqual({ ok: false });
-		expect(parseLimit(undefined)).toBe(50);
-		expect(parseLimit('10')).toBe(10);
-		expect(parseLimit(7)).toBe(7);
-		expect(parseLimit('0')).toBeNull();
-		expect(parseLimit('abc')).toBeNull();
-		expect(parseLimit('500')).toBeNull();
-	});
-
-	it('views deliveries without payloads', () => {
-		const view = deliveryView({ _id: 'dlv_1', eventId: 'e', type: 't', status: 'pending', sealed: 'x', data: {} });
-		expect(view).toMatchObject({ deliveryId: 'dlv_1', attempts: 0, replays: 0, lastErrorCode: null });
-		expect(JSON.stringify(view)).not.toContain('sealed');
 	});
 });

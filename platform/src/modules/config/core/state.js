@@ -260,26 +260,6 @@ export const applyOps = (state, ops) => {
 };
 
 /**
- * Overrides of a layer that are allowed in a template (website-level settings, no locks).
- * @param {LayerState} state
- * @returns {LayerState}
- */
-export const withoutLocks = (state) => ({
-	elements: Object.fromEntries(Object.entries(state.elements).map(([key, { enabled }]) => [key, { enabled }])),
-	features: Object.fromEntries(Object.entries(state.features).map(([key, { value }]) => [key, { value }])),
-});
-
-/**
- * The change that turns any state into `state` for the keys `state` defines (merge, not replace).
- * @param {LayerState} state
- * @returns {ChangeOps}
- */
-export const opsOf = (state) => ({
-	elements: Object.fromEntries(Object.entries(state.elements).map(([key, entry]) => [key, { ...entry }])),
-	features: Object.fromEntries(Object.entries(state.features).map(([key, entry]) => [key, { ...entry }])),
-});
-
-/**
  * `LayerInput` for `@ss/entitlements` (`locked` only when true; deep copies).
  * @param {LayerState} state
  */

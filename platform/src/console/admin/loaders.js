@@ -97,45 +97,6 @@ export const loadStaffSession = async (api) => {
 	return { ok: /** @type {const} */ (true), me: me.data, staff: /** @type {any} */ (me.data.staff) };
 };
 
-/**
- * Platform health: queues and dead letters, unhealthy service apps, finance alerts and the job queue (each section
- * degrades on its own, e.g. for roles without `platform.jobs.read`).
- * @param {ConsoleApi} api
- */
-export const loadDashboard = async (api) => {
-	const [health, metrics, deadLetters, apps, alerts] = await Promise.all([
-		api.get(paths.health()),
-		api.get(paths.metrics()),
-		api.get(`${paths.deadLetters()}?limit=5`),
-		api.get(paths.apps({ limit: 100 })),
-		api.get(paths.alerts()),
-	]);
-	const appItems = itemsOf(apps);
-	return {
-		ok: /** @type {const} */ (true),
-		health: section(health, /** @type {any} */ (null)),
-		metrics: orElse(metrics, null),
-		metricsProblem: metrics.ok ? null : metrics.problem,
-		deadLetters: itemsOf(deadLetters),
-		apps: appItems,
-		unhealthy: unhealthyApps(appItems),
-		alerts: itemsOf(alerts),
-	};
-};
-
-/**
- * Live service apps whose heartbeat is stale or reports a non-`ok` status.
- * @param {any[]} apps
- */
-export const unhealthyApps = (apps) =>
-	apps.filter(
-		(a) =>
-			a.kind === 'service' &&
-			(a.status === 'active' || a.status === 'deprecated') &&
-			a.health &&
-			(a.health.stale === true || (a.health.status !== null && a.health.status !== 'ok')),
-	);
-
 const DOMAIN = /^(?=.{1,253}$)[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 
 /**
@@ -173,12 +134,12 @@ export const loadMerchants = async (api, filter = {}) => {
 
 /**
  * Merchant detail: profile and websites, team, subscriptions, balance and meter, staff notes, finance
- * alerts, and the listed apps (for impersonated product launches).
+ * alerts.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadMerchant = async (api, merchantId) => {
-	const [merchant, team, subscriptions, balance, meter, notes, alerts, apps] = await Promise.all([
+	const [merchant, team, subscriptions, balance, meter, notes, alerts] = await Promise.all([
 		api.get(paths.merchant(merchantId)),
 		api.get(paths.team(merchantId)),
 		api.get(paths.subscriptions(merchantId)),
@@ -186,7 +147,6 @@ export const loadMerchant = async (api, merchantId) => {
 		api.get(paths.meter(merchantId)),
 		api.get(paths.notes(merchantId)),
 		api.get(paths.alerts({ merchantId })),
-		api.get(paths.apps({ status: 'active,deprecated', limit: 100 })),
 	]);
 	const failed = firstFailure(merchant);
 	if (failed) return failed;
@@ -202,7 +162,6 @@ export const loadMerchant = async (api, merchantId) => {
 		meter: orElse(meter, null),
 		notes: section(notes, { items: [] }),
 		alerts: itemsOf(alerts),
-		apps: itemsOf(apps),
 	};
 };
 
@@ -238,7 +197,7 @@ export const loadWebsites = async (api, filter = {}) => {
  * @param {{ status?: string, kind?: string, cursor?: string }} [filter]
  */
 export const loadApps = async (api, filter = {}) => {
-	const status = oneOf(filter.status, ['pending', 'active', 'deprecated', 'retired']);
+	const status = oneOf(filter.status, ['active', 'inactive']);
 	const kind = oneOf(filter.kind, ['service', 'pack']);
 	const list = await api.get(paths.apps({ status, kind, cursor: pick(filter.cursor, CURSOR), limit: 50 }));
 	const failed = firstFailure(list);
@@ -247,51 +206,7 @@ export const loadApps = async (api, filter = {}) => {
 };
 
 /**
- * App detail: app (keys, environments, health), versions, and its platform policy layer.
- * @param {ConsoleApi} api
- * @param {string} appId
- */
-export const loadApp = async (api, appId) => {
-	const [app, versions, policy] = await Promise.all([
-		api.get(paths.app(appId)),
-		api.get(paths.versions(appId)),
-		api.get(paths.platformPolicy(appId)),
-	]);
-	const failed = firstFailure(app);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		app: /** @type {any} */ (app.ok ? app.data : null),
-		versions: pageOf(versions),
-		policy: orElse(policy, null),
-	};
-};
-
-/**
- * One manifest version with its diff against the version before it.
- * @param {ConsoleApi} api
- * @param {string} appId
- * @param {string} version
- */
-export const loadVersion = async (api, appId, version) => {
-	if (!/^\d{1,9}$/.test(version))
-		return /** @type {LoadFailure} */ ({
-			ok: false,
-			status: 404,
-			problem: { status: 404, title: 'Not found', detail: 'No such version.' },
-		});
-	const [app, detail] = await Promise.all([api.get(paths.app(appId)), api.get(paths.version(appId, version))]);
-	const failed = firstFailure(app, detail);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		app: /** @type {any} */ (app.ok ? app.data : null),
-		version: /** @type {any} */ (detail.ok ? detail.data : null),
-	};
-};
-
-/**
- * The current accepted manifest of an app (null when it has none yet).
+ * The current manifest of an app (null when it has none yet).
  * @param {ConsoleApi} api
  * @param {any} app
  */
@@ -299,6 +214,19 @@ const currentManifest = async (api, app) => {
 	if (!app?.currentVersion) return null;
 	const version = await api.get(paths.version(app.appId, app.currentVersion));
 	return version.ok ? /** @type {any} */ (version.data.manifest ?? null) : null;
+};
+
+/**
+ * App detail: the app and its current manifest (which elements take widgets).
+ * @param {ConsoleApi} api
+ * @param {string} appId
+ */
+export const loadApp = async (api, appId) => {
+	const app = await api.get(paths.app(appId));
+	const failed = firstFailure(app);
+	if (failed) return failed;
+	const data = /** @type {any} */ (app.ok ? app.data : null);
+	return { ok: /** @type {const} */ (true), app: data, manifest: await currentManifest(api, data) };
 };
 
 /**
@@ -391,39 +319,8 @@ export const loadLedger = async (api, merchantId) => {
 	};
 };
 
-const DELIVERY_STATUSES = Object.freeze(['pending', 'retrying', 'delivered', 'dead']);
-
-/**
- * Integration: metrics and dead letters (all, or for a website/app), the delivery log for a website or app.
- * @param {ConsoleApi} api
- * @param {{ websiteId?: string, appId?: string, status?: string }} [filter]
- */
-export const loadIntegration = async (api, filter = {}) => {
-	const websiteId = pick(filter.websiteId, ID.website);
-	const appId = pick(filter.appId, ID.app);
-	const status = oneOf(filter.status, DELIVERY_STATUSES);
-	const scope = { websiteId, appId };
-	const [metrics, deadLetters, deliveries, apps] = await Promise.all([
-		api.get(paths.metrics(scope)),
-		api.get(paths.deadLetters(scope)),
-		websiteId || appId ? api.get(paths.deliveries({ ...scope, status })) : Promise.resolve(null),
-		api.get(paths.apps({ limit: 100 })),
-	]);
-	const failed = firstFailure(metrics, deadLetters);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		filter: { websiteId, appId, status },
-		metrics: /** @type {any} */ (metrics.ok ? metrics.data : null),
-		deadLetters: pageOf(deadLetters),
-		deliveries: deliveries ? pageOf(deliveries) : null,
-		deliveriesProblem: deliveries && !deliveries.ok ? deliveries.problem : null,
-		apps: itemsOf(apps),
-	};
-};
-
-export const CONNECTOR_KINDS = Object.freeze(['database', 'storage', 'ai', 'messaging', 'payments', 'analytics']);
-export const CONNECTOR_STATUSES = Object.freeze(['connected', 'missing', 'failing', 'revoked']);
+export const CONNECTOR_KINDS = Object.freeze(['database', 'storage', 'ai', 'messaging', 'payments']);
+export const CONNECTOR_STATUSES = Object.freeze(['connected', 'missing', 'failing']);
 
 /**
  * Connector status list (never secrets: the staff view carries status and check reports only).
@@ -440,18 +337,16 @@ export const loadConnectors = async (api, filter = {}) => {
 	return { ok: /** @type {const} */ (true), filter: { merchantId, kind, status }, page: pageOf(list) };
 };
 
-const SCOPE = /^(global|merchant:mer_[0-9a-z]{10,64})$/;
 const AUDIT_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 const ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(\.\*)?$/;
 
 /**
- * Audit log: newest-first entries filtered by scope, actor, target or action (`credits.*` matches a prefix).
+ * Audit log: newest-first entries filtered by actor, target or action (`credits.*` matches a prefix).
  * @param {ConsoleApi} api
- * @param {{ scope?: string, actorId?: string, targetId?: string, action?: string }} [filter]
+ * @param {{ actorId?: string, targetId?: string, action?: string }} [filter]
  */
 export const loadAudit = async (api, filter = {}) => {
 	const f = {
-		scope: pick(filter.scope, SCOPE),
 		actorId: pick(filter.actorId, AUDIT_ID),
 		targetId: pick(filter.targetId, AUDIT_ID),
 		action: pick(filter.action, ACTION),
@@ -463,8 +358,7 @@ export const loadAudit = async (api, filter = {}) => {
 };
 
 /**
- * Portal settings (needs `platform.settings.write`): the Portal URL (the request's origin), the preview URL, the
- * mailer and the key ids.
+ * Portal settings (needs `platform.settings.write`): the Portal URL (the request's origin) and the mailer.
  * @param {ConsoleApi} api
  * @param {any} staff the signed-in staff member
  */
@@ -498,24 +392,4 @@ export const loadSubscriptionLookup = async (api, filter = {}) => {
 	const overview = await api.get(paths.adminConfig(id));
 	if (!overview.ok && overview.status !== 404) return /** @type {LoadFailure} */ (firstFailure(overview));
 	return { ok: /** @type {const} */ (true), id, invalid: false, found: overview.ok ? overview.data : null };
-};
-
-/**
- * Impersonation state of a merchant session (for the merchant console banner): the staff member behind it and
- * when it ends, read from `GET /v1/system/whoami` (`actor.via`, `session.expiresAt`). Null for ordinary sessions.
- * @param {ConsoleApi} api
- * @returns {Promise<{ staffId: string, staffName: string | null, expiresAt: string | null } | null>}
- */
-export const loadImpersonation = async (api) => {
-	const who = await api.get(paths.whoami());
-	if (!who.ok) return null;
-	const data = /** @type {any} */ (who.data);
-	const via = data?.actor?.via;
-	if (data?.authMode !== 'merchant' || !via || typeof via.id !== 'string') return null;
-	const expiresAt = data.session?.expiresAt;
-	return {
-		staffId: via.id,
-		staffName: typeof via.name === 'string' ? via.name : null,
-		expiresAt: typeof expiresAt === 'string' ? expiresAt : expiresAt ? new Date(expiresAt).toISOString() : null,
-	};
 };

@@ -5,15 +5,11 @@ import { compile } from '@ss/rules';
 import { buildRuntimeSource, OUTPUT } from '../../../scripts/build-delivery-runtime.js';
 import { bundleData, versionedLoader } from '../../../src/modules/delivery/core/compile.js';
 import {
-	STUB_PROTOCOL,
 	adaptHeadless,
 	adaptRenderer,
 	adoptStyles,
-	pageContext,
 	start,
-	stubDefinition,
 	unavailableClient,
-	viewFields,
 } from '../../../src/modules/delivery/runtime/entry.js';
 import { RUNTIME_AUDIENCE, RUNTIME_CORE } from '../../../src/modules/delivery/runtime/generated.js';
 import { PACK, PACK_FILES } from './fixtures.js';
@@ -72,31 +68,40 @@ const data = (extra = {}) => ({
 	...extra,
 });
 
-/** Fake element API (service stub) and events endpoint. */
+/** Fake product API (service widgets) and events endpoint. */
 const fakeFetch = () => {
 	/** @type {Array<{ url: string, init: any }>} */
 	const calls = [];
-	let n = 0;
 	/** @type {any} */
 	const fetch = async (/** @type {string} */ url, /** @type {any} */ init = {}) => {
 		calls.push({ url, init });
-		n += 1;
-		const view =
-			n === 1
-				? {
-						title: 'Need help?',
-						body: 'We reply in minutes',
-						items: [{ text: 'FAQ', href: 'https://chat.example.net/faq' }],
-						actions: [
-							{ action: 'open', label: 'Chat now' },
-							{ action: 'Bad!', label: 'x' },
-						],
-					}
-				: { title: 'Connected' };
-		return new Response(JSON.stringify(view), { status: 200, headers: { 'content-type': 'application/json' } });
+		return new Response(JSON.stringify({ greeting: 'Need help?' }), {
+			status: 200,
+			headers: { 'content-type': 'application/json' },
+		});
 	};
 	return { fetch, calls };
 };
+
+/** A service widget: its headless core loads a greeting through the element API client bound to the product. */
+const WIDGET_FILES = /** @type {Record<string, string>} */ ({
+	'headless/launcher.js': [
+		'export const createLauncher = ({ client }) => {',
+		"\tlet state = { greeting: '' };",
+		'\tconst listeners = new Set();',
+		"\tclient.get('/v1/launcher').then((r) => { state = { greeting: r.ok ? r.value.greeting : r.error.code }; for (const fn of listeners) fn(state); });",
+		'\treturn { state: () => state, subscribe: (fn) => { listeners.add(fn); return () => listeners.delete(fn); }, actions: {} };',
+		'};',
+	].join('\n'),
+	'ui/launcher.js': [
+		'export const render = ({ state, dom }) => {',
+		"\tconst el = dom.createElement('p');",
+		"\tel.className = 'ss-launcher';",
+		'\tel.textContent = state.greeting;',
+		'\treturn el;',
+		'};',
+	].join('\n'),
+});
 
 describe('generated runtime', () => {
 	it('is up to date with entry.js and @ss/web (rebuild: node platform/scripts/build-delivery-runtime.js)', async () => {
@@ -179,141 +184,34 @@ describe('start(): mounting compiled elements', () => {
 		expect(errors).toHaveLength(1);
 	});
 
-	it('the element stub renders the product view model and invokes actions over the element API', async () => {
+	it('service widgets: real modules with an element API client bound to the product and the website key', async () => {
 		const { window } = page();
-		// the Loader's safe `h` builds nodes in the global document (the page's own document in a browser)
-		vi.stubGlobal('document', window.document);
 		const { fetch, calls } = fakeFetch();
-		const instance = start(
-			/** @type {any} */ (
-				data({
-					elements: [{ key: 'launcher', stub: STUB_PROTOCOL, api: 'https://chat.example.net', config: {}, strings: {} }],
-				})
-			),
-			{ window, fetch, storage: null },
-		);
-		await settled(instance);
-		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Need help?'));
-		// v2: the page context travels as ?ctx= (path; item id / page type from data-ss-* attributes)
-		const first = new URL(String(calls[0]?.url));
-		expect(`${first.origin}${first.pathname}`).toBe('https://chat.example.net/v1/elements/launcher/view');
-		expect(JSON.parse(String(first.searchParams.get('ctx')))).toEqual({ path: '/collections/sale' });
-		expect(calls[0]?.init.headers.authorization ?? calls[0]?.init.headers.Authorization).toBe('Bearer pk_live_test');
-		expect(window.document.querySelector('.ss-el__body')?.textContent).toBe('We reply in minutes');
-		expect(window.document.querySelector('.ss-el__items a')?.getAttribute('href')).toBe('https://chat.example.net/faq');
-		const buttons = window.document.querySelectorAll('.ss-el__action');
-		expect(buttons).toHaveLength(1); // invalid action names are dropped
-		/** @type {any} */ (buttons[0]).click();
-		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Connected'));
-		expect(String(calls[1]?.url).split('?')[0]).toBe('https://chat.example.net/v1/elements/launcher/actions/open');
-		expect(calls[1]?.init.method).toBe('POST');
-		expect(await window.SS.elements.get('launcher').actions.invoke('Bad!')).toMatchObject({ ok: false });
-		instance.destroy();
-		vi.unstubAllGlobals();
-	});
-
-	it('stub v2: page context from data-ss-* attributes, input fields posted with actions; v1 data stays compatible', async () => {
-		const { window } = new JSDOM(
-			'<!doctype html><html data-ss-page-type="product"><head></head><body><article data-ss-item-id="sku-9"><main id="main"></main></article></body></html>',
-			{ url: 'https://shop.example.com/p/sku-9', runScripts: 'outside-only', pretendToBeVisual: true },
-		);
-		vi.stubGlobal('document', window.document);
-		/** @type {Array<{ url: string, init: any }>} */
-		const calls = [];
-		/** @type {any} */
-		const fetch = async (/** @type {string} */ url, /** @type {any} */ init = {}) => {
-			calls.push({ url, init });
-			const view =
-				calls.length === 1
-					? {
-							title: 'Notify me',
-							fields: [
-								{ name: 'email', type: 'email', label: 'E-mail', required: true },
-								{
-									name: 'size',
-									type: 'select',
-									label: 'Size',
-									options: [{ value: 's', label: 'Small' }, { value: 'm' }],
-								},
-								{ name: 'agree', type: 'checkbox', label: 'Agree' },
-								{ name: 'qty', type: 'number', label: 'Qty' },
-								{ name: 'Bad Name', type: 'text', label: 'x' },
-								{ name: 'html', type: 'html', label: 'x' },
-							],
-							actions: [{ action: 'subscribe', label: 'Notify me' }],
-						}
-					: { title: 'Done' };
-			return new Response(JSON.stringify(view), { status: 200, headers: { 'content-type': 'application/json' } });
+		const base = `${PACK_BASE}app_1123456789abcdefghjkmnpq/2/`;
+		const spec = {
+			key: 'launcher',
+			product: 'chat-box',
+			config: {},
+			strings: {},
+			placement: { selectors: [{ selector: '#main', position: 'append' }] },
+			headless: { path: 'packs/app_1123456789abcdefghjkmnpq/2/headless/launcher.js', name: 'createLauncher' },
+			renderer: { path: 'packs/app_1123456789abcdefghjkmnpq/2/ui/launcher.js', name: 'render' },
+			api: 'https://chat.example.net',
 		};
-		const spec = { key: 'notify', stub: STUB_PROTOCOL, api: 'https://alerts.example.net', config: {}, strings: {} };
-		const instance = start(
-			/** @type {any} */ (data({ elements: [{ ...spec, placement: { selectors: [{ selector: '#main' }] } }] })),
-			{ window, fetch, storage: null },
-		);
-		await settled(instance);
-		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Notify me'));
-		const ctx = JSON.parse(String(new URL(String(calls[0]?.url)).searchParams.get('ctx')));
-		expect(ctx).toEqual({ path: '/p/sku-9', itemId: 'sku-9', pageType: 'product' });
-		const inputs = window.document.querySelectorAll('.ss-el__input');
-		expect([...inputs].map((/** @type {any} */ el) => el.getAttribute('name'))).toEqual(['email', 'size', 'agree', 'qty']);
-		expect(window.document.querySelectorAll('.ss-el__input option')).toHaveLength(2);
-		const email = /** @type {any} */ (window.document.querySelector('input[name="email"]'));
-		// a required field left empty blocks the action
-		/** @type {any} */ (window.document.querySelector('.ss-el__action')).click();
-		await new Promise((r) => setTimeout(r, 20));
-		expect(calls).toHaveLength(1);
-		email.value = 'a@b.test';
-		/** @type {any} */ (window.document.querySelector('input[name="agree"]')).checked = true;
-		/** @type {any} */ (window.document.querySelector('input[name="qty"]')).value = '2';
-		/** @type {any} */ (window.document.querySelector('.ss-el__action')).click();
-		await vi.waitFor(() => expect(window.document.querySelector('.ss-el__title')?.textContent).toBe('Done'));
-		expect(String(calls[1]?.url).split('?')[0]).toBe('https://alerts.example.net/v1/elements/notify/actions/subscribe');
-		expect(JSON.parse(calls[1]?.init.body)).toEqual({ fields: { email: 'a@b.test', size: 's', agree: true, qty: 2 } });
-		instance.destroy();
-
-		// v1 bundles: no ctx, same view model
-		calls.length = 0;
-		const v1 = start(/** @type {any} */ (data({ elements: [{ ...spec, stub: 'ss-element-stub@1' }] })), {
+		const importWidget = async (/** @type {string} */ url) =>
+			import(`data:text/javascript;base64,${Buffer.from(WIDGET_FILES[url.slice(base.length)] ?? '').toString('base64')}`);
+		const instance = start(/** @type {any} */ (data({ elements: [spec] })), {
 			window,
+			importModule: importWidget,
 			fetch,
 			storage: null,
 		});
-		await settled(v1);
-		await vi.waitFor(() => expect(calls.length).toBeGreaterThan(0));
-		expect(calls[0]?.url).toBe('https://alerts.example.net/v1/elements/notify/view');
-		v1.destroy();
-		vi.unstubAllGlobals();
-	});
-
-	it('the page context falls back to <meta> and the placement target; view fields are sanitised', () => {
-		const { window } = new JSDOM(
-			'<!doctype html><html><head><meta name="ss:item-id" content="it-1"></head><body><div id="t" data-ss-page-type="cart"></div></body></html>',
-			{ url: 'https://shop.example.com/cart' },
-		);
-		expect(pageContext(window, 'x', { selectors: [{ selector: '#t' }, { selector: '##bad' }] })).toEqual({
-			path: '/cart',
-			itemId: 'it-1',
-			pageType: 'cart',
-		});
-		expect(pageContext(null, 'x', undefined)).toEqual({ path: '/' });
-		expect(viewFields('nope')).toEqual([]);
-		expect(viewFields(Array.from({ length: 30 }, (_, i) => ({ name: `f${i}`, type: 'text', label: 'L' })))).toHaveLength(20);
-		expect(viewFields([{ name: 'a', type: 'select', options: [{ value: 1 }, { label: 'no value' }] }])).toEqual([
-			{ name: 'a', type: 'select', label: 'a', required: false, options: [{ value: '1', label: '1' }] },
-		]);
-	});
-
-	it('the stub reports a missing element API', async () => {
-		const definition = stubDefinition('launcher');
-		/** @type {any} */
-		let state = {};
-		const created = definition.create({
-			store: { setState: (/** @type {any} */ s) => (state = { ...state, ...s }) },
-			client: null,
-			emit: () => true,
-		});
-		await vi.waitFor(() => expect(state.status).toBe('error'));
-		expect(await created.actions.invoke('open')).toMatchObject({ ok: false });
+		await settled(instance);
+		await vi.waitFor(() => expect(window.document.querySelector('#main .ss-launcher')?.textContent).toBe('Need help?'));
+		const call = calls.find((c) => String(c.url).startsWith('https://chat.example.net/'));
+		expect(String(call?.url)).toBe('https://chat.example.net/v1/launcher');
+		expect(new Headers(call?.init.headers).get('authorization')).toBe('Bearer pk_live_test');
+		instance.destroy();
 	});
 });
 
@@ -326,8 +224,8 @@ describe('the compiled loader in a page', () => {
 				...data().elements[0],
 				compiledPlacement: { audience: program },
 				kind: 'pack',
-				delivery: 'pack',
 				moduleVersion: 1,
+				reads: {},
 				appId: PACK,
 				manifestVersion: 1,
 				headless: { path: 'headless/bar.js', name: 'createBar' },

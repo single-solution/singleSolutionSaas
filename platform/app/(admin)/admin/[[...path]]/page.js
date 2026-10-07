@@ -14,7 +14,6 @@ import Audit, { metadata as AuditMeta } from '../_views/audit.js';
 import Connectors, { metadata as ConnectorsMeta } from '../_views/connectors.js';
 import Finance, { metadata as FinanceMeta } from '../_views/finance.js';
 import ForgotPassword, { metadata as ForgotPasswordMeta } from '../_views/forgot-password.js';
-import Integration, { metadata as IntegrationMeta } from '../_views/integration.js';
 import Login, { metadata as LoginMeta } from '../_views/login.js';
 import Merchants, { metadata as MerchantsMeta } from '../_views/merchants.js';
 import Settings, { metadata as SettingsMeta } from '../_views/settings.js';
@@ -28,20 +27,18 @@ import SubscriptionsSubscriptionId, {
 	metadata as SubscriptionsSubscriptionIdMeta,
 } from '../_views/subscriptions-subscriptionId.js';
 import AppsAppIdPolicies, { metadata as AppsAppIdPoliciesMeta } from '../_views/apps-appId-policies.js';
-import AppsAppIdVersionsVersion, { metadata as AppsAppIdVersionsVersionMeta } from '../_views/apps-appId-versions-version.js';
 
 export const dynamic = 'force-dynamic';
 
 /** Path patterns under /admin (`:name` captures a segment into `params`), views, metadata and whether they need a session. */
 const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Metadata, boolean]>} */ ([
-	[[], Home, HomeMeta, true],
+	[[], Home, HomeMeta, false],
 	[['account'], Account, AccountMeta, true],
 	[['apps'], Apps, AppsMeta, true],
 	[['audit'], Audit, AuditMeta, true],
 	[['connectors'], Connectors, ConnectorsMeta, true],
 	[['finance'], Finance, FinanceMeta, true],
 	[['forgot-password'], ForgotPassword, ForgotPasswordMeta, false],
-	[['integration'], Integration, IntegrationMeta, true],
 	[['login'], Login, LoginMeta, false],
 	[['merchants'], Merchants, MerchantsMeta, true],
 	[['settings'], Settings, SettingsMeta, true],
@@ -53,7 +50,6 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, true],
 	[['subscriptions', ':subscriptionId'], SubscriptionsSubscriptionId, SubscriptionsSubscriptionIdMeta, true],
 	[['apps', ':appId', 'policies'], AppsAppIdPolicies, AppsAppIdPoliciesMeta, true],
-	[['apps', ':appId', 'versions', ':version'], AppsAppIdVersionsVersion, AppsAppIdVersionsVersionMeta, true],
 ]);
 
 /**

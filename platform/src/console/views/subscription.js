@@ -1,7 +1,7 @@
 'use client';
 /**
  * Subscription detail: elements as switches with their prices, configuration (SchemaForm, history, rollback,
- * preview diff), plan change, schedules, experiments, pause/resume/cancel and "Open in product".
+ * preview diff), plan change, pause/resume/cancel and "Open in product".
  * @module
  */
 import { useState } from 'react';
@@ -33,7 +33,7 @@ import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
 import { PageProblem } from './common.js';
-import { ConfigurePanel, ExperimentsPanel, SchedulesPanel, diffLine } from './configure.js';
+import { ConfigurePanel, diffLine } from './configure.js';
 import { TextsPanel } from './texts.js';
 import { PlanComparison } from './products.js';
 
@@ -43,7 +43,6 @@ import { PlanComparison } from './products.js';
 const OFF_REASONS = /** @type {Record<string, string>} */ ({
 	resource_missing: 'Waiting for a connected resource',
 	dependency: 'Needs another element switched on',
-	rollout: 'Not yet rolled out to this website',
 	paused: 'Subscription paused',
 	suspended: 'Suspended',
 	spend_cap: 'Spend cap reached',
@@ -93,8 +92,6 @@ export function SubscriptionView(props) {
 	const [overview, setOverview] = useState(props.ok ? props.overview : null);
 	const [effective, setEffective] = useState(props.ok ? props.effective : null);
 	const [history, setHistory] = useState(props.ok ? props.history : { items: [], nextCursor: null });
-	const [schedules, setSchedules] = useState(props.ok ? props.schedules : []);
-	const [experiments, setExperiments] = useState(props.ok ? props.experiments : []);
 	const [tab, setTab] = useState('elements');
 	const [pending, setPending] = useState(/** @type {string | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
@@ -116,15 +113,6 @@ export function SubscriptionView(props) {
 		if (o.ok) setOverview(o.data);
 		if (p.ok) setEffective(p.data.preview ?? null);
 		if (h.ok) setHistory(h.data);
-	};
-	const refreshSchedules = async () => {
-		const r = await apiFetch(`${configPath}/schedules`);
-		if (r.ok) setSchedules(r.data.items ?? []);
-	};
-	const refreshExperiments = async () => {
-		const r = await apiFetch(`${configPath}/experiments`);
-		if (r.ok) setExperiments(r.data.items ?? []);
-		await refreshConfig();
 	};
 
 	/** @param {string} key @param {boolean} enabled */
@@ -480,7 +468,7 @@ export function SubscriptionView(props) {
 			{(sub.holds ?? []).length > 0 && sub.status !== 'cancelled' ? (
 				<Callout tone="warning" title="Not running">
 					{(sub.holds ?? []).map((/** @type {string} */ h) => OFF_REASONS[h] ?? humanize(h)).join(' · ')}.
-					{(sub.holds ?? []).includes('spend_cap') ? ' Raise the cap in Spend policies to resume.' : ''}
+					{(sub.holds ?? []).includes('spend_cap') ? ' Raise the spend cap to resume.' : ''}
 				</Callout>
 			) : null}
 			{props.configProblem ? <Callout tone="warning">{describeProblem(props.configProblem)}</Callout> : null}
@@ -525,34 +513,6 @@ export function SubscriptionView(props) {
 						content: <TextsPanel merchantId={merchantId} website={website} product={product} readOnly={!live} />,
 					},
 					{ id: 'plan', label: 'Plan', content: planPanel },
-					{
-						id: 'schedules',
-						label: 'Schedules',
-						content: (
-							<SchedulesPanel
-								merchantId={merchantId}
-								website={website}
-								subscription={sub}
-								product={product}
-								schedules={schedules}
-								onChanged={refreshSchedules}
-							/>
-						),
-					},
-					{
-						id: 'experiments',
-						label: 'Experiments',
-						content: (
-							<ExperimentsPanel
-								merchantId={merchantId}
-								website={website}
-								subscription={sub}
-								product={product}
-								experiments={experiments}
-								onChanged={refreshExperiments}
-							/>
-						),
-					},
 					{ id: 'history', label: 'History', content: historyPanel },
 				]}
 			/>

@@ -80,9 +80,7 @@ export const descriptorOf = (kind, provider, c) => {
 				...(c.authHeader ? { authHeader: c.authHeader } : {}),
 				...(c.headers && Object.keys(c.headers).length > 0 ? { headers: { ...c.headers } } : {}),
 			};
-		case 'payments':
-			return { provider, credentials: { ...c } };
 		default:
-			return { provider, ids: { ...c.ids } };
+			return { provider, credentials: { ...c } };
 	}
 };

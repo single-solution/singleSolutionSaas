@@ -70,9 +70,7 @@ export const previewOf = (kind, provider, c) => {
 						from: c.from ?? null,
 					}
 				: { baseUrl: safeUrl(c.baseUrl), apiKey: maskSecret(c.apiKey) };
-		case 'payments':
-			return { fields: Object.keys(c).sort() };
 		default:
-			return { ids: Object.fromEntries(Object.entries(c.ids ?? {}).map(([name, value]) => [name, maskSecret(value)])) };
+			return { fields: Object.keys(c).sort() };
 	}
 };

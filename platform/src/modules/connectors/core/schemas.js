@@ -116,20 +116,6 @@ const SCHEMAS = {
 		propertyNames: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$' },
 		additionalProperties: { type: 'string', minLength: 1, maxLength: 4096 },
 	},
-	analytics: {
-		type: 'object',
-		additionalProperties: false,
-		required: ['ids'],
-		properties: {
-			ids: {
-				type: 'object',
-				minProperties: 1,
-				maxProperties: 20,
-				propertyNames: { type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_]{0,63}$' },
-				additionalProperties: { type: 'string', minLength: 1, maxLength: 256, pattern: TOKEN },
-			},
-		},
-	},
 };
 
 /** @type {import('@ss/contracts').Validator | null} */

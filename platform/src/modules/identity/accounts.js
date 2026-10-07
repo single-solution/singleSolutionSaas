@@ -636,41 +636,10 @@ export const createAccounts = (deps) => {
 				sessionId: s.id,
 				current: s.id === session.id,
 				mfa: s.mfa,
-				...(s.api ? { api: true } : {}),
 				createdAt: iso(s.createdAt),
 				lastSeenAt: iso(s.lastSeenAt),
 				expiresAt: iso(s.expiresAt),
 			})),
-
-		/**
-		 * A staff API token (F.18): a staff session used as `Authorization: Bearer sst_…` by tooling (`ss pack publish`),
-		 * with the staff member's roles, MFA satisfied by the creating session, ≤ 12 h, listed and revocable like any
-		 * session. A token cannot create another token.
-		 * @param {Session} session
-		 * @param {{ minutes: number, label?: string }} input
-		 * @param {Meta} meta
-		 */
-		createApiToken: async (session, { minutes, label }, meta) => {
-			if (session.kind !== 'staff') throw problem('forbidden', 'Only staff create API tokens.');
-			if (session.api) throw problem('forbidden', 'An API token cannot create another token.');
-			const { token, session: created } = await ctx.sessions.create({
-				kind: 'staff',
-				subject: session.subject,
-				roles: session.roles,
-				mfa: true,
-				api: true,
-				absoluteMs: minutes * 60_000,
-				ip: meta.ip ?? null,
-				userAgent: label ? `api-token: ${label}` : 'api-token',
-			});
-			await audit(
-				{ type: 'staff', id: session.subject },
-				'staff.api_token_created',
-				{ type: 'staff', id: session.subject },
-				{ after: { sessionId: created.id, minutes, label: label ?? null }, meta },
-			);
-			return { token: `sst_${token}`, sessionId: created.id, expiresAt: iso(created.absoluteExpiresAt) };
-		},
 
 		/**
 		 * @param {Session} session

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { defineCollection } from '../src/infra/db.js';
 import { composeModules, defineModule, moduleProblems } from '../src/infra/modules.js';
 import { modules } from '../src/modules/index.js';
-import { buildInfo, validateNotice } from '../src/modules/system/core/info.js';
 import { createTestLogger } from './helpers.js';
 
 const shared = () => /** @type {any} */ ({ logger: createTestLogger().logger, now: () => 0 });
@@ -95,40 +94,5 @@ describe('composeModules', () => {
 
 	it('the registry lists the system module', () => {
 		expect(modules.map((m) => m.name)).toContain('system');
-	});
-});
-
-describe('system core', () => {
-	it('builds public info', () => {
-		expect(
-			buildInfo({ portalUrl: 'https://p.test', version: '1', env: 'test', modules: ['b', 'a'], notice: null, now: 0 }),
-		).toEqual({
-			name: 'Single Solution Portal',
-			version: '1',
-			environment: 'test',
-			portalUrl: 'https://p.test',
-			jwksUrl: 'https://p.test/.well-known/jwks.json',
-			apiVersion: 'v1',
-			modules: ['a', 'b'],
-			notice: null,
-			time: '1970-01-01T00:00:00.000Z',
-		});
-	});
-
-	it('validates notices', () => {
-		expect(validateNotice({ notice: { text: ' Maintenance at 02:00 ', level: 'warning' } })).toEqual({
-			ok: true,
-			value: { text: 'Maintenance at 02:00', level: 'warning' },
-		});
-		expect(validateNotice({ notice: null })).toEqual({ ok: true, value: null });
-		expect(validateNotice(null).ok).toBe(false);
-		expect(validateNotice({ notice: null, extra: 1 })).toEqual({
-			ok: false,
-			errors: [{ path: '/extra', message: 'unknown property' }],
-		});
-		expect(validateNotice({ notice: 'x' }).ok).toBe(false);
-		expect(validateNotice({}).ok).toBe(false);
-		const bad = validateNotice({ notice: { text: '', level: 'loud', x: 1 } });
-		expect(bad.ok ? [] : bad.errors.map((e) => e.path)).toEqual(['/notice/x', '/notice/text', '/notice/level']);
 	});
 });

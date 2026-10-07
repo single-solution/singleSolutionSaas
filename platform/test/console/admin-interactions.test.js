@@ -2,19 +2,20 @@
 /**
  * Admin Console in the browser (jsdom): the views are rendered client-side against a live in-process Portal —
  * `fetch` is routed to `portal.handle` with a cookie jar, as a same-origin browser would — and driven through
- * their forms and dialogs: staff sign-in with TOTP enrolment and verification, suspend / resume, impersonation,
- * website transfer, app registration and pack upload, lifecycle, version review, key revocation, admin overrides
- * and locks, platform policies and rollback, credit operations and chain verification, settlement and
- * reconciliation, replay, audit verification and staff management.
+ * their forms and dialogs: staff sign-in with TOTP enrolment and verification, suspend / resume, staff notes,
+ * website transfer, product connect and pack folder upload, the Active / Inactive switch, the admin launch, admin
+ * overrides and locks, platform policies and rollback, credit operations and ledger verification, audit search and
+ * staff management.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
+import { createHash } from 'node:crypto';
+import { Blob as NodeBlob } from 'node:buffer';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/infra/db.js';
+import { createSystemStore } from '../../src/infra/system.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
-import { BUNDLE_FORMAT } from '../../src/modules/catalog/core/bundle.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi, adminRoutes } from '../../src/console/admin/paths.js';
@@ -27,16 +28,14 @@ import {
 	StaffResetPasswordView,
 } from '../../src/console/admin/views/auth.js';
 import { AccountView } from '../../src/console/admin/views/account.js';
-import { DashboardView } from '../../src/console/admin/views/dashboard.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { WebsitesView } from '../../src/console/admin/views/websites.js';
-import { AppView, AppsView, VersionView } from '../../src/console/admin/views/apps.js';
+import { AppView, AppsView } from '../../src/console/admin/views/apps.js';
 import { PoliciesView, SubscriptionAdminView } from '../../src/console/admin/views/config.js';
 import { FinanceView, LedgerView } from '../../src/console/admin/views/finance.js';
-import { IntegrationView } from '../../src/console/admin/views/integration.js';
 import { AuditView, ConnectorsAdminView } from '../../src/console/admin/views/operations.js';
 import { StaffView } from '../../src/console/admin/views/staff.js';
-import { ImpersonationBanner } from '../../src/console/admin/views/impersonation.js';
+import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { IdChip } from '../../src/console/admin/views/common.js';
 import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
@@ -116,6 +115,18 @@ const fillDialog = (label, value) =>
 /** @param {string} snippet */
 const shows = (snippet) => document.body.textContent?.replace(/\s+/g, ' ').includes(snippet) ?? false;
 
+/**
+ * Pick a folder in the open pack dialog's folder input.
+ * @param {unknown[]} files
+ */
+const pickFolder = async (files) => {
+	const input = /** @type {HTMLInputElement} */ (document.querySelector('[role="dialog"] input[type="file"]'));
+	Object.defineProperty(input, 'files', { value: files, configurable: true });
+	await act(async () => {
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+	});
+};
+
 /** Typed confirmation input of the open dialog. */
 const confirmInput = () => {
 	const label = [...document.querySelectorAll('label')].find((l) => /^Type .* to confirm/.test(l.textContent ?? ''));
@@ -185,7 +196,6 @@ const manifest = (/** @type {{ version?: string, hourly?: number }} */ { version
 			name: 'Notice bar',
 			modes: ['A', 'B'],
 			price: { hourly },
-			budget: { js: 3 },
 			placement: true,
 			headless: 'headless/bar.js#createBar',
 			renderer: 'ui/bar.js#render',
@@ -211,7 +221,6 @@ const manifest = (/** @type {{ version?: string, hourly?: number }} */ { version
 			name: 'Trust badge',
 			modes: ['A', 'B'],
 			price: { hourly: 500 },
-			budget: { js: 2 },
 			placement: true,
 			headless: 'headless/badge.js#createBadge',
 			renderer: 'ui/badge.js#render',
@@ -221,17 +230,37 @@ const manifest = (/** @type {{ version?: string, hourly?: number }} */ { version
 	priceBook: { version: '1', effectiveFrom: '2026-01-01T00:00:00.000Z' },
 });
 
+/** @param {string} version asset files of a build (their content changes with the version) */
+const assetsOf = (version) => ({
+	'headless/bar.js': `export const createBar = () => ({ v: '${version}' });`,
+	'ui/bar.js': `export const render = () => '${version}';`,
+	'headless/badge.js': `export const createBadge = () => ({ v: '${version}' });`,
+	'ui/badge.js': `export const render = () => 'badge ${version}';`,
+});
+
 /** @param {any} m */
 const descriptorOf = (m) => ({
-	format: BUNDLE_FORMAT,
+	format: 'ss-pack-bundle@1',
 	manifest: m,
-	assets: [
-		{ path: 'headless/bar.js', sha256: 'a'.repeat(64), size: 1200, contentType: 'text/javascript' },
-		{ path: 'ui/bar.js', sha256: 'b'.repeat(64), size: 2400, contentType: 'text/javascript' },
-		{ path: 'headless/badge.js', sha256: 'c'.repeat(64), size: 900, contentType: 'text/javascript' },
-		{ path: 'ui/badge.js', sha256: 'd'.repeat(64), size: 1000, contentType: 'text/javascript' },
-	],
+	assets: Object.entries(assetsOf(m.product.version)).map(([path, body]) => ({
+		path,
+		sha256: createHash('sha256').update(body).digest('hex'),
+		size: Buffer.byteLength(body),
+		contentType: 'text/javascript',
+	})),
 });
+
+/**
+ * The folder `ss pack build` writes, as picked files (Node Blobs carrying `webkitRelativePath`).
+ * @param {any} m
+ */
+const folderOf = (m) =>
+	Object.entries({ 'descriptor.json': JSON.stringify(descriptorOf(m)), ...assetsOf(m.product.version) }).map(([path, body]) =>
+		Object.assign(new NodeBlob([body], { type: path.endsWith('.json') ? 'application/json' : 'text/javascript' }), {
+			name: path.split('/').at(-1),
+			webkitRelativePath: `pack/${path}`,
+		}),
+	);
 
 describe('admin console interactions (jsdom)', () => {
 	it('drives every admin page against a live Portal', async () => {
@@ -240,8 +269,9 @@ describe('admin console interactions (jsdom)', () => {
 		const mailer = { available: true, send: async (/** @type {any} */ m) => void mail.push(m) };
 		const modules = defaultModules.map((m) => (m.name === 'identity' ? createIdentityModule({ mailer }) : m));
 		const portal = createPortal({
-			config: await testConfig(),
+			config: await testConfig({ STORAGE_DIR: ':memory:' }),
 			db: mongo.db('admin_ui'),
+			system: createSystemStore(mongo.db('admin_ui')),
 			modules,
 			logger: createTestLogger().logger,
 		});
@@ -377,15 +407,27 @@ describe('admin console interactions (jsdom)', () => {
 		const merchantId = owner.merchantId;
 		const site = await owner.b.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
 		const websiteId = site.ok ? site.data.website.websiteId : '';
-		const key = await generateSigningKey({ kid: 'pack-1' });
-		const d1 = descriptorOf(manifest());
-		const up = await staff.api.post(adminApi.packs(), {
-			descriptor: d1,
-			signature: await signBundle({ signer: createSigner(key.privateJwk), descriptor: d1 }),
-			publicJwk: key.publicJwk,
+		// the pack: its folder uploaded through the Apps page ("Add pack"), then activated with the switch
+		render(<AppsView {...await admin.loadApps(staff.api, {})} staff={me} />);
+		await press('Add pack');
+		await pickFolder(folderOf(manifest()));
+		await press('Upload');
+		await until(() => shows('Uploaded'));
+		const posted = staff.calls.find((c) => c.path === adminApi.packs() && c.status < 300)?.body;
+		const appId = String(posted?.appId);
+		expect(staff.calls.filter((c) => c.method === 'PUT' && c.path.startsWith(posted.uploadPath))).toHaveLength(4);
+		cleanup();
+		render(
+			<ToastProvider>
+				<AppView {...await admin.loadApp(staff.api, appId)} staff={me} />
+			</ToastProvider>,
+		);
+		await until(() => shows('Upload pack version'));
+		await act(async () => {
+			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
 		});
-		const appId = up.ok ? up.data.app.appId : '';
-		await staff.api.post(adminApi.lifecycle(appId), { action: 'activate' });
+		await until(() => staff.calls.some((c) => c.path === adminApi.status(appId) && c.status === 200));
+		cleanup();
 		await staff.api.post(adminApi.credit(merchantId, 'credits'), {
 			amountMillicredits: 100_000,
 			reference: 'seed-1',
@@ -407,7 +449,7 @@ describe('admin console interactions (jsdom)', () => {
 		expect(shows('child')).toBe(true);
 		cleanup();
 
-		// ---------------------------------------------------------------- merchants: list, suspend / resume, impersonation
+		// ---------------------------------------------------------------- merchants: list, suspend / resume, notes
 		render(<MerchantsView {...await admin.loadMerchants(staff.api, {})} />);
 		expect(shows('Else Ltd')).toBe(true);
 		cleanup();
@@ -423,29 +465,6 @@ describe('admin console interactions (jsdom)', () => {
 		fill('Reason (audited, shown to staff)', 'cleared');
 		await press('Resume merchant');
 		await until(() => staff.calls.some((c) => c.path === adminApi.resume(merchantId) && c.status === 200));
-		await press('Impersonate');
-		await press('Start impersonation');
-		expect(shows('It is audited.')).toBe(true);
-		fill('Reason', 'ticket 42');
-		await press('Start impersonation');
-		await until(() => staff.calls.some((c) => c.path === adminApi.impersonationExchange() && c.status === 200));
-		// the merchant session cookie now sits in this browser next to the staff cookie
-		expect([...staff.jar.keys()].sort()).toEqual(['__Host-ss_merchant', '__Host-ss_staff']);
-		staff.jar.delete('__Host-ss_merchant');
-		await press('Impersonate');
-		fill('Reason', 'ticket 43');
-		await act(async () => {
-			/** @type {HTMLInputElement} */ (
-				[...document.querySelectorAll('input[type="radio"]')].find((r) => r.getAttribute('value') === 'product')
-			).click();
-		});
-		await settle(1);
-		await press('Start impersonation');
-		expect(shows('Choose a product.')).toBe(true);
-		type(byLabel(document, 'Product'), appId);
-		await press('Start impersonation');
-		await until(() => staff.calls.some((c) => c.path === adminApi.launch(appId)));
-		await press('Cancel');
 		fill('New note', 'Prefers e-mail over phone.');
 		await press('Add note');
 		await until(() => shows('Prefers e-mail over phone.') && shows('root@ss.test ·'));
@@ -470,119 +489,38 @@ describe('admin console interactions (jsdom)', () => {
 		// and back, so the rest of the flow uses the original owner
 		await staff.api.post(adminApi.transfer(websiteId), { toMerchantId: merchantId, reason: 'undo' });
 
-		// ---------------------------------------------------------------- apps: add (URL + connect secret), upload, lifecycle, keys, review
-		render(<AppsView {...await admin.loadApps(staff.api, {})} staff={me} />);
+		// ---------------------------------------------------------------- apps: add (URL + connect secret), a new pack version, launch
+		render(<AppsView {...await admin.loadApps(staff.api, { status: 'active' })} staff={me} />);
+		expect(shows('notice-bar')).toBe(true);
 		await press('Add product');
 		fill('Product URL', 'https://product.example.com');
 		fill('Connect secret', 'too-short');
 		await press('Connect');
 		await until(() => staff.calls.some((c) => c.path === adminApi.connect() && c.status === 422));
-		expect(shows('at least 32 characters')).toBe(true);
 		await press('Cancel');
-		await press('Upload pack');
-		await press('Upload');
-		expect(shows('Paste the JSON here.')).toBe(true);
-		fill('Bundle descriptor (JSON)', '{oops');
-		fill('Signature (JSON: kid, alg, sig)', '[]');
-		await press('Upload');
-		expect(shows('Must be a JSON object.')).toBe(true);
-		const d2 = descriptorOf(manifest({ version: '0.2.0', hourly: 1500 }));
-		fill('Bundle descriptor (JSON)', JSON.stringify(d2));
-		fill(
-			'Signature (JSON: kid, alg, sig)',
-			JSON.stringify(await signBundle({ signer: createSigner(key.privateJwk), descriptor: d2 })),
+		cleanup();
+
+		render(
+			<ToastProvider>
+				<AppView {...await admin.loadApp(staff.api, appId)} staff={me} />
+			</ToastProvider>,
 		);
+		await press('Upload pack version');
+		await pickFolder(folderOf(manifest({ version: '0.2.0', hourly: 1500 })));
 		await press('Upload');
-		await until(() => shows('Pack uploaded'));
+		await until(() => shows('Version v2 of notice-bar is uploaded'));
+		await until(() => shows('v2 (0.2.0)'));
 		cleanup();
 
-		render(<AppView {...await admin.loadApp(staff.api, appId)} staff={me} />);
-		await press('Deprecate');
-		type(confirmInput(), 'notice-bar');
-		fill('Reason (shown to merchants with the sunset date)', 'replaced');
-		await press('Deprecate');
-		expect(shows('Choose a sunset date') || shows('Pick the day')).toBe(true);
-		fill('Sunset date (UTC)', new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10));
-		await press('Deprecate');
-		await until(() =>
-			staff.calls.some((c) => c.path === adminApi.lifecycle(appId) && c.status === 200 && c.body?.status === 'deprecated'),
-		);
-		await until(() => shows('Deprecated — retires'));
-		await press('Activate');
-		await until(() => button('Activate').closest('[role="dialog"]'));
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Activate')
-			).click();
-		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.lifecycle(appId) && c.body?.status === 'active'));
-		await press('Load more').catch(() => undefined);
-		cleanup();
-
-		const v2 = await admin.loadVersion(staff.api, appId, '2');
-		render(<VersionView {...v2} staff={me} />);
-		await press('Reject');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Reject')
-			).click();
-		});
-		await settle(1);
-		expect(shows('Say why the version is rejected')).toBe(true);
-		await press('Cancel');
-		await press('Approve');
-		fill('Note (optional)', 'looks good');
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Approve')
-			).click();
-		});
-		await until(() => shows('Reviewed by'));
-		cleanup();
-
-		// a service app (presentation of a pack as a service: the service-only actions answer with problems)
+		// a service app (presentation of the pack as a service): the admin launch (production)
 		const loaded = await admin.loadApp(staff.api, appId);
 		if (!loaded.ok) throw new Error('app');
-		const serviceApp = {
-			...loaded.app,
-			kind: 'service',
-			endpoints: { base: 'https://svc.example.com' },
-			environments: { production: 'https://svc.example.com', staging: 'https://staging.svc.example.com' },
-			health: {
-				lastHeartbeatAt: new Date().toISOString(),
-				version: '1.0.0',
-				status: 'degraded',
-				queues: { jobs: 3 },
-				stale: false,
-			},
-		};
-		render(<AppView {...loaded} app={serviceApp} staff={me} />);
-		expect(shows('Degraded')).toBe(true);
-		await press('Refresh manifest');
-		await until(() => staff.calls.some((c) => c.path === adminApi.refresh(appId)));
-		await press('Save environments');
-		await until(() => staff.calls.some((c) => c.path === adminApi.environments(appId)));
-		await press(`Open ${serviceApp.name}`);
-		expect(shows('Enter a merchant id (mer_…).')).toBe(true);
+		const serviceApp = { ...loaded.app, kind: 'service', baseUrl: 'https://svc.example.com' };
+		render(<AppView {...loaded} app={serviceApp} manifest={manifest()} staff={me} />);
+		expect(shows('Upload widgets')).toBe(true);
 		fill('Merchant id', merchantId);
-		fill('Website id (optional)', 'bad');
-		await press(`Open ${serviceApp.name}`);
-		expect(shows('Enter a website id')).toBe(true);
-		fill('Website id (optional)', websiteId);
 		await press(`Open ${serviceApp.name}`);
 		await until(() => staff.calls.some((c) => c.path === adminApi.launch(appId) && c.method === 'POST'));
-		await act(async () => {
-			/** @type {HTMLInputElement} */ (
-				[...document.querySelectorAll('input[type="radio"]')].find((r) => r.getAttribute('value') === 'all')
-			).click();
-		});
-		await press(`Open ${serviceApp.name}`);
-		await settle(2);
-		await press('Revoke');
-		type(confirmInput(), 'pack-1');
-		fill('Reason', 'leaked');
-		await press('Revoke key');
-		await until(() => staff.calls.some((c) => c.path === adminApi.revokeAppKey(appId, 'pack-1') && c.status === 200));
 		cleanup();
 
 		// ---------------------------------------------------------------- admin overrides, locks, history, rollback
@@ -723,49 +661,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('Ledger chain intact'));
 		cleanup();
 
-		// ---------------------------------------------------------------- integration, connectors, audit (fabricated rows)
-		const integration = await admin.loadIntegration(staff.api, { websiteId });
-		if (!integration.ok) throw new Error('integration');
-		const deadRow = {
-			deliveryId: 'dlv_0000000000000000000000000z',
-			eventId: 'evt_1',
-			type: 'order.placed@1',
-			websiteId,
-			appId,
-			attempts: 8,
-			lastErrorCode: 'http_500',
-			deadAt: new Date().toISOString(),
-			expiresAt: new Date().toISOString(),
-		};
-		render(
-			<IntegrationView
-				{...integration}
-				deadLetters={{ items: [deadRow], nextCursor: null }}
-				deliveries={{
-					items: [
-						{
-							...deadRow,
-							kind: 'control',
-							status: 'dead',
-							replays: 1,
-							lastHttpStatus: 500,
-							createdAt: new Date().toISOString(),
-						},
-					],
-					nextCursor: null,
-				}}
-				staff={me}
-			/>,
-		);
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('button')].find((b) => b.textContent === 'Replay')
-			).click();
-		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.replay(deadRow.deliveryId)));
-		await until(() => shows('Unknown delivery'));
-		cleanup();
-
+		// ---------------------------------------------------------------- connectors, audit (fabricated rows)
 		const connectors = await admin.loadConnectors(staff.api, {});
 		render(
 			<ConnectorsAdminView
@@ -795,29 +691,23 @@ describe('admin console interactions (jsdom)', () => {
 			<AuditView
 				ok
 				available
-				filter={{ scope: 'global' }}
+				filter={{ action: 'merchant.*' }}
 				page={{
 					items: [
 						{
 							auditId: 'aud_1',
 							at: new Date().toISOString(),
 							action: 'merchant.suspended',
-							actor: { type: 'staff', id: me.staffId, via: null },
+							actor: { type: 'staff', id: me.staffId },
 							target: { type: 'merchant', id: merchantId },
 							reason: 'fraud',
-							scope: 'global',
-							seq: 3,
-							hash: 'abc',
 						},
 						{
 							auditId: 'aud_2',
 							at: new Date().toISOString(),
 							action: 'website.updated',
-							actor: { type: 'merchant_user', id: 'usr_1', via: { type: 'staff', id: me.staffId } },
+							actor: { type: 'merchant_user', id: 'usr_1' },
 							target: { type: 'website', id: websiteId },
-							scope: `merchant:${merchantId}`,
-							seq: 9,
-							hash: 'def',
 						},
 					],
 					nextCursor: null,
@@ -825,44 +715,36 @@ describe('admin console interactions (jsdom)', () => {
 			/>,
 		);
 		expect(shows('merchant.suspended')).toBe(true);
-		expect(shows(`via ${me.staffId}`)).toBe(true);
-		await press('Verify');
-		await until(() => shows('Chain intact'));
+		expect(shows('usr_1')).toBe(true);
 		cleanup();
 
+		// ---------------------------------------------------------------- settings: the mailer
 		render(
-			<DashboardView
-				ok
-				staff={me}
-				health={{
-					available: true,
-					problem: null,
-					data: { jobs: { queued: 1, leased: 0, retrying: 2, dead: 0 } },
-				}}
-				metrics={{ deliveries: { pending: 1, retrying: 2, delivered: 3, dead: 1 }, deadLetters: 1 }}
-				metricsProblem={{ status: 403, title: 'Forbidden' }}
-				deadLetters={[deadRow]}
-				apps={[]}
-				unhealthy={[{ ...serviceApp, health: { ...serviceApp.health, stale: true } }]}
-				alerts={[{ alertId: 'alr_1', kind: 'unpriced', at: new Date().toISOString(), merchantId, subscriptionId: null }]}
-			/>,
+			<ToastProvider>
+				<SettingsView {...await admin.loadSettings(staff.api, me)} />
+			</ToastProvider>,
 		);
-		expect(shows('Job queue')).toBe(true);
-		expect(shows('unpriced') || shows('Unpriced')).toBe(true);
+		fill('SMTP host', 'smtp.example.com');
+		fill('Port', '465');
+		fill('User', 'mailer');
+		fill('Password', 'smtp secret');
+		fill('From', 'Portal <no-reply@example.com>');
+		await act(async () => {
+			/** @type {HTMLInputElement} */ (byLabel(document, 'Implicit TLS (port 465)')).click();
+		});
+		await press('Save mail settings');
+		await until(() => staff.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
+		await until(() => shows('Remove mailer'));
+		await press('Remove mailer');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Remove')
+			).click();
+		});
+		await until(() => staff.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
 		cleanup();
-		render(
-			<DashboardView
-				ok
-				health={{ available: true, problem: { status: 500, title: 'Boom' }, data: null }}
-				metrics={null}
-				metricsProblem={null}
-				deadLetters={[]}
-				apps={[]}
-				unhealthy={[]}
-				alerts={[]}
-			/>,
-		);
-		expect(shows('No finance alert.')).toBe(true);
+		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
+		expect(shows('Settings are unavailable')).toBe(true);
 		cleanup();
 
 		// ---------------------------------------------------------------- staff management
@@ -891,7 +773,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => staff.calls.filter((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/staff/')).length >= 3);
 		cleanup();
 
-		// ---------------------------------------------------------------- client helpers, banner, sign out
+		// ---------------------------------------------------------------- client helpers, sign out
 		function Probe() {
 			const r = useAdminResource('/v1/admin/merchants/mer_0000000000000000000000000z', null);
 			return (
@@ -916,15 +798,6 @@ describe('admin console interactions (jsdom)', () => {
 		vi.stubGlobal('fetch', anonymous.fetch);
 		expect((await adminFetch(adminApi.merchants())).status).toBe(401);
 		staffSignInAgain('/admin/x');
-		render(
-			<ImpersonationBanner
-				impersonation={{ staffId: me.staffId, expiresAt: new Date().toISOString() }}
-				userEmail="a@b.test"
-			/>,
-		);
-		await press('End impersonation');
-		await until(() => anonymous.calls.some((c) => c.path === '/v1/auth/merchant/logout'));
-		cleanup();
 		staff.use();
 		render(
 			<AdminShell staff={me}>

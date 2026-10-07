@@ -41,7 +41,7 @@ export const staffContext = async (next) => {
 /** Fully signed-in staff skip the sign-in page. */
 export const redirectIfStaff = async () => {
 	const session = await staffSession();
-	if (session.ok) redirect('/admin');
+	if (session.ok) redirect('/admin/merchants');
 };
 
 /** First run: no staff user exists yet, so the sign-in page offers "Create admin". */

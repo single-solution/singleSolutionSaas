@@ -303,11 +303,10 @@ export const consumersOf = (type, table, { exclude = null } = {}) => {
 	return [...out];
 };
 
-/** App statuses that still receive deliveries. */
-export const DELIVERABLE_APP_STATUSES = Object.freeze(['active', 'deprecated']);
-
 /**
- * @param {{ status?: unknown, kind?: unknown } | null | undefined} app
+ * Service apps receive (and publish) events whatever their catalog status: an inactive app keeps serving its
+ * existing subscriptions. Packs have no server.
+ * @param {{ kind?: unknown } | null | undefined} app
  * @returns {boolean}
  */
-export const isDeliverableApp = (app) => !!app && DELIVERABLE_APP_STATUSES.includes(String(app.status)) && app.kind !== 'pack';
+export const isDeliverableApp = (app) => !!app && app.kind !== 'pack';

@@ -52,8 +52,8 @@ Every factory receives a `ModuleContext`:
 | `verifyWebsiteKey({ key, origin, referer, keyKind?, scopes?, env? })`                                 | the `websiteKey` authenticator's verification for keys carried outside `Authorization` (e.g. `sendBeacon` body auth); throws infra problems               |
 | `withTransaction(fn)`                                                                                 | run `fn(session)` in a retried multi-document transaction; pass `{ session }` to every repository call inside it                                          |
 | `mailer`                                                                                              | platform mailer `send({ to, template, data })` (verify e-mail, password reset, invite, staff setup); `available` false → 503                              |
-| `audit`                                                                                               | `record({ actor, action, target, before, after, requestId, ip, reason })`, `list(...)`                                                                    |
-| `jobs`                                                                                                | `enqueue({ name, payload, key, runAt, maxAttempts })`, dead letters, replay                                                                               |
+| `audit`                                                                                               | `record({ actor, action, target, before, after, requestId, ip, reason })`, `list(...)` (append-only)                                                      |
+| `jobs`                                                                                                | `enqueue({ name, payload, key, runAt, maxAttempts, group })`, `runBatch({ groups, maxJobs })`; exhausted → `failed`                                       |
 | `locks`                                                                                               | lease locks                                                                                                                                               |
 | `sessions`, `loginThrottle`, `cookies`                                                                | console session primitives (identity module)                                                                                                              |
 | `replayStore`                                                                                         | shared atomic replay store for `@ss/protocol` verifiers (launch `consume`, nonces)                                                                        |
@@ -66,8 +66,7 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
   `tenant: 'merchant'` and are reached with `repo.forMerchant(merchantId)` (every filter pins `merchantId`);
   staff/system code that must cross merchants uses `repo.acrossMerchants()` explicitly. Ledgers, audit-like and
   event-like records use `appendOnly: true` (the repository has no update or delete).
-- **Outbound calls** to merchant- or developer-supplied destinations (product registration and manifest refresh,
-  event deliveries, connector checks, client databases) go through `@ss/net` only: one `createOutboundPolicy` per
+- **Outbound calls** to merchant- or developer-supplied destinations (product connect, event deliveries, connector checks, client databases) go through `@ss/net` only: one `createOutboundPolicy` per
   module built from `ctx.config.outbound.allowHosts` (forced empty when `ctx.config.isProduction`), `safeFetch` for
   HTTP(S), `checkHost` + `guardedLookup` for sockets and the MongoDB driver, `isSafeMongoUri` for connection strings,
   `signV4` for object stores. No module keeps its own SSRF rules.
@@ -75,8 +74,9 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
 - **Routes** are `/v1/...` with an `auth` mode (`staff`, `merchant`, `websiteKey`, `product`, `public`, or a
   list tried in order) and, for console routes, a `permission` checked against `resource(ctx)` (default
   `{ merchantId: params.merchantId ?? actor.merchantId, websiteId: params.websiteId }`). Load the entity, then call
-  `ctx.authorize(permission, { merchantId, websiteId })` when the resource is only known after a lookup. POSTs that
-  create or move state keep the default `idempotent: true`. Duplicate routes across modules are a boot error.
+  `ctx.authorize(permission, { merchantId, websiteId })` when the resource is only known after a lookup. `idempotent`
+  defaults to `false`; set `true` on POSTs where a retried request must not act twice (creates, money moves, usage)
+  and `'no-store'` when the request or response carries a secret. Duplicate routes across modules are a boot error.
 - **Wire formats** in PLAN F.9 (`/v1/product/*`) are binding; product routes use `auth: 'product'` (client
   assertion; `ctx.app.appId`).
 - **Nothing is scheduled** (PLAN F.19): no crons, timers, polling or periodic passes. Work runs inside, or right after
@@ -95,6 +95,6 @@ appendOnly, tenant })`. `ensureIndexes` creates everything declared. Merchant-ow
 - **Migrations** are `YYYYMMDDHHMM-<module>-<slug>`, run in id order across modules under a lock, recorded once, and
   must be safe to re-run after a crash. Provide `plan()` for the dry run. They receive the raw `Db` and must never
   update append-only collections.
-- **Audit** every staff and merchant mutation with the actor from `ctx.actor` (including `via` for impersonation).
+- **Audit** every staff and merchant mutation with the actor from `ctx.actor`.
 - **Tests** live in `platform/test/**`: pure `core/` tests, and repository/route tests on `MongoMemoryReplSet`
   through `createPortal` (see `test/integration.test.js` for a probe module that uses every extension point).

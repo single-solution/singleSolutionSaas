@@ -5,18 +5,7 @@
  * @module
  */
 import { isDuplicateKey } from '../../infra/util.js';
-import {
-	ACCOUNTS,
-	ALERTS,
-	COUNTERS,
-	DOCUMENTS,
-	LEDGER,
-	PAUSES,
-	SPEND_POLICIES,
-	SUBSCRIPTIONS,
-	TIMELINE,
-	USAGE,
-} from './schema.js';
+import { ACCOUNTS, ALERTS, COUNTERS, DOCUMENTS, LEDGER, PAUSES, SPEND_CAPS, SUBSCRIPTIONS, TIMELINE, USAGE } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/db.js').MutableOps} MutableOps */
@@ -37,7 +26,7 @@ export const createCommerceRepo = (ctx) => {
 	const counters = tenant(COUNTERS);
 	const ledger = tenant(LEDGER);
 	const accounts = tenant(ACCOUNTS);
-	const policies = tenant(SPEND_POLICIES);
+	const spendCaps = tenant(SPEND_CAPS);
 	const alerts = /** @type {ReadOps} */ (ctx.collection(ALERTS));
 	/** @param {string} m */
 	const subsOf = (m) => /** @type {MutableOps} */ (subscriptions.forMerchant(m));
@@ -258,11 +247,19 @@ export const createCommerceRepo = (ctx) => {
 				.limit(limit)
 				.toArray(),
 
-		// ---- spend policies
-		/** @param {string} merchantId @returns {Promise<Doc[]>} */
-		policiesOf: (merchantId) => policies.forMerchant(merchantId).find({ merchantId }).sort({ createdAt: 1, _id: 1 }).toArray(),
+		// ---- spend cap
+		/** @param {string} merchantId @returns {Promise<Doc | null>} */
+		spendCapOf: (merchantId) => spendCaps.forMerchant(merchantId).findOne({ merchantId, _id: merchantId }),
+		/** @param {string} merchantId @param {Doc} set */
+		putSpendCap: (merchantId, set) =>
+			/** @type {MutableOps} */ (spendCaps.forMerchant(merchantId)).updateOne(
+				{ merchantId, _id: merchantId },
+				{ $set: set },
+				{ upsert: true },
+			),
 		/** @param {string} merchantId */
-		policyOps: (merchantId) => /** @type {MutableOps} */ (policies.forMerchant(merchantId)),
+		deleteSpendCap: (merchantId) =>
+			/** @type {MutableOps} */ (spendCaps.forMerchant(merchantId)).deleteOne({ merchantId, _id: merchantId }),
 
 		// ---- alerts
 		/** @param {Doc} alert */

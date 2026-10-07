@@ -1,16 +1,16 @@
 /**
- * Database-backed job queue and the runner of on-demand admin operations (PLAN F.19: event-driven only — no crons,
- * no worker processes, no timers, no periodic drains).
+ * Database-backed job queue (PLAN F.19: event-driven only — no crons, no worker processes, no timers, no periodic
+ * drains).
  *
  * A job runs right after the request that enqueued it (`onEnqueued` hands it to the request scope, which runs exactly
  * that job after the response). A job that fails stays queued with its next-attempt time (`runAt`) and is retried
  * when there is a natural reason: the module that owns it runs its due jobs of the same `group` when that group is
  * touched again (e.g. the Event Hub retries a product's due deliveries when an event is delivered to that product or
- * the product calls the Portal), or staff run the `drain` operation (bounded) from the admin console.
+ * the product calls the Portal), or staff make them due now (`makeDue`, e.g. "Retry deliveries now").
  *
  * Queue semantics (`platform_jobs`):
  * - `enqueue` is idempotent on an optional job `key` (unique while the job document exists: done jobs are kept for
- *   `doneRetentionMs`, dead ones for `deadRetentionMs`, then removed by TTL); `group` tags jobs that are retried
+ *   `doneRetentionMs`, failed ones for `failedRetentionMs`, then removed by TTL); `group` tags jobs that are retried
  *   together (`runBatch({ groups })`).
  * - `lease` atomically claims one due job (`queued` with `runAt ≤ now`, or `running` whose lease expired — the
  *   worker died) and gives it a visibility timeout; every lease counts an attempt.
@@ -19,8 +19,7 @@
  *   payload of the done record (jobs enqueued with `dropPayload: true` are completed that way by `runBatch`), so
  *   payloads that must not outlive their delivery are gone as soon as the job succeeds.
  * - failures retry with exponential backoff and jitter (5 s · 2^(attempt-1), capped at 1 h) until `maxAttempts`,
- *   then the job is dead-lettered; `permanentFailure()` dead-letters at once. Dead jobs can be replayed.
-
+ *   then the job stops as `failed` with its `lastError`; `permanentFailure()` stops it at once.
  * @module
  */
 import { createId } from '@ss/contracts';
@@ -28,8 +27,6 @@ import { platformError } from './errors.js';
 import { defaultRandomBytes, isDuplicateKey, isObject, randomToken } from './util.js';
 
 /** @typedef {import('./db.js').MutableOps} MutableOps */
-/** @typedef {import('./db.js').ReadOps} ReadOps */
-/** @typedef {import('./db.js').Locks} Locks */
 /** @typedef {import('./logger.js').Logger} Logger */
 
 /**
@@ -53,7 +50,7 @@ const NAME = /^[a-z][a-z0-9_.-]{0,63}$/;
 const PERMANENT = Symbol.for('ss.platform.permanent-failure');
 
 /**
- * An error that dead-letters the job without further retries (e.g. invalid payload).
+ * An error that fails the job without further retries (e.g. invalid payload).
  * @param {string} message
  * @returns {Error}
  */
@@ -101,7 +98,7 @@ const toJob = (doc) => ({
 
 /**
  * @param {{ repo: MutableOps, now?: () => number, randomBytes?: (n: number) => Uint8Array, random?: () => number,
- *   logger: Logger, doneRetentionMs?: number, deadRetentionMs?: number, defaultMaxAttempts?: number,
+ *   logger: Logger, doneRetentionMs?: number, failedRetentionMs?: number, defaultMaxAttempts?: number,
  *   onEnqueued?: (job: { id: string, name: string }) => void }} options `onEnqueued`: a new job that is due now was
  *   stored (the composition root runs it after the current request's response)
  */
@@ -112,7 +109,7 @@ export const createJobs = ({
 	random = Math.random,
 	logger,
 	doneRetentionMs = 7 * 24 * 60 * 60_000,
-	deadRetentionMs = 30 * 24 * 60 * 60_000,
+	failedRetentionMs = 30 * 24 * 60 * 60_000,
 	defaultMaxAttempts = 8,
 	onEnqueued,
 }) => {
@@ -160,27 +157,27 @@ export const createJobs = ({
 	};
 
 	/**
-	 * Mark a job dead.
+	 * Mark a job failed (no more attempts).
 	 * @param {string} id
 	 * @param {string | null} leaseToken
 	 * @param {{ message: string, code?: string }} error
 	 */
-	const markDead = async (id, leaseToken, error) => {
+	const markFailed = async (id, leaseToken, error) => {
 		const t = now();
 		const result = await repo.updateOne(
 			{ _id: id, ...(leaseToken ? { leaseToken } : {}) },
 			{
 				$set: {
-					status: 'dead',
+					status: 'failed',
 					lastError: error,
 					finishedAt: new Date(t),
 					updatedAt: new Date(t),
-					expireAt: new Date(t + deadRetentionMs),
+					expireAt: new Date(t + failedRetentionMs),
 				},
 				$unset: { leaseToken: '', leaseUntil: '' },
 			},
 		);
-		logger.warn('job dead-lettered', { jobId: id, error });
+		logger.warn('job failed permanently', { jobId: id, error });
 		return result.modifiedCount === 1;
 	};
 
@@ -218,7 +215,7 @@ export const createJobs = ({
 			if (!doc) return null;
 			if (doc.attempts > doc.maxAttempts) {
 				// its previous lease expired (the worker died) on the last allowed attempt
-				await markDead(String(doc._id), doc.leaseToken, {
+				await markFailed(String(doc._id), doc.leaseToken, {
 					message: 'lease expired on the last attempt',
 					code: 'lease_expired',
 				});
@@ -248,13 +245,13 @@ export const createJobs = ({
 	/**
 	 * @param {Job} job
 	 * @param {unknown} error
-	 * @returns {Promise<'retry' | 'dead' | 'lost'>}
+	 * @returns {Promise<'retry' | 'failed' | 'lost'>}
 	 */
 	const fail = async (job, error) => {
 		const described = describeError(error);
 		const permanent = isObject(error) && /** @type {any} */ (error)[PERMANENT] === true;
 		if (permanent || job.attempts >= job.maxAttempts)
-			return (await markDead(job.id, job.leaseToken, described)) ? 'dead' : 'lost';
+			return (await markFailed(job.id, job.leaseToken, described)) ? 'failed' : 'lost';
 		const t = now();
 		const result = await repo.updateOne(
 			{ _id: job.id, leaseToken: job.leaseToken, status: 'running' },
@@ -295,7 +292,7 @@ export const createJobs = ({
 			leased: 0,
 			succeeded: 0,
 			retried: 0,
-			dead: 0,
+			failed: 0,
 			lost: 0,
 			stoppedBy: /** @type {'empty' | 'deadline' | 'limit'} */ ('empty'),
 		};
@@ -331,7 +328,7 @@ export const createJobs = ({
 					logger.warn('job failed', { jobId: job.id, job: job.name, attempt: job.attempts, error });
 					const outcome = await fail(job, error);
 					if (outcome === 'retry') stats.retried += 1;
-					else if (outcome === 'dead') stats.dead += 1;
+					else if (outcome === 'failed') stats.failed += 1;
 					else stats.lost += 1;
 				}
 			}
@@ -351,51 +348,6 @@ export const createJobs = ({
 		fail,
 		runBatch,
 		/**
-		 * Queue health (read only): `queued` (due or scheduled, first attempt), `retrying` (queued after a failure),
-		 * `leased` (running) and `dead` jobs.
-		 * @returns {Promise<{ queued: number, leased: number, retrying: number, dead: number }>}
-		 */
-		queueHealth: async () => {
-			const rows = await repo
-				.aggregate([
-					{ $match: { status: { $in: ['queued', 'running', 'dead'] } } },
-					{
-						$group: {
-							_id: {
-								$cond: [
-									{ $eq: ['$status', 'queued'] },
-									{ $cond: [{ $gt: ['$attempts', 0] }, 'retrying', 'queued'] },
-									{ $cond: [{ $eq: ['$status', 'running'] }, 'leased', 'dead'] },
-								],
-							},
-							n: { $sum: 1 },
-						},
-					},
-				])
-				.toArray();
-			const out = { queued: 0, leased: 0, retrying: 0, dead: 0 };
-			for (const row of rows) if (Object.hasOwn(out, row._id)) out[/** @type {keyof typeof out} */ (row._id)] = row.n;
-			return out;
-		},
-		/**
-		 * @param {{ name?: string, limit?: number }} [query]
-		 */
-		deadLetters: async ({ name, limit = 50 } = {}) =>
-			(
-				await repo
-					.find({ status: 'dead', ...(name ? { name } : {}) })
-					.sort({ finishedAt: -1 })
-					.limit(Math.min(limit, 200))
-					.toArray()
-			).map((doc) => ({
-				id: String(doc._id),
-				name: doc.name,
-				key: doc.key ?? null,
-				attempts: doc.attempts,
-				lastError: doc.lastError ?? null,
-				finishedAt: doc.finishedAt,
-			})),
-		/**
 		 * Make queued jobs that wait for their retry time due now (staff "Retry now"), oldest first, bounded.
 		 * @param {{ name?: string, group?: string, limit?: number }} [filter]
 		 * @returns {Promise<number>} jobs made due
@@ -414,27 +366,6 @@ export const createJobs = ({
 				{ $set: { runAt: t, updatedAt: t } },
 			);
 			return result.modifiedCount;
-		},
-		/**
-		 * Re-queue a dead job with a fresh attempt budget.
-		 * @param {string} id
-		 * @returns {Promise<boolean>}
-		 */
-		replay: async (id) => {
-			const t = new Date(now());
-			const result = await repo.updateOne(
-				{ _id: id, status: 'dead' },
-				{ $set: { status: 'queued', attempts: 0, runAt: t, updatedAt: t }, $unset: { expireAt: '', finishedAt: '' } },
-			);
-			return result.modifiedCount === 1;
-		},
-		/** Counts by status. */
-		stats: async () => {
-			const rows = await repo.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]).toArray();
-			/** @type {Record<'queued' | 'running' | 'done' | 'dead', number>} */
-			const out = { queued: 0, running: 0, done: 0, dead: 0 };
-			for (const row of rows) if (Object.hasOwn(out, row._id)) out[/** @type {'queued'} */ (row._id)] = row.n;
-			return out;
 		},
 	});
 };

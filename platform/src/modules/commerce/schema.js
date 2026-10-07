@@ -12,7 +12,7 @@ export const USAGE = 'commerce_usage';
 export const COUNTERS = 'commerce_usage_counters';
 export const LEDGER = 'commerce_ledger';
 export const ACCOUNTS = 'commerce_accounts';
-export const SPEND_POLICIES = 'commerce_spend_policies';
+export const SPEND_CAPS = 'commerce_spend_caps';
 export const ALERTS = 'commerce_alerts';
 
 const DAY_S = 86_400;
@@ -106,10 +106,9 @@ export const collections = Object.freeze([
 	}),
 	defineCollection({
 		module: 'commerce',
-		name: SPEND_POLICIES,
+		name: SPEND_CAPS,
 		tenant: 'merchant',
-		description: 'Spend caps per website or merchant and day/month window.',
-		indexes: [{ keys: { merchantId: 1, scope: 1, websiteId: 1, window: 1 }, name: 'one_per_scope_window', unique: true }],
+		description: 'Optional monthly spend cap per merchant (_id = merchantId): limit in millicredits per UTC month.',
 	}),
 	defineCollection({
 		module: 'commerce',

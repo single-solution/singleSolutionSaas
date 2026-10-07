@@ -1,10 +1,10 @@
-import { loadSpendPolicies } from '../../../src/console/loaders.js';
-import { SpendPoliciesView } from '../../../src/console/views/credits.js';
+import { loadSpendCap } from '../../../src/console/loaders.js';
+import { SpendCapView } from '../../../src/console/views/credits.js';
 import { merchantContext } from '../_lib/server.js';
 
-export const metadata = { title: 'Spend policies' };
+export const metadata = { title: 'Spend cap' };
 
-export default async function SpendPoliciesPage() {
+export default async function SpendCapPage() {
 	const { api, merchantId } = await merchantContext('/spend-policies');
-	return <SpendPoliciesView {...await loadSpendPolicies(api, merchantId)} />;
+	return <SpendCapView {...await loadSpendCap(api, merchantId)} />;
 }

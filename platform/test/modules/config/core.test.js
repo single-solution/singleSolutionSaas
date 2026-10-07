@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { validateFeatureConfig, validateManifest } from '@ss/contracts';
 import { diffStates, lockedTouches, touchedKeys } from '../../../src/modules/config/core/diff.js';
-import { MAX_VARIANTS, toRuntimeExperiment, validateExperiment } from '../../../src/modules/config/core/experiments.js';
-import { MAX_SCHEDULE_AHEAD_MS, parseName, parseReason, parseScheduleAt } from '../../../src/modules/config/core/schedule.js';
+import { parseReason } from '../../../src/modules/config/service.js';
 import {
 	applyOps,
 	decodeState,
 	emptyState,
 	encodeState,
 	normaliseState,
-	opsOf,
 	toLayerInput,
-	withoutLocks,
 } from '../../../src/modules/config/core/state.js';
 import { actorMayLock, actorMayWrite, parseTarget, targetKey } from '../../../src/modules/config/core/targets.js';
 import {
@@ -39,8 +36,7 @@ describe('targets', () => {
 		const platform = parseTarget({ appId: 'app_coupons' }, 'platform');
 		expect(platform).toEqual({ ok: true, value: { level: 'platform', appId: 'app_coupons' } });
 		expect(parseTarget('app_coupons', 'platform')).toEqual(platform);
-		const merchant = parseTarget({ level: 'merchant', merchantId: MER_A, appId: 'app_coupons' });
-		expect(merchant.ok && targetKey(merchant.value)).toBe(`merchant:${MER_A}:app_coupons`);
+		expect(parseTarget({ level: 'merchant', merchantId: MER_A, appId: 'app_coupons' }).ok).toBe(false);
 		const website = parseTarget(SUB_A1, 'website');
 		expect(website.ok && targetKey(website.value)).toBe(`website:${SUB_A1}`);
 		const admin = parseTarget({ subscriptionId: SUB_A1 }, 'admin');
@@ -52,16 +48,11 @@ describe('targets', () => {
 		expect(errorsOf(parseTarget(42, 'website'))[0].path).toBe('/target');
 		expect(errorsOf(parseTarget({}, 'nope'))[0].path).toBe('/level');
 		expect(errorsOf(parseTarget({ subscriptionId: 'x' }, 'website'))[0].path).toBe('/target/subscriptionId');
-		expect(errorsOf(parseTarget({ merchantId: 'bad' }, 'merchant')).map((/** @type {any} */ e) => e.path)).toEqual([
-			'/target/merchantId',
-			'/target/appId',
-		]);
 		expect(errorsOf(parseTarget({ appId: '' }, 'platform'))[0].path).toBe('/target/appId');
 	});
 
 	it('knows who may write and lock', () => {
 		expect(actorMayWrite('merchant_user', 'website')).toBe(true);
-		expect(actorMayWrite('merchant_user', 'merchant')).toBe(true);
 		expect(actorMayWrite('merchant_user', 'admin')).toBe(false);
 		expect(actorMayWrite('merchant_user', 'platform')).toBe(false);
 		expect(actorMayWrite('staff', 'platform')).toBe(true);
@@ -92,11 +83,6 @@ describe('state', () => {
 		expect(normaliseState('x')).toEqual(emptyState());
 		expect(normaliseState({ elements: [], features: null })).toEqual(emptyState());
 		expect(toLayerInput(state)).toEqual(state);
-		expect(withoutLocks(state)).toEqual({
-			elements: { codes: { enabled: true }, banner: { enabled: false } },
-			features: { 'codes.maxActive': { value: 5 }, 'codes.window': { value: { days: 3 } } },
-		});
-		expect(opsOf(state).features?.['codes.window']).toEqual({ value: { days: 3 }, locked: true });
 	});
 
 	it('applies element, feature, config and lock operations', () => {
@@ -267,121 +253,12 @@ describe('validate', () => {
 	});
 });
 
-describe('experiments', () => {
-	const good = {
-		element: 'codes',
-		metric: 'order.placed@1',
-		name: 'Stacking',
-		variants: [
-			{ key: 'control', weight: 1, config: {} },
-			{ key: 'stack', weight: 3, config: { allowStacking: true, prefix: 'XP' } },
-		],
-	};
-
-	it('accepts a valid definition and maps it to runtime.experiments', () => {
-		const result = validateExperiment({ index, input: good, validateFeatureConfig });
-		expect(result.ok).toBe(true);
-		const value = /** @type {any} */ (result).value;
-		expect(toRuntimeExperiment({ experimentId: 'exp_1', ...value })).toEqual({
-			id: 'exp_1',
-			element: 'codes',
-			variants: [
-				{ key: 'control', weight: 1, values: {} },
-				{ key: 'stack', weight: 3, values: { allowStacking: true, prefix: 'XP' } },
-			],
-		});
-		const noName = validateExperiment({
-			index,
-			input: {
-				...good,
-				name: undefined,
-				variants: [
-					{ key: 'a', weight: 1 },
-					{ key: 'b', weight: 1 },
-				],
-			},
-			validateFeatureConfig,
-		});
-		expect(noName.ok && noName.value.variants[0]?.config).toEqual({});
-	});
-
-	it('rejects invalid definitions', () => {
-		/** @param {any} input */
-		const codes = (input) =>
-			errorsOf(validateExperiment({ index, input, validateFeatureConfig })).map(
-				(/** @type {any} */ e) => `${e.path}:${e.code}`,
-			);
-		expect(codes('x')).toEqual([':invalid_experiment']);
-		expect(codes({ ...good, element: 'ghost' })).toContain('/element:unknown_element');
-		expect(
-			codes({
-				...good,
-				element: 'banner',
-				variants: [
-					{ key: 'a', weight: 1 },
-					{ key: 'b', weight: 1 },
-				],
-			}),
-		).toContain('/element:not_experimentable');
-		expect(codes({ ...good, metric: 'nope' })).toContain('/metric:invalid_experiment');
-		expect(codes({ ...good, name: '' })).toContain('/name:invalid_experiment');
-		expect(codes({ ...good, extra: 1 })).toContain('/extra:invalid_experiment');
-		expect(codes({ ...good, variants: [good.variants[0]] })).toContain('/variants:invalid_experiment');
-		expect(
-			codes({ ...good, variants: Array.from({ length: MAX_VARIANTS + 1 }, (_, i) => ({ key: `v${i}`, weight: 1 })) }),
-		).toContain('/variants:invalid_experiment');
-		expect(
-			codes({
-				...good,
-				variants: [
-					'x',
-					{ key: 'A!', weight: 0, foo: 1 },
-					{ key: 'a', weight: 1, config: 'x' },
-					{ key: 'a', weight: 1, config: { ghost: 1, maxActive: 5, prefix: 'bad!' } },
-				],
-			}),
-		).toEqual([
-			'/variants/0:invalid_experiment',
-			'/variants/1/foo:invalid_experiment',
-			'/variants/1/key:invalid_experiment',
-			'/variants/1/weight:invalid_experiment',
-			'/variants/2/config:invalid_experiment',
-			'/variants/3/key:invalid_experiment',
-			'/variants/3/config/ghost:unknown_feature',
-			'/variants/3/config/maxActive:not_experimentable',
-			'/variants/3/config/prefix:invalid_value',
-		]);
-		expect(
-			codes({
-				...good,
-				element: 3,
-				variants: [
-					{ key: 'a', weight: 1, config: { x: 1 } },
-					{ key: 'b', weight: 1 },
-				],
-			}),
-		).toEqual(['/element:unknown_element']);
-	});
-});
-
-describe('schedule helpers', () => {
-	const now = Date.parse('2026-10-01T10:00:00Z');
-	it('parses future instants within a year', () => {
-		expect(parseScheduleAt('2026-10-01T11:00:00Z', now)).toEqual({ ok: true, value: now + 3_600_000 });
-		expect(parseScheduleAt(now + 1, now)).toEqual({ ok: true, value: now + 1 });
-		expect(parseScheduleAt('2026-10-01T12:00:00.5+01:00', now).ok).toBe(true);
-		expect(parseScheduleAt('tomorrow', now).ok).toBe(false);
-		expect(parseScheduleAt('2026-10-01T11:00:00', now).ok).toBe(false);
-		expect(parseScheduleAt(now, now)).toEqual({ ok: false, message: 'at must be in the future' });
-		expect(parseScheduleAt(now + MAX_SCHEDULE_AHEAD_MS + 1, now).ok).toBe(false);
-	});
+describe('reasons', () => {
 	it('parses reasons and names', () => {
 		expect(parseReason(undefined, false)).toEqual({ ok: true, value: null });
 		expect(parseReason('', true).ok).toBe(false);
 		expect(parseReason('  why  ', true)).toEqual({ ok: true, value: 'why' });
 		expect(parseReason('   ', false).ok).toBe(false);
 		expect(parseReason(3, false).ok).toBe(false);
-		expect(parseName(' Summer ')).toEqual({ ok: true, value: 'Summer' });
-		expect(parseName('').ok).toBe(false);
 	});
 });

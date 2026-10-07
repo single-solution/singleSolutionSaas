@@ -106,13 +106,7 @@ export const createPortal = ({
 		revoked: () => ports.websiteKeyRevoked,
 		now,
 	});
-	const audit = createAudit({
-		repo: repos.appendOnly(COLLECTIONS.audit),
-		locks,
-		now,
-		randomBytes,
-		logger: logger.child({ component: 'audit' }),
-	});
+	const audit = createAudit({ repo: repos.appendOnly(COLLECTIONS.audit), now, randomBytes });
 
 	/** @type {SharedContext} */
 	const shared = Object.freeze({

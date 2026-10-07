@@ -6,14 +6,11 @@
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
 import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/infra/db.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
-import { BUNDLE_FORMAT } from '../../src/modules/catalog/core/bundle.js';
-import { createConsoleApi } from '../../src/console/api.js';
 import * as loaders from '../../src/console/loaders.js';
 import { AccountView } from '../../src/console/views/account.js';
 import {
@@ -26,23 +23,17 @@ import {
 	safeNext,
 } from '../../src/console/views/auth.js';
 import { ConnectorsView, buildCredentials, credentialFields } from '../../src/console/views/connectors.js';
-import { CreditsView, SpendPoliciesView } from '../../src/console/views/credits.js';
-import { DeliveriesView } from '../../src/console/views/deliveries.js';
+import { CreditsView, SpendCapView } from '../../src/console/views/credits.js';
 import { KeysView } from '../../src/console/views/keys.js';
 import { ProductsView, hourlyEstimate } from '../../src/console/views/products.js';
 import { ConsoleShell, balanceState } from '../../src/console/views/shell.js';
 import { SubscriptionView, availability, requestedOn } from '../../src/console/views/subscription.js';
-import {
-	ConfigurePanel,
-	ExperimentsPanel,
-	SchedulesPanel,
-	effectiveValues,
-	featureLocks,
-} from '../../src/console/views/configure.js';
+import { ConfigurePanel, effectiveValues, featureLocks } from '../../src/console/views/configure.js';
 import { TeamView } from '../../src/console/views/team.js';
 import { UsageView, spendBreakdown } from '../../src/console/views/usage.js';
 import { OnboardingView, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
-import { PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
+import { createTestLogger, startMongo, testConfig } from '../helpers.js';
+import { browserOf as client, uploadPack, withMemoryStorage } from './merchant-harness.js';
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
@@ -54,102 +45,6 @@ beforeAll(async () => {
 afterAll(async () => {
 	await closeMongoClients();
 	await mongo?.stop();
-});
-
-/** A cookie-following console API client (what a signed-in browser session is to the Portal). */
-const client = (/** @type {import('../../src/portal.js').Portal} */ portal) => {
-	/** @type {Map<string, string>} */
-	const jar = new Map();
-	const api = createConsoleApi({
-		handle: portal.handle,
-		baseUrl: PORTAL_URL,
-		cookie: () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ') || null,
-		onSetCookie: (list) => {
-			for (const set of list) {
-				const [pair = ''] = set.split(';');
-				const i = pair.indexOf('=');
-				const name = pair.slice(0, i);
-				const value = pair.slice(i + 1);
-				if (value) jar.set(name, value);
-				else jar.delete(name);
-			}
-		},
-	});
-	return { api, jar };
-};
-
-/** A pack with configurable features, two plans and an add-on. */
-const packManifest = () => ({
-	ssps: '1',
-	product: {
-		slug: 'notice-bar',
-		name: 'Notice bar',
-		kind: 'pack',
-		version: '0.1.0',
-		category: 'storefront',
-		description: 'A bar on top.',
-	},
-	elements: [
-		{
-			key: 'bar',
-			name: 'Notice bar',
-			modes: ['A', 'B'],
-			price: { hourly: 1250 },
-			budget: { js: 3 },
-			placement: true,
-			experiments: true,
-			headless: 'headless/bar.js#createBar',
-			renderer: 'ui/bar.js#render',
-			features: {
-				type: 'object',
-				additionalProperties: false,
-				properties: {
-					message: {
-						type: 'string',
-						title: 'Message',
-						default: 'Hello',
-						maxLength: 140,
-						'x-kind': 'config',
-						'x-experiment': true,
-						'x-ui': { widget: 'textarea', group: 'Content', order: 1, help: 'Shown in the bar' },
-					},
-					tone: {
-						type: 'string',
-						title: 'Tone',
-						default: 'info',
-						enum: ['info', 'warning'],
-						'x-ui': { group: 'Content', order: 2 },
-					},
-					maxPerDay: {
-						type: 'integer',
-						title: 'Max per day',
-						default: 3,
-						minimum: 1,
-						maximum: 100,
-						'x-kind': 'limit',
-						'x-plan': { basic: { default: 2, max: 5 } },
-						'x-lock': true,
-					},
-					dismissible: { type: 'boolean', title: 'Dismissible', default: true, 'x-ui': { advanced: true } },
-				},
-			},
-		},
-		{
-			key: 'badge',
-			name: 'Trust badge',
-			modes: ['A', 'B'],
-			price: { hourly: 500 },
-			budget: { js: 2 },
-			placement: true,
-			headless: 'headless/badge.js#createBadge',
-			renderer: 'ui/badge.js#render',
-		},
-	],
-	plans: [
-		{ code: 'basic', name: 'Basic', elements: ['bar'], addons: ['badge'] },
-		{ code: 'plus', name: 'Plus', elements: ['bar', 'badge'] },
-	],
-	priceBook: { version: '1', effectiveFrom: '2026-01-01T00:00:00.000Z' },
 });
 
 /**
@@ -181,7 +76,9 @@ describe('merchant console smoke', () => {
 		/** @type {Array<{ to: string, template: string, data: Record<string, any> }>} */
 		const mail = [];
 		const mailer = { available: true, send: async (/** @type {any} */ m) => void mail.push(m) };
-		const modules = defaultModules.map((m) => (m.name === 'identity' ? createIdentityModule({ mailer }) : m));
+		const modules = withMemoryStorage(
+			defaultModules.map((m) => (m.name === 'identity' ? createIdentityModule({ mailer }) : m)),
+		);
 		const { logger } = createTestLogger();
 		const portal = createPortal({ config: await testConfig(), db: mongo.db('console_smoke'), modules, logger });
 		await portal.ensureIndexes();
@@ -235,25 +132,7 @@ describe('merchant console smoke', () => {
 			(await staff.api.post('/v1/auth/staff/mfa/confirm', { code: totpCode(enrol.ok ? enrol.data.secret : '', Date.now()) }))
 				.ok,
 		).toBe(true);
-		const dev = await generateSigningKey({ kid: 'dev-1' });
-		const descriptor = /** @type {any} */ ({
-			format: BUNDLE_FORMAT,
-			manifest: packManifest(),
-			assets: [
-				{ path: 'headless/bar.js', sha256: 'a'.repeat(64), size: 1200, contentType: 'text/javascript' },
-				{ path: 'ui/bar.js', sha256: 'b'.repeat(64), size: 2400, contentType: 'text/javascript' },
-				{ path: 'headless/badge.js', sha256: 'c'.repeat(64), size: 900, contentType: 'text/javascript' },
-				{ path: 'ui/badge.js', sha256: 'd'.repeat(64), size: 1000, contentType: 'text/javascript' },
-			],
-		});
-		const uploaded = await staff.api.post('/v1/admin/packs', {
-			descriptor,
-			signature: await signBundle({ signer: createSigner(dev.privateJwk), descriptor }),
-			publicJwk: dev.publicJwk,
-		});
-		expect(uploaded.ok).toBe(true);
-		const appId = uploaded.ok ? uploaded.data.app.appId : '';
-		expect((await staff.api.post(`/v1/admin/apps/${appId}/lifecycle`, { action: 'activate' })).ok).toBe(true);
+		const appId = await uploadPack(staff.fetch);
 		const credit = await staff.api.post(`/v1/admin/merchants/${merchantId}/credits`, {
 			amountMillicredits: 250_000,
 			reference: 'bank-1',
@@ -282,20 +161,6 @@ describe('merchant console smoke', () => {
 			features: { 'bar.message': { value: 'Free shipping' }, 'bar.maxPerDay': { value: 99 } },
 		});
 		expect(patched.ok).toBe(true);
-		const experiment = await merchant.api.post(`${configPath}/experiments`, {
-			element: 'bar',
-			metric: 'order.placed@1',
-			variants: [
-				{ key: 'a', weight: 50, config: {} },
-				{ key: 'b', weight: 50, config: { message: 'Free returns' } },
-			],
-		});
-		expect(experiment.ok).toBe(true);
-		const scheduled = await merchant.api.post(`${configPath}/schedules`, {
-			change: { features: { 'bar.tone': { value: 'warning' } } },
-			at: new Date(Date.now() + 86_400_000).toISOString(),
-		});
-		expect(scheduled.ok).toBe(true);
 		expect(
 			(
 				await merchant.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/keys`, {
@@ -304,15 +169,7 @@ describe('merchant console smoke', () => {
 				})
 			).ok,
 		).toBe(true);
-		expect(
-			(
-				await merchant.api.post(`/v1/merchants/${merchantId}/spend-policies`, {
-					scope: 'merchant',
-					window: 'day',
-					limit: 50_000,
-				})
-			).ok,
-		).toBe(true);
+		expect((await merchant.api.request('PUT', `/v1/merchants/${merchantId}/spend-cap`, { limit: 50_000 })).ok).toBe(true);
 		expect(
 			(await merchant.api.post(`/v1/merchants/${merchantId}/team/invites`, { email: 'dev@shop.test', roles: ['developer'] }))
 				.ok,
@@ -368,14 +225,6 @@ describe('merchant console smoke', () => {
 		expect(configureHtml).toContain('Plan max 5');
 		expect(configureHtml).toContain('limited by your plan');
 		expect(configureHtml).toContain('Advanced settings (1)');
-		const schedulesHtml = text(
-			ssr(<SchedulesPanel {...panelProps} schedules={detail.schedules} onChanged={() => undefined} />),
-		);
-		expect(schedulesHtml).toContain('bar.tone = "warning"');
-		const experimentsHtml = text(
-			ssr(<ExperimentsPanel {...panelProps} experiments={detail.experiments} onChanged={() => undefined} />),
-		);
-		expect(experimentsHtml).toContain('order.placed@1');
 		expect(
 			text(
 				ssr(
@@ -403,11 +252,6 @@ describe('merchant console smoke', () => {
 		const resources = await loaders.loadResources(merchant.api, merchantId, websiteId);
 		expect(text(ssr(<ConnectorsView {...resources} />))).toContain('What this website uses');
 
-		const deliveries = await loaders.loadDeliveries(merchant.api, merchantId, websiteId, { status: 'pending' });
-		expect(deliveries.ok).toBe(true);
-		ssr(<DeliveriesView {...deliveries} />);
-		ssr(<DeliveriesView {...await loaders.loadDeliveries(merchant.api, merchantId, websiteId)} />);
-
 		const credits = await loaders.loadCredits(merchant.api, merchantId, { websiteId: 'not-an-id' });
 		const creditsHtml = text(ssr(<CreditsView {...credits} />));
 		expect(creditsHtml).toContain('250 credits');
@@ -421,8 +265,8 @@ describe('merchant console smoke', () => {
 			),
 		).toContain('Statement');
 
-		const policies = await loaders.loadSpendPolicies(merchant.api, merchantId);
-		expect(text(ssr(<SpendPoliciesView {...policies} />))).toContain('50 credits');
+		const cap = await loaders.loadSpendCap(merchant.api, merchantId);
+		expect(text(ssr(<SpendCapView {...cap} />))).toContain('50 credits');
 
 		const team = await loaders.loadTeam(merchant.api, merchantId, session.me);
 		const teamHtml = text(ssr(<TeamView {...team} />));
@@ -485,7 +329,7 @@ describe('merchant console smoke', () => {
 			publishableKey: 'pk',
 			secretKey: 'sk',
 		});
-		expect(buildCredentials('analytics', credentialFields('analytics', 'ga'), { ids: 'bad line' }).errors.ids).toMatch(
+		expect(buildCredentials('payments', credentialFields('payments', 'stripe'), { _pairs: 'bad line' }).errors._pairs).toMatch(
 			/NAME=value/,
 		);
 		expect(

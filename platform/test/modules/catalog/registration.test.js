@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { PORTAL_URL, startMongo } from '../../helpers.js';
 import { bootPortal, problemOf } from './boot.js';
+import { fakeCommerce } from './fakes/modules.js';
 import { PRODUCT_SECRET, startFakeProduct } from './fakes/product.js';
 import { renamedService, serviceManifest } from './fixtures.js';
 
@@ -62,25 +63,36 @@ describe('onboarding with the connect secret (Portal side)', () => {
 		// the secret is neither answered nor stored
 		expect(JSON.stringify(res.json)).not.toContain(PRODUCT_SECRET);
 
+		const v1 = await t.staff('GET', `/v1/admin/apps/${appId}/versions/1`);
+		expect(v1.status).toBe(200);
+		expect(v1.json).toMatchObject({ appId, version: 1, status: 'accepted', manifest: { product: { slug: 'coupons' } } });
+		expect((await t.staff('GET', `/v1/admin/apps/${appId}/versions/9`)).status).toBe(404);
+		expect((await t.staff('GET', `/v1/admin/apps/${appId}/versions/x`)).status).toBe(404);
+
 		const detail = await t.staff('GET', `/v1/admin/apps/${appId}`);
-		expect(detail.json).toMatchObject({
+		expect(detail.json).toEqual({
+			appId,
 			slug: 'coupons',
 			kind: 'service',
-			status: 'pending',
-			environments: { production: p.url, staging: null },
+			status: 'inactive',
+			name: 'Coupons',
+			productVersion: serviceManifest().product.version,
+			endpoints: serviceManifest().endpoints,
+			baseUrl: p.url,
+			currentVersion: 1,
+			createdAt: expect.any(String),
+			versions: [
+				{ version: 1, productVersion: serviceManifest().product.version, status: 'accepted', createdAt: expect.any(String) },
+			],
+			keys: [{ kid: 'product-k1', thumbprint: expect.any(String), createdAt: expect.any(String) }],
 		});
 		expect(JSON.stringify(detail.json)).not.toContain(PRODUCT_SECRET);
-		expect(detail.json.keys).toEqual([expect.objectContaining({ kid: 'product-k1', status: 'active', source: 'connection' })]);
-		expect((await t.staff('GET', `/v1/admin/apps/${appId}/versions/1`)).json).toMatchObject({
-			status: 'accepted',
-			source: 'connection',
-			manifest: serviceManifest(),
-		});
-		const beat = await t.call('POST', '/v1/product/heartbeat', {
-			bearer: await t.assertion(p.signer, appId),
-			body: { version: '1.4.0', status: 'ok' },
-		});
-		expect(beat).toMatchObject({ status: 200, json: { ok: true } });
+		expect(await t.service().getManifest(appId)).toEqual(serviceManifest());
+		expect(await t.service().versionDetail(appId, 1)).toMatchObject({ status: 'accepted', source: 'connection', assets: null });
+		// the pinned key authenticates the product
+		expect(await t.service().appKeys(appId)).not.toBeNull();
+		expect(await t.service().appKeys('')).toBeNull();
+		expect(await t.service().appKeys('app_nope')).toBeNull();
 		const audit = await t.audit(appId);
 		expect(audit.map((a) => a.action)).toEqual(['catalog.app_connected']);
 		expect(JSON.stringify(audit)).not.toContain(PRODUCT_SECRET);
@@ -127,8 +139,10 @@ describe('onboarding with the connect secret (Portal side)', () => {
 		problemOf(await connect(open, { url: q.url }), 422, 'invalid_manifest');
 	});
 
-	it('connecting again replaces the binding: new address and key, the old key revoked, same app', async () => {
-		const t = await boot();
+	it('connecting again replaces the binding: new address and key, same app; a changed manifest is current at once', async () => {
+		/** @type {string[]} */
+		const invalidated = [];
+		const t = await boot({ modules: [fakeCommerce([], invalidated)] });
 		const manifest = renamedService('loyalty');
 		const first = await product(t, { manifest });
 		const registered = await t.register(first);
@@ -139,19 +153,80 @@ describe('onboarding with the connect secret (Portal side)', () => {
 		problemOf(await connect(t, { url: moved.url }), 401, 'unauthorized');
 		const res = await connect(t, { url: moved.url, secret: moved.secret });
 		expect(res.status).toBe(201);
-		expect(res.json).toMatchObject({ appId, reconnected: true });
+		expect(res.json).toEqual({ appId, slug: 'loyalty', baseUrl: moved.url, kid: 'product-k2', reconnected: true, version: 1 });
 		expect(moved.registrations.at(-1)?.appId).toBe(appId);
 		const detail = await t.staff('GET', `/v1/admin/apps/${appId}`);
-		expect(detail.json.environments.production).toBe(moved.url);
-		expect(detail.json.keys.map((/** @type {any} */ k) => [k.kid, k.status])).toEqual([
-			['product-k1', 'revoked'],
-			['product-k2', 'active'],
-		]);
-		expect((await t.audit(appId)).map((a) => a.action)).toContain('catalog.app_reconnected');
-		// the same deployment again (its key kept): still one active key
+		expect(detail.json.baseUrl).toBe(moved.url);
+		expect(detail.json.keys.map((/** @type {any} */ k) => k.kid)).toEqual(['product-k2']);
+		expect((await t.audit(appId)).map((a) => a.action)).toEqual(['catalog.app_connected', 'catalog.app_reconnected']);
+		// the same deployment again (its key kept): still one key, nothing new announced
 		expect((await connect(t, { url: moved.url, secret: moved.secret })).status).toBe(201);
-		expect(
-			(await t.staff('GET', `/v1/admin/apps/${appId}`)).json.keys.filter((/** @type {any} */ k) => k.status === 'active'),
-		).toHaveLength(1);
+		expect((await t.staff('GET', `/v1/admin/apps/${appId}`)).json.keys).toHaveLength(1);
+		expect(t.integration?.emitted).toEqual([]);
+		expect(invalidated).toEqual([]);
+
+		// a new manifest with other prices: version 2 is current immediately, version 1 superseded
+		const priced = renamedService('loyalty');
+		priced.product.version = '1.5.0';
+		priced.elements[0].price.hourly = 1500;
+		moved.setManifest(priced);
+		const changed = await connect(t, { url: moved.url, secret: moved.secret });
+		expect(changed.json).toMatchObject({
+			version: 2,
+			priceChanges: [
+				{
+					element: 'codes',
+					before: expect.objectContaining({ hourly: 1000 }),
+					after: expect.objectContaining({ hourly: 1500 }),
+				},
+			],
+		});
+		const after = (await t.staff('GET', `/v1/admin/apps/${appId}`)).json;
+		expect(after).toMatchObject({ currentVersion: 2, productVersion: '1.5.0' });
+		expect(after.versions.map((/** @type {any} */ v) => [v.version, v.status])).toEqual([
+			[2, 'accepted'],
+			[1, 'superseded'],
+		]);
+		expect(t.integration?.emitted).toEqual([
+			{
+				type: 'manifest.accepted@1',
+				data: expect.objectContaining({ appId, version: 2, productVersion: '1.5.0' }),
+				options: { appIds: [appId] },
+			},
+		]);
+		expect(invalidated).toEqual([appId]);
+		// a description-only change: new version, no price note
+		const described = structuredClone(priced);
+		described.product.description = 'Now with points';
+		moved.setManifest(described);
+		const quiet = await connect(t, { url: moved.url, secret: moved.secret });
+		expect(quiet.json.version).toBe(3);
+		expect(quiet.json).not.toHaveProperty('priceChanges');
+	});
+
+	it('survives failing neighbours when announcing a new manifest', async () => {
+		const t = await boot({ modules: [fakeCommerce([], null)] });
+		const manifest = renamedService('wishlist');
+		const p = await product(t, { manifest });
+		const appId = (await t.register(p)).json.appId;
+		const next = renamedService('wishlist');
+		next.product.version = '2.0.0';
+		p.setManifest(next);
+		t.integration?.failOnce();
+		const res = await connect(t, { url: p.url });
+		expect(res.json.version).toBe(2);
+		expect(t.entries.map((e) => e.msg)).toEqual(
+			expect.arrayContaining(['manifest.accepted emission failed', 'entitlement refresh after a new manifest failed']),
+		);
+		expect((await t.service().getApp(appId)).currentVersion).toBe(2);
+
+		const lone = await boot({ integration: null });
+		const q = await product(lone, { manifest: renamedService('signups') });
+		const lid = (await lone.register(q)).json.appId;
+		const v2 = renamedService('signups');
+		v2.product.version = '2.0.0';
+		q.setManifest(v2);
+		expect((await connect(lone, { url: q.url })).json.version).toBe(2);
+		expect((await lone.service().getApp(lid)).currentVersion).toBe(2);
 	});
 });

@@ -1,8 +1,7 @@
 'use client';
 /**
  * Merchants: search (id, domain, name or member e-mail prefix) and status filter; merchant detail with websites,
- * subscriptions, balance, team, notes and alerts; suspend / resume with a reason (typed confirmation); and
- * time-boxed impersonation of a team member — into the Merchant Console or into one product.
+ * subscriptions, balance, team, notes and alerts; suspend / resume with a reason (typed confirmation).
  * @module
  */
 import { useState } from 'react';
@@ -42,9 +41,6 @@ import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, Crumbs, IdChip, staffCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
-
-/** Impersonation time box (minutes): the protocol caps impersonation at one hour (F.5). */
-export const IMPERSONATION_MINUTES = Object.freeze([15, 30, 60]);
 
 /**
  * @param {any} props loader result of `loadMerchants`
@@ -167,12 +163,10 @@ export function MerchantView(props) {
 	const [statusChange, setStatusChange] = useState(/** @type {null | 'suspend' | 'resume'} */ (null));
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [impersonating, setImpersonating] = useState(/** @type {any} */ (null));
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.merchants(), label: 'Back to merchants' }} />;
-	const { staff, members, invites, subscriptions, balance, meter, alerts, apps, notes } = props;
+	const { staff, members, invites, subscriptions, balance, meter, alerts, notes } = props;
 	const websites = /** @type {any[]} */ (merchant?.websites ?? props.websites);
 	const canWrite = staffCan(staff, 'platform.merchants.write');
-	const canImpersonate = staffCan(staff, 'platform.impersonate');
 	const domainOf = (/** @type {string} */ id) => websites.find((w) => w.websiteId === id)?.domain ?? id;
 
 	const changeStatus = async (/** @type {{ reason: string }} */ { reason }) => {
@@ -283,22 +277,12 @@ export function MerchantView(props) {
 							key: 'actions',
 							header: <span className="sr-only">Actions</span>,
 							align: 'right',
-							render: (w) => (
-								<span className="inline-flex gap-1">
-									<ButtonLink
-										as={Link}
-										size="sm"
-										variant="ghost"
-										href={adminRoutes.integration({ websiteId: w.websiteId })}>
-										Deliveries
+							render: (w) =>
+								w.env === 'live' ? (
+									<ButtonLink as={Link} size="sm" variant="ghost" href={adminRoutes.websites({ domain: w.domain })}>
+										Transfer
 									</ButtonLink>
-									{w.env === 'live' ? (
-										<ButtonLink as={Link} size="sm" variant="ghost" href={adminRoutes.websites({ domain: w.domain })}>
-											Transfer
-										</ButtonLink>
-									) : null}
-								</span>
-							),
+								) : null,
 						},
 					]}
 				/>
@@ -333,9 +317,7 @@ export function MerchantView(props) {
 				/>
 			</Card>
 
-			<Card
-				title="Team"
-				subtitle={canImpersonate ? 'Impersonation is time-boxed, audited and shown to the merchant.' : undefined}>
+			<Card title="Team">
 				<Table
 					caption="Team members"
 					dense
@@ -367,21 +349,6 @@ export function MerchantView(props) {
 							),
 						},
 						{ key: 'status', header: 'Status', render: (m) => <StatusBadge status={m.status} /> },
-						{
-							key: 'actions',
-							header: <span className="sr-only">Actions</span>,
-							align: 'right',
-							render: (m) =>
-								canImpersonate && m.status === 'active' ? (
-									<Button
-										size="sm"
-										variant="secondary"
-										onClick={() => setImpersonating(m)}
-										icon={<Icon name="user" size={14} />}>
-										Impersonate
-									</Button>
-								) : null,
-						},
 					]}
 				/>
 				{invites.length > 0 ? (
@@ -434,13 +401,6 @@ export function MerchantView(props) {
 						: 'Subscriptions resume billing and products serve again.'}
 				</p>
 			</TypedConfirmDialog>
-			<ImpersonateDialog
-				member={impersonating}
-				merchant={merchant}
-				subscriptions={subscriptions}
-				apps={apps}
-				onClose={() => setImpersonating(null)}
-			/>
 		</div>
 	);
 }
@@ -505,122 +465,5 @@ function NotesCard({ merchantId, notes, canWrite }) {
 				</div>
 			}
 		</Card>
-	);
-}
-
-/**
- * Time-boxed impersonation of a merchant user: the Merchant Console (a merchant session carrying `via` — the
- * merchant sees a banner) or one product (an `impersonate` launch, `impExp` ≤ 1 h).
- * @param {{ member: any, merchant: any, subscriptions: any[], apps: any[], onClose: () => void }} props
- */
-export function ImpersonateDialog({ member, merchant, subscriptions, apps, onClose }) {
-	const [target, setTarget] = useState('console');
-	const [appId, setAppId] = useState('');
-	const [minutes, setMinutes] = useState('15');
-	const [reason, setReason] = useState('');
-	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const subscribed = new Set(subscriptions.filter((s) => s.status !== 'cancelled').map((s) => s.appId));
-	const products = apps.filter((a) => subscribed.has(a.appId));
-	const close = () => {
-		setProblem(null);
-		setErrors({});
-		setReason('');
-		onClose();
-	};
-	const start = async () => {
-		/** @type {Record<string, string>} */
-		const local = {};
-		if (!reason.trim()) local.reason = 'Say why (support ticket, incident …). It is audited.';
-		if (target === 'product' && !appId) local.appId = 'Choose a product.';
-		setErrors(local);
-		if (Object.keys(local).length > 0) return;
-		const seconds = Number(minutes) * 60;
-		setBusy(true);
-		setProblem(null);
-		if (target === 'console') {
-			// two steps: a one-time token (60 s, bound to this staff session), then the exchange that sets the merchant
-			// session cookie in this browser
-			const started = await adminFetch(adminApi.impersonate(merchant.merchantId), {
-				method: 'POST',
-				body: { userId: member.userId, minutes: Number(minutes), reason: reason.trim() },
-			});
-			const exchanged = started.ok
-				? await adminFetch(adminApi.impersonationExchange(), { method: 'POST', body: { token: started.data.exchangeToken } })
-				: started;
-			setBusy(false);
-			if (!exchanged.ok) {
-				setProblem(exchanged.problem);
-				return;
-			}
-			close();
-			window.location.assign('/websites');
-			return;
-		}
-		const result = await adminFetch(adminApi.launch(appId), {
-			method: 'POST',
-			body: { kind: 'impersonate', merchantId: merchant.merchantId, subject: member.userId, impersonationSeconds: seconds },
-		});
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		window.open(result.data.url, '_blank', 'noopener,noreferrer');
-		close();
-	};
-	return (
-		<Dialog
-			open={Boolean(member)}
-			onClose={close}
-			title={`Impersonate ${member?.email ?? 'member'}`}
-			description={`You act as this member of ${merchant.name}. Everything you do is recorded with your staff id.`}
-			footer={
-				<>
-					<Button variant="secondary" onClick={close}>
-						Cancel
-					</Button>
-					<Button onClick={() => void start()} loading={busy} icon={<Icon name="external" size={14} />}>
-						Start impersonation
-					</Button>
-				</>
-			}>
-			<RadioGroup
-				legend="Open"
-				value={target}
-				onChange={setTarget}
-				options={[
-					{ value: 'console', label: 'The Merchant Console (a banner shows the impersonation)' },
-					{ value: 'product', label: 'One product, as this member', disabled: products.length === 0 },
-				]}
-			/>
-			{target === 'product' ? (
-				<Select
-					label="Product"
-					value={appId}
-					onChange={(e) => setAppId(e.currentTarget.value)}
-					error={errors.appId}
-					options={[{ value: '', label: 'Choose…' }, ...products.map((a) => ({ value: a.appId, label: a.name ?? a.slug }))]}
-				/>
-			) : null}
-			<RadioGroup
-				legend="Ends after"
-				inline
-				value={minutes}
-				onChange={setMinutes}
-				options={IMPERSONATION_MINUTES.map((m) => ({ value: String(m), label: `${m} min` }))}
-			/>
-			<TextArea
-				label="Reason"
-				rows={2}
-				maxLength={500}
-				value={reason}
-				onChange={(e) => setReason(e.currentTarget.value)}
-				error={errors.reason}
-				required
-			/>
-			<FormError problem={problem} fields={['userId', 'minutes', 'reason']} />
-		</Dialog>
 	);
 }

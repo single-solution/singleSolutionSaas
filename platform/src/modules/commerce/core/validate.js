@@ -3,7 +3,7 @@
  * JSON-pointer paths, so routes can answer `validation_failed` with field errors.
  * @module
  */
-import { isId, isTimeZone } from '@ss/contracts';
+import { isId } from '@ss/contracts';
 
 /** @typedef {{ path: string, message: string }} FieldError */
 /**
@@ -144,42 +144,18 @@ export const checkCreditOperation = (kind, input) => {
 };
 
 /**
- * @typedef {object} SpendPolicyInput
- * @property {'website' | 'merchant'} scope
- * @property {string | null} websiteId required for website scope
- * @property {'day' | 'month'} window
- * @property {number} limit millicredits per window
- * @property {string} timeZone
- */
-
-/**
+ * Body of `PUT /v1/merchants/:merchantId/spend-cap`: `{ limit }`, positive integer millicredits per UTC month.
  * @param {unknown} input
- * @returns {Checked<SpendPolicyInput>}
+ * @returns {Checked<{ limit: number }>}
  */
-export const checkSpendPolicy = (input) => {
+export const checkSpendCap = (input) => {
 	if (!isObject(input)) return { ok: false, errors: [{ path: '', message: 'body must be an object' }] };
 	/** @type {FieldError[]} */
 	const errors = [];
-	noExtra(input, ['scope', 'websiteId', 'window', 'limit', 'timeZone'], errors);
-	if (input.scope !== 'website' && input.scope !== 'merchant')
-		errors.push({ path: '/scope', message: 'scope must be website or merchant' });
-	if (input.scope === 'website' && !isId(input.websiteId, 'web'))
-		errors.push({ path: '/websiteId', message: 'websiteId is required for website caps' });
-	if (input.scope === 'merchant' && input.websiteId !== undefined && input.websiteId !== null)
-		errors.push({ path: '/websiteId', message: 'merchant caps take no websiteId' });
-	if (input.window !== 'day' && input.window !== 'month')
-		errors.push({ path: '/window', message: 'window must be day or month' });
-	if (!Number.isSafeInteger(input.limit) || /** @type {number} */ (input.limit) < 0)
-		errors.push({ path: '/limit', message: 'limit must be integer millicredits ≥ 0' });
-	if (input.timeZone !== undefined && (typeof input.timeZone !== 'string' || !isTimeZone(input.timeZone)))
-		errors.push({ path: '/timeZone', message: 'timeZone must be an IANA time zone' });
-	return result(errors, () => ({
-		scope: /** @type {'website' | 'merchant'} */ (input.scope),
-		websiteId: input.scope === 'website' ? /** @type {string} */ (input.websiteId) : null,
-		window: /** @type {'day' | 'month'} */ (input.window),
-		limit: /** @type {number} */ (input.limit),
-		timeZone: typeof input.timeZone === 'string' ? input.timeZone : 'UTC',
-	}));
+	noExtra(input, ['limit'], errors);
+	if (!Number.isSafeInteger(input.limit) || /** @type {number} */ (input.limit) < 1)
+		errors.push({ path: '/limit', message: 'limit must be a positive integer of millicredits' });
+	return result(errors, () => ({ limit: /** @type {number} */ (input.limit) }));
 };
 
 /**

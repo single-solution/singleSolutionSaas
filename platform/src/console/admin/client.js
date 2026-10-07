@@ -1,10 +1,12 @@
 'use client';
 /**
  * Browser API client of the Admin Console: the console's `apiFetch` (same-origin `/v1/*`, JSON only, CSRF-safe
- * cookie session, fresh `Idempotency-Key` per POST) with the staff sign-in page as the 401 destination.
+ * cookie session, fresh `Idempotency-Key` per POST) with the staff sign-in page as the 401 destination, and raw
+ * uploads of pack assets.
  * @module
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { networkProblem } from '@ss/ui/problems';
 import { apiFetch } from '../client.js';
 import { adminRoutes } from './paths.js';
 
@@ -34,6 +36,42 @@ export const adminFetch = async (path, { redirectOn401 = true, ...init } = {}) =
 	const result = await apiFetch(path, { ...init, redirectOn401: false });
 	if (!result.ok && result.status === 401 && redirectOn401) staffSignInAgain();
 	return result;
+};
+
+/**
+ * `PUT` raw bytes (a pack asset) with the staff cookie session: same-origin, so the browser's `Origin` /
+ * `Sec-Fetch-Site` headers satisfy the Portal's CSRF check exactly as {@link adminFetch} does.
+ * @param {string} path
+ * @param {Blob} bytes
+ * @param {string} [contentType] defaults to the blob's type
+ * @returns {Promise<ApiResult>}
+ */
+export const adminUpload = async (path, bytes, contentType) => {
+	/** @type {Response} */
+	let response;
+	try {
+		response = await fetch(path, {
+			method: 'PUT',
+			headers: { accept: 'application/json', 'content-type': contentType || bytes.type || 'application/octet-stream' },
+			credentials: 'same-origin',
+			cache: 'no-store',
+			body: bytes,
+		});
+	} catch (error) {
+		return { ok: false, status: 0, problem: networkProblem(error) };
+	}
+	/** @type {any} */
+	const data = await response.json().catch(() => null);
+	if (response.ok) return { ok: true, status: response.status, data };
+	if (response.status === 401) staffSignInAgain();
+	return {
+		ok: false,
+		status: response.status,
+		problem: {
+			status: response.status,
+			...(data && typeof data === 'object' ? data : { title: response.statusText || 'Error' }),
+		},
+	};
 };
 
 /**

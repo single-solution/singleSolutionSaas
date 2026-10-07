@@ -1,7 +1,7 @@
 /**
- * The `catalog` module: app registry for service products and element packs — registration handshake (Portal side),
- * signed pack bundles, manifest versions with diff and review, lifecycle, environments, app keys (`appKeys` port),
- * health, launches and the public catalog. See `service.js`.
+ * The `catalog` module: app registry for service products and element packs — connect handshake (Portal side), pack
+ * and widget uploads, manifest versions, active/inactive status, app keys (`appKeys` port), launches and the public
+ * catalog. See `service.js`.
  *
  * `createCatalogModule(options)` builds the definition with injected outbound I/O (development allowlist, DNS
  * resolver, HTTP client) for tests and local development; `catalogModule` is the production definition.
@@ -15,8 +15,6 @@ import { createCatalogService } from './service.js';
 /** @typedef {import('./service.js').CatalogOptions} CatalogOptions */
 /** @typedef {import('./service.js').CatalogService} CatalogService */
 
-/** Admin operation that re-fetches every listed app's manifest (on demand; resumable with `after`). */
-
 /**
  * @param {CatalogOptions} [options]
  */
@@ -26,7 +24,6 @@ export const createCatalogModule = (options = {}) =>
 		collections,
 		problems: {
 			catalog_target_refused: { status: 422, title: 'Outbound target refused' },
-			catalog_registration_failed: { status: 502, title: 'Registration handshake failed' },
 			catalog_bundle_invalid: { status: 422, title: 'Invalid pack bundle' },
 			catalog_launch_refused: { status: 422, title: 'Launch refused' },
 		},

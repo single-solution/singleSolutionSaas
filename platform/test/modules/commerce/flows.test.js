@@ -400,28 +400,22 @@ describe('billing semantics (F.1)', () => {
 		expect(await h.service.getSubscription(sub.subscriptionId)).toMatchObject({ holds: ['insufficient_credits'] });
 	});
 
-	it('spend caps pause before a cap would be exceeded and resume when the window resets or the cap rises', async () => {
+	it('the monthly spend cap pauses before it would be exceeded and resumes when the month ends or the cap rises', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_caps', clock });
 		await h.credit(M1, 100_000);
 		const sub = await h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
-		const policy = await h.service.createPolicy(
-			M1,
-			{ scope: 'website', websiteId: W1, window: 'day', limit: 4000 },
-			{ actor: MERCHANT_ACTOR },
-		);
-		expect(policy).toMatchObject({ scope: 'website', websiteId: W1, limitMillicredits: 4000, timeZone: 'UTC' });
-		await expect(
-			h.service.createPolicy(M1, { scope: 'website', websiteId: W1, window: 'day', limit: 1 }, { actor: MERCHANT_ACTOR }),
-		).rejects.toMatchObject({
-			code: 'conflict',
+		expect(await h.service.spendCap(M1)).toEqual({
+			limit: null,
+			spent: 0,
+			remaining: null,
+			reached: false,
+			periodStart: '2026-10-01T00:00:00.000Z',
+			periodEnd: '2026-11-01T00:00:00.000Z',
 		});
-		await expect(
-			h.service.createPolicy(M1, { scope: 'website', websiteId: W3, window: 'day', limit: 1 }, { actor: MERCHANT_ACTOR }),
-		).rejects.toMatchObject({
-			code: 'not_found',
-		});
-		clock.set(T0 + HOUR + 5 * MIN); // 11:05: spent 1500 + 2 × 1500 > 4000 → pause
+		const set = await h.service.setSpendCap(M1, { limit: 4000 }, { actor: MERCHANT_ACTOR });
+		expect(set).toMatchObject({ limit: 4000, spent: 0, remaining: 4000, reached: false });
+		clock.set(T0 + HOUR + 5 * MIN); // 11:05: spent 1500 + 2 × 1500 > 4000 → pause until the month ends
 		await h.service.runSettlement();
 		expect(await h.service.getSubscription(sub.subscriptionId)).toMatchObject({ status: 'paused', holds: ['spend_cap'] });
 		const doc = await decode(h, await h.service.documentFor({ websiteId: W1, appId: APP }));
@@ -429,43 +423,29 @@ describe('billing semantics (F.1)', () => {
 		clock.set(T0 + 3 * HOUR + 5 * MIN);
 		await h.service.runSettlement();
 		expect((await h.service.statement(M1, { from: T0, to: clock.now() + 1 })).totals.settlement).toBe(-3000); // within the cap
-		const raised = await h.service.updatePolicy(M1, policy.policyId, { limit: 20_000 }, { actor: MERCHANT_ACTOR });
-		expect(raised.limitMillicredits).toBe(20_000);
+		expect(await h.service.spendCap(M1)).toMatchObject({ limit: 4000, spent: 3000, remaining: 1000, reached: false });
+		expect((await h.service.setSpendCap(M1, { limit: 20_000 }, { actor: MERCHANT_ACTOR })).limit).toBe(20_000);
 		expect(await h.service.getSubscription(sub.subscriptionId)).toMatchObject({ status: 'active' });
-		await h.service.updatePolicy(M1, policy.policyId, { limit: 4000 }, { actor: MERCHANT_ACTOR });
+		await h.service.setSpendCap(M1, { limit: 3000 }, { actor: MERCHANT_ACTOR });
 		expect(await h.service.getSubscription(sub.subscriptionId)).toMatchObject({ holds: ['spend_cap'] });
-		await expect(
-			h.service.updatePolicy(M1, policy.policyId, { window: 'month' }, { actor: MERCHANT_ACTOR }),
-		).rejects.toMatchObject({
-			code: 'validation_failed',
-		});
-		await expect(h.service.updatePolicy(M1, policy.policyId, { limit: -1 }, { actor: MERCHANT_ACTOR })).rejects.toMatchObject({
-			code: 'validation_failed',
-		});
-		// next day: the window resets → resume
-		clock.set(Date.parse('2026-10-02T00:05:00Z'));
+		expect(await h.service.spendCap(M1)).toMatchObject({ remaining: 0, reached: true });
+		for (const body of [{ limit: -1 }, { limit: 0 }, { limit: 1.5 }, { limit: 5, other: 1 }, 'x'])
+			await expect(h.service.setSpendCap(M1, body, { actor: MERCHANT_ACTOR })).rejects.toMatchObject({
+				code: 'validation_failed',
+			});
+		// next month: the period resets → resume
+		clock.set(Date.parse('2026-11-01T00:05:00Z'));
 		await h.service.runSettlement();
 		expect(await h.service.getSubscription(sub.subscriptionId)).toMatchObject({ status: 'active', holds: [] });
-		// a merchant-wide monthly cap already reached pauses every website
-		const merchantCap = await h.service.createPolicy(
-			M1,
-			{ scope: 'merchant', window: 'month', limit: 100 },
-			{ actor: MERCHANT_ACTOR },
-		);
+		// removing the cap releases a hold
+		await h.service.setSpendCap(M1, { limit: 1 }, { actor: MERCHANT_ACTOR });
 		expect(await h.service.getSubscription(sub.subscriptionId)).toMatchObject({ holds: ['spend_cap'] });
-		expect((await h.service.listPolicies(M1)).map((p) => p.scope)).toEqual(['website', 'merchant']);
-		await h.service.deletePolicy(M1, merchantCap.policyId, { actor: MERCHANT_ACTOR });
-		await h.service.deletePolicy(M1, policy.policyId, { actor: MERCHANT_ACTOR });
+		await h.service.removeSpendCap(M1, { actor: MERCHANT_ACTOR });
 		expect(await h.service.getSubscription(sub.subscriptionId)).toMatchObject({ holds: [] });
-		await expect(h.service.deletePolicy(M1, policy.policyId, { actor: MERCHANT_ACTOR })).rejects.toMatchObject({
-			code: 'not_found',
-		});
-		await expect(h.service.updatePolicy(M1, policy.policyId, {}, { actor: MERCHANT_ACTOR })).rejects.toMatchObject({
-			code: 'not_found',
-		});
-		await expect(h.service.createPolicy(M1, { scope: 'x' }, { actor: MERCHANT_ACTOR })).rejects.toMatchObject({
-			code: 'validation_failed',
-		});
+		expect((await h.service.spendCap(M1)).limit).toBeNull();
+		await expect(h.service.removeSpendCap(M1, { actor: MERCHANT_ACTOR })).rejects.toMatchObject({ code: 'not_found' });
+		const audit = await h.portal.shared.audit.list({ merchantId: M1 });
+		expect(audit.map((a) => a.action)).toEqual(expect.arrayContaining(['spend_cap.updated', 'spend_cap.removed']));
 	});
 
 	it('merchant suspension suspends every subscription; cancellation settles through the cancelled hour', async () => {
@@ -644,7 +624,7 @@ describe('entitlement documents', () => {
 		const events = h.world.events.length;
 		const preview = await h.service.previewDocument({
 			subscriptionId: a.subscriptionId,
-			layers: { website: { features: { 'codes.redemptions': { value: 7 } } }, experiments: [] },
+			layers: { website: { features: { 'codes.redemptions': { value: 7 } } } },
 		});
 		expect(preview).toMatchObject({
 			subscriptionId: a.subscriptionId,
@@ -659,7 +639,6 @@ describe('entitlement documents', () => {
 		).toBe(20);
 		h.world.layers.set(a.subscriptionId, {
 			platform: { features: { 'codes.redemptions': { value: 3, locked: true } } },
-			experiments: [],
 		});
 		expect(await h.service.invalidateApp(APP)).toEqual({ invalidated: 2 });
 		expect(
@@ -676,6 +655,13 @@ describe('entitlement documents', () => {
 		expect(await h.service.invalidateApp(APP)).toEqual({ invalidated: 1 });
 		expect(await h.service.getSubscription(a.subscriptionId, M2).catch((e) => e.code)).toBe('not_found');
 		expect((await h.service.subscriptionsOfMerchant(M1)).map((s) => s.status)).toEqual(['cancelled']);
+		// an inactive app takes no new subscriptions; existing ones keep working
+		const entry = /** @type {any} */ (h.world.apps.get(APP));
+		h.world.apps.set(APP, { ...entry, app: { ...entry.app, status: 'inactive' } });
+		await expect(
+			h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR }),
+		).rejects.toMatchObject({ code: 'conflict' });
+		expect(await h.service.documentFor({ websiteId: W3, appId: APP })).toBeTypeOf('string');
 	});
 
 	it('works without optional neighbours (no config, connectors or integration) and survives delivery failures', async () => {

@@ -27,7 +27,6 @@
  * @property {string} [merchantId] merchant_user / website actors
  * @property {Array<{ websiteId: string, roles: string[] }>} [grants] website-scoped merchant roles
  * @property {string[]} [permissions] explicit extra permission patterns (rarely needed)
- * @property {{ type: 'staff', id: string, name?: string | null }} [via] impersonation: the staff member acting as this user
  *
  * @typedef {{ merchantId?: string | null, websiteId?: string | null }} Resource
  */
@@ -61,14 +60,11 @@ export const MERCHANT_PERMISSIONS = Object.freeze([
 export const STAFF_PERMISSIONS = Object.freeze([
 	'platform.merchants.read',
 	'platform.merchants.write',
-	'platform.impersonate',
 	'platform.launch.admin',
 	'platform.credits.adjust',
 	'platform.finance.read',
 	'platform.apps.read',
-	'platform.apps.review',
 	'platform.apps.manage',
-	'platform.jobs.read',
 	'platform.jobs.manage',
 	'platform.audit.read',
 	'platform.settings.write',
@@ -88,7 +84,6 @@ export const STAFF_ROLE_BUNDLES = Object.freeze({
 		'platform.merchants.read',
 		'platform.launch.admin',
 		'platform.apps.read',
-		'platform.jobs.read',
 		'platform.audit.read',
 		...READ_ONLY_MERCHANT,
 	]),

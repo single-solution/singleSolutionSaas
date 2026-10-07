@@ -3,13 +3,11 @@
  *
  * - Service onboarding (Portal side of `@ss/protocol` connect): staff add a product with its URL and the deployer's
  *   connect secret; the Portal calls its `/.well-known/ss-connect` (HMAC both ways) and pins its base URL and key.
- * - Element-pack bundle uploads (signed descriptor: manifest + asset hashes).
- * - Manifest versions: refresh (staff; the served manifest must carry a valid
- *   `SS-Manifest-Signature` made with a registered app key, otherwise it is stored as `rejected` and alerted), diff,
- *   staff approval / rejection, `manifest.accepted@1`.
- * - Lifecycle (pending → active → deprecated → retired), environments, app keys (rotation overlap, revocation).
- * - Product calls: heartbeat, key rotation, online launch consumption.
- * - Launch issuance (`@ss/protocol` `issueLaunch` with the Portal signer) and the `appKeys` port.
+ *   Connecting again replaces the binding; a changed manifest becomes the current version immediately.
+ * - Pack / widget uploads (`ss pack build` descriptor: manifest + asset hashes). Pack versions are `uploading` until
+ *   delivery has every asset (`versionReady`); widget uploads of service products are handed to delivery.
+ * - Status (`active` | `inactive`, staff switch), launch issuance (`@ss/protocol` `issueLaunch` with the Portal
+ *   signer), online launch consumption and the `appKeys` port.
  * - Catalog read models (active products, elements, plans, prices in millicredits).
  *
  * Errors are thrown as `http.js` problems (RFC 9457 codes from `@ss/contracts` plus this module's `catalog_*` codes).
@@ -18,29 +16,21 @@
 import { createId, validateManifest } from '@ss/contracts';
 import { checkUrl, createOutboundPolicy, isNetError, safeFetch as netFetch, textOf } from '@ss/net';
 import {
-	MANIFEST_SIGNATURE_HEADER,
 	canonicalJson,
 	canonicalUrl,
 	createJwks,
 	createConnectRequest,
 	createKeyResolver,
 	hashManifest,
+	isConnectSecret,
 	isProtocolError,
 	issueLaunch as protocolIssueLaunch,
-	thumbprint,
-	toPublicJwk,
-	isConnectSecret,
-	verifyBundle,
 	verifyConnectResponse,
-	verifyManifest,
 } from '@ss/protocol';
 import { problem } from '../../infra/http.js';
-import { checkBundleAssets, checkUiManifest, parseBundleUpload } from './core/bundle.js';
-import { diffManifests } from './core/diff.js';
-import { SEEN_EVERY_MS, STALE_AFTER_MS, healthView, parseHeartbeat } from './core/health.js';
+import { checkBundleAssets, checkWidgetManifest, parseBundleUpload } from './core/bundle.js';
 import { launchRefusal, launchUrl } from './core/launch.js';
-import { applyLifecycle, dueForRetirement, reviewRefusal } from './core/lifecycle.js';
-import { catalogEntry } from './core/summary.js';
+import { catalogEntry, priceChanges } from './core/summary.js';
 import { createCatalogRepo, keyId, versionId } from './repo.js';
 import { APPS, KEYS, LAUNCHES, VERSIONS } from './schema.js';
 
@@ -50,7 +40,6 @@ import { APPS, KEYS, LAUNCHES, VERSIONS } from './schema.js';
 /** @typedef {import('@ss/protocol').KeyResolver} KeyResolver */
 /** @typedef {import('./repo.js').AppDoc} AppDoc */
 /** @typedef {import('./repo.js').VersionDoc} VersionDoc */
-/** @typedef {import('./repo.js').KeyDoc} KeyDoc */
 /** @typedef {import('@ss/net').OutboundPolicy} OutboundPolicy */
 /**
  * Outbound HTTP client (the `@ss/net` `safeFetch` signature).
@@ -60,11 +49,7 @@ import { APPS, KEYS, LAUNCHES, VERSIONS } from './schema.js';
 /** @typedef {import('./core/launch.js').LaunchInput} LaunchInput */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Audited */
 
-/** Old keys keep verifying for 7 days after the product announces a new one. */
-export const KEY_OVERLAP_MS = 7 * 24 * 60 * 60_000;
-/** Most keys an app may hold at once (active and inside their overlap window). */
-export const MAX_ACTIVE_KEYS = 5;
-export const WELL_KNOWN_APP = '/.well-known/ss-app.json';
+const WELL_KNOWN_APP = '/.well-known/ss-app.json';
 const MANIFEST_MAX_BYTES = 256 * 1024;
 const SYSTEM = /** @type {Actor} */ ({ type: 'system', id: 'catalog' });
 
@@ -74,7 +59,6 @@ const SYSTEM = /** @type {Actor} */ ({ type: 'system', id: 'catalog' });
  *   default `ctx.config.outbound.allowHosts`; always empty in production
  * @property {import('@ss/net').Resolver} [resolve] DNS resolver of the outbound policy (tests)
  * @property {SafeFetch} [fetch] outbound HTTP client (default: `@ss/net` `safeFetch`)
- * @property {number} [staleAfterMs]
  */
 
 /**
@@ -100,12 +84,18 @@ const parseJson = (text) => {
 };
 
 /**
+ * @param {unknown} value
+ * @returns {value is Record<string, any>}
+ */
+const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/**
  * The reason a product gives in an error answer: its `problems` (a misconfigured product answers
  * `{ status: 'misconfigured', problems }`), else its problem `detail`; at most 5 short sentences, or null.
  * @param {string} text the response body
  * @returns {string | null}
  */
-export const productReason = (text) => {
+const productReason = (text) => {
 	const json = parseJson(text);
 	if (!isObject(json)) return null;
 	const listed = Array.isArray(json.problems) ? json.problems.filter((p) => typeof p === 'string' && p.trim() !== '') : [];
@@ -116,12 +106,6 @@ export const productReason = (text) => {
 		.join(' ');
 	return joined === '' ? null : joined;
 };
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, any>}
- */
-const isObject = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
  * Validate a manifest with `@ss/contracts` (schema + semantics) and its expected kind.
@@ -145,52 +129,19 @@ const checkedManifest = (manifest, kind, pointer = '') => {
 	return value;
 };
 
+/** @param {Date | undefined} at */
+const iso = (at) => (at instanceof Date ? at.toISOString() : null);
+
 /**
  * @param {ModuleContext} ctx
  * @param {CatalogOptions} [options]
  */
 export const createCatalogService = (ctx, options = {}) => {
-	const stored = createCatalogRepo({
+	const repo = createCatalogRepo({
 		apps: ctx.collection(APPS),
 		versions: ctx.collection(VERSIONS),
 		keys: ctx.collection(KEYS),
 		launches: ctx.collection(LAUNCHES),
-	});
-	/**
-	 * Retirement on read (F.19: no timer): a deprecated app whose sunset has passed is retired the first time it is
-	 * read after the sunset (compare-and-set, audited once).
-	 * @template {AppDoc | null} A
-	 * @param {A} app
-	 * @returns {Promise<A>}
-	 */
-	const current = async (app) => {
-		if (!app || !dueForRetirement(app, ctx.now())) return app;
-		const retired = await stored.updateApp(app._id, { status: 'deprecated' }, { $set: { status: 'retired' } });
-		if (retired)
-			await audit({
-				actor: SYSTEM,
-				action: 'catalog.app_retired',
-				app: app._id,
-				before: { status: 'deprecated' },
-				after: { status: 'retired' },
-				reason: 'sunset reached',
-			});
-		return /** @type {A} */ (retired ?? (await stored.app(app._id)) ?? app);
-	};
-	/** @type {typeof stored} */
-	const repo = Object.freeze({
-		...stored,
-		app: async (appId) => current(await stored.app(appId)),
-		appBySlug: async (slug) => current(await stored.appBySlug(slug)),
-		listApps: async (query) => {
-			/** @type {AppDoc[]} */
-			const out = [];
-			for (const app of await stored.listApps(query)) {
-				const now = await current(app);
-				if (!query.status || query.status.includes(now.status)) out.push(now);
-			}
-			return out;
-		},
 	});
 	/** @type {OutboundPolicy} */
 	const policy = createOutboundPolicy({
@@ -200,7 +151,6 @@ export const createCatalogService = (ctx, options = {}) => {
 	});
 	/** @type {SafeFetch} */
 	const safeFetch = options.fetch ?? netFetch;
-	const staleAfterMs = options.staleAfterMs ?? STALE_AFTER_MS;
 
 	// ------------------------------------------------------------------------------------------------------------
 	// helpers
@@ -208,20 +158,19 @@ export const createCatalogService = (ctx, options = {}) => {
 	/**
 	 * Canonical, SSRF-checked base URL (before any request).
 	 * @param {string} value
-	 * @param {string} path field name for errors
 	 */
-	const baseUrlOf = (value, path) => {
+	const baseUrlOf = (value) => {
 		/** @type {string} */
 		let canonical;
 		try {
 			canonical = canonicalUrl(value);
 		} catch {
-			return fail('validation_failed', `${path} is not a valid URL.`, {
-				errors: [{ path, message: 'must be a plain http(s) URL' }],
+			return fail('validation_failed', '/url is not a valid URL.', {
+				errors: [{ path: '/url', message: 'must be a plain http(s) URL' }],
 			});
 		}
 		const checked = checkUrl(canonical, policy);
-		if (!checked.ok) fail('catalog_target_refused', `${path}: destination refused (${checked.reason}).`);
+		if (!checked.ok) fail('catalog_target_refused', `/url: destination refused (${checked.reason}).`);
 		return canonical;
 	};
 
@@ -253,9 +202,9 @@ export const createCatalogService = (ctx, options = {}) => {
 	};
 
 	/**
-	 * `GET <base>/.well-known/ss-app.json` (the manifest the product advertises) and its `SS-Manifest-Signature`.
+	 * `GET <base>/.well-known/ss-app.json` (the manifest the product advertises; only its slug is used).
 	 * @param {string} base
-	 * @returns {Promise<{ json: Record<string, any>, signature: string | null }>}
+	 * @returns {Promise<Record<string, any>>}
 	 */
 	const fetchAdvertised = async (base) => {
 		const res = await outbound(`${base}${WELL_KNOWN_APP}`, {
@@ -273,9 +222,7 @@ export const createCatalogService = (ctx, options = {}) => {
 			);
 		}
 		const json = parseJson(res.text);
-		if (!isObject(json)) return fail('invalid_manifest', `${WELL_KNOWN_APP} is not a JSON object.`);
-		const signature = res.headers[MANIFEST_SIGNATURE_HEADER.toLowerCase()];
-		return { json, signature: typeof signature === 'string' && signature !== '' ? signature : null };
+		return isObject(json) ? json : fail('invalid_manifest', `${WELL_KNOWN_APP} is not a JSON object.`);
 	};
 
 	/** @param {VersionDoc} doc @returns {Manifest} */
@@ -286,12 +233,21 @@ export const createCatalogService = (ctx, options = {}) => {
 
 	/** @param {AppDoc} app */
 	const currentManifest = async (app) => {
-		const doc = await repo.version(app._id, app.currentVersion);
-		if (!doc) return fail('internal_error', `App ${app._id} has no current manifest.`);
-		return manifestOf(doc);
+		const doc = app.currentVersion === null ? null : await repo.version(app._id, app.currentVersion);
+		return doc ? manifestOf(doc) : fail('conflict', `${app.slug} has no ready version yet.`);
 	};
 
 	/**
+	 * The manifest to describe an app with: the current one, else (a pack still uploading) the latest.
+	 * @param {AppDoc} app
+	 */
+	const describingManifest = async (app) => {
+		const doc = await repo.version(app._id, app.currentVersion ?? app.latestVersion);
+		return doc ? manifestOf(doc) : null;
+	};
+
+	/**
+	 * The app view (INTERFACES.md `getApp`).
 	 * @param {AppDoc} app
 	 * @param {Manifest | null} manifest
 	 */
@@ -300,21 +256,15 @@ export const createCatalogService = (ctx, options = {}) => {
 		slug: app.slug,
 		kind: app.kind,
 		status: app.status,
-		sunsetAt: app.sunsetAt instanceof Date ? app.sunsetAt.toISOString() : null,
 		name: manifest?.product.name ?? null,
 		productVersion: manifest?.product.version ?? null,
 		endpoints: manifest?.endpoints ?? null,
-		environments: {
-			production: app.environments.production?.baseUrl ?? null,
-			staging: app.environments.staging?.baseUrl ?? null,
-		},
+		baseUrl: app.kind === 'service' ? app.baseUrl : null,
 		currentVersion: app.currentVersion,
-		pendingVersion: app.pendingVersion ?? null,
-		health: app.kind === 'service' ? healthView(app.health, ctx.now(), staleAfterMs) : null,
-		createdAt: app.createdAt instanceof Date ? app.createdAt.toISOString() : null,
+		createdAt: iso(app.createdAt),
 	});
 
-	/** @param {Omit<VersionDoc, 'manifestJson'> & { manifestJson?: string }} doc */
+	/** @param {VersionDoc} doc */
 	const versionView = (doc) => ({
 		appId: doc.appId,
 		version: doc.version,
@@ -322,128 +272,99 @@ export const createCatalogService = (ctx, options = {}) => {
 		source: doc.source,
 		productVersion: doc.productVersion,
 		manifestHash: doc.manifestHash,
-		breaking: doc.breaking,
-		diff: doc.diff,
 		assets: doc.assets ?? null,
 		submittedBy: doc.submittedBy,
-		review: doc.review
-			? {
-					by: doc.review.by,
-					at: doc.review.at instanceof Date ? doc.review.at.toISOString() : doc.review.at,
-					reason: doc.review.reason,
-				}
-			: null,
-		createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : null,
-		...(doc.manifestJson ? { manifest: JSON.parse(doc.manifestJson) } : {}),
-	});
-
-	/** @param {KeyDoc} doc */
-	const keyView = (doc) => ({
-		kid: doc.kid,
-		status: doc.status,
-		thumbprint: doc.thumbprint,
-		source: doc.source,
-		notAfter: doc.notAfter instanceof Date ? doc.notAfter.toISOString() : null,
-		usable: doc.status === 'active' && (doc.notAfter === null || doc.notAfter.getTime() > ctx.now()),
-		revoked: doc.revoked ? { at: doc.revoked.at.toISOString(), by: doc.revoked.by, reason: doc.revoked.reason } : null,
-		createdAt: doc.createdAt instanceof Date ? doc.createdAt.toISOString() : null,
+		createdAt: iso(doc.createdAt),
+		manifest: JSON.parse(doc.manifestJson),
 	});
 
 	/**
-	 * Keys an app may currently sign with (active, inside any overlap window).
-	 * @param {string} appId
+	 * @param {{ actor: Actor | { type: string, id: string }, action: string, app: string, before?: unknown,
+	 *   after?: unknown, requestId?: string | null, ip?: string | null, merchantId?: string | null }} entry
 	 */
-	const usableKeys = async (appId) =>
-		(await repo.keys(appId)).filter((k) => k.status === 'active' && (k.notAfter === null || k.notAfter.getTime() > ctx.now()));
-
-	/**
-	 * @param {{ actor: Actor | { type: string, id: string }, action: string, app: { _id: string } | string, before?: unknown,
-	 *   after?: unknown, reason?: string | null, requestId?: string | null, ip?: string | null, merchantId?: string | null }} entry
-	 */
-	const audit = ({ actor, action, app, before, after, reason = null, requestId = null, ip = null, merchantId = null }) =>
+	const audit = ({ actor, action, app, before, after, requestId = null, ip = null, merchantId = null }) =>
 		ctx.audit.record({
 			actor: /** @type {any} */ (actor),
 			action,
-			target: { type: 'app', id: typeof app === 'string' ? app : app._id, merchantId },
+			target: { type: 'app', id: app, merchantId },
 			...(before === undefined ? {} : { before }),
 			...(after === undefined ? {} : { after }),
-			reason,
+			reason: null,
 			requestId,
 			ip,
 		});
 
 	/**
-	 * `manifest.accepted@1` through the integration module (skipped when it is not registered).
+	 * A new current version: `manifest.accepted@1` (integration) and re-signed entitlements (commerce); both optional
+	 * and failure-tolerant (logged).
 	 * @param {AppDoc} app
 	 * @param {VersionDoc} version
 	 */
-	const emitAccepted = async (app, version) => {
-		if (!ctx.moduleNames().includes('integration')) return;
-		try {
-			const integration = ctx.service('integration');
-			if (typeof integration.emitControl !== 'function') return;
-			await integration.emitControl(
-				'manifest.accepted@1',
-				{
-					appId: app._id,
-					slug: app.slug,
-					kind: app.kind,
-					version: version.version,
-					productVersion: version.productVersion,
-					manifestHash: version.manifestHash,
-					breaking: version.breaking,
-				},
-				{ appIds: [app._id] },
-			);
-		} catch (error) {
-			ctx.logger.error('manifest.accepted emission failed', { error, appId: app._id, version: version.version });
+	const announce = async (app, version) => {
+		const names = ctx.moduleNames();
+		if (names.includes('integration')) {
+			try {
+				await ctx.service('integration').emitControl(
+					'manifest.accepted@1',
+					{
+						appId: app._id,
+						slug: app.slug,
+						kind: app.kind,
+						version: version.version,
+						productVersion: version.productVersion,
+						manifestHash: version.manifestHash,
+					},
+					{ appIds: [app._id] },
+				);
+			} catch (error) {
+				ctx.logger.error('manifest.accepted emission failed', { error, appId: app._id, version: version.version });
+			}
+		}
+		if (names.includes('commerce')) {
+			try {
+				await ctx.service('commerce').invalidateApp(app._id);
+			} catch (error) {
+				ctx.logger.error('entitlement refresh after a new manifest failed', { error, appId: app._id });
+			}
 		}
 	};
 
 	/**
-	 * Store a candidate as the pending version (superseding an older pending one).
-	 * @param {{ app: AppDoc, manifest: Manifest, source: 'refresh' | 'upload', submittedBy: string,
-	 *   assets?: VersionDoc['assets'], signature?: VersionDoc['signature'] }} input
+	 * Make a stored version the app's current one (the previous current version is superseded) and announce it.
+	 * @param {AppDoc} app
+	 * @param {VersionDoc} doc
 	 */
-	const storePending = async ({ app, manifest, source, submittedBy, assets = null, signature = null }) => {
-		const accepted = await currentManifest(app);
-		const diff = diffManifests(accepted, manifest);
-		const version = /** @type {number} */ (await repo.nextVersion(app._id));
-		/** @type {VersionDoc} */
-		const doc = {
-			_id: versionId(app._id, version),
-			appId: app._id,
-			version,
-			manifestJson: canonicalJson(manifest),
-			manifestHash: hashManifest(manifest),
-			productVersion: manifest.product.version,
-			status: 'pending',
-			source,
-			diff,
-			breaking: diff.isBreaking,
-			assets,
-			signature,
-			submittedBy,
-			review: null,
-		};
-		await repo.insertVersion(doc);
-		const updated = await repo.updateApp(app._id, {}, { $set: { pendingVersion: version } });
-		if (app.pendingVersion && app.pendingVersion !== version)
-			await repo.setVersionStatus(app._id, app.pendingVersion, 'pending', { status: 'superseded' });
-		return { app: /** @type {AppDoc} */ (updated), version: doc };
+	const makeCurrent = async (app, doc) => {
+		const updated =
+			(await repo.updateApp(app._id, { currentVersion: app.currentVersion }, { $set: { currentVersion: doc.version } })) ??
+			fail('conflict', 'The app changed concurrently; retry.');
+		if (app.currentVersion !== null) await repo.setVersionStatus(app._id, app.currentVersion, 'accepted', 'superseded');
+		await announce(updated, doc);
+		return updated;
 	};
 
 	/**
-	 * Is this candidate identical to the current or the pending version?
-	 * @param {AppDoc} app
-	 * @param {string} hash
-	 * @returns {Promise<VersionDoc | null>}
+	 * @param {{ appId: string, manifest: Manifest, status: VersionDoc['status'], source: VersionDoc['source'],
+	 *   submittedBy: string, assets?: VersionDoc['assets'], version?: number }} input
+	 * @returns {Promise<VersionDoc>}
 	 */
-	const sameAsKnown = async (app, hash) => {
-		const refs = [{ appId: app._id, version: app.currentVersion }];
-		if (app.pendingVersion) refs.push({ appId: app._id, version: app.pendingVersion });
-		const docs = await repo.versionsByRef(refs);
-		return docs.find((d) => d.manifestHash === hash) ?? null;
+	const storeVersion = async ({ appId, manifest, status, source, submittedBy, assets = null, version }) => {
+		const n = version ?? (await repo.nextVersion(appId));
+		/** @type {VersionDoc} */
+		const doc = {
+			_id: versionId(appId, n),
+			appId,
+			version: n,
+			manifestJson: canonicalJson(manifest),
+			manifestHash: hashManifest(manifest),
+			productVersion: manifest.product.version,
+			status,
+			source,
+			assets,
+			submittedBy,
+		};
+		await repo.insertVersion(doc);
+		return doc;
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -452,8 +373,9 @@ export const createCatalogService = (ctx, options = {}) => {
 	/**
 	 * Admin → Apps → Add product: `POST <url>/.well-known/ss-connect`, HMAC-signed with the deployer's `CONNECT_SECRET`
 	 * (`@ss/protocol` `createConnectRequest`; the secret itself is never sent nor stored). The product answers its public
-	 * key and manifest, HMAC-signed with the same secret; the app is then stored with its base URL and key pinned.
-	 * Connecting again (same slug) replaces the binding: the key and the address move, the old keys are revoked.
+	 * key and manifest, HMAC-signed with the same secret; the app is then stored (inactive) with its base URL and key.
+	 * Connecting again (same slug) replaces the binding: address and key move, and a changed manifest becomes the current
+	 * version at once (`priceChanges` lists the element prices that changed).
 	 * @param {{ url: unknown, secret: unknown } & Audited} input
 	 */
 	const connectProduct = async ({ url, secret, actor, requestId = null, ip = null }) => {
@@ -461,10 +383,10 @@ export const createCatalogService = (ctx, options = {}) => {
 			fail('validation_failed', 'The connect secret must be at least 32 characters.', {
 				errors: [{ path: '/secret', message: 'must be at least 32 characters' }],
 			});
-		const base = baseUrlOf(String(url ?? ''), '/url');
+		const base = baseUrlOf(String(url ?? ''));
 		// the advertised (unsigned) manifest only picks the app to replace; the signed answer is what is stored
 		const advertised = await fetchAdvertised(base);
-		const slug = isObject(advertised.json.product) ? advertised.json.product.slug : undefined;
+		const slug = isObject(advertised.product) ? advertised.product.slug : undefined;
 		const existing = typeof slug === 'string' ? await repo.appBySlug(slug) : null;
 		if (existing && existing.kind !== 'service') fail('conflict', `${existing.slug} is not a service product.`);
 		const appId = existing?._id ?? createId('app', { randomBytes: ctx.randomBytes });
@@ -505,487 +427,231 @@ export const createCatalogService = (ctx, options = {}) => {
 		const manifest = checkedManifest(verified.manifest, 'service', '/manifest');
 		if (existing && existing.slug !== manifest.product.slug)
 			fail('conflict', `The product answered ${manifest.product.slug}, not ${existing.slug}.`);
-		const key = {
-			_id: keyId(appId, verified.publicJwk.kid),
-			appId,
-			kid: verified.publicJwk.kid,
-			publicJwk: verified.publicJwk,
-			thumbprint: verified.thumbprint,
-			status: /** @type {const} */ ('active'),
-			notAfter: null,
-			source: 'connection',
-			revoked: null,
-		};
-		if (existing) {
-			const at = new Date(ctx.now());
-			for (const old of await repo.keys(appId))
-				if (old.status === 'active' && old.kid !== key.kid)
-					await repo.revokeKey(appId, old.kid, { at, by: actor.id, reason: 'reconnected' });
-			if (!(await repo.keys(appId)).some((k) => k.kid === key.kid && k.status === 'active')) await repo.insertKey(key);
-			await repo.updateApp(appId, {}, { $set: { 'environments.production': { baseUrl: base } } });
-			if (!(await sameAsKnown(existing, hashManifest(manifest))))
-				await storePending({ app: existing, manifest, source: 'refresh', submittedBy: actor.id });
-			await audit({
-				actor,
-				action: 'catalog.app_reconnected',
-				app: appId,
-				after: { baseUrl: base, kid: key.kid },
-				requestId,
-				ip,
-			});
-		} else {
+		const kid = verified.publicJwk.kid;
+		const key = { _id: keyId(appId, kid), appId, kid, publicJwk: verified.publicJwk, thumbprint: verified.thumbprint };
+
+		if (!existing) {
 			/** @type {AppDoc} */
 			const app = {
 				_id: appId,
 				slug: manifest.product.slug,
 				kind: 'service',
-				status: 'pending',
-				sunsetAt: null,
-				environments: { production: { baseUrl: base }, staging: null },
+				status: 'inactive',
+				baseUrl: base,
 				currentVersion: 1,
-				pendingVersion: null,
 				latestVersion: 1,
-				health: null,
 				createdBy: actor.id,
 			};
 			if (!(await repo.insertApp(app))) fail('conflict', `An app with slug ${manifest.product.slug} exists.`);
-			/** @type {VersionDoc} */
-			const version = {
-				_id: versionId(appId, 1),
+			const version = await storeVersion({
 				appId,
-				version: 1,
-				manifestJson: canonicalJson(manifest),
-				manifestHash: hashManifest(manifest),
-				productVersion: manifest.product.version,
+				manifest,
 				status: 'accepted',
 				source: 'connection',
-				diff: diffManifests(null, manifest),
-				breaking: false,
-				assets: null,
-				signature: null,
 				submittedBy: actor.id,
-				review: { by: actor.id, at: new Date(ctx.now()), reason: 'connection' },
-			};
-			await repo.insertVersion(version);
+				version: 1,
+			});
 			await repo.insertKey(key);
 			await audit({
 				actor,
 				action: 'catalog.app_connected',
 				app: appId,
-				after: { slug: app.slug, kind: 'service', baseUrl: base, kid: key.kid, manifestHash: version.manifestHash },
+				after: { slug: app.slug, kind: 'service', baseUrl: base, kid, manifestHash: version.manifestHash },
 				requestId,
 				ip,
 			});
+			return { appId, slug: app.slug, baseUrl: base, kid, reconnected: false, version: 1 };
 		}
-		return { appId, slug: manifest.product.slug, baseUrl: base, kid: key.kid, reconnected: Boolean(existing) };
+
+		await repo.insertKey(key);
+		await repo.dropOtherKeys(appId, kid);
+		const app = /** @type {AppDoc} */ (await repo.updateApp(appId, {}, { $set: { baseUrl: base } }));
+		const before = await currentManifest(app);
+		/** @type {ReturnType<typeof priceChanges>} */
+		let changes = [];
+		let version = /** @type {number} */ (app.currentVersion);
+		if (hashManifest(before) !== hashManifest(manifest)) {
+			const doc = await storeVersion({ appId, manifest, status: 'accepted', source: 'connection', submittedBy: actor.id });
+			await makeCurrent(app, doc);
+			changes = priceChanges(before, manifest);
+			version = doc.version;
+		}
+		await audit({
+			actor,
+			action: 'catalog.app_reconnected',
+			app: appId,
+			before: { baseUrl: existing.baseUrl, currentVersion: existing.currentVersion },
+			after: { baseUrl: base, kid, currentVersion: version },
+			requestId,
+			ip,
+		});
+		return {
+			appId,
+			slug: app.slug,
+			baseUrl: base,
+			kid,
+			reconnected: true,
+			version,
+			...(changes.length > 0 ? { priceChanges: changes } : {}),
+		};
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
-	// packs
+	// packs and widgets
 
 	/**
-	 * Upload a signed pack bundle descriptor: a new pack (pins `publicJwk`) or a new pending version of an existing one.
+	 * `POST /v1/admin/packs` `{ descriptor }` (`ss pack build`): a new pack (inactive, version 1 uploading), a new
+	 * uploading version of an existing pack (no change when manifest and assets are the same as its latest version), or
+	 * the widgets of a connected service product (handed to delivery `registerWidgets`; their elements must be mode A in
+	 * the product's current manifest). Assets then go to the returned `uploadPath` one by one (delivery).
 	 * @param {{ body: unknown } & Audited} input
 	 */
 	const uploadPack = async ({ body, actor, requestId = null, ip = null }) => {
 		const parsed = parseBundleUpload(body);
 		if (!parsed.ok) return fail('catalog_bundle_invalid', 'The bundle upload is invalid.', { errors: parsed.errors });
-		const { descriptor, signature, publicJwk } = parsed.value;
-		const manifest = checkedManifest(descriptor.manifest, 'pack', '/descriptor/manifest');
+		const { descriptor } = parsed.value;
+		const declared = /** @type {Record<string, any>} */ (descriptor.manifest);
+		const existing = isObject(declared.product) ? await repo.appBySlug(String(declared.product.slug)) : null;
+
+		if (existing?.kind === 'service') {
+			const errors = checkWidgetManifest(declared, await currentManifest(existing));
+			if (errors.length === 0) errors.push(...checkBundleAssets(/** @type {Manifest} */ (declared), descriptor.assets));
+			if (errors.length > 0) fail('catalog_bundle_invalid', 'The widget bundle does not match the product.', { errors });
+			const registered = await ctx.service('delivery').registerWidgets({ appId: existing._id, descriptor, actor });
+			return { appId: existing._id, slug: existing.slug, kind: /** @type {const} */ ('service'), ...registered };
+		}
+
+		const manifest = checkedManifest(declared, 'pack', '/descriptor/manifest');
 		const assetErrors = checkBundleAssets(manifest, descriptor.assets);
 		if (assetErrors.length > 0)
 			fail('catalog_bundle_invalid', 'The bundle does not contain the modules it declares.', { errors: assetErrors });
-		const hash = hashManifest(manifest);
 		const assets = descriptor.assets.map((a) => ({
 			path: a.path,
 			sha256: a.sha256,
 			size: a.size,
 			...(a.contentType ? { contentType: a.contentType } : {}),
 		}));
-		const existing = await repo.appBySlug(manifest.product.slug);
+		/** @param {AppDoc} app @param {VersionDoc} doc @param {boolean} changed */
+		const answer = (app, doc, changed) => ({
+			appId: app._id,
+			slug: app.slug,
+			kind: /** @type {const} */ ('pack'),
+			version: doc.version,
+			status: doc.status === 'uploading' ? 'uploading' : 'ready',
+			missing: doc.status === 'uploading' ? (doc.assets ?? []).map((a) => a.path) : [],
+			uploadPath: `/v1/admin/packs/${app._id}/versions/${doc.version}/assets/`,
+			changed,
+		});
 
 		if (existing) {
-			if (existing.kind !== 'pack') fail('conflict', `${manifest.product.slug} is a service product.`);
-			if (existing.status === 'retired') fail('conflict', `${manifest.product.slug} is retired.`);
-			const keys = await usableKeys(existing._id);
-			if (publicJwk !== undefined && !keys.some((k) => isObject(publicJwk) && k.kid === publicJwk.kid))
-				fail('catalog_bundle_invalid', 'New signing keys cannot be introduced by an upload; sign with a registered key.');
-			if (!(await verifyBundle({ descriptor, signature, keys: keys.map((k) => k.publicJwk) })))
-				fail('catalog_bundle_invalid', 'The bundle signature does not verify under the pack keys.');
-			const known = await sameAsKnown(existing, hash);
-			if (known)
-				return { app: appView(existing, await currentManifest(existing)), version: versionView(known), changed: false };
-			const stored = await storePending({
-				app: existing,
+			const latest = await repo.version(existing._id, existing.latestVersion);
+			if (
+				latest &&
+				latest.status !== 'superseded' &&
+				latest.manifestHash === hashManifest(manifest) &&
+				canonicalJson(latest.assets ?? []) === canonicalJson(assets)
+			)
+				return answer(existing, latest, false);
+			const doc = await storeVersion({
+				appId: existing._id,
 				manifest,
+				status: 'uploading',
 				source: 'upload',
 				submittedBy: actor.id,
 				assets,
-				signature,
 			});
+			await repo.supersedeUploads(existing._id, doc.version);
 			await audit({
 				actor,
 				action: 'catalog.pack_uploaded',
 				app: existing._id,
-				after: { version: stored.version.version, manifestHash: hash, breaking: stored.version.breaking },
+				after: { version: doc.version, manifestHash: doc.manifestHash, assets: assets.length },
 				requestId,
 				ip,
 			});
-			return {
-				app: appView(stored.app, await currentManifest(stored.app)),
-				version: versionView(stored.version),
-				changed: true,
-			};
+			return answer(existing, doc, true);
 		}
 
-		/** @type {import('@ss/protocol').PublicJwk} */
-		let jwk;
-		try {
-			jwk = toPublicJwk(publicJwk);
-		} catch {
-			return fail('catalog_bundle_invalid', 'A new pack needs the developer publicJwk (Ed25519).', {
-				errors: [{ path: '/publicJwk', message: 'must be an Ed25519 public JWK' }],
-			});
-		}
-		if (jwk.kid !== signature.kid) fail('catalog_bundle_invalid', 'signature.kid must be the kid of publicJwk.');
-		if (!(await verifyBundle({ descriptor, signature, keys: [jwk] })))
-			fail('catalog_bundle_invalid', 'The bundle signature does not verify under publicJwk.');
 		const appId = createId('app', { randomBytes: ctx.randomBytes });
 		/** @type {AppDoc} */
 		const app = {
 			_id: appId,
 			slug: manifest.product.slug,
 			kind: 'pack',
-			status: 'pending',
-			sunsetAt: null,
-			environments: { production: null, staging: null },
-			currentVersion: 1,
-			pendingVersion: null,
+			status: 'inactive',
+			baseUrl: null,
+			currentVersion: null,
 			latestVersion: 1,
-			health: null,
 			createdBy: actor.id,
 		};
 		if (!(await repo.insertApp(app))) fail('conflict', `An app with slug ${manifest.product.slug} already exists.`);
-		/** @type {VersionDoc} */
-		const version = {
-			_id: versionId(appId, 1),
+		const doc = await storeVersion({
 			appId,
-			version: 1,
-			manifestJson: canonicalJson(manifest),
-			manifestHash: hash,
-			productVersion: manifest.product.version,
-			status: 'accepted',
+			manifest,
+			status: 'uploading',
 			source: 'upload',
-			diff: diffManifests(null, manifest),
-			breaking: false,
-			assets,
-			signature,
 			submittedBy: actor.id,
-			review: { by: actor.id, at: new Date(ctx.now()), reason: 'first upload' },
-		};
-		await repo.insertVersion(version);
-		await repo.insertKey({
-			_id: keyId(appId, jwk.kid),
-			appId,
-			kid: jwk.kid,
-			publicJwk: jwk,
-			thumbprint: await thumbprint(jwk),
-			status: 'active',
-			notAfter: null,
-			source: 'upload',
-			revoked: null,
+			assets,
+			version: 1,
 		});
 		await audit({
 			actor,
 			action: 'catalog.pack_created',
 			app: appId,
-			after: { slug: app.slug, kid: jwk.kid, manifestHash: hash, assets: assets.length },
+			after: { slug: app.slug, manifestHash: doc.manifestHash, assets: assets.length },
 			requestId,
 			ip,
 		});
-		return { app: appView(app, manifest), version: versionView(version), changed: true };
-	};
-
-	// ------------------------------------------------------------------------------------------------------------
-	// manifest versions
-
-	/**
-	 * Why a refreshed manifest's `SS-Manifest-Signature` is not acceptable (`null` when it verifies under one of the
-	 * app's registered keys, for this appId, over exactly this manifest, and is at most 24 h old).
-	 * @param {AppDoc} app
-	 * @param {Manifest} manifest
-	 * @param {string | null} signature
-	 * @returns {Promise<string | null>}
-	 */
-	const signatureRefusal = async (app, manifest, signature) => {
-		if (signature === null) return 'manifest_signature_missing';
-		const keyResolver = await appKeys(app._id);
-		if (!keyResolver) return 'manifest_signature_no_keys';
-		try {
-			await verifyManifest({ manifest, jws: signature, keyResolver, expectedAppId: app._id, now: ctx.now });
-			return null;
-		} catch (error) {
-			return `manifest_signature_${isProtocolError(error) ? error.code : 'invalid'}`;
-		}
+		return answer(app, doc, true);
 	};
 
 	/**
-	 * Store a refreshed manifest whose signature failed as a `rejected` version (once per hash and reason), audit it
-	 * and raise an alert. Nothing about the app changes.
-	 * @param {{ app: AppDoc, manifest: Manifest, reason: string, actor: Actor | { type: string, id: string },
-	 *   requestId: string | null, ip: string | null }} input
+	 * Delivery has every asset of an uploading pack version: it becomes the current version (the previous one is
+	 * superseded; an upload older than the latest one is superseded already), `manifest.accepted@1` is emitted and
+	 * entitlements re-signed. Idempotent.
+	 * @param {{ appId: string, version: number }} input
 	 */
-	const rejectRefresh = async ({ app, manifest, reason, actor, requestId, ip }) => {
-		const hash = hashManifest(manifest);
-		const latest = await repo.version(app._id, app.latestVersion);
-		if (latest && latest.status === 'rejected' && latest.manifestHash === hash && latest.review?.reason === reason)
-			return { changed: false, rejected: true, reason, version: versionView(latest) };
-		const diff = diffManifests(await currentManifest(app), manifest);
-		const version = /** @type {number} */ (await repo.nextVersion(app._id));
-		/** @type {VersionDoc} */
-		const doc = {
-			_id: versionId(app._id, version),
-			appId: app._id,
-			version,
-			manifestJson: canonicalJson(manifest),
-			manifestHash: hash,
-			productVersion: manifest.product.version,
-			status: 'rejected',
-			source: 'refresh',
-			diff,
-			breaking: diff.isBreaking,
-			assets: null,
-			signature: null,
-			submittedBy: actor.id,
-			review: { by: SYSTEM.id, at: new Date(ctx.now()), reason },
-		};
-		await repo.insertVersion(doc);
-		await audit({
-			actor,
-			action: 'catalog.manifest_signature_rejected',
-			app: app._id,
-			after: { version, manifestHash: hash },
-			reason,
-			requestId,
-			ip,
-		});
-		ctx.logger.error('catalog alert: refreshed manifest refused', { appId: app._id, version, reason });
-		return { changed: false, rejected: true, reason, version: versionView(doc) };
-	};
-
-	/**
-	 * Fetch the product's advertised manifest and store it as a pending version when it changed. The manifest must
-	 * carry a valid `SS-Manifest-Signature` (`@ss/protocol` `verifyManifest` with the app's registered keys); an
-	 * unsigned or invalid one is stored as `rejected` with the reason and alerted (`rejectRefresh`).
-	 * @param {{ appId: string } & Partial<Audited>} input
-	 */
-	const refreshManifest = async ({ appId, actor = SYSTEM, requestId = null, ip = null }) => {
-		const app = await appDoc(appId);
-		if (app.kind !== 'service') fail('conflict', 'Packs are updated by uploading a new signed bundle.');
-		if (app.status === 'retired') fail('conflict', 'The app is retired.');
-		const base = app.environments.production?.baseUrl ?? fail('conflict', 'The app has no production environment.');
-		baseUrlOf(base, '/environments/production');
-		const advertised = await fetchAdvertised(base);
-		const manifest = checkedManifest(advertised.json, 'service');
-		if (manifest.product.slug !== app.slug)
-			fail('invalid_manifest', `The manifest slug changed from ${app.slug} to ${manifest.product.slug}.`);
-		const refusal = await signatureRefusal(app, manifest, advertised.signature);
-		if (refusal) return rejectRefresh({ app, manifest, reason: refusal, actor, requestId, ip });
-		const known = await sameAsKnown(app, hashManifest(manifest));
-		if (known) return { changed: false, version: versionView(known) };
-		const stored = await storePending({ app, manifest, source: 'refresh', submittedBy: actor.id });
-		await audit({
-			actor,
-			action: 'catalog.manifest_refreshed',
-			app: appId,
-			after: { version: stored.version.version, manifestHash: stored.version.manifestHash, breaking: stored.version.breaking },
-			requestId,
-			ip,
-		});
-		return { changed: true, version: versionView(stored.version) };
-	};
-
-	/**
-	 * Approve or reject a pending version. Approval makes it current and emits `manifest.accepted@1` for live apps.
-	 * @param {{ appId: string, version: number, action: 'approve' | 'reject', reason?: string | null } & Audited} input
-	 */
-	const reviewVersion = async ({ appId, version, action, reason = null, actor, requestId = null, ip = null }) => {
+	const versionReady = async ({ appId, version }) => {
 		const app = await appDoc(appId);
 		const doc = (await repo.version(appId, version)) ?? fail('not_found', `No version ${version} of ${appId}.`);
-		const refusal = reviewRefusal({ versionStatus: doc.status, appStatus: app.status, action });
-		if (refusal) fail('conflict', refusal);
-		const review = { by: actor.id, at: new Date(ctx.now()), reason };
-		if (action === 'reject') {
-			if (!(await repo.setVersionStatus(appId, version, 'pending', { status: 'rejected', review })))
-				fail('conflict', 'The version changed concurrently.');
-			if (app.pendingVersion === version)
-				await repo.updateApp(appId, { pendingVersion: version }, { $set: { pendingVersion: null } });
-			await audit({ actor, action: 'catalog.version_rejected', app: appId, after: { version }, reason, requestId, ip });
-			return versionView({ ...doc, status: 'rejected', review });
+		if (doc.status === 'uploading' && (await repo.setVersionStatus(appId, version, 'uploading', 'accepted'))) {
+			await makeCurrent(app, { ...doc, status: 'accepted' });
+			await audit({ actor: SYSTEM, action: 'catalog.version_ready', app: appId, after: { version } });
 		}
-		const updated = await repo.updateApp(
-			appId,
-			{ currentVersion: app.currentVersion, pendingVersion: app.pendingVersion },
-			{ $set: { currentVersion: version, pendingVersion: app.pendingVersion === version ? null : app.pendingVersion } },
-		);
-		if (!updated) fail('conflict', 'The app changed concurrently; reload and retry.');
-		await repo.setVersionStatus(appId, version, 'pending', { status: 'accepted', review });
-		await repo.setVersionStatus(appId, app.currentVersion, 'accepted', { status: 'superseded' });
-		const accepted = { ...doc, status: /** @type {const} */ ('accepted'), review };
-		await audit({
-			actor,
-			action: 'catalog.version_approved',
-			app: appId,
-			before: { currentVersion: app.currentVersion },
-			after: { currentVersion: version, breaking: doc.breaking },
-			reason,
-			requestId,
-			ip,
-		});
-		if (updated.status === 'active' || updated.status === 'deprecated') await emitAccepted(updated, accepted);
-		return versionView(accepted);
+		const fresh = await appDoc(appId);
+		return appView(fresh, await describingManifest(fresh));
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
-	// lifecycle, environments, keys
+	// status
 
 	/**
-	 * @param {{ appId: string, action: 'activate' | 'deprecate' | 'retire', sunsetAt?: string | null, reason?: string | null,
-	 *   force?: boolean } & Audited} input
+	 * `POST /v1/admin/apps/:appId/status`: inactive apps are not listed nor newly subscribable, and merchants cannot
+	 * open them; existing subscriptions keep working.
+	 * @param {{ appId: string, status: 'active' | 'inactive' } & Audited} input
 	 */
-	const setLifecycle = async ({
-		appId,
-		action,
-		sunsetAt = null,
-		reason = null,
-		force = false,
-		actor,
-		requestId = null,
-		ip = null,
-	}) => {
+	const setStatus = async ({ appId, status, actor, requestId = null, ip = null }) => {
 		const app = await appDoc(appId);
-		const next = applyLifecycle({ status: app.status, action, now: ctx.now(), sunsetAt, currentSunsetAt: app.sunsetAt, force });
-		if (!next.ok) return fail('conflict', next.reason);
+		if (app.status === status) return appView(app, await describingManifest(app));
+		if (status === 'active' && app.currentVersion === null)
+			fail('conflict', `${app.slug} has no ready version yet; upload its assets first.`);
 		const updated =
-			(await repo.updateApp(appId, { status: app.status }, { $set: { status: next.status, sunsetAt: next.sunsetAt } })) ??
+			(await repo.updateApp(appId, { status: app.status }, { $set: { status } })) ??
 			fail('conflict', 'The app changed concurrently; reload and retry.');
 		await audit({
 			actor,
-			action: `catalog.app_${action === 'activate' ? 'activated' : action === 'deprecate' ? 'deprecated' : 'retired'}`,
+			action: status === 'active' ? 'catalog.app_activated' : 'catalog.app_deactivated',
 			app: appId,
-			before: { status: app.status, sunsetAt: app.sunsetAt },
-			after: { status: next.status, sunsetAt: next.sunsetAt },
-			reason,
+			before: { status: app.status },
+			after: { status },
 			requestId,
 			ip,
 		});
-		if (action === 'activate' && app.status === 'pending') {
-			const current = await repo.version(appId, updated.currentVersion);
-			if (current) await emitAccepted(updated, current);
-		}
-		return appView(updated, await currentManifest(updated));
-	};
-
-	/**
-	 * @param {{ appId: string, production?: string, staging?: string | null } & Audited} input
-	 */
-	const setEnvironments = async ({ appId, production, staging, actor, requestId = null, ip = null }) => {
-		const app = await appDoc(appId);
-		if (app.kind !== 'service') fail('conflict', 'Packs have no environments.');
-		/** @type {Record<string, unknown>} */
-		const set = {};
-		if (production !== undefined) set['environments.production'] = { baseUrl: baseUrlOf(production, '/production') };
-		if (staging === null) set['environments.staging'] = null;
-		else if (staging !== undefined) set['environments.staging'] = { baseUrl: baseUrlOf(staging, '/staging') };
-		const updated = /** @type {AppDoc} */ (await repo.updateApp(appId, {}, { $set: set }));
-		await audit({
-			actor,
-			action: 'catalog.environments_set',
-			app: appId,
-			before: app.environments,
-			after: updated.environments,
-			requestId,
-			ip,
-		});
-		return appView(updated, await currentManifest(updated));
-	};
-
-	/**
-	 * @param {{ appId: string, kid: string, reason: string } & Audited} input
-	 */
-	const revokeKey = async ({ appId, kid, reason, actor, requestId = null, ip = null }) => {
-		await appDoc(appId);
-		const revoked = { at: new Date(ctx.now()), by: actor.id, reason };
-		if (!(await repo.revokeKey(appId, kid, revoked))) fail('not_found', `No active key ${kid}.`);
-		await audit({ actor, action: 'catalog.key_revoked', app: appId, after: { kid }, reason, requestId, ip });
-		return { kid, status: 'revoked', keys: (await repo.keys(appId)).map(keyView) };
+		return appView(updated, await describingManifest(updated));
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
-	// product calls (F.9)
-
-	/**
-	 * `POST /v1/product/heartbeat`
-	 * @param {{ appId: string, body: unknown }} input
-	 */
-	const recordHeartbeat = async ({ appId, body }) => {
-		const parsed = parseHeartbeat(body);
-		if (!parsed.ok) return fail('validation_failed', 'The heartbeat is invalid.', { errors: parsed.errors });
-		const at = new Date(ctx.now());
-		const updated = await repo.updateApp(
-			appId,
-			{ kind: 'service' },
-			{ $set: { health: { lastHeartbeatAt: at, lastSeenAt: at, ...parsed.value } } },
-		);
-		if (!updated) fail('not_found', 'Unknown app.');
-		return { ok: true, serverTime: at.toISOString() };
-	};
-
-	/**
-	 * `POST /v1/product/keys/rotate` — the product announces its next key; current keys stay valid for the overlap.
-	 * @param {{ appId: string, publicJwk: unknown, requestId?: string | null }} input
-	 */
-	const rotateKey = async ({ appId, publicJwk, requestId = null }) => {
-		/** @type {import('@ss/protocol').PublicJwk} */
-		let jwk;
-		try {
-			jwk = toPublicJwk(publicJwk);
-		} catch {
-			return fail('validation_failed', 'publicJwk must be an Ed25519 public JWK.', {
-				errors: [{ path: '/publicJwk', message: 'must be an Ed25519 public JWK' }],
-			});
-		}
-		if (jwk.nbf !== undefined || jwk.exp !== undefined) jwk = toPublicJwk({ ...jwk, nbf: undefined, exp: undefined });
-		const app = await appDoc(appId);
-		if (app.kind !== 'service') fail('conflict', 'Only service products rotate keys this way.');
-		const all = await repo.keys(appId);
-		const jkt = await thumbprint(jwk);
-		if (all.some((k) => k.kid === jwk.kid || k.thumbprint === jkt)) fail('conflict', 'This key is already registered.');
-		const usable = all.filter((k) => k.status === 'active' && (k.notAfter === null || k.notAfter.getTime() > ctx.now()));
-		if (usable.length >= MAX_ACTIVE_KEYS) fail('conflict', `An app may hold at most ${MAX_ACTIVE_KEYS} keys at once.`);
-		const until = new Date(ctx.now() + KEY_OVERLAP_MS);
-		await repo.limitActiveKeys(appId, until);
-		await repo.insertKey({
-			_id: keyId(appId, jwk.kid),
-			appId,
-			kid: jwk.kid,
-			publicJwk: jwk,
-			thumbprint: jkt,
-			status: 'active',
-			notAfter: null,
-			source: 'rotation',
-			revoked: null,
-		});
-		await audit({
-			actor: { type: 'product', id: appId },
-			action: 'catalog.key_rotated',
-			app: appId,
-			after: { kid: jwk.kid },
-			requestId,
-		});
-		const kids = (await usableKeys(appId)).map((k) => k.kid);
-		return { kid: jwk.kid, kids, previousValidUntil: until.toISOString() };
-	};
+	// launches and the keys port
 
 	/**
 	 * `POST /v1/product/launch/consume` — single use through the shared replay store.
@@ -999,21 +665,18 @@ export const createCatalogService = (ctx, options = {}) => {
 		return { consumed: !seen };
 	};
 
-	// ------------------------------------------------------------------------------------------------------------
-	// launches and keys port
-
 	/**
-	 * Issue an SSO launch (INTERFACES.md): `{ url, token }` with `url = <product>/sso?launch=<token>`.
+	 * Issue an SSO launch (INTERFACES.md): `{ url, token }` with `url = <baseUrl>/sso?launch=<token>`.
 	 * @param {LaunchInput & { requestId?: string | null, ip?: string | null }} input
 	 */
 	const issueLaunch = async (input) => {
 		const app = await appDoc(input.appId);
-		const manifest = await currentManifest(app);
-		const refusal = launchRefusal({ input, app, manifest });
+		const refusal =
+			app.kind === 'service'
+				? launchRefusal({ input, app, manifest: await currentManifest(app) })
+				: 'element packs have no dashboard to launch';
 		if (refusal) fail('catalog_launch_refused', refusal);
-		const environment = input.environment ?? 'production';
-		const base =
-			app.environments[environment]?.baseUrl ?? fail('catalog_launch_refused', `The app has no ${environment} environment.`);
+		const base = app.baseUrl ?? fail('catalog_launch_refused', 'The app has no connected address.');
 		/** @type {Awaited<ReturnType<typeof protocolIssueLaunch>>} */
 		let issued;
 		try {
@@ -1026,8 +689,6 @@ export const createCatalogService = (ctx, options = {}) => {
 				user: input.user,
 				scope: input.scope ?? {},
 				...(input.subscriptions === undefined ? {} : { subscriptions: input.subscriptions }),
-				...(input.kind === 'impersonate' ? { actor: input.actor } : {}),
-				...(input.impersonationSeconds === undefined ? {} : { impersonationSeconds: input.impersonationSeconds }),
 				now: ctx.now,
 				randomBytes: ctx.randomBytes,
 			});
@@ -1055,9 +716,7 @@ export const createCatalogService = (ctx, options = {}) => {
 					kind: claims.kind,
 					subject: claims.sub,
 					jti: claims.jti,
-					environment,
 					...(claims.scope.all === true ? { scope: 'all' } : {}),
-					...(claims.impExp ? { impExp: claims.impExp } : {}),
 				},
 				requestId: input.requestId ?? null,
 				ip: input.ip ?? null,
@@ -1067,72 +726,17 @@ export const createCatalogService = (ctx, options = {}) => {
 	};
 
 	/**
-	 * Port `appKeys(appId)`: resolver over the app's usable keys (revoked keys excluded, overlap ends as JWK `exp`).
-	 * Packs and retired apps never authenticate.
+	 * Port `appKeys(appId)`: resolver over the connected service product's key. Packs never authenticate.
 	 * @param {string} appId
 	 * @returns {Promise<KeyResolver | null>}
 	 */
 	const appKeys = async (appId) => {
 		if (typeof appId !== 'string' || appId.length === 0 || appId.length > 128) return null;
 		const app = await repo.app(appId);
-		if (!app || app.kind !== 'service' || app.status === 'retired') return null;
-		// a product calling the Portal is how the Portal knows it is alive (no periodic heartbeat, F.19)
-		const seen = app.health?.lastSeenAt instanceof Date ? app.health.lastSeenAt.getTime() : 0;
-		if (ctx.now() - seen >= SEEN_EVERY_MS)
-			await stored
-				.updateApp(
-					appId,
-					{ kind: 'service' },
-					{
-						$set: {
-							health: {
-								...(app.health ?? { lastHeartbeatAt: null, version: null, status: null, queues: null }),
-								lastSeenAt: new Date(ctx.now()),
-							},
-						},
-					},
-				)
-				.catch(() => null);
-		const keys = await usableKeys(appId);
+		if (!app || app.kind !== 'service') return null;
+		const keys = await repo.keys(appId);
 		if (keys.length === 0) return null;
-		const jwks = createJwks(
-			keys.map((k) => ({ ...k.publicJwk, ...(k.notAfter ? { exp: Math.floor(k.notAfter.getTime() / 1000) } : {}) })),
-		);
-		return createKeyResolver({ jwks, now: ctx.now });
-	};
-
-	/**
-	 * Verify a service product's signed **UI bundle** descriptor (F.16; delivery stores and serves it): the same
-	 * `ss-pack-bundle@1` descriptor and detached signature as packs, signed with one of the product's registered,
-	 * non-revoked keys (no key can be introduced this way). `manifest` is the UI subset checked by `checkUiManifest`.
-	 * @param {{ appId: string, body: unknown }} input
-	 * @returns {Promise<{ descriptor: import('./core/bundle.js').Descriptor, signature: import('./core/bundle.js').BundleSignature,
-	 *   slug: string, elements: Array<{ key: string, headless: string, renderer: string, strings?: string }> }>}
-	 */
-	const verifyUiBundle = async ({ appId, body }) => {
-		const app = await appDoc(appId);
-		if (app.kind !== 'service') fail('conflict', 'Only service products publish UI bundles; packs upload pack bundles.');
-		if (app.status === 'retired') fail('conflict', `${app.slug} is retired.`);
-		const parsed = parseBundleUpload(body);
-		if (!parsed.ok) return fail('catalog_bundle_invalid', 'The UI bundle upload is invalid.', { errors: parsed.errors });
-		const { descriptor, signature, publicJwk } = parsed.value;
-		if (publicJwk !== undefined)
-			fail('catalog_bundle_invalid', 'UI bundles are signed with a registered product key; publicJwk is not accepted.', {
-				errors: [{ path: '/publicJwk', message: 'unknown property' }],
-			});
-		const errors = checkUiManifest(descriptor.manifest, app.slug);
-		if (errors.length === 0)
-			errors.push(
-				...checkBundleAssets(/** @type {import('@ss/contracts').Manifest} */ (descriptor.manifest), descriptor.assets),
-			);
-		if (errors.length > 0) fail('catalog_bundle_invalid', 'The UI bundle descriptor is invalid.', { errors });
-		const resolver = await appKeys(appId);
-		if (!resolver || !(await verifyBundle({ descriptor, signature, keyResolver: resolver })))
-			fail('catalog_bundle_invalid', 'The UI bundle signature does not verify under the product keys.');
-		const manifest = /** @type {{ elements: Array<{ key: string, headless: string, renderer: string, strings?: string }> }} */ (
-			descriptor.manifest
-		);
-		return { descriptor, signature, slug: app.slug, elements: manifest.elements.map((e) => ({ ...e })) };
+		return createKeyResolver({ jwks: createJwks(keys.map((k) => k.publicJwk)), now: ctx.now });
 	};
 
 	// ------------------------------------------------------------------------------------------------------------
@@ -1141,62 +745,79 @@ export const createCatalogService = (ctx, options = {}) => {
 	/** @param {string} appId */
 	const getApp = async (appId) => {
 		const app = await appDoc(appId);
-		return appView(app, await currentManifest(app));
+		return appView(app, await describingManifest(app));
 	};
 
 	/** @param {string} slug */
 	const appBySlug = async (slug) => {
 		const app = (await repo.appBySlug(String(slug))) ?? fail('not_found', `No app ${slug}.`);
-		return appView(app, await currentManifest(app));
+		return appView(app, await describingManifest(app));
 	};
 
 	/**
 	 * @param {string} appId
-	 * @param {number} [version] default: the current accepted version
+	 * @param {number} [version] default: the current version
 	 * @returns {Promise<Manifest>}
 	 */
 	const getManifest = async (appId, version) => {
 		const app = await appDoc(appId);
-		const doc =
-			(await repo.version(appId, version ?? app.currentVersion)) ?? fail('not_found', `No version ${version} of ${appId}.`);
+		if (version === undefined) return currentManifest(app);
+		const doc = (await repo.version(appId, version)) ?? fail('not_found', `No version ${version} of ${appId}.`);
 		return manifestOf(doc);
 	};
 
 	/**
-	 * Catalog listing (merchant and public consoles): active and deprecated apps with their accepted manifests.
-	 * @param {{ kind?: 'service' | 'pack', includeDeprecated?: boolean }} [filter]
+	 * A stored version with its manifest and asset list (delivery checks pack asset uploads against it).
+	 * @param {string} appId
+	 * @param {number} version
 	 */
-	const activeProducts = async ({ kind, includeDeprecated = true } = {}) => {
+	const versionDetail = async (appId, version) => {
+		const doc = (await repo.version(appId, version)) ?? fail('not_found', `No version ${version} of ${appId}.`);
+		return versionView(doc);
+	};
+
+	/**
+	 * Catalog listing (merchant and public consoles): active apps with their current manifests.
+	 * @param {{ kind?: 'service' | 'pack' }} [filter]
+	 */
+	const activeProducts = async ({ kind } = {}) => {
 		/** @type {AppDoc[]} */
 		const apps = [];
 		let after = null;
 		for (;;) {
-			const page = await repo.listApps({
-				status: includeDeprecated ? ['active', 'deprecated'] : ['active'],
-				...(kind ? { kind } : {}),
-				after,
-				limit: 200,
-			});
+			const page = await repo.listApps({ status: ['active'], ...(kind ? { kind } : {}), after, limit: 200 });
 			apps.push(...page);
 			if (page.length < 200) break;
 			after = /** @type {AppDoc} */ (page[page.length - 1])._id;
 		}
-		const versions = await repo.versionsByRef(apps.map((a) => ({ appId: a._id, version: a.currentVersion })));
+		const listed = apps.filter((a) => a.currentVersion !== null);
+		const versions = await repo.versionsByRef(
+			listed.map((a) => ({ appId: a._id, version: /** @type {number} */ (a.currentVersion) })),
+		);
 		const byId = new Map(versions.map((v) => [v.appId, v]));
-		return apps.flatMap((app) => {
+		return listed.flatMap((app) => {
 			const doc = byId.get(app._id);
-			return doc ? [catalogEntry({ ...app, appId: app._id }, manifestOf(doc))] : [];
+			return doc
+				? [
+						catalogEntry(
+							{ ...app, appId: app._id, currentVersion: /** @type {number} */ (app.currentVersion) },
+							manifestOf(doc),
+						),
+					]
+				: [];
 		});
 	};
 
 	/**
-	 * Catalog detail by slug (includes feature schemas). Only listed (active/deprecated) apps.
+	 * Catalog detail by slug (includes feature schemas). Only active apps.
 	 * @param {string} slug
 	 */
 	const productDetail = async (slug) => {
 		const app = await repo.appBySlug(String(slug));
-		if (!app || (app.status !== 'active' && app.status !== 'deprecated')) return fail('not_found', `No product ${slug}.`);
-		return catalogEntry({ ...app, appId: app._id }, await currentManifest(app), { detail: true });
+		if (!app || app.status !== 'active' || app.currentVersion === null) return fail('not_found', `No product ${slug}.`);
+		return catalogEntry({ ...app, appId: app._id, currentVersion: app.currentVersion }, await currentManifest(app), {
+			detail: true,
+		});
 	};
 
 	/**
@@ -1205,30 +826,29 @@ export const createCatalogService = (ctx, options = {}) => {
 	 */
 	const listApps = async (query) => {
 		const apps = await repo.listApps(query);
-		const versions = await repo.versionsByRef(apps.map((a) => ({ appId: a._id, version: a.currentVersion })));
+		const versions = await repo.versionsByRef(
+			apps.map((a) => ({ appId: a._id, version: a.currentVersion ?? a.latestVersion })),
+		);
 		const byId = new Map(versions.map((v) => [v.appId, manifestOf(v)]));
 		return apps.map((app) => appView(app, byId.get(app._id) ?? null));
 	};
 
-	/** @param {string} appId */
+	/**
+	 * Staff detail: the app view, its last 50 versions (summary) and the product's key.
+	 * @param {string} appId
+	 */
 	const appDetail = async (appId) => {
 		const app = await appDoc(appId);
-		return { ...appView(app, await currentManifest(app)), keys: (await repo.keys(appId)).map(keyView) };
-	};
-
-	/**
-	 * @param {string} appId
-	 * @param {{ before?: number | null, limit: number }} page
-	 */
-	const listVersions = async (appId, page) => {
-		await appDoc(appId);
-		return (await repo.listVersions(appId, page)).map((doc) => versionView(doc));
-	};
-
-	/** @param {string} appId @param {number} version */
-	const versionDetail = async (appId, version) => {
-		const doc = (await repo.version(appId, version)) ?? fail('not_found', `No version ${version} of ${appId}.`);
-		return versionView(doc);
+		return {
+			...appView(app, await describingManifest(app)),
+			versions: (await repo.listVersions(appId, 50)).map((v) => ({
+				version: v.version,
+				productVersion: v.productVersion,
+				status: v.status,
+				createdAt: iso(v.createdAt),
+			})),
+			keys: (await repo.keys(appId)).map((k) => ({ kid: k.kid, thumbprint: k.thumbprint, createdAt: iso(k.createdAt) })),
+		};
 	};
 
 	return {
@@ -1236,6 +856,8 @@ export const createCatalogService = (ctx, options = {}) => {
 		getApp,
 		appBySlug,
 		getManifest,
+		versionDetail,
+		versionReady,
 		activeProducts,
 		issueLaunch,
 		appKeys,
@@ -1244,20 +866,11 @@ export const createCatalogService = (ctx, options = {}) => {
 		// staff
 		connectProduct,
 		uploadPack,
-		refreshManifest,
-		reviewVersion,
-		setLifecycle,
-		setEnvironments,
-		revokeKey,
+		setStatus,
 		listApps,
 		appDetail,
-		listVersions,
-		versionDetail,
 		// products
-		recordHeartbeat,
-		rotateKey,
 		consumeLaunch,
-		verifyUiBundle,
 	};
 };
 /** @typedef {ReturnType<typeof createCatalogService>} CatalogService */

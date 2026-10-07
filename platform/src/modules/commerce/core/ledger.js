@@ -20,7 +20,6 @@ export const CHARGE_TYPES = Object.freeze(/** @type {const} */ (['settlement', '
  * @typedef {object} LedgerActor
  * @property {string} type
  * @property {string} id
- * @property {{ type: 'staff', id: string } | null} [via]
  */
 
 /**
@@ -67,8 +66,7 @@ const iso = (value) => {
  * @param {LedgerActor | null | undefined} actor
  * @returns {LedgerActor | null}
  */
-export const ledgerActor = (actor) =>
-	actor ? { type: actor.type, id: actor.id, via: actor.via ? { type: 'staff', id: actor.via.id } : null } : null;
+export const ledgerActor = (actor) => (actor ? { type: actor.type, id: actor.id } : null);
 
 /**
  * The canonical form hashed for an entry: every field that carries meaning, with absent fields as `null`, instants

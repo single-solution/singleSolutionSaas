@@ -443,7 +443,7 @@ describe('staff accounts', () => {
 		const promoted = await root.client.patch(`/v1/admin/staff/${support.staffId}`, { roles: ['finance'] });
 		expect(promoted.json.roles).toEqual(['finance']);
 		expect((await support.client.get('/v1/admin/merchants')).status).toBe(200); // finance reads merchants
-		expect((await support.client.get('/v1/admin/developers')).status).toBe(403); // live roles from the port
+		expect((await support.client.get('/v1/admin/staff')).status).toBe(403); // live roles from the port
 
 		expect((await root.client.post(`/v1/admin/staff/${root.staffId}/mfa/reset`, { reason: 'lost' })).status).toBe(409);
 		expect((await root.client.post(`/v1/admin/staff/${support.staffId}/mfa/reset`, { reason: 'lost phone' })).status).toBe(204);

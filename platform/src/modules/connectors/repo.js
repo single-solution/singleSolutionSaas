@@ -1,6 +1,6 @@
 /**
  * Data access of the `connectors` module (its own collections only). Every merchant operation goes through
- * `forMerchant(merchantId)`; only the health check and staff listings use `acrossMerchants()`.
+ * `forMerchant(merchantId)`; only staff listings and internal checks by id use `acrossMerchants()`.
  * @module
  */
 import { isDuplicateKey } from '../../infra/util.js';
@@ -62,7 +62,7 @@ export const createConnectorsRepo = ({ connectors, assignments }) => {
 				filter.$or = [{ createdAt: { $lt: at } }, { createdAt: at, _id: { $lt: after[1] } }];
 			}
 			return across()
-				.find(filter, { projection: { sealed: 0, previous: 0 } })
+				.find(filter, { projection: { sealed: 0 } })
 				.sort({ createdAt: -1, _id: -1 })
 				.limit(limit)
 				.toArray();
@@ -94,23 +94,6 @@ export const createConnectorsRepo = ({ connectors, assignments }) => {
 		 * @param {string} connectorId
 		 */
 		remove: (merchantId, connectorId) => c(merchantId).deleteOne({ merchantId, _id: connectorId }),
-		/**
-		 * Connectors due for the health check (oldest check first).
-		 * @param {Date} before
-		 * @param {number} limit
-		 */
-		dueForCheck: (before, limit) =>
-			across()
-				.find(
-					{ status: { $in: ['connected', 'failing'] }, $or: [{ lastCheckAt: null }, { lastCheckAt: { $lt: before } }] },
-					{ projection: { _id: 1, merchantId: 1 } },
-				)
-				.sort({ lastCheckAt: 1, _id: 1 })
-				.limit(limit)
-				.toArray(),
-		/** @param {Date} now */
-		purgeExpiredPrevious: async (now) =>
-			(await across().updateMany({ 'previous.expiresAt': { $lte: now } }, { $set: { previous: null } })).modifiedCount,
 		/**
 		 * Claim (website, kind) for a connector; false when another connector holds it.
 		 * @param {string} merchantId

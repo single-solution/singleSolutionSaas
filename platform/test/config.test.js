@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ENV_VARS, PORTAL_VERSION, buildConfig, deriveSecret, loadConfig, loadEnv } from '../src/infra/config.js';
+import { ENV_VARS, buildConfig, deriveSecret, loadConfig, loadEnv } from '../src/infra/config.js';
 import { isPlatformError } from '../src/infra/errors.js';
 import { originFromHeaders, requestOrigin, withOrigin } from '../src/infra/request-scope.js';
 import { createSystemStore, generateSecrets, secretsOf, testSystemState } from '../src/infra/system.js';
@@ -39,11 +39,10 @@ describe('loadEnv: only the database and the storage; everything else is fixed',
 		expect(env).toMatchObject({
 			env: 'test',
 			isProduction: false,
-			version: PORTAL_VERSION,
 			mongo: { uri: 'mongodb://127.0.0.1:27017/ss_portal_test', dbName: 'ss_portal_test', maxPoolSize: 5 },
 			logLevel: 'info',
 			maxBodyBytes: 1024 * 1024,
-			delivery: { storage: null, budgetKb: 60 },
+			delivery: { storage: null },
 		});
 		expect(env.sessions.staff).toEqual({ idleMs: 30 * 60_000, absoluteMs: 12 * 3_600_000 });
 		expect(env.sessions.merchant).toEqual({ idleMs: 1440 * 60_000, absoluteMs: 336 * 3_600_000 });
@@ -52,7 +51,7 @@ describe('loadEnv: only the database and the storage; everything else is fixed',
 		const tuned = loadEnv(
 			await testEnv({ MAX_BODY_BYTES: '12', DELIVERY_BUDGET_KB: '1', MONGODB_DB: 'other', APP_VERSION: 'x' }),
 		);
-		expect(tuned).toMatchObject({ maxBodyBytes: 1024 * 1024, delivery: { budgetKb: 60 }, version: PORTAL_VERSION });
+		expect(tuned).toMatchObject({ maxBodyBytes: 1024 * 1024, delivery: { storage: null } });
 		expect(tuned.mongo.dbName).toBe('ss_portal_test');
 	});
 

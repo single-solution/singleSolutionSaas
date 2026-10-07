@@ -221,8 +221,8 @@ export const paginate = ({ cursor, limit, url } = {}, { defaultLimit = 20, maxLi
  * @property {boolean} [mfa] staff sessions must have completed MFA (default true; false only for the MFA step itself)
  * @property {'pk' | 'sk'} [keyKind] websiteKey: restrict to one key kind
  * @property {string[]} [scopes] websiteKey: scopes the key must grant
- * @property {boolean | 'optional' | 'no-store'} [idempotent] POST: true = Idempotency-Key required (default),
- *   'optional', false, or 'no-store' — the key is optional and only the status and fingerprint are kept, so a replay
+ * @property {boolean | 'optional' | 'no-store'} [idempotent] POST: true = Idempotency-Key required (routes that create
+ *   things or move money), 'optional', false (default), or 'no-store' — the key is optional and only the status and fingerprint are kept, so a replay
  *   answers 409 `idempotency_replay_no_body` instead of re-sending the response (use for responses with secrets)
  * @property {{ limit: number, windowMs: number, key?: (ctx: RequestContext) => string }} [rateLimit]
  * @property {number} [maxBodyBytes]
@@ -694,7 +694,7 @@ export const createApiHandler = ({
 			// idempotency
 			/** @type {string | null} */
 			let record = null;
-			const idempotent = method === 'POST' ? (route.idempotent ?? true) : false;
+			const idempotent = method === 'POST' ? (route.idempotent ?? false) : false;
 			const noStore = idempotent === 'no-store';
 			if (idempotent) {
 				const key = request.headers.get('idempotency-key');

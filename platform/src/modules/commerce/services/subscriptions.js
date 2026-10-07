@@ -8,7 +8,7 @@
  * @module
  */
 import { createId } from '@ss/contracts';
-import { splitLayers } from './deps.js';
+import { configLayers } from './deps.js';
 import { ceilHour, currentPriceBook, floorHour, periodBounds, resolveEntitlement, toDocument } from '@ss/entitlements';
 import { signEntitlementDocument } from '@ss/protocol';
 import { problem } from '../../../infra/http.js';
@@ -38,7 +38,6 @@ import { overlaySwitches, resolverState, sameElements, statusOf, withHold } from
  * @property {string} id
  * @property {string} [merchantId]
  * @property {string[]} [roles]
- * @property {{ type: 'staff', id: string }} [via]
  */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Caller */
 
@@ -139,7 +138,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	const resolve = async (sub, website, now, override = null) => {
 		const { product, manifest } = await deps.manifestOf(sub.appId, sub.manifestVersion);
 		const [config, resources, identity] = await Promise.all([
-			override ? Promise.resolve(splitLayers(override)) : deps.layersFor(sub),
+			override ? Promise.resolve(configLayers(override)) : deps.layersFor(sub),
 			deps.statusFor(sub.websiteId),
 			deps.identityFor(sub.websiteId),
 		]);
@@ -155,8 +154,8 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 				websiteId: sub.websiteId,
 				merchantId: sub.merchantId,
 			},
-			layers: overlaySwitches(config.layers, sub.switches),
-			runtime: { resources, usage, spendCap: state.spendCap, experiments: config.experiments },
+			layers: overlaySwitches(config, sub.switches),
+			runtime: { resources, usage, spendCap: state.spendCap },
 			now,
 		};
 		const resolved = resolveEntitlement(input);
@@ -510,7 +509,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 			const switches = { website: { ...(sub.switches?.website ?? {}) }, admin: { ...(sub.switches?.admin ?? {}) } };
 			switches[layer][elementKey] = enabled;
 			if (!staff && enabled) {
-				const conflicts = configurationConflicts(product, { ...sub, switches }, (await deps.layersFor(sub)).layers);
+				const conflicts = configurationConflicts(product, { ...sub, switches }, await deps.layersFor(sub));
 				if (conflicts.notInPlan.includes(elementKey)) throw problem('forbidden', `${elementKey} is not part of the plan.`);
 				const unmet = conflicts.unmet.find((u) => u.element === elementKey);
 				if (unmet)
@@ -553,7 +552,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		const staff = caller.actor.type === 'staff' || caller.actor.type === 'system';
 		const conflicts = staff
 			? { notInPlan: [], unmet: [] }
-			: configurationConflicts(product, candidate, (await deps.layersFor(sub)).layers);
+			: configurationConflicts(product, candidate, await deps.layersFor(sub));
 		if (conflicts.notInPlan.length > 0 || conflicts.unmet.length > 0)
 			throw problem('conflict', 'The new plan conflicts with the current element switches.', {
 				errors: [

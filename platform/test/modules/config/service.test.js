@@ -5,7 +5,7 @@ import { configModule } from '../../../src/modules/config/index.js';
 import { createClock, createTestLogger, startMongo, testConfig } from '../../helpers.js';
 import { boot } from './boot.js';
 import { createFakes } from './fakes/index.js';
-import { APP, MER_A, MER_B, SUB_A1, SUB_A2, SUB_B1, WEB_A1, WEB_A2, WEB_A3, WEB_B1, manifest } from './fixtures.js';
+import { APP, MER_A, MER_B, SUB_A1, SUB_A2, SUB_B1, WEB_A1, manifest } from './fixtures.js';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 120_000 });
 
@@ -216,9 +216,10 @@ describe('validation against feature schemas', () => {
 		expect(missing.code).toBe('not_found');
 		const otherApp = await rejection(
 			service.applyChange({
-				target: { merchantId: MER_A, appId: 'app_other' },
-				level: 'merchant',
-				actor: merchantA,
+				target: { appId: 'app_other' },
+				level: 'platform',
+				actor: staff,
+				reason: 'policy',
 				change: { elements: { x: true } },
 			}),
 		);
@@ -336,7 +337,7 @@ describe('versioning and rollback', () => {
 		expect((await db.collection('config_layers').findOne({ _id: `website:${SUB_A2}` }))?.version).toBe(5);
 	});
 
-	it('validates against the pinned manifest for subscriptions and the current one for merchant defaults', async () => {
+	it('validates against the pinned manifest for subscriptions and the current one for platform policies', async () => {
 		const { service, fakes } = await fresh();
 		fakes.setCurrentVersion('1.5.0');
 		await service.applyChange({
@@ -346,409 +347,15 @@ describe('versioning and rollback', () => {
 			change: { elements: { codes: true } },
 		});
 		await service.applyChange({
-			target: { merchantId: MER_A, appId: APP },
-			level: 'merchant',
-			actor: merchantA,
+			target: { appId: APP },
+			level: 'platform',
+			actor: staff,
+			reason: 'policy',
 			change: { elements: { codes: true } },
 		});
 		expect((await service.history({ subscriptionId: SUB_A1 }, { level: 'website' })).items[0]?.manifestVersion).toBe('1.4.0');
-		expect((await service.history({ merchantId: MER_A, appId: APP }, { level: 'merchant' })).items[0]?.manifestVersion).toBe(
-			'1.5.0',
-		);
-		// merchant-level change invalidates every subscription of that merchant for the app, not other merchants
-		expect(fakes.invalidated).toEqual(expect.arrayContaining([SUB_A1, SUB_A2]));
-		expect(fakes.invalidated).not.toContain(SUB_B1);
-	});
-});
-
-describe('templates', () => {
-	it('applies across websites with per-website results and re-pushes updates', async () => {
-		const { service } = await fresh();
-		const settings = { elements: { codes: true }, config: { codes: { prefix: 'TPL', maxActive: 30 } } };
-		const badLock = await rejection(
-			service.saveTemplate({ merchantId: MER_A, appId: APP, name: 'x', settings: { locks: {} }, actor: merchantA }),
-		);
-		expect(codes(badLock)).toEqual(['lock_forbidden']);
-		const lockedEntry = await rejection(
-			service.saveTemplate({
-				merchantId: MER_A,
-				appId: APP,
-				name: 'x',
-				settings: { features: { 'codes.prefix': { value: 'A', locked: true } } },
-				actor: merchantA,
-			}),
-		);
-		expect(codes(lockedEntry)).toEqual(['lock_forbidden']);
-		const invalid = await rejection(
-			service.saveTemplate({
-				merchantId: MER_A,
-				appId: APP,
-				name: 'x',
-				settings: { features: { 'codes.ghost': { value: 1 } } },
-				actor: merchantA,
-			}),
-		);
-		expect(invalid.errors[0]).toMatchObject({ path: '/settings/features/codes.ghost', code: 'unknown_feature' });
-		const shape = await rejection(
-			service.saveTemplate({ merchantId: MER_A, appId: APP, name: 'x', settings: 'x', actor: merchantA }),
-		);
-		expect(shape.errors[0].path).toBe('/settings');
-		expect(
-			codes(
-				await rejection(service.saveTemplate({ merchantId: MER_A, appId: APP, name: '', settings: {}, actor: merchantA })),
-			),
-		).toEqual(['invalid_name']);
-		expect(
-			codes(await rejection(service.saveTemplate({ merchantId: 'x', appId: APP, name: 'n', settings: {}, actor: merchantA }))),
-		).toEqual(['invalid_target']);
-		expect(
-			(
-				await rejection(
-					service.saveTemplate({
-						merchantId: MER_A,
-						appId: APP,
-						name: 'n',
-						settings: {},
-						actor: /** @type {any} */ ({ type: 'product', id: 'p' }),
-					}),
-				)
-			).code,
-		).toBe('forbidden');
-
-		const template = await service.saveTemplate({ merchantId: MER_A, appId: APP, name: 'Summer', settings, actor: merchantA });
-		expect(template).toMatchObject({ name: 'Summer', version: 1, settings: { elements: { codes: { enabled: true } } } });
-
-		// staff lock on WEB_A2's prefix makes that website fail; WEB_A3 has no subscription; WEB_B1 is another merchant's
-		await service.applyChange({
-			target: { subscriptionId: SUB_A2 },
-			level: 'website',
-			actor: staff,
-			change: { features: { 'codes.prefix': { value: 'LOCK', locked: true } } },
-		});
-		const applied = await service.applyTemplate({
-			merchantId: MER_A,
-			templateId: template.templateId,
-			websiteIds: [WEB_A1, WEB_A2, WEB_A3, WEB_B1, 'web_unknown0000000000000000'],
-			actor: merchantA,
-		});
-		expect(applied).toMatchObject({ applied: 1, failed: 4 });
-		expect(applied.results.map((r) => [r.websiteId, r.status, /** @type {any} */ (r.error)?.code ?? null])).toEqual([
-			[WEB_A1, 'applied', null],
-			[WEB_A2, 'failed', 'validation_failed'],
-			[WEB_A3, 'failed', 'not_found'],
-			[WEB_B1, 'failed', 'not_found'],
-			['web_unknown0000000000000000', 'failed', 'not_found'],
-		]);
-		const website = await service.getLayer({ target: SUB_A1, level: 'website' });
-		expect(website.state.features['codes.prefix']).toEqual({ value: 'TPL' });
-		expect((await service.history(SUB_A1, { level: 'website' })).items[0]).toMatchObject({
-			kind: 'template',
-			templateId: template.templateId,
-			templateVersion: 1,
-		});
-		const again = await service.applyTemplate({ templateId: template.templateId, websiteIds: [WEB_A1], actor: merchantA }); // any-merchant lookup
-		expect(again.results[0]?.status).toBe('unchanged');
-		const denied = await service.applyTemplate({
-			merchantId: MER_A,
-			templateId: template.templateId,
-			websiteIds: [WEB_A1],
-			canWrite: () => false,
-			actor: merchantA,
-		});
-		expect(denied.results[0]).toMatchObject({ status: 'failed', error: { code: 'forbidden' } });
-		expect(
-			codes(
-				await rejection(
-					service.applyTemplate({ merchantId: MER_A, templateId: template.templateId, websiteIds: [], actor: merchantA }),
-				),
-			),
-		).toEqual(['invalid_websites']);
-		expect(
-			(
-				await rejection(
-					service.applyTemplate({
-						merchantId: MER_B,
-						templateId: template.templateId,
-						websiteIds: [WEB_B1],
-						actor: merchantA,
-					}),
-				)
-			).code,
-		).toBe('not_found');
-
-		// update → push re-applies to websites on older versions
-		const nothing = await service.pushTemplate({ merchantId: MER_A, templateId: template.templateId, actor: merchantA });
-		expect(nothing.results).toEqual([]);
-		const updated = await service.updateTemplate({
-			merchantId: MER_A,
-			templateId: template.templateId,
-			name: 'Summer 2',
-			settings: { config: { codes: { prefix: 'TPL2' } } },
-			version: 1,
-			actor: merchantA,
-		});
-		expect(updated).toMatchObject({ version: 2, name: 'Summer 2' });
-		expect(
-			(
-				await rejection(
-					service.updateTemplate({ merchantId: MER_A, templateId: template.templateId, version: 1, actor: merchantA }),
-				)
-			).code,
-		).toBe('conflict');
-		expect(
-			(await rejection(service.updateTemplate({ merchantId: MER_A, templateId: 'cft_none', actor: merchantA }))).code,
-		).toBe('not_found');
-		expect(
-			codes(
-				await rejection(
-					service.updateTemplate({ merchantId: MER_A, templateId: template.templateId, name: '', actor: merchantA }),
-				),
-			),
-		).toEqual(['invalid_name']);
-		const pushed = await service.pushTemplate({ merchantId: MER_A, templateId: template.templateId, actor: merchantA });
-		expect(pushed.results.map((r) => [r.websiteId, r.status])).toEqual([[WEB_A1, 'applied']]);
-		expect((await service.getLayer({ target: SUB_A1, level: 'website' })).state.features['codes.prefix']).toEqual({
-			value: 'TPL2',
-		});
-		const all = await service.pushTemplate({ merchantId: MER_A, templateId: template.templateId, all: true, actor: merchantA });
-		expect(all.results[0]?.status).toBe('unchanged');
-		expect((await service.getTemplate({ merchantId: MER_A, templateId: template.templateId })).applications).toEqual([
-			expect.objectContaining({ websiteId: WEB_A1, templateVersion: 2, subscriptionId: SUB_A1 }),
-		]);
-		expect((await service.listTemplates({ merchantId: MER_A, appId: APP })).items).toHaveLength(1);
-		expect((await service.listTemplates({ merchantId: MER_B })).items).toHaveLength(0);
-		expect((await rejection(service.getTemplate({ merchantId: MER_B, templateId: template.templateId }))).code).toBe(
-			'not_found',
-		);
-		expect(
-			(await rejection(service.pushTemplate({ merchantId: MER_B, templateId: template.templateId, actor: merchantA }))).code,
-		).toBe('not_found');
-	});
-});
-
-describe('scheduled changes', () => {
-	it('is applied on the first read at or after its time, exactly once (change key), and can be cancelled', async () => {
-		const { service, portal, clock } = await fresh();
-		const at = new Date(clock.now() + 3_600_000).toISOString();
-		const change = {
-			target: { subscriptionId: SUB_A1 },
-			level: 'website',
-			config: { codes: { prefix: 'LATER' } },
-			reason: 'launch',
-		};
-		const scheduled = await service.schedule({ change, at, actor: merchantA });
-		expect(scheduled).toMatchObject({
-			status: 'pending',
-			change: { config: { codes: { prefix: 'LATER' } } },
-			reason: 'launch',
-		});
-		// no job: time passing alone changes nothing, the next read of the configuration applies it
-		expect(await portal.shared.jobs.stats()).toMatchObject({ queued: 0 });
-		await service.layersFor(SUB_A1); // not due yet
-		expect((await service.listSchedules({ target: SUB_A1, level: 'website' })).items[0]?.status).toBe('pending');
-		clock.advance(3_600_000);
-		expect((await service.layersFor(SUB_A1)).website.features['codes.prefix']).toEqual({ value: 'LATER' });
-		expect((await service.getLayer({ target: SUB_A1, level: 'website' })).state.features['codes.prefix']).toEqual({
-			value: 'LATER',
-		});
-		// applying again (a concurrent read, a retry): no second version
-		expect(await service.applyScheduled({ scheduleId: scheduled.scheduleId, merchantId: MER_A })).toEqual({
-			status: 'applied',
-		});
-		expect((await service.history(SUB_A1, { level: 'website' })).items).toHaveLength(1);
-		// a crash after the version was written but before the schedule was marked applied
-		const second = await service.schedule({
-			change: { ...change, config: { codes: { prefix: 'TWICE' } } },
-			at: clock.now() + 1000,
-			actor: merchantA,
-		});
-		clock.advance(2000);
-		expect(await service.applyScheduled({ scheduleId: second.scheduleId, merchantId: MER_A })).toMatchObject({
-			status: 'applied',
-			version: 2,
-		});
-		await mongo
-			.db(`cfg_svc_${n}`)
-			.collection('config_schedules')
-			.updateOne({ _id: /** @type {any} */ (second.scheduleId) }, { $set: { status: 'applying' } });
-		expect(await service.applyScheduled({ scheduleId: second.scheduleId, merchantId: MER_A })).toMatchObject({
-			status: 'applied',
-			version: 2,
-		});
-		expect((await service.history(SUB_A1, { level: 'website' })).items).toHaveLength(2);
-
-		const third = await service.schedule({ change, at: clock.now() + 60_000, actor: merchantA });
-		const cancelled = await service.cancelSchedule({ merchantId: MER_A, scheduleId: third.scheduleId, actor: merchantA });
-		expect(cancelled.status).toBe('cancelled');
-		expect(
-			(await rejection(service.cancelSchedule({ merchantId: MER_A, scheduleId: third.scheduleId, actor: merchantA }))).code,
-		).toBe('conflict');
-		expect(
-			(await rejection(service.cancelSchedule({ merchantId: MER_B, scheduleId: third.scheduleId, actor: merchantA }))).code,
-		).toBe('not_found');
-		expect(
-			(
-				await rejection(
-					service.cancelSchedule({
-						merchantId: MER_A,
-						scheduleId: third.scheduleId,
-						scope: { websiteId: WEB_A2 },
-						actor: merchantA,
-					}),
-				)
-			).code,
-		).toBe('not_found');
-		clock.advance(120_000);
-		await service.applyDue(MER_A); // the applied and the cancelled one are not due any more: no-ops
-		expect(await service.applyScheduled({ scheduleId: third.scheduleId, merchantId: MER_A })).toEqual({ status: 'cancelled' });
-		expect((await service.history(SUB_A1, { level: 'website' })).items).toHaveLength(2);
-		expect(await service.applyScheduled({ scheduleId: 'cfs_missing', merchantId: MER_A })).toEqual({ status: 'missing' });
-		const list = await service.listSchedules({ target: SUB_A1, level: 'website' });
-		expect(list.items.map((s) => s.status)).toEqual(['applied', 'applied', 'cancelled']);
-		expect((await service.listSchedules({ target: { appId: APP }, level: 'platform' })).items).toEqual([]);
-	});
-
-	it('validates at schedule time and fails (without retry) when the change became invalid', async () => {
-		const { service, clock } = await fresh();
-		const target = { subscriptionId: SUB_A1 };
-		const past = await rejection(
-			service.schedule({ change: { target, level: 'website' }, at: clock.now() - 1, actor: merchantA }),
-		);
-		expect(codes(past)).toEqual(['invalid_at']);
-		const invalid = await rejection(
-			service.schedule({
-				change: { target, level: 'website', elements: { ghost: true } },
-				at: clock.now() + 1000,
-				actor: merchantA,
-			}),
-		);
-		expect(codes(invalid)).toEqual(['unknown_element']);
-		expect(codes(await rejection(service.schedule({ change: 'x', at: clock.now() + 1000, actor: merchantA })))).toEqual([
-			'invalid_change',
-		]);
-		const platform = await rejection(
-			service.schedule({
-				change: { target: { appId: APP }, level: 'platform', reason: 'r' },
-				at: clock.now() + 1000,
-				actor: staff,
-			}),
-		);
-		expect(codes(platform)).toEqual(['invalid_target']);
-
-		const s = await service.schedule({
-			change: { target, level: 'website', config: { codes: { prefix: 'LATE' } } },
-			at: clock.now() + 1000,
-			actor: merchantA,
-		});
-		await service.applyChange({
-			target,
-			level: 'website',
-			actor: staff,
-			change: { features: { 'codes.prefix': { value: 'NOW', locked: true } } },
-		});
-		clock.advance(2000);
-		const [failed] = (await service.listSchedules({ target, level: 'website' })).items;
-		expect(failed).toMatchObject({ status: 'failed', error: { code: 'validation_failed' } });
-		expect(s.status).toBe('pending');
-	});
-});
-
-describe('experiments', () => {
-	it('stores definitions, exposes running ones in layersFor and applies a winner', async () => {
-		const { service, fakes } = await fresh();
-		const definition = {
-			element: 'codes',
-			metric: 'order.placed@1',
-			variants: [
-				{ key: 'a', weight: 1, config: { prefix: 'AAA' } },
-				{ key: 'b', weight: 1, config: { prefix: 'BBB', allowStacking: true } },
-			],
-		};
-		const bad = await rejection(
-			service.createExperiment({ subscriptionId: SUB_A1, experiment: { ...definition, element: 'banner' }, actor: merchantA }),
-		);
-		expect(codes(bad)).toContain('not_experimentable');
-		const one = await service.createExperiment({ subscriptionId: SUB_A1, experiment: definition, actor: merchantA });
-		const two = await service.createExperiment({ subscriptionId: SUB_A1, experiment: definition, actor: merchantA });
-		expect(one).toMatchObject({ status: 'draft', element: 'codes', metric: 'order.placed@1' });
-		expect((await service.layersFor(SUB_A1)).experiments).toEqual([]);
-		const started = await service.startExperiment({ subscriptionId: SUB_A1, experimentId: one.experimentId, actor: merchantA });
-		expect(started.status).toBe('running');
-		expect(
-			(await rejection(service.startExperiment({ subscriptionId: SUB_A1, experimentId: two.experimentId, actor: merchantA })))
-				.code,
-		).toBe('conflict');
-		expect(
-			(await rejection(service.startExperiment({ subscriptionId: SUB_A1, experimentId: one.experimentId, actor: merchantA })))
-				.code,
-		).toBe('conflict');
-		expect(
-			(await rejection(service.startExperiment({ subscriptionId: SUB_A2, experimentId: one.experimentId, actor: merchantA })))
-				.code,
-		).toBe('not_found');
-		const layers = await service.layersFor(SUB_A1);
-		expect(layers.experiments).toEqual([
-			{
-				id: one.experimentId,
-				element: 'codes',
-				variants: [
-					{ key: 'a', weight: 1, values: { prefix: 'AAA' } },
-					{ key: 'b', weight: 1, values: { prefix: 'BBB', allowStacking: true } },
-				],
-			},
-		]);
-		expect(
-			codes(
-				await rejection(
-					service.stopExperiment({
-						subscriptionId: SUB_A1,
-						experimentId: one.experimentId,
-						applyVariant: 'zzz',
-						actor: merchantA,
-					}),
-				),
-			),
-		).toEqual(['invalid_variant']);
-		const stopped = await service.stopExperiment({
-			subscriptionId: SUB_A1,
-			experimentId: one.experimentId,
-			applyVariant: 'b',
-			actor: merchantA,
-		});
-		expect(stopped).toMatchObject({ status: 'stopped', winner: 'b', applied: { version: 1 } });
-		expect((await service.getLayer({ target: SUB_A1, level: 'website' })).state.features).toEqual({
-			'codes.prefix': { value: 'BBB' },
-			'codes.allowStacking': { value: true },
-		});
-		const plain = await service.stopExperiment({ subscriptionId: SUB_A1, experimentId: two.experimentId, actor: merchantA });
-		expect(plain).toMatchObject({ status: 'stopped' });
-		expect((await service.listExperiments({ subscriptionId: SUB_A1 })).items.map((e) => e.status)).toEqual([
-			'stopped',
-			'stopped',
-		]);
-		expect(fakes.invalidated).toContain(SUB_A1);
-		expect(
-			(
-				await rejection(
-					service.createExperiment({
-						subscriptionId: SUB_A1,
-						experiment: definition,
-						actor: /** @type {any} */ ({ type: 'product', id: 'x' }),
-					}),
-				)
-			).code,
-		).toBe('forbidden');
-		expect(
-			(
-				await rejection(
-					service.stopExperiment({
-						subscriptionId: SUB_A1,
-						experimentId: one.experimentId,
-						actor: /** @type {any} */ ({ type: 'product', id: 'x' }),
-					}),
-				)
-			).code,
-		).toBe('forbidden');
+		expect((await service.history({ appId: APP }, { level: 'platform' })).items[0]?.manifestVersion).toBe('1.5.0');
+		expect(fakes.invalidated).toEqual([SUB_A1]);
 	});
 });
 
@@ -763,18 +370,15 @@ describe('contract with @ss/entitlements', () => {
 			reason: 'fraud policy',
 			change: { features: { 'codes.allowStacking': { value: false, locked: true } } },
 		});
-		// merchant default and website override (website above plan max 50 → clamped by the resolver, not here)
-		await service.applyChange({
-			target: { merchantId: MER_A, appId: APP },
-			level: 'merchant',
-			actor: merchantA,
-			change: { config: { codes: { prefix: 'MER', allowStacking: true } } },
-		});
+		// website override (above plan max 50 → clamped by the resolver, not here; stacking is locked by the platform)
 		await service.applyChange({
 			target: { subscriptionId: SUB_A1 },
 			level: 'website',
 			actor: merchantA,
-			change: { elements: { banner: true }, config: { codes: { maxActive: 80 }, banner: { text: 'Hello' } } },
+			change: {
+				elements: { banner: true },
+				config: { codes: { maxActive: 80, prefix: 'WEB', allowStacking: true }, banner: { text: 'Hello' } },
+			},
 		});
 		// admin override may exceed the plan max and lock
 		await service.applyChange({
@@ -784,27 +388,13 @@ describe('contract with @ss/entitlements', () => {
 			reason: 'enterprise deal',
 			change: { features: { 'codes.window': { value: { days: 90 }, locked: true } } },
 		});
-		const experiment = await service.createExperiment({
-			subscriptionId: SUB_A1,
-			experiment: {
-				element: 'codes',
-				metric: 'order.placed@1',
-				variants: [
-					{ key: 'only', weight: 1, config: { prefix: 'EXP' } },
-					{ key: 'same', weight: 1, config: { prefix: 'EXP' } },
-				],
-			},
-			actor: merchantA,
-		});
-		await service.startExperiment({ subscriptionId: SUB_A1, experimentId: experiment.experimentId, actor: merchantA });
-
-		const { experiments, ...layers } = await service.layersFor(SUB_A1);
-		expect(Object.keys(layers)).toEqual(['platform', 'merchant', 'website', 'admin']);
+		const layers = await service.layersFor(SUB_A1);
+		expect(Object.keys(layers)).toEqual(['platform', 'website', 'admin']);
 		const resolved = resolveEntitlement({
 			product: normaliseProduct(manifest()),
 			subscription: { id: SUB_A1, plan: 'starter', status: 'active', websiteId: WEB_A1, merchantId: MER_A },
 			layers,
-			runtime: { experiments },
+			runtime: {},
 			now: clock.now(),
 		});
 		expect(resolved.elements.banner).toMatchObject({ enabled: true, source: 'website' });
@@ -816,21 +406,20 @@ describe('contract with @ss/entitlements', () => {
 		});
 		expect(resolved.features['codes.maxActive']).toMatchObject({ value: 50, source: 'website', reason: 'clamped' });
 		expect(resolved.features['codes.window']).toMatchObject({ value: { days: 90 }, source: 'admin', locked: true });
-		expect(resolved.features['codes.prefix']).toMatchObject({ value: 'EXP', source: 'experiment' });
+		expect(resolved.features['codes.prefix']).toMatchObject({ value: 'WEB', source: 'website' });
 		expect(resolved.features['banner.text']).toMatchObject({ value: 'Hello', source: 'website' });
-		expect(resolved.experiments[experiment.experimentId]).toMatchObject({ element: 'codes' });
 		expect(resolved.report).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ key: 'codes.allowStacking', layer: 'merchant', reason: 'locked', lockedBy: 'platform' }),
+				expect.objectContaining({ key: 'codes.allowStacking', layer: 'website', reason: 'locked', lockedBy: 'platform' }),
 			]),
 		);
 		expect(resolved.report.some((r) => r.reason === 'unknown' || r.reason === 'invalid')).toBe(false);
 
 		// commerce may pass what it knows to skip the subscription lookup
-		expect(await service.layersFor(SUB_A1, { merchantId: MER_A, appId: APP })).toEqual({ ...layers, experiments });
+		expect(await service.layersFor(SUB_A1, { merchantId: MER_A, appId: APP })).toEqual(layers);
 		// other merchants' subscriptions see the platform policy only
 		const b = await service.layersFor(SUB_B1);
-		expect(b.merchant).toEqual({ elements: {}, features: {} });
+		expect(b.website).toEqual({ elements: {}, features: {} });
 		expect(b.platform.features['codes.allowStacking']).toEqual({ value: false, locked: true });
 	});
 });
@@ -847,13 +436,6 @@ describe('preview and module wiring', () => {
 		expect(result.layers.website.features['codes.maxActive']).toEqual({ value: 70 });
 		expect(/** @type {any} */ (result.preview).features['codes.maxActive']).toMatchObject({ value: 50, reason: 'clamped' });
 		expect((await service.history(SUB_A1, { level: 'website' })).items).toEqual([]); // nothing written
-		const merchant = await service.preview({
-			subscriptionId: SUB_A1,
-			level: 'merchant',
-			change: { config: { codes: { prefix: 'M' } } },
-			actor: merchantA,
-		});
-		expect(merchant.level).toBe('merchant');
 		const platform = await service.preview({
 			subscriptionId: SUB_A1,
 			level: 'platform',

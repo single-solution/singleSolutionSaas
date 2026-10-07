@@ -14,16 +14,15 @@ import { productOf } from '../core/catalog.js';
 const MANIFEST_CACHE = 200;
 
 /**
- * Split `config.layersFor` output into resolver layers and runtime experiments.
+ * The resolver layers of `config.layersFor` output (`{ platform, website, admin }`, absent ones dropped).
  * @param {Record<string, any> | null | undefined} value
- * @returns {{ layers: Record<string, any>, experiments: any[] }}
+ * @returns {Record<string, any>}
  */
-export const splitLayers = (value) => {
-	const { experiments, ...layers } = value ?? {};
+export const configLayers = (value) => {
 	/** @type {Record<string, any>} */
 	const out = {};
-	for (const name of ['platform', 'merchant', 'website', 'admin']) if (layers[name]) out[name] = layers[name];
-	return { layers: out, experiments: Array.isArray(experiments) ? experiments : [] };
+	for (const name of ['platform', 'website', 'admin']) if (value?.[name]) out[name] = value[name];
+	return out;
 };
 
 /**
@@ -66,13 +65,13 @@ export const createDeps = (ctx) => {
 		getApp: (appId) => ctx.service('catalog').getApp(appId),
 		manifestOf,
 		/**
-		 * Configuration layers and experiments of a subscription (`config.layersFor(subscriptionId, hint)` returns
-		 * `{ platform, merchant, website, admin, experiments }`).
+		 * Configuration layers of a subscription (`config.layersFor(subscriptionId, hint)` returns
+		 * `{ platform, website, admin }`).
 		 * @param {Record<string, any>} sub `{ _id, merchantId, appId }`
-		 * @returns {Promise<{ layers: Record<string, any>, experiments: any[] }>}
+		 * @returns {Promise<Record<string, any>>}
 		 */
 		layersFor: async (sub) =>
-			splitLayers(await optional('config')?.layersFor(sub._id, { merchantId: sub.merchantId, appId: sub.appId })),
+			configLayers(await optional('config')?.layersFor(sub._id, { merchantId: sub.merchantId, appId: sub.appId })),
 		/**
 		 * Bring-your-own identity: the website's identity issuer as the document's `identity` section, or null.
 		 * @param {string} websiteId

@@ -5,12 +5,12 @@
  *   staff login and the MFA routes a half-signed-in staff session may reach (`mfa: false`).
  * - `/v1/me/*` (staff or merchant session): profile, password, MFA, sessions, merchant switch.
  * - `/v1/merchants/:merchantId/*` (merchant session or staff): merchant, team, websites, keys.
- * - `/v1/admin/*` (staff): merchants (search, notes, impersonation), websites, staff users, partners, developers.
- * - `POST /v1/auth/impersonation/exchange` (staff): one-time impersonation token → merchant session cookie.
+ * - `/v1/admin/*` (staff): merchants (search, notes), websites, staff users.
  * - `GET /v1/product/revocations?since=` (client assertion, F.9).
  *
- * Responses that carry secrets (website keys, MFA secrets and recovery codes, challenges) opt out of idempotent
- * replay (`idempotent: 'no-store'`): the idempotency store persists response bodies.
+ * Creates require an `Idempotency-Key` (`idempotent: true`). Responses that carry secrets (website keys, MFA secrets
+ * and recovery codes, challenges) opt out of idempotent replay (`idempotent: 'no-store'`): the idempotency store
+ * persists response bodies.
  * @module
  */
 import { readCookie } from '../../infra/auth.js';
@@ -71,7 +71,7 @@ const ownMerchant = (c) => {
  * @returns {RouteDefinition[]}
  */
 export const identityRoutes = (ctx, service) => {
-	const { accounts, teams, websites, keys, issuers, issuerRequests, admin, impersonation } = service;
+	const { accounts, teams, websites, keys, issuers, issuerRequests, admin } = service;
 
 	/**
 	 * @param {RequestContext} c
@@ -134,12 +134,7 @@ export const identityRoutes = (ctx, service) => {
 			method: 'POST',
 			path: '/v1/auth/merchant/logout',
 			auth: 'merchant',
-			idempotent: false,
-			handler: async (c) => {
-				// signing out of an impersonation session ends the impersonation (audited on both chains)
-				if (c.session?.via) await impersonation.ended({ session: sessionOf(c), meta: metaOf(c) });
-				return noContent({ cookies: [(await accounts.logout('merchant', tokenOf(c, 'merchant'))).cookie] });
-			},
+			handler: async (c) => noContent({ cookies: [(await accounts.logout('merchant', tokenOf(c, 'merchant'))).cookie] }),
 		},
 		{
 			method: 'POST',
@@ -234,27 +229,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/auth/staff/logout',
 			auth: 'staff',
 			mfa: false,
-			idempotent: false,
 			handler: async (c) => noContent({ cookies: [(await accounts.logout('staff', tokenOf(c, 'staff'))).cookie] }),
-		},
-		{
-			// the second step of an impersonation: the staff member's browser trades the one-time token for the
-			// merchant session cookie (single use, bound to the staff member who started it)
-			method: 'POST',
-			path: '/v1/auth/impersonation/exchange',
-			auth: 'staff',
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) => {
-				const { token } = valid(inputs.tokenOnly(c.body));
-				const out = await impersonation.exchange({ token, actor: actorOf(c), meta: metaOf(c) });
-				return withCookie({
-					cookie: ctx.cookies.set('merchant', out.token, out.maxAgeSeconds),
-					merchantId: out.merchantId,
-					userId: out.userId,
-					expiresAt: out.expiresAt,
-				});
-			},
 		},
 		{
 			method: 'POST',
@@ -370,14 +345,6 @@ export const identityRoutes = (ctx, service) => {
 			handler: async (c) => ok({ items: await accounts.listSessions(sessionOf(c)) }),
 		},
 		{
-			method: 'POST',
-			path: '/v1/admin/api-tokens',
-			auth: 'staff',
-			permission: 'platform.apps.manage',
-			rateLimit: { limit: 10, windowMs: 60 * 60_000 },
-			handler: async (c) => created(await accounts.createApiToken(sessionOf(c), valid(inputs.apiToken(c.body)), metaOf(c))),
-		},
-		{
 			method: 'DELETE',
 			path: '/v1/me/sessions/:sessionId',
 			auth: ['staff', 'merchant'],
@@ -423,6 +390,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/merchants/:merchantId/team/invites',
 			auth: ['merchant', 'staff'],
 			permission: 'merchant.team.manage',
+			idempotent: true,
 			handler: async (c) =>
 				created(
 					await teams.invite({
@@ -514,6 +482,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/merchants/:merchantId/websites',
 			auth: ['merchant', 'staff'],
 			permission: 'websites.create',
+			idempotent: true,
 			handler: async (c) =>
 				created(
 					await websites.createWebsite({
@@ -815,24 +784,6 @@ export const identityRoutes = (ctx, service) => {
 				),
 		},
 		{
-			method: 'POST',
-			path: '/v1/admin/merchants/:merchantId/impersonate',
-			auth: 'staff',
-			permission: 'platform.impersonate',
-			// the response carries a one-time token: never stored for idempotent replay
-			idempotent: 'no-store',
-			rateLimit: { limit: 30, windowMs: 60_000 },
-			handler: async (c) =>
-				ok(
-					await impersonation.start({
-						merchantId: /** @type {string} */ (c.params.merchantId),
-						...valid(inputs.impersonate(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
 			method: 'GET',
 			path: '/v1/admin/merchants/:merchantId/notes',
 			auth: 'staff',
@@ -847,6 +798,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/admin/merchants/:merchantId/notes',
 			auth: 'staff',
 			permission: 'platform.merchants.write',
+			idempotent: true,
 			handler: async (c) =>
 				created(
 					await admin.addNote({
@@ -895,6 +847,7 @@ export const identityRoutes = (ctx, service) => {
 			path: '/v1/admin/staff',
 			auth: 'staff',
 			permission: 'platform.staff.manage',
+			idempotent: true,
 			handler: async (c) =>
 				created(await admin.createStaff({ ...valid(inputs.staffCreate(c.body)), actor: actorOf(c), meta: metaOf(c) })),
 		},
@@ -922,103 +875,6 @@ export const identityRoutes = (ctx, service) => {
 				await admin.resetStaffMfa({
 					staffId: /** @type {string} */ (c.params.staffId),
 					...valid(inputs.reason(c.body)),
-					actor: actorOf(c),
-					meta: metaOf(c),
-				});
-				return noContent();
-			},
-		},
-		{
-			method: 'GET',
-			path: '/v1/admin/partners',
-			auth: 'staff',
-			permission: 'platform.merchants.read',
-			handler: async () => ok({ items: await admin.partners.list() }),
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/partners',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
-			handler: async (c) =>
-				created(await admin.partners.create({ ...valid(inputs.party(c.body)), actor: actorOf(c), meta: metaOf(c) })),
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/partners/:partnerId/grants',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
-			handler: async (c) => {
-				const { merchantId, roles = ['admin'] } = valid(inputs.partnerGrant(c.body));
-				await teams.loadMerchant(merchantId);
-				return ok(
-					await admin.partners.grant({
-						id: /** @type {string} */ (c.params.partnerId),
-						grant: { merchantId, roles },
-						match: { merchantId },
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				);
-			},
-		},
-		{
-			method: 'DELETE',
-			path: '/v1/admin/partners/:partnerId/grants/:merchantId',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
-			handler: async (c) => {
-				await admin.partners.ungrant({
-					id: /** @type {string} */ (c.params.partnerId),
-					match: { merchantId: /** @type {string} */ (c.params.merchantId) },
-					actor: actorOf(c),
-					meta: metaOf(c),
-				});
-				return noContent();
-			},
-		},
-		{
-			method: 'GET',
-			path: '/v1/admin/developers',
-			auth: 'staff',
-			permission: 'platform.apps.read',
-			handler: async () => ok({ items: await admin.developers.list() }),
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/developers',
-			auth: 'staff',
-			permission: 'platform.apps.manage',
-			handler: async (c) =>
-				created(await admin.developers.create({ ...valid(inputs.party(c.body)), actor: actorOf(c), meta: metaOf(c) })),
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/developers/:developerId/grants',
-			auth: 'staff',
-			permission: 'platform.apps.manage',
-			handler: async (c) => {
-				const { appId } = valid(inputs.developerGrant(c.body));
-				return ok(
-					await admin.developers.grant({
-						id: /** @type {string} */ (c.params.developerId),
-						grant: { appId },
-						match: { appId },
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				);
-			},
-		},
-		{
-			method: 'DELETE',
-			path: '/v1/admin/developers/:developerId/grants/:appId',
-			auth: 'staff',
-			permission: 'platform.apps.manage',
-			handler: async (c) => {
-				await admin.developers.ungrant({
-					id: /** @type {string} */ (c.params.developerId),
-					match: { appId: /** @type {string} */ (c.params.appId) },
 					actor: actorOf(c),
 					meta: metaOf(c),
 				});

@@ -24,7 +24,7 @@
  */
 
 /** Connector statuses (`@ss/contracts` `RESOURCE_STATUSES`). */
-export const STATUSES = Object.freeze(/** @type {const} */ (['connected', 'missing', 'failing', 'revoked']));
+export const STATUSES = Object.freeze(/** @type {const} */ (['connected', 'missing', 'failing']));
 
 /**
  * Status that follows a check report.

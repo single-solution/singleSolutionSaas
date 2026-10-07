@@ -199,7 +199,6 @@ describe('identity issuers (routes and service)', () => {
 			runtime: { state: 'active' },
 			resources: [],
 			dataScope: { prefix: 'ss_loyalty_' },
-			experiments: [],
 			identity: section,
 		};
 		expect(validateEntitlementDocument(doc).ok).toBe(true);

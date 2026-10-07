@@ -18,10 +18,9 @@ export const routes = Object.freeze({
 	usage: (/** @type {string} */ id) => `/websites/${e(id)}/usage`,
 	keys: (/** @type {string} */ id) => `/websites/${e(id)}/keys`,
 	resources: (/** @type {string} */ id) => `/websites/${e(id)}/resources`,
-	deliveries: (/** @type {string} */ id) => `/websites/${e(id)}/deliveries`,
 	identity: (/** @type {string} */ id) => `/websites/${e(id)}/identity`,
 	credits: () => '/credits',
-	spendPolicies: () => '/spend-policies',
+	spendCap: () => '/spend-policies',
 	team: () => '/team',
 	account: () => '/account',
 });
@@ -33,7 +32,6 @@ export const WEBSITE_TABS = Object.freeze([
 	{ key: 'usage', label: 'Usage & spend', href: routes.usage },
 	{ key: 'keys', label: 'Keys', href: routes.keys },
 	{ key: 'resources', label: 'Resources', href: routes.resources },
-	{ key: 'deliveries', label: 'Deliveries', href: routes.deliveries },
 	{ key: 'identity', label: 'Identity', href: routes.identity },
 ]);
 
@@ -60,11 +58,7 @@ export const api = Object.freeze({
 	identity: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/identity`,
 	keyScopes: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/keys/scopes`,
 	notifications: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/notifications`,
-	deliveries: (
-		/** @type {string} */ m,
-		/** @type {string} */ w,
-		/** @type {{ cursor?: string | null, status?: string | null }} */ q = {},
-	) => `/v1/merchants/${e(m)}/websites/${e(w)}/deliveries${query(q)}`,
+	snippet: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}/delivery/snippet`,
 	deliveryStrings: (/** @type {string} */ m, /** @type {string} */ w) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/delivery/strings`,
 	deliveryString: (
@@ -74,8 +68,6 @@ export const api = Object.freeze({
 		/** @type {string} */ element,
 		/** @type {string} */ language,
 	) => `/v1/merchants/${e(m)}/websites/${e(w)}/delivery/strings/${e(appId)}/${e(element)}/${e(language)}`,
-	replay: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ d) =>
-		`/v1/merchants/${e(m)}/websites/${e(w)}/deliveries/${e(d)}/replay`,
 	catalog: () => '/v1/catalog/products',
 	product: (/** @type {string} */ slug) => `/v1/catalog/products/${e(slug)}`,
 	subscriptions: (/** @type {string} */ m, /** @type {string | null} */ websiteId = null) =>
@@ -85,14 +77,13 @@ export const api = Object.freeze({
 	config: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ s) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/subscriptions/${e(s)}/config`,
 	launch: (/** @type {string} */ m, /** @type {string} */ appId) => `/v1/merchants/${e(m)}/apps/${e(appId)}/launch`,
-	demo: (/** @type {string} */ m, /** @type {string} */ appId) => `/v1/merchants/${e(m)}/apps/${e(appId)}/demo`,
 	balance: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/balance`,
 	meter: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/meter`,
 	statement: (
 		/** @type {string} */ m,
 		/** @type {{ from?: string | null, to?: string | null, websiteId?: string | null }} */ q = {},
 	) => `/v1/merchants/${e(m)}/statement${query(q)}`,
-	spendPolicies: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/spend-policies`,
+	spendCap: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/spend-cap`,
 	team: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/team`,
 	connectors: (
 		/** @type {string} */ m,

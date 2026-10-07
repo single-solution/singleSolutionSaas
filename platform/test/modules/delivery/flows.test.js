@@ -2,7 +2,20 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { closeMongoClients } from '../../../src/infra/db.js';
 import { startMongo } from '../../helpers.js';
-import { BIG, M1, M2, PACK, SERVICE, UI_FILES, W1, W2, bootDelivery, fileBytes, packManifest, uiBundleBody } from './fixtures.js';
+import {
+	M1,
+	M2,
+	PACK,
+	SERVICE,
+	STAFF_ACTOR,
+	W1,
+	W2,
+	WIDGET_FILES,
+	bootDelivery,
+	fileBytes,
+	packAssets,
+	widgetDescriptor,
+} from './fixtures.js';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 120_000 });
 
@@ -29,7 +42,7 @@ const problemOf = (res, status, code) => {
 const SITE = `/v1/merchants/${M1}/websites/${W1}`;
 
 describe('pack asset uploads', () => {
-	it('stores assets whose bytes match the signed descriptor and refuses everything else', async () => {
+	it('stores assets whose bytes match the descriptor and refuses everything else', async () => {
 		const t = await boot();
 		const staff = await t.cookie({ kind: 'staff', roles: ['admin'] });
 		const put = (/** @type {string} */ path, /** @type {Uint8Array | string} */ raw, type = 'text/javascript', c = staff) =>
@@ -57,14 +70,15 @@ describe('pack asset uploads', () => {
 			'not_found',
 		);
 		problemOf(await put('ui/bar.js', fileBytes('ui/bar.js'), 'text/javascript', await t.cookie()), 401);
+		// a service product without that widget version
 		problemOf(
 			await t.request('PUT', `/v1/admin/packs/${SERVICE}/versions/1/assets/ui/bar.js`, {
 				raw: 'x',
 				cookie: staff,
 				headers: { 'content-type': 'text/javascript' },
 			}),
-			409,
-			'conflict',
+			404,
+			'not_found',
 		);
 
 		// the real bytes (binary too) are accepted, idempotently
@@ -73,6 +87,7 @@ describe('pack asset uploads', () => {
 		expect(ok.json).toMatchObject({
 			path: 'headless/bar.js',
 			changed: true,
+			status: 'uploading',
 			missing: ['ui/bar.js', 'strings/en.json', 'img/logo.png'],
 		});
 		expect((await put('headless/bar.js', fileBytes('headless/bar.js'))).json.changed).toBe(false);
@@ -97,11 +112,31 @@ describe('pack asset uploads', () => {
 
 		const audit = await t.db.collection('platform_audit').find({ action: 'delivery.asset_uploaded' }).toArray();
 		expect(audit).toHaveLength(2);
+		// an already accepted version is not made ready again
+		await t.uploadAll(PACK);
+		expect(t.world.ready).toEqual([]);
+	});
+
+	it('makes an uploading pack version current when its last asset lands, then recompiles subscribed websites', async () => {
+		const t = await boot();
+		await t.uploadAll(PACK);
+		await t.subscribe(W1, PACK);
+		const entry = /** @type {any} */ (t.world.apps.get(PACK));
+		entry.versions.set(2, { ...entry.versions.get(1), status: 'uploading', assets: packAssets() });
+		entry.versions.set(3, { ...entry.versions.get(1), status: 'superseded' });
+		const before = Number((await t.db.collection('delivery_aliases').findOne({ websiteId: W1 }))?.requested);
+		await t.uploadAll(PACK, 2, ['headless/bar.js', 'ui/bar.js', 'strings/en.json']);
+		expect(t.world.ready).toEqual([]);
+		await t.uploadAll(PACK, 2, ['img/logo.png']);
+		expect(t.world.ready).toEqual([{ appId: PACK, version: 2 }]);
+		expect(entry.app.currentVersion).toBe(2);
+		expect(Number((await t.db.collection('delivery_aliases').findOne({ websiteId: W1 }))?.requested)).toBe(before + 1);
+		await expect(t.uploadAll(PACK, 3)).rejects.toThrow(/409/);
 	});
 });
 
-describe('compile, serve, rollback', () => {
-	it('compiles the enabled mode-A elements, serves alias and immutable versions, and rolls back', async () => {
+describe('compile and serve', () => {
+	it('compiles the enabled mode-A elements and serves alias and immutable versions', async () => {
 		const t = await boot();
 		await t.uploadAll(PACK);
 		const owner = await t.cookie();
@@ -112,7 +147,7 @@ describe('compile, serve, rollback', () => {
 		expect(first.json).toMatchObject({ changed: true, previousVersion: null });
 		const v1 = first.json.version;
 		expect(v1).toMatch(/^[0-9a-f]{16}$/);
-		expect(first.json.artefact.elements).toEqual([{ appId: PACK, slug: 'notice-bar', key: 'bar', kind: 'pack', budgetKb: 6 }]);
+		expect(first.json.artefact.elements).toEqual([{ appId: PACK, slug: 'notice-bar', key: 'bar', kind: 'pack' }]);
 
 		// recompiling unchanged inputs is a no-op with the same version (deterministic)
 		const again = await t.request('POST', `${SITE}/delivery/compile`, { cookie: owner });
@@ -146,9 +181,9 @@ describe('compile, serve, rollback', () => {
 			version: v1,
 			integrity,
 			csp: { scriptSrc: ['https://portal.test', `'${integrity}'`], hashes: [integrity] },
-			elements: [{ appId: PACK, key: 'bar', delivery: 'pack', modules: [{ path: 'headless/bar.js' }, { path: 'ui/bar.js' }] }],
+			elements: [{ appId: PACK, key: 'bar', moduleVersion: 1, modules: [{ path: 'headless/bar.js' }, { path: 'ui/bar.js' }] }],
 		});
-		expect(manifest.json.budget.totalKb).toBeLessThanOrEqual(60);
+		expect(manifest.json).not.toHaveProperty('budget');
 		problemOf(await t.request('GET', `/w/${W1}/0000000000000000/loader.js`), 404, 'not_found');
 		problemOf(await t.request('GET', `/w/${W2}/loader.js`), 404, 'not_found');
 
@@ -159,7 +194,7 @@ describe('compile, serve, rollback', () => {
 		);
 		expect(snippet.json.alias.tag).toContain(`/w/${W1}/loader.js`);
 
-		// a config change → new version; rollback flips back atomically
+		// a config change → new version
 		t.world.layers.set(pack.subscriptionId, { website: { features: { 'bar.message': { value: 'Sale ends tonight' } } } });
 		await t.commerce.invalidate(pack.subscriptionId);
 		const second = await t.request('POST', `${SITE}/delivery/compile`, { cookie: owner });
@@ -167,15 +202,11 @@ describe('compile, serve, rollback', () => {
 		const v2 = second.json.version;
 		expect(v2).not.toBe(v1);
 		expect((await t.request('GET', `/w/${W1}/loader.js`)).text).toContain('Sale ends tonight');
-		const back = await t.request('POST', `${SITE}/delivery/rollback`, { cookie: owner, body: { version: v1 } });
-		expect(back.json).toMatchObject({ changed: true, version: v1, previousVersion: v2 });
-		expect((await t.request('GET', `/w/${W1}/loader.js`)).headers.get('etag')).toBe(`"${v1}"`);
-		problemOf(await t.request('POST', `${SITE}/delivery/rollback`, { cookie: owner, body: { version: 'f'.repeat(16) } }), 404);
-		problemOf(await t.request('POST', `${SITE}/delivery/rollback`, { cookie: owner, body: { version: 'x' } }), 422);
+		problemOf(await t.request('POST', `${SITE}/delivery/rollback`, { cookie: owner, body: { version: v1 } }), 404);
 
 		const status = await t.request('GET', `${SITE}/delivery`, { cookie: owner });
-		expect(status.json).toMatchObject({ version: v1, previousVersion: v2, env: 'live' });
-		expect(status.json.history.map((/** @type {any} */ h) => h.reason)).toEqual(['rollback', 'manual', 'manual']);
+		expect(status.json).toMatchObject({ version: v2, previousVersion: v1, env: 'live' });
+		expect(status.json.history.map((/** @type {any} */ h) => h.reason)).toEqual(['manual', 'manual']);
 		expect(status.json.artefacts.map((/** @type {any} */ a) => a.seq)).toEqual([2, 1]);
 
 		// another merchant cannot see or change this website
@@ -199,18 +230,27 @@ describe('compile, serve, rollback', () => {
 			const out = await t.service.compile({ websiteId: W1 });
 			const manifest = await t.request('GET', `/w/${W1}/${out.version}/manifest.json`);
 			return {
-				keys: manifest.json.elements.map((/** @type {any} */ e) => `${e.key}:${e.delivery}`),
+				keys: manifest.json.elements.map((/** @type {any} */ e) => `${e.key}:${e.kind}`),
 				out,
 				manifest: manifest.json,
 			};
 		};
-		// pack bar (A) + chat launcher (A, stub); tip (B only) and inbox (C only) are never delivered
+		// pack bar (A); chat launcher (A) has no widgets yet; tip (B only) and inbox (C only) are never delivered
 		const all = await elementsOf();
-		expect(all.keys).toEqual(['bar:pack', 'launcher:ss-element-stub@2']);
-		expect(all.manifest.csp.connectSrc).toEqual(['https://chat.example.net', 'https://portal.test']);
-		const loader = (await t.request('GET', `/w/${W1}/loader.js`)).text;
-		expect(loader).toContain('"stub":"ss-element-stub@2"');
-		expect(loader).toContain('"api":"https://chat.example.net"');
+		expect(all.keys).toEqual(['bar:pack']);
+		expect(all.out.warnings).toContainEqual(
+			expect.objectContaining({ code: 'widgets_missing', appId: SERVICE, key: 'launcher' }),
+		);
+		expect(all.manifest.csp.connectSrc).toEqual(['https://portal.test']);
+		await t.service.registerWidgets({
+			appId: SERVICE,
+			descriptor: widgetDescriptor(),
+			actor: /** @type {any} */ (STAFF_ACTOR),
+		});
+		await t.uploadAll(SERVICE, 1, WIDGET_FILES);
+		const both = await elementsOf();
+		expect(both.keys).toEqual(['bar:pack', 'launcher:service']);
+		expect(both.manifest.csp.connectSrc).toEqual(['https://chat.example.net', 'https://portal.test']);
 
 		// element switched off → gone
 		await t.commerce.setElement({
@@ -220,6 +260,18 @@ describe('compile, serve, rollback', () => {
 			actor: /** @type {any} */ ({ type: 'merchant_user', id: 'usr_owner', merchantId: M1, roles: ['owner'] }),
 		});
 		expect((await elementsOf()).keys).toEqual(['bar:pack']);
+		// a service product without an https base URL delivers nothing
+		await t.commerce.setElement({
+			subscriptionId: chat.subscriptionId,
+			elementKey: 'launcher',
+			enabled: true,
+			actor: /** @type {any} */ ({ type: 'merchant_user', id: 'usr_owner', merchantId: M1, roles: ['owner'] }),
+		});
+		/** @type {any} */ (t.world.apps.get(SERVICE)).app.baseUrl = 'http://chat.example.net';
+		const insecure = await elementsOf();
+		expect(insecure.keys).toEqual(['bar:pack']);
+		expect(insecure.out.warnings).toContainEqual(expect.objectContaining({ code: 'no_api_base', key: 'launcher' }));
+		await t.commerce.cancel({ subscriptionId: chat.subscriptionId, actor: /** @type {any} */ ({ type: 'system', id: 't' }) });
 		// paused subscription → its elements are gone
 		await t.commerce.pause({
 			subscriptionId: pack.subscriptionId,
@@ -265,40 +317,6 @@ describe('compile, serve, rollback', () => {
 		expect(bad.artefact.elements).toEqual([]);
 	});
 
-	it('refuses a compile over the website budget and keeps the current alias', async () => {
-		const t = await boot({ budgetKb: 40 });
-		await t.uploadAll(PACK);
-		await t.uploadAll(BIG);
-		const owner = await t.cookie();
-		await t.subscribe(W1, PACK);
-		const ok = await t.request('POST', `${SITE}/delivery/compile`, { cookie: owner });
-		expect(ok.status).toBe(200);
-		await t.subscribe(W1, BIG);
-		const refused = problemOf(
-			await t.request('POST', `${SITE}/delivery/compile`, { cookie: owner }),
-			422,
-			'delivery_budget_exceeded',
-		);
-		expect(refused.detail).toMatch(/website budget is 40 KB/);
-		expect(refused.errors).toEqual([
-			{ path: '/elements/gallery', code: 'budget', message: 'big-gallery/gallery budget.js 40 KB' },
-			{ path: '/elements/bar', code: 'budget', message: 'notice-bar/bar budget.js 6 KB' },
-		]);
-		expect((await t.request('GET', `/w/${W1}/loader.js`)).headers.get('etag')).toBe(`"${ok.json.version}"`);
-	});
-
-	it('refuses elements that ship more than their declared budget', async () => {
-		const t = await boot();
-		const entry = /** @type {any} */ (t.world.apps.get(PACK));
-		entry.versions.set(1, { ...entry.versions.get(1), manifest: packManifest({ budget: 0 }) });
-		await t.uploadAll(PACK);
-		await t.subscribe(W1, PACK);
-		await expect(t.service.compile({ websiteId: W1 })).rejects.toMatchObject({
-			code: 'delivery_budget_exceeded',
-			errors: [expect.objectContaining({ path: '/elements/bar', code: 'over_declared' })],
-		});
-	});
-
 	it('recompiles through the job when commerce bumps a document version, coalescing requests', async () => {
 		const t = await boot();
 		await t.uploadAll(PACK);
@@ -314,100 +332,153 @@ describe('compile, serve, rollback', () => {
 		expect((await t.request('GET', `/w/${W1}/loader.js`)).text).toContain('"message":"v2"');
 		expect(await t.db.collection('delivery_artefacts').countDocuments({ websiteId: W1 })).toBe(1);
 	});
+	it('records a refused compile job and retries it when the loader is served', async () => {
+		const t = await boot();
+		await t.uploadAll(PACK);
+		const entry = /** @type {any} */ (t.world.apps.get(PACK));
+		const manifest = entry.versions.get(1).manifest;
+		await t.subscribe(W1, PACK);
+		manifest.elements = [manifest.elements[0], { ...manifest.elements[0], name: 'Twin' }];
+		await t.db.collection('platform_jobs').deleteMany({});
+		await t.service.requestCompile(W1);
+		await t.portal.shared.jobs.runBatch({ handlers: t.portal.modules.jobs, deadlineMs: 10_000, owner: 'test' });
+		const owner = await t.cookie();
+		const status = await t.request('GET', `${SITE}/delivery`, { cookie: owner });
+		expect(status.json).toMatchObject({ version: null, lastFailure: { code: 'conflict' } });
+		expect(status.json.lastFailure.errors).toEqual([
+			{ path: '/elements/notice-bar:bar', message: 'element notice-bar:bar is delivered twice' },
+		]);
+		problemOf(await t.request('GET', `/w/${W1}/loader.js`), 404, 'not_found');
+		await expect(
+			t.service.uploadAsset({
+				appId: PACK,
+				version: 1,
+				path: '../x.js',
+				bytes: Buffer.from('x'),
+				contentType: 'text/javascript',
+				actor: /** @type {any} */ (STAFF_ACTOR),
+			}),
+		).rejects.toMatchObject({ code: 'validation_failed' });
+	});
 });
 
-describe('service UI bundles (F.16)', () => {
-	it('replaces the element stub with the product signed modules once every asset is uploaded', async () => {
+describe('service widgets', () => {
+	it('registers widgets, uploads them on the pack asset route and compiles the real modules into the loader', async () => {
 		const t = await boot();
+		/** @type {any} */ (t.world.apps.get(SERVICE)).app.baseUrl = 'https://api.chat.example.net/';
 		await t.subscribe(W1, SERVICE);
 		const first = await t.service.compile({ websiteId: W1 });
-		expect(first.artefact.elements.map((/** @type {any} */ e) => e.key)).toEqual(['launcher']);
-		const stubbed = await t.request('GET', `/w/${W1}/${first.version}/manifest.json`);
-		expect(stubbed.json.elements[0].delivery).toBe('ss-element-stub@2');
+		expect(first.artefact.elements).toEqual([]);
+		expect(first.warnings).toContainEqual(expect.objectContaining({ code: 'widgets_missing', key: 'launcher' }));
 
-		// packs cannot, forged signatures are refused (by catalog), a valid descriptor is pending until uploaded
-		await expect(t.service.submitUiBundle({ appId: PACK, body: uiBundleBody() })).rejects.toMatchObject({ code: 'conflict' });
-		await expect(t.service.submitUiBundle({ appId: SERVICE, body: uiBundleBody({ sig: 'forged' }) })).rejects.toMatchObject({
-			code: 'forbidden',
+		const actor = /** @type {any} */ (STAFF_ACTOR);
+		const registered = await t.service.registerWidgets({ appId: SERVICE, descriptor: widgetDescriptor(), actor });
+		expect(registered).toEqual({
+			version: 1,
+			status: 'uploading',
+			missing: WIDGET_FILES,
+			uploadPath: `/v1/admin/packs/${SERVICE}/versions/1/assets/`,
+			changed: true,
 		});
-		const submitted = await t.service.submitUiBundle({ appId: SERVICE, body: uiBundleBody() });
-		expect(submitted).toMatchObject({ version: 1, status: 'pending', elements: ['launcher'], missing: UI_FILES });
-		expect((await t.service.submitUiBundle({ appId: SERVICE, body: uiBundleBody() })).version).toBe(1); // idempotent
-
-		// the bytes must match the descriptor
-		const upload = (/** @type {string} */ path, /** @type {Uint8Array} */ bytes) =>
-			t.service.uploadUiAsset({ appId: SERVICE, version: 1, path, bytes, contentType: 'text/javascript' });
-		await expect(upload('headless/bar.js', Buffer.from('tampered'))).rejects.toMatchObject({
-			code: 'delivery_asset_mismatch',
+		// the same descriptor is the same version; a descriptor without widget modules is refused
+		expect((await t.service.registerWidgets({ appId: SERVICE, descriptor: widgetDescriptor(), actor })).version).toBe(1);
+		const bare = { ...widgetDescriptor(), manifest: { elements: [{ key: 'launcher', headless: 'nope.js#x' }] } };
+		await expect(t.service.registerWidgets({ appId: SERVICE, descriptor: bare, actor })).rejects.toMatchObject({
+			code: 'validation_failed',
 		});
-		await expect(upload('other.js', fileBytes('ui/bar.js'))).rejects.toMatchObject({ code: 'delivery_asset_mismatch' });
-		await expect(
-			t.service.uploadUiAsset({
-				appId: SERVICE,
-				version: 7,
-				path: 'ui/bar.js',
-				bytes: fileBytes('ui/bar.js'),
-				contentType: 'text/javascript',
-			}),
-		).rejects.toMatchObject({ code: 'not_found' });
-		expect((await upload('headless/bar.js', fileBytes('headless/bar.js'))).status).toBe('pending');
-		// still the stub while incomplete
-		const partial = await t.service.compile({ websiteId: W1 });
-		expect(partial.version).toBe(first.version);
-		const done = await upload('ui/bar.js', fileBytes('ui/bar.js'));
-		expect(done).toMatchObject({ status: 'ready', missing: [] });
-		expect((await t.service.listUiBundles({ appId: SERVICE })).items[0]).toMatchObject({ version: 1, status: 'ready' });
 
-		// ready → every subscribed website was asked to recompile; the compile ships the modules from /w/ui/
+		// one asset route for both kinds: bytes must match the descriptor
+		const staff = await t.cookie({ kind: 'staff', roles: ['admin'] });
+		const put = (/** @type {string} */ path, /** @type {Uint8Array | string} */ raw) =>
+			t.request('PUT', `${registered.uploadPath}${path}`, {
+				raw,
+				cookie: staff,
+				headers: { 'content-type': 'text/javascript' },
+			});
+		problemOf(await put('headless/bar.js', 'tampered'), 422, 'delivery_asset_mismatch');
+		problemOf(await put('img/other.js', 'x'), 422, 'delivery_asset_mismatch');
+		const partial = await put('headless/bar.js', fileBytes('headless/bar.js'));
+		expect(partial.json).toMatchObject({ status: 'uploading', missing: ['ui/bar.js'] });
+		expect((await t.service.compile({ websiteId: W1 })).version).toBe(first.version);
+		const done = await put('ui/bar.js', fileBytes('ui/bar.js'));
+		expect(done.json).toMatchObject({
+			status: 'ready',
+			missing: [],
+			url: `https://portal.test/w/packs/${SERVICE}/1/ui/bar.js`,
+		});
+		expect(await t.db.collection('platform_audit').countDocuments({ action: 'delivery.widgets_ready' })).toBe(1);
+		expect((await put('ui/bar.js', fileBytes('ui/bar.js'))).json).toMatchObject({ status: 'ready', changed: false });
+		expect(await t.db.collection('platform_audit').countDocuments({ action: 'delivery.widgets_ready' })).toBe(1);
+		const again = await t.service.registerWidgets({ appId: SERVICE, descriptor: widgetDescriptor(), actor });
+		expect(again).toMatchObject({ version: 1, status: 'ready', missing: [], changed: false });
+
+		// ready → every subscribed website was asked to recompile; the loader ships the real modules from /w/packs/
 		expect((await t.db.collection('delivery_aliases').findOne({ websiteId: W1 }))?.requested).toBeGreaterThan(0);
 		const out = await t.service.compile({ websiteId: W1 });
 		expect(out.changed).toBe(true);
 		const manifest = await t.request('GET', `/w/${W1}/${out.version}/manifest.json`);
-		expect(manifest.json.elements[0]).toMatchObject({ key: 'launcher', delivery: 'ui-bundle', uiBundleVersion: 1 });
-		expect(manifest.json.elements[0].modules.map((/** @type {any} */ m) => m.path)).toEqual(UI_FILES);
+		expect(manifest.json.elements[0]).toMatchObject({
+			key: 'launcher',
+			kind: 'service',
+			moduleVersion: 1,
+			api: 'https://api.chat.example.net',
+		});
+		expect(manifest.json.elements[0].modules.map((/** @type {any} */ m) => m.path)).toEqual(WIDGET_FILES);
 		const loader = (await t.request('GET', `/w/${W1}/loader.js`)).text;
-		expect(loader).toContain(`"path":"ui/${SERVICE}/1/headless/bar.js"`);
-		expect(loader).toContain('"api":"https://chat.example.net"');
-		expect(loader).not.toContain('"stub":"ss-element-stub');
-		const served = await t.request('GET', `/w/ui/${SERVICE}/1/headless/bar.js`);
+		expect(loader).toContain(`"path":"packs/${SERVICE}/1/headless/bar.js"`);
+		expect(loader).toContain(`"path":"packs/${SERVICE}/1/ui/bar.js"`);
+		expect(loader).toContain('"api":"https://api.chat.example.net"');
+		expect(loader).not.toContain('stub');
+		const served = await t.request('GET', `/w/packs/${SERVICE}/1/headless/bar.js`);
 		expect(served.status).toBe(200);
 		expect(served.headers.get('cache-control')).toContain('immutable');
 		expect(served.text).toBe(fileBytes('headless/bar.js').toString('utf8'));
-		// UI-bundle assets are not reachable as pack assets
-		expect((await t.request('GET', `/w/packs/${SERVICE}/1/headless/bar.js`)).status).toBe(404);
+		expect((await t.request('GET', `/w/ui/${SERVICE}/1/headless/bar.js`)).status).toBe(404);
+
+		// the loader key may call the product's own routes; the base URL falls back to the manifest's endpoints.base
+		expect([...t.world.keys.values()].at(-1)?.scopes).toEqual([
+			'events.write',
+			'elements.read',
+			'chat-box.read',
+			'chat-box.write',
+		]);
+		/** @type {any} */ (t.world.apps.get(SERVICE)).app.baseUrl = null;
+		await t.service.compile({ websiteId: W1 });
+		expect((await t.request('GET', `/w/${W1}/loader.js`)).text).toContain('"api":"https://chat.example.net"');
+		// an inactive product keeps delivering to existing subscriptions, without new product scopes on the key
+		/** @type {any} */ (t.world.apps.get(SERVICE)).app.status = 'inactive';
+		const keysBefore = t.world.keys.size;
+		const inactive = await t.service.compile({ websiteId: W1 });
+		expect(inactive.artefact.elements.map((/** @type {any} */ e) => e.key)).toEqual(['launcher']);
+		expect(t.world.keys.size).toBe(keysBefore);
+	});
+
+	it('registers a second version for a changed descriptor and compiles the newest ready one', async () => {
+		const t = await boot();
+		const actor = /** @type {any} */ (STAFF_ACTOR);
+		await t.service.registerWidgets({ appId: SERVICE, descriptor: widgetDescriptor(), actor });
+		await t.uploadAll(SERVICE, 1, WIDGET_FILES);
+		const changed = { ...widgetDescriptor(), assets: [...widgetDescriptor().assets].reverse() };
+		const second = await t.service.registerWidgets({ appId: SERVICE, descriptor: changed, actor });
+		expect(second).toMatchObject({ version: 2, status: 'uploading' });
+		await t.subscribe(W1, SERVICE);
+		const out = await t.service.compile({ websiteId: W1 });
+		expect((await t.request('GET', `/w/${W1}/${out.version}/loader.js`)).text).toContain(`packs/${SERVICE}/1/`);
+		await t.uploadAll(SERVICE, 2, WIDGET_FILES);
+		const next = await t.service.compile({ websiteId: W1 });
+		expect((await t.request('GET', `/w/${W1}/${next.version}/loader.js`)).text).toContain(`packs/${SERVICE}/2/`);
 	});
 });
 
 describe('no client data in Portal collections', () => {
-	it('delivery collections hold metadata only — never fetched pages or element payloads', async () => {
-		const marker = 'CUSTOMER-SECRET-PAGE-CONTENT';
-		const t = await boot({
-			delivery: {
-				fetch: async (url) => ({
-					status: 200,
-					headers: { 'content-type': 'text/html; charset=utf-8' },
-					body: Buffer.from(`<html><head></head><body><p>${marker}</p></body></html>`),
-					url,
-				}),
-			},
-		});
+	it('delivery collections hold metadata only — never file contents', async () => {
+		const t = await boot();
 		await t.uploadAll(PACK);
 		await t.subscribe(W1, PACK);
-		const owner = await t.cookie();
-		await t.request('POST', `${SITE}/delivery/compile`, { cookie: owner });
-		const preview = await t.request('POST', `${SITE}/preview`, { cookie: owner, body: { path: '/' } });
-		const page = await t.request('GET', new URL(preview.json.url).pathname);
-		expect(page.text).toContain(marker);
-		for (const name of [
-			'delivery_assets',
-			'delivery_artefacts',
-			'delivery_aliases',
-			'delivery_previews',
-			'platform_jobs',
-			'platform_audit',
-		]) {
+		await t.service.compile({ websiteId: W1 });
+		for (const name of ['delivery_assets', 'delivery_artefacts', 'delivery_aliases', 'platform_jobs', 'platform_audit']) {
 			const docs = await t.db.collection(name).find({}).toArray();
-			expect(JSON.stringify(docs)).not.toContain(marker);
+			expect(JSON.stringify(docs)).not.toContain('createBar = ({ config');
 		}
 		// the asset records are hashes and sizes, not file contents
 		const asset = await t.db.collection('delivery_assets').findOne({ path: 'headless/bar.js' });

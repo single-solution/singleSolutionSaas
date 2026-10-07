@@ -3,9 +3,11 @@
  * nothing here is stored — listings are always computed from the current accepted manifest.
  * @module
  */
+import { canonicalJson } from '@ss/protocol';
 
 /** @typedef {import('@ss/contracts').Manifest} Manifest */
 /** @typedef {import('@ss/contracts').ManifestElement} ManifestElement */
+/** @typedef {ManifestElement['price']} Price */
 
 /**
  * @param {ManifestElement} element
@@ -68,7 +70,7 @@ export const priceSummary = (manifest) => {
 
 /**
  * Catalog entry for consoles and the public marketplace.
- * @param {{ appId: string, slug: string, kind: string, status: string, sunsetAt?: Date | null, currentVersion: number }} app
+ * @param {{ appId: string, slug: string, kind: string, status: string, currentVersion: number }} app
  * @param {Manifest} manifest
  * @param {{ detail?: boolean }} [options] `detail` adds the feature schemas (for configuration forms)
  */
@@ -77,7 +79,6 @@ export const catalogEntry = (app, manifest, { detail = false } = {}) => ({
 	slug: app.slug,
 	kind: app.kind,
 	status: app.status,
-	sunsetAt: app.sunsetAt instanceof Date ? app.sunsetAt.toISOString() : null,
 	name: manifest.product.name,
 	category: manifest.product.category,
 	...(manifest.product.description ? { description: manifest.product.description } : {}),
@@ -85,7 +86,6 @@ export const catalogEntry = (app, manifest, { detail = false } = {}) => ({
 	manifestVersion: app.currentVersion,
 	capabilities: {
 		adminLaunch: manifest.capabilities?.adminLaunch === true,
-		sandbox: manifest.capabilities?.sandbox === true,
 		// F.16: the product may ask to become a website's identity issuer (merchant approval required)
 		identityIssuer: /** @type {Record<string, unknown> | undefined} */ (manifest.capabilities)?.identityIssuer === true,
 	},
@@ -96,3 +96,20 @@ export const catalogEntry = (app, manifest, { detail = false } = {}) => ({
 	plans: planEntries(manifest),
 	price: priceSummary(manifest),
 });
+
+/**
+ * Element prices that differ between two manifests (a read-only note for staff after a reconnect); `before` / `after`
+ * is null for an element that was added / removed.
+ * @param {Manifest} before
+ * @param {Manifest} after
+ * @returns {Array<{ element: string, before: Price | null, after: Price | null }>}
+ */
+export const priceChanges = (before, after) => {
+	const old = new Map(before.elements.map((e) => [e.key, e.price]));
+	const next = new Map(after.elements.map((e) => [e.key, e.price]));
+	return [...new Set([...old.keys(), ...next.keys()])].flatMap((element) => {
+		const was = old.get(element) ?? null;
+		const now = next.get(element) ?? null;
+		return canonicalJson(was) === canonicalJson(now) ? [] : [{ element, before: was, after: now }];
+	});
+};

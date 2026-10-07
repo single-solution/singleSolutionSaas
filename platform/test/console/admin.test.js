@@ -1,26 +1,22 @@
 /**
  * End-to-end smoke of the Admin Console: boots the Portal in-process (every module, MongoMemory), creates the first
  * admin and signs in through the staff flow (password → optional TOTP enrolment, codes computed here → MFA verify on
- * the next sign-in), seeds a merchant with a website, a listed pack (and a breaking second version) and a
+ * the next sign-in), seeds a merchant with a website, an active pack (descriptor + assets uploaded) and a
  * subscription with admin overrides, then server-renders every admin page (renderToString) and checks that each
- * renders without errors or React warnings. A second test covers impersonation: the merchant session carrying
- * `via`, the banner in the Merchant Console and the audit trail.
+ * renders without errors or React warnings.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { createSigner, generateSigningKey, signBundle } from '@ss/protocol';
+import { createHash } from 'node:crypto';
 import { sessionCookieName, totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/infra/db.js';
-import { COLLECTIONS } from '../../src/infra/schema.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
-import { BUNDLE_FORMAT } from '../../src/modules/catalog/core/bundle.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import * as loaders from '../../src/console/loaders.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi, adminRoutes, query } from '../../src/console/admin/paths.js';
-import { ConsoleShell } from '../../src/console/views/shell.js';
 import { AdminShell, adminSections } from '../../src/console/admin/views/shell.js';
 import {
 	StaffForgotPasswordView,
@@ -30,17 +26,9 @@ import {
 	StaffResetPasswordView,
 	safeAdminNext,
 } from '../../src/console/admin/views/auth.js';
-import { DashboardView } from '../../src/console/admin/views/dashboard.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { WebsitesView } from '../../src/console/admin/views/websites.js';
-import {
-	AppView,
-	AppsView,
-	ManifestDiffView,
-	VersionView,
-	healthLabel,
-	parseJsonField,
-} from '../../src/console/admin/views/apps.js';
+import { AppView, AppsView } from '../../src/console/admin/views/apps.js';
 import {
 	PoliciesView,
 	SubscriptionAdminView,
@@ -48,10 +36,8 @@ import {
 	effectiveRows,
 } from '../../src/console/admin/views/config.js';
 import { FinanceView, LedgerView } from '../../src/console/admin/views/finance.js';
-import { IntegrationView } from '../../src/console/admin/views/integration.js';
 import { AuditView, ConnectorsAdminView, checkSummary } from '../../src/console/admin/views/operations.js';
 import { StaffView } from '../../src/console/admin/views/staff.js';
-import { ImpersonationBanner } from '../../src/console/admin/views/impersonation.js';
 import { layerChange, layerValues } from '../../src/console/admin/views/layer.js';
 import { parseSignedCredits, staffCan } from '../../src/console/admin/views/common.js';
 import { PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../helpers.js';
@@ -90,14 +76,13 @@ const client = (/** @type {import('../../src/portal.js').Portal} */ portal) => {
 	return { api, jar };
 };
 
-/** @param {{ breaking?: boolean }} [options] */
-const packManifest = ({ breaking = false } = {}) => ({
+const packManifest = () => ({
 	ssps: '1',
 	product: {
 		slug: 'notice-bar',
 		name: 'Notice bar',
 		kind: 'pack',
-		version: breaking ? '0.2.0' : '0.1.0',
+		version: '0.1.0',
 		category: 'storefront',
 		description: 'A bar on top.',
 	},
@@ -106,8 +91,7 @@ const packManifest = ({ breaking = false } = {}) => ({
 			key: 'bar',
 			name: 'Notice bar',
 			modes: ['A', 'B'],
-			price: { hourly: breaking ? 2000 : 1250 },
-			budget: { js: 3 },
+			price: { hourly: 1250 },
 			placement: true,
 			headless: 'headless/bar.js#createBar',
 			renderer: 'ui/bar.js#render',
@@ -137,41 +121,66 @@ const packManifest = ({ breaking = false } = {}) => ({
 				},
 			},
 		},
-		...(breaking
-			? []
-			: [
-					{
-						key: 'badge',
-						name: 'Trust badge',
-						modes: ['A', 'B'],
-						price: { hourly: 500 },
-						budget: { js: 2 },
-						placement: true,
-						headless: 'headless/badge.js#createBadge',
-						renderer: 'ui/badge.js#render',
-					},
-				]),
+		{
+			key: 'badge',
+			name: 'Trust badge',
+			modes: ['A', 'B'],
+			price: { hourly: 500 },
+			placement: true,
+			headless: 'headless/badge.js#createBadge',
+			renderer: 'ui/badge.js#render',
+		},
 	],
-	plans: [{ code: 'basic', name: 'Basic', elements: ['bar'], ...(breaking ? {} : { addons: ['badge'] }) }],
-	priceBook: { version: breaking ? '2' : '1', effectiveFrom: '2026-01-01T00:00:00.000Z' },
+	plans: [{ code: 'basic', name: 'Basic', elements: ['bar'], addons: ['badge'] }],
+	priceBook: { version: '1', effectiveFrom: '2026-01-01T00:00:00.000Z' },
 });
 
-/** @param {boolean} [breaking] */
-const descriptorOf = (breaking = false) =>
-	/** @type {any} */ ({
-		format: BUNDLE_FORMAT,
-		manifest: packManifest({ breaking }),
-		assets: [
-			{ path: 'headless/bar.js', sha256: 'a'.repeat(64), size: 1200, contentType: 'text/javascript' },
-			{ path: 'ui/bar.js', sha256: 'b'.repeat(64), size: 2400, contentType: 'text/javascript' },
-			...(breaking
-				? []
-				: [
-						{ path: 'headless/badge.js', sha256: 'c'.repeat(64), size: 900, contentType: 'text/javascript' },
-						{ path: 'ui/badge.js', sha256: 'd'.repeat(64), size: 1000, contentType: 'text/javascript' },
-					]),
-		],
-	});
+/** The pack's asset files (`ss pack build` output besides descriptor.json). */
+const ASSETS = Object.freeze({
+	'headless/bar.js': 'export const createBar = () => ({});',
+	'ui/bar.js': 'export const render = () => null;',
+	'headless/badge.js': 'export const createBadge = () => ({});',
+	'ui/badge.js': 'export const render = () => null;',
+});
+
+const descriptorOf = () => ({
+	format: 'ss-pack-bundle@1',
+	manifest: packManifest(),
+	assets: Object.entries(ASSETS).map(([path, body]) => ({
+		path,
+		sha256: createHash('sha256').update(body).digest('hex'),
+		size: Buffer.byteLength(body),
+		contentType: 'text/javascript',
+	})),
+});
+
+/**
+ * Upload the pack as the admin console does: the descriptor, then the raw bytes of every missing asset; activate it.
+ * @param {import('../../src/portal.js').Portal} portal
+ * @param {ReturnType<typeof client>} staff
+ */
+const uploadPack = async (portal, staff) => {
+	const uploaded = await staff.api.post(adminApi.packs(), { descriptor: descriptorOf() });
+	expect(uploaded).toMatchObject({ ok: true, data: { kind: 'pack', version: 1, status: 'uploading' } });
+	const r = uploaded.ok ? uploaded.data : {};
+	for (const path of r.missing) {
+		const response = await portal.handle(
+			new Request(new URL(`${r.uploadPath}${path}`, PORTAL_URL), {
+				method: 'PUT',
+				headers: {
+					cookie: [...staff.jar].map(([k, v]) => `${k}=${v}`).join('; '),
+					origin: PORTAL_URL,
+					'sec-fetch-site': 'same-origin',
+					'content-type': 'text/javascript',
+				},
+				body: /** @type {Record<string, string>} */ (ASSETS)[path],
+			}),
+		);
+		expect(`${response.status} ${await response.clone().text()}`).toMatch(/^20/);
+	}
+	expect((await staff.api.post(adminApi.status(r.appId), { status: 'active' })).ok).toBe(true);
+	return /** @type {string} */ (r.appId);
+};
 
 /**
  * Server-render a view, failing on render errors and React warnings.
@@ -210,7 +219,7 @@ const setup = async (name) => {
 	const mailer = { available: true, send: async (/** @type {any} */ m) => void mail.push(m) };
 	const modules = defaultModules.map((m) => (m.name === 'identity' ? createIdentityModule({ mailer }) : m));
 	const { logger } = createTestLogger();
-	const config = await testConfig();
+	const config = await testConfig({ STORAGE_DIR: ':memory:' });
 	const db = mongo.db(name);
 	// the Portal runs on an injected clock (starting at the wall time, so signed artefacts stay valid): time only moves
 	// when a test advances it, and expiry assertions are exact
@@ -276,23 +285,13 @@ describe('admin console smoke', () => {
 	it('signs staff in with TOTP and server-renders every admin page', async () => {
 		const { portal, staff, staffMember, merchant, merchantId, websiteId } = await setup('admin_smoke');
 
-		// ------------------------------------------------------------------ catalog: a pack, activated, then a breaking v2
-		const key = await generateSigningKey({ kid: 'pack-1' });
-		const descriptor = descriptorOf();
-		const uploaded = await staff.api.post(adminApi.packs(), {
-			descriptor,
-			signature: await signBundle({ signer: createSigner(key.privateJwk), descriptor }),
-			publicJwk: key.publicJwk,
+		// ------------------------------------------------------------------ catalog: a pack, uploaded and activated
+		const appId = await uploadPack(portal, staff);
+		// the same build again changes nothing
+		expect(await staff.api.post(adminApi.packs(), { descriptor: descriptorOf() })).toMatchObject({
+			ok: true,
+			data: { appId, changed: false, missing: [] },
 		});
-		expect(uploaded.ok).toBe(true);
-		const appId = uploaded.ok ? uploaded.data.app.appId : '';
-		expect((await staff.api.post(adminApi.lifecycle(appId), { action: 'activate' })).ok).toBe(true);
-		const v2 = descriptorOf(true);
-		const second = await staff.api.post(adminApi.packs(), {
-			descriptor: v2,
-			signature: await signBundle({ signer: createSigner(key.privateJwk), descriptor: v2 }),
-		});
-		expect(second).toMatchObject({ ok: true, data: { version: { version: 2, status: 'pending', breaking: true } } });
 
 		// ------------------------------------------------------------------ money and a subscription with admin overrides
 		expect(
@@ -338,12 +337,6 @@ describe('admin console smoke', () => {
 		expect(shell).toContain('child');
 
 		// ------------------------------------------------------------------ every page
-		const dashboard = await admin.loadDashboard(staff.api);
-		const dashboardHtml = text(ssr(<DashboardView {...dashboard} />));
-		expect(dashboardHtml).toContain('Platform health');
-		expect(dashboardHtml).toContain('Job queue');
-		expect(dashboard.ok && dashboard.health.problem).toBeNull();
-
 		const merchants = await admin.loadMerchants(staff.api, {});
 		expect(text(ssr(<MerchantsView {...merchants} />))).toContain('Shop & Co');
 		for (const q of [merchantId, 'shop.example.com', 'shop', 'nobody.example.com'])
@@ -363,7 +356,6 @@ describe('admin console smoke', () => {
 		const detailHtml = text(ssr(<MerchantView {...detail} staff={staffMember} />));
 		expect(detailHtml).toContain('shop.example.com');
 		expect(detailHtml).toContain('owner@shop.test');
-		expect(detailHtml).toContain('Impersonate');
 		expect(detailHtml).toContain('250 credits');
 		expect(detailHtml).toContain('notice-bar');
 		expect(detailHtml).toContain('VIP customer, call before suspending.');
@@ -401,20 +393,13 @@ describe('admin console smoke', () => {
 		expect(sub.ok && sub.effective.features['bar.maxPerDay']).toMatchObject({ value: 50, locked: true });
 
 		const apps = await admin.loadApps(staff.api, { kind: 'pack', status: 'active' });
-		expect(text(ssr(<AppsView {...apps} staff={staffMember} />))).toContain('2 to review');
+		expect(text(ssr(<AppsView {...apps} staff={staffMember} />))).toContain('notice-bar');
 		const app = await admin.loadApp(staff.api, appId);
+		expect(app.ok && app.manifest?.product.slug).toBe('notice-bar');
 		const appHtml = text(ssr(<AppView {...app} staff={staffMember} />));
-		expect(appHtml).toContain('Manifest versions');
-		expect(appHtml).toContain('pack-1');
-		expect(appHtml).toContain('Deprecate');
-		const version = await admin.loadVersion(staff.api, appId, '2');
-		const versionHtml = text(ssr(<VersionView {...version} staff={staffMember} />));
-		expect(versionHtml).toContain('breaking change');
-		expect(versionHtml).toContain('Element removed');
-		expect(versionHtml).toContain('Approve');
-		expect(text(ssr(<VersionView {...await admin.loadVersion(staff.api, appId, 'x')} staff={staffMember} />))).toContain(
-			'Not found',
-		);
+		expect(appHtml).toContain('Upload pack version');
+		expect(appHtml).toContain('Active');
+		expect(appHtml).toContain('v1 (0.1.0)');
 		const policies = await admin.loadPolicies(staff.api, appId);
 		const policiesHtml = text(ssr(<PoliciesView {...policies} staff={staffMember} />));
 		expect(policiesHtml).toContain('Platform hello');
@@ -429,21 +414,13 @@ describe('admin console smoke', () => {
 		const chain = await staff.api.get(adminApi.ledgerVerification(merchantId));
 		expect(chain).toMatchObject({ ok: true, data: { ok: true } });
 
-		expect(text(ssr(<IntegrationView {...await admin.loadIntegration(staff.api, {})} staff={staffMember} />))).toContain(
-			'Filter by website or app',
-		);
-		const scoped = await admin.loadIntegration(staff.api, { websiteId, status: 'dead', appId: 'bad' });
-		expect(scoped.ok && scoped.filter).toEqual({ websiteId, appId: null, status: 'dead' });
-		ssr(<IntegrationView {...scoped} staff={staffMember} />);
-
 		expect(text(ssr(<ConnectorsAdminView {...await admin.loadConnectors(staff.api, { kind: 'database' })} />))).toContain(
 			'No connectors match',
 		);
-		const audit = await admin.loadAudit(staff.api, { scope: `merchant:${merchantId}`, action: 'credits.added' });
+		const audit = await admin.loadAudit(staff.api, { action: 'credits.added', actorId: '<bad>' });
+		expect(audit.ok && audit.filter).toEqual({ actorId: null, targetId: null, action: 'credits.added' });
 		expect(audit.ok && audit.page.items.map((e) => e.action)).toEqual(['credits.added']);
-		const auditHtml = text(ssr(<AuditView {...audit} />));
-		expect(auditHtml).toContain('credits.added');
-		expect(auditHtml).toContain('Verify a chain');
+		expect(text(ssr(<AuditView {...audit} />))).toContain('credits.added');
 
 		const staffPage = await admin.loadStaff(staff.api, staffMember);
 		const staffHtml = text(ssr(<StaffView {...staffPage} />));
@@ -469,14 +446,12 @@ describe('admin console smoke', () => {
 		expect(gone.ok).toBe(false);
 		ssr(<SubscriptionAdminView {...gone} staff={staffMember} />);
 		for (const [View, result] of /** @type {const} */ ([
-			[DashboardView, gone],
 			[MerchantsView, gone],
 			[AppsView, gone],
 			[AppView, gone],
 			[PoliciesView, gone],
 			[FinanceView, gone],
 			[LedgerView, gone],
-			[IntegrationView, gone],
 			[ConnectorsAdminView, gone],
 			[AuditView, gone],
 			[StaffView, gone],
@@ -486,12 +461,6 @@ describe('admin console smoke', () => {
 			expect(text(ssr(<View {...result} staff={staffMember} />))).toMatch(/not|could not|found/i);
 		// a merchant session is not a staff session
 		expect(await admin.loadStaffSession(merchant.api)).toMatchObject({ ok: false, status: 401 });
-		// the dashboard degrades section by section when a read is refused (roles without platform.jobs.read, or here
-		// an anonymous caller — the console layout redirects those before any page loads)
-		const anonymous = await admin.loadDashboard(client(portal).api);
-		expect(anonymous).toMatchObject({ ok: true, metrics: null, apps: [], alerts: [] });
-		expect(anonymous.ok && anonymous.metricsProblem?.status).toBe(401);
-		ssr(<DashboardView {...anonymous} />);
 	});
 
 	it('limits navigation and pages to the staff role', async () => {
@@ -521,116 +490,16 @@ describe('admin console smoke', () => {
 		expect(forbidden).toMatchObject({ ok: false, status: 403 });
 		expect(text(ssr(<StaffView {...forbidden} />))).toContain('Not permitted');
 		expect(staffCan(session.staff, 'platform.launch.admin')).toBe(true);
-		expect(staffCan(session.staff, 'platform.impersonate')).toBe(false);
 		expect(staffCan(null, 'platform.merchants.read')).toBe(false);
-	});
-
-	it('impersonation: a time-boxed merchant session with via shows the banner and is audited as the staff member', async () => {
-		const { portal, clock, db, staff, staffMember, me, merchantId, merchant, websiteId } = await setup('admin_impersonation');
-		// an ordinary merchant session: no banner
-		expect(await admin.loadImpersonation(merchant.api)).toBeNull();
-		const plain = text(
-			ssr(
-				<ConsoleShell me={me.me} merchantId={merchantId} websites={[]} meter={null} impersonation={null}>
-					<p>child</p>
-				</ConsoleShell>,
-			),
-		);
-		expect(plain).not.toContain('Staff impersonation');
-		// staff side: the merchant's team lists the member to impersonate (superadmins may impersonate)
-		const detail = await admin.loadMerchant(staff.api, merchantId);
-		if (!detail.ok) throw new Error('merchant');
-		const member = detail.members.find((m) => m.email === 'owner@shop.test');
-		expect(staffCan(staffMember, 'platform.impersonate')).toBe(true);
-		expect(text(ssr(<MerchantView {...detail} staff={staffMember} />))).toContain('Impersonate');
-
-		// POST /v1/admin/merchants/:merchantId/impersonate mints a one-time token; the same staff browser exchanges it
-		// for a merchant session carrying `via`, time-boxed to the minutes asked for
-		const startedAt = clock.now();
-		const started = await staff.api.post(adminApi.impersonate(merchantId), {
-			userId: member.userId,
-			minutes: 15,
-			reason: 'ticket 42',
-		});
-		expect(started.ok).toBe(true);
-		const exchanged = await staff.api.post(adminApi.impersonationExchange(), {
-			token: started.ok ? started.data.exchangeToken : '',
-		});
-		expect(exchanged.ok).toBe(true);
-		const merchantCookie = staff.jar.get(sessionCookieName('merchant', true));
-		expect(merchantCookie).toBeTruthy();
-		staff.jar.delete(sessionCookieName('merchant', true));
-		const impersonated = createConsoleApi({
-			handle: portal.handle,
-			baseUrl: PORTAL_URL,
-			cookie: `${sessionCookieName('merchant', true)}=${merchantCookie}`,
-		});
-		const state = await admin.loadImpersonation(impersonated);
-		expect(state).toMatchObject({ staffId: staffMember.staffId, staffName: 'root@ss.test' });
-		const ends = Date.parse(String(state?.expiresAt));
-		expect(ends).toBeGreaterThan(startedAt);
-		// time-boxed to exactly the 15 minutes asked for, from the moment of the exchange (injected clock)
-		expect(ends).toBe(startedAt + 15 * 60_000);
-
-		// the Merchant Console frame shows the banner on every page
-		const session = await loaders.loadSession(impersonated);
-		if (!session.ok) throw new Error('impersonated session');
-		const frame = await loaders.loadFrame(impersonated, merchantId);
-		const banner = text(
-			ssr(
-				<ConsoleShell
-					me={session.me}
-					merchantId={merchantId}
-					websites={frame.websites}
-					meter={frame.meter}
-					impersonation={state}>
-					<p>child</p>
-				</ConsoleShell>,
-			),
-		);
-		expect(banner).toContain('Staff impersonation of owner@shop.test');
-		expect(banner).toContain(staffMember.staffId);
-		expect(banner).toContain('End impersonation');
-		expect(text(ssr(<ImpersonationBanner impersonation={{ staffId: 'stf_x', expiresAt: null }} />))).toContain('stf_x');
-		expect(renderToString(<ImpersonationBanner impersonation={null} />)).toBe('');
-
-		// actions taken while impersonating are recorded as the user, via the staff member
-		const policy = await impersonated.post(`/v1/merchants/${merchantId}/spend-policies`, {
-			scope: 'merchant',
-			window: 'day',
-			limit: 10_000,
-		});
-		expect(policy.ok).toBe(true);
-		const renamed = await impersonated.request('PATCH', `/v1/merchants/${merchantId}`, { name: 'Shop & Co (fixed)' });
-		expect(renamed.ok).toBe(true);
-		const entries = await db.collection(COLLECTIONS.audit).find({ merchantId, 'actor.via.id': staffMember.staffId }).toArray();
-		expect(entries.length).toBeGreaterThan(0);
-		expect(entries.every((e) => e.actor.id === member.userId)).toBe(true);
-		void websiteId;
-
-		// ending the impersonation signs the merchant session out; the staff session is untouched
-		expect((await impersonated.post('/v1/auth/merchant/logout')).ok).toBe(true);
-		expect(await admin.loadImpersonation(impersonated)).toBeNull();
-		expect((await admin.loadStaffSession(staff.api)).ok).toBe(true);
-		// the start and the end are on the staff (global) chain and on the merchant's chain, readable in the audit log
-		const global = await admin.loadAudit(staff.api, { scope: 'global', action: 'staff.*' });
-		expect(global.ok && global.page.items.map((e) => e.action)).toEqual(
-			expect.arrayContaining(['staff.impersonation_started', 'staff.impersonation_ended']),
-		);
-		const local = await admin.loadAudit(staff.api, { scope: `merchant:${merchantId}`, action: 'merchant.*' });
-		expect(local.ok && local.page.items.map((e) => e.action)).toEqual(
-			expect.arrayContaining(['merchant.impersonation_started', 'merchant.impersonation_ended']),
-		);
-		expect(text(ssr(<AuditView {...local} />))).toContain(`via ${staffMember.staffId}`);
 	});
 
 	it('pure helpers of the admin views', () => {
 		expect(safeAdminNext('/admin/finance')).toBe('/admin/finance');
 		expect(safeAdminNext('/admin')).toBe('/admin');
-		expect(safeAdminNext('/websites')).toBe('/admin');
-		expect(safeAdminNext('//evil.example/admin')).toBe('/admin');
-		expect(safeAdminNext('/administrator')).toBe('/admin');
-		expect(safeAdminNext(null)).toBe('/admin');
+		expect(safeAdminNext('/websites')).toBe('/admin/merchants');
+		expect(safeAdminNext('//evil.example/admin')).toBe('/admin/merchants');
+		expect(safeAdminNext('/administrator')).toBe('/admin/merchants');
+		expect(safeAdminNext(null)).toBe('/admin/merchants');
 		expect(parseSignedCredits('12.5')).toEqual({ ok: true, value: 12_500 });
 		expect(parseSignedCredits('-1', { allowNegative: true })).toEqual({ ok: true, value: -1000 });
 		expect(parseSignedCredits('-1').ok).toBe(false);
@@ -638,43 +507,9 @@ describe('admin console smoke', () => {
 		expect(parseSignedCredits('abc').ok).toBe(false);
 		expect(query({ a: 'x', b: null, c: '', d: 2 })).toBe('?a=x&d=2');
 		expect(query({})).toBe('');
-		expect(adminRoutes.audit({ scope: 'merchant:mer_1' })).toBe('/admin/audit?scope=merchant%3Amer_1');
+		expect(adminRoutes.audit({ action: 'credits.*' })).toBe('/admin/audit?action=credits.*');
 		expect(adminRoutes.login('/admin/x')).toBe('/admin/login?next=%2Fadmin%2Fx');
-		expect(adminApi.auditVerification('global')).toBe('/v1/admin/audit/verification?scope=global');
-		const service = { kind: 'service', status: 'active' };
-		expect(
-			admin
-				.unhealthyApps([
-					{ ...service, appId: 'a', health: { stale: true, status: null } },
-					{ ...service, appId: 'b', health: { stale: false, status: 'degraded' } },
-					{ ...service, appId: 'c', health: { stale: false, status: 'ok' } },
-					{ kind: 'pack', status: 'active', appId: 'd', health: null },
-					{ ...service, status: 'retired', appId: 'e', health: { stale: true } },
-				])
-				.map((a) => a.appId),
-		).toEqual(['a', 'b']);
-		expect(healthLabel({ kind: 'pack' })).toBeNull();
-		expect(healthLabel({ kind: 'service', health: { stale: true, lastSeenAt: null } })).toEqual({
-			status: 'failing',
-			label: 'Never seen',
-		});
-		expect(healthLabel({ kind: 'service', health: { stale: true, lastSeenAt: '2026-01-01T00:00:00Z' } })).toEqual({
-			status: 'failing',
-			label: 'Stale',
-		});
-		expect(healthLabel({ kind: 'service', health: { stale: false, status: 'degraded' } })).toEqual({
-			status: 'failing',
-			label: 'Degraded',
-		});
-		expect(healthLabel({ kind: 'service', health: { stale: false, status: 'ok' } })).toEqual({
-			status: 'ok',
-			label: 'Healthy',
-		});
-		expect(parseJsonField('')).toMatchObject({ ok: false });
-		expect(parseJsonField('', { optional: true })).toEqual({ ok: true, value: undefined });
-		expect(parseJsonField('[1]')).toMatchObject({ ok: false, message: 'Must be a JSON object.' });
-		expect(parseJsonField('{bad')).toMatchObject({ ok: false });
-		expect(parseJsonField('{"a":1}')).toEqual({ ok: true, value: { a: 1 } });
+		expect(adminApi.status('app_1')).toBe('/v1/admin/apps/app_1/status');
 		expect(checkSummary(null)).toBeNull();
 		expect(
 			checkSummary({
@@ -743,31 +578,5 @@ describe('admin console smoke', () => {
 				elementLocked: false,
 			}),
 		).toEqual({ features: { 'bar.message': { value: 'Hi', locked: true } } });
-
-		// presentational pieces
-		expect(text(ssr(<ManifestDiffView diff={null} />))).toContain('No diff recorded');
-		expect(text(ssr(<ManifestDiffView diff={{ changed: false }} />))).toContain('No changes');
-		expect(
-			text(
-				ssr(
-					<ManifestDiffView
-						diff={{
-							changed: true,
-							breaking: [],
-							version: { from: '1', to: '2' },
-							elements: { added: ['x'], removed: [], changed: [{ key: 'bar', fields: ['price'] }] },
-							prices: [{ element: 'bar', field: 'hourly', from: 1, to: 2, direction: 'increase' }],
-							plans: {
-								added: [],
-								removed: [],
-								changed: [{ code: 'p', elementsAdded: ['x'], elementsRemoved: [], addonsAdded: [], addonsRemoved: [] }],
-							},
-							features: [{ element: 'bar', feature: 'm', change: 'changed', fields: ['maxLength'] }],
-							other: { priceBook: true, scopesAdded: ['graph.read'], scopesRemoved: [] },
-						}}
-					/>,
-				),
-			),
-		).toContain('No breaking changes');
 	});
 });

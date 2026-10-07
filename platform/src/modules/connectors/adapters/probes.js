@@ -10,7 +10,7 @@
  * - storage: SigV4-signed PUT / GET / DELETE of a probe object under the configured prefix;
  * - ai / messaging (HTTP): one cheap authenticated GET (AI: the models list);
  * - messaging (SMTP): TCP (+ TLS when `secure`) reachability and the server greeting; authentication is not tried;
- * - payments / analytics: no automated check (stored only) — the report is marked `skipped`.
+ * - payments: no automated check (stored only) — the report is marked `skipped`.
  * @module
  */
 import { connect as netConnect } from 'node:net';

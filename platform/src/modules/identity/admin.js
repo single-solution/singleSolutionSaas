@@ -1,11 +1,11 @@
 /**
  * Staff operations: merchant suspension (with reason; commerce reacts through `onMerchantStatus`), merchant listing,
  * staff users (created without a password — they set one through a mailed setup link; two-factor sign-in once they
- * enrol), partners and developers with their grants. Every mutation is audited.
+ * enrol). Every mutation is audited.
  * @module
  */
 import { problem } from '../../infra/http.js';
-import { presentMerchant, presentParty, presentStaff } from './core/present.js';
+import { presentMerchant, presentStaff } from './core/present.js';
 import { insertUnique, requireMailer, sendQuietly } from './repo.js';
 import { parseMerchantQuery, prefixPattern } from './core/search.js';
 
@@ -90,64 +90,6 @@ export const createAdmin = (deps, hooks) => {
 		const others = await repo.staff.countDocuments({ _id: { $ne: staff._id }, status: 'active', roles: 'superadmin' });
 		return others > 0;
 	};
-
-	/**
-	 * @param {'partners' | 'developers'} kind
-	 */
-	const parties = (kind) => {
-		const collection = kind === 'partners' ? repo.partners : repo.developers;
-		const idKey = kind === 'partners' ? 'partnerId' : 'developerId';
-		const prefix = kind === 'partners' ? 'prt' : 'dev';
-		const type = kind === 'partners' ? 'partner' : 'developer';
-		/** @param {string} id */
-		const load = async (id) => {
-			const doc = await collection.findOne({ _id: id });
-			if (!doc) throw problem('not_found', `No such ${type}.`);
-			return doc;
-		};
-		return Object.freeze({
-			load,
-			/** @param {string} id */
-			get: async (id) => presentParty(await load(id), /** @type {any} */ (idKey)),
-			list: async () =>
-				(await collection.find({}).sort({ createdAt: 1, _id: 1 }).limit(1000).toArray()).map((d) =>
-					presentParty(d, /** @type {any} */ (idKey)),
-				),
-			/** @param {{ name: string, email: string, actor: Actor, meta?: Meta }} input */
-			create: async ({ name, email, actor, meta = {} }) => {
-				const doc = { _id: repo.id(prefix), name, email, status: 'active', grants: [] };
-				await insertUnique(() => collection.insertOne(doc), 'conflict', `A ${type} with this e-mail exists.`);
-				await audit(actor, `${type}.created`, { type, id: doc._id }, { after: { name, email }, meta });
-				return presentParty({ ...doc, createdAt: new Date(ctx.now()) }, /** @type {any} */ (idKey));
-			},
-			/**
-			 * Replace the grant for the same target (merchantId / appId).
-			 * @param {{ id: string, grant: Record<string, any>, match: Record<string, string>, actor: Actor, meta?: Meta }} input
-			 */
-			grant: async ({ id, grant, match, actor, meta = {} }) => {
-				await load(id);
-				await collection.updateOne({ _id: id }, { $pull: { grants: match } });
-				await collection.updateOne({ _id: id }, { $push: { grants: { ...grant, at: new Date(ctx.now()), by: actor.id } } });
-				await audit(actor, `${type}.granted`, { type, id, merchantId: grant.merchantId ?? null }, { after: grant, meta });
-				return presentParty(await load(id), /** @type {any} */ (idKey));
-			},
-			/** @param {{ id: string, match: Record<string, string>, actor: Actor, meta?: Meta }} input */
-			ungrant: async ({ id, match, actor, meta = {} }) => {
-				await load(id);
-				const result = await collection.updateOne({ _id: id }, { $pull: { grants: match } });
-				if (result.modifiedCount !== 1) throw problem('not_found', 'No such grant.');
-				await audit(
-					actor,
-					`${type}.grant_revoked`,
-					{ type, id, merchantId: match.merchantId ?? null },
-					{ before: match, meta },
-				);
-			},
-		});
-	};
-
-	const partners = parties('partners');
-	const developers = parties('developers');
 
 	return Object.freeze({
 		suspendMerchant: setStatus('suspended'),
@@ -300,12 +242,6 @@ export const createAdmin = (deps, hooks) => {
 
 		/** @returns {Promise<boolean>} true once any staff user exists (the staff sign-in page then stops offering "Create admin") */
 		hasStaff: async () => (await repo.staff.countDocuments({})) > 0,
-
-		// -----------------------------------------------------------------------------------------------------------
-		// Partners and developers
-
-		partners,
-		developers,
 	});
 };
 /** @typedef {ReturnType<typeof createAdmin>} Admin */

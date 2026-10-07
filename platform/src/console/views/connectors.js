@@ -1,8 +1,8 @@
 'use client';
 /**
- * Resources of a website: the client-owned connectors (database, storage, AI, messaging, payments, analytics)
- * with credential forms per kind/provider, connection-test results, rotation, rollback, revocation and website
- * assignment. Credentials are write-only: the Portal never returns them, and the form is cleared after sending.
+ * Resources of a website: the client-owned connectors (database, storage, AI, messaging, payments) with
+ * credential forms per kind/provider, connection-test results, edit (label and/or new credentials), delete and
+ * website assignment. Credentials are write-only: the Portal never returns them, and the form is cleared after sending.
  * @module
  */
 import { useState } from 'react';
@@ -46,7 +46,6 @@ export const PROVIDERS = Object.freeze({
 	ai: ['openai', 'anthropic', 'google', 'generic'],
 	messaging: ['generic-http', 'smtp'],
 	payments: null,
-	analytics: null,
 });
 
 /** Display names of providers. */
@@ -146,16 +145,6 @@ export const credentialFields = (kind, provider) => {
 					type: 'pairs',
 					required: true,
 					help: 'One NAME=value per line (e.g. publishableKey=…).',
-				},
-			];
-		case 'analytics':
-			return [
-				{
-					name: 'ids',
-					label: 'Account ids',
-					type: 'pairs',
-					required: true,
-					help: 'One name=id per line (e.g. measurementId=G-XXXX).',
 				},
 			];
 		default:
@@ -358,7 +347,7 @@ export function ConnectorsView(props) {
 	const [connectors, setConnectors] = useState(/** @type {any[]} */ (ok ? props.connectors : []));
 	const [resources, setResources] = useState(/** @type {any[]} */ (ok ? props.resources : []));
 	const [needs, setNeeds] = useState(/** @type {any[] | null} */ (ok ? (props.needs ?? null) : null));
-	const [form, setForm] = useState(/** @type {null | { mode: 'create' | 'rotate', connector?: any }} */ (null));
+	const [form, setForm] = useState(/** @type {null | { mode: 'create' | 'edit', connector?: any }} */ (null));
 	const [kind, setKind] = useState('database');
 	const [provider, setProvider] = useState('mongodb');
 	const [label, setLabel] = useState('');
@@ -368,9 +357,7 @@ export function ConnectorsView(props) {
 	const [busy, setBusy] = useState(/** @type {string | null} */ (null));
 	const [assigning, setAssigning] = useState(/** @type {any} */ (null));
 	const [assigned, setAssigned] = useState(/** @type {string[]} */ ([]));
-	const [confirm, setConfirm] = useState(
-		/** @type {null | { action: 'revoke' | 'delete' | 'rollback', connector: any }} */ (null),
-	);
+	const [confirm, setConfirm] = useState(/** @type {null | { action: 'delete', connector: any }} */ (null));
 	const [showAll, setShowAll] = useState(false);
 	if (!ok) return <PageProblem problem={props.problem} />;
 	const { merchantId, website, catalog, subscriptions, websites } = props;
@@ -403,40 +390,47 @@ export function ConnectorsView(props) {
 		setForm({ mode: 'create' });
 	};
 	/** @param {any} connector */
-	const openRotate = (connector) => {
+	const openEdit = (connector) => {
 		setKind(connector.kind);
 		setProvider(connector.provider);
+		setLabel(connector.label ?? '');
 		setValues({});
 		setErrors({});
 		setProblem(null);
-		setForm({ mode: 'rotate', connector });
+		setForm({ mode: 'edit', connector });
 	};
 	const fields = credentialFields(kind, provider);
 	const submit = async () => {
-		const built = buildCredentials(kind, fields, values);
+		const editing = form?.mode === 'edit';
+		// editing: credentials are optional (leave every field empty to keep the current ones)
+		const replace = !editing || Object.values(values).some((v) => v === true || (typeof v === 'string' && v.trim()));
+		const built = replace ? buildCredentials(kind, fields, values) : { credentials: {}, errors: {} };
 		/** @type {Record<string, string>} */
 		const local = { ...built.errors };
-		if (form?.mode === 'create' && !provider.trim()) local.provider = 'Choose or type a provider.';
+		if (!editing && !provider.trim()) local.provider = 'Choose or type a provider.';
+		if (editing && !replace && !label.trim()) local.label = 'Enter a label or new credentials.';
 		setErrors(local);
 		if (Object.keys(local).length > 0) return;
 		setBusy('form');
 		setProblem(null);
-		const result =
-			form?.mode === 'rotate'
-				? await apiFetch(`${api.connector(merchantId, form.connector.connectorId)}/rotate`, {
-						method: 'POST',
-						body: { credentials: built.credentials },
-					})
-				: await apiFetch(api.connectors(merchantId), {
-						method: 'POST',
-						body: {
-							kind,
-							provider: provider.trim(),
-							...(label.trim() ? { label: label.trim() } : {}),
-							credentials: built.credentials,
-							websiteIds: [websiteId],
-						},
-					});
+		const result = editing
+			? await apiFetch(api.connector(merchantId, form.connector.connectorId), {
+					method: 'PATCH',
+					body: {
+						...(label.trim() ? { label: label.trim() } : {}),
+						...(replace ? { credentials: built.credentials } : {}),
+					},
+				})
+			: await apiFetch(api.connectors(merchantId), {
+					method: 'POST',
+					body: {
+						kind,
+						provider: provider.trim(),
+						...(label.trim() ? { label: label.trim() } : {}),
+						credentials: built.credentials,
+						websiteIds: [websiteId],
+					},
+				});
 		setBusy(null);
 		// credentials never stay in memory longer than needed
 		setValues({});
@@ -446,9 +440,9 @@ export function ConnectorsView(props) {
 			setErrors(Object.fromEntries(Object.entries(fe).map(([k, v]) => [k.replace(/^credentials\./, ''), v])));
 			return;
 		}
-		const report = result.data?.report ?? result.data?.connector?.lastCheckReport;
+		const report = result.data?.report;
 		toast.show({
-			title: form?.mode === 'rotate' ? 'Credentials rotated' : 'Resource connected',
+			title: editing ? 'Connector updated' : 'Resource connected',
 			description: report
 				? report.ok
 					? 'The connection check passed.'
@@ -489,26 +483,18 @@ export function ConnectorsView(props) {
 		toast.show({ title: 'Websites updated' });
 		await reload();
 	};
-	const runConfirm = async () => {
+	const remove = async () => {
 		if (!confirm) return;
-		const { action, connector } = confirm;
-		setBusy(action);
+		setBusy('delete');
 		setProblem(null);
-		const path = api.connector(merchantId, connector.connectorId);
-		const result =
-			action === 'delete'
-				? await apiFetch(path, { method: 'DELETE' })
-				: await apiFetch(`${path}/${action}`, { method: 'POST', body: {} });
+		const result = await apiFetch(api.connector(merchantId, confirm.connector.connectorId), { method: 'DELETE' });
 		setBusy(null);
 		if (!result.ok) {
 			setProblem(result.problem);
 			return;
 		}
 		setConfirm(null);
-		toast.show({
-			title:
-				action === 'revoke' ? 'Resource revoked' : action === 'delete' ? 'Resource deleted' : 'Previous credentials restored',
-		});
+		toast.show({ title: 'Connector deleted' });
 		await reload();
 	};
 
@@ -581,7 +567,6 @@ export function ConnectorsView(props) {
 				) : (
 					<ul className="divide-y divide-line">
 						{list.map((c) => {
-							const rollbackOpen = c.rollbackAvailableUntil && Date.parse(c.rollbackAvailableUntil) > Date.now();
 							return (
 								<li key={c.connectorId} className="space-y-3 px-5 py-4">
 									<div className="flex flex-wrap items-start justify-between gap-3">
@@ -591,7 +576,6 @@ export function ConnectorsView(props) {
 											</p>
 											<p className="text-xs text-muted">
 												{humanize(c.kind)} · {providerLabel(c.provider)} · added {formatDateTime(c.createdAt)}
-												{c.rotatedAt ? ` · rotated ${formatDateTime(c.rotatedAt)}` : ''}
 											</p>
 										</div>
 										<StatusBadge status={c.status} />
@@ -618,45 +602,31 @@ export function ConnectorsView(props) {
 											.map(websiteLabel)
 											.join(', ') || 'no website'}
 									</p>
-									{c.status !== 'revoked' ? (
-										<div className="flex flex-wrap gap-2">
-											<Button
-												size="sm"
-												variant="secondary"
-												onClick={() => void test(c)}
-												loading={busy === `test:${c.connectorId}`}>
-												Test
-											</Button>
-											<Button size="sm" variant="secondary" onClick={() => openRotate(c)}>
-												Rotate credentials
-											</Button>
-											<Button
-												size="sm"
-												variant="secondary"
-												onClick={() => {
-													setProblem(null);
-													setAssigned([...(c.websiteIds ?? [])]);
-													setAssigning(c);
-												}}>
-												Websites
-											</Button>
-											{rollbackOpen ? (
-												<Button
-													size="sm"
-													variant="ghost"
-													onClick={() => setConfirm({ action: 'rollback', connector: c })}>
-													Undo rotation
-												</Button>
-											) : null}
-											<Button size="sm" variant="ghost" onClick={() => setConfirm({ action: 'revoke', connector: c })}>
-												Revoke
-											</Button>
-										</div>
-									) : (
+									<div className="flex flex-wrap gap-2">
+										<Button
+											size="sm"
+											variant="secondary"
+											onClick={() => void test(c)}
+											loading={busy === `test:${c.connectorId}`}>
+											Test
+										</Button>
+										<Button size="sm" variant="secondary" onClick={() => openEdit(c)}>
+											Edit
+										</Button>
+										<Button
+											size="sm"
+											variant="secondary"
+											onClick={() => {
+												setProblem(null);
+												setAssigned([...(c.websiteIds ?? [])]);
+												setAssigning(c);
+											}}>
+											Websites
+										</Button>
 										<Button size="sm" variant="ghost" onClick={() => setConfirm({ action: 'delete', connector: c })}>
 											Delete
 										</Button>
-									)}
+									</div>
 								</li>
 							);
 						})}
@@ -669,10 +639,10 @@ export function ConnectorsView(props) {
 					setValues({});
 					setForm(null);
 				}}
-				title={form?.mode === 'rotate' ? `Rotate ${form.connector?.label ?? 'credentials'}` : 'Connect a resource'}
+				title={form?.mode === 'edit' ? `Edit ${form.connector?.label ?? 'connector'}` : 'Connect a resource'}
 				description={
-					form?.mode === 'rotate'
-						? 'The new credentials are tested and replace the current ones; you can undo for a short while.'
+					form?.mode === 'edit'
+						? 'Leave the credential fields empty to keep the current ones. New credentials are tested before use.'
 						: `Assigned to ${websiteLabel(website)}. Credentials are encrypted and never shown again.`
 				}
 				footer={
@@ -686,7 +656,7 @@ export function ConnectorsView(props) {
 							Cancel
 						</Button>
 						<Button onClick={() => void submit()} loading={busy === 'form'}>
-							{form?.mode === 'rotate' ? 'Rotate' : 'Connect and test'}
+							{form?.mode === 'edit' ? 'Save' : 'Connect and test'}
 						</Button>
 					</>
 				}>
@@ -732,7 +702,15 @@ export function ConnectorsView(props) {
 							onChange={(e) => setLabel(e.currentTarget.value)}
 						/>
 					</>
-				) : null}
+				) : (
+					<Input
+						label="Label"
+						value={label}
+						maxLength={80}
+						onChange={(e) => setLabel(e.currentTarget.value)}
+						error={errors.label}
+					/>
+				)}
 				<CredentialInputs
 					fields={fields}
 					values={values}
@@ -778,30 +756,14 @@ export function ConnectorsView(props) {
 			<ConfirmDialog
 				open={Boolean(confirm)}
 				onClose={() => setConfirm(null)}
-				onConfirm={() => void runConfirm()}
+				onConfirm={() => void remove()}
 				busy={busy !== null}
-				danger={confirm?.action !== 'rollback'}
-				title={
-					confirm?.action === 'revoke'
-						? 'Revoke this connector?'
-						: confirm?.action === 'delete'
-							? 'Delete this connector?'
-							: 'Undo the last rotation?'
-				}
-				confirmLabel={
-					confirm?.action === 'revoke'
-						? 'Revoke now'
-						: confirm?.action === 'delete'
-							? 'Delete'
-							: 'Restore previous credentials'
-				}
+				danger
+				title="Delete this connector?"
+				confirmLabel="Delete"
 				error={problem ? describeProblem(problem) : null}>
 				<p className="text-sm text-muted">
-					{confirm?.action === 'revoke'
-						? 'Every product using it stops immediately on every assigned website. Rotate instead if you only need new credentials.'
-						: confirm?.action === 'delete'
-							? 'The encrypted credentials are destroyed.'
-							: 'The previous credentials become active again.'}
+					Every product using it stops on every assigned website. The encrypted credentials are destroyed.
 				</p>
 			</ConfirmDialog>
 		</div>

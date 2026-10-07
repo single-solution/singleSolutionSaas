@@ -6,7 +6,7 @@ expose (extra functions allowed). All functions are async, take plain objects, r
 
 ## identity (`modules/identity`)
 
-Merchants, merchant users, staff users, partners, developers, sessions, websites, website keys.
+Merchants, merchant users, staff users, sessions, websites, website keys.
 
 - `getMerchant(merchantId)` → `{ merchantId, name, status: active|suspended, createdAt }`
 - `getWebsite(websiteId)` → `{ websiteId, merchantId, domain, env: 'live'|'test', twinId, status, timeZone, language,
@@ -28,20 +28,13 @@ currency, createdAt }` — the **website settings** (F.16) are `null` when unset
   `{ defaults, items: [{ scope, group, label, description, product? }] }` (the console key form: one checkbox group
   per product).
 - Website keys are signed with a **dedicated website-key signing key** (generated on first start, `infra/system.js`), not the launch key.
-- **Staff API tokens** (F.18): `POST /v1/admin/api-tokens` (`platform.apps.manage`, `{ minutes: 5..720, label? }`) →
-  201 `{ token: 'sst_…', sessionId, expiresAt }` — a staff session flagged `api` with the member's roles and MFA
-  satisfied, accepted only as `Authorization: Bearer sst_…` (no cookie, so no CSRF check; a cookie carrying it and a
-  bearer carrying a browser session are refused), listed (`api: true`) and revocable under `/v1/me/sessions`; a token
-  cannot mint another. Audited `staff.api_token_created`. Used by `ss pack publish`.
 - Implements ports `sessionActor(session)` and `websiteKeyRevoked(claims, rawKey)` → `true` when the key is revoked,
   unknown, or (for `sk_`) its HMAC does not match `rawKey`; infra calls it after the offline signature check.
 - Calls `integration.emitControl('key.revoked@1', …)` on revoke.
-- Staff building blocks (`service.admin`, `service.impersonation`): `admin.listMerchants({ after, limit, status?, q? })`
-  — `q` is a case/accent-insensitive prefix of the merchant name (`nameKey`), or of a member e-mail when it contains
-  `@`; `admin.listNotes({ merchantId, before?, limit })` / `admin.addNote({ merchantId, body ≤ 2000, actor })`
-  (append-only, audited without the body); `impersonation.start({ merchantId, userId, minutes ≤ 60, reason, actor })`
-  → one-time exchange token (only its HMAC stored, bound to the staff member, 60 s), `impersonation.exchange({ token,
-actor })` → merchant session with `via`, `impersonation.ended({ session })` (audited on both chains).
+- Staff building blocks (`service.admin`): `admin.listMerchants({ after, limit, status?, q? })` — `q` is a
+  case/accent-insensitive prefix of the merchant name (`nameKey`), or of a member e-mail when it contains `@`;
+  `admin.listNotes({ merchantId, before?, limit })` / `admin.addNote({ merchantId, body ≤ 2000, actor })` (append-only,
+  audited without the body).
 - **Bring-your-own customer identity** (PLAN §5.3, F.14), one issuer per website (`identity_issuers`, `_id` =
   websiteId): `setIdentityIssuer({ merchantId, websiteId, input: { issuer, jwksUrl | publicJwks[], audience?,
 claimMap: { subject = 'sub', email?, phone? } }, actor })` (public signature keys only — Ed25519, P-256, RSA ≥ 2048,
@@ -67,41 +60,49 @@ _rejected`). A merchant's own PUT clears `managedBy`. Deleting/transferring a we
 
 ## catalog (`modules/catalog`)
 
-Apps (products), onboarding with the product's connect secret (Portal side), manifest versions and review, app keys,
-environments, health, launches.
+Apps (service products and element packs): onboarding with the product's connect secret (Portal side), pack and
+widget uploads, manifest versions, status, app keys, launches.
 
-- Onboarding: `connectProduct({ url, secret })` (staff `POST /v1/admin/apps/connect`) → `{ appId, slug, baseUrl, kid,
-reconnected }`: `@ss/protocol` `createConnectRequest` to `<url>/.well-known/ss-connect` (HMAC with the deployer's
-  `CONNECT_SECRET`, never sent nor stored), `verifyConnectResponse`, manifest and base-URL checks, app + version + key
-  created — or, for a known slug, the binding replaced (key replaced, base URL moved).
-- `getApp(appId)` → `{ appId, slug, kind: service|pack, status: pending|active|deprecated|retired, endpoints, currentVersion }`
-- `appBySlug(slug)`
-- `getManifest(appId, version?)` → validated manifest (features inline)
-- `activeProducts()` → catalog list for consoles
-- `issueLaunch({ kind, appId, subject, user, scope, subscriptions, actor?, impersonationSeconds? })` → `{ url, token }`
-  (`url` = `<product>/sso?launch=<token>`). Admin launches carry `scope.merchantId` or the app-wide `scope: { all: true }`
-  (exclusive: only `permissions` may sit next to it). The staff route `POST /v1/admin/apps/:appId/launch` with
-  `{ kind: 'admin', all: true }` needs `platform.launch.admin` **and** the `superadmin` or `admin` staff role (support
-  staff may launch per merchant only).
-- Merchant "Try demo": `POST /v1/merchants/:merchantId/apps/:appId/demo` (`subscriptions.read`, listed apps only,
-  30/min) → `{ url, expiresAt }` of a `demo` launch with no merchant or website scope (the product shows its sandbox).
-- Environments: `setEnvironments({ appId, production?, staging? })` (the connection records the product's base URL as
-  production). Integration delivers to these registered bases, never to the manifest's self-declared `endpoints.base`.
-- `refreshManifest({ appId })` imports `/.well-known/ss-app.json` only with a valid `SS-Manifest-Signature`
-  (`@ss/protocol` `verifyManifest` over the app's registered, non-revoked keys, `expectedAppId = appId`, ≤ 24 h old).
-  An unsigned or invalid refresh is stored as a `rejected` version with `review.reason`
-  (`manifest_signature_missing | _no_keys | _malformed | _signature | _issuer | _expired | _unknown_kid | …`), audited
-  as `catalog.manifest_signature_rejected` and alerted (error log `catalog alert: …`); identical repeats are not
-  stored again. Returns `{ changed, version, rejected?, reason? }`.
-- Implements port `appKeys(appId)` → KeyResolver of registered (non-revoked) app keys.
-- Emits `manifest.accepted@1` (platform-scoped, `appIds: [appId]`) via integration on approval.
+- `getApp(appId)` → `{ appId, slug, kind: service|pack, status: active|inactive, name, productVersion, endpoints,
+baseUrl, currentVersion, createdAt }` — `baseUrl` is the connected address (service only); `currentVersion` is `null`
+  for a pack whose first version is still uploading. `appBySlug(slug)`.
+- **Status**: new apps are `inactive`; staff switch with `setStatus({ appId, status, actor })`
+  (`POST /v1/admin/apps/:appId/status`, `platform.apps.manage`; activating needs a current version). Inactive apps are
+  not listed, not newly subscribable and cannot be opened by merchants; existing subscriptions keep working.
+- Onboarding: `connectProduct({ url, secret })` (staff `POST /v1/admin/apps/connect`, idempotent) → `{ appId, slug,
+baseUrl, kid, reconnected, version, priceChanges? }`: `@ss/protocol` `createConnectRequest` to
+  `<url>/.well-known/ss-connect` (HMAC with the deployer's `CONNECT_SECRET`, never sent nor stored),
+  `verifyConnectResponse`, manifest and base-URL checks, app (inactive) + version + key created — or, for a known slug,
+  the binding replaced (key replaced, base URL moved). A changed manifest becomes the current version at once
+  (`priceChanges` lists changed element prices).
+- **One upload path for packs and widgets**: `uploadPack({ body: { descriptor } })` (`POST /v1/admin/packs`,
+  idempotent; the `ss pack build` descriptor) → `{ appId, slug, kind, version, status: uploading|ready, missing,
+uploadPath, changed }`. A pack slug creates the pack (inactive, version 1) or a new uploading version (same manifest
+  and assets as the latest = no change); the slug of a connected service product hands its widgets to
+  `delivery.registerWidgets` (their elements must be mode A in the current manifest). Assets then go one by one to
+  `PUT <uploadPath><path>` (delivery). `versionReady({ appId, version })` (called by delivery when a pack version has
+  every asset) makes it current (the previous one superseded). Idempotent.
+- `getManifest(appId, version?)` → validated manifest (features inline); `versionDetail(appId, version)` (descriptor
+  assets included).
+- `activeProducts({ kind? })` → active apps with a current version (consoles, key scopes).
+- `issueLaunch({ kind: 'merchant'|'admin', appId, subject, user, scope, subscriptions?, actor? })` → `{ url, token }`
+  (`url` = `<baseUrl>/sso?launch=<token>`). Merchant launches need an active app. Admin launches carry
+  `scope.merchantId` or the app-wide `scope: { all: true }` (exclusive: only `permissions` may sit next to it). The
+  staff route `POST /v1/admin/apps/:appId/launch` with `{ all: true }` needs `platform.launch.admin` **and** the
+  `superadmin` or `admin` staff role (support staff may launch per merchant only).
+- Staff reads: `GET /v1/admin/apps`, `GET /v1/admin/apps/:appId` (versions summary, keys),
+  `GET /v1/admin/apps/:appId/versions/:version`.
+- Implements port `appKeys(appId)` → KeyResolver of the app's registered keys.
+- A new current version emits `manifest.accepted@1` (platform-scoped, `appIds: [appId]`) via integration and calls
+  `commerce.invalidateApp`.
 
 ## commerce (`modules/commerce`)
 
 Subscriptions, element switches, entitlement documents, usage, quotas, ledger (append-only, hash-chained),
 credits, settlement, spend caps.
 
-- `subscribe({ websiteId, appId, planCode? })` → subscription (requires ≥ 1 hour of credits; pins price book). A manifest
+- `subscribe({ websiteId, appId, planCode? })` → subscription (active apps only; requires ≥ 1 hour of credits; pins
+  price book). A manifest
   `trialHours` is granted once per website × app at the first subscribe as an `adjustment` ledger entry
   (`entryKey trial:<websiteId>:<appId>`, worth `trialHours ×` the first hour's charge; it counts towards the one-hour
   minimum; audited `credits.trial_granted`).
@@ -111,6 +112,11 @@ credits, settlement, spend caps.
 - `documentFor({ websiteId, appId })` → compact JWS (signed by Portal signer, cached until content hash changes)
 - `recordUsage({ appId, records })` → `{ results }` (F.9)
 - `addCredits({ merchantId, amountMillicredits, reference, note, actor })`, `adjust`, `refund`
+- **Spend cap** (`commerce_spend_caps`, `_id` = merchantId, `{ limit, updatedAt, updatedBy }`): `spendCap(merchantId)`
+  → `{ limit, spent, remaining, reached, periodStart, periodEnd }` (UTC month), `setSpendCap(merchantId, { limit },
+caller)`, `removeSpendCap(merchantId, caller)` (audited `spend_cap.*`). Routes `GET|PUT|DELETE
+/v1/merchants/:merchantId/spend-cap` (`billing.read` / `billing.manage`). When the month's spend plus the coming
+  hours' burn would exceed the cap, live subscriptions get the `spend_cap` hold until the month ends.
 - `balance(merchantId)`, `meter(merchantId)` — both settle the merchant's due complete hours first (lazy settlement:
   `runSettlement({ merchantId })`, 2 s budget, idempotent per `periodKey`; a failure never fails the read)
 - `statement(merchantId, { from, to, websiteId? })`
@@ -120,7 +126,7 @@ credits, settlement, spend caps.
   `layers` (config dry runs; nothing stored or emitted)
 - Settlement on read (F.19, no cron): `settleDue(merchantId)` runs before balance, meter and statement reads, product
   document fetches (`documentFor`), subscription changes, and right after a product's usage batch.
-- Reads configuration layers from `config.layersFor(subscriptionId)`; resource status from
+- Reads configuration layers `{ platform, website, admin }` from `config.layersFor(subscriptionId)`; resource status from
   `connectors.statusFor(websiteId)`; the website's identity issuer from `identity.identityFor(websiteId)` (document
   `identity` section; it extends the content hash, so an issuer change or key rotation bumps the version) and the
   website settings as the document **`website` section** `{ timeZone?, language?, currency? }` (only set values;
@@ -138,16 +144,13 @@ neededNow, optional? }]` from the last resolution (stored with the document); `w
 
 ## config (`modules/config`)
 
-Layered overrides with versions, locks, templates and scheduled changes for subscriptions/merchants/platform.
+Layered overrides with versions and locks for subscriptions (website, admin) and platform policies per app.
 
-- `layersFor(subscriptionId)` → `{ platform, merchant, website, admin }` in the shape `@ss/entitlements`
-  `resolveEntitlement` expects (elements on/off, feature values, config, locks)
-- `setOverride({ level: 'merchant'|'website'|'admin'|'platform', target, elementKey?, featureKey?, value, lock?, actor })`
-  → new version (validated against the manifest feature schema via `@ss/contracts` `validateFeatureConfig`)
-- `history(target)`, `rollback({ target, version, actor })`
-- Templates: `saveTemplate`, `applyTemplate({ templateId, websiteIds })`
-- Scheduled changes: `schedule({ change, at })`, applied on read (`applyDue(merchantId)`, called by `layersFor` and
-  `listSchedules`) at or after `at` — no job
+- `layersFor(subscriptionId)` → `{ platform, website, admin }` in the shape `@ss/entitlements` `resolveEntitlement`
+  expects (elements on/off, feature values, config, locks)
+- `setOverride({ level: 'website'|'admin'|'platform', target, elementKey?, featureKey?, value, lock?, actor })` → new
+  version (validated against the manifest feature schema via `@ss/contracts` `validateFeatureConfig`)
+- `history(target)`, `rollback({ target, version, actor })`, `preview(...)` (dry run)
 - Calls `commerce.invalidate(subscriptionId)` (commerce exposes `invalidate`) after every change.
 
 ## integration (`modules/integration`)
@@ -169,20 +172,20 @@ idempotencyKey)`; payloads are NOT persisted in Portal — only routing metadata
   `order.*@1`, each covered by an `events.subscribe:` scope) × active subscriptions; deliveries are jobs
   `integration.deliver` signed with `@ss/protocol` `signEvent`, attempted right after the ingesting request; a failed
   one is retried (backoff, then due) on the next delivery to that product and when the product next calls the Portal
-  (port `productCalled`), or by staff (`POST /v1/admin/apps/:appId/deliveries/retry`, `retryNow`); DLQ, replay.
-- **Delivery target:** the app's registered environment base (`catalog.getApp().environments`) + the manifest's
-  `endpoints.events` path: events of `test` websites go to `staging` when one is registered, everything else to
-  `production`; no environment → dead-lettered `no_endpoint`. https only; plain http and private addresses only for
+  (port `productCalled`), or by staff (`POST /v1/admin/apps/:appId/deliveries/retry`, `retryNow`). A delivery that
+  meets a permanent error, uses its last attempt or is older than 24 h is marked `failed` (`failedAt`,
+  `lastErrorCode`; metadata only). Inactive service apps still receive events.
+- **Delivery target:** `catalog.getApp().baseUrl` + the manifest's `endpoints.events` path; no base → `failed`
+  `no_endpoint`. https only; plain http and private addresses only for
   `OUTBOUND_DEV_ALLOW_HOSTS` outside production (the allowlist is empty in production).
-- `deliveryLog({ websiteId | appId, cursor })`, `replay(deliveryId)`.
-- Because payloads are not stored, fan-out happens at ingest time (payload carried inside the job only, job deleted
-  on success; DLQ keeps the payload sealed with `ctx.envelope` for at most 7 days).
+- Because payloads are not stored, fan-out happens at ingest time (payload sealed with `ctx.envelope` inside the job
+  only, dropped on success and gone with the job when it fails).
 
 ## connectors (`modules/connectors`)
 
-Client-owned resources (§1a): database, storage, ai, messaging, payments, analytics.
+Client-owned resources (§1a): database, storage, ai, messaging, payments.
 
-- `create({ merchantId, kind, provider, credentials, websiteIds })` (credentials sealed with `ctx.envelope`, aad =
+- `create({ merchantId, kind, provider, credentials, websiteIds })` (idempotent route; credentials sealed with `ctx.envelope`, aad =
   merchantId + connectorId; never returned)
 - `test(connectorId)` → check report (database: reachability, auth, least privilege, role can create indexes in its own
   db; storage: put/get/delete probe object; ai/messaging: a cheap authenticated call). Least privilege: any role or
@@ -190,8 +193,10 @@ Client-owned resources (§1a): database, storage, ai, messaging, payments, analy
   `*AnyDatabase` role or cluster / any-resource privilege fails the check (`least_privilege` step, code
   `over_privileged`, status `failing`); `dbAdmin` / `dbOwner` / `userAdmin` on the target database is a `db_admin`
   warning only. Every destination passes the `@ss/net` outbound policy.
-- `rotate`, `revoke`, `assign({ connectorId, websiteIds })`
-- `statusFor(websiteId)` → `[{ kind, ref, status: connected|missing|failing|revoked }]`
+- `update({ merchantId, connectorId, label?, credentials? })` (`PATCH …/connectors/:connectorId`: new credentials are
+  re-sealed in place and re-checked), `remove` (`DELETE`: record and sealed material gone, resolution stops at once),
+  `assign({ connectorId, websiteIds })` (`PUT …/websites`)
+- `statusFor(websiteId)` → `[{ kind, ref, status: connected|missing|failing }]`
 - `resolve({ appId, websiteId, kind })` → `{ kind, descriptor, expiresAt }` (F.9) — only for products whose manifest
   requires `kind` (product level, or an element, optional kinds included — F.18) and that have an active subscription on that website, and (F.16)
   only while the kind is **needed now** per `commerce.resourceNeeds` (an element-level kind whose elements are all
@@ -204,10 +209,10 @@ Client-owned resources (§1a): database, storage, ai, messaging, payments, analy
 
 ## delivery (`modules/delivery`)
 
-Delivery plane (PLAN §4): pack asset storage, the per-website bundle compiler, serving, rollback, preview proxy.
-Artefacts (pack assets, compiled bundles) are **our software** and live in platform asset storage
+Delivery plane (PLAN §4): pack and widget asset storage, the per-website bundle compiler, serving, snippets.
+Artefacts (pack and widget assets, compiled bundles) are **our software** and live in platform asset storage
 (`STORAGE_*`, an S3-compatible bucket signed with `@ss/net` `signV4`; `STORAGE_DIR` (a directory or `:memory:`)
-outside production). Collections hold metadata only; fetched merchant pages are never stored.
+outside production). Collections hold metadata only.
 
 - `requestCompile(websiteId, { reason? })` → `{ websiteId, request, jobId }` — called by **commerce** whenever a
   document version is bumped and when a subscription is cancelled; increments `delivery_aliases.requested` and
@@ -217,27 +222,27 @@ outside production). Collections hold metadata only; fetched merchant pages are 
 artefact, warnings }`. Inputs: `commerce.subscriptionsForWebsite` + `commerce.documentFor` (verified with the Portal
   key resolver, bound to the website's domain, `graceMs: 0`), `catalog.getApp` / `getManifest(appId,
 sub.manifestVersion)` / `versionDetail` (pack descriptor assets), `identity.getWebsite` / `issueKey` / `listKeys` /
-  `revokeKey` (one `pk_` key per website, scopes `events.write elements.read`, issued by the system actor on first
-  compile and re-issued when it is no longer active). Delivered: elements the document enables, of `runtime.state =
-active` subscriptions, whose manifest declares mode A. Packs → their headless + renderer modules
-  (`/w/packs/<appId>/<version>/<path>`, lazy `import()`); service products → the element stub
-  (`ss-element-stub@1`, below). Output `w/<websiteId>/<env>/<version>/loader.js` + `manifest.json`
-  (`ss-website-bundle@1`: integrity sha384, sha256, sizes, budget, CSP sources, elements, warnings); version = first 16
-  hex of SHA-256 of the bundle (deterministic). The alias flips by compare-and-set on `compiledRequest`.
-  Refusals: `delivery_budget_exceeded` (422; `errors[]` lists offenders: `budget` when loader gzip + Σ `budget.js` +
-  Σ product `budget.shared` > the website budget (60 KB), `over_declared` when an element's own entry modules
-  ship more gzip bytes than its `budget.js`, `shared_over_declared` when a product's shared chunks exceed its
-  `budget.shared`), `conflict` (one product delivers the same element id twice).
-  **Wave-1 (F.18):** sizes come from `@ss/contracts/budget` `measureBundle` over the stored modules (own entry modules
-  per element; shared modules and every imported chunk once per product; an undeclared `budget.shared` counts as
-  measured, warning `shared_undeclared`); stub elements count 0 KB. Every bundle element carries `product` (the Loader
-  id is `<product>:<key>`; two products may deliver the same key). Pack elements get `reads: { <slug>: <base> }` for
-  each manifest `reads` product with an active subscription (warning `reads_inactive` otherwise) and the loader key
-  gains their read scopes (re-issued when one is missing). Strings: the product catalogs `strings/<lang>.json` sliced
-  by the element's `stringKeys` (default `<key>.*`) for the website language (`identity.getWebsite().language`,
-  fallback `en`), then the merchant's overrides. `manifest.json` adds `budget.sharedKb`, `budget.shared[]` and per
-  element `gzipBytes` / `reads`.
-- `rollback({ websiteId, merchantId?, version, actor })`, `status({ websiteId, merchantId? })`, `snippet(...)`.
+  `revokeKey` (one `pk_` key per website, scopes `events.write elements.read` plus the product scopes below, issued by
+  the system actor and re-issued when it is no longer active or lacks a scope). Delivered: elements the document
+  enables, of `runtime.state = active` subscriptions, whose manifest declares mode A. Pack elements → the pack's
+  headless + renderer modules; service elements → the modules of the product's newest ready widget bundle, with
+  `api: <baseUrl>` (fallback `endpoints.base`), and the loader key gains `<slug>.read` / `<slug>.write`. Both are served
+  at `/w/packs/<appId>/<version>/<path>` (lazy `import()`). Skipped elements are warnings: `widgets_missing` (service
+  element without widgets), `no_api_base` (no https base URL), `reads_inactive`, module and placement problems. Output
+  `w/<websiteId>/<env>/<version>/loader.js` + `manifest.json` (`ss-website-bundle@1`: integrity sha384, sha256, bytes,
+  CSP sources, elements, warnings); version = first 16 hex of SHA-256 of the bundle (deterministic). The alias flips by
+  compare-and-set on `compiledRequest`. Refusal: `conflict` (one product delivers the same element id twice).
+  Every bundle element carries `product` (the Loader id is `<product>:<key>`; two products may deliver the same key).
+  Pack elements get `reads: { <slug>: <base> }` for each manifest `reads` product with an active subscription and the
+  loader key gains their read scopes. Strings: the product catalogs `strings/<lang>.json` sliced by the element's
+  `stringKeys` (default `<key>.*`) for the website language (`identity.getWebsite().language`, fallback `en`), then the
+  merchant's overrides.
+- `status({ websiteId, merchantId? })`.
+- **Install snippet**: `snippet({ websiteId, merchantId? })` (`GET /v1/merchants/:m/websites/:w/delivery/snippet`) →
+  `{ websiteId, env, version, alias: { url, tag, note }, immutable: { url, integrity, tag, note }, csp }`. The alias
+  tag (`<script src="<portal>/w/<websiteId>/loader.js" crossorigin="anonymous" defer>`) always serves the current
+  version and is what the Merchant Console's install code card shows (with copy); the immutable tag pins one version
+  with SRI. Before the first compile `version`, `immutable` and `csp` are `null` and the alias tag is already valid.
 - **String overrides** (F.18, `delivery_strings`, `_id` = `<websiteId>:<appId>:<element>`):
   `listStringOverrides({ merchantId, websiteId })` → `{ items: [{ appId, element, languages, updatedAt }] }` and
   `setStringOverride({ merchantId, websiteId, appId, element, language, body: { strings }, actor })` (`language` a BCP
@@ -245,61 +250,30 @@ active` subscriptions, whose manifest declares mode A. Packs → their headless 
   to the product and the element must be mode A) — audited `delivery.strings_updated`, then `requestCompile`. Routes
   `GET /v1/merchants/:m/websites/:w/delivery/strings`, `PUT …/delivery/strings/:appId/:element/:language`
   (`websites.read` / `websites.write`).
-- `uploadAsset({ appId, version, path, bytes, contentType, actor })` — bytes must equal the descriptor's sha256 and
-  size (`delivery_asset_mismatch`), types js/mjs/css/json/svg/png/woff2 with per-type caps (415 / 413).
-- **Service UI bundles** (F.16, `delivery_ui_bundles`): a service product publishes the browser modules of its mode-A
-  elements itself. `POST /v1/product/ui-bundles` (product auth) with `{ descriptor, signature }` — the pack format
-  `ss-pack-bundle@1`, signature over `ss-pack-bundle.v1.<sha256(canonicalJson(descriptor))>` with a **registered
-  product key** (`catalog.verifyUiBundle`; no `publicJwk`), `descriptor.manifest` = `{ product: { slug, version },
-elements: [{ key, headless: 'file.js#export', renderer, strings? }] }` → `{ version, status: pending|ready, missing,
-uploadPath }` (same descriptor = same version). Then `PUT /v1/product/ui-bundles/:version/assets/<path>` per asset
-  (raw bytes, checks as for packs). When the last asset lands the bundle is `ready` (audited) and every subscribed
-  website recompiles; `GET /v1/product/ui-bundles` lists them. Assets are served immutable at
-  `/w/ui/<appId>/<version>/<path>`. The compiler uses the newest ready bundle for the elements the pinned manifest
-  declares mode A (budgets as for packs; the element API client is bound to `endpoints.base`), else the stub.
-  `manifest.json` records `delivery: 'pack' | 'ui-bundle' | 'ss-element-stub@2'`. Bundle data `assets` is
-  `<portal>/w/` and module paths start with `packs/` or `ui/`.
-- `createPreview({ merchantId, websiteId, body: { path?, base?: 'current'|'empty', elements?: [{ appId, key, config?,
-strings?, placement? }] }, actor })` → `{ previewId, url, expiresAt, version, budget, elements, warnings }`;
-  `servePreview({ token, path, search })`. Previews are served from the Portal's own origin under `CSP: sandbox`
-  without `allow-same-origin` (opaque origin), scripts by nonce only.
+- `registerWidgets({ appId, descriptor, actor })` (called by `catalog.uploadPack` for a service product;
+  `delivery_widgets`) → `{ version, status: uploading|ready, missing, uploadPath, changed }` (same descriptor = same
+  version).
+- `uploadAsset({ appId, version, path, bytes, contentType, actor })` — one route for both kinds,
+  `PUT /v1/admin/packs/:appId/versions/:version/assets/<path>` (`platform.apps.manage`): bytes must equal the
+  descriptor's sha256 and size (`delivery_asset_mismatch`), types js/mjs/css/json/svg/png/woff2 with per-type caps
+  (415 / 413). The last asset of a pack version calls `catalog.versionReady`; the last of a widget bundle makes it
+  `ready`. Either way every website subscribed to the app recompiles.
 - Job `delivery.compile` (runs right after the request that asked for it; a failed one is retried when the website's
-  loader is next served). Problems `delivery_budget_exceeded`, `delivery_asset_mismatch`, `delivery_preview_refused`.
-
+  loader is next served). Problem `delivery_asset_mismatch`.
 - Commerce calls `requestCompile` (see commerce); the compile reads only public service functions, so delivery has no
   write path into other modules except `identity.issueKey` / `revokeKey` for its one `pk_` key.
 
-**Element stub contract (`ss-element-stub@2`; `@1` bundles keep working)** — how a service product's mode-A element
-without a UI bundle runs inside the Loader with no product code in the bundle. The stub's headless core calls the
-product with the website's `pk_` key (`Authorization: Bearer pk_…`, `SS-Identity` when federated, `Idempotency-Key` on
-POST; Origin enforcement as for any `pk_` call): `GET <endpoints.base>/v1/elements/<key>/view?ctx=<JSON>` → view
-model; `POST <endpoints.base>/v1/elements/<key>/actions/<action>?ctx=<JSON>` (`action` matches
-`^[a-z][a-z0-9_]{0,39}$`, JSON body) → the next view model. `ctx` (v2) is the page context `{ path ≤ 512, itemId? ≤
-128, pageType? ≤ 40 }`: item id / page type from `data-ss-item-id` / `data-ss-page-type` on the element's nearest
-ancestor, else the placement target, else `<html>` or `<meta name="ss:item-id|ss:page-type">`. View model (all
-optional, text only, never HTML): `{ title ≤ 200, body ≤ 2000, items: [{ text, href? }] ≤ 50, fields: [{ name
-(^[a-z][a-z0-9_]{0,39}$), type: text|email|tel|number|textarea|select|checkbox, label ≤ 200, required?, options?:
-[{ value, label? }] ≤ 50 }] ≤ 20, actions: [{ action, label ≤ 80 }] ≤ 10 }`. With fields, an action posts `{ ...input,
-fields: { <name>: string | number | null | boolean } }` (required fields are checked in the browser first); without
-fields the body is the action input as in v1.
-Errors are RFC 9457 problems. The stub renders with the Loader's safe `h()` (class names `ss-el`, `ss-el__title`,
-`ss-el__body`, `ss-el__items`, `ss-el__fields`, `ss-el__field`, `ss-el__input`, `ss-el__action`; design tokens via CSS variables), emits `<key>.action@1` (`{ action, ok? }`, catalogued in `@ss/contracts` `ELEMENT_EVENT_DATA` with `<key>.shown@1`), and exposes
-`actions.refresh()` / `actions.invoke(action, input)` on `SS.elements.get(key)`.
-
 ## Product API routes (`/v1/product/*`, `auth: 'product'`) — owned by the module named
 
-| Route                                                                               | Module          |
-| ----------------------------------------------------------------------------------- | --------------- |
-| `GET /v1/product/entitlements`                                                      | commerce        |
-| `GET /v1/product/revocations`                                                       | identity        |
-| `POST /v1/product/usage`                                                            | commerce        |
-| `POST /v1/product/launch/consume`                                                   | catalog         |
-| `POST /v1/product/heartbeat`                                                        | catalog         |
-| `POST /v1/product/keys/rotate`                                                      | catalog         |
-| `POST /v1/product/events`                                                           | integration     |
-| `POST /v1/product/resources/resolve`                                                | connectors      |
-| `PUT /v1/product/websites/:websiteId/identity`                                      | identity (F.16) |
-| `POST\|GET /v1/product/ui-bundles` · `PUT /v1/product/ui-bundles/:version/assets/*` | delivery (F.16) |
+| Route                                          | Module          |
+| ---------------------------------------------- | --------------- |
+| `GET /v1/product/entitlements`                 | commerce        |
+| `GET /v1/product/revocations`                  | identity        |
+| `POST /v1/product/usage`                       | commerce        |
+| `POST /v1/product/launch/consume`              | catalog         |
+| `POST /v1/product/events`                      | integration     |
+| `POST /v1/product/resources/resolve`           | connectors      |
+| `PUT /v1/product/websites/:websiteId/identity` | identity (F.16) |
 
-Website-facing: `POST /v1/events` (integration, `websiteKey`); delivery serves `/w/*` and `/p/*` (public). Console routes (`/v1/merchants/...`, `/v1/admin/...`)
+Website-facing: `POST /v1/events` (integration, `websiteKey`); delivery serves `/w/*` (public). Console routes (`/v1/merchants/...`, `/v1/admin/...`)
 belong to the module owning the entity.

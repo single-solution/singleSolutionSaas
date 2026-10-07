@@ -1,22 +1,17 @@
 /**
- * HTTP adapters of the `delivery` module. Public serving lives outside `/v1` (`/w/*`, `/p/*`, mounted by thin
- * `app/w` and `app/p` route files over the same handler); console and staff routes are `/v1/...`.
+ * HTTP adapters of the `delivery` module. Public serving lives outside `/v1` (`/w/*`); console and staff routes are
+ * `/v1/...`.
  *
  * | Route                                                                       | Auth             |
  * | --------------------------------------------------------------------------- | ---------------- |
- * | `PUT  /v1/admin/packs/:appId/versions/:version/assets/<path>`               | staff            |
- * | `POST /v1/product/ui-bundles` · `GET /v1/product/ui-bundles`                 | product          |
- * | `PUT  /v1/product/ui-bundles/:version/assets/<path>`                        | product          |
+ * | `PUT  /v1/admin/packs/:appId/versions/:version/assets/<path>` (packs and service widgets) | staff |
  * | `GET  /v1/merchants/:merchantId/websites/:websiteId/delivery`               | merchant, staff  |
  * | `GET  /v1/merchants/:merchantId/websites/:websiteId/delivery/snippet`       | merchant, staff  |
  * | `POST /v1/merchants/:merchantId/websites/:websiteId/delivery/compile`       | merchant, staff  |
- * | `POST /v1/merchants/:merchantId/websites/:websiteId/delivery/rollback`      | merchant, staff  |
- * | `POST /v1/merchants/:merchantId/websites/:websiteId/preview`                | merchant, staff  |
  * | `GET  /v1/merchants/:merchantId/websites/:websiteId/delivery/strings`       | merchant, staff  |
  * | `PUT  …/delivery/strings/:appId/:element/:language` (string overrides)      | merchant, staff  |
  * | `GET  /w/:websiteId/loader.js` · `/w/:websiteId/:version/{loader.js,manifest.json}` | public   |
- * | `GET  /w/packs/:appId/:version/<path>` · `/w/ui/:appId/:version/<path>`     | public           |
- * | `GET  /p/:token[/<path>]`                                                   | public           |
+ * | `GET  /w/packs/:appId/:version/<path>`                                      | public           |
  *
  * `<path>` spans up to {@link MAX_PATH_SEGMENTS} segments (one route per depth; the router matches whole segments).
  * @module
@@ -45,7 +40,7 @@ const caller = (ctx) => ({ actor: /** @type {any} */ (ctx.actor), requestId: ctx
  * @param {DeliveryService} delivery
  */
 export const deliveryRoutes = (delivery) => [
-	// ---- developers / staff: pack assets ----------------------------------------------------------------------
+	// ---- staff: pack and widget assets ----------------------------------------------------------------------------
 	...Array.from({ length: MAX_PATH_SEGMENTS }, (_, i) =>
 		defineRoute({
 			method: 'PUT',
@@ -62,50 +57,6 @@ export const deliveryRoutes = (delivery) => [
 					bytes: ctx.rawBytes,
 					contentType: ctx.headers.get('content-type'),
 					...caller(ctx),
-				}),
-		}),
-	),
-
-	// ---- service products: their own signed UI bundle (F.16) ------------------------------------------------------
-	defineRoute({
-		method: 'POST',
-		path: '/v1/product/ui-bundles',
-		auth: 'product',
-		idempotent: 'optional',
-		maxBodyBytes: 256 * 1024,
-		rateLimit: { limit: 30, windowMs: 60 * 60_000 },
-		handler: (ctx) =>
-			delivery.submitUiBundle({
-				appId: /** @type {{ appId: string }} */ (ctx.app).appId,
-				body: ctx.body,
-				requestId: ctx.requestId,
-				ip: ctx.ip,
-			}),
-	}),
-	defineRoute({
-		method: 'GET',
-		path: '/v1/product/ui-bundles',
-		auth: 'product',
-		rateLimit: { limit: 60, windowMs: 60_000 },
-		handler: (ctx) => delivery.listUiBundles({ appId: /** @type {{ appId: string }} */ (ctx.app).appId }),
-	}),
-	...Array.from({ length: MAX_PATH_SEGMENTS }, (_, i) =>
-		defineRoute({
-			method: 'PUT',
-			path: `/v1/product/ui-bundles/:version/assets/${segments(i + 1)}`,
-			auth: 'product',
-			rawBody: true,
-			maxBodyBytes: MAX_UPLOAD_BYTES,
-			rateLimit: { limit: 600, windowMs: 60 * 60_000 },
-			handler: (ctx) =>
-				delivery.uploadUiAsset({
-					appId: /** @type {{ appId: string }} */ (ctx.app).appId,
-					version: ctx.params.version ?? '',
-					path: joined(ctx, i + 1),
-					bytes: ctx.rawBytes,
-					contentType: ctx.headers.get('content-type'),
-					requestId: ctx.requestId,
-					ip: ctx.ip,
 				}),
 		}),
 	),
@@ -140,19 +91,6 @@ export const deliveryRoutes = (delivery) => [
 			}),
 	}),
 	defineRoute({
-		method: 'POST',
-		path: `${SITE}/delivery/rollback`,
-		auth: CONSOLE,
-		permission: 'websites.write',
-		handler: (ctx) =>
-			delivery.rollback({
-				websiteId: ctx.params.websiteId ?? '',
-				merchantId: ctx.params.merchantId ?? '',
-				version: /** @type {Record<string, unknown> | undefined} */ (ctx.body)?.version,
-				...caller(ctx),
-			}),
-	}),
-	defineRoute({
 		method: 'GET',
 		path: `${SITE}/delivery/strings`,
 		auth: CONSOLE,
@@ -177,22 +115,6 @@ export const deliveryRoutes = (delivery) => [
 				...caller(ctx),
 			}),
 	}),
-	defineRoute({
-		method: 'POST',
-		path: `${SITE}/preview`,
-		auth: CONSOLE,
-		permission: 'websites.read',
-		rateLimit: { limit: 20, windowMs: 10 * 60_000, key: (ctx) => `merchant:${ctx.params.merchantId}` },
-		handler: async (ctx) => ({
-			...(await delivery.createPreview({
-				websiteId: ctx.params.websiteId ?? '',
-				merchantId: ctx.params.merchantId ?? '',
-				body: ctx.body,
-				...caller(ctx),
-			})),
-		}),
-	}),
-
 	// ---- public serving ------------------------------------------------------------------------------------------
 	defineRoute({
 		method: 'GET',
@@ -215,38 +137,17 @@ export const deliveryRoutes = (delivery) => [
 				}),
 		}),
 	),
-	.../** @type {const} */ (['packs', 'ui']).flatMap((dir) =>
-		Array.from({ length: MAX_PATH_SEGMENTS }, (_, i) =>
-			defineRoute({
-				method: 'GET',
-				path: `/w/${dir}/:appId/:version/${segments(i + 1)}`,
-				auth: 'public',
-				handler: (ctx) =>
-					delivery.serveAsset({
-						appId: ctx.params.appId ?? '',
-						version: ctx.params.version ?? '',
-						path: joined(ctx, i + 1),
-						ifNoneMatch: ctx.headers.get('if-none-match'),
-						bundle: dir === 'ui' ? 'ui' : 'pack',
-					}),
-			}),
-		),
-	),
-	...Array.from({ length: MAX_PATH_SEGMENTS + 1 }, (_, depth) =>
+	...Array.from({ length: MAX_PATH_SEGMENTS }, (_, i) =>
 		defineRoute({
 			method: 'GET',
-			path: depth === 0 ? '/p/:token' : `/p/:token/${segments(depth)}`,
+			path: `/w/packs/:appId/:version/${segments(i + 1)}`,
 			auth: 'public',
-			rateLimit: {
-				limit: 120,
-				windowMs: 60_000,
-				key: (ctx) => delivery.previewSubject(ctx.params.token ?? '', ctx.ip),
-			},
 			handler: (ctx) =>
-				delivery.servePreview({
-					token: ctx.params.token ?? '',
-					path: `/${Array.from({ length: depth }, (_, i) => encodeURIComponent(ctx.params[`p${i}`] ?? '')).join('/')}`,
-					search: new URL(ctx.request.url).search,
+				delivery.serveAsset({
+					appId: ctx.params.appId ?? '',
+					version: ctx.params.version ?? '',
+					path: joined(ctx, i + 1),
+					ifNoneMatch: ctx.headers.get('if-none-match'),
 				}),
 		}),
 	),

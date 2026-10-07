@@ -1,8 +1,10 @@
 /**
  * Fake neighbour modules implementing only the INTERFACES.md functions identity depends on:
- * `commerce.onMerchantStatus`, `integration.emitControl`, and the `appKeys` port (catalog) for product routes.
+ * `commerce.onMerchantStatus`, `integration.emitControl`, and the `appKeys` port (catalog) for product routes, plus a
+ * `whoami` route that reports how a request authenticated.
  */
 import { createJwks, createKeyResolver, createSigner, generateSigningKey, signAssertion } from '@ss/protocol';
+import { ok } from '../../../../src/infra/http.js';
 import { defineModule } from '../../../../src/infra/modules.js';
 
 /** @param {{ fail?: boolean }} [options] */
@@ -112,3 +114,22 @@ export const memoryMailer = () => {
 		},
 	};
 };
+
+/** `GET /v1/test/whoami`: the authentication mode, actor, session and website key of the request. */
+export const whoamiModule = defineModule({
+	name: 'whoami',
+	routes: () => [
+		{
+			method: 'GET',
+			path: '/v1/test/whoami',
+			auth: ['staff', 'merchant', 'product', 'websiteKey'],
+			handler: (c) =>
+				ok({
+					authMode: c.authMode,
+					actor: c.actor,
+					...(c.session ? { session: { kind: c.session.kind, mfa: c.session.mfa } } : {}),
+					...(c.website ? { website: { websiteId: c.website.websiteId, kind: c.website.kind, env: c.website.env } } : {}),
+				}),
+		},
+	],
+});

@@ -21,7 +21,7 @@ const UNLIMITED_KINDS = new Set(['quota', 'limit', 'rate']);
 /**
  * @typedef {object} ManifestIndex
  * @property {string} version
- * @property {Map<string, { experiments: boolean, schema: FeatureSchema | null }>} elements
+ * @property {Map<string, { schema: FeatureSchema | null }>} elements
  */
 
 /**
@@ -30,12 +30,7 @@ const UNLIMITED_KINDS = new Set(['quota', 'limit', 'rate']);
  */
 export const indexManifest = (manifest) => ({
 	version: manifest.product.version,
-	elements: new Map(
-		manifest.elements.map((element) => [
-			element.key,
-			{ experiments: element.experiments === true, schema: element.features ?? null },
-		]),
-	),
+	elements: new Map(manifest.elements.map((element) => [element.key, { schema: element.features ?? null }])),
 });
 
 /**

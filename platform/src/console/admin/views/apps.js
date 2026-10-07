@@ -1,10 +1,9 @@
 'use client';
 /**
  * Apps (products): list with status / kind filters; adding a service product (its URL and connect secret; connecting
- * again replaces the binding); upload of a signed pack bundle (descriptor + detached signature + key); app detail with
- * manifest versions (diff viewer with breaking flags, approve / reject with reason), lifecycle (activate,
- * deprecate with a sunset date, retire), environments, keys (revoke), health and the admin launch (one merchant,
- * or app-wide `all` for superadmins/admins).
+ * again replaces the binding and stores a changed manifest as the current version); uploading a built pack folder
+ * (`ss pack build` output: `descriptor.json` + assets) for a new pack, a pack version or a service product's widgets;
+ * app detail with the Active / Inactive switch, "Retry deliveries now" and the admin launch.
  * @module
  */
 import { useState } from 'react';
@@ -14,23 +13,20 @@ import {
 	ButtonLink,
 	Callout,
 	Card,
-	CodeBlock,
-	ConfirmDialog,
 	Dialog,
-	EmptyState,
 	Form,
 	FormActions,
 	FormError,
 	Icon,
 	Input,
 	KeyValueList,
+	Meter,
 	PageHeader,
 	RadioGroup,
 	Select,
 	StatusBadge,
+	Switch,
 	Table,
-	TextArea,
-	TypedConfirmDialog,
 	describeProblem,
 	fieldErrors,
 	formatDate,
@@ -40,21 +36,13 @@ import {
 	useToast,
 } from '@ss/ui';
 import { Link } from '../../link.js';
-import { adminFetch, useAdminResource, usePagedList } from '../client.js';
+import { adminFetch, adminUpload, useAdminResource, usePagedList } from '../client.js';
 import { ID, adminApi, adminRoutes } from '../paths.js';
 import { ActionProblem, AdminProblem, Crumbs, IdChip, localProblem, staffCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
-const STATUSES = ['pending', 'active', 'deprecated', 'retired'];
-
-/** Health label of an app: `Healthy`, `Stale`, the reported status, or null for packs. */
-export const healthLabel = (/** @type {any} */ app) => {
-	if (app.kind !== 'service' || !app.health) return null;
-	if (app.health.stale) return { status: 'failing', label: app.health.lastSeenAt ? 'Stale' : 'Never seen' };
-	if (app.health.status && app.health.status !== 'ok') return { status: 'failing', label: humanize(app.health.status) };
-	return { status: 'ok', label: 'Healthy' };
-};
+const STATUSES = ['active', 'inactive'];
 
 /**
  * @param {any} props loader result of `loadApps` plus `staff`
@@ -73,12 +61,12 @@ export function AppsView(props) {
 		<div className="space-y-6">
 			<PageHeader
 				title="Apps"
-				subtitle="Service products and element packs: review, lifecycle, keys and health."
+				subtitle="Service products and element packs."
 				actions={
 					canManage ? (
 						<>
 							<Button variant="secondary" onClick={() => setDialog('pack')} icon={<Icon name="box" size={14} />}>
-								Upload pack
+								Add pack
 							</Button>
 							<Button onClick={() => setDialog('add')} icon={<Icon name="plus" size={14} />}>
 								Add product
@@ -141,19 +129,10 @@ export function AppsView(props) {
 						header: 'Version',
 						render: (a) => (
 							<span className="space-x-1">
-								<span className="tabular-nums">v{a.currentVersion}</span>
+								<span className="tabular-nums">{a.currentVersion ? `v${a.currentVersion}` : '—'}</span>
 								{a.productVersion ? <span className="text-xs text-muted">({a.productVersion})</span> : null}
-								{a.pendingVersion ? <Badge tone="info">v{a.pendingVersion} to review</Badge> : null}
 							</span>
 						),
-					},
-					{
-						key: 'health',
-						header: 'Health',
-						render: (a) => {
-							const h = healthLabel(a);
-							return h ? <StatusBadge status={h.status} label={h.label} /> : <span className="text-muted">—</span>;
-						},
 					},
 					{ key: 'createdAt', header: 'Created', sortable: true, render: (a) => formatDate(a.createdAt) },
 				]}
@@ -166,9 +145,29 @@ export function AppsView(props) {
 }
 
 /**
+ * Price changes of a reconnect (`[{ element, before, after }]`): a read-only note.
+ * @param {{ changes: any[] | undefined }} props
+ */
+export function PriceChanges({ changes }) {
+	if (!Array.isArray(changes) || changes.length === 0) return null;
+	return (
+		<Callout tone="warning" title="Prices changed">
+			<ul className="mt-1 space-y-1">
+				{changes.map((c) => (
+					<li key={c.element} className="text-sm">
+						<span className="font-mono text-xs">{c.element}</span>: {JSON.stringify(c.before ?? null)} →{' '}
+						{JSON.stringify(c.after ?? null)}
+					</li>
+				))}
+			</ul>
+		</Callout>
+	);
+}
+
+/**
  * Add a service product: its URL and the connect secret its deployer set as `CONNECT_SECRET`. The Portal calls the
  * product's `/.well-known/ss-connect` (HMAC with the secret, which is never sent nor stored) and pins its address and
- * key. Connecting an existing product again replaces its binding (new address, new key).
+ * key. Connecting an existing product again replaces its binding and stores a changed manifest as the current version.
  * @param {{ open: boolean, onClose: () => void }} props
  */
 export function AddProductDialog({ open, onClose }) {
@@ -214,14 +213,17 @@ export function AddProductDialog({ open, onClose }) {
 				) : null
 			}>
 			{done ? (
-				<KeyValueList
-					columns={1}
-					items={[
-						{ label: 'App', value: <IdChip id={done.appId} label="app id" /> },
-						{ label: 'Address', value: done.baseUrl },
-						{ label: 'Key', value: done.kid },
-					]}
-				/>
+				<div className="space-y-3">
+					<KeyValueList
+						columns={1}
+						items={[
+							{ label: 'App', value: <IdChip id={done.appId} label="app id" /> },
+							{ label: 'Address', value: done.baseUrl },
+							{ label: 'Key', value: done.kid },
+						]}
+					/>
+					<PriceChanges changes={done.priceChanges} />
+				</div>
 			) : (
 				<Form onSubmit={connect} busy={busy} aria-label="Add a service product">
 					<FormError problem={problem} />
@@ -259,131 +261,146 @@ export function AddProductDialog({ open, onClose }) {
 }
 
 /**
- * Parse a JSON text field: `{ ok, value }` or `{ ok: false, message }`.
- * @param {string} text
- * @param {{ optional?: boolean }} [options]
+ * The files of a picked `ss pack build` folder: its `descriptor.json` and every other file by its path relative to
+ * the folder (`webkitRelativePath` without the folder's own name).
+ * @param {ArrayLike<File>} picked
+ * @returns {{ descriptor: File | null, files: Map<string, File> }}
  */
-export const parseJsonField = (text, { optional = false } = {}) => {
-	if (!text.trim()) return optional ? { ok: true, value: undefined } : { ok: false, message: 'Paste the JSON here.' };
-	try {
-		const value = JSON.parse(text);
-		if (typeof value !== 'object' || value === null || Array.isArray(value))
-			return { ok: false, message: 'Must be a JSON object.' };
-		return { ok: true, value };
-	} catch (error) {
-		return { ok: false, message: `Not valid JSON (${error instanceof Error ? error.message : 'parse error'}).` };
-	}
+export const packFolder = (picked) => {
+	const all = Array.from(picked).map((file) => ({ file, path: file.webkitRelativePath || file.name }));
+	const top = all
+		.filter((f) => f.path === 'descriptor.json' || f.path.endsWith('/descriptor.json'))
+		.sort((a, b) => a.path.length - b.path.length)[0];
+	if (!top) return { descriptor: null, files: new Map() };
+	const root = top.path.slice(0, top.path.length - 'descriptor.json'.length);
+	const files = new Map(all.filter((f) => f.path.startsWith(root)).map((f) => [f.path.slice(root.length), f.file]));
+	return { descriptor: top.file, files };
 };
 
+/** Non-standard attributes that turn a file input into a folder picker. */
+const FOLDER_PICKER = { webkitdirectory: '', directory: '' };
+
+/** @param {string} path an asset path (`ui/x.js`) URL-encoded segment by segment */
+const encodePath = (path) => path.split('/').map(encodeURIComponent).join('/');
+
 /**
- * Upload a signed pack bundle descriptor (`ss app publish` output): descriptor, detached signature and — for a new
- * pack only — the public key to pin.
- * @param {{ open: boolean, onClose: () => void }} props
+ * Upload a built pack folder (`ss pack build` output): `POST /v1/admin/packs { descriptor }`, then `PUT` the raw bytes
+ * of every asset the Portal reports missing to `${uploadPath}<path>`. The same path serves a new pack, a new pack
+ * version and a service product's widgets (the Portal tells them apart by the descriptor's manifest).
+ * @param {{ open: boolean, onClose: () => void, title?: string, onDone?: () => unknown }} props
  */
-export function PackDialog({ open, onClose }) {
-	const [descriptor, setDescriptor] = useState('');
-	const [signature, setSignature] = useState('');
-	const [publicJwk, setPublicJwk] = useState('');
-	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
+export function PackDialog({ open, onClose, title = 'Upload a pack', onDone }) {
+	const [picked, setPicked] = useState(/** @type {ReturnType<typeof packFolder> | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [busy, setBusy] = useState(false);
+	const [progress, setProgress] = useState(/** @type {{ sent: number, total: number } | null} */ (null));
 	const [done, setDone] = useState(/** @type {any} */ (null));
 	const close = () => {
+		setPicked(null);
 		setDone(null);
 		setProblem(null);
-		setErrors({});
+		setProgress(null);
 		onClose();
 	};
-	/** @param {import('react').ChangeEvent<HTMLInputElement>} event @param {(text: string) => void} set */
-	const readFile = async (event, set) => {
-		const file = event.currentTarget.files?.[0];
-		if (file) set(await file.text());
-	};
-	const submit = async () => {
-		const d = parseJsonField(descriptor);
-		const s = parseJsonField(signature);
-		const k = parseJsonField(publicJwk, { optional: true });
-		/** @type {Record<string, string>} */
-		const local = {};
-		if (!d.ok) local.descriptor = /** @type {any} */ (d).message;
-		if (!s.ok) local.signature = /** @type {any} */ (s).message;
-		if (!k.ok) local.publicJwk = /** @type {any} */ (k).message;
-		setErrors(local);
-		if (Object.keys(local).length > 0) return;
-		setBusy(true);
-		setProblem(null);
-		const result = await adminFetch(adminApi.packs(), {
-			method: 'POST',
-			body: {
-				descriptor: /** @type {any} */ (d).value,
-				signature: /** @type {any} */ (s).value,
-				.../** @type {any} */ (k.value ? { publicJwk: /** @type {any} */ (k).value } : {}),
-			},
-		});
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			const fe = fieldErrors(result.problem);
-			setErrors(
-				Object.fromEntries(
-					['descriptor', 'signature', 'publicJwk'].flatMap((name) => {
-						const hit = Object.entries(fe).find(([k2]) => k2 === name || k2.startsWith(`${name}.`));
-						return hit ? [[name, hit[1]]] : [];
-					}),
-				),
+	const upload = async () => {
+		if (!picked?.descriptor) {
+			setProblem(localProblem('Choose the pack folder', 'Choose the folder `ss pack build` wrote (it has descriptor.json).'));
+			return;
+		}
+		/** @type {any} */
+		let descriptor;
+		try {
+			descriptor = JSON.parse(await picked.descriptor.text());
+		} catch {
+			setProblem(
+				localProblem('Invalid descriptor', 'descriptor.json is not valid JSON: build the pack again with `ss pack build`.'),
 			);
 			return;
 		}
-		setDone(result.data);
+		setBusy(true);
+		setProblem(null);
+		const result = await adminFetch(adminApi.packs(), { method: 'POST', body: { descriptor } });
+		if (!result.ok) {
+			setBusy(false);
+			setProblem(result.problem);
+			return;
+		}
+		const r = /** @type {any} */ (result.data);
+		const missing = /** @type {string[]} */ (r.missing ?? []);
+		const assets = new Map((descriptor.assets ?? []).map((/** @type {any} */ a) => [a.path, a]));
+		setProgress({ sent: 0, total: missing.length });
+		for (const [index, path] of missing.entries()) {
+			const file = picked.files.get(path);
+			if (!file) {
+				setBusy(false);
+				setProblem(
+					localProblem('Missing file', `${path} is missing from the folder: build the pack again with \`ss pack build\`.`),
+				);
+				return;
+			}
+			const put = await adminUpload(`${r.uploadPath}${encodePath(path)}`, file, assets.get(path)?.contentType);
+			if (!put.ok) {
+				setBusy(false);
+				setProblem(localProblem('Upload failed', `${path}: ${describeProblem(put.problem)}`));
+				return;
+			}
+			setProgress({ sent: index + 1, total: missing.length });
+		}
+		setBusy(false);
+		setDone(r);
+		await onDone?.();
 	};
 	return (
 		<Dialog
 			open={open}
 			onClose={close}
-			size="lg"
-			title={done ? (done.changed ? 'Pack uploaded' : 'Nothing new') : 'Upload a pack bundle'}
-			description={done ? undefined : 'Element packs are published as signed bundles (no registration handshake).'}
+			title={done ? (done.changed || (done.missing ?? []).length > 0 ? 'Uploaded' : 'Nothing new') : title}
+			description={done ? undefined : 'Pick the folder `ss pack build` wrote: descriptor.json and its assets.'}
 			footer={
 				done ? (
-					<ButtonLink as={Link} href={adminRoutes.app(done.app.appId)} variant="primary">
-						Open {done.app.name ?? done.app.slug}
+					<ButtonLink as={Link} href={adminRoutes.app(done.appId)} variant="primary">
+						Open {done.slug}
 					</ButtonLink>
 				) : null
 			}>
 			{done ? (
 				<p className="text-sm text-fg">
-					{done.changed
-						? `Version v${done.version.version} of ${done.app.slug} is stored with status ${done.version.status}.`
-						: `This bundle matches version v${done.version.version}; nothing was stored.`}
+					{done.changed || (done.missing ?? []).length > 0
+						? `Version v${done.version} of ${done.slug} is uploaded (${formatNumber((done.missing ?? []).length)} files sent).`
+						: `This build matches version v${done.version} of ${done.slug}; nothing was stored.`}
 				</p>
 			) : (
-				<Form onSubmit={submit} busy={busy} aria-label="Upload a pack bundle">
-					<JsonField
-						label="Bundle descriptor (JSON)"
-						value={descriptor}
-						onChange={setDescriptor}
-						onFile={(e) => void readFile(e, setDescriptor)}
-						error={errors.descriptor}
-						rows={8}
-					/>
-					<JsonField
-						label="Signature (JSON: kid, alg, sig)"
-						value={signature}
-						onChange={setSignature}
-						onFile={(e) => void readFile(e, setSignature)}
-						error={errors.signature}
-						rows={3}
-					/>
-					<JsonField
-						label="Public key (JWK, new packs only)"
-						value={publicJwk}
-						onChange={setPublicJwk}
-						onFile={(e) => void readFile(e, setPublicJwk)}
-						error={errors.publicJwk}
-						rows={3}
-						help="Pinned for the pack on its first upload. Later uploads must be signed with a pinned key."
-					/>
-					<FormError problem={problem} fields={['descriptor', 'signature', 'publicJwk']} />
+				<Form onSubmit={upload} busy={busy} aria-label={title}>
+					<label className="block space-y-1.5 text-sm font-semibold text-fg">
+						<span>Pack folder</span>
+						<input
+							type="file"
+							multiple
+							{...FOLDER_PICKER}
+							className="block w-full text-sm font-normal"
+							onChange={(e) => {
+								setProblem(null);
+								setPicked(packFolder(e.currentTarget.files ?? []));
+							}}
+						/>
+					</label>
+					{picked ? (
+						<p className="text-xs text-muted">
+							{picked.descriptor
+								? `${formatNumber(picked.files.size)} files, descriptor.json found.`
+								: 'No descriptor.json in this folder.'}
+						</p>
+					) : null}
+					{progress ? (
+						<Meter
+							label="Assets"
+							value={progress.sent}
+							max={Math.max(progress.total, 1)}
+							valueText={`${progress.sent} / ${progress.total}`}
+							tone="primary"
+						/>
+					) : null}
+					<FormError problem={problem} />
 					<FormActions>
 						<Button variant="secondary" onClick={close}>
 							Cancel
@@ -398,31 +415,9 @@ export function PackDialog({ open, onClose }) {
 	);
 }
 
-/**
- * @param {{ label: string, value: string, onChange: (v: string) => void, onFile: (e: import('react').ChangeEvent<HTMLInputElement>) => void,
- *   error?: string, rows?: number, help?: string }} props
- */
-function JsonField({ label, value, onChange, onFile, error, rows = 4, help }) {
-	return (
-		<div className="space-y-1.5">
-			<TextArea
-				label={label}
-				value={value}
-				rows={rows}
-				onChange={(e) => onChange(e.currentTarget.value)}
-				error={error}
-				help={help}
-				spellCheck={false}
-				className="font-mono text-xs"
-			/>
-			<label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-primary">
-				<Icon name="plus" size={12} />
-				Load from a file
-				<input type="file" accept="application/json,.json" className="sr-only" onChange={onFile} />
-			</label>
-		</div>
-	);
-}
+/** Whether a manifest declares mode-A elements (widgets rendered on the website). */
+export const hasWidgets = (/** @type {any} */ manifest) =>
+	(manifest?.elements ?? []).some((/** @type {any} */ e) => (e.modes ?? []).includes('A'));
 
 /**
  * @param {any} props loader result of `loadApp` plus `staff`
@@ -432,86 +427,33 @@ export function AppView(props) {
 	const ok = props.ok === true;
 	const appId = ok ? props.app.appId : null;
 	const { data: app, reload } = useAdminResource(appId ? adminApi.app(appId) : null, ok ? props.app : null);
-	const versions = usePagedList((cursor) => (appId ? adminApi.versions(appId, { cursor }) : null), ok ? props.versions : null);
-	const [lifecycle, setLifecycle] = useState(/** @type {null | 'activate' | 'deprecate' | 'retire'} */ (null));
-	const [sunset, setSunset] = useState('');
-	const [force, setForce] = useState(false);
-	const [revoking, setRevoking] = useState(/** @type {any} */ (null));
+	const [uploading, setUploading] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [refreshing, setRefreshing] = useState(false);
 	const [retrying, setRetrying] = useState(false);
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.apps(), label: 'Back to apps' }} />;
-	const { staff } = props;
-	const canReview = staffCan(staff, 'platform.apps.review');
+	const { staff, manifest } = props;
 	const canManage = staffCan(staff, 'platform.apps.manage');
 	const canLaunch = staffCan(staff, 'platform.launch.admin');
-	const keys = /** @type {any[]} */ (app.keys ?? []);
-	const health = app.health;
+	const upload = app.kind === 'pack' ? 'Upload pack version' : hasWidgets(manifest) ? 'Upload widgets' : null;
 
-	const runLifecycle = async (/** @type {{ reason: string }} */ { reason }) => {
-		if (!lifecycle) return;
-		let sunsetAt = '';
-		if (lifecycle === 'deprecate') {
-			const at = Date.parse(`${sunset}T00:00:00Z`);
-			if (!Number.isFinite(at)) {
-				setProblem(localProblem('Choose a sunset date', 'Pick the day the app retires (at least one day ahead).'));
-				return;
-			}
-			sunsetAt = new Date(at).toISOString();
-		}
+	const setStatus = async (/** @type {boolean} */ active) => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.lifecycle(app.appId), {
+		const result = await adminFetch(adminApi.status(app.appId), {
 			method: 'POST',
-			body: {
-				action: lifecycle,
-				...(reason ? { reason } : {}),
-				...(sunsetAt ? { sunsetAt } : {}),
-				...(lifecycle === 'retire' && force ? { force: true } : {}),
-			},
+			body: { status: active ? 'active' : 'inactive' },
 		});
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
 			return;
 		}
-		toast.show({ title: `${app.name ?? app.slug}: ${humanize(result.data.status)}` });
-		setLifecycle(null);
+		toast.show({ title: `${app.name ?? app.slug}: ${active ? 'active' : 'inactive'}` });
 		await reload();
-	};
-	const revoke = async (/** @type {{ reason: string }} */ { reason }) => {
-		setBusy(true);
-		setProblem(null);
-		const result = await adminFetch(adminApi.revokeAppKey(app.appId, revoking.kid), { method: 'POST', body: { reason } });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		toast.show({ title: `Key ${revoking.kid} revoked`, description: 'Assertions signed with it are refused from now on.' });
-		setRevoking(null);
-		await reload();
-	};
-	const refresh = async () => {
-		setRefreshing(true);
-		setProblem(null);
-		const result = await adminFetch(adminApi.refresh(app.appId), { method: 'POST', body: {} });
-		setRefreshing(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		const r = result.data;
-		toast.show({
-			title: r.rejected ? 'Manifest refresh rejected' : r.changed ? 'New manifest version to review' : 'Manifest unchanged',
-			description: r.rejected ? humanize(r.reason) : undefined,
-			tone: r.rejected ? 'danger' : 'success',
-		});
-		await Promise.all([reload(), versions.reload()]);
 	};
 
-	// event deliveries that failed wait for a natural retry (the next event or call of the product); staff can force it
+	// failed event deliveries wait for a natural retry (the next event or call of the product); staff can force it
 	const retryDeliveries = async () => {
 		setRetrying(true);
 		setProblem(null);
@@ -522,17 +464,13 @@ export function AppView(props) {
 			return;
 		}
 		const r = result.data;
+		const failing = (r.retried ?? 0) + (r.failed ?? 0);
 		toast.show({
 			title: 'Deliveries retried',
-			description: `${formatNumber(r.succeeded ?? 0)} delivered, ${formatNumber(r.retried ?? 0)} still failing, ${formatNumber(r.dead ?? 0)} dead-lettered`,
-			tone: (r.retried ?? 0) + (r.dead ?? 0) > 0 ? 'danger' : 'success',
+			description: `${formatNumber(r.succeeded ?? 0)} delivered, ${formatNumber(failing)} still failing`,
+			tone: failing > 0 ? 'danger' : 'success',
 		});
 	};
-
-	const actions = [];
-	if (canReview && (app.status === 'pending' || app.status === 'deprecated')) actions.push('activate');
-	if (canReview && app.status === 'active') actions.push('deprecate');
-	if (canReview && (app.status === 'pending' || app.status === 'deprecated')) actions.push('retire');
 
 	return (
 		<div className="space-y-6">
@@ -556,13 +494,9 @@ export function AppView(props) {
 						<ButtonLink as={Link} href={adminRoutes.policies(app.appId)} icon={<Icon name="sliders" size={14} />}>
 							Platform policy
 						</ButtonLink>
-						{app.kind === 'service' && canManage ? (
-							<Button
-								variant="secondary"
-								onClick={() => void refresh()}
-								loading={refreshing}
-								icon={<Icon name="refresh" size={14} />}>
-								Refresh manifest
+						{upload && canManage ? (
+							<Button variant="secondary" onClick={() => setUploading(true)} icon={<Icon name="box" size={14} />}>
+								{upload}
 							</Button>
 						) : null}
 						{app.kind === 'service' && staffCan(staff, 'platform.jobs.manage') ? (
@@ -574,315 +508,48 @@ export function AppView(props) {
 								Retry deliveries now
 							</Button>
 						) : null}
-						{actions.map((a) => (
-							<Button
-								key={a}
-								variant={a === 'activate' ? 'primary' : 'danger'}
-								onClick={() => {
-									setProblem(null);
-									setSunset('');
-									setForce(false);
-									setLifecycle(/** @type {any} */ (a));
-								}}>
-								{humanize(a)}
-							</Button>
-						))}
 					</>
 				}
 			/>
-			<ActionProblem problem={!lifecycle && !revoking ? problem : null} />
-			{app.status === 'deprecated' && app.sunsetAt ? (
-				<Callout tone="warning" title={`Deprecated — retires ${formatDate(app.sunsetAt)}`}>
-					Merchants see the sunset date; the app is retired the first time it is used after the sunset.
-				</Callout>
-			) : null}
+			<ActionProblem problem={problem} />
 			<Card title="Overview">
-				<KeyValueList
-					columns={3}
-					items={[
-						{
-							label: 'Current version',
-							value: `v${app.currentVersion}${app.productVersion ? ` (${app.productVersion})` : ''}`,
-						},
-						{
-							label: 'Pending review',
-							value: app.pendingVersion ? (
-								<Link
-									href={adminRoutes.version(app.appId, app.pendingVersion)}
-									className="font-semibold text-primary hover:underline">
-									v{app.pendingVersion}
-								</Link>
-							) : (
-								'None'
-							),
-						},
-						{ label: 'Created', value: formatDateTime(app.createdAt) },
-						{
-							label: 'Endpoints base',
-							value: <span className="break-all font-mono text-xs">{app.endpoints?.base ?? '—'}</span>,
-						},
-						{ label: 'Sunset', value: app.sunsetAt ? formatDate(app.sunsetAt) : '—' },
-					]}
-				/>
-			</Card>
-
-			{app.kind === 'service' ? (
-				<Card title="Health" subtitle="Last heartbeat reported by the product (POST /v1/product/heartbeat).">
-					{health ? (
-						<div className="space-y-3">
-							<KeyValueList
-								columns={3}
-								items={[
-									{
-										label: 'State',
-										value: (() => {
-											const h = healthLabel(app);
-											return h ? <StatusBadge status={h.status} label={h.label} /> : '—';
-										})(),
-									},
-									{ label: 'Last seen', value: formatDateTime(health.lastSeenAt) },
-									{ label: 'Last heartbeat', value: formatDateTime(health.lastHeartbeatAt) },
-									{ label: 'Reported version', value: health.version ?? '—' },
-								]}
-							/>
-							{health.queues ? <CodeBlock label="Queues" code={JSON.stringify(health.queues, null, 2)} /> : null}
-							<p className="text-xs text-muted">Only the latest heartbeat is kept; there is no heartbeat history yet.</p>
-						</div>
-					) : (
-						<p className="text-sm text-muted">No heartbeat yet.</p>
-					)}
-				</Card>
-			) : null}
-
-			<Card title="Manifest versions" subtitle="Open a version to see its diff against the accepted manifest.">
-				<Table
-					caption="Manifest versions"
-					dense
-					rows={versions.items}
-					rowKey={(v) => String(v.version)}
-					empty="No versions."
-					hasMore={Boolean(versions.cursor)}
-					loadingMore={versions.loading}
-					onLoadMore={() => void versions.more()}
-					columns={[
-						{
-							key: 'version',
-							header: 'Version',
-							rowHeader: true,
-							render: (v) => (
-								<Link
-									href={adminRoutes.version(app.appId, v.version)}
-									className="font-semibold text-primary hover:underline">
-									v{v.version}
-								</Link>
-							),
-						},
-						{ key: 'productVersion', header: 'Product', render: (v) => v.productVersion },
-						{ key: 'status', header: 'Status', render: (v) => <StatusBadge status={v.status} /> },
-						{
-							key: 'breaking',
-							header: 'Breaking',
-							render: (v) =>
-								v.breaking ? (
-									<Badge tone="danger">{formatNumber(v.diff?.breaking?.length ?? 0)} breaking</Badge>
-								) : (
-									<span className="text-muted">No</span>
-								),
-						},
-						{ key: 'source', header: 'Source', render: (v) => humanize(v.source) },
-						{ key: 'createdAt', header: 'Submitted', render: (v) => formatDateTime(v.createdAt) },
-						{
-							key: 'review',
-							header: 'Review',
-							render: (v) =>
-								v.review ? (
-									<span className="text-xs">
-										{v.review.reason ?? '—'} ({v.review.by})
-									</span>
-								) : (
-									'—'
-								),
-						},
-					]}
-				/>
-			</Card>
-
-			{app.kind === 'service' ? <EnvironmentsCard app={app} canManage={canManage} onSaved={reload} /> : null}
-
-			<Card title="Signing keys" subtitle="Keys the product signs client assertions and manifests with.">
-				<Table
-					caption="Signing keys"
-					dense
-					rows={keys}
-					rowKey={(k) => k.kid}
-					empty={app.kind === 'pack' ? 'Pack keys are pinned from the first upload.' : 'No keys.'}
-					columns={[
-						{
-							key: 'kid',
-							header: 'Key id',
-							rowHeader: true,
-							render: (k) => <span className="font-mono text-xs">{k.kid}</span>,
-						},
-						{
-							key: 'status',
-							header: 'Status',
-							render: (k) => <StatusBadge status={k.status} label={k.usable ? 'Usable' : humanize(k.status)} />,
-						},
-						{
-							key: 'thumbprint',
-							header: 'Thumbprint',
-							render: (k) => <span className="break-all font-mono text-[11px]">{k.thumbprint}</span>,
-						},
-						{ key: 'source', header: 'Source', render: (k) => humanize(k.source) },
-						{ key: 'notAfter', header: 'Valid until', render: (k) => (k.notAfter ? formatDateTime(k.notAfter) : '—') },
-						{
-							key: 'actions',
-							header: <span className="sr-only">Actions</span>,
-							align: 'right',
-							render: (k) =>
-								canManage && k.status === 'active' ? (
-									<Button size="sm" variant="ghost" onClick={() => setRevoking(k)}>
-										Revoke
-									</Button>
-								) : k.revoked ? (
-									<span className="text-xs text-muted">{k.revoked.reason}</span>
-								) : null,
-						},
-					]}
-				/>
+				<div className="space-y-4">
+					<Switch
+						label="Active"
+						description="Active apps are listed to merchants and can be subscribed. Existing subscriptions keep working either way."
+						checked={app.status === 'active'}
+						disabled={!canManage || busy}
+						onChange={(next) => void setStatus(next)}
+					/>
+					<KeyValueList
+						columns={3}
+						items={[
+							{
+								label: 'Current version',
+								value: app.currentVersion
+									? `v${app.currentVersion}${app.productVersion ? ` (${app.productVersion})` : ''}`
+									: 'None yet',
+							},
+							{ label: 'Created', value: formatDateTime(app.createdAt) },
+							{
+								label: app.kind === 'service' ? 'Address' : 'Endpoints base',
+								value: <span className="break-all font-mono text-xs">{app.baseUrl ?? app.endpoints?.base ?? '—'}</span>,
+							},
+						]}
+					/>
+				</div>
 			</Card>
 
 			{canLaunch && app.kind === 'service' ? <LaunchCard app={app} staff={staff} /> : null}
 
-			<TypedConfirmDialog
-				open={lifecycle === 'deprecate' || lifecycle === 'retire'}
-				onClose={() => setLifecycle(null)}
-				onConfirm={(input) => void runLifecycle(input)}
-				busy={busy}
-				title={lifecycle === 'deprecate' ? `Deprecate ${app.slug}?` : `Retire ${app.slug}?`}
-				expected={app.slug}
-				confirmLabel={lifecycle === 'deprecate' ? 'Deprecate' : 'Retire'}
-				reason={{ required: true, label: 'Reason (shown to merchants with the sunset date)' }}
-				error={problem ? describeProblem(problem) : null}>
-				{lifecycle === 'deprecate' ? (
-					<>
-						<p className="text-sm text-muted">New subscriptions stop; existing ones keep working until the sunset date.</p>
-						<Input
-							label="Sunset date (UTC)"
-							type="date"
-							value={sunset}
-							onChange={(e) => setSunset(e.currentTarget.value)}
-							help="At least one day and at most two years ahead."
-							required
-						/>
-					</>
-				) : (
-					<>
-						<p className="text-sm text-muted">Retired apps stop serving: launches, entitlements and deliveries end.</p>
-						{app.status === 'deprecated' ? (
-							<label className="flex items-center gap-2 text-sm">
-								<input type="checkbox" checked={force} onChange={(e) => setForce(e.currentTarget.checked)} />
-								Retire before the sunset date (force)
-							</label>
-						) : null}
-					</>
-				)}
-			</TypedConfirmDialog>
-			<ConfirmDialog
-				open={lifecycle === 'activate'}
-				onClose={() => setLifecycle(null)}
-				onConfirm={() => void runLifecycle({ reason: '' })}
-				busy={busy}
-				title={`Activate ${app.slug}?`}
-				confirmLabel="Activate"
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">
-					{app.status === 'deprecated'
-						? 'The deprecation is withdrawn and the sunset date cleared.'
-						: 'The app is listed in the catalog and merchants can subscribe.'}
-				</p>
-			</ConfirmDialog>
-			<TypedConfirmDialog
-				open={Boolean(revoking)}
-				onClose={() => setRevoking(null)}
-				onConfirm={(input) => void revoke(input)}
-				busy={busy}
-				title="Revoke this signing key?"
-				expected={revoking?.kid ?? ''}
-				confirmLabel="Revoke key"
-				reason={{ required: true }}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">
-					The product can no longer authenticate with this key. If it is the only key, the product stops working until it is
-					registered again.
-				</p>
-			</TypedConfirmDialog>
+			{upload ? <PackDialog open={uploading} onClose={() => setUploading(false)} title={upload} onDone={reload} /> : null}
 		</div>
 	);
 }
 
 /**
- * @param {{ app: any, canManage: boolean, onSaved: () => Promise<unknown> }} props
- */
-function EnvironmentsCard({ app, canManage, onSaved }) {
-	const toast = useToast();
-	const [production, setProduction] = useState(app.environments?.production ?? '');
-	const [staging, setStaging] = useState(app.environments?.staging ?? '');
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [busy, setBusy] = useState(false);
-	const save = async () => {
-		setBusy(true);
-		setProblem(null);
-		const result = await adminFetch(adminApi.environments(app.appId), {
-			method: 'PUT',
-			body: { production: production.trim(), staging: staging.trim() ? staging.trim() : null },
-		});
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		toast.show({ title: 'Environments saved' });
-		await onSaved();
-	};
-	const errors = fieldErrors(problem);
-	return (
-		<Card title="Environments" subtitle="Base URLs of the product. Staging is used for staff launches only.">
-			<Form onSubmit={save} busy={busy} aria-label="Environments">
-				<div className="grid gap-4 sm:grid-cols-2">
-					<Input
-						label="Production"
-						type="url"
-						value={production}
-						onChange={(e) => setProduction(e.currentTarget.value)}
-						error={errors.production}
-						disabled={!canManage}
-					/>
-					<Input
-						label="Staging"
-						type="url"
-						value={staging}
-						onChange={(e) => setStaging(e.currentTarget.value)}
-						error={errors.staging}
-						disabled={!canManage}
-						help="Leave empty to remove."
-					/>
-				</div>
-				<FormError problem={problem} fields={['production', 'staging']} />
-				{canManage ? (
-					<FormActions>
-						<Button type="submit" variant="secondary" loading={busy}>
-							Save environments
-						</Button>
-					</FormActions>
-				) : null}
-			</Form>
-		</Card>
-	);
-}
-
-/**
- * Open the product as admin: scoped to one merchant (optionally one website) or app-wide (`all`, superadmin/admin).
+ * Open the product as admin (production): scoped to one merchant (optionally one website) or app-wide (`all`,
+ * superadmin/admin).
  * @param {{ app: any, staff: any }} props
  */
 function LaunchCard({ app, staff }) {
@@ -890,7 +557,6 @@ function LaunchCard({ app, staff }) {
 	const [scope, setScope] = useState('merchant');
 	const [merchantId, setMerchantId] = useState('');
 	const [websiteId, setWebsiteId] = useState('');
-	const [environment, setEnvironment] = useState('production');
 	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [busy, setBusy] = useState(false);
@@ -908,7 +574,6 @@ function LaunchCard({ app, staff }) {
 			method: 'POST',
 			body: {
 				kind: 'admin',
-				environment,
 				...(scope === 'all'
 					? { all: true }
 					: { merchantId: merchantId.trim(), ...(websiteId.trim() ? { websiteId: websiteId.trim() } : {}) }),
@@ -954,17 +619,7 @@ function LaunchCard({ app, staff }) {
 						/>
 					</div>
 				) : null}
-				<Select
-					label="Environment"
-					value={environment}
-					onChange={(e) => setEnvironment(e.currentTarget.value)}
-					fieldClassName="w-48"
-					options={[
-						{ value: 'production', label: 'Production' },
-						{ value: 'staging', label: 'Staging', disabled: !app.environments?.staging },
-					]}
-				/>
-				<FormError problem={problem} fields={['merchantId', 'websiteId', 'all', 'environment']} />
+				<FormError problem={problem} fields={['merchantId', 'websiteId', 'all']} />
 				<FormActions>
 					<Button type="submit" loading={busy} icon={<Icon name="external" size={14} />}>
 						Open {app.name ?? app.slug}
@@ -972,297 +627,5 @@ function LaunchCard({ app, staff }) {
 				</FormActions>
 			</Form>
 		</Card>
-	);
-}
-
-/**
- * Manifest diff sections (pure presentation of the catalog `ManifestDiff`).
- * @param {{ diff: any }} props
- */
-export function ManifestDiffView({ diff }) {
-	if (!diff) return <p className="text-sm text-muted">No diff recorded.</p>;
-	if (!diff.changed) return <EmptyState compact icon="check" title="No changes against the accepted manifest" />;
-	const breaking = /** @type {any[]} */ (diff.breaking ?? []);
-	/** @param {string[]} list @param {'success' | 'danger' | 'neutral'} tone */
-	const chips = (list, tone) =>
-		list.length === 0 ? (
-			<span className="text-muted">—</span>
-		) : (
-			<span className="flex flex-wrap gap-1">
-				{list.map((x) => (
-					<Badge key={x} tone={tone}>
-						{x}
-					</Badge>
-				))}
-			</span>
-		);
-	const other = diff.other ?? {};
-	const flags = Object.entries(other).filter(([, v]) => v === true);
-	return (
-		<div className="space-y-5">
-			{breaking.length > 0 ? (
-				<Callout
-					tone="danger"
-					title={`${breaking.length} breaking change${breaking.length === 1 ? '' : 's'} for existing subscribers`}>
-					<ul className="mt-1 space-y-1">
-						{breaking.map((b, i) => (
-							<li key={i} className="flex flex-wrap items-baseline gap-2">
-								<Badge tone="danger">{humanize(b.code)}</Badge>
-								<span className="font-mono text-xs">{b.path}</span>
-								<span>{b.message}</span>
-							</li>
-						))}
-					</ul>
-				</Callout>
-			) : (
-				<Callout tone="success" live={false}>
-					No breaking changes.
-				</Callout>
-			)}
-			<KeyValueList
-				columns={3}
-				items={[
-					{ label: 'Product version', value: `${diff.version?.from ?? '—'} → ${diff.version?.to ?? '—'}` },
-					{ label: 'Elements added', value: chips(diff.elements?.added ?? [], 'success') },
-					{ label: 'Elements removed', value: chips(diff.elements?.removed ?? [], 'danger') },
-					{
-						label: 'Elements changed',
-						value: chips(
-							(diff.elements?.changed ?? []).map((/** @type {any} */ c) => `${c.key} (${c.fields.join(', ')})`),
-							'neutral',
-						),
-					},
-					{ label: 'Plans added', value: chips(diff.plans?.added ?? [], 'success') },
-					{ label: 'Plans removed', value: chips(diff.plans?.removed ?? [], 'danger') },
-					{ label: 'Scopes added', value: chips(other.scopesAdded ?? [], 'neutral') },
-					{ label: 'Scopes removed', value: chips(other.scopesRemoved ?? [], 'neutral') },
-					{
-						label: 'Also changed',
-						value: chips(
-							flags.map(([k]) => humanize(k)),
-							'neutral',
-						),
-					},
-				]}
-			/>
-			{(diff.prices ?? []).length > 0 ? (
-				<Table
-					caption="Price changes"
-					captionHidden={false}
-					dense
-					rows={diff.prices}
-					rowKey={(p) => `${p.element}:${p.field}`}
-					columns={[
-						{ key: 'element', header: 'Element', rowHeader: true },
-						{ key: 'field', header: 'Price', render: (p) => <span className="font-mono text-xs">{p.field}</span> },
-						{ key: 'from', header: 'From', render: (p) => JSON.stringify(p.from ?? null) },
-						{ key: 'to', header: 'To', render: (p) => JSON.stringify(p.to ?? null) },
-						{
-							key: 'direction',
-							header: 'Direction',
-							render: (p) => (
-								<Badge tone={p.direction === 'increase' || p.direction === 'added' ? 'danger' : 'success'}>
-									{p.direction}
-								</Badge>
-							),
-						},
-					]}
-				/>
-			) : null}
-			{(diff.plans?.changed ?? []).length > 0 ? (
-				<Table
-					caption="Plan changes"
-					captionHidden={false}
-					dense
-					rows={diff.plans.changed}
-					rowKey={(p) => p.code}
-					columns={[
-						{ key: 'code', header: 'Plan', rowHeader: true },
-						{
-							key: 'in',
-							header: 'Elements',
-							render: (p) => `+${p.elementsAdded.join(', ') || '—'} / −${p.elementsRemoved.join(', ') || '—'}`,
-						},
-						{
-							key: 'add',
-							header: 'Add-ons',
-							render: (p) => `+${p.addonsAdded.join(', ') || '—'} / −${p.addonsRemoved.join(', ') || '—'}`,
-						},
-					]}
-				/>
-			) : null}
-			{(diff.features ?? []).length > 0 ? (
-				<Table
-					caption="Feature changes"
-					captionHidden={false}
-					dense
-					rows={diff.features}
-					rowKey={(f) => `${f.element}.${f.feature}`}
-					columns={[
-						{
-							key: 'feature',
-							header: 'Feature',
-							rowHeader: true,
-							render: (f) => (
-								<span className="font-mono text-xs">
-									{f.element}.{f.feature}
-								</span>
-							),
-						},
-						{
-							key: 'change',
-							header: 'Change',
-							render: (f) => (
-								<Badge tone={f.change === 'removed' ? 'danger' : f.change === 'added' ? 'success' : 'neutral'}>
-									{f.change}
-								</Badge>
-							),
-						},
-						{ key: 'fields', header: 'Fields', render: (f) => (f.fields ?? []).join(', ') || '—' },
-					]}
-				/>
-			) : null}
-		</div>
-	);
-}
-
-/**
- * @param {any} props loader result of `loadVersion` plus `staff`
- */
-export function VersionView(props) {
-	const toast = useToast();
-	const ok = props.ok === true;
-	const [version, setVersion] = useState(/** @type {any} */ (ok ? props.version : null));
-	const [review, setReview] = useState(/** @type {null | 'approve' | 'reject'} */ (null));
-	const [reason, setReason] = useState('');
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.apps(), label: 'Back to apps' }} />;
-	const { app, staff } = props;
-	const canReview = staffCan(staff, 'platform.apps.review') && version.status === 'pending' && app.status !== 'retired';
-	const submit = async () => {
-		if (review === 'reject' && !reason.trim()) {
-			setProblem(localProblem('A reason is required', 'Say why the version is rejected; the developer sees it.'));
-			return;
-		}
-		setBusy(true);
-		setProblem(null);
-		const path =
-			review === 'approve' ? adminApi.approve(app.appId, version.version) : adminApi.reject(app.appId, version.version);
-		const result = await adminFetch(path, { method: 'POST', body: reason.trim() ? { reason: reason.trim() } : {} });
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		toast.show({
-			title: review === 'approve' ? `v${version.version} accepted` : `v${version.version} rejected`,
-			description: review === 'approve' ? 'Subscribers get re-signed entitlement documents.' : undefined,
-		});
-		setVersion({ ...version, ...result.data });
-		setReview(null);
-		setReason('');
-	};
-	return (
-		<div className="space-y-6">
-			<PageHeader
-				breadcrumbs={
-					<Crumbs
-						items={[
-							{ label: 'Apps', href: adminRoutes.apps() },
-							{ label: app.name ?? app.slug, href: adminRoutes.app(app.appId) },
-							{ label: `v${version.version}` },
-						]}
-					/>
-				}
-				title={`${app.name ?? app.slug} v${version.version}`}
-				badge={
-					<>
-						<StatusBadge status={version.status} />
-						{version.breaking ? <Badge tone="danger">Breaking</Badge> : null}
-					</>
-				}
-				subtitle={`Product ${version.productVersion} · ${humanize(version.source)} · submitted ${formatDateTime(version.createdAt)}`}
-				actions={
-					canReview ? (
-						<>
-							<Button variant="danger" onClick={() => setReview('reject')}>
-								Reject
-							</Button>
-							<Button onClick={() => setReview('approve')}>Approve</Button>
-						</>
-					) : null
-				}
-			/>
-			{version.review ? (
-				<Callout
-					tone={version.status === 'rejected' ? 'danger' : 'info'}
-					title={`Reviewed by ${version.review.by} ${formatDateTime(version.review.at)}`}>
-					{version.review.reason ?? 'No reason given.'}
-				</Callout>
-			) : null}
-			<Card title="Changes against the accepted manifest">
-				<ManifestDiffView diff={version.diff} />
-			</Card>
-			{version.assets ? (
-				<Card title="Bundle assets">
-					<Table
-						caption="Bundle assets"
-						dense
-						rows={version.assets}
-						rowKey={(a) => a.path}
-						columns={[
-							{
-								key: 'path',
-								header: 'Path',
-								rowHeader: true,
-								render: (a) => <span className="font-mono text-xs">{a.path}</span>,
-							},
-							{ key: 'size', header: 'Size', align: 'right', render: (a) => `${formatNumber(a.size)} B` },
-							{
-								key: 'sha256',
-								header: 'SHA-256',
-								render: (a) => <span className="break-all font-mono text-[11px]">{a.sha256}</span>,
-							},
-						]}
-					/>
-				</Card>
-			) : null}
-			<Card title="Manifest" subtitle={<span className="break-all font-mono">{version.manifestHash}</span>}>
-				{version.manifest ? (
-					<details>
-						<summary className="cursor-pointer text-sm font-semibold text-primary">Show the full manifest</summary>
-						<div className="mt-3">
-							<CodeBlock code={JSON.stringify(version.manifest, null, 2)} label="Manifest JSON" wrap={false} />
-						</div>
-					</details>
-				) : (
-					<p className="text-sm text-muted">The manifest body is not available.</p>
-				)}
-			</Card>
-			<ConfirmDialog
-				open={review !== null}
-				onClose={() => setReview(null)}
-				onConfirm={() => void submit()}
-				busy={busy}
-				danger={review === 'reject'}
-				title={review === 'approve' ? `Approve v${version.version}?` : `Reject v${version.version}?`}
-				confirmLabel={review === 'approve' ? 'Approve' : 'Reject'}
-				error={problem ? describeProblem(problem) : null}>
-				{review === 'approve' && version.breaking ? (
-					<Callout tone="warning" live={false}>
-						This version has breaking changes for existing subscribers. Make sure merchants were notified.
-					</Callout>
-				) : null}
-				<TextArea
-					label={review === 'reject' ? 'Reason (required, sent to the developer)' : 'Note (optional)'}
-					rows={3}
-					maxLength={500}
-					value={reason}
-					onChange={(e) => setReason(e.currentTarget.value)}
-					required={review === 'reject'}
-				/>
-			</ConfirmDialog>
-		</div>
 	);
 }

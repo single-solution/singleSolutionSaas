@@ -31,15 +31,14 @@ import { currentOrigin } from './request-scope.js';
  * @typedef {object} EnvConfig
  * @property {PortalEnv} env
  * @property {boolean} isProduction
- * @property {string} version
  * @property {{ uri: string, dbName: string, maxPoolSize: number }} mongo control-plane database only
  * @property {string} logLevel
  * @property {number} maxBodyBytes default JSON body cap
  * @property {{ staff: SessionPolicy, merchant: SessionPolicy }} sessions
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound hosts outbound calls may reach although private or
  *   plain http (`OUTBOUND_DEV_ALLOW_HOSTS`; always empty in production)
- * @property {{ storage: AssetStorageConfig | null, budgetKb: number }} delivery platform-owned artefact storage (our
- *   software only: pack assets and compiled website bundles — never client data) and the default website budget
+ * @property {{ storage: AssetStorageConfig | null }} delivery platform-owned artefact storage (our software only: pack
+ *   assets and compiled website bundles — never client data)
  */
 
 /**
@@ -58,7 +57,6 @@ import { currentOrigin } from './request-scope.js';
  * @typedef {object} PortalConfig
  * @property {PortalEnv} env
  * @property {boolean} isProduction
- * @property {string} version
  * @property {string} portalUrl the current request's origin (no trailing slash) — issuer of launches, audience of
  *   assertions, base of links
  * @property {string} portalOrigin same as `portalUrl`
@@ -77,8 +75,7 @@ import { currentOrigin } from './request-scope.js';
  * @property {{ staff: SessionPolicy, merchant: SessionPolicy }} sessions
  * @property {{ allowHosts: ReadonlyArray<string> }} outbound
  * @property {{ smtp: SmtpConfig | null, from: string | null }} mail platform mailer (verify e-mail, resets, invites)
- * @property {{ storage: AssetStorageConfig | null, budgetKb: number }} delivery artefact storage and the default
- *   website budget
+ * @property {{ storage: AssetStorageConfig | null }} delivery artefact storage
  */
 
 /**
@@ -97,14 +94,10 @@ import { currentOrigin } from './request-scope.js';
  * @property {string | null} pass
  */
 
-/** Version reported by /v1/system/info. */
-export const PORTAL_VERSION = '0.1.0';
 /** Control-plane connection pool per instance. */
 export const MONGO_POOL_SIZE = 5;
 /** Default request body cap (1 MiB). */
 export const MAX_BODY_BYTES = 1024 * 1024;
-/** Default per-website bundle budget (KB gzip). */
-export const DELIVERY_BUDGET_KB = 60;
 /** Session lifetimes: idle timeout and absolute lifetime. */
 export const SESSIONS = Object.freeze({
 	staff: Object.freeze({ idleMs: 30 * 60_000, absoluteMs: 12 * 3_600_000 }),
@@ -269,7 +262,7 @@ export const loadEnv = (env = process.env) => {
 	if (allowHosts.some((entry) => !HOST_ENTRY.test(entry)))
 		problems.push('OUTBOUND_DEV_ALLOW_HOSTS must be comma-separated host names or IP addresses');
 
-	// Delivery: platform-owned artefact storage (never a client connector) and the default website budget
+	// Delivery: platform-owned artefact storage (never a client connector)
 	/** @type {AssetStorageConfig | null} */
 	let assetStorage = null;
 	try {
@@ -291,7 +284,6 @@ export const loadEnv = (env = process.env) => {
 	return Object.freeze({
 		env: portalEnv,
 		isProduction: portalEnv === 'production',
-		version: PORTAL_VERSION,
 		mongo: Object.freeze({ uri: mongoUri, dbName, maxPoolSize: MONGO_POOL_SIZE }),
 		logLevel,
 		maxBodyBytes: MAX_BODY_BYTES,
@@ -299,7 +291,6 @@ export const loadEnv = (env = process.env) => {
 		outbound: Object.freeze({ allowHosts: Object.freeze(allowHosts) }),
 		delivery: Object.freeze({
 			storage: assetStorage ? Object.freeze(assetStorage) : null,
-			budgetKb: DELIVERY_BUDGET_KB,
 		}),
 	});
 };

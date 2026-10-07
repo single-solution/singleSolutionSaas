@@ -95,8 +95,6 @@ export const createFakes = ({ withPreview = true, withInvalidateApp = true, merc
 		name: 'commerce',
 		service: (ctx) => ({
 			getSubscription,
-			/** @param {string} websiteId */
-			subscriptionsForWebsite: async (websiteId) => [...subscriptions.values()].filter((s) => s.websiteId === websiteId),
 			/** @param {string} subscriptionId */
 			invalidate: async (subscriptionId) => {
 				if (failInvalidate) throw new Error('commerce down');
@@ -109,12 +107,11 @@ export const createFakes = ({ withPreview = true, withInvalidateApp = true, merc
 						previewDocument: async ({ subscriptionId, layers }) => {
 							const sub = await getSubscription(subscriptionId);
 							const product = normaliseProduct(manifests.get(sub.manifestVersion));
-							const { experiments, ...rest } = layers;
 							return resolveEntitlement({
 								product,
 								subscription: { id: subscriptionId, plan: sub.planCode, status: 'active' },
-								layers: rest,
-								runtime: { experiments },
+								layers,
+								runtime: {},
 								now: ctx.now(),
 							});
 						},
@@ -132,8 +129,6 @@ export const createFakes = ({ withPreview = true, withInvalidateApp = true, merc
 				if (!website) throw problem('not_found', 'no website');
 				return { ...website };
 			},
-			/** @param {string} merchantId */
-			listWebsites: async (merchantId) => [...websites.values()].filter((w) => w.merchantId === merchantId),
 		}),
 	});
 

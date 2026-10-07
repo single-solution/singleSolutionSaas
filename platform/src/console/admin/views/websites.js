@@ -164,16 +164,6 @@ export function WebsitesView(props) {
 									{ label: 'Status', value: <StatusBadge status={w.status} /> },
 									{ label: 'Test twin', value: <IdChip id={w.twinId} label="twin id" /> },
 									{ label: 'Created', value: formatDateTime(w.createdAt) },
-									{
-										label: 'Deliveries',
-										value: (
-											<Link
-												href={adminRoutes.integration({ websiteId: w.websiteId })}
-												className="text-primary hover:underline">
-												Delivery log
-											</Link>
-										),
-									},
 								]}
 							/>
 							{canWrite && w.status === 'active' ? (

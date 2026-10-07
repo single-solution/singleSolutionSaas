@@ -176,20 +176,19 @@ describe('actorFromSession', () => {
 		absoluteExpiresAt: new Date(),
 	};
 	it('maps staff and merchant sessions', () => {
-		expect(actorFromSession({ ...base, kind: 'staff', merchantId: null, via: null, roles: ['admin'] })).toEqual({
+		expect(actorFromSession({ ...base, kind: 'staff', merchantId: null, roles: ['admin'] })).toEqual({
 			type: 'staff',
 			id: 'usr_1',
 			roles: ['admin'],
 		});
-		expect(actorFromSession({ ...base, kind: 'merchant', merchantId: MERCHANT, via: { type: 'staff', id: 'stf_1' } })).toEqual({
+		expect(actorFromSession({ ...base, kind: 'merchant', merchantId: MERCHANT })).toEqual({
 			type: 'merchant_user',
 			id: 'usr_1',
 			roles: ['owner'],
 			grants: [],
 			merchantId: MERCHANT,
-			via: { type: 'staff', id: 'stf_1' },
 		});
-		expect(actorFromSession({ ...base, kind: 'merchant', merchantId: null, via: null })).toEqual({
+		expect(actorFromSession({ ...base, kind: 'merchant', merchantId: null })).toEqual({
 			type: 'merchant_user',
 			id: 'usr_1',
 			roles: ['owner'],

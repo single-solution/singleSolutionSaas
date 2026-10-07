@@ -14,7 +14,6 @@ import { connectorsRoutes } from './routes.js';
 import { collections } from './schema.js';
 import { createConnectorsService } from './service.js';
 
-/** Admin operation that checks every connector not checked recently (bounded; what is left stays due). */
 /** Response bodies of connection checks are read up to this size. */
 export const CHECK_MAX_BYTES = 64 * 1024;
 

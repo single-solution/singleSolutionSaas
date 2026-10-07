@@ -3,7 +3,7 @@
  *
  * - Product (F.9, `auth: 'product'`): `GET /v1/product/entitlements`, `POST /v1/product/usage`.
  * - Merchant console (`merchant` or `staff`): subscriptions, element switches, plan, pause/resume/cancel, balance,
- *   meter, statement, spend policies. Subscription routes authorise after the lookup with the subscription's website.
+ *   meter, statement, monthly spend cap. Subscription routes authorise after the lookup with the subscription's website.
  * - Admin (`staff`): credits, adjustments, refunds, ledger + verification, alerts.
  * @module
  */
@@ -84,6 +84,7 @@ export const commerceRoutes = (service) => {
 			path: `/v1/admin/merchants/:merchantId/${segment}`,
 			auth: 'staff',
 			permission: 'platform.credits.adjust',
+			idempotent: true,
 			handler: async (c) => {
 				const checked = checkCreditOperation(kind, c.body);
 				if (!checked.ok) return invalid(checked.errors, 'The credit operation is invalid.');
@@ -116,6 +117,7 @@ export const commerceRoutes = (service) => {
 			method: 'POST',
 			path: '/v1/product/usage',
 			auth: 'product',
+			idempotent: true,
 			rateLimit: { limit: 600, windowMs: 60_000 },
 			handler: async (c) => {
 				const checked = checkUsageBatch(c.body);
@@ -141,6 +143,7 @@ export const commerceRoutes = (service) => {
 			path: '/v1/merchants/:merchantId/websites/:websiteId/subscriptions',
 			auth: ['merchant', 'staff'],
 			permission: 'subscriptions.manage',
+			idempotent: true,
 			handler: async (c) => {
 				const checked = checkSubscribe(c.body);
 				if (!checked.ok) return invalid(checked.errors, 'The subscription request is invalid.');
@@ -223,34 +226,25 @@ export const commerceRoutes = (service) => {
 		}),
 		defineRoute({
 			method: 'GET',
-			path: '/v1/merchants/:merchantId/spend-policies',
+			path: '/v1/merchants/:merchantId/spend-cap',
 			auth: ['merchant', 'staff'],
 			permission: 'billing.read',
-			handler: async (c) => ({ items: await service.listPolicies(c.params.merchantId ?? '') }),
-		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/merchants/:merchantId/spend-policies',
-			auth: ['merchant', 'staff'],
-			permission: 'billing.manage',
-			handler: async (c) => created({ policy: await service.createPolicy(c.params.merchantId ?? '', c.body, callerOf(c)) }),
+			handler: async (c) => service.spendCap(c.params.merchantId ?? ''),
 		}),
 		defineRoute({
 			method: 'PUT',
-			path: '/v1/merchants/:merchantId/spend-policies/:policyId',
+			path: '/v1/merchants/:merchantId/spend-cap',
 			auth: ['merchant', 'staff'],
 			permission: 'billing.manage',
-			handler: async (c) => ({
-				policy: await service.updatePolicy(c.params.merchantId ?? '', c.params.policyId ?? '', c.body, callerOf(c)),
-			}),
+			handler: async (c) => service.setSpendCap(c.params.merchantId ?? '', c.body, callerOf(c)),
 		}),
 		defineRoute({
 			method: 'DELETE',
-			path: '/v1/merchants/:merchantId/spend-policies/:policyId',
+			path: '/v1/merchants/:merchantId/spend-cap',
 			auth: ['merchant', 'staff'],
 			permission: 'billing.manage',
 			handler: async (c) => {
-				await service.deletePolicy(c.params.merchantId ?? '', c.params.policyId ?? '', callerOf(c));
+				await service.removeSpendCap(c.params.merchantId ?? '', callerOf(c));
 				return noContent();
 			},
 		}),

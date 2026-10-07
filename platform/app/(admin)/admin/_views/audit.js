@@ -11,7 +11,6 @@ export default async function AuditLogPage({ searchParams }) {
 	return (
 		<AuditView
 			{...await loadAudit(api, {
-				scope: one(q.scope),
 				actorId: one(q.actorId),
 				targetId: one(q.targetId),
 				action: one(q.action),

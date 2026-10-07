@@ -11,7 +11,6 @@
  */
 
 const JTI = /^[A-Za-z0-9_-]{16,256}$/;
-const REASON_MAX = 500;
 
 /**
  * @param {unknown} body
@@ -58,72 +57,15 @@ const str = (value, path, errors, { required = false, max = 2048 } = {}) => {
 };
 
 /**
- * `PUT /v1/admin/apps/:appId/environments` — `staging: null` removes the staging environment.
+ * `POST /v1/admin/apps/:appId/status` `{ status }`
  * @param {unknown} body
- * @returns {Parsed<{ production?: string, staging?: string | null }>}
+ * @returns {Parsed<{ status: 'active' | 'inactive' }>}
  */
-export const parseEnvironments = (body) => {
-	const { input, errors } = open(body, ['production', 'staging']);
-	/** @type {{ production?: string, staging?: string | null }} */
-	const value = {};
-	if (input.production !== undefined) {
-		const production = str(input.production, '/production', errors, { required: true });
-		if (production) value.production = production;
-	}
-	if (input.staging === null) value.staging = null;
-	else if (input.staging !== undefined) {
-		const staging = str(input.staging, '/staging', errors, { required: true });
-		if (staging) value.staging = staging;
-	}
-	if (input.production === undefined && input.staging === undefined && errors.length === 0)
-		errors.push({ path: '', message: 'send production and/or staging' });
-	return done(errors, value);
-};
-
-/**
- * `POST /v1/admin/apps/:appId/lifecycle`
- * @param {unknown} body
- * @returns {Parsed<{ action: 'activate' | 'deprecate' | 'retire', sunsetAt: string | null, reason: string | null, force: boolean }>}
- */
-export const parseLifecycle = (body) => {
-	const { input, errors } = open(body, ['action', 'sunsetAt', 'reason', 'force']);
-	const action = input.action;
-	if (action !== 'activate' && action !== 'deprecate' && action !== 'retire')
-		errors.push({ path: '/action', message: 'action must be activate, deprecate or retire' });
-	const sunsetAt = str(input.sunsetAt, '/sunsetAt', errors, { required: action === 'deprecate', max: 40 });
-	const reason = str(input.reason, '/reason', errors, { required: action !== 'activate', max: REASON_MAX });
-	if (input.force !== undefined && typeof input.force !== 'boolean')
-		errors.push({ path: '/force', message: 'must be a boolean' });
-	return done(errors, {
-		action: /** @type {'activate' | 'deprecate' | 'retire'} */ (action),
-		sunsetAt: sunsetAt ?? null,
-		reason: reason ?? null,
-		force: input.force === true,
-	});
-};
-
-/**
- * Version review (`approve` reason optional, `reject` reason required) and key revocation (reason required).
- * @param {unknown} body
- * @param {{ reasonRequired: boolean }} options
- * @returns {Parsed<{ reason: string | null }>}
- */
-export const parseReason = (body, { reasonRequired }) => {
-	const { input, errors } = open(body ?? {}, ['reason']);
-	const reason = str(input.reason, '/reason', errors, { required: reasonRequired, max: REASON_MAX });
-	return done(errors, { reason: reason ?? null });
-};
-
-/**
- * `POST /v1/product/keys/rotate` `{ publicJwk }` (F.9)
- * @param {unknown} body
- * @returns {Parsed<{ publicJwk: unknown }>}
- */
-export const parseRotate = (body) => {
-	const { input, errors } = open(body, ['publicJwk']);
-	if (typeof input.publicJwk !== 'object' || input.publicJwk === null || Array.isArray(input.publicJwk))
-		errors.push({ path: '/publicJwk', message: 'publicJwk must be an Ed25519 public JWK' });
-	return done(errors, { publicJwk: input.publicJwk });
+export const parseStatus = (body) => {
+	const { input, errors } = open(body, ['status']);
+	if (input.status !== 'active' && input.status !== 'inactive')
+		errors.push({ path: '/status', message: 'status must be active or inactive' });
+	return done(errors, { status: /** @type {'active' | 'inactive'} */ (input.status) });
 };
 
 /**
@@ -140,61 +82,20 @@ export const parseConsume = (body) => {
 };
 
 /**
- * Staff launch body (`POST /v1/admin/apps/:appId/launch`). `all: true` asks for an app-wide admin launch
- * (`scope: { all: true }`), exclusive with merchant/website/partner/developer ids.
+ * Staff (admin) launch body (`POST /v1/admin/apps/:appId/launch`): one merchant (optionally one website), or
+ * `all: true` for an app-wide admin launch (`scope: { all: true }`). `kind` may be sent and must be `admin`.
  * @param {unknown} body
- * @returns {Parsed<{ kind: string, all: boolean, merchantId: string | null, websiteId: string | null, partnerId: string | null,
- *   developerId: string | null, subject: string | null, impersonationSeconds: number | undefined,
- *   environment: 'production' | 'staging' }>}
+ * @returns {Parsed<{ all: boolean, merchantId: string | null, websiteId: string | null }>}
  */
 export const parseStaffLaunch = (body) => {
-	const { input, errors } = open(body, [
-		'kind',
-		'all',
-		'merchantId',
-		'websiteId',
-		'partnerId',
-		'developerId',
-		'subject',
-		'impersonationSeconds',
-		'environment',
-	]);
-	const kind = str(input.kind, '/kind', errors, { required: true, max: 32 });
+	const { input, errors } = open(body ?? {}, ['kind', 'all', 'merchantId', 'websiteId']);
+	if (input.kind !== undefined && input.kind !== 'admin') errors.push({ path: '/kind', message: 'kind must be admin' });
 	const merchantId = str(input.merchantId, '/merchantId', errors, { max: 128 });
 	const websiteId = str(input.websiteId, '/websiteId', errors, { max: 128 });
-	const partnerId = str(input.partnerId, '/partnerId', errors, { max: 128 });
-	const developerId = str(input.developerId, '/developerId', errors, { max: 128 });
-	const subject = str(input.subject, '/subject', errors, { max: 128 });
-	if (input.impersonationSeconds !== undefined && !Number.isInteger(input.impersonationSeconds))
-		errors.push({ path: '/impersonationSeconds', message: 'must be an integer' });
-	const environment = input.environment ?? 'production';
-	if (environment !== 'production' && environment !== 'staging')
-		errors.push({ path: '/environment', message: 'environment must be production or staging' });
 	if (input.all !== undefined && input.all !== true) errors.push({ path: '/all', message: 'all must be true when given' });
-	if (input.all === true && (kind !== 'admin' || merchantId || websiteId || partnerId || developerId))
-		errors.push({ path: '/all', message: 'all is only for admin launches without merchantId or websiteId' });
-	return done(errors, {
-		kind: kind ?? '',
-		all: input.all === true,
-		merchantId: merchantId ?? null,
-		websiteId: websiteId ?? null,
-		partnerId: partnerId ?? null,
-		developerId: developerId ?? null,
-		subject: subject ?? null,
-		impersonationSeconds: /** @type {number | undefined} */ (input.impersonationSeconds),
-		environment: /** @type {'production' | 'staging'} */ (environment),
-	});
-};
-
-/**
- * Merchant demo launch body (`POST /v1/merchants/:merchantId/apps/:appId/demo`): no fields — a demo is never scoped
- * to the merchant or a website.
- * @param {unknown} body
- * @returns {Parsed<Record<string, never>>}
- */
-export const parseDemoLaunch = (body) => {
-	const { errors } = open(body ?? {}, []);
-	return done(errors, /** @type {Record<string, never>} */ ({}));
+	if (input.all === true && (merchantId || websiteId))
+		errors.push({ path: '/all', message: 'all excludes merchantId and websiteId' });
+	return done(errors, { all: input.all === true, merchantId: merchantId ?? null, websiteId: websiteId ?? null });
 };
 
 /**
