@@ -203,9 +203,50 @@ flowchart LR
 - **Product depth**: each product is grilled in depth **right before it is built** (Chat first), and finished fully
   before moving to the next.
 
+### Portal screens
+
+**Sign-in**: one sign-in page for admins and merchants; the Portal opens the right console. Two-step code when enabled.
+A brand-new merchant with nothing yet sees a short welcome ("Your admin will add your websites and products") with
+contact details.
+
+**Admin**
+
+- **Overview**: totals (merchants, websites, active products, credits added and spent this month), needs attention (low,
+  in grace, stopped), recent activity, per-product numbers; numbers with 30-day charts.
+- **Merchants** (inner sidebar list + table): columns name + owner e-mail, status (active, low balance, in grace,
+  stopped, suspended), balance + daily spend, websites + products; filters, sort, bulk actions. Merchant page header:
+  name, status, balance; actions **Add credits**, **Suspend / resume** (reason required), **Resend setup link**,
+  **Delete** (only with no websites and zero balance). Tabs: Websites · Credits · Details · Activity.
+   - Websites tab: rows with domain, product chips (status colour), daily cost; a row opens the website page.
+   - **Add product to a website**: admin picks the product; it is added with **all features off**. Only **our admin**
+     switches features on/off inside the product dashboard (the merchant sees Features read-only and edits settings of
+     active features).
+- **Website page** (admin and merchant): header + tabs **Products** (product cards: status, daily cost, Open) ·
+  **Install and tokens** (one block per product: widget script, browser token, server token with reveal / copy /
+  regenerate — regenerating stops the old token immediately — and a docs link) · **Usage** (30-day chart + table by
+  product and feature).
+- **Products**: status + address + connected date, websites using it (tab with merchants/websites and their charges),
+  credits earned this month + 30-day chart; actions Open as admin, Set active/inactive, Reconnect (URL + secret).
+- **Credits and billing**: all receipts (filter by merchant, date, method), charges by day/merchant/product, needs
+  attention. "Add credits" receipt: credits, amount paid, payment method (free text), reference.
+- **Admins**: invite by e-mail with a role (Owner, Support, Finance); they get a setup link.
+- **Settings**: e-mail sending (provider, sender, test e-mail), billing rules (grace days, low-balance threshold in
+  **days of spend**, default 3), branding (name, logo, accent), security (session length, optional "require two-step
+  for admins").
+- **Activity**: admins see every action.
+
+**Merchant**
+
+- **Overview**: balance + days left at current spend, 30-day spend chart, websites with product chips and Open buttons,
+  warnings (low, grace, stopped, suspended).
+- **Websites**: list → website page (as above, without admin actions).
+- **Usage and credits**: spend per product × website × day × feature; credit receipts.
+- **Account**: business details (name, phone, address, country), login e-mail (confirmed by e-mail) and password,
+  two-step sign-in (on/off, recovery codes), own activity.
+
 ### Still open
 
-- Portal screens page by page (admin and merchant) beyond 0.6, and each product dashboard's screens.
+- Each product dashboard's screens (decided per product before building it).
 - Exact feature list per product (prices start at 0).
 
 ## 0.9 Conflicts with the current build and deployment
