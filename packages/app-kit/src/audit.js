@@ -1,6 +1,5 @@
 /**
- * Audit trail for dashboard and API actions (Part E §8, §10). Entries include the actor (and the staff actor behind an
- * impersonation) and are appended to the merchant's own database (`ss_<slug>_audit`, append-only by convention: the
+ * Audit trail for dashboard and API actions (Part E §8, §10). Entries include the actor and are appended to the merchant's own database (`ss_<slug>_audit`, append-only by convention: the
  * kit exposes no update or delete for it). `before`/`after` may contain merchant data, so they never go to logs.
  * Inject `sink` to send entries elsewhere.
  * @module
@@ -10,7 +9,7 @@ import { isObject, kitError } from './util.js';
 /**
  * @typedef {object} AuditEntry
  * @property {string} websiteId
- * @property {{ type: string, id?: string, act?: string }} actor
+ * @property {{ type: string, id?: string }} actor
  * @property {string} action e.g. `coupon.created`
  * @property {{ type: string, id?: string } | string} [target]
  * @property {unknown} [before]
@@ -44,7 +43,6 @@ export const createAudit = ({ data, now = Date.now, sink = null }) => {
 			actor: {
 				type: entry.actor.type,
 				...(entry.actor.id ? { id: entry.actor.id } : {}),
-				...(entry.actor.act ? { act: entry.actor.act } : {}),
 			},
 			action: entry.action,
 			...(entry.target === undefined ? {} : { target: entry.target }),

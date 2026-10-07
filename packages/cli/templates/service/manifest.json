@@ -11,19 +11,12 @@
 	"endpoints": {
 		"base": "https://{{slug}}.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
-	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": ["limit:notes.max_notes"],
-		"offlineGrace": "PT24H"
-	},
+	"capabilities": { "adminLaunch": true },
 	"scopes": ["events.subscribe:order.placed"],
 	"requires": { "resources": ["database"] },
 	"events": { "consumes": ["order.placed@1"], "publishes": ["{{namespace}}.note_created@1"] },
-	"budget": { "shared": 1 },
 	"elements": [
 		{
 			"key": "notes",
@@ -35,7 +28,6 @@
 				"hourly": 10,
 				"metered": [{ "unit": "note_created", "perUnit": 1, "per": 10, "included": { "starter": 100 } }]
 			},
-			"budget": { "js": 3 },
 			"dependsOn": [],
 			"requires": { "resources": ["database"] },
 			"features": { "$ref": "schemas/notes.features.json" },

@@ -256,4 +256,4 @@ on `popstate`). Calls made before the Loader arrives can be queued in a stub: `w
 Measured with esbuild (`--bundle --minify --format=esm`, gzip -9): Loader + events client + renderer helpers used by the
 Loader ≈ 12.8 kB gzip (31 kB min), inside the < 15 kB core budget (§4.1). The audience evaluator adds ≈ 9 kB gzip
 (`evaluateAudienceProgram`, precompiled programs) or ≈ 12 kB (`evaluateAudience`, with the parser), so it is only
-bundled for websites that use audience rules, and its size counts against that website's budget.
+bundled for websites that use audience rules.

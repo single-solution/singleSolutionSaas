@@ -22,13 +22,6 @@ export const SCHEMA_IDS = Object.freeze({
 	eventEnvelope: schemaId('event-envelope'),
 	placement: schemaId('placement'),
 	problem: schemaId('problem'),
-	graphCustomer: schemaId('graph:customer'),
-	graphItem: schemaId('graph:item'),
-	graphOrder: schemaId('graph:order'),
-	graphSession: schemaId('graph:session'),
-	graphFile: schemaId('graph:file'),
-	graphConsentRecord: schemaId('graph:consent-record'),
-	graphCustomFieldDefinition: schemaId('graph:custom-field-definition'),
 });
 
 /**

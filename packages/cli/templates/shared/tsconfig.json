@@ -8,7 +8,6 @@
 		"adapters/**/*.js",
 		"jobs/**/*.js",
 		"app/**/*.js",
-		"tests/**/*.js",
-		"serve.js"
+		"tests/**/*.js"
 	]
 }

@@ -7,7 +7,9 @@
 import { deepFreeze } from '../util.js';
 import { SCHEMA_IDS, eventDataSchemaId } from './schema-ids.js';
 import { PATTERNS, RESOURCE_STATUSES, commonRef as ref } from './common.js';
-import { ITEM_STATUSES } from './graph/item.js';
+
+/** Publication statuses of a catalog item (`item.created|updated@1`). */
+export const ITEM_STATUSES = Object.freeze(/** @type {const} */ (['draft', 'active', 'archived']));
 
 /** Actor types that can cause an event. */
 export const ACTOR_TYPES = Object.freeze(
@@ -488,8 +490,8 @@ export const elementUiEventDataSchema = deepFreeze({
 
 /**
  * Catalogued element UI events, keyed by verb: `<element>.shown@1` (the Loader mounted the element; data is empty or
- * names the variant) and `<element>.action@1` (an element action ran, e.g. a service product's stub action,
- * `ss-element-stub@1`). Other verbs use {@link elementUiEventDataSchema}.
+ * names the variant) and `<element>.action@1` (an element action ran, e.g. a storefront CTA). Other verbs use
+ * {@link elementUiEventDataSchema}.
  */
 export const ELEMENT_EVENT_DATA = deepFreeze({
 	'shown@1': data({ variant: { type: 'string', minLength: 1, maxLength: 40, pattern: PATTERNS.elementKey } }, []),

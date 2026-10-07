@@ -10,7 +10,7 @@ import { isObject, kitError } from './util.js';
 
 /** @typedef {import('@ss/protocol').Signer} Signer */
 /** @typedef {import('./stores/types.js').UsageRecord} UsageRecord */
-/** @typedef {'database' | 'storage' | 'ai' | 'messaging' | 'payments' | 'analytics'} ResourceKind */
+/** @typedef {'database' | 'storage' | 'ai' | 'messaging' | 'payments'} ResourceKind */
 /** @typedef {{ kind: ResourceKind, descriptor: Record<string, unknown>, expiresAt: string }} ResolvedResource */
 
 /**
@@ -22,8 +22,6 @@ import { isObject, kitError } from './util.js';
  * @property {(options?: { since?: string | null }) => Promise<{ keyIds: string[], cursor: string | null }>} revocations
  * @property {(records: UsageRecord[], options?: { idempotencyKey?: string }) => Promise<{ results: Array<{ idempotencyKey: string, status: 'accepted' | 'duplicate' | 'rejected', reason?: string }> }>} usage
  * @property {(input: { jti: string, exp?: number }) => Promise<{ consumed: boolean }>} consumeLaunch
- * @property {(input: { version: string, status?: string, queues?: Record<string, number> }) => Promise<unknown>} heartbeat
- * @property {(input: { publicJwk: Record<string, unknown> }) => Promise<unknown>} rotateKey
  * @property {(event: Record<string, unknown>) => Promise<unknown>} publishEvent send one complete envelope (as a batch of one)
  * @property {(events: Record<string, unknown>[]) => Promise<unknown>} publishEvents send complete envelopes `{ events: [...] }`
  * @property {(input: { websiteId: string, kind: ResourceKind }) => Promise<ResolvedResource>} resolveResource
@@ -182,8 +180,6 @@ export const createPortalClient = ({
 			const json = expectObject(await call('POST', '/v1/product/launch/consume', { body: input }), 'launch');
 			return { consumed: json.consumed === true };
 		},
-		heartbeat: (input) => call('POST', '/v1/product/heartbeat', { body: input }),
-		rotateKey: (input) => call('POST', '/v1/product/keys/rotate', { body: input }),
 		publishEvent: (event) => call('POST', '/v1/product/events', { body: { events: [event] } }),
 		publishEvents: (events) => call('POST', '/v1/product/events', { body: { events } }),
 		resolveResource: async ({ websiteId, kind }) => {

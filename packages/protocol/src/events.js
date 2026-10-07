@@ -15,8 +15,7 @@
  * until the tolerance window closes (a replay after that fails the timestamp check anyway).
  *
  * Event signatures cover the body only, so they are for deliveries to ONE fixed endpoint (the product's declared
- * events endpoint). For Portal→product API calls use `signRequest` / `verifyRequest` (`requests.js`), which also bind
- * method and path.
+ * events endpoint).
  */
 import { createProtocolError } from './errors.js';
 import { sha256Hex, utf8 } from './encoding.js';

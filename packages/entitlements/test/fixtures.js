@@ -68,7 +68,6 @@ export const couponsInput = () => ({
 						title: 'Layout',
 						default: 'inline',
 						enum: ['inline', 'collapsible', 'modal'],
-						'x-experiment': true,
 					},
 					pattern: { type: 'string', title: 'Pattern', default: 'SAVE-####', 'x-lock': false },
 					headline: {
@@ -83,7 +82,6 @@ export const couponsInput = () => ({
 						title: 'Tags',
 						default: [],
 						items: { type: 'string' },
-						'x-experiment': true,
 						'x-plan': { starter: { max: 2 } },
 					},
 					theme: { type: 'object', title: 'Theme', default: {}, properties: {} },
@@ -103,7 +101,6 @@ export const couponsInput = () => ({
 						title: 'Delay',
 						default: 0,
 						'x-kind': 'limit',
-						'x-experiment': true,
 						'x-plan': { starter: { max: 1000 } },
 					},
 				},

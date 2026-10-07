@@ -8,8 +8,7 @@ This document is **normative**: the behaviour described here is the contract tha
 
 - JavaScript ESM, functional, JSDoc-typed. No classes, no I/O, no clock: time is always a parameter.
 - Inputs are never mutated; every function returns new values.
-- Depends on nothing at runtime except `node:crypto` (SHA-256). Rules are **injected**
-  (`evaluateRule(ruleSource, context)`), so this package does not depend on the `@ss/rules` API.
+- Depends on nothing at runtime except `node:crypto` (SHA-256) and `@ss/contracts` (document validation).
 
 ## 1. Units and representations
 
@@ -18,7 +17,7 @@ This document is **normative**: the behaviour described here is the contract tha
 | Money    | **Integer millicredits**. `1 credit = 1000 millicredits` (`MILLICREDITS_PER_CREDIT`). Plain JS numbers (exact up to 2^53). Manifest prices are already integer millicredits (`@ss/contracts`); `toMillicredits` converts display/decimal credits and rejects sub-millicredit precision. |
 | Rates    | Metered prices are rationals `Rate = { millicredits, per }` — the manifest's `perUnit` millicredits per `per` units (charge `floor(q × millicredits / per)`), reduced to lowest terms. `rateFromCredits(0.00001)` → `{ millicredits: 1, per: 100 }`.                                    |
 | Instants | Accepted as epoch ms, ISO string or `Date`; internally epoch ms (UTC). Outputs use ISO-8601 UTC without milliseconds when they are zero (`2026-10-01T10:00:00Z`).                                                                                                                       |
-| Hashes   | `stableStringify` (keys sorted recursively) + SHA-256 hex. `bucketOf(parts)` = first 48 bits of `sha256(parts.join('\0'))` mod 10 000.                                                                                                                                                  |
+| Hashes   | `stableStringify` (keys sorted recursively) + SHA-256 hex.                                                                                                                                                                                                                              |
 
 Rounding: every charge rounds **down** to a whole millicredit. Metered charges are computed on
 cumulative period-to-date usage (`charge(after) − charge(before)`), so the hourly entries of a period
@@ -37,8 +36,7 @@ merchant's favour per period and unit).
   `elementOrder` is a deterministic topological order.
 - **Features** are the top-level properties of the element's `features` JSON Schema, keyed
   `element.name`. Metadata read from each node: `x-kind` (`flag|quota|limit|rate|config`; inferred as
-  `flag` for booleans, `config` otherwise), `x-lock` (lockable, default `true`), `x-experiment`
-  (default `false`), `x-plan` (`{ planCode: { default?, max? } }` — the **only** source of per-plan
+  `flag` for booleans, `config` otherwise), `x-lock` (lockable, default `true`), `x-plan` (`{ planCode: { default?, max? } }` — the **only** source of per-plan
   defaults and maxima), quota `x-period` (required) / `x-hardStop` (default `true`) / `x-unit`, rate
   `x-per` (required, `second|minute|hour`) / `x-unit`. `x-ui` is ignored. Numeric JSON types keep
   `minimum`/`maximum` as absolute bounds (quota/limit/rate default minimum 0); quota/limit/rate values
@@ -56,13 +54,12 @@ merchant's favour per period and unit).
   prices from the elements; the Portal may pass the version history as `priceBooks[]`, each optionally
   overriding `base` (default 0), `elements` and `metered`.
 
-Helpers: `elementDependencies(product, key)` → transitive `{ dependsOn, dependents }`;
-`planDefaults(product, plan)` → `{ elements, available, features }`; `findPriceBook`,
+Helpers: `planDefaults(product, plan)` → `{ elements, available, features }`; `findPriceBook`,
 `currentPriceBook(product, at)`. Errors carry `code = 'catalog/<reason>'`.
 
 ## 3. Resolution (`resolve.js`)
 
-`resolveEntitlement({ product, subscription, layers, runtime, now, evaluateRule?, hash? })` returns the
+`resolveEntitlement({ product, subscription, layers, runtime, now, hash? })` returns the
 **unsigned** entitlement payload (`schema: 'entitlement@1'`). Signing and `validUntil` belong to the
 protocol layer.
 
@@ -72,20 +69,19 @@ Configuration layers, in precedence order (later wins):
 
 | #   | Layer      | Supplied by                                 | Authority | Bounded by plan max | May lock |
 | --- | ---------- | ------------------------------------------- | --------- | ------------------- | -------- |
-| 1   | `product`  | schema `default` / element `defaultEnabled` | 3         | —                   | no       |
-| 2   | `plan`     | plan `elements` / `x-plan` defaults         | 3         | —                   | no       |
-| 3   | `platform` | `layers.platform` (staff policy)            | 4         | no                  | yes      |
-| 4   | `merchant` | `layers.merchant` (merchant-wide defaults)  | 2         | **yes**             | yes      |
-| 5   | `website`  | `layers.website` (website override)         | 1         | **yes**             | yes      |
-| 6   | `admin`    | `layers.admin` (staff override)             | 5         | no (may exceed)     | yes      |
-| 7   | runtime    | `subscription.status` + `runtime`           | —         | —                   | —        |
+| 1   | `product`  | schema `default` / element `defaultEnabled` | 2         | —                   | no       |
+| 2   | `plan`     | plan `elements` / `x-plan` defaults         | 2         | —                   | no       |
+| 3   | `platform` | `layers.platform` (staff policy)            | 3         | no                  | yes      |
+| 4   | `website`  | `layers.website` (website override)         | 1         | **yes**             | yes      |
+| 5   | `admin`    | `layers.admin` (staff override)             | 4         | no (may exceed)     | yes      |
+| 6   | runtime    | `subscription.status` + `runtime`           | —         | —                   | —        |
 
 With a plan, the plan layer supplies an on/off value for **every** element (on for `elements`, off for
 addons and unavailable ones) and a feature value for keys with an `x-plan` default. Without a plan, all
 elements are available, product defaults apply and nothing is plan-bounded.
 
 **Plan availability.** An element that is neither included nor an addon is unavailable: it resolves to
-`enabled: false`, reason `not_in_plan`, and merchant/website attempts to enable it are reported as
+`enabled: false`, reason `not_in_plan`, and website attempts to enable it are reported as
 `ignored / not_in_plan` (switching it off is not reported). Platform and admin may still enable it.
 
 Layer entries: elements `{ enabled, locked?, from?, until? }` (or a bare boolean); features
@@ -96,10 +92,10 @@ switches). Entries with the wrong type are **ignored** (`invalid`); unknown keys
 
 - The **lock holder** is the locking candidate with the highest authority (ties: the later layer).
 - Every candidate with authority **lower** than the holder is excluded; the effective value is the
-  last remaining candidate in precedence order. Excluded merchant/website values are reported as
+  last remaining candidate in precedence order. Excluded website values are reported as
   `ignored / locked` with `lockedBy`.
-- Consequences: a platform lock binds merchant and website; a merchant lock binds website; an admin
-  value always applies and an admin lock also reports merchant/website attempts. Manifests cannot lock
+- Consequences: a platform lock binds website; an admin value always applies and an admin lock also
+  reports website attempts. Manifests cannot lock
   (product and plan layers never lock).
 - `locked`/`lockedBy` in the output describe the holder even when admin overrode the value.
 - A feature with `x-lock: false` ignores lock requests from non-admin layers (`lock_not_allowed`).
@@ -108,7 +104,7 @@ switches). Entries with the wrong type are **ignored** (`invalid`); unknown keys
 
 Applied to the effective value only:
 
-- Merchant, website and experiment values are clamped to the plan max (`plan_max`): numbers → the max
+- Website values are clamped to the plan max (`plan_max`): numbers → the max
   (also when the attempt is `null`/unlimited), flags → `false`. Strings and arrays above the max
   (length / item count) cannot be clamped and are **ignored** (`ignored / plan_max`), so the next lower
   layer applies.
@@ -128,24 +124,13 @@ disables it:
    one) is not `'connected'` in `runtime.resources` (a `{ kind: status }` map or the document's
    `[{ kind, status }]` list; listed in `missing`). A missing product-level kind therefore disables every
    element; a missing element-level kind only the elements that require it;
-3. `rollout` — `runtime.rollouts[element] = { id, percent?, rule? }` excludes the subscription:
-   `bucketOf([subscriptionId, element, id]) ≥ round(percent × 100)`, or `evaluateRule(rule, context)`
-   does not return exactly `true` (missing evaluator or a throw fails closed). `context` =
-   `runtime.context` + `subscriptionId, websiteId, merchantId, plan, now, element`;
-4. `dependency` — a direct dependency is (finally) disabled (listed in `blockedBy`). Disabling cascades
+3. `dependency` — a direct dependency is (finally) disabled (listed in `blockedBy`). Disabling cascades
    transitively; enabling an element never enables its dependencies.
 
 Configured-off elements keep their configuration reason (the source layer or `not_in_plan`).
 
 **Quotas:** for a `quota` feature with `hardStop`, `runtime.usage[key] ≥ value` sets `blocked: true`,
 reason `quota_exhausted` (the element stays enabled; only that feature stops). Soft quotas never block.
-
-**Experiments:** `runtime.experiments[] = { id, element, variants: [{ key, weight, values }] }`.
-Variants are sorted by key; the subscription's bucket `bucketOf([subscriptionId, element, id])` is
-mapped onto cumulative weights (`bucket < floor(cumulative × 10 000 / total)`). The selected
-variant's values (feature names within the element) override the feature with `source: 'experiment'`,
-subject to: feature is `experiment: true` (else `not_experimentable`), not locked (else `locked`), valid,
-and clamped like a customer value. Experiments apply in id order.
 
 ### 3.5 Resolver output (internal)
 
@@ -154,7 +139,6 @@ and clamped like a customer value. Experiments apply in id order.
   elements: { key: { enabled, source, locked, lockedBy, reason, missing?, blockedBy? } },
   features: { key: { value, source, locked, lockedBy, reason, blocked } },
   config:   { element: { name: value } },
-  experiments: { id: { element, variant } },
   contentHash, resolvedAt, report[] }
 ```
 
@@ -162,8 +146,8 @@ This richer shape is internal to the Portal. `priceBookVersion` is the subscript
 book current at `now`. `contentHash = hash(stableStringify(content))` over everything before it —
 `contentHash(resolved)` recomputes it — excluding `resolvedAt` and the diagnostic `report`, so an
 unchanged effective state keeps its hash. The default hasher is SHA-256 via `node:crypto`
-(deterministic, no I/O); pass `hash` to replace it. Output is independent of object key order and
-experiment array order; keys are sorted. At most one experiment may run per element.
+(deterministic, no I/O); pass `hash` to replace it. Output is independent of object key order; keys are
+sorted.
 
 ### 3.6 Canonical document (`document.js`)
 
@@ -177,16 +161,15 @@ an empty `website` is omitted) and returns `{ ok: true, document }` only if
 - `version` is the Portal's integer, bumped when `contentHash` changes.
 - `cancelled` never yields a document: `{ ok: false, reason: 'cancelled' }` (the Portal revokes instead).
 - `runtime` = `{ state: 'active' }` or `{ state, reason: state }` for `paused | suspended | spend_cap`.
-  Per-element problems (resources, rollouts, dependencies) stay on the elements; the subscription state
+  Per-element problems (resources, dependencies) stay on the elements; the subscription state
   remains `active`.
 - Elements: `{ enabled: true }` or `{ enabled: false, reason }`, where reason is the source name
-  (`website_override`, …), `not_in_plan`, `rollout`, the runtime state, `resource_missing:<kinds…>` or
+  (`website_override`, …), `not_in_plan`, the runtime state, `resource_missing:<kinds…>` or
   `dependency:<elements…>`.
 - Features: `{ value, source, locked, reason? }` with source `product_default | plan_default |
-platform_policy | merchant_default | website_override | admin_override | runtime` (experiments);
+platform_policy | website_override | admin_override`;
   `reason` is `clamped` or `quota_exhausted` (the element stays enabled). `lockedBy`, `blocked`,
   `missing`, `blockedBy` are dropped.
-- `experiments` = `[{ element, variant }]` sorted by element.
 
 ## 4. Quotas (`quotas.js`)
 
@@ -203,8 +186,7 @@ platform_policy | merchant_default | website_override | admin_override | runtime
 `quotaState({ feature: { value | included, hardStop, period }, counters, period?: { unit, timeZone }, now })`
 → `{ used, included, remaining, overage, exhausted, blocked, hardStop, period }`. `counters` is a list
 of `{ at, quantity }` (summed within the period) or a period-to-date number. `null` included =
-unlimited. `quotaAllows(state, qty)`; `overageCharge({ used, included, rate })`;
-`incrementalOverageCharge({ usedBefore, usedAfter, included, rate })`.
+unlimited. `quotaAllows(state, qty)`; `overageCharge({ used, included, rate })`.
 
 ## 5. Settlement (`settlement.js`)
 
@@ -239,22 +221,20 @@ unlimited. `quotaAllows(state, qty)`; `overageCharge({ used, included, rate })`;
 bucket quantity or `{ before, delta }` (period-to-date before the bucket). Missing `included` = 0,
 `null` = unlimited.
 
-`reconcile({ expectedBuckets, ledgerKeys })` → `{ missing, duplicates, extra, mismatched }` (keys or
-`{ periodKey, amount }` on both sides; amounts compared when both are present).
-
 Balance helpers: `balanceAfter({ balance, charges, credits })`,
 `hoursRemaining({ balance, burnRatePerHour })` (`0` when balance ≤ 0, `null` when nothing burns),
 `projectedMonth({ monthToDate, burnRatePerHour, now, timeZone })` (projects the current and remaining
 UTC hours of the local calendar month), `hourlyCharge`/`burnRate({ priceBook, elements })`.
 
-## 6. Spend caps (`spend.js`)
+## 6. Spend cap (`spend.js`)
 
-Caps `{ scope: 'website' | 'merchant', scopeId, window: 'day' | 'month', limit, timeZone? }` over
-spend entries `{ at, amount, websiteId?, merchantId? }`.
+One optional cap per merchant, `{ limit }` millicredits per **UTC calendar month** (no time zones), over
+spend entries `{ at, amount }` (the merchant's charges).
 
-- `spendCapState({ cap, entries, now, upcoming })` → `{ key, spent, limit, remaining, reached, wouldExceed, periodStart, periodEnd }`;
-  `reached = spent ≥ limit`, `wouldExceed = reached || (upcoming > 0 && spent + upcoming > limit)`.
-- `spendCapDecision({ caps, entries, now, upcoming })` → `{ shouldPause, blocking, resumeAt, states }`.
-  Pause when any cap would be exceeded (pass the next hour's burn as `upcoming` to avoid starting an
-  hour that breaks the cap); `resumeAt` = end of the latest blocking period. The resulting pause is fed
-  to settlement as `pauses[{ reason: 'spend_cap' }]` and to resolution as `runtime.spendCap`.
+- `spendCapState({ cap, entries, now, upcoming = 0 })` → `{ limit, spent, remaining, reached, wouldExceed,
+periodKey: 'YYYY-MM', periodStart, periodEnd }`; `reached = spent ≥ limit`,
+  `wouldExceed = reached || spent + upcoming > limit`.
+- `spendCapDecision({ cap, entries, now, upcoming = 0 })` → `{ shouldPause, resumeAt, state }`; `cap: null`
+  never pauses (`state: null`). Pass the next hour's burn as `upcoming` to avoid starting an hour that breaks
+  the cap; `resumeAt` = the end of the month. The resulting pause is fed to settlement as
+  `pauses[{ reason: 'spend_cap' }]` and to resolution as `runtime.spendCap`.

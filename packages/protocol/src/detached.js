@@ -1,7 +1,6 @@
 /**
- * Internal: detached Ed25519 signatures carried in `SS-Timestamp` / `SS-Signature` headers, shared by signed events
- * (`events.js`) and signed requests (`requests.js`). Each caller supplies its own domain-separated message builder, so
- * a signature made for one purpose never verifies for the other.
+ * Internal: detached Ed25519 signatures carried in `SS-Timestamp` / `SS-Signature` headers, used by signed events
+ * (`events.js`), which supply their own domain-separated message builder.
  *
  * `SS-Signature: v1;kid=<kid>;sig=<base64url>[, v1;kid=<kid2>;sig=<...>]` — up to four entries for dual-signing.
  */

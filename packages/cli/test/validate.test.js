@@ -85,7 +85,7 @@ describe('ss app validate', () => {
 	it('keeps every import inside the project: tests, app/, root files and stylesheets included', async () => {
 		const dir = await project();
 		await edit(dir, 'tests/api.test.js', (text) => `import { createPortal } from '../../../platform/src/portal.js';\n${text}`);
-		await edit(dir, 'serve.js', (text) => `export { x } from '../loyalty/serve.js';\n${text}`);
+		await edit(dir, 'next.config.js', (text) => `export { x } from '../loyalty/next.config.js';\n${text}`);
 		await edit(dir, 'app/page.js', (text) => `const other = await import('../../other/app/page.js');\n${text}`);
 		await mkdir(path.join(dir, 'app'), { recursive: true });
 		await writeFile(
@@ -98,7 +98,7 @@ describe('ss app validate', () => {
 			'app/globals.css:4',
 			'app/globals.css:5',
 			'app/page.js:1',
-			'serve.js:1',
+			'next.config.js:1',
 			'tests/api.test.js:1',
 		]);
 		expect(found[0]?.message).toMatch(/its own repository/);
@@ -193,12 +193,12 @@ describe('ss app validate', () => {
 		expect(rules(report)).toContain('manifest.read');
 	});
 
-	it('reports semantic manifest problems (mode rules) and the budget estimate', async () => {
+	it('reports warnings without failing, and semantic manifest problems (mode rules)', async () => {
 		const dir = await project();
-		await edit(dir, 'manifest.json', (text) => text.replace('"budget": { "js": 3 }', '"budget": { "js": 1 }'));
+		await edit(dir, 'package.json', (text) => text.replace('"validate":', '"validate-x":'));
 		let report = await validateProject(dir);
 		expect(report.ok).toBe(true);
-		expect(report.problems.map((problem) => `${problem.severity}:${problem.rule}`)).toEqual(['warning:budget.estimate']);
+		expect(report.problems.map((problem) => `${problem.severity}:${problem.rule}`)).toEqual(['warning:package.script']);
 		expect(formatValidation(report)).toContain('1 warning');
 
 		await edit(dir, 'manifest.json', (text) => text.replace('"renderer": "ui/notes.js#render"', '"renderer": null'));
@@ -208,17 +208,15 @@ describe('ss app validate', () => {
 
 	it('checks anatomy, OpenAPI coverage, package wiring and event schemas', async () => {
 		const dir = await project();
-		await rm(path.join(dir, 'jobs'), { recursive: true });
 		await rm(path.join(dir, 'app/dashboard/[[...section]]/page.js'));
 		await rm(path.join(dir, 'schemas/events'), { recursive: true });
 		await edit(dir, 'openapi.json', (text) => text.replaceAll('"/v1/notes', '"/v1/other'));
 		await edit(dir, 'package.json', (text) =>
-			text.replace('"@ss/app-kit"', '"@ss/app-kit-renamed"').replace('"certify":', '"certify-x":'),
+			text.replace('"@ss/app-kit"', '"@ss/app-kit-renamed"').replace('"validate":', '"validate-x":'),
 		);
 		let report = await validateProject(dir);
 		expect(report.problems.filter((problem) => problem.rule === 'anatomy.missing').map((problem) => problem.file)).toEqual([
 			'app/dashboard/[[...section]]/page.js',
-			'jobs/',
 		]);
 		expect(rules(report)).toEqual(
 			expect.arrayContaining(['openapi.resource', 'package.dependency', 'package.script', 'events.schema']),

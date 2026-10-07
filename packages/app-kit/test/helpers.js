@@ -56,7 +56,7 @@ export const manifest = () => ({
 		dashboard: '/dashboard',
 		events: '/.well-known/ss-events',
 	},
-	capabilities: { adminLaunch: true, offlineGrace: 'PT24H' },
+	capabilities: { adminLaunch: true },
 	scopes: ['events.subscribe:order.*'],
 	events: { consumes: ['order.placed@1'], publishes: ['coupon_box.redeemed@1'] },
 	elements: [

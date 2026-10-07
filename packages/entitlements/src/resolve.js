@@ -1,5 +1,5 @@
 import { currentPriceBook, isNumericFeature, isValidFeatureValue, withinPlanMax } from './catalog.js';
-import { BUCKETS, bucketOf, sha256Hex, stableStringify } from './hash.js';
+import { sha256Hex, stableStringify } from './hash.js';
 import { isoInstant, toMs, toMsOr } from './time.js';
 
 /**
@@ -13,20 +13,20 @@ import { isoInstant, toMs, toMsOr } from './time.js';
 /** @typedef {import('./time.js').Instant} Instant */
 
 /** Configuration layers in precedence order (later wins unless a lock says otherwise). */
-export const LAYERS = /** @type {const} */ (['product', 'plan', 'platform', 'merchant', 'website', 'admin']);
+export const LAYERS = /** @type {const} */ (['product', 'plan', 'platform', 'website', 'admin']);
 
 /** @typedef {typeof LAYERS[number]} Layer */
 /** @typedef {'active' | 'paused' | 'suspended' | 'cancelled' | 'spend_cap'} RuntimeState */
 
 /**
  * Authority used by lock semantics: a lock set by layer N binds every layer of lower authority.
- * Customer layers (merchant, website) have the lowest authority; admin the highest.
+ * The customer layer (website) has the lowest authority; admin the highest.
  * @type {Readonly<Record<Layer, number>>}
  */
-export const AUTHORITY = { website: 1, merchant: 2, product: 3, plan: 3, platform: 4, admin: 5 };
+export const AUTHORITY = { website: 1, product: 2, plan: 2, platform: 3, admin: 4 };
 
-/** Layers authored by the customer: bounded by the plan and bound by locks. */
-const CUSTOMER_LAYERS = new Set(['merchant', 'website']);
+/** The layer authored by the customer: bounded by the plan and bound by locks. */
+const CUSTOMER_LAYERS = new Set(['website']);
 
 /**
  * @typedef {object} ElementEntry
@@ -61,47 +61,21 @@ const CUSTOMER_LAYERS = new Set(['merchant', 'website']);
  */
 
 /**
- * @typedef {object} Rollout
- * @property {string} id Rollout identity (part of the bucketing hash).
- * @property {number} [percent] 0–100 (two decimals), share of subscriptions included.
- * @property {string} [rule] Rule source evaluated with the injected `evaluateRule`; must return `true`.
- */
-
-/**
- * @typedef {object} ExperimentVariant
- * @property {string} key
- * @property {number} weight Positive integer.
- * @property {Readonly<Record<string, unknown>>} [values] Feature values by feature name (within the element).
- */
-
-/**
- * @typedef {object} Experiment
- * @property {string} id
- * @property {string} element
- * @property {readonly ExperimentVariant[]} variants
- */
-
-/**
  * @typedef {object} RuntimeInput
  * @property {'active' | 'paused' | 'suspended' | 'cancelled'} [state]
  * @property {boolean} [spendCap] A spend cap is reached (see spend.js).
  * @property {Readonly<Record<string, number>>} [usage] Period-to-date usage by quota feature key.
  * @property {Readonly<Record<string, string>> | readonly { kind: string, status: string }[]} [resources] Client resource status by kind
  *   (contracts `RESOURCE_STATUSES`; only `'connected'` is usable).
- * @property {Readonly<Record<string, Rollout>>} [rollouts] Rollouts by element key.
- * @property {readonly Experiment[]} [experiments]
- * @property {Readonly<Record<string, unknown>>} [context] Extra context passed to `evaluateRule`.
  */
-
-/** @typedef {(ruleSource: string, context: Readonly<Record<string, unknown>>) => unknown} EvaluateRule */
 
 /**
  * @typedef {object} ReportItem
  * @property {'element' | 'feature'} target
  * @property {string} key
- * @property {Layer | 'experiment'} layer
+ * @property {Layer} layer
  * @property {'ignored' | 'clamped'} kind
- * @property {string} reason `locked` | `invalid` | `unknown` | `lock_not_allowed` | `not_experimentable` | `plan_max` | `min` | `max` | `not_in_plan`
+ * @property {string} reason `locked` | `invalid` | `unknown` | `lock_not_allowed` | `plan_max` | `min` | `max` | `not_in_plan`
  * @property {unknown} [attempted]
  * @property {unknown} [applied]
  * @property {Layer} [lockedBy]
@@ -114,7 +88,7 @@ const CUSTOMER_LAYERS = new Set(['merchant', 'website']);
  * @property {boolean} locked
  * @property {Layer | null} lockedBy
  * @property {string} reason Why the element is in this state: the source layer, `not_in_plan`, or a runtime reason
- *   (`cancelled` | `suspended` | `paused` | `spend_cap` | `resource_missing` | `rollout` | `dependency`).
+ *   (`cancelled` | `suspended` | `paused` | `spend_cap` | `resource_missing` | `dependency`).
  * @property {string[]} [missing] Resource kinds that are not connected (`resource_missing`).
  * @property {string[]} [blockedBy] Disabled dependencies (`dependency`).
  */
@@ -122,7 +96,7 @@ const CUSTOMER_LAYERS = new Set(['merchant', 'website']);
 /**
  * @typedef {object} EffectiveFeature
  * @property {unknown} value
- * @property {Layer | 'experiment'} source
+ * @property {Layer} source
  * @property {boolean} locked
  * @property {Layer | null} lockedBy
  * @property {'clamped' | 'quota_exhausted' | null} reason
@@ -141,7 +115,6 @@ const CUSTOMER_LAYERS = new Set(['merchant', 'website']);
  * @property {Record<string, EffectiveElement>} elements
  * @property {Record<string, EffectiveFeature>} features
  * @property {Record<string, Record<string, unknown>>} config Effective feature values grouped by element.
- * @property {Record<string, { element: string, variant: string }>} experiments
  * @property {string} contentHash SHA-256 of the effective content (everything above); see {@link contentHash}.
  * @property {string} resolvedAt
  * @property {ReportItem[]} report Clamped values and ignored attempts (diagnostic; not part of `contentHash`).
@@ -191,13 +164,13 @@ export const pickEffective = (candidates) => {
 /**
  * Clamps a numeric value into absolute and (for customer layers) plan bounds.
  * @param {FeatureDef} feature
- * @param {Layer | 'experiment'} layer
+ * @param {Layer} layer
  * @param {unknown} value
  * @param {import('./catalog.js').PlanMax | undefined} planMax
  * @returns {{ value: unknown, reason: string | null }}
  */
 const clampFeature = (feature, layer, value, planMax) => {
-	const customer = CUSTOMER_LAYERS.has(layer) || layer === 'experiment';
+	const customer = CUSTOMER_LAYERS.has(layer);
 	if (feature.jsonType === 'boolean') {
 		return customer && !withinPlanMax(feature, value, planMax) ? { value: false, reason: 'plan_max' } : { value, reason: null };
 	}
@@ -222,7 +195,7 @@ const clampFeature = (feature, layer, value, planMax) => {
 };
 
 /**
- * True when a customer/experiment value exceeds the plan max of a feature that cannot be clamped
+ * True when a customer value exceeds the plan max of a feature that cannot be clamped
  * (strings and arrays: length / item count). Such values are ignored rather than truncated.
  * @param {FeatureDef} feature
  * @param {unknown} value
@@ -251,7 +224,7 @@ const collectCandidates = ({ target, key, productCandidate, planCandidate, layer
 	/** @type {Candidate[]} */
 	const candidates = [productCandidate];
 	if (planCandidate) candidates.push(planCandidate);
-	for (const layer of /** @type {const} */ (['platform', 'merchant', 'website', 'admin'])) {
+	for (const layer of /** @type {const} */ (['platform', 'website', 'admin'])) {
 		const source = target === 'element' ? layers[layer]?.elements : layers[layer]?.features;
 		const raw = source?.[key];
 		if (raw === undefined) continue;
@@ -283,53 +256,6 @@ const collectCandidates = ({ target, key, productCandidate, planCandidate, layer
 };
 
 /**
- * Deterministic variant selection: `bucketOf([subscriptionId, element, experimentId])` mapped onto
- * cumulative weights of the variants sorted by key.
- * @param {{ subscriptionId: string, experiment: Experiment }} input
- * @returns {ExperimentVariant}
- */
-export const selectVariant = ({ subscriptionId, experiment }) => {
-	const variants = [...experiment.variants].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
-	if (variants.length === 0) throw resolveError('invalid_experiment', `experiment ${experiment.id} has no variants`);
-	for (const v of variants) {
-		if (!Number.isSafeInteger(v.weight) || v.weight <= 0)
-			throw resolveError('invalid_experiment', `variant ${v.key} weight must be a positive integer`);
-	}
-	const total = variants.reduce((sum, v) => sum + v.weight, 0);
-	const bucket = bucketOf([subscriptionId, experiment.element, experiment.id]);
-	let cumulative = 0;
-	for (const variant of variants) {
-		cumulative += variant.weight;
-		if (bucket < Math.floor((cumulative * BUCKETS) / total)) return variant;
-	}
-	/* c8 ignore next */
-	return /** @type {ExperimentVariant} */ (variants.at(-1));
-};
-
-/**
- * Whether a subscription is inside a rollout audience. Percent uses
- * `bucketOf([subscriptionId, element, rollout.id]) < round(percent × 100)`; a rule must evaluate to
- * exactly `true`. Missing evaluator or evaluation errors fail closed.
- * @param {{ subscriptionId: string, element: string, rollout: Rollout, evaluateRule?: EvaluateRule, context: Readonly<Record<string, unknown>> }} input
- * @returns {boolean}
- */
-export const inRollout = ({ subscriptionId, element, rollout, evaluateRule, context }) => {
-	if (rollout.percent !== undefined) {
-		const threshold = Math.round(Math.min(100, Math.max(0, rollout.percent)) * 100);
-		if (bucketOf([subscriptionId, element, rollout.id]) >= threshold) return false;
-	}
-	if (rollout.rule !== undefined) {
-		if (!evaluateRule) return false;
-		try {
-			return evaluateRule(rollout.rule, context) === true;
-		} catch {
-			return false;
-		}
-	}
-	return true;
-};
-
-/**
  * @param {Subscription} subscription
  * @param {RuntimeInput} runtime
  * @returns {RuntimeState}
@@ -348,14 +274,13 @@ const runtimeState = (subscription, runtime) => {
  * @param {object} input
  * @param {Product} input.product Normalised product (catalog.js).
  * @param {Subscription} input.subscription
- * @param {Readonly<Partial<Record<'platform' | 'merchant' | 'website' | 'admin', LayerInput>>>} [input.layers]
+ * @param {Readonly<Partial<Record<'platform' | 'website' | 'admin', LayerInput>>>} [input.layers]
  * @param {RuntimeInput} [input.runtime]
  * @param {Instant} input.now
- * @param {EvaluateRule} [input.evaluateRule] Injected rule evaluator (e.g. from `@ss/rules`).
  * @param {(text: string) => string} [input.hash] Hasher for `contentHash` (default SHA-256 hex).
  * @returns {EntitlementPayload}
  */
-export const resolveEntitlement = ({ product, subscription, layers = {}, runtime = {}, now, evaluateRule, hash = sha256Hex }) => {
+export const resolveEntitlement = ({ product, subscription, layers = {}, runtime = {}, now, hash = sha256Hex }) => {
 	const nowMs = toMs(now, 'now');
 	const planCode = subscription.plan ?? null;
 	const plan = planCode === null ? null : (product.plans[planCode] ?? null);
@@ -364,7 +289,7 @@ export const resolveEntitlement = ({ product, subscription, layers = {}, runtime
 	/** @type {ReportItem[]} */
 	const report = [];
 
-	for (const layer of /** @type {const} */ (['platform', 'merchant', 'website', 'admin'])) {
+	for (const layer of /** @type {const} */ (['platform', 'website', 'admin'])) {
 		for (const key of Object.keys(layers[layer]?.elements ?? {})) {
 			if (!product.elements[key]) report.push({ target: 'element', key, layer, kind: 'ignored', reason: 'unknown' });
 		}
@@ -410,44 +335,24 @@ export const resolveEntitlement = ({ product, subscription, layers = {}, runtime
 		elements[key] = { enabled, source: effective.layer, locked: holder !== null, lockedBy: holder?.layer ?? null, reason };
 	}
 
-	// 2. Runtime state, resources, rollouts, then dependency cascade (topological order).
+	// 2. Runtime state, resources, then dependency cascade (topological order).
 	const state = runtimeState(subscription, runtime);
 	/** @type {Record<string, string>} */
 	const resourceStatus = Array.isArray(runtime.resources)
 		? Object.fromEntries(runtime.resources.map((r) => [r.kind, r.status]))
 		: { ...(runtime.resources ?? {}) };
-	const context = {
-		...(runtime.context ?? {}),
-		subscriptionId: subscription.id,
-		websiteId: subscription.websiteId ?? null,
-		merchantId: subscription.merchantId ?? null,
-		plan: planCode,
-		now: isoInstant(nowMs),
-	};
 	for (const key of product.elementOrder) {
 		const current = /** @type {EffectiveElement} */ (elements[key]);
 		if (!current.enabled) continue;
 		const el = /** @type {ElementDef} */ (product.elements[key]);
 		const missing = el.requires.filter((kind) => resourceStatus[kind] !== 'connected');
-		const rollout = runtime.rollouts?.[key];
 		const blockedBy = el.dependsOn.filter((dep) => elements[dep]?.enabled !== true);
 		if (state !== 'active') elements[key] = { ...current, enabled: false, reason: state };
 		else if (missing.length > 0) elements[key] = { ...current, enabled: false, reason: 'resource_missing', missing };
-		else if (
-			rollout &&
-			!inRollout({
-				subscriptionId: subscription.id,
-				element: key,
-				rollout,
-				evaluateRule,
-				context: { ...context, element: key },
-			})
-		) {
-			elements[key] = { ...current, enabled: false, reason: 'rollout' };
-		} else if (blockedBy.length > 0) elements[key] = { ...current, enabled: false, reason: 'dependency', blockedBy };
+		else if (blockedBy.length > 0) elements[key] = { ...current, enabled: false, reason: 'dependency', blockedBy };
 	}
 
-	// 3. Features (layers + locks + clamping), experiments, quota hard stops.
+	// 3. Features (layers + locks + clamping), quota hard stops.
 	/** @type {Record<string, EffectiveFeature>} */
 	const features = {};
 	for (const key of Object.keys(product.features).sort()) {
@@ -499,65 +404,6 @@ export const resolveEntitlement = ({ product, subscription, layers = {}, runtime
 		};
 	}
 
-	/** @type {Record<string, { element: string, variant: string }>} */
-	const experiments = {};
-	const sortedExperiments = [...(runtime.experiments ?? [])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-	for (const experiment of sortedExperiments) {
-		if (!product.elements[experiment.element])
-			throw resolveError('invalid_experiment', `experiment ${experiment.id} targets unknown element ${experiment.element}`);
-		if (experiments[experiment.id]) throw resolveError('invalid_experiment', `duplicate experiment id ${experiment.id}`);
-		if (Object.values(experiments).some((e) => e.element === experiment.element)) {
-			throw resolveError('invalid_experiment', `element ${experiment.element} already has a running experiment`);
-		}
-		const variant = selectVariant({ subscriptionId: subscription.id, experiment });
-		experiments[experiment.id] = { element: experiment.element, variant: variant.key };
-		for (const [name, value] of Object.entries(variant.values ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
-			const key = `${experiment.element}.${name}`;
-			const feature = product.features[key];
-			const current = features[key];
-			if (!feature || !current) {
-				report.push({ target: 'feature', key, layer: 'experiment', kind: 'ignored', reason: 'unknown' });
-			} else if (!feature.experiment) {
-				report.push({
-					target: 'feature',
-					key,
-					layer: 'experiment',
-					kind: 'ignored',
-					reason: 'not_experimentable',
-					attempted: value,
-				});
-			} else if (current.locked) {
-				report.push({
-					target: 'feature',
-					key,
-					layer: 'experiment',
-					kind: 'ignored',
-					reason: 'locked',
-					attempted: value,
-					lockedBy: current.lockedBy ?? undefined,
-				});
-			} else if (!isValidFeatureValue(feature, value)) {
-				report.push({ target: 'feature', key, layer: 'experiment', kind: 'ignored', reason: 'invalid', attempted: value });
-			} else if (exceedsUnclampable(feature, value, plan?.max[key])) {
-				report.push({ target: 'feature', key, layer: 'experiment', kind: 'ignored', reason: 'plan_max', attempted: value });
-			} else {
-				const clamped = clampFeature(feature, 'experiment', value, plan?.max[key]);
-				if (clamped.reason) {
-					report.push({
-						target: 'feature',
-						key,
-						layer: 'experiment',
-						kind: 'clamped',
-						reason: clamped.reason,
-						attempted: value,
-						applied: clamped.value,
-					});
-				}
-				features[key] = { ...current, value: clamped.value, source: 'experiment', reason: clamped.reason ? 'clamped' : null };
-			}
-		}
-	}
-
 	for (const key of Object.keys(runtime.usage ?? {})) {
 		const feature = product.features[key];
 		const current = features[key];
@@ -592,7 +438,6 @@ export const resolveEntitlement = ({ product, subscription, layers = {}, runtime
 		elements: sortKeys(elements),
 		features,
 		config,
-		experiments: sortKeys(experiments),
 	};
 	return { ...content, contentHash: hash(stableStringify(content)), resolvedAt: isoInstant(nowMs), report: sortReport(report) };
 };
@@ -605,7 +450,7 @@ export const resolveEntitlement = ({ product, subscription, layers = {}, runtime
  */
 const sortKeys = (record) => Object.fromEntries(Object.entries(record).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 
-const LAYER_RANK = { product: 0, plan: 1, platform: 2, merchant: 3, website: 4, admin: 5, experiment: 6 };
+const LAYER_RANK = { product: 0, plan: 1, platform: 2, website: 3, admin: 4 };
 
 /**
  * Deterministic report order: target, key, layer precedence, kind, reason.
@@ -634,7 +479,6 @@ const CONTENT_KEYS = /** @type {const} */ ([
 	'elements',
 	'features',
 	'config',
-	'experiments',
 ]);
 
 /**

@@ -100,20 +100,6 @@ const element = {
 				},
 			},
 		},
-		budget: {
-			type: 'object',
-			required: ['js'],
-			additionalProperties: false,
-			properties: {
-				js: {
-					type: 'integer',
-					minimum: 0,
-					maximum: 1024,
-					description:
-						"Mode A budget in KB gzip of the element's own minified entry modules (headless + renderer); 0 = no UI. Code shared by several elements is declared once in the product-level budget.shared.",
-				},
-			},
-		},
 		dependsOn: { type: 'array', maxItems: 50, uniqueItems: true, items: ref('elementKey') },
 		requires: elementRequires,
 		features: { $ref: SCHEMA_IDS.featureSchema },
@@ -131,7 +117,6 @@ const element = {
 		rules: names(PATTERNS.elementKey, 50),
 		hooks: names(PATTERNS.hookName, 50),
 		customFields: names(PATTERNS.elementKey, 50),
-		experiments: { type: 'boolean' },
 		api: {
 			type: 'object',
 			additionalProperties: false,
@@ -184,7 +169,6 @@ export const manifestSchema = deepFreeze({
 			properties: {
 				base: { type: 'string', format: 'uri', maxLength: 500, pattern: '^https://' },
 				dashboard: path,
-				demo: path,
 				events: path,
 			},
 		},
@@ -194,30 +178,10 @@ export const manifestSchema = deepFreeze({
 			properties: {
 				adminLaunch: { type: 'boolean' },
 				identityIssuer: { type: 'boolean' },
-				sandbox: { type: 'boolean' },
-				localEnforcement: {
-					type: 'array',
-					uniqueItems: true,
-					items: { type: 'string', maxLength: 100, pattern: '^(?:flag|quota|limit|rate):[a-z][a-z0-9_.]*$' },
-				},
-				offlineGrace: ref('duration'),
 			},
 		},
 		scopes: names(PATTERNS.scope, 200),
 		requires: productRequires,
-		budget: {
-			type: 'object',
-			additionalProperties: false,
-			properties: {
-				shared: {
-					type: 'integer',
-					minimum: 0,
-					maximum: 1024,
-					description:
-						'KB gzip of the code-split chunks the elements share (counted once per website bundle, whatever elements are delivered).',
-				},
-			},
-		},
 		reads: {
 			type: 'array',
 			maxItems: 20,

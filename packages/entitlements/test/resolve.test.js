@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { AUTHORITY, LAYERS, inRollout, pickEffective, resolveEntitlement, selectVariant } from '../src/resolve.js';
+import { AUTHORITY, LAYERS, pickEffective, resolveEntitlement } from '../src/resolve.js';
 import { normaliseProduct } from '../src/catalog.js';
 import { HEALTHY, NOW, coupons, couponsInput, deepFreeze } from './fixtures.js';
 
@@ -27,7 +27,7 @@ const resolve = (overrides = {}) =>
 		...overrides,
 	});
 
-const CONFIG_LAYERS = /** @type {const} */ (['platform', 'merchant', 'website', 'admin']);
+const CONFIG_LAYERS = /** @type {const} */ (['platform', 'website', 'admin']);
 const RUNTIME_STATES = /** @type {const} */ (['active', 'paused', 'suspended', 'cancelled', 'spend_cap']);
 
 /**
@@ -45,29 +45,21 @@ const subsets = () => {
  * Specification oracle (written from the README table, independently of the implementation):
  * - an admin value always wins;
  * - otherwise a platform lock pins platform's value;
- * - otherwise a merchant lock excludes website;
  * - otherwise the last provided layer wins.
  * @param {readonly Layer[]} provided In precedence order.
  * @param {typeof CONFIG_LAYERS[number] | null} lock
  * @returns {{ source: Layer, ignored: Layer[] }}
  */
 const oracle = (provided, lock) => {
-	const last = (/** @type {readonly Layer[]} */ allowed) =>
-		/** @type {Layer} */ (provided.filter((l) => allowed.includes(l)).at(-1));
-	/** @type {Layer[]} */
-	let ignored = [];
-	if (lock === 'admin') ignored = provided.filter((l) => l === 'merchant' || l === 'website');
-	else if (lock === 'platform') ignored = provided.filter((l) => l === 'merchant' || l === 'website');
-	else if (lock === 'merchant') ignored = provided.filter((l) => l === 'website');
+	const ignored = lock === 'admin' || lock === 'platform' ? provided.filter((l) => l === 'website') : [];
 	if (provided.includes('admin')) return { source: 'admin', ignored };
 	if (lock === 'platform') return { source: 'platform', ignored };
-	if (lock === 'merchant') return { source: last(['product', 'plan', 'platform', 'merchant']), ignored };
-	return { source: last(LAYERS), ignored };
+	return { source: /** @type {Layer} */ (provided.filter((l) => LAYERS.includes(l)).at(-1)), ignored };
 };
 
 describe('precedence matrix: elements (every layer × lock × runtime state)', () => {
 	/** Distinct values per layer so the source is observable. */
-	const VALUE = { product: false, plan: true, platform: false, merchant: true, website: false, admin: true };
+	const VALUE = { product: false, plan: true, platform: false, website: true, admin: false };
 	const cases = [];
 	for (const provided of subsets()) {
 		const all = /** @type {Layer[]} */ (['product', 'plan', ...provided]);
@@ -102,7 +94,7 @@ describe('precedence matrix: elements (every layer × lock × runtime state)', (
 });
 
 describe('precedence matrix: features (every layer × lock × runtime state)', () => {
-	const VALUE = { product: 10, plan: 50, platform: 60, merchant: 70, website: 80, admin: 90 };
+	const VALUE = { product: 10, plan: 50, platform: 60, website: 80, admin: 90 };
 	const cases = [];
 	for (const provided of subsets()) {
 		const all = /** @type {Layer[]} */ (['product', 'plan', ...provided]);
@@ -142,12 +134,11 @@ describe('locks', () => {
 		const doc = resolve({
 			layers: {
 				platform: { features: { 'codes.maxActive': { value: 60, locked: true } } },
-				merchant: { features: { 'codes.maxActive': { value: 70, locked: true } } },
-				website: { features: { 'codes.maxActive': { value: 80 } } },
+				website: { features: { 'codes.maxActive': { value: 80, locked: true } } },
 			},
 		});
 		expect(doc.features['codes.maxActive']).toMatchObject({ value: 60, source: 'platform', lockedBy: 'platform' });
-		expect(doc.report.filter((r) => r.reason === 'locked').map((r) => r.layer)).toEqual(['merchant', 'website']);
+		expect(doc.report.filter((r) => r.reason === 'locked').map((r) => r.layer)).toEqual(['website']);
 	});
 
 	it('admin overrides a platform lock and the lock stays in effect', () => {
@@ -163,15 +154,15 @@ describe('locks', () => {
 	it('ignores lock requests on non-lockable features except from admin', () => {
 		const website = resolve({
 			layers: {
-				merchant: { features: { 'codes.pattern': { value: 'A-#', locked: true } } },
-				website: { features: { 'codes.pattern': { value: 'B-#' } } },
+				platform: { features: { 'codes.pattern': { value: 'A-#' } } },
+				website: { features: { 'codes.pattern': { value: 'B-#', locked: true } } },
 			},
 		});
 		expect(website.features['codes.pattern']).toMatchObject({ value: 'B-#', locked: false });
 		expect(website.report).toContainEqual({
 			target: 'feature',
 			key: 'codes.pattern',
-			layer: 'merchant',
+			layer: 'website',
 			kind: 'ignored',
 			reason: 'lock_not_allowed',
 		});
@@ -190,7 +181,6 @@ describe('clamping and validation', () => {
 
 	it.each([
 		['website', 500, 100, 'plan_max'],
-		['merchant', 500, 100, 'plan_max'],
 		['website', null, 100, 'plan_max'],
 		['website', 0, 1, 'min'],
 		['admin', 500, 500, null],
@@ -232,11 +222,10 @@ describe('clamping and validation', () => {
 
 		const attempt = resolve({
 			subscription: starter,
-			layers: { merchant: { elements: { ai_copy: true } }, website: { elements: { ai_copy: { enabled: true } } } },
+			layers: { website: { elements: { ai_copy: { enabled: true } } } },
 		});
 		expect(attempt.elements.ai_copy).toMatchObject({ enabled: false, reason: 'not_in_plan' });
 		expect(attempt.report).toEqual([
-			{ target: 'element', key: 'ai_copy', layer: 'merchant', kind: 'ignored', reason: 'not_in_plan', attempted: true },
 			{ target: 'element', key: 'ai_copy', layer: 'website', kind: 'ignored', reason: 'not_in_plan', attempted: true },
 		]);
 		// Switching an unavailable element off is harmless and not reported.
@@ -410,14 +399,6 @@ describe('dependency cascades', () => {
 		expect(doc.elements.ai_copy?.enabled).toBe(true);
 	});
 
-	it('cascades runtime-disabled dependencies (rollout) and keeps own reasons first', () => {
-		const doc = resolve({ runtime: { resources: { ai: 'connected' }, rollouts: { apply_box: { id: 'r1', percent: 0 } } } });
-		expect(doc.elements.apply_box).toMatchObject({ enabled: false, reason: 'rollout' });
-		expect(doc.elements.reports).toMatchObject({ enabled: false, reason: 'resource_missing' });
-		const healthy = resolve({ runtime: { resources: HEALTHY, rollouts: { apply_box: { id: 'r1', percent: 0 } } } });
-		expect(healthy.elements.reports).toMatchObject({ enabled: false, reason: 'dependency', blockedBy: ['apply_box'] });
-	});
-
 	it('does not auto-enable dependencies', () => {
 		const doc = resolve({
 			subscription: { ...SUB, plan: 'starter' },
@@ -427,268 +408,19 @@ describe('dependency cascades', () => {
 	});
 });
 
-describe('rollouts', () => {
-	it('evaluates percent and injected rules, failing closed', () => {
-		const ctx = { subscriptionId: 'sub_1', element: 'codes', context: {} };
-		expect(inRollout({ ...ctx, rollout: { id: 'r', percent: 100 } })).toBe(true);
-		expect(inRollout({ ...ctx, rollout: { id: 'r', percent: 0 } })).toBe(false);
-		expect(inRollout({ ...ctx, rollout: { id: 'r' } })).toBe(true);
-		expect(inRollout({ ...ctx, rollout: { id: 'r', rule: 'x' } })).toBe(false);
-		expect(inRollout({ ...ctx, rollout: { id: 'r', rule: 'x' }, evaluateRule: () => true })).toBe(true);
-		expect(inRollout({ ...ctx, rollout: { id: 'r', rule: 'x' }, evaluateRule: () => 1 })).toBe(false);
-		expect(
-			inRollout({
-				...ctx,
-				rollout: { id: 'r', rule: 'x' },
-				evaluateRule: () => {
-					throw new Error('boom');
-				},
-			}),
-		).toBe(false);
-	});
-
-	it('passes subscription context to the rule evaluator', () => {
-		/** @type {unknown[]} */
-		const seen = [];
-		const doc = resolve({
-			runtime: {
-				resources: HEALTHY,
-				rollouts: { ai_copy: { id: 'r', rule: 'website.country == "PK"' } },
-				context: { country: 'PK' },
-			},
-			evaluateRule: (source, context) => {
-				seen.push([source, context]);
-				return context.country === 'PK';
-			},
-		});
-		expect(doc.elements.ai_copy?.enabled).toBe(true);
-		expect(seen).toEqual([
-			[
-				'website.country == "PK"',
-				{
-					country: 'PK',
-					subscriptionId: 'sub_1',
-					websiteId: 'w1',
-					merchantId: 'm1',
-					plan: 'pro',
-					now: '2026-10-01T12:00:00Z',
-					element: 'ai_copy',
-				},
-			],
-		]);
-	});
-
-	it('percent rollouts are monotonic and roughly proportional', () => {
-		fc.assert(
-			fc.property(
-				fc.string({ minLength: 1, maxLength: 12 }),
-				fc.integer({ min: 0, max: 100 }),
-				fc.integer({ min: 0, max: 100 }),
-				(id, a, b) => {
-					const [lo, hi] = a <= b ? [a, b] : [b, a];
-					const rollout = (/** @type {number} */ percent) =>
-						inRollout({ subscriptionId: id, element: 'codes', rollout: { id: 'r', percent }, context: {} });
-					if (rollout(lo)) expect(rollout(hi)).toBe(true);
-				},
-			),
-		);
-		let included = 0;
-		for (let i = 0; i < 10000; i += 1)
-			if (inRollout({ subscriptionId: `sub_${i}`, element: 'codes', rollout: { id: 'r', percent: 25 }, context: {} }))
-				included += 1;
-		expect(Math.abs(included / 10000 - 0.25)).toBeLessThan(0.0125);
-	});
-});
-
-describe('experiments', () => {
-	const experiment = deepFreeze({
-		id: 'exp_layout',
-		element: 'codes',
-		variants: [
-			{ key: 'control', weight: 1, values: {} },
-			{ key: 'modal', weight: 1, values: { layout: 'modal' } },
-		],
-	});
-
-	it('selects deterministically by hash(subscriptionId, element, experimentId)', () => {
-		const a = selectVariant({ subscriptionId: 'sub_1', experiment });
-		expect(selectVariant({ subscriptionId: 'sub_1', experiment }).key).toBe(a.key);
-		const reversed = { ...experiment, variants: [...experiment.variants].reverse() };
-		expect(selectVariant({ subscriptionId: 'sub_1', experiment: reversed }).key).toBe(a.key);
-		expect(() => selectVariant({ subscriptionId: 's', experiment: { ...experiment, variants: [] } })).toThrow(/no variants/);
-		expect(() =>
-			selectVariant({ subscriptionId: 's', experiment: { ...experiment, variants: [{ key: 'a', weight: 0 }] } }),
-		).toThrow(/weight/);
-	});
-
-	it('distributes 10k ids within ±5 % of the weights (property)', () => {
-		const weighted = {
-			id: 'exp_w',
-			element: 'codes',
-			variants: [
-				{ key: 'a', weight: 20 },
-				{ key: 'b', weight: 30 },
-				{ key: 'c', weight: 50 },
-			],
-		};
-		fc.assert(
-			fc.property(fc.string({ minLength: 1, maxLength: 8 }), fc.constantFrom('exp_w', 'exp_x', 'exp_y'), (salt, id) => {
-				/** @type {Record<string, number>} */
-				const counts = { a: 0, b: 0, c: 0 };
-				for (let i = 0; i < 10000; i += 1) {
-					const v = selectVariant({ subscriptionId: `${salt}-${i}`, experiment: { ...weighted, id } });
-					counts[v.key] = (counts[v.key] ?? 0) + 1;
-				}
-				expect(Math.abs((counts.a ?? 0) / 10000 - 0.2)).toBeLessThan(0.05);
-				expect(Math.abs((counts.b ?? 0) / 10000 - 0.3)).toBeLessThan(0.05);
-				expect(Math.abs((counts.c ?? 0) / 10000 - 0.5)).toBeLessThan(0.05);
-			}),
-			{ numRuns: 15 },
-		);
-		// Deterministic, tighter check: each share within ±5 % of its own weight.
-		/** @type {Record<string, number>} */
-		const counts = { a: 0, b: 0, c: 0 };
-		for (let i = 0; i < 10000; i += 1) {
-			const key = selectVariant({ subscriptionId: `sub_${i}`, experiment: weighted }).key;
-			counts[key] = (counts[key] ?? 0) + 1;
-		}
-		expect(Math.abs((counts.a ?? 0) - 2000)).toBeLessThan(100);
-		expect(Math.abs((counts.b ?? 0) - 3000)).toBeLessThan(150);
-		expect(Math.abs((counts.c ?? 0) - 5000)).toBeLessThan(250);
-	});
-
-	it('applies variant values with source=experiment and respects locks and flags', () => {
-		const modalFor = [...Array(50).keys()]
-			.map((i) => `sub_${i}`)
-			.find((id) => selectVariant({ subscriptionId: id, experiment }).key === 'modal');
-		expect(modalFor).toBeDefined();
-		const subscription = { ...SUB, id: /** @type {string} */ (modalFor) };
-		const doc = resolve({ subscription, runtime: { resources: HEALTHY, experiments: [experiment] } });
-		expect(doc.experiments).toEqual({ exp_layout: { element: 'codes', variant: 'modal' } });
-		expect(doc.features['codes.layout']).toMatchObject({ value: 'modal', source: 'experiment' });
-		expect(doc.config.codes?.layout).toBe('modal');
-
-		const locked = resolve({
-			subscription,
-			layers: { admin: { features: { 'codes.layout': { value: 'inline', locked: true } } } },
-			runtime: { experiments: [experiment] },
-		});
-		expect(locked.features['codes.layout']).toMatchObject({ value: 'inline', source: 'admin' });
-		expect(locked.report).toContainEqual({
-			target: 'feature',
-			key: 'codes.layout',
-			layer: 'experiment',
-			kind: 'ignored',
-			reason: 'locked',
-			attempted: 'modal',
-			lockedBy: 'admin',
-		});
-	});
-
-	it('reports non-experimentable, invalid and unknown variant values and clamps numeric ones', () => {
-		const all = [{ key: 'only', weight: 1, values: { headline: 'Hi', layout: 'bogus', nope: 1, delayMs: 5000 } }];
-		const doc = resolve({
-			subscription: { ...SUB, plan: 'starter' },
-			runtime: {
-				experiments: [
-					{ id: 'e1', element: 'codes', variants: all },
-					{ id: 'e2', element: 'apply_box', variants: [{ key: 'v', weight: 1, values: { delayMs: 5000 } }] },
-				],
-			},
-		});
-		expect(doc.report).toEqual(
-			expect.arrayContaining([
-				{
-					target: 'feature',
-					key: 'codes.headline',
-					layer: 'experiment',
-					kind: 'ignored',
-					reason: 'not_experimentable',
-					attempted: 'Hi',
-				},
-				{
-					target: 'feature',
-					key: 'codes.layout',
-					layer: 'experiment',
-					kind: 'ignored',
-					reason: 'invalid',
-					attempted: 'bogus',
-				},
-				{ target: 'feature', key: 'codes.nope', layer: 'experiment', kind: 'ignored', reason: 'unknown' },
-				{ target: 'feature', key: 'codes.delayMs', layer: 'experiment', kind: 'ignored', reason: 'unknown' },
-				{
-					target: 'feature',
-					key: 'apply_box.delayMs',
-					layer: 'experiment',
-					kind: 'clamped',
-					reason: 'plan_max',
-					attempted: 5000,
-					applied: 1000,
-				},
-			]),
-		);
-		expect(doc.features['apply_box.delayMs']).toMatchObject({ value: 1000, source: 'experiment', reason: 'clamped' });
-		const tooLong = resolve({
-			subscription: { ...SUB, plan: 'starter' },
-			runtime: {
-				experiments: [{ id: 'e4', element: 'codes', variants: [{ key: 'v', weight: 1, values: { tags: ['a', 'b', 'c'] } }] }],
-			},
-		});
-		expect(tooLong.features['codes.tags']?.value).toEqual([]);
-		expect(tooLong.report).toContainEqual({
-			target: 'feature',
-			key: 'codes.tags',
-			layer: 'experiment',
-			kind: 'ignored',
-			reason: 'plan_max',
-			attempted: ['a', 'b', 'c'],
-		});
-		const noValues = resolve({
-			runtime: { experiments: [{ id: 'e3', element: 'codes', variants: [{ key: 'v', weight: 1 }] }] },
-		});
-		expect(noValues.experiments.e3?.variant).toBe('v');
-	});
-
-	it('rejects experiments on unknown elements and duplicate ids', () => {
-		expect(() =>
-			resolve({ runtime: { experiments: [{ id: 'e', element: 'zzz', variants: [{ key: 'v', weight: 1 }] }] } }),
-		).toThrow(/unknown element/);
-		const e = { id: 'e', element: 'codes', variants: [{ key: 'v', weight: 1 }] };
-		expect(() => resolve({ runtime: { experiments: [e, e] } })).toThrow(/duplicate/);
-		expect(() => resolve({ runtime: { experiments: [e, { ...e, id: 'f' }] } })).toThrow(/already has/);
-	});
-});
-
 describe('determinism, order independence and versioning', () => {
 	/** @type {Parameters<typeof resolveEntitlement>[0]['layers']} */
 	const layers = {
-		platform: { features: { 'codes.apiRate': { value: 90 } } },
-		merchant: { elements: { ai_copy: false }, features: { 'codes.maxActive': { value: 70, locked: true } } },
+		platform: {
+			elements: { ai_copy: false },
+			features: { 'codes.apiRate': { value: 90 }, 'codes.maxActive': { value: 70, locked: true } },
+		},
 		website: {
 			elements: { reports: false },
 			features: { 'codes.maxActive': { value: 80 }, 'codes.headline': { value: { en: 'Code?' } } },
 		},
 		admin: { features: { 'codes.bulk': { value: true } } },
 	};
-	const experiments = [
-		{
-			id: 'b',
-			element: 'codes',
-			variants: [
-				{ key: 'x', weight: 1, values: { layout: 'modal' } },
-				{ key: 'y', weight: 2 },
-			],
-		},
-		{
-			id: 'a',
-			element: 'apply_box',
-			variants: [
-				{ key: 'p', weight: 3, values: { delayMs: 10 } },
-				{ key: 'q', weight: 1 },
-			],
-		},
-	];
-
 	/**
 	 * Rebuilds an object with keys in a permuted order.
 	 * @template {Record<string, unknown>} T
@@ -706,9 +438,9 @@ describe('determinism, order independence and versioning', () => {
 	};
 
 	it('same inputs in any key/array order produce the identical document (property)', () => {
-		const base = resolve({ layers, runtime: { resources: HEALTHY, experiments } });
+		const base = resolve({ layers, runtime: { resources: HEALTHY } });
 		fc.assert(
-			fc.property(fc.array(fc.nat(10), { maxLength: 6 }), fc.boolean(), (order, flip) => {
+			fc.property(fc.array(fc.nat(10), { maxLength: 6 }), (order) => {
 				const shuffled = Object.fromEntries(
 					Object.entries(permute(/** @type {Record<string, import('../src/resolve.js').LayerInput>} */ (layers), order)).map(
 						([name, layer]) => [
@@ -722,7 +454,7 @@ describe('determinism, order independence and versioning', () => {
 				);
 				const doc = resolve({
 					layers: shuffled,
-					runtime: { resources: permute(HEALTHY, order), experiments: flip ? [...experiments].reverse() : experiments },
+					runtime: { resources: permute(HEALTHY, order) },
 				});
 				expect(doc).toEqual(base);
 				expect(JSON.stringify(doc)).toBe(JSON.stringify(base));
@@ -734,7 +466,7 @@ describe('determinism, order independence and versioning', () => {
 		expect(() =>
 			resolve({
 				layers: deepFreeze(structuredClone(layers)),
-				runtime: deepFreeze({ resources: HEALTHY, experiments: structuredClone(experiments) }),
+				runtime: deepFreeze({ resources: HEALTHY }),
 			}),
 		).not.toThrow();
 	});
@@ -772,7 +504,6 @@ describe('determinism, order independence and versioning', () => {
 			'elements',
 			'features',
 			'config',
-			'experiments',
 			'contentHash',
 			'resolvedAt',
 			'report',

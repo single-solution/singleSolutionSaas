@@ -11,10 +11,9 @@
 	"endpoints": {
 		"base": "https://{{slug}}.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
-	"capabilities": { "adminLaunch": true, "sandbox": true, "offlineGrace": "PT24H" },
+	"capabilities": { "adminLaunch": true },
 	"scopes": [],
 	"events": { "consumes": [], "publishes": [] },
 	"elements": [

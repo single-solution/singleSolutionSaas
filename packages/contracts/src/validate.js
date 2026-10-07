@@ -5,7 +5,7 @@
  */
 import Ajv2020Module from 'ajv/dist/2020.js';
 import addFormatsModule from 'ajv-formats';
-import { ALL_SCHEMAS, GRAPH_ENTITY_SCHEMAS } from './schemas/index.js';
+import { ALL_SCHEMAS } from './schemas/index.js';
 import { SCHEMA_IDS, eventDataSchemaId } from './schemas/schema-ids.js';
 import { FEATURE_EXTENSION_KEYWORDS } from './schemas/feature-schema.js';
 import {
@@ -27,7 +27,6 @@ import { escapePointerToken, isPlainObject } from './util.js';
  * @typedef {import('./types.js').ValidationResult<T>} ValidationResult
  */
 /** @typedef {import('ajv').ErrorObject} AjvError */
-/** @typedef {import('./schemas/index.js').GraphEntityName} GraphEntityName */
 
 // ajv and ajv-formats are CommonJS; under NodeNext their default export is the module object at type level.
 const Ajv2020 = /** @type {typeof Ajv2020Module.default} */ (/** @type {unknown} */ (Ajv2020Module));
@@ -94,7 +93,6 @@ const result = (value, problems) =>
  * @property {(value: unknown) => ValidationResult<import('./types.js').EntitlementDocument>} validateEntitlementDocument schema + semantic checks
  * @property {(value: unknown) => ValidationResult<import('./types.js').EventEnvelope>} validateEvent envelope, then `data` by `type@v`
  * @property {(value: unknown) => ValidationResult<import('./types.js').Placement>} validatePlacement schema + semantic checks
- * @property {(entity: GraphEntityName, value: unknown) => ValidationResult<Record<string, unknown>>} validateGraphEntity graph entity by name
  * @property {(featureSchema: import('./types.js').FeatureSchema, value: unknown) => ValidationResult<Record<string, unknown>>} validateFeatureConfig
  *   validate element configuration against its (manifest-validated) feature schema
  */
@@ -287,16 +285,6 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 		return result(placement, problems.length > 0 ? problems : checkPlacement(placement));
 	};
 
-	/** @type {Validator['validateGraphEntity']} */
-	const validateGraphEntity = (entity, value) => {
-		const id = Object.hasOwn(GRAPH_ENTITY_SCHEMAS, entity) ? GRAPH_ENTITY_SCHEMAS[entity] : undefined;
-		if (id === undefined)
-			return result(/** @type {Record<string, unknown>} */ ({}), [
-				{ path: '', keyword: 'entity', message: `unknown graph entity '${String(entity)}'` },
-			]);
-		return result(/** @type {Record<string, unknown>} */ (isPlainObject(value) ? value : {}), run(id, value));
-	};
-
 	return Object.freeze({
 		validate,
 		has,
@@ -304,7 +292,6 @@ export const createValidator = ({ schemas = [], events = {} } = {}) => {
 		validateEntitlementDocument,
 		validateEvent,
 		validatePlacement,
-		validateGraphEntity,
 		validateFeatureConfig,
 	});
 };
@@ -344,13 +331,6 @@ export const validateEvent = (value) => getDefaultValidator().validateEvent(valu
  * @param {unknown} value
  */
 export const validatePlacement = (value) => getDefaultValidator().validatePlacement(value);
-
-/**
- * Validate a graph entity with the default validator.
- * @param {GraphEntityName} entity
- * @param {unknown} value
- */
-export const validateGraphEntity = (entity, value) => getDefaultValidator().validateGraphEntity(entity, value);
 
 /**
  * Validate element configuration against a feature schema with the default validator.

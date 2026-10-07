@@ -56,22 +56,6 @@ export const stableJson = (value) => {
 	return JSON.stringify(value) ?? 'null';
 };
 
-const DURATION = /^P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/;
-
-/**
- * Parse an ISO-8601 duration (weeks, days, hours, minutes, seconds; no years/months) to milliseconds.
- * @param {unknown} value
- * @param {number} fallback returned when `value` is absent or unparseable
- * @returns {number}
- */
-export const parseDurationMs = (value, fallback) => {
-	if (typeof value !== 'string' || value === 'P' || value.endsWith('T')) return fallback;
-	const match = DURATION.exec(value);
-	if (!match) return fallback;
-	const [, w, d, h, m, s] = match.map((part) => (part === undefined ? 0 : Number(part)));
-	return ((((Number(w) * 7 + Number(d)) * 24 + Number(h)) * 60 + Number(m)) * 60 + Number(s)) * 1000;
-};
-
 /**
  * Collection-safe product namespace: `ss_<slug with - → _>_`.
  * @param {string} slug

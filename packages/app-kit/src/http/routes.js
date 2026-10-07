@@ -1,10 +1,10 @@
 /**
  * Route definitions and matching. Paths are `/`-separated; a segment `:name` captures a parameter; anything else is
- * literal (so `/v1/data:export` is a literal segment).
+ * literal (so `/v1/items:search` is a literal segment).
  * @module
  */
 
-/** @typedef {'website' | 'launch' | 'portal' | 'none'} AuthMode */
+/** @typedef {'website' | 'launch' | 'none'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
 
 /**
@@ -16,7 +16,8 @@
  * @property {'pk' | 'sk'} [keyKind] restrict to one key kind
  * @property {string[]} [roles] launch-session roles allowed (default any)
  * @property {string} [element] element that must be enabled in the entitlement document
- * @property {boolean | 'optional'} [idempotent] POST: true = Idempotency-Key required (default), 'optional', false = ignored
+ * @property {boolean} [idempotent] true = a repeated `Idempotency-Key` (same website or session, same route, within
+ *   24 h) answers 409 `duplicate_request`; requests without the header run normally. Default false: the header is ignored
  * @property {{ limit: number | ((ctx: any) => number | Promise<number>), windowMs?: number, windowSeconds?: number,
  *   key?: (ctx: any) => string | Promise<string>, bucket?: string }} [rateLimit]
  *   fixed window (`windowMs` or `windowSeconds`). `limit` may be a (sync or async) function of the request context,
@@ -38,7 +39,7 @@
 /** @typedef {RouteDefinition & { segments: string[], id: string }} CompiledRoute */
 
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
-const AUTH = new Set(['website', 'launch', 'portal', 'none']);
+const AUTH = new Set(['website', 'launch', 'none']);
 
 /**
  * Validate and freeze a route definition.
@@ -50,7 +51,7 @@ export const defineRoute = (definition) => {
 	if (!METHODS.has(method)) throw new TypeError(`route method must be one of ${[...METHODS].join(', ')}`);
 	if (typeof path !== 'string' || !path.startsWith('/') || /\s/.test(path))
 		throw new TypeError(`route path must start with /: ${path}`);
-	if (!AUTH.has(auth)) throw new TypeError(`route auth must be website, launch, portal or none (${method} ${path})`);
+	if (!AUTH.has(auth)) throw new TypeError(`route auth must be website, launch or none (${method} ${path})`);
 	if (typeof handler !== 'function') throw new TypeError(`route ${method} ${path} needs a handler`);
 	if (definition.element !== undefined && auth !== 'website' && auth !== 'launch') {
 		throw new TypeError(`element gating needs website or launch auth (${method} ${path})`);

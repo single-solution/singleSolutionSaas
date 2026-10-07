@@ -58,7 +58,6 @@ describe('ss app init → validate (integration)', () => {
 			'ui/notes.js',
 			'api/routes.js',
 			'adapters/db.js',
-			'jobs/README.md',
 			'strings/en.json',
 			'schemas/notes.features.json',
 			'schemas/events/order_notes.note_created@1.json',
@@ -70,18 +69,27 @@ describe('ss app init → validate (integration)', () => {
 			'.env.example',
 			'.gitignore',
 			'README.md',
-			'ss.dev.json',
 		])
 			expect(files).toContain(file);
 		const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8'));
 		expect(manifest.product).toMatchObject({ slug: 'order-notes', name: 'Order Notes', kind: 'service' });
 		expect(manifest.events.publishes).toEqual(['order_notes.note_created@1']);
+		expect(manifest.capabilities).toEqual({ adminLaunch: true });
+		expect(manifest.endpoints.demo).toBeUndefined();
+		expect(manifest.budget).toBeUndefined();
 		const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8'));
 		expect(pkg.dependencies['@ss/app-kit']).toBe('^0.1.0');
 		expect(Object.keys(pkg.scripts)).toEqual(
-			expect.arrayContaining(['dev', 'build', 'start', 'portal', 'check', 'test', 'lint', 'typecheck', 'format:check']),
+			expect.arrayContaining(['dev', 'build', 'start', 'check', 'test', 'lint', 'typecheck', 'format:check', 'validate']),
 		);
-		expect(Object.keys(pkg.scripts)).toEqual(expect.arrayContaining(['validate', 'certify']));
+		for (const removed of ['portal', 'certify', 'serve']) expect(pkg.scripts[removed]).toBeUndefined();
+		expect(pkg.exports).toEqual({
+			'./platform': './adapters/platform.js',
+			'./routes': './api/routes.js',
+			'./package.json': './package.json',
+		});
+		for (const file of Object.values(pkg.exports))
+			expect(await exists(path.join(dir, /** @type {string} */ (file)))).toBe(true);
 		expect(pkg).toMatchObject({ private: true, license: 'UNLICENSED', prettier: '@ss/config/prettier.json' });
 		expect(pkg.devDependencies).toMatchObject({ '@ss/cli': '^0.1.0', '@ss/config': '^0.1.0' });
 		// self-sufficient: its own tooling config from @ss/config, and the repository files of a standalone project
@@ -105,8 +113,8 @@ describe('ss app init → validate (integration)', () => {
 		expect(await readFile(path.join(dir, 'app/_lib/product.js'), 'utf8')).toContain('toNextRoute');
 		expect(await readFile(path.join(dir, 'app/api/[...path]/route.js'), 'utf8')).toContain("forward('POST')");
 		expect(await readFile(path.join(dir, 'app/_lib/assets.js'), 'utf8')).toContain("'schemas/notes.features.json': feature0");
-		expect(files).toContain('serve.js');
-		expect(files).not.toContain('api/probes.js');
+		for (const removed of ['serve.js', 'ss.dev.json', 'adapters/privacy.js', 'jobs/README.md', 'tests/certify.test.js'])
+			expect(files).not.toContain(removed);
 		expect(await readFile(path.join(dir, 'api/routes.js'), 'utf8')).not.toContain('{{');
 
 		const report = await validateProject(dir);
@@ -122,7 +130,7 @@ describe('ss app init → validate (integration)', () => {
 		const { files } = await initApp({ dir, kind: 'service', slug: 'bare-app', name: 'Bare App', minimal: true });
 		for (const file of NOTES_SAMPLE_FILES) expect(files).not.toContain(file.replace('{{namespace}}', 'bare_app'));
 		expect(files.filter((file) => /notes?[._]/.test(file))).toEqual([]);
-		for (const file of ['core/status.js', 'api/routes.js', 'adapters/privacy.js', 'tests/status.test.js', 'ui/README.md'])
+		for (const file of ['core/status.js', 'api/routes.js', 'adapters/platform.js', 'tests/status.test.js', 'ui/README.md'])
 			expect(files).toContain(file);
 		const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8'));
 		expect(manifest.elements.map((/** @type {{ key: string }} */ element) => element.key)).toEqual(['status']);
@@ -147,6 +155,10 @@ describe('ss app init → validate (integration)', () => {
 		expect(files).not.toContain('openapi.json');
 		const manifest = JSON.parse(await readFile(path.join(dir, 'manifest.json'), 'utf8'));
 		expect(manifest.endpoints).toBeUndefined();
+		expect(manifest.budget).toBeUndefined();
+		const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8'));
+		expect(pkg.scripts).toMatchObject({ build: 'ss pack build .', validate: 'ss app validate .' });
+		expect(pkg.scripts.certify).toBeUndefined();
 		expect(manifest.elements[0].modes).toEqual(['A', 'B']);
 		expect((await validateProject(dir)).ok).toBe(true);
 		const stdout = await runOwnTests(dir);

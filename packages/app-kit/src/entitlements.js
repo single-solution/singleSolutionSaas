@@ -5,7 +5,7 @@
  * - Fresh for `ttlMs` (default 5 min) after a successful fetch; then refreshed on the next read (single-flight per
  *   website, so a burst of requests makes one Portal call).
  * - Portal unreachable → the last verified document keeps being served, flagged `stale: true`, until its
- *   `validUntil + offlineGrace` (manifest `capabilities.offlineGrace`, default 24 h). After that: `{ ok: false }`.
+ *   `validUntil + OFFLINE_GRACE_MS` (fixed, 24 h). After that: `{ ok: false }`.
  * - Portal says the subscription is gone (404/410) → cache dropped, `{ ok: false, reason: 'not_subscribed' }`.
  * - Versions are monotonic: an older document never replaces a newer one (rollback protection).
  * - `entitlement.changed` events call `refresh(websiteId)`.

@@ -1,7 +1,7 @@
 /**
  * Dashboard SSO: verify a Portal launch (`@ss/protocol` `verifyLaunch`, single use through the shared replay store),
  * then optionally exchange it for a product session (opaque random id in the session store; the product puts it in
- * an HttpOnly cookie). Impersonation sessions never outlive the launch's `impExp`.
+ * an HttpOnly cookie). Launch kinds: `merchant` (the merchant's dashboard) and `admin` (staff SSO).
  * @module
  */
 import { consumeWith, isProtocolError, verifyLaunch } from '@ss/protocol';
@@ -11,20 +11,16 @@ import { randomToken } from './util.js';
 /** @typedef {import('@ss/protocol').LaunchClaims} LaunchClaims */
 /** @typedef {import('./stores/types.js').ReplayStore} ReplayStore */
 /** @typedef {import('./stores/types.js').SessionStore} SessionStore */
-/** @typedef {'merchant' | 'demo' | 'platform_admin' | 'impersonate' | 'partner' | 'developer'} LaunchRole */
+/** @typedef {'merchant' | 'platform_admin'} LaunchRole */
 
 /** Launch kind → dashboard role. */
 export const ROLE_OF_KIND = Object.freeze({
 	merchant: 'merchant',
-	demo: 'demo',
 	admin: 'platform_admin',
-	impersonate: 'impersonate',
-	partner: 'partner',
-	developer: 'developer',
 });
 
 /**
- * @typedef {{ ok: true, claims: LaunchClaims, role: LaunchRole, scope: LaunchClaims['scope'] & { actor?: string } }
+ * @typedef {{ ok: true, claims: LaunchClaims, role: LaunchRole, scope: LaunchClaims['scope'] }
  *   | { ok: false, code: string }} LaunchVerification
  */
 
@@ -34,7 +30,7 @@ export const ROLE_OF_KIND = Object.freeze({
  * @property {LaunchRole} role
  * @property {string} subject
  * @property {LaunchClaims['user']} user
- * @property {LaunchClaims['scope'] & { actor?: string }} scope
+ * @property {LaunchClaims['scope']} scope
  * @property {string} kind
  * @property {number} expiresAt epoch ms
  */
@@ -86,9 +82,8 @@ export const createLaunch = ({
 					return consumed === true;
 				},
 			});
-			const role = /** @type {LaunchRole} */ (ROLE_OF_KIND[claims.kind]);
-			const scope = claims.act ? { ...claims.scope, actor: claims.act.sub } : { ...claims.scope };
-			return { ok: true, claims, role, scope };
+			const role = /** @type {LaunchRole} */ (/** @type {Record<string, string>} */ (ROLE_OF_KIND)[claims.kind]);
+			return { ok: true, claims, role, scope: { ...claims.scope } };
 		} catch (error) {
 			return { ok: false, code: isProtocolError(error) ? error.code : 'error' };
 		}
@@ -104,8 +99,7 @@ export const createLaunch = ({
 		const result = await verify(token);
 		if (!result.ok) return result;
 		const { claims, role, scope } = result;
-		const cap = claims.kind === 'impersonate' && typeof claims.impExp === 'number' ? claims.impExp * 1000 : Infinity;
-		const expiresAt = Math.min(now() + ttlMs, cap);
+		const expiresAt = now() + ttlMs;
 		/** @type {Session} */
 		const session = {
 			id: `ses_${randomToken(randomBytes, 24)}`,

@@ -1,8 +1,7 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the product's own routes.
- * Every product route is website-key authenticated and gated by its element: a disabled element answers
- * 403 element_disabled in all modes. POSTs require an Idempotency-Key (app-kit stores and replays the response).
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints
+ * and /sso) plus the product's own routes. Every product route is website-key authenticated and gated by its element:
+ * a disabled element answers 403 element_disabled.
  */
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { toPublic } from '../core/notes.js';

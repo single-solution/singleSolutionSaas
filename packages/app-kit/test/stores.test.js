@@ -117,7 +117,7 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect(events.map((e) => e.id)).toEqual(['e1']);
 	});
 
-	it('event outbox: unique ids, leases, ack drops the envelope, retry, dead letter, retention', async () => {
+	it('event outbox: unique ids, leases, ack drops the envelope, retry, retention', async () => {
 		const clock = createClock();
 		const { eventOutbox } = factory(clock.now);
 		const envelope = (/** @type {string} */ id) => ({ id, type: 'coupon_box.created@1', data: { n: 1 } });
@@ -133,17 +133,16 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		expect(await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'c' })).toEqual([]);
 		await eventOutbox.ack([first[0]?.id ?? ''], { now: clock.now(), retainMs: 10_000 });
 		await eventOutbox.retry([first[1]?.id ?? ''], { now: clock.now(), nextAttemptAt: clock.now() + 5000, error: 'x' });
-		await eventOutbox.deadLetter([second[0]?.id ?? ''], { now: clock.now(), error: 'rejected', retainMs: 10_000 });
-		for (const op of /** @type {const} */ (['ack', 'retry', 'deadLetter'])) {
+		for (const op of /** @type {const} */ (['ack', 'retry'])) {
 			await /** @type {any} */ (eventOutbox)[op]([], { now: 0, retainMs: 1, nextAttemptAt: 0, error: 'x' });
 			await /** @type {any} */ (eventOutbox)[op](['missing'], { now: 0, retainMs: 1, nextAttemptAt: 0, error: 'x' });
 		}
-		expect(await eventOutbox.stats()).toEqual({ pending: 1, sent: 1, dead: 1 });
+		expect(await eventOutbox.stats()).toEqual({ pending: 2, sent: 1 });
 		expect(await eventOutbox.enqueue({ id: first[0]?.id ?? '', envelope: envelope('x') })).toEqual({ inserted: false });
 		clock.advance(5000);
 		const retried = await eventOutbox.lease({ now: clock.now(), limit: 10, leaseMs: 1000, owner: 'd' });
-		expect(retried).toHaveLength(1);
-		expect(retried[0]).toMatchObject({ attempts: 1, lastError: 'x' });
+		expect(retried.map((e) => e.id)).toContain(first[1]?.id);
+		expect(retried.find((e) => e.id === first[1]?.id)).toMatchObject({ attempts: 1, lastError: 'x' });
 	});
 
 	it('revocations accumulate with the cursor', async () => {
@@ -168,22 +167,6 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		await sessions.create('s2', {}, clock.now() + 1000);
 		await sessions.delete('s2');
 		expect(await sessions.get('s2')).toBeNull();
-	});
-
-	it('idempotency: new, pending, mismatch, done, release, expiry', async () => {
-		const clock = createClock();
-		const { idempotency } = factory(clock.now);
-		expect(await idempotency.begin('k', 'f1', clock.now() + 1000)).toEqual({ state: 'new' });
-		expect(await idempotency.begin('k', 'f1', clock.now() + 1000)).toEqual({ state: 'pending' });
-		expect(await idempotency.begin('k', 'f2', clock.now() + 1000)).toEqual({ state: 'mismatch' });
-		const response = { status: 201, headers: { 'content-type': 'application/json' }, replay: /** @type {const} */ ('website') };
-		await idempotency.complete('k', response);
-		await idempotency.complete('missing', response);
-		expect(await idempotency.begin('k', 'f1', clock.now() + 1000)).toEqual({ state: 'done', response });
-		await idempotency.release('k');
-		expect(await idempotency.begin('k', 'f2', clock.now() + 1000)).toEqual({ state: 'new' });
-		clock.advance(2000);
-		expect(await idempotency.begin('k', 'f3', clock.now() + 1000)).toEqual({ state: 'new' });
 	});
 
 	it('rate limits count per window', async () => {
@@ -242,6 +225,5 @@ describe('mongo stores specifics', () => {
 		await expect(stores.settings.insert('x', {})).rejects.toThrow('other');
 		await expect(stores.entitlements.put('x', { token: 't', version: 1, fetchedAt: 1 })).rejects.toThrow('other');
 		await expect(stores.usageQueue.enqueue(record('x'))).rejects.toThrow('other');
-		await expect(stores.idempotency.begin('x', 'f', 1)).rejects.toThrow('other');
 	});
 });

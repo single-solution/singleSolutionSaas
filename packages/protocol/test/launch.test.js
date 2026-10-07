@@ -185,15 +185,11 @@ const baseIssue = async (clock) => ({
 describe('launch kind/scope rules', () => {
 	it.each([
 		['merchant', { scope: { merchantId: 'm' } }],
-		['demo', { scope: {} }],
 		['admin', { scope: { merchantId: 'm', permissions: ['orders.read'] }, user: { id: 'staff_1', roles: ['support'] } }],
 		['admin', { scope: { all: true } }],
 		['admin', { scope: { all: true, permissions: ['apps.manage'] } }],
 		['admin', { scope: { merchantId: 'm', subscriptions: ['sub_1', 'sub_2'] } }],
 		['merchant', { scope: { merchantId: 'm', subscriptions: [] } }],
-		['partner', { scope: { partnerId: 'p' } }],
-		['developer', { scope: { developerId: 'd' } }],
-		['impersonate', { scope: { merchantId: 'm' }, actor: 'staff_1', impersonationSeconds: 900 }],
 	])('accepts a valid %s launch', async (kind, extra) => {
 		const clock = createClock();
 		const { token } = await issueLaunch({
@@ -203,37 +199,19 @@ describe('launch kind/scope rules', () => {
 		});
 		const claims = await verify(clock, token);
 		expect(claims.kind).toBe(kind);
-		if (kind === 'impersonate') {
-			expect(claims.act).toEqual({ sub: 'staff_1' });
-			expect(/** @type {number} */ (claims.impExp) - claims.iat).toBe(900);
-		}
 	});
 
 	it.each([
 		['merchant without merchantId', { kind: 'merchant', scope: {} }],
+		['demo (removed kind)', { kind: 'demo', scope: {} }],
 		['admin without scope', { kind: 'admin', scope: {} }],
 		['admin with all and a merchant', { kind: 'admin', scope: { all: true, merchantId: 'm' } }],
 		['admin with all and subscriptions', { kind: 'admin', scope: { all: true, subscriptions: ['s'] } }],
 		['admin with all: false', { kind: 'admin', scope: { all: false, merchantId: 'm' } }],
 		['admin with all: "yes"', { kind: 'admin', scope: { all: 'yes' } }],
 		['merchant with all', { kind: 'merchant', scope: { all: true, merchantId: 'm' } }],
-		['impersonate with all', { kind: 'impersonate', scope: { all: true }, actor: 'staff_1' }],
 		['subscriptions not a list', { kind: 'admin', scope: { merchantId: 'm', subscriptions: 'sub_1' } }],
 		['subscriptions with an empty id', { kind: 'admin', scope: { merchantId: 'm', subscriptions: [''] } }],
-		['demo with a real merchant', { kind: 'demo', scope: { merchantId: 'm' } }],
-		['partner without partnerId', { kind: 'partner', scope: {} }],
-		['developer without developerId', { kind: 'developer', scope: {} }],
-		['impersonate without actor', { kind: 'impersonate', scope: { merchantId: 'm' } }],
-		['impersonate without merchant', { kind: 'impersonate', scope: {}, actor: 'staff_1' }],
-		[
-			'impersonate longer than 1 h',
-			{ kind: 'impersonate', scope: { merchantId: 'm' }, actor: 'staff_1', impersonationSeconds: 3601 },
-		],
-		[
-			'impersonate with zero window',
-			{ kind: 'impersonate', scope: { merchantId: 'm' }, actor: 'staff_1', impersonationSeconds: 0 },
-		],
-		['impersonate self', { kind: 'impersonate', scope: { merchantId: 'm' }, actor: 'usr_1' }],
 		['unknown kind', { kind: 'root' }],
 		['missing user id', { user: {} }],
 	])('refuses to issue %s', async (_name, extra) => {
@@ -241,35 +219,22 @@ describe('launch kind/scope rules', () => {
 		await expectCode(issueLaunch({ ...(await baseIssue(clock)), .../** @type {any} */ (extra) }), 'kind_scope');
 	});
 
-	it.each([
-		['merchant carrying act', { kind: 'merchant', act: { sub: 's' } }],
-		['admin with no scope', { kind: 'admin', scope: undefined }],
-		['impersonate w/o impExp', { kind: 'impersonate', act: { sub: 's' }, impExp: undefined }],
-		['impersonate > 1 h', { kind: 'impersonate', act: { sub: 's' }, impExp: 99999999999 }],
-		['impersonate with bad act', { kind: 'impersonate', act: 's', impExp: 1 }],
-	])('rejects a signed launch with %s', async (_name, extra) => {
-		const clock = createClock();
-		const { claims } = await issueLaunch(await baseIssue(clock));
-		const token = await signCompact({ signer: portal.signer, typ: 'ss-launch+jwt', payload: { ...claims, ...extra } });
-		await expectCode(verify(clock, token), 'kind_scope');
-	});
-
-	it('rejects an impersonation launch after its window (defence in depth)', async () => {
-		const clock = createClock();
-		const { claims } = await issueLaunch({
-			...(await baseIssue(clock)),
-			kind: 'impersonate',
-			actor: 'staff_1',
-			impersonationSeconds: 1,
-		});
-		const token = await signCompact({ signer: portal.signer, typ: 'ss-launch+jwt', payload: claims });
-		clock.advance(2000);
-		await expectCode(verify(clock, token), 'expired');
-	});
+	it.each([['admin with no scope', { kind: 'admin', scope: undefined }]])(
+		'rejects a signed launch with %s',
+		async (_name, extra) => {
+			const clock = createClock();
+			const { claims } = await issueLaunch(await baseIssue(clock));
+			const token = await signCompact({ signer: portal.signer, typ: 'ss-launch+jwt', payload: { ...claims, ...extra } });
+			await expectCode(verify(clock, token), 'kind_scope');
+		},
+	);
 
 	it('kindScopeViolation returns null for valid claims', () => {
-		expect(kindScopeViolation({ kind: 'demo', user: { id: 'u' }, scope: {} })).toBeNull();
-		expect(kindScopeViolation({ kind: 'demo', user: { id: 'u' } })).toBe('scope is required');
+		expect(kindScopeViolation({ kind: 'merchant', user: { id: 'u' }, scope: { merchantId: 'm' } })).toBeNull();
+		expect(kindScopeViolation({ kind: 'merchant', user: { id: 'u' } })).toBe('scope is required');
+		expect(kindScopeViolation({ kind: 'merchant', user: { id: 'u' }, scope: {} })).toBe(
+			'merchant launch requires scope.merchantId',
+		);
 	});
 
 	it('kindScopeViolation explains admin scope violations', () => {
@@ -281,7 +246,7 @@ describe('launch kind/scope rules', () => {
 			'scope.all excludes scope.websiteId',
 		);
 		expect(kindScopeViolation({ kind: 'admin', user, scope: { all: 1 } })).toBe('scope.all must be true');
-		expect(kindScopeViolation({ kind: 'partner', user, scope: { all: true, partnerId: 'p' } })).toBe(
+		expect(kindScopeViolation({ kind: 'merchant', user, scope: { all: true, merchantId: 'm' } })).toBe(
 			'scope.all is only allowed for admin launches',
 		);
 		expect(kindScopeViolation({ kind: 'admin', user, scope: { merchantId: 'm', subscriptions: [1] } })).toBe(

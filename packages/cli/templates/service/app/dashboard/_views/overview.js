@@ -1,8 +1,7 @@
 /**
  * Dashboard (SSO). The Portal sends the browser to app-kit's `GET /sso?launch=<jwt>`, which verifies the launch
  * (signature, issuer, audience, kind/scope, single use), stores a session and sets the HttpOnly `ss_session` cookie,
- * then redirects here. Supports merchant, demo, admin(scope), impersonate, partner and developer launches;
- * impersonation shows the audit banner and ends at the launch's `impExp`.
+ * then redirects here. Supports merchant and admin (staff) launches.
  */
 import { createElement as h } from 'react';
 import { cookies } from 'next/headers.js';
@@ -23,9 +22,6 @@ export default async function Dashboard({ searchParams }) {
 	return h(
 		'main',
 		{ className: 'ss-dashboard' },
-		view.actor
-			? h('div', { role: 'status', className: 'ss-dashboard__audit' }, t('dashboard.audit_banner', { actor: view.actor }))
-			: null,
 		h('h1', null, t('dashboard.title', { name: '{{name}}' })),
 		h('p', null, t('dashboard.signed_in_as', { user: session.user?.email ?? view.user ?? '—', role: view.role })),
 		h('p', null, t('dashboard.scope', { scope: JSON.stringify(view.scope) })),

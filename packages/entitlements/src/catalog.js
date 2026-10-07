@@ -11,7 +11,7 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * Mapping from the manifest:
  * - element `features` is a JSON Schema object; each top-level property is a feature. Metadata keywords:
  *   `x-kind` (flag|quota|limit|rate|config|placement; inferred as `flag` for booleans, `config` otherwise), `x-lock`
- *   (lockable, default true), `x-experiment`, `x-plan` ({ planCode: { default?, max?, members? } } — the only source
+ *   (lockable, default true), `x-plan` ({ planCode: { default?, max?, members? } } — the only source
  *   of per-plan bounds), quota `x-period` / `x-hardStop` / `x-unit`, rate `x-per` / `x-unit`. A `placement` feature
  *   (F.18) is an object validated against the placement v1 schema; `x-placement.members` limits the members it may
  *   set, and a plan's `members` is its plan bound (a value setting another member exceeds the plan, `plan_max`).
@@ -50,7 +50,6 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {unknown} [x-ui] UI hints (ignored).
  * @property {FeatureKind} [x-kind]
  * @property {boolean} [x-lock]
- * @property {boolean} [x-experiment]
  * @property {Readonly<Record<string, { default?: unknown, max?: number | boolean, members?: readonly string[] }>>} [x-plan]
  * @property {{ members?: readonly string[] }} [x-placement] placement features: the members it may set
  * @property {PeriodUnit} [x-period]
@@ -71,7 +70,6 @@ import { assertMillicredits, normaliseRate } from './units.js';
  * @property {number | null} max Absolute upper bound for numeric JSON types.
  * @property {readonly unknown[] | null} enum
  * @property {boolean} lockable `x-lock` (default true).
- * @property {boolean} experiment `x-experiment` (default false).
  * @property {PeriodUnit | null} period Quota period (`x-period`, required on quotas).
  * @property {boolean} hardStop Quota blocks once exhausted (`x-hardStop`, default true).
  * @property {string | null} unit Metered unit (`x-unit`).
@@ -376,7 +374,6 @@ const normaliseFeature = (element, name, node, planCodes) => {
 		max,
 		enum: node.enum ? [...node.enum] : null,
 		lockable: node['x-lock'] !== false,
-		experiment: node['x-experiment'] === true,
 		period: kind === 'quota' ? /** @type {PeriodUnit} */ (node['x-period']) : null,
 		hardStop: kind === 'quota' ? node['x-hardStop'] !== false : false,
 		unit: kind === 'quota' || kind === 'rate' ? (node['x-unit'] ?? null) : null,
@@ -659,38 +656,6 @@ export const findPriceBook = (product, version) => product.priceBooks.find((book
 export const currentPriceBook = (product, at) => {
 	const ms = toMs(at);
 	return product.priceBooks.filter((book) => book.effectiveFrom <= ms).at(-1);
-};
-
-/**
- * Transitive dependencies and dependents of an element (both sorted).
- * @param {Pick<Product, 'elements'>} product
- * @param {string} key
- * @returns {{ dependsOn: string[], dependents: string[] }}
- */
-export const elementDependencies = (product, key) => {
-	if (!product.elements[key]) throw catalogError('unknown_element', `unknown element ${key}`);
-	/**
-	 * @param {string} start
-	 * @param {(k: string) => readonly string[]} next
-	 * @returns {string[]}
-	 */
-	const closure = (start, next) => {
-		const seen = new Set();
-		const stack = [...next(start)];
-		while (stack.length > 0) {
-			const k = /** @type {string} */ (stack.pop());
-			if (!seen.has(k)) {
-				seen.add(k);
-				stack.push(...next(k));
-			}
-		}
-		return [...seen].sort();
-	};
-	const all = Object.values(product.elements);
-	return {
-		dependsOn: closure(key, (k) => product.elements[k]?.dependsOn ?? []),
-		dependents: closure(key, (k) => all.filter((el) => el.dependsOn.includes(k)).map((el) => el.key)),
-	};
 };
 
 /**

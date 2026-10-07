@@ -100,23 +100,14 @@ describe('api/events', () => {
 });
 
 describe('api/session + jobs', () => {
-	it('describes dashboard sessions, including the impersonating actor', () => {
-		assert.deepEqual(
-			sessionView({
-				kind: 'impersonate',
-				role: 'impersonate',
-				scope: { merchantId: 'mer_1', actor: 'usr_staff' },
-				user: { id: 'u1' },
-			}),
-			{
-				kind: 'impersonate',
-				role: 'impersonate',
-				scope: { merchantId: 'mer_1', actor: 'usr_staff' },
-				user: 'u1',
-				actor: 'usr_staff',
-			},
-		);
-		assert.equal(sessionView({ kind: 'demo', role: 'demo', subject: 'usr_demo' }).user, 'usr_demo');
+	it('describes dashboard sessions', () => {
+		assert.deepEqual(sessionView({ kind: 'merchant', role: 'owner', scope: { merchantId: 'mer_1' }, user: { id: 'u1' } }), {
+			kind: 'merchant',
+			role: 'owner',
+			scope: { merchantId: 'mer_1' },
+			user: 'u1',
+		});
+		assert.equal(sessionView({ kind: 'admin', role: 'support', subject: 'stf_1' }).user, 'stf_1');
 	});
 
 	it('marks soft-deleted notes for removal by a TTL index (no job)', async () => {

@@ -1,22 +1,15 @@
 /**
- * `ss pack build | publish` (F.18): the publishable browser bundle of a product's mode-A elements, the same way for
- * every pack (and for a service product's UI bundle), and the measurement `ss app validate` uses for budgets.
- *
- * - **build**: every module the manifest names (`headless` / `renderer`, `file.js#export`) is an esbuild entry,
- *   bundled together as minified ES modules for browsers with code splitting — each entry keeps its path, code shared
- *   by several entries goes to `chunks/*.js` (loaded once per page). String catalogs (`strings/<lang>.json` and legacy
- *   per-element `strings` files) ship as compact JSON. Every asset is hashed into the unsigned `ss-pack-bundle@1`
- *   descriptor `{ format, manifest (features inline), assets: [{ path, sha256, size, contentType }] }`.
- * - **publish**: signs the descriptor with `@ss/protocol` `signBundle` and uploads it to the Portal admin pack API
- *   (`POST /v1/admin/packs`, then `PUT /v1/admin/packs/:appId/versions/:version/assets/<path>` per asset) with a staff
- *   API token (`sst_…`, Admin Console → API tokens, or `POST /v1/admin/api-tokens`).
+ * `ss pack build` (F.18): the uploadable browser bundle of a product's mode-A elements, the same way for every pack and
+ * for a service product's widgets. Every module the manifest names (`headless` / `renderer`, `file.js#export`) is an esbuild entry,
+ * bundled together as minified ES modules for browsers with code splitting — each entry keeps its path, code shared
+ * by several entries goes to `chunks/*.js` (loaded once per page). String catalogs (`strings/<lang>.json` and legacy
+ * per-element `strings` files) ship as compact JSON. Every asset is hashed into the unsigned `ss-pack-bundle@1`
+ * descriptor `{ format, manifest (features inline), assets: [{ path, sha256, size, contentType }] }`.
  * @module
  */
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { measureBundle } from '@ss/contracts/budget';
-import { createSigner, signBundle, toPublicJwk } from '@ss/protocol';
 import { isObject, walk } from '../fsutil.js';
 import { loadManifest } from '../manifest.js';
 
@@ -74,21 +67,6 @@ export const moduleEntries = (manifest) => {
 			if (typeof ref === 'string' && ref.includes('#')) files.add(ref.split('#')[0] ?? '');
 	return [...files].filter((file) => file !== '').sort();
 };
-
-/**
- * Each mode-A element's entry modules (for {@link measureBundle}).
- * @param {{ elements?: ReadonlyArray<Record<string, any>> }} manifest
- * @returns {Array<{ key: string, modules: string[] }>}
- */
-export const elementModules = (manifest) =>
-	(manifest.elements ?? [])
-		.filter((element) => Array.isArray(element.modes) && element.modes.includes('A'))
-		.map((element) => ({
-			key: String(element.key),
-			modules: [element.headless, element.renderer]
-				.filter((ref) => typeof ref === 'string' && ref.includes('#'))
-				.map((ref) => String(ref).split('#')[0] ?? ''),
-		}));
 
 /**
  * Bundle module entries (minified ESM for browsers, code splitting): each entry keeps its project-relative path and
@@ -173,15 +151,6 @@ export const descriptorOf = ({ manifest, assets }) => ({
 });
 
 /**
- * Measure a build the way the Portal does (`@ss/contracts/budget`).
- * @param {Pack} pack
- */
-export const measurePack = ({ manifest, assets }) => {
-	const byPath = new Map(assets.map((asset) => [asset.path, asset.bytes]));
-	return measureBundle({ elements: elementModules(manifest), read: (file) => byPath.get(file) });
-};
-
-/**
  * Write a build: every asset at its path plus `descriptor.json` (the folder is replaced).
  * @param {Pack} pack
  * @param {string} outDir
@@ -193,79 +162,4 @@ export const writePack = async (pack, outDir) => {
 		await writeFile(path.join(outDir, asset.path), asset.bytes);
 	}
 	await writeFile(path.join(outDir, 'descriptor.json'), `${JSON.stringify(descriptorOf(pack), null, '\t')}\n`);
-};
-
-/**
- * @typedef {object} PublishInput
- * @property {Pack} pack
- * @property {string} portalUrl
- * @property {string} token staff API token (`sst_…`)
- * @property {Record<string, unknown>} signingKey the developer's private Ed25519 JWK (with `kid`)
- * @property {typeof fetch} fetch
- * @property {boolean} [activate] activate the pack once its assets are uploaded
- */
-
-/**
- * Sign and upload a build.
- * @param {PublishInput} input
- * @returns {Promise<{ appId: string, version: number, uploaded: number, status: string }>}
- */
-export const publishPack = async ({ pack, portalUrl, token, signingKey, fetch, activate = false }) => {
-	const base = portalUrl.replace(/\/+$/, '');
-	const descriptor = descriptorOf(pack);
-	const signature = await signBundle({ signer: createSigner(/** @type {any} */ (signingKey)), descriptor });
-	const publicJwk = toPublicJwk(signingKey);
-	/** @param {string} method @param {string} route @param {{ json?: unknown, bytes?: Buffer, type?: string }} body */
-	const call = async (method, route, { json, bytes, type }) => {
-		const response = await fetch(`${base}${route}`, {
-			method,
-			headers: {
-				authorization: `Bearer ${token}`,
-				'content-type': type ?? 'application/json',
-				...(method === 'POST'
-					? {
-							'idempotency-key': `ss-pack-${createHash('sha256')
-								.update(route + JSON.stringify(json ?? ''))
-								.digest('hex')
-								.slice(0, 32)}`,
-						}
-					: {}),
-			},
-			body: bytes ? new Uint8Array(bytes) : JSON.stringify(json),
-		});
-		const text = await response.text();
-		/** @type {any} */
-		let parsed = null;
-		try {
-			parsed = text ? JSON.parse(text) : null;
-		} catch {
-			parsed = null;
-		}
-		if (!response.ok)
-			throw Object.assign(
-				new Error(`${method} ${route}: ${response.status} ${parsed?.detail ?? parsed?.title ?? text.slice(0, 200)}`),
-				{
-					code: 'publish_failed',
-					status: response.status,
-					problem: parsed,
-				},
-			);
-		return parsed;
-	};
-	const uploaded = await call('POST', '/v1/admin/packs', { json: { descriptor, signature, publicJwk } });
-	const appId = String(uploaded?.app?.appId ?? '');
-	const version = Number(uploaded?.version?.version ?? 0);
-	if (!appId || !version)
-		throw Object.assign(new Error('the Portal did not return the pack version'), { code: 'publish_failed' });
-	for (const asset of pack.assets)
-		await call('PUT', `/v1/admin/packs/${appId}/versions/${version}/assets/${asset.path}`, {
-			bytes: asset.bytes,
-			type: asset.contentType,
-		});
-	let status = String(uploaded?.app?.status ?? 'pending');
-	if (activate && status !== 'active') {
-		const result = await call('POST', `/v1/admin/apps/${appId}/lifecycle`, { json: { action: 'activate' } });
-		status = String(result?.status ?? status);
-	}
-	return { appId, version, uploaded: pack.assets.length, status };
 };

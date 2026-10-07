@@ -1,6 +1,6 @@
 /**
  * Meta-rules for element feature schemas (PLAN Part E §6): the allowed JSON Schema 2020-12 subset plus the
- * annotation keywords `x-ui`, `x-plan`, `x-lock`, `x-experiment`, `x-kind`, and the quota/rate metadata `x-period`,
+ * annotation keywords `x-ui`, `x-plan`, `x-lock`, `x-kind`, and the quota/rate metadata `x-period`,
  * `x-hardStop`, `x-unit` (quota) and `x-per`, `x-unit` (rate), and `x-placement` (placement features).
  *
  * The `placement` kind (F.18) is the one exception to "no open objects": a top-level `type: 'object'` feature with
@@ -55,18 +55,7 @@ export const FEATURE_FORMATS = Object.freeze(
 
 /** Annotation keywords added to the subset. */
 export const FEATURE_EXTENSION_KEYWORDS = Object.freeze(
-	/** @type {const} */ ([
-		'x-ui',
-		'x-plan',
-		'x-lock',
-		'x-experiment',
-		'x-kind',
-		'x-period',
-		'x-hardStop',
-		'x-unit',
-		'x-per',
-		'x-placement',
-	]),
+	/** @type {const} */ (['x-ui', 'x-plan', 'x-lock', 'x-kind', 'x-period', 'x-hardStop', 'x-unit', 'x-per', 'x-placement']),
 );
 
 /** Every keyword allowed in a feature schema node. */
@@ -173,7 +162,6 @@ const nodeProperties = {
 		properties: { members: placementMembers },
 	},
 	'x-lock': { type: 'boolean' },
-	'x-experiment': { type: 'boolean' },
 	'x-kind': { type: 'string', enum: [...FEATURE_KINDS] },
 	'x-period': { type: 'string', enum: [...QUOTA_PERIODS] },
 	'x-hardStop': { type: 'boolean' },

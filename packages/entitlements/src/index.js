@@ -16,13 +16,12 @@ export {
 	toMillicredits,
 } from './units.js';
 export { HOUR_MS, ceilHour, floorHour, isoHour, isoInstant, toMs } from './time.js';
-export { BUCKETS, bucketOf, deepEqual, sha256Hex, stableStringify } from './hash.js';
+export { deepEqual, sha256Hex, stableStringify } from './hash.js';
 export {
 	FEATURE_KINDS,
 	PERIOD_UNITS,
 	RATE_WINDOWS,
 	currentPriceBook,
-	elementDependencies,
 	findPriceBook,
 	isCountKind,
 	isNumericFeature,
@@ -32,17 +31,9 @@ export {
 	planDefaults,
 	withinPlanMax,
 } from './catalog.js';
-export { AUTHORITY, LAYERS, contentHash, inRollout, pickEffective, resolveEntitlement, selectVariant } from './resolve.js';
+export { AUTHORITY, LAYERS, contentHash, pickEffective, resolveEntitlement } from './resolve.js';
 export { SOURCE_NAMES, toDocument } from './document.js';
-export {
-	incrementalOverageCharge,
-	overageCharge,
-	periodBounds,
-	quotaAllows,
-	quotaState,
-	wallToInstant,
-	zoneOffset,
-} from './quotas.js';
+export { overageCharge, periodBounds, quotaAllows, quotaState, wallToInstant, zoneOffset } from './quotas.js';
 export {
 	balanceAfter,
 	burnRate,
@@ -53,6 +44,5 @@ export {
 	planSettlement,
 	priceBookResolver,
 	projectedMonth,
-	reconcile,
 } from './settlement.js';
 export { spendCapDecision, spendCapState } from './spend.js';

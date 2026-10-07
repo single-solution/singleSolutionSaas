@@ -168,15 +168,9 @@ importers:
       '@ss/contracts':
         specifier: workspace:^
         version: link:../contracts
-      '@ss/entitlements':
-        specifier: workspace:^
-        version: link:../entitlements
       '@ss/protocol':
         specifier: workspace:^
         version: link:../protocol
-      '@ss/rules':
-        specifier: workspace:^
-        version: link:../rules
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
@@ -196,9 +190,6 @@ importers:
       eslint:
         specifier: ^9.39.5
         version: 9.39.5(jiti@2.7.0)
-      mongodb-memory-server:
-        specifier: ^10.4.3
-        version: 10.4.3
       prettier:
         specifier: ^3.9.9
         version: 3.9.9

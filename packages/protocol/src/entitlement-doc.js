@@ -18,7 +18,7 @@ import { normalizeDomain } from './website-keys.js';
 
 /** JOSE `typ` of entitlement documents. */
 export const ENTITLEMENT_TYP = 'ss-entitlement+jws';
-/** Default offline grace (24 h, matching the manifest default `offlineGrace: PT24H`). */
+/** Default offline grace (24 h, the fixed grace products apply). */
 export const DEFAULT_GRACE_MS = 24 * 60 * 60_000;
 const MAX_DOCUMENT_LENGTH = 512 * 1024;
 

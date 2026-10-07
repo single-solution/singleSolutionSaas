@@ -15,7 +15,6 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 | `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                                       |
 | `api/`          | thin REST handlers, event consumers, dashboard session view                                                          |
 | `adapters/`     | data repositories (every query keyed by `websiteId`) and the app-kit platform wiring                                 |
-| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)                         |
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                        |
 | `schemas/`      | feature schemas and product event data schemas                                                                       |
 | `app/`          | Next.js App Router: `.well-known/ss-connect`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
@@ -24,22 +23,25 @@ Protocol (registration, launches, website keys, entitlements with offline grace,
 ## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator on http://localhost:4400 (reads ss.dev.json)
-pnpm dev                       # product on http://localhost:3000 (Next.js), or: node serve.js 3000 (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss dev keys                    # pk_test_/sk_test_ website keys
-ss dev launch --kind merchant  # prints a launch URL (GET /sso?launch=… → ss_session cookie → /dashboard)
-ss dev emit order.placed --website web_devwebsite01
-ss dev settle --hours 3        # hourly ledger lines for the fake subscriptions
+pnpm dev                       # product on http://localhost:3000 (.env.local: MONGODB_URI, empty = in-memory, and a generated CONNECT_SECRET)
 ```
+
+Connect it from the Portal: Admin → Apps → Add product → the product URL and its `CONNECT_SECRET`. Staff activate the
+app before merchants can subscribe.
+
+## Widgets (Mode A)
+
+```sh
+ss pack build                  # bundles the headless/ui modules of the Mode A elements into dist/pack (descriptor.json + assets)
+```
+
+Upload the folder in the Portal: Admin → Apps → the app → Upload widgets.
 
 ## Check
 
 ```sh
 pnpm check                     # format, lint, typecheck, unit tests with coverage (tooling from @ss/config)
 ss app validate                # manifest, anatomy, import direction, DOM-free cores, tokens, strings
-ss certify . --url http://localhost:3000   # certification suite (an unconnected product: restart it first)
 ```
 
 ## Remove the `notes` sample
@@ -52,12 +54,9 @@ ss certify . --url http://localhost:3000   # certification suite (an unconnected
    tests `tests/core.test.js`, `tests/headless.test.js`, `tests/ui.test.js`, `tests/api.test.js`, `tests/helpers.js`,
    `tests/memory-collection.js`.
 2. `manifest.json`: replace the `notes` element with your own (a service product needs at least one element), update
-   `plans[].elements`, drop `capabilities.localEnforcement` `limit:notes.*`, `retention.notes`, the
+   `plans[].elements`, drop `retention.notes`, the
    `order.placed@1` consume and its `events.subscribe:` scope, and the `note_created` publish.
-3. `openapi.json`: remove `/v1/notes` and `/v1/notes/{id}` and document your element's `api.resources` (mark the one
-   `ss certify` should exercise with `"x-ss-certify": true`).
+3. `openapi.json`: remove `/v1/notes` and `/v1/notes/{id}` and document your element's `api.resources`.
 4. `api/routes.js`: drop the notes routes and handlers; `wireEvents` registers nothing until you consume events.
-5. `adapters/privacy.js`: list your own personal-data collections; when you store none, pass `export` /
-   `anonymize` handlers that answer empty results (as `--minimal` does) so the Portal's data requests succeed.
-6. `strings/en.json`: remove the `notes.*` keys (keep `dashboard.*`).
-7. Run `ss app validate` and `pnpm check`.
+5. `strings/en.json`: remove the `notes.*` keys (keep `dashboard.*`).
+6. Run `ss app validate` and `pnpm check`.

@@ -23,19 +23,17 @@ describe('api helpers', () => {
 	});
 
 	it('describes launch sessions of every kind', () => {
-		assert.deepEqual(sessionView({ kind: 'staff', role: 'support', subject: 'stf_1', scope: { actor: 'stf_1' } }), {
-			kind: 'staff',
+		assert.deepEqual(sessionView({ kind: 'admin', role: 'support', subject: 'stf_1', scope: { merchantId: 'mer_1' } }), {
+			kind: 'admin',
 			role: 'support',
-			scope: { actor: 'stf_1' },
+			scope: { merchantId: 'mer_1' },
 			user: 'stf_1',
-			actor: 'stf_1',
 		});
-		assert.deepEqual(sessionView({ kind: 'demo', role: 'viewer' }), {
-			kind: 'demo',
+		assert.deepEqual(sessionView({ kind: 'merchant', role: 'viewer' }), {
+			kind: 'merchant',
 			role: 'viewer',
 			scope: {},
 			user: null,
-			actor: null,
 		});
 	});
 

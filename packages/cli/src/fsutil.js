@@ -19,22 +19,9 @@ export const exists = async (target) => {
 	}
 };
 
-/**
- * True when `target` is a directory.
- * @param {string} target
- * @returns {Promise<boolean>}
- */
-export const isDirectory = async (target) => {
-	try {
-		return (await stat(target)).isDirectory();
-	} catch {
-		return false;
-	}
-};
-
 /** Directories never walked. */
 export const IGNORED_DIRS = Object.freeze(
-	new Set(['node_modules', '.git', '.next', 'coverage', 'dist', '.ss', '.vercel', '.ss-pack-out']),
+	new Set(['node_modules', '.git', '.next', 'coverage', 'dist', '.vercel', '.ss-pack-out']),
 );
 
 /**

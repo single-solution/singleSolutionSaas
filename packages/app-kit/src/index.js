@@ -1,7 +1,7 @@
 /**
  * @ss/app-kit — everything a service product needs to follow the Product Standard (SSPS v1). See README.md and API.md.
  */
-export { createProduct } from './product.js';
+export { createProduct, OFFLINE_GRACE_MS } from './product.js';
 export { CONTROL_DB_POOL_SIZE, MONGODB_URI_REQUIRED, configFromEnv, configProblems } from './env.js';
 export { misconfiguredResponse, startupFailedResponse } from './misconfigured.js';
 export { createLogger, noopLogger, redact } from './logger.js';
@@ -19,12 +19,10 @@ export { createHttpConnector, createHttpAi, createHttpMessaging } from './connec
 export { createSmtpMessaging, SMTP_PORTS } from './connectors/smtp.js';
 export { createOutbox } from './outbox.js';
 export { createBackground } from './background.js';
-export { REPLAY_COLLECTION, REPLAY_HEADERS } from './http/replay.js';
 export { presignUrl, signHeaders } from './connectors/sigv4.js';
 export { createEvents, checkEvent, CONTROL_EVENTS } from './events.js';
 export { createAudit } from './audit.js';
 export { createIdentity, verifyIdentityToken, identityTokenOf, IDENTITY_HEADER, IDENTITY_MAX_AGE_MS } from './identity.js';
-export { createPrivacy } from './privacy.js';
 export { createRequestHandler } from './http/handler.js';
 export { defineRoute } from './http/routes.js';
 export { ok, created, noContent, problem, paginate, isProblem, RESERVED_PROBLEM_MEMBERS } from './http/results.js';

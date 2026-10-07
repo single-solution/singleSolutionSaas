@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createAudit, createPortalClient, createProduct } from '../src/index.js';
-import { createJwks, createKeyResolver, createSigner, generateSigningKey, verifyManifest } from '@ss/protocol';
+import { createSigner, generateSigningKey } from '@ss/protocol';
 import { PORTAL_URL, WEBSITE, createClock, entitle, manifest, setup } from './helpers.js';
 import { createFakePortal, entitlementPayload } from '../src/testing.js';
 
@@ -18,7 +18,6 @@ describe('createProduct', () => {
 					name: 'Bar',
 					modes: ['A', 'B'],
 					price: { hourly: 0 },
-					budget: { js: 3 },
 					placement: true,
 					headless: 'h.js#c',
 					renderer: 'r.js#r',
@@ -34,7 +33,6 @@ describe('createProduct', () => {
 			/private member/,
 		);
 		const product = createProduct({ ...base, manifest: manifest(), signingKey: `${privateJwk.kid}:${privateJwk.d}` });
-		// before registration (no appId) the manifest is served unsigned
 		expect(await product.manifestRoute()).toEqual({
 			status: 200,
 			body: manifest(),
@@ -42,28 +40,15 @@ describe('createProduct', () => {
 		});
 	});
 
-	it('signs the served manifest with the product key once the appId is known', async () => {
-		const { product, publicJwk, clock } = await setup();
-		const first = await product.manifestRoute();
-		const jws = first.headers['ss-manifest-signature'];
-		expect(typeof jws).toBe('string');
-		const claims = await verifyManifest({
-			manifest: first.body,
-			jws,
-			keyResolver: createKeyResolver({ jwks: createJwks([publicJwk]), now: clock.now }),
-			expectedAppId: 'app_test',
-			now: clock.now,
-		});
-		expect(claims).toMatchObject({ appId: 'app_test', kid: 'product-1', iat: clock.now() / 1000 });
-		clock.advance(60_000);
-		expect((await product.manifestRoute()).headers['ss-manifest-signature']).toBe(jws);
-		clock.advance(3_600_000);
-		expect((await product.manifestRoute()).headers['ss-manifest-signature']).not.toBe(jws);
+	it('serves the manifest unsigned once connected too', async () => {
+		const { product } = await setup();
+		const served = await product.manifestRoute();
+		expect(served.headers).toEqual({ 'cache-control': 'public, max-age=300' });
+		expect(served.body.product.slug).toBe(manifest().product.slug);
 	});
 
-	it('sends heartbeats and publishes events through the signed client', async () => {
+	it('publishes events through the signed client', async () => {
 		const { portal, product } = await setup();
-		expect(await product.heartbeat()).toEqual({ ok: true });
 		await entitle(portal);
 		const envelope = await product.portal.publishEvent({
 			websiteId: WEBSITE,
@@ -104,7 +89,6 @@ describe('createProduct', () => {
 			product.portal.publishEvent({ websiteId: WEBSITE, type: 'coupon_box.redeemed@1', data: {}, idempotencyKey: '' }),
 		).rejects.toMatchObject({ code: 'invalid_event' });
 		await product.portal.publishEvents([]);
-		expect(await product.portal.rotateKey({ publicJwk: {} })).toEqual({ ok: true });
 		expect(await product.portal.consumeLaunch({ jti: 'j' })).toEqual({ consumed: true });
 	});
 
@@ -190,7 +174,7 @@ describe('portal client', () => {
 		answers.push(() => new Response('not json', { status: 200 }));
 		await expect(client.jwks()).rejects.toMatchObject({ code: 'portal_error' });
 		answers.push(() => new Response('', { status: 200 }));
-		expect(await client.heartbeat({ version: '1' })).toBeNull();
+		expect(await client.publishEvents([])).toBeNull();
 		answers.push(() => new Response('[]', { status: 200 }));
 		await expect(client.revocations()).rejects.toMatchObject({ code: 'portal_error' });
 		answers.push(() => new Response('{"keyIds":["a",1]}', { status: 200 }));
@@ -215,7 +199,7 @@ describe('portal client', () => {
 		answers.push(() => new Response('{"title":"x"}', { status: 400 }));
 		await expect(client.usage([])).rejects.toMatchObject({ code: 'portal_error', details: { status: 400 } });
 		const unregistered = createPortalClient({ portalUrl: 'https://portal.test', appId: async () => null, signer, fetch });
-		await expect(unregistered.heartbeat({ version: '1' })).rejects.toMatchObject({ code: 'not_registered' });
+		await expect(unregistered.publishEvents([])).rejects.toMatchObject({ code: 'not_registered' });
 	});
 });
 
@@ -226,7 +210,7 @@ describe('audit', () => {
 		const audit = createAudit({ data: /** @type {any} */ ({}), now: () => 0, sink: async (entry) => written.push(entry) });
 		await audit.record({
 			websiteId: WEBSITE,
-			actor: { type: 'staff', id: 'u1', act: 'staff_2' },
+			actor: { type: 'staff', id: 'u1' },
 			action: 'coupon.created',
 			target: { type: 'coupon', id: 'c1' },
 			before: null,
@@ -235,7 +219,7 @@ describe('audit', () => {
 		});
 		expect(written[0]).toEqual({
 			websiteId: WEBSITE,
-			actor: { type: 'staff', id: 'u1', act: 'staff_2' },
+			actor: { type: 'staff', id: 'u1' },
 			action: 'coupon.created',
 			target: { type: 'coupon', id: 'c1' },
 			before: null,
@@ -271,7 +255,7 @@ describe('fake portal', () => {
 		expect(await (await portal.fetch('https://other.test/x')).text()).toBe('fallback');
 		const noFallback = await createFakePortal();
 		await expect(noFallback.fetch('https://other.test/x')).rejects.toThrow(TypeError);
-		expect((await portal.fetch('https://portal.test/v1/product/heartbeat', { method: 'POST' })).status).toBe(401);
+		expect((await portal.fetch('https://portal.test/v1/product/events', { method: 'POST' })).status).toBe(401);
 		expect(entitlementPayload({ websiteId: WEBSITE, productSlug: 'a-b', now: 0 }).dataScope.prefix).toBe('ss_a_b_');
 		expect(typeof (await portal.signDocument({ validUntil: '2030-01-01T00:00:00Z' }))).toBe('string');
 	});

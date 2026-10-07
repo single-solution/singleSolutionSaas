@@ -19,7 +19,6 @@ import {
 	CodeBlock,
 	ConfirmDialog,
 	Dialog,
-	Drawer,
 	EmptyState,
 	ErrorState,
 	Form,
@@ -34,7 +33,6 @@ import {
 	Select,
 	ShareBars,
 	Skeleton,
-	Sparkline,
 	Spinner,
 	Stat,
 	StatusBadge,
@@ -239,16 +237,12 @@ describe('display', () => {
 					]}
 				/>
 				<ShareBars label="None" data={[]} />
-				<Sparkline label="Trend" values={[1, 3, 2]} />
-				<Sparkline label="Flat" values={[1]} />
 			</div>,
 		);
 		expect(container.querySelector('svg[role="img"]')?.getAttribute('aria-label')).toBe('Spend: 2 values, highest 2 c');
 		expect(container.querySelector('table.sr-only td')?.textContent).toBe('2 c');
 		expect(container.textContent).toContain('No data for this period.');
 		expect(container.querySelector('ul[aria-label="Share"]')?.children).toHaveLength(2);
-		expect(container.querySelector('svg[aria-label="Trend"] polyline')).not.toBeNull();
-		expect(container.querySelector('svg[aria-label="Flat"]')).toBeNull();
 	});
 });
 
@@ -354,23 +348,22 @@ describe('Tabs', () => {
 });
 
 describe('overlays', () => {
-	/** @param {{ initial?: boolean, drawer?: boolean }} props */
-	function Harness({ initial = false, drawer = false }) {
+	/** @param {{ initial?: boolean }} props */
+	function Harness({ initial = false }) {
 		const [open, setOpen] = useState(initial);
-		const Overlay = drawer ? Drawer : Dialog;
 		return (
 			<div>
 				<button type="button" onClick={() => setOpen(true)}>
 					Open
 				</button>
-				<Overlay
+				<Dialog
 					open={open}
 					onClose={() => setOpen(false)}
 					title="Edit"
 					description="Change it"
 					footer={<button type="button">Last</button>}>
 					<input aria-label="First field" />
-				</Overlay>
+				</Dialog>
 			</div>
 		);
 	}
@@ -399,8 +392,8 @@ describe('overlays', () => {
 		expect(document.body.style.overflow).toBe('');
 	});
 
-	it('Drawer closes on backdrop click; ConfirmDialog confirms', () => {
-		render(<Harness initial drawer />);
+	it('Dialog closes on backdrop click; ConfirmDialog confirms', () => {
+		render(<Harness initial />);
 		const backdrop = /** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')?.parentElement);
 		act(() => {
 			backdrop.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));

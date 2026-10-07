@@ -13,13 +13,12 @@ A service product needs at least one element, so this project ships the placehol
 | Path            | Purpose                                                                                                              |
 | --------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `manifest.json` | SSPS manifest (features referenced from `schemas/`, bundled inline by the tooling)                                   |
-| `openapi.json`  | Mode C API (every `api.resources` entry documented; `x-ss-certify` marks the resource `ss certify` exercises)        |
+| `openapi.json`  | Mode C API (every `api.resources` entry documented)                                                                  |
 | `core/`         | pure domain logic (no I/O, no DOM)                                                                                   |
 | `headless/`     | Mode B element cores built on `core/` (string helpers for now)                                                       |
 | `ui/`           | Mode A renderers built only on `headless/`, design tokens only                                                       |
 | `api/`          | thin REST handlers, event consumers, dashboard session view                                                          |
-| `adapters/`     | the app-kit platform wiring and the personal-data declaration (`privacy.js`)                                         |
-| `jobs/`         | no scheduled work: handlers run on events, reads or dashboard buttons (see `jobs/README.md`)                         |
+| `adapters/`     | the app-kit platform wiring                                                                                          |
 | `strings/`      | string catalogs (`t('key')`, `{placeholder}`)                                                                        |
 | `schemas/`      | feature schemas and product event data schemas                                                                       |
 | `app/`          | Next.js App Router: `.well-known/ss-connect`, `.well-known/ss-events`, `.well-known/ss-app.json`, `/v1/*`, dashboard |
@@ -28,18 +27,14 @@ A service product needs at least one element, so this project ships the placehol
 ## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator on http://localhost:4400 (reads ss.dev.json)
-pnpm dev                       # product on http://localhost:3000 (Next.js), or: node serve.js 3000 (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss dev keys                    # pk_test_/sk_test_ website keys
-ss dev launch --kind merchant  # prints a launch URL (GET /sso?launch=… → ss_session cookie → /dashboard)
+pnpm dev                       # product on http://localhost:3000 (.env.local: MONGODB_URI, empty = in-memory, and a generated CONNECT_SECRET)
 ```
+
+Connect it from the Portal: Admin → Apps → Add product → the product URL and its `CONNECT_SECRET`.
 
 ## Check
 
 ```sh
 pnpm check                     # format, lint, typecheck, unit tests with coverage (tooling from @ss/config)
 ss app validate                # manifest, anatomy, import direction, DOM-free cores, tokens, strings
-ss certify . --url http://localhost:3000   # certification suite (an unconnected product: restart it first)
 ```

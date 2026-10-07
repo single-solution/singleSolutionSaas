@@ -1,7 +1,6 @@
 'use client';
 /**
- * Modal overlays: Dialog (centred) and Drawer (side panel). Both are `role="dialog"` + `aria-modal`, labelled by
- * their title, trap focus (Tab / Shift+Tab cycle inside), close on Escape and on backdrop click, lock page scroll,
+ * Modal dialog: `role="dialog"` + `aria-modal`, labelled by its title, traps focus (Tab / Shift+Tab cycle inside), close on Escape and on backdrop click, lock page scroll,
  * and restore focus to the element that opened them.
  * @module
  */
@@ -86,9 +85,10 @@ export const useFocusTrap = (ref, open, onClose) => {
  */
 
 /**
- * @param {OverlayProps & { variant: 'dialog' | 'drawer' }} props
+ * Centred modal dialog (bottom sheet on small screens).
+ * @param {OverlayProps} props
  */
-function Overlay({
+export function Dialog({
 	open,
 	onClose,
 	title,
@@ -98,7 +98,6 @@ function Overlay({
 	size = 'md',
 	closeLabel = 'Close',
 	dismissible = true,
-	variant,
 }) {
 	const ref = useRef(/** @type {HTMLDivElement | null} */ (null));
 	const titleId = useId();
@@ -111,10 +110,7 @@ function Overlay({
 	const width = size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-3xl' : 'max-w-xl';
 	const panel = (
 		<div
-			className={cx(
-				'fixed inset-0 z-50 flex bg-overlay',
-				variant === 'dialog' ? 'items-end justify-center p-0 sm:items-center sm:p-4' : 'justify-end',
-			)}
+			className="fixed inset-0 z-50 flex items-end justify-center bg-overlay p-0 sm:items-center sm:p-4"
 			onMouseDown={(event) => {
 				if (event.target === event.currentTarget) close();
 			}}>
@@ -126,10 +122,8 @@ function Overlay({
 				aria-describedby={description ? descriptionId : undefined}
 				tabIndex={-1}
 				className={cx(
-					'flex w-full flex-col border border-line bg-surface text-fg shadow-overlay focus:outline-none',
-					variant === 'dialog'
-						? cx('max-h-[92vh] rounded-t-card sm:rounded-card', width)
-						: cx('h-full rounded-l-card', size === 'lg' ? 'max-w-2xl' : 'max-w-lg'),
+					'flex max-h-[92vh] w-full flex-col rounded-t-card border border-line bg-surface text-fg shadow-overlay focus:outline-none sm:rounded-card',
+					width,
 				)}>
 				<div className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">
 					<div className="min-w-0">
@@ -160,22 +154,6 @@ function Overlay({
 		</div>
 	);
 	return typeof document === 'undefined' ? panel : createPortal(panel, document.body);
-}
-
-/**
- * Centred modal dialog (bottom sheet on small screens).
- * @param {OverlayProps} props
- */
-export function Dialog(props) {
-	return <Overlay {...props} variant="dialog" />;
-}
-
-/**
- * Side panel.
- * @param {OverlayProps} props
- */
-export function Drawer(props) {
-	return <Overlay {...props} variant="drawer" />;
 }
 
 /**

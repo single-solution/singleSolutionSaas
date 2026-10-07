@@ -56,7 +56,6 @@ describe('toDocument', () => {
 			runtime: { state: 'active' },
 			resources: [{ kind: 'database', ref: 'db_main', status: 'connected' }],
 			dataScope: { prefix: 'ss_coupons_' },
-			experiments: [],
 		});
 		expect(doc.elements.codes).toEqual({ enabled: true });
 		expect(doc.features['codes.maxActive']).toEqual({ value: 50, source: 'plan_default', locked: false });
@@ -112,40 +111,30 @@ describe('toDocument', () => {
 
 	it('maps every source to contracts FEATURE_SOURCES', () => {
 		expect(Object.values(SOURCE_NAMES).sort()).toEqual([...FEATURE_SOURCES].sort());
-		const experiment = { id: 'exp', element: 'apply_box', variants: [{ key: 'only', weight: 1, values: { delayMs: 5 } }] };
 		const resolved = resolve({
 			layers: {
 				platform: { features: { 'codes.apiRate': { value: 90 } } },
-				merchant: { features: { 'codes.headline': { value: 'Merchant' } } },
 				website: { features: { 'codes.layout': { value: 'modal' } } },
 				admin: { features: { 'codes.bulk': { value: true, locked: true } } },
 			},
-			runtime: { resources: HEALTHY, experiments: [experiment] },
+			runtime: { resources: HEALTHY },
 		});
 		const doc = documentOf(toDocument(resolved, META));
 		expect(
 			Object.fromEntries(
-				[
-					'codes.pattern',
-					'codes.maxActive',
-					'codes.apiRate',
-					'codes.headline',
-					'codes.layout',
-					'codes.bulk',
-					'apply_box.delayMs',
-				].map((k) => [k, doc.features[k]?.source]),
+				['codes.pattern', 'codes.maxActive', 'codes.apiRate', 'codes.layout', 'codes.bulk'].map((k) => [
+					k,
+					doc.features[k]?.source,
+				]),
 			),
 		).toEqual({
 			'codes.pattern': 'product_default',
 			'codes.maxActive': 'plan_default',
 			'codes.apiRate': 'platform_policy',
-			'codes.headline': 'merchant_default',
 			'codes.layout': 'website_override',
 			'codes.bulk': 'admin_override',
-			'apply_box.delayMs': 'runtime',
 		});
 		expect(doc.features['codes.bulk']).toEqual({ value: true, source: 'admin_override', locked: true });
-		expect(doc.experiments).toEqual([{ element: 'apply_box', variant: 'only' }]);
 	});
 
 	it('encodes element reasons compactly and keeps quota exhaustion on the feature', () => {
@@ -173,10 +162,6 @@ describe('toDocument', () => {
 		const dep = documentOf(toDocument(resolve({ layers: { admin: { elements: { codes: false } } } }), META));
 		expect(dep.elements.apply_box).toEqual({ enabled: false, reason: 'dependency:codes' });
 		expect(dep.elements.codes).toEqual({ enabled: false, reason: 'admin_override' });
-		const rollout = documentOf(
-			toDocument(resolve({ runtime: { resources: HEALTHY, rollouts: { ai_copy: { id: 'r', percent: 0 } } } }), META),
-		);
-		expect(rollout.elements.ai_copy).toEqual({ enabled: false, reason: 'rollout' });
 		const clamped = documentOf(
 			toDocument(resolve({ layers: { website: { features: { 'codes.maxActive': { value: 99999 } } } } }), META),
 		);
@@ -222,7 +207,7 @@ describe('toDocument', () => {
 	});
 
 	it('any resolver output maps to a schema-valid document (property)', () => {
-		const layerNames = /** @type {const} */ (['platform', 'merchant', 'website', 'admin']);
+		const layerNames = /** @type {const} */ (['platform', 'website', 'admin']);
 		const elementKeys = Object.keys(coupons.elements);
 		const featureValues = {
 			'codes.maxActive': fc.oneof(fc.nat(20000), fc.constant(null)),
@@ -255,11 +240,10 @@ describe('toDocument', () => {
 				fc.boolean(),
 				fc.record({ database: status, ai: status }),
 				fc.nat(200),
-				fc.option(fc.integer({ min: 0, max: 100 })),
 				fc
 					.string({ minLength: 10, maxLength: 20 })
 					.map((s) => `sub_${[...s].map((c) => '0123456789abcdefghjkmnpqrstvwxyz'[c.charCodeAt(0) % 32]).join('')}`),
-				(layers, plan, status, spendCap, resources, used, percent, subscriptionId) => {
+				(layers, plan, status, spendCap, resources, used, subscriptionId) => {
 					const resolved = resolveEntitlement({
 						product: coupons,
 						subscription: { id: subscriptionId, plan, status },
@@ -268,17 +252,6 @@ describe('toDocument', () => {
 							spendCap,
 							resources,
 							usage: { 'codes.redemptions': used },
-							rollouts: percent === null ? {} : { reports: { id: 'r', percent } },
-							experiments: [
-								{
-									id: 'e',
-									element: 'codes',
-									variants: [
-										{ key: 'control', weight: 1 },
-										{ key: 'modal-a', weight: 1, values: { layout: 'modal' } },
-									],
-								},
-							],
 						},
 						now: NOW,
 					});

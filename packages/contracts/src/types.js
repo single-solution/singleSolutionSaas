@@ -17,7 +17,7 @@
  */
 
 /** @typedef {'A' | 'B' | 'C'} Mode */
-/** @typedef {'database' | 'storage' | 'ai' | 'messaging' | 'payments' | 'analytics'} ResourceKind */
+/** @typedef {'database' | 'storage' | 'ai' | 'messaging' | 'payments'} ResourceKind */
 /** @typedef {'string' | 'integer' | 'number' | 'boolean' | 'array' | 'object'} FeatureType */
 /**
  * @typedef {'paths' | 'selectors' | 'pageTypes' | 'devices' | 'referrers' | 'schedule' | 'consent' | 'triggers' |
@@ -52,7 +52,6 @@
  * @property {Record<string, { default?: unknown, max?: number | boolean, members?: PlacementMember[] }>} [x-plan]
  *   `members`: placement features only — the placement members the plan may set
  * @property {boolean} [x-lock]
- * @property {boolean} [x-experiment]
  * @property {'flag' | 'quota' | 'limit' | 'rate' | 'config' | 'placement'} [x-kind]
  * @property {{ members?: PlacementMember[] }} [x-placement] placement features: the members the element supports
  * @property {'hour' | 'day' | 'week' | 'month'} [x-period] quota reset period (required for quotas)
@@ -87,7 +86,6 @@
  * @property {Mode[]} modes
  * @property {boolean} [stateful]
  * @property {{ hourly: number, metered?: MeteredPrice[] }} price hourly in integer millicredits
- * @property {{ js: number }} [budget] KB gzip of the element's own minified entry modules
  * @property {string[]} [dependsOn]
  * @property {{ resources?: ResourceKind[], optionalResources?: ResourceKind[] }} [requires] `optionalResources`
  *   are used when connected and never disable the element
@@ -98,7 +96,6 @@
  * @property {string[]} [rules]
  * @property {string[]} [hooks]
  * @property {string[]} [customFields]
- * @property {boolean} [experiments]
  * @property {{ resources?: string[] }} [api]
  * @property {string | null} [headless]
  * @property {string | null} [renderer]
@@ -120,11 +117,10 @@
  * @typedef {object} Manifest
  * @property {'1'} ssps
  * @property {{ slug: string, name: string, kind: 'service' | 'pack', version: string, category: string, description?: string }} product
- * @property {{ base: string, dashboard?: string, demo?: string, events?: string, register?: string }} [endpoints]
- * @property {{ adminLaunch?: boolean, identityIssuer?: boolean, sandbox?: boolean, localEnforcement?: string[], offlineGrace?: string }} [capabilities]
+ * @property {{ base: string, dashboard?: string, events?: string }} [endpoints]
+ * @property {{ adminLaunch?: boolean, identityIssuer?: boolean }} [capabilities]
  * @property {string[]} [scopes]
  * @property {{ resources?: ResourceKind[] }} [requires]
- * @property {{ shared?: number }} [budget] KB gzip of the shared code-split chunks (counted once per website)
  * @property {Array<string | { product: string, scopes?: string[] }>} [reads] service products whose public read API
  *   the elements call (the Loader passes an API client per active product)
  * @property {{ consumes?: string[], publishes?: string[] }} [events]
@@ -162,7 +158,6 @@
  * @property {{ prefix: string }} dataScope
  * @property {IdentitySection} [identity] the website's own customer identity issuer (bring-your-own identity)
  * @property {WebsiteSection} [website] website defaults filled by the Portal (time zone, language, currency)
- * @property {Array<{ element: string, variant: string }>} experiments
  */
 
 /**

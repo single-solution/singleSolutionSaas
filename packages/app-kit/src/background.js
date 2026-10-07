@@ -9,7 +9,7 @@
  * the request (not awaited). Each run is bounded to one batch per website and queue.
  *
  * `mode: 'on'` (the default, `'auto'` is an alias) enables it; `mode: 'off'` (the default when `NODE_ENV=test`) leaves
- * sending to explicit `flush()` calls. Explicit `tick()` sends everything due (`product.flush()`, `heartbeat()`).
+ * sending to explicit `flush()` calls. Explicit `tick()` sends everything due (`product.flush()`).
  * @module
  */
 
@@ -54,7 +54,7 @@ export const createBackground = ({ tasks, mode = 'auto', logger }) => {
 		}
 	};
 
-	/** Send everything due now (explicit calls: `product.flush()`, `heartbeat()`). */
+	/** Send everything due now (explicit calls: `product.flush()`). */
 	const tick = () => {
 		if (running) return running;
 		pending.clear();

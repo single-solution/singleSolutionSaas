@@ -3,22 +3,21 @@
  * serverless and edge-style runtimes). Pipeline per request:
  *
  *   request id → route match (404/405, CORS preflight) → body read with a byte cap (413) → auth (website key /
- *   launch session / Portal signature / none) → entitlement + element gating → JSON parse (415/400) → customer
- *   identity → rate limit (429; limit and key may be functions of the context) → Idempotency-Key (428/409/replay) →
+ *   launch session / none) → entitlement + element gating → JSON parse (415/400) → customer identity → rate limit
+ *   (429; limit and key may be functions of the context) → duplicate refusal for `idempotent: true` routes (409) →
  *   handler → RFC 9457 problems for every error. A misconfigured product answers every request 503 with its problems. After the response, the usage and events that request (or this instance) queued, and the website's due retries, are sent.
  * @module
  */
 import { STOPPED_STATES, can } from '../entitlements.js';
 import { createId } from '@ss/contracts';
+import { sha256Hex } from '../util.js';
 import { isProblem, isResult, noContent, ok, problem } from './results.js';
-import { replayHeaders } from './replay.js';
 import { misconfiguredResponse } from '../misconfigured.js';
 import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
 
 /** @typedef {import('./routes.js').RouteDefinition} RouteDefinition */
 /** @typedef {import('./routes.js').CompiledRoute} CompiledRoute */
 /** @typedef {import('./results.js').RouteResult} RouteResult */
-/** @typedef {import('../stores/types.js').StoredResponse} StoredResponse */
 
 /**
  * @typedef {object} RequestContext
@@ -36,31 +35,12 @@ import { compileRoutes, matchPath, matchRoute, splitPath } from './routes.js';
  * @property {import('../keys.js').WebsiteBinding | null} website
  * @property {{ doc: import('@ss/contracts').EntitlementDocument, stale: boolean, version: number } | null} entitlement
  * @property {import('../launch.js').Session | null} session
- * @property {{ kid: string, timestamp: number } | null} portal
  * @property {string | null} websiteId website of the request (key binding, or the session's selected website)
  * @property {import('../identity.js').CustomerIdentity | null} identity the verified customer (routes with `identity`)
  * @property {import('../identity.js').IdentityFailure | null} identityProblem why `identity` is null (optional identity)
  * @property {any} product
  * @property {import('../logger.js').Logger} log
  */
-
-/** Original request paths of requests rewritten by adapters (e.g. `toNextRoute` stripping `/api`). */
-const ORIGINAL_PATHS = new WeakMap();
-
-/**
- * Record the path (with query) the client addressed before an adapter rewrote the request URL.
- * @param {Request} request the rewritten request
- * @param {string} path
- */
-export const rememberOriginalPath = (request, path) => {
-	ORIGINAL_PATHS.set(request, path);
-};
-
-/**
- * @param {Request} request
- * @returns {string | undefined}
- */
-const originalPathOf = (request) => ORIGINAL_PATHS.get(request);
 
 /** Per-request `after()` schedulers registered by adapters (e.g. Next.js `after` through `toNextRoute`). */
 const SCHEDULERS = new WeakMap();
@@ -88,6 +68,8 @@ const firstValues = (params) => {
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const IDEMPOTENCY_KEY = /^[\x21-\x7e]{1,255}$/;
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+/** How long a seen Idempotency-Key refuses a repeat of the same route for the same website. */
+const DUPLICATE_WINDOW_MS = 24 * 60 * 60_000;
 const CORS_HEADERS = 'authorization, content-type, idempotency-key, ss-identity, x-request-id, x-ss-website';
 
 /**
@@ -290,7 +272,6 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				website: null,
 				entitlement: null,
 				session: null,
-				portal: null,
 				websiteId: null,
 				identity: null,
 				identityProblem: null,
@@ -298,7 +279,7 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				log,
 			};
 
-			// body (read before auth: Portal signatures cover the raw bytes)
+			// body
 			if (BODY_METHODS.has(method)) {
 				const read = await readBody(request, r.maxBodyBytes ?? maxBodyBytes);
 				if (!read.ok) return fail(problem('payload_too_large', `The body exceeds ${r.maxBodyBytes ?? maxBodyBytes} bytes.`));
@@ -340,16 +321,6 @@ export const createRequestHandler = (product, routes, options = {}) => {
 					ctx.websiteId = selected;
 					websiteId = selected;
 				}
-			} else if (r.auth === 'portal') {
-				// signature binds method, path + query (as addressed by the Portal), audience (appId) and body
-				const verified = await ctxKit.verifyPortalRequest({
-					method,
-					path: originalPathOf(request) ?? `${url.pathname}${url.search}`,
-					headers: request.headers,
-					rawBody: ctx.rawBody,
-				});
-				if (!verified.ok) return fail(problem('invalid_credentials', 'The Portal signature is invalid.'));
-				ctx.portal = { kid: verified.kid, timestamp: verified.timestamp };
 			}
 
 			// entitlement + element gating
@@ -451,54 +422,15 @@ export const createRequestHandler = (product, routes, options = {}) => {
 				}
 			}
 
-			// idempotency
+			// duplicate refusal: a route declaring `idempotent: true` refuses an Idempotency-Key it saw for the same
+			// website (or session) within 24 h; only the hashed key and its expiry are stored, never a body
 			/** @type {string | null} */
-			let idempotencyRecord = null;
-			const replayStamp = ctx.website
-				? { merchantId: ctx.website.merchantId, env: ctx.website.env }
-				: ctx.entitlement
-					? { merchantId: ctx.entitlement.doc.merchantId, env: ctx.entitlement.doc.env }
-					: {};
-			const idempotent = method === 'POST' ? (r.idempotent ?? true) : false;
-			if (idempotent) {
-				const key = request.headers.get('idempotency-key');
-				if (key === null) {
-					if (idempotent === true) return fail(problem('idempotency_key_required', 'Send an Idempotency-Key header.'));
-				} else {
-					if (!IDEMPOTENCY_KEY.test(key)) return fail(problem('bad_request', 'The Idempotency-Key is invalid.'));
-					const principal = ctx.website?.websiteId ?? ctx.session?.subject ?? (ctx.portal ? 'portal' : 'anonymous');
-					idempotencyRecord = ctxKit.hmac(`key\n${principal}\n${r.id}\n${pathname}\n${key}`);
-					const fingerprint = ctxKit.hmac(`fingerprint\n${method}\n${pathname}\n${url.search}\n${ctx.rawBody}`);
-					const begun = await stores.idempotency.begin(idempotencyRecord, fingerprint, now() + 24 * 60 * 60_000);
-					if (begun.state === 'mismatch')
-						return fail(problem('idempotency_conflict', 'This Idempotency-Key was used with a different request.'));
-					if (begun.state === 'pending') {
-						extra['retry-after'] = '1';
-						return fail(problem('conflict', 'A request with this Idempotency-Key is still in progress.'));
-					}
-					if (begun.state === 'done') {
-						const stored = begun.response;
-						const replay = stored.replay ?? 'none';
-						/** @type {string | null} */
-						let body = null;
-						if (replay === 'website' && ctx.websiteId) {
-							body = await ctxKit.replayBodies.get({
-								websiteId: ctx.websiteId,
-								stamp: replayStamp,
-								key: idempotencyRecord,
-							});
-						}
-						if (replay !== 'empty' && body === null) {
-							return fail(
-								problem(
-									'idempotency_replay_no_body',
-									'This request was already processed, but its response body is not available for replay.',
-								),
-							);
-						}
-						extra['idempotent-replayed'] = 'true';
-						return finish({ status: stored.status, headers: stored.headers, body });
-					}
+			let duplicateKey = null;
+			if (r.idempotent === true && ctx.idempotencyKey) {
+				const principal = ctx.websiteId ?? ctx.session?.subject ?? 'anonymous';
+				duplicateKey = `idem:${sha256Hex(`${principal}\n${r.id}\n${ctx.idempotencyKey}`)}`;
+				if (await stores.replay.seen(duplicateKey, now() + DUPLICATE_WINDOW_MS)) {
+					return fail(problem('duplicate_request', 'A request with this Idempotency-Key was already processed.'));
 				}
 			}
 
@@ -526,25 +458,8 @@ export const createRequestHandler = (product, routes, options = {}) => {
 					rendered = render(problem('internal_error'), requestId, pathname);
 				}
 			}
-			if (idempotencyRecord) {
-				if (rendered.status < 500) {
-					const hasBody = rendered.body !== null && rendered.body !== '';
-					/** @type {StoredResponse['replay']} */
-					let replay = hasBody ? 'none' : 'empty';
-					if (hasBody && ctx.websiteId) {
-						const put = await ctxKit.replayBodies.put({
-							websiteId: ctx.websiteId,
-							stamp: replayStamp,
-							key: idempotencyRecord,
-							body: /** @type {string} */ (rendered.body),
-						});
-						if (put) replay = 'website';
-					}
-					/** @type {StoredResponse} */
-					const stored = { status: rendered.status, headers: replayHeaders(rendered.headers), replay };
-					await stores.idempotency.complete(idempotencyRecord, stored);
-				} else await stores.idempotency.release(idempotencyRecord);
-			}
+			// a failed attempt (5xx) may be retried with the same key
+			if (duplicateKey && rendered.status >= 500) await stores.replay.forget(duplicateKey).catch(() => {});
 			return finish(rendered);
 		} catch (error) {
 			log.error('request failed', { error });

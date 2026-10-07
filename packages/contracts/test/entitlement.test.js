@@ -38,7 +38,7 @@ describe('entitlement document', () => {
 		['bad feature source', (d) => (d.features['codes.maxActive'].source = 'guess'), '/features/codes.maxActive/source', 'enum'],
 		[
 			'bad feature key',
-			(d) => (d.features.maxActive = { value: 1, source: 'runtime', locked: false }),
+			(d) => (d.features.maxActive = { value: 1, source: 'admin_override', locked: false }),
 			'/features/maxActive',
 			'propertyNames',
 		],
@@ -51,7 +51,6 @@ describe('entitlement document', () => {
 		],
 		['bad data prefix', (d) => (d.dataScope.prefix = 'SS-'), '/dataScope/prefix', 'pattern'],
 		['unknown runtime state', (d) => (d.runtime.state = 'broken'), '/runtime/state', 'enum'],
-		['missing experiments', (d) => delete d.experiments, '/experiments', 'required'],
 		['missing validFrom', (d) => delete d.validFrom, '/validFrom', 'required'],
 	];
 	it.each(invalid)('rejects %s', (_name, mutate, path, keyword) => {
@@ -94,7 +93,7 @@ describe('entitlement document', () => {
 			'/issuedAt',
 		);
 		expectRule(
-			check((d) => (d.features['ghost.x'] = { value: 1, source: 'runtime', locked: false })),
+			check((d) => (d.features['ghost.x'] = { value: 1, source: 'admin_override', locked: false })),
 			DOCUMENT_RULES.unknownElement,
 			'/features/ghost.x',
 		);
@@ -102,16 +101,6 @@ describe('entitlement document', () => {
 			check((d) => (d.config.ghost = {})),
 			DOCUMENT_RULES.unknownElement,
 			'/config/ghost',
-		);
-		expectRule(
-			check((d) => d.experiments.push({ element: 'ghost', variant: 'a' })),
-			DOCUMENT_RULES.unknownElement,
-			'/experiments/1/element',
-		);
-		expectRule(
-			check((d) => d.experiments.push({ element: 'codes', variant: 'c' })),
-			DOCUMENT_RULES.duplicateExperiment,
-			'/experiments/1',
 		);
 		expectRule(
 			check((d) => d.resources.push({ ...d.resources[0] })),

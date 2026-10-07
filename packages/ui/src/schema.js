@@ -55,7 +55,6 @@ export const PLACEMENT_MEMBERS = Object.freeze([
  * @property {Record<string, { default?: unknown, max?: number | boolean, members?: string[] }>} [x-plan]
  * @property {{ members?: string[] }} [x-placement]
  * @property {boolean} [x-lock]
- * @property {boolean} [x-experiment]
  * @property {string} [x-period]
  * @property {string} [x-per]
  * @property {string} [x-unit]
@@ -458,7 +457,6 @@ export const changedNames = (before, after) =>
 const LOCK_LABELS = Object.freeze({
 	admin_override: 'Set by admin',
 	platform_policy: 'Set by platform',
-	merchant_default: 'Set by your organisation',
 	plan_default: 'Set by your plan',
 	product_default: 'Set by the product',
 });

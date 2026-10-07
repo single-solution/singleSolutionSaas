@@ -153,10 +153,6 @@ describe('manifest semantics', () => {
 			'/elements/1/headless',
 		);
 		expectRule(
-			semantic((m) => (m.elements[1].budget.js = 0)),
-			MANIFEST_RULES.modeARequiresBudget,
-		);
-		expectRule(
 			semantic((m) => (m.elements[1].modes = ['B', 'C'])),
 			MANIFEST_RULES.rendererRequiresModeA,
 		);
@@ -188,7 +184,6 @@ describe('manifest semantics', () => {
 			}),
 		).toEqual([]);
 		expect(semantic((m) => (m.requires.resources = ['database', 'storage']))).toEqual([]);
-		expect(MANIFEST_RULES.undeclaredResource).toBe('undeclaredResource');
 	});
 
 	it('checks plans: codes, elements and dependency closure', () => {
@@ -503,7 +498,6 @@ describe('manifest semantics', () => {
 		}
 		const m = manifest();
 		delete m.endpoints.dashboard;
-		delete m.endpoints.demo;
 		expect(validateManifest(m).ok).toBe(true);
 	});
 
@@ -531,13 +525,6 @@ describe('manifest semantics', () => {
 		);
 		const result = validateManifest({ ...manifest(), priceBook: { version: '1', effectiveFrom: '2026-13-01T00:00:00Z' } });
 		expect(result.ok).toBe(false);
-	});
-
-	it('requires experiments: true for x-experiment features', () => {
-		expectRule(
-			semantic((m) => (m.elements[0].experiments = false)),
-			MANIFEST_RULES.experimentsDisabled,
-		);
 	});
 
 	it('reports semantic problems through validateManifest', () => {

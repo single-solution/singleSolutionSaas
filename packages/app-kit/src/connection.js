@@ -2,7 +2,7 @@
  * The product's connection to its Portal, kept in its own control database (never in the environment).
  *
  * - **Secrets** (`settings: secrets`): one random 32-byte root secret generated on first start (insert-if-absent, so
- *   concurrent cold starts agree). `secret(label)` derives a purpose key from it (HKDF), e.g. the idempotency HMAC key or
+ *   concurrent cold starts agree). `secret(label)` derives a purpose key from it (HKDF), e.g.
  *   a product's feed-token secret.
  * - **Signing key** (`settings: signingKey`): the product's Ed25519 key, generated on the first connect and kept.
  * - **Connection** (`settings: connection`): `{ portalUrl, appId, baseUrl, privateJwk, connectedAt }`, written by

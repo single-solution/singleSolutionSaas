@@ -21,7 +21,6 @@ describe('status (placeholder element)', () => {
 			role: 'owner',
 			scope: {},
 			user: 'usr_1',
-			actor: null,
 		});
 		assert.equal(createTranslator({ 'a.b': 'Hi {name}' })('a.b', { name: 'Ada' }), 'Hi Ada');
 	});

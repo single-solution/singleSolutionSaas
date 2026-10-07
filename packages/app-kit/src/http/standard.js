@@ -4,7 +4,6 @@
  * @module
  */
 import { eventGlobMatches, eventNamespace } from '@ss/contracts';
-import { guardCollection } from '../data.js';
 import { checkEvent } from '../events.js';
 import { config as configOf, featuresOf, can } from '../entitlements.js';
 import { isObject } from '../util.js';
@@ -85,7 +84,6 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 					runtime: doc.runtime,
 					elements: doc.elements,
 					features: Object.fromEntries(Object.entries(doc.features).map(([key, entry]) => [key, entry.value])),
-					experiments: doc.experiments,
 					validUntil: doc.validUntil,
 				});
 			},
@@ -108,8 +106,7 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 				/** @type {Record<string, unknown>} */
 				const elements = {};
 				for (const key of keys) {
-					const variant = doc.experiments.find((/** @type {{ element: string }} */ e) => e.element === key)?.variant ?? null;
-					elements[key] = { config: configOf(doc, key), features: featuresOf(doc, key), variant };
+					elements[key] = { config: configOf(doc, key), features: featuresOf(doc, key) };
 				}
 				return ok({ version, stale, elements }, { headers: { 'cache-control': 'private, max-age=60' } });
 			},
@@ -118,7 +115,6 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 			method: 'POST',
 			path: '/v1/events',
 			auth: 'website',
-			idempotent: false,
 			rateLimit: { limit: 600, windowMs: 60_000 },
 			handler: async (ctx) => {
 				const body = ctx.body;
@@ -176,30 +172,6 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 				return ok(resolved, { headers: { 'cache-control': 'public, max-age=300' } });
 			},
 		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/data:export',
-			auth: 'portal',
-			idempotent: false,
-			handler: async (ctx) => {
-				const input = privacyInput(ctx.body);
-				if (!input) return problem('bad_request', 'Send { websiteId, subject? }.');
-				const result = await ctxKit.privacy.export(input);
-				return ok(result);
-			},
-		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/data:anonymize',
-			auth: 'portal',
-			idempotent: false,
-			handler: async (ctx) => {
-				const input = privacyInput(ctx.body);
-				if (!input || !input.subject) return problem('bad_request', 'Send { websiteId, subject }.');
-				const result = await ctxKit.privacy.anonymize(input);
-				return ok(result);
-			},
-		}),
 	];
 
 	if (wellKnown) {
@@ -220,7 +192,6 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 				auth: 'none',
 				connected: false,
 				rawBody: true,
-				idempotent: false,
 				maxBodyBytes: 65_536,
 				rateLimit: { limit: 20, windowMs: 60_000 },
 				handler: async (ctx) => {
@@ -236,26 +207,7 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 				path: '/.well-known/ss-events',
 				auth: 'none',
 				rawBody: true,
-				idempotent: false,
 				handler: passthrough({ response: ({ headers, body }) => product.events.handle({ headers, rawBody: body }) }),
-			}),
-		);
-	}
-	if (ctxKit.devProbes) {
-		routes.push(
-			defineRoute({
-				method: 'GET',
-				path: '/v1/ss-probe/data-guard',
-				auth: 'website',
-				entitlement: false,
-				handler: async (ctx) => ok(await probeDataGuard(product, ctx.website.websiteId)),
-			}),
-			defineRoute({
-				method: 'GET',
-				path: '/v1/ss-probe/events/:id',
-				auth: 'website',
-				entitlement: false,
-				handler: (ctx) => ok({ id: ctx.params.id, effects: product.events.effects(ctx.website.websiteId, ctx.params.id) }),
 			}),
 		);
 	}
@@ -285,46 +237,4 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 		);
 	}
 	return routes;
-};
-
-/**
- * Development probe: run a query WITHOUT websiteId through the tenant guard and report what happened. Uses the
- * website's real database when it resolves, otherwise the same guard over a collection stub that never runs a query.
- * @param {any} product
- * @param {string} websiteId
- * @returns {Promise<{ rejected: boolean, code: string | null }>}
- */
-const probeDataGuard = async (product, websiteId) => {
-	/** @type {{ find: (filter: Record<string, unknown>) => { toArray: () => Promise<unknown[]> } }} */
-	let collection;
-	try {
-		collection = (await product.data.forWebsite(websiteId)).collection('ss_probe');
-	} catch {
-		const stub = /** @type {any} */ ({ collectionName: 'ss_probe', find: () => ({ toArray: async () => [] }) });
-		collection = guardCollection(stub, { websiteId, now: Date.now, schemaVersion: () => 1, stamp: {} });
-	}
-	try {
-		await collection.find({}).toArray();
-		return { rejected: false, code: null };
-	} catch (error) {
-		return { rejected: true, code: /** @type {{ code?: string }} */ (error)?.code ?? 'rejected' };
-	}
-};
-
-/**
- * @param {unknown} body
- * @returns {{ websiteId: string, subject?: Record<string, string>, requestId?: string } | null}
- */
-const privacyInput = (body) => {
-	if (!isObject(body) || typeof body.websiteId !== 'string' || body.websiteId === '') return null;
-	/** @type {{ websiteId: string, subject?: Record<string, string>, requestId?: string }} */
-	const out = { websiteId: body.websiteId };
-	if (body.subject !== undefined) {
-		if (!isObject(body.subject)) return null;
-		const subject = Object.fromEntries(Object.entries(body.subject).filter(([, v]) => typeof v === 'string' && v.length > 0));
-		if (Object.keys(subject).length === 0) return null;
-		out.subject = /** @type {Record<string, string>} */ (subject);
-	}
-	if (typeof body.requestId === 'string') out.requestId = body.requestId;
-	return out;
 };

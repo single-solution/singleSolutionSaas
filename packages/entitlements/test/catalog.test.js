@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import {
 	currentPriceBook,
-	elementDependencies,
 	findPriceBook,
 	isValidFeatureValue,
 	normaliseFeatureKey,
@@ -19,7 +18,7 @@ import {
 	toCredits,
 	toMillicredits,
 } from '../src/units.js';
-import { bucketOf, deepEqual, stableStringify } from '../src/hash.js';
+import { deepEqual, stableStringify } from '../src/hash.js';
 import { ceilHour, isoHour, isoInstant, toMs } from '../src/time.js';
 import { coupons, couponsInput, deepFreeze } from './fixtures.js';
 
@@ -80,10 +79,6 @@ describe('hash and time helpers', () => {
 		expect(stableStringify({ b: 1, a: [2, { d: undefined, c: 3 }] })).toBe('{"a":[2,{"c":3}],"b":1}');
 		expect(stableStringify(undefined)).toBe('null');
 		expect(deepEqual({ a: 1, b: 2 }, { b: 2, a: 1 })).toBe(true);
-		const b = bucketOf(['x', 'y']);
-		expect(b).toBeGreaterThanOrEqual(0);
-		expect(b).toBeLessThan(10000);
-		expect(bucketOf(['x', 'y'])).toBe(b);
 	});
 
 	it('normalises instants', () => {
@@ -138,7 +133,6 @@ describe('normaliseProduct', () => {
 		expect(coupons.features['codes.bulk']).toMatchObject({ kind: 'flag', default: false, min: null, max: null });
 		expect(coupons.features['codes.layout']).toMatchObject({
 			kind: 'config',
-			experiment: true,
 			enum: ['inline', 'collapsible', 'modal'],
 		});
 		expect(coupons.features['codes.pattern']?.lockable).toBe(false);
@@ -376,12 +370,6 @@ describe('normaliseProduct', () => {
 });
 
 describe('catalog helpers', () => {
-	it('computes transitive dependencies and dependents', () => {
-		expect(elementDependencies(coupons, 'reports')).toEqual({ dependsOn: ['apply_box', 'codes'], dependents: [] });
-		expect(elementDependencies(coupons, 'codes')).toEqual({ dependsOn: [], dependents: ['apply_box', 'reports'] });
-		expectCode(() => elementDependencies(coupons, 'zzz'), 'catalog/unknown_element');
-	});
-
 	it('returns plan defaults', () => {
 		const starter = planDefaults(coupons, 'starter');
 		expect(starter.elements).toEqual({ codes: true, apply_box: true, reports: false, ai_copy: false });

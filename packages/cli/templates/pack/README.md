@@ -16,5 +16,5 @@ Website Graph through the `client` the runtime passes in (`graph.session.*` scop
 ```sh
 pnpm check        # format, lint, typecheck, unit tests with coverage (tooling from @ss/config)
 ss app validate
-ss certify .      # static certification for packs (validate + headless/renderer smoke test)
+ss pack build     # dist/pack: descriptor.json + bundled assets; upload the folder in Admin → Apps → Upload pack version
 ```

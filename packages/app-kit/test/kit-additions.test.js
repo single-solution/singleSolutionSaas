@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createBackground, defineRoute, feature, ok, paginate, problem, standardRoutes, toNextRoute } from '../src/index.js';
+import {
+	createBackground,
+	createMemoryStores,
+	createOutbox,
+	defineRoute,
+	feature,
+	ok,
+	paginate,
+	problem,
+	standardRoutes,
+	toNextRoute,
+} from '../src/index.js';
+import { kitError } from '../src/util.js';
 import { WEBSITE, entitle, setup, websiteKey } from './helpers.js';
 
 const BASE = 'https://coupons.example.dev';
@@ -17,7 +29,7 @@ describe('portal.publishEvent through the durable outbox', () => {
 		expect(again.id).toBe(first.id);
 		expect(first.id).toMatch(/^evt_[0-9a-z]{26}$/);
 		expect(portal.published).toHaveLength(1);
-		expect(await product.outbox.stats()).toEqual({ pending: 0, sent: 1, dead: 0 });
+		expect(await product.outbox.stats()).toEqual({ pending: 0, sent: 1 });
 		const other = await product.portal.publishEvent({ ...input, idempotencyKey: 'r-2' });
 		expect(other.id).not.toBe(first.id);
 		const explicit = await product.portal.publishEvent({
@@ -28,7 +40,7 @@ describe('portal.publishEvent through the durable outbox', () => {
 		expect(explicit.id).toBe('evt_0123456789abcdefghjkmnpqrs');
 	});
 
-	it('queues during a Portal outage and delivers with backoff on flush; rejections are dead-lettered', async () => {
+	it('queues during a Portal outage and delivers with backoff on flush; rejections are dropped', async () => {
 		const { portal, product, clock } = await setup();
 		await entitle(portal);
 		await product.entitlements.forWebsite(WEBSITE);
@@ -45,14 +57,14 @@ describe('portal.publishEvent through the durable outbox', () => {
 		expect((await product.outbox.flush()).sent).toBe(0); // still backing off
 		clock.advance(5_000);
 		expect(await product.outbox.flush()).toMatchObject({ sent: 1, batches: 1 });
-		expect(await product.outbox.stats()).toEqual({ pending: 0, sent: 1, dead: 0 });
+		expect(await product.outbox.stats()).toEqual({ pending: 0, sent: 1 });
 
 		portal.rejectEventType('coupon_box.redeemed@1');
 		await product.portal.publishEvent({ websiteId: WEBSITE, type: 'coupon_box.redeemed@1', data: {}, idempotencyKey: 'bad-1' });
-		expect(await product.outbox.stats()).toMatchObject({ dead: 1 });
+		expect(await product.outbox.stats()).toEqual({ pending: 0, sent: 2 });
 	});
 
-	it('dead-letters a permanent 4xx on flush and retries 5xx', async () => {
+	it('drops on a permanent 4xx on flush and retries 5xx', async () => {
 		const { portal, product, clock } = await setup();
 		await entitle(portal);
 		await product.entitlements.forWebsite(WEBSITE);
@@ -64,7 +76,37 @@ describe('portal.publishEvent through the durable outbox', () => {
 		clock.advance(60_000);
 		portal.failNext('/v1/product/events', 422);
 		expect(await product.outbox.flush()).toMatchObject({ rejected: 1 });
-		expect(await product.outbox.stats()).toMatchObject({ pending: 0, dead: 1 });
+		expect(await product.outbox.stats()).toMatchObject({ pending: 0 });
+	});
+
+	it('drops events past the retry window with an error log', async () => {
+		let t = 0;
+		/** @type {Array<{ msg: string, fields: unknown }>} */
+		const errors = [];
+		const log = () => {};
+		const logger = /** @type {any} */ ({
+			info: log,
+			warn: log,
+			debug: log,
+			error: (/** @type {string} */ msg, /** @type {unknown} */ fields) => errors.push({ msg, fields }),
+		});
+		const outbox = createOutbox({
+			store: createMemoryStores({ now: () => t }).eventOutbox,
+			portal: {
+				publishEvents: async () => {
+					throw kitError('portal_error', 'down', { status: 503 });
+				},
+			},
+			now: () => t,
+			randomBytes: (length) => new Uint8Array(length),
+			logger,
+			maxAttempts: 2,
+		});
+		expect(await outbox.publish({ id: 'evt_1', websiteId: WEBSITE })).toEqual({ queued: true, status: 'queued' });
+		t += 10_000;
+		expect(await outbox.flush()).toMatchObject({ rejected: 1 });
+		expect(errors).toEqual([{ msg: 'events dropped', fields: { events: 1, reason: 'retry_window', status: 503 } }]);
+		expect(await outbox.stats()).toEqual({ pending: 0, sent: 1 });
 	});
 });
 
@@ -125,7 +167,7 @@ describe('queue delivery on requests (no timer)', () => {
 		expect(calls).toContainEqual(undefined);
 	});
 
-	it('wires into the product: usage recorded in a request is sent after it (Next after) and by heartbeat', async () => {
+	it('wires into the product: usage recorded in a request is sent after it (Next after) and by flush', async () => {
 		const { portal, product } = await setup({ overrides: { background: { mode: 'on' } } });
 		await entitle(portal);
 		const sk = await websiteKey(portal, { kind: 'sk', keyId: 'key_2' });
@@ -134,7 +176,6 @@ describe('queue delivery on requests (no timer)', () => {
 				method: 'POST',
 				path: '/v1/redeem',
 				auth: 'website',
-				idempotent: false,
 				handler: async (ctx) => {
 					await ctx.product.usage.record({
 						websiteId: ctx.websiteId,
@@ -155,10 +196,9 @@ describe('queue delivery on requests (no timer)', () => {
 		await scheduled[0]?.();
 		expect(portal.usage.size).toBe(1);
 		await product.usage.record({ websiteId: WEBSITE, unit: 'redemption', quantity: 1, idempotencyKey: 'u-2' });
-		await product.heartbeat();
+		await product.flush();
 		expect(portal.usage.size).toBe(2);
 		expect(product.background.mode).toBe('on');
-		await product.flush();
 		await product.close();
 	});
 

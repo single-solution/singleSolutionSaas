@@ -11,9 +11,7 @@ import { checkTimeClaims, isObject, nowSeconds, requireString, signCompact, veri
 /** @import { KeyResolver, Signer } from './keys.js' */
 
 /** Launch kinds. */
-export const LAUNCH_KINDS = Object.freeze(
-	/** @type {const} */ (['merchant', 'demo', 'admin', 'impersonate', 'partner', 'developer']),
-);
+export const LAUNCH_KINDS = Object.freeze(/** @type {const} */ (['merchant', 'admin']));
 
 /** JOSE `typ` of launch tokens. */
 export const LAUNCH_TYP = 'ss-launch+jwt';
@@ -21,8 +19,6 @@ export const LAUNCH_TYP = 'ss-launch+jwt';
 /** Default and maximum launch lifetime (seconds). */
 export const DEFAULT_LAUNCH_TTL_SECONDS = 60;
 export const MAX_LAUNCH_TTL_SECONDS = 300;
-/** Maximum impersonation session length (seconds). */
-export const MAX_IMPERSONATION_SECONDS = 3600;
 
 /** @typedef {typeof LAUNCH_KINDS[number]} LaunchKind */
 /** @typedef {{ id: string, email?: string, name?: string, roles?: string[] }} LaunchUser */
@@ -30,11 +26,11 @@ export const MAX_IMPERSONATION_SECONDS = 3600;
  * What a launch may act on. Admin launches carry either `{ all: true }` (app-wide management, nothing else) or a
  * merchant scope `{ merchantId, subscriptions? }`.
  * @typedef {{ all?: true, merchantId?: string, websiteId?: string, websiteIds?: string[], subscriptions?: string[],
- *   partnerId?: string, developerId?: string, permissions?: string[] }} LaunchScope
+ *   permissions?: string[] }} LaunchScope
  */
 /**
  * @typedef {{ iss: string, aud: string, sub: string, iat: number, nbf: number, exp: number, jti: string, kind: LaunchKind,
- *   user: LaunchUser, scope: LaunchScope, subscriptions?: unknown[], act?: { sub: string }, impExp?: number }} LaunchClaims
+ *   user: LaunchUser, scope: LaunchScope, subscriptions?: unknown[] }} LaunchClaims
  */
 
 /** Scope members allowed next to `all: true` (none: app-wide scope is exclusive, except `permissions`). */
@@ -58,19 +54,14 @@ const stringList = (value) => Array.isArray(value) && value.length <= 1000 && va
  *  - merchant: `scope.merchantId`
  *  - admin: either `scope.all === true` (app-wide; then no merchant/website/subscription members) or `scope.merchantId`
  *  - `scope.all` only for admin
- *  - demo: no `scope.merchantId` (sandbox data only)
- *  - partner: `scope.partnerId`; developer: `scope.developerId`
- *  - impersonate: `act.sub` (the staff actor, ≠ `sub`), `scope.merchantId`, `impExp` with iat < impExp ≤ iat + 1 h
- *  - only impersonate may carry `act` / `impExp`
  * @param {Record<string, unknown>} claims
  * @returns {string | null}
  */
 export const kindScopeViolation = (claims) => {
-	const { kind, user, scope, act, impExp, iat, sub } = claims;
+	const { kind, user, scope } = claims;
 	if (typeof kind !== 'string' || !(/** @type {readonly string[]} */ (LAUNCH_KINDS).includes(kind))) return 'unknown kind';
 	if (!isObject(user) || !nonEmpty(user.id)) return 'user.id is required';
 	if (!isObject(scope)) return 'scope is required';
-	if (kind !== 'impersonate' && (act !== undefined || impExp !== undefined)) return 'act/impExp only allowed for impersonate';
 	if (scope.subscriptions !== undefined && !stringList(scope.subscriptions)) return 'scope.subscriptions must be a list of ids';
 	if (scope.all !== undefined) {
 		if (kind !== 'admin') return 'scope.all is only allowed for admin launches';
@@ -78,35 +69,19 @@ export const kindScopeViolation = (claims) => {
 		const extra = Object.keys(scope).find((key) => !ALL_SCOPE_MEMBERS.has(key));
 		return extra === undefined ? null : `scope.all excludes scope.${extra}`;
 	}
-	switch (kind) {
-		case 'merchant':
-			return nonEmpty(scope.merchantId) ? null : 'merchant launch requires scope.merchantId';
-		case 'admin':
-			return nonEmpty(scope.merchantId) ? null : 'admin launch requires scope.all or scope.merchantId';
-		case 'demo':
-			return scope.merchantId === undefined ? null : 'demo launch must not carry scope.merchantId';
-		case 'partner':
-			return nonEmpty(scope.partnerId) ? null : 'partner launch requires scope.partnerId';
-		case 'developer':
-			return nonEmpty(scope.developerId) ? null : 'developer launch requires scope.developerId';
-		default: {
-			if (!isObject(act) || !nonEmpty(act.sub)) return 'impersonate launch requires act.sub';
-			if (act.sub === sub) return 'actor must differ from subject';
-			if (!nonEmpty(scope.merchantId)) return 'impersonate launch requires scope.merchantId';
-			if (typeof impExp !== 'number' || typeof iat !== 'number') return 'impersonate launch requires impExp';
-			if (impExp <= iat || impExp - iat > MAX_IMPERSONATION_SECONDS) return 'impExp must be within 1 hour of iat';
-			return null;
-		}
-	}
+	if (nonEmpty(scope.merchantId)) return null;
+	return kind === 'merchant'
+		? 'merchant launch requires scope.merchantId'
+		: 'admin launch requires scope.all or scope.merchantId';
 };
 
 /**
  * Issue a launch token.
  * @param {{
  *   signer: Signer, issuer: string, audience: string, subject: string, kind: LaunchKind, user: LaunchUser,
- *   scope?: LaunchScope, subscriptions?: unknown[], actor?: string, impersonationSeconds?: number,
- *   ttlSeconds?: number, jti?: string, now?: () => number, randomBytes?: (length: number) => Uint8Array,
- * }} params `audience` is the product's appId; `actor` and `impersonationSeconds` are for `impersonate` only.
+ *   scope?: LaunchScope, subscriptions?: unknown[], ttlSeconds?: number, jti?: string, now?: () => number,
+ *   randomBytes?: (length: number) => Uint8Array,
+ * }} params `audience` is the product's appId.
  * @returns {Promise<{ token: string, claims: LaunchClaims }>}
  */
 export const issueLaunch = async ({
@@ -118,8 +93,6 @@ export const issueLaunch = async ({
 	user,
 	scope = {},
 	subscriptions,
-	actor,
-	impersonationSeconds,
 	ttlSeconds = DEFAULT_LAUNCH_TTL_SECONDS,
 	jti,
 	now = Date.now,
@@ -146,10 +119,6 @@ export const issueLaunch = async ({
 		scope,
 	};
 	if (subscriptions !== undefined) claims.subscriptions = subscriptions;
-	if (kind === 'impersonate') {
-		if (actor !== undefined) claims.act = { sub: actor };
-		claims.impExp = iat + (impersonationSeconds ?? MAX_IMPERSONATION_SECONDS);
-	}
 	const violation = kindScopeViolation(claims);
 	if (violation) throw createProtocolError('kind_scope', violation);
 	const token = await signCompact({ signer, typ: LAUNCH_TYP, payload: claims });
@@ -187,9 +156,6 @@ export const verifyLaunch = async ({
 	const { exp } = checkTimeClaims({ claims: payload, nowMs: now(), skewSeconds, maxLifetimeSeconds: maxTtlSeconds });
 	const violation = kindScopeViolation(payload);
 	if (violation) throw createProtocolError('kind_scope', violation);
-	if (payload.kind === 'impersonate' && now() / 1000 >= /** @type {number} */ (payload.impExp)) {
-		throw createProtocolError('expired', 'impersonation window has ended');
-	}
 	const first = await consume(/** @type {string} */ (payload.jti), (exp + skewSeconds) * 1000);
 	if (!first) throw createProtocolError('replay', 'launch token was already used');
 	return /** @type {LaunchClaims} */ (/** @type {unknown} */ (payload));

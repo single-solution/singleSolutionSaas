@@ -6,8 +6,8 @@
  * `.nvmrc` a repository of its own needs) is added; inside one (e.g. `products/` of the monorepo) the workspace's apply.
  *
  * `--minimal` (service products): the `notes` sample ({@link NOTES_SAMPLE_FILES}) is left out and
- * `templates/minimal/service` is overlaid instead: one placeholder Mode C element `status` (`GET /v1/status`, marked
- * `x-ss-certify`, no database, no events) because a product needs at least one element. The project still passes
+ * `templates/minimal/service` is overlaid instead: one placeholder Mode C element `status` (`GET /v1/status`,
+ * no database, no events) because a product needs at least one element. The project still passes
  * `ss app validate` and its own tests.
  * @module
  */
@@ -27,7 +27,7 @@ export const INIT_KINDS = Object.freeze(/** @type {const} */ (['service', 'pack'
 
 /**
  * Template files (source paths, before placeholder substitution) that belong to the `notes` sample only; `--minimal`
- * leaves them out. The manifest, openapi.json, strings, api/routes.js, adapters/privacy.js, docs and README are
+ * leaves them out. The manifest, openapi.json, strings, api/routes.js, docs and README are
  * replaced by the minimal overlay instead.
  */
 export const NOTES_SAMPLE_FILES = Object.freeze([

@@ -16,10 +16,8 @@ export const SOURCE_NAMES = Object.freeze(
 		product: 'product_default',
 		plan: 'plan_default',
 		platform: 'platform_policy',
-		merchant: 'merchant_default',
 		website: 'website_override',
 		admin: 'admin_override',
-		experiment: 'runtime',
 	}),
 );
 
@@ -127,9 +125,6 @@ export const toDocument = (resolved, meta) => {
 		dataScope: { prefix: meta.dataScope.prefix },
 		...(meta.identity ? { identity: meta.identity } : {}),
 		...(meta.website && Object.keys(meta.website).length > 0 ? { website: { ...meta.website } } : {}),
-		experiments: Object.values(resolved.experiments)
-			.map((e) => ({ element: e.element, variant: e.variant }))
-			.sort((a, b) => (a.element < b.element ? -1 : a.element > b.element ? 1 : 0)),
 	};
 	const result = validateEntitlementDocument(document);
 	return result.ok ? { ok: true, document: result.value } : { ok: false, problems: result.problems };

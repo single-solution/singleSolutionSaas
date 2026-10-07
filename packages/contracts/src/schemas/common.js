@@ -43,9 +43,7 @@ export const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 export const ENVIRONMENTS = Object.freeze(/** @type {const} */ (['live', 'test']));
 
 /** Client-provided resource kinds a product can require (PLAN §1a). */
-export const RESOURCE_KINDS = Object.freeze(
-	/** @type {const} */ (['database', 'storage', 'ai', 'messaging', 'payments', 'analytics']),
-);
+export const RESOURCE_KINDS = Object.freeze(/** @type {const} */ (['database', 'storage', 'ai', 'messaging', 'payments']));
 
 /** Connection status of a client resource; the one vocabulary for entitlement documents and `resource.changed@1`. */
 export const RESOURCE_STATUSES = Object.freeze(/** @type {const} */ (['connected', 'missing', 'failing', 'revoked']));
@@ -55,15 +53,7 @@ export const MODES = Object.freeze(/** @type {const} */ (['A', 'B', 'C']));
 
 /** Precedence chain sources (PLAN §9). */
 export const FEATURE_SOURCES = Object.freeze(
-	/** @type {const} */ ([
-		'product_default',
-		'plan_default',
-		'platform_policy',
-		'merchant_default',
-		'website_override',
-		'admin_override',
-		'runtime',
-	]),
+	/** @type {const} */ (['product_default', 'plan_default', 'platform_policy', 'website_override', 'admin_override']),
 );
 
 /**

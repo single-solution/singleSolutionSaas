@@ -1,15 +1,12 @@
 import { createHash } from 'node:crypto';
 
 /**
- * Deterministic hashing used for document versions and bucketing.
+ * Deterministic hashing used for document versions.
  *
  * Decision: we use `node:crypto` SHA-256 directly. It is deterministic and performs no I/O, so the
  * functions stay referentially transparent; the only cost is that this package targets Node (the
  * Portal and app-kit), not the browser Loader. Browser code receives already-resolved documents.
  */
-
-/** Number of buckets used for rollouts and experiments (basis points: 10 000 = 100 %). */
-export const BUCKETS = 10_000;
 
 /**
  * JSON serialisation with object keys sorted recursively (arrays keep their order).
@@ -37,18 +34,6 @@ export const stableStringify = (value) => {
  * @returns {string}
  */
 export const sha256Hex = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
-
-/**
- * Deterministic bucket in `[0, buckets)` for the given identity parts
- * (`sha256(parts.join('\u0000'))`, first 48 bits, modulo `buckets`).
- * @param {readonly string[]} parts
- * @param {number} [buckets]
- * @returns {number}
- */
-export const bucketOf = (parts, buckets = BUCKETS) => {
-	const hex = sha256Hex(parts.join('\u0000'));
-	return Number.parseInt(hex.slice(0, 12), 16) % buckets;
-};
 
 /**
  * Structural equality via {@link stableStringify}.

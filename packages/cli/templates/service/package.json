@@ -5,6 +5,11 @@
 	"type": "module",
 	"private": true,
 	"license": "UNLICENSED",
+	"exports": {
+		"./platform": "./adapters/platform.js",
+		"./routes": "./api/routes.js",
+		"./package.json": "./package.json"
+	},
 	"engines": {
 		"node": ">=22"
 	},
@@ -14,8 +19,6 @@
 		"prebuild": "ss app assets .",
 		"build": "next build",
 		"start": "next start --port 3000",
-		"serve": "node serve.js 3000",
-		"portal": "ss dev",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
 		"test": "vitest run --coverage",
 		"test:watch": "vitest",
@@ -23,8 +26,7 @@
 		"typecheck": "tsc -p tsconfig.json",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
-		"validate": "ss app validate .",
-		"certify": "ss certify . --url http://localhost:3000"
+		"validate": "ss app validate ."
 	},
 	"dependencies": {
 		"@ss/app-kit": "{{sdkVersion}}",

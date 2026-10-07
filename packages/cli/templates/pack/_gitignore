@@ -1,5 +1,3 @@
 node_modules/
 dist/
-.ss/
 coverage/
-ss-certify-report.json

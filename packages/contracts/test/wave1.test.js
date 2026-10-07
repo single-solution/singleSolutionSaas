@@ -1,4 +1,3 @@
-import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import {
 	MANIFEST_RULES,
@@ -8,7 +7,6 @@ import {
 	validateFeatureConfig,
 	validateManifest,
 } from '../src/index.js';
-import { GZIP_LEVEL, gzipSize, measureBundle, relativeImports, resolveModule, toKb } from '../src/budget.js';
 import { manifest, packManifest, placement } from '../src/testing.js';
 import { expectProblem, expectRule } from './helpers.js';
 
@@ -107,11 +105,10 @@ describe('placement feature kind', () => {
 	});
 });
 
-describe('manifest reads, shared budget and optional resources', () => {
+describe('manifest reads and optional resources', () => {
 	it('normalises and checks reads', () => {
 		const m = packManifest();
 		m.reads = ['catalog', { product: 'search', scopes: ['search.read'] }];
-		m.budget = { shared: 4 };
 		m.elements[0].stringKeys = ['bar.*', 'common.title'];
 		expect(validateManifest(m).ok).toBe(true);
 		expect(readsOf(m)).toEqual([
@@ -133,66 +130,5 @@ describe('manifest reads, shared budget and optional resources', () => {
 		expect(validateManifest(m).ok).toBe(true);
 		m.elements[0].requires = { resources: ['database'], optionalResources: ['database'] };
 		expectProblem(validateManifest(m), '/elements/0/requires/optionalResources/0', MANIFEST_RULES.optionalResourceRequired);
-	});
-});
-
-describe('bundle budget measurement', () => {
-	const files = new Map(
-		Object.entries({
-			'headless/a.js': 'import{x as a}from"./../chunks/chunk-1.js";export const createA=()=>a;',
-			'ui/a.js': 'import"../chunks/chunk-1.js";export const render=()=>null;import("./lazy.js");',
-			'ui/lazy.js': 'export const lazy=1;',
-			'headless/b.js': 'export{y as createB}from"../chunks/chunk-2.js";',
-			'ui/shared.js': 'export const render=()=>1;',
-			'chunks/chunk-1.js': 'export const x=1;'.repeat(20),
-			'chunks/chunk-2.js': 'import"../missing.js";export const y=2;',
-			'outside.js': 'import"../../escape.js";',
-		}),
-	);
-	it('counts element entries on their own and every shared module once', () => {
-		const result = measureBundle({
-			elements: [
-				{ key: 'a', modules: ['headless/a.js', 'ui/a.js', 'ui/shared.js'] },
-				{ key: 'b', modules: ['headless/b.js', 'ui/shared.js', 'ui/absent.js'] },
-				{ key: 'c', modules: ['outside.js'] },
-			],
-			read: (path) => files.get(path),
-		});
-		const [a, b] = result.elements;
-		expect(a?.modules).toEqual(['headless/a.js', 'ui/a.js']);
-		expect(b?.modules).toEqual(['headless/b.js', 'ui/absent.js']);
-		expect(result.shared.modules).toEqual([
-			'chunks/chunk-1.js',
-			'chunks/chunk-2.js',
-			'missing.js',
-			'ui/lazy.js',
-			'ui/shared.js',
-		]);
-		expect(result.missing).toEqual(['missing.js', 'ui/absent.js']);
-		const expected = ['headless/a.js', 'ui/a.js'].reduce((sum, p) => sum + gzipSize(String(files.get(p))), 0);
-		expect(a?.gzipBytes).toBe(expected);
-		expect(a?.kb).toBe(toKb(expected));
-	});
-	it('uses cached gzip sizes when given', () => {
-		const result = measureBundle({
-			elements: [{ key: 'a', modules: ['ui/lazy.js'] }],
-			read: (path) => files.get(path),
-			gzip: (path) => (path === 'ui/lazy.js' ? 2048 : undefined),
-		});
-		expect(result.elements[0]?.gzipBytes).toBe(2048);
-		expect(result.elements[0]?.kb).toBe(2);
-	});
-	it('measures like gzip level 9 and parses bundled imports', () => {
-		expect(gzipSize('hello')).toBe(gzipSync(Buffer.from('hello'), { level: GZIP_LEVEL }).byteLength);
-		expect(gzipSize(new Uint8Array([1, 2, 3]))).toBeGreaterThan(0);
-		expect(toKb(1)).toBe(0.1);
-		expect(toKb(1024)).toBe(1);
-		expect(relativeImports('import*as m from"./m.js";export{a}from\'../b.js\';import("./c.js");import"pkg";')).toEqual([
-			'./m.js',
-			'../b.js',
-			'./c.js',
-		]);
-		expect(resolveModule('ui/a.js', '../chunks/x.js')).toBe('chunks/x.js');
-		expect(resolveModule('a.js', '../x.js')).toBeNull();
 	});
 });

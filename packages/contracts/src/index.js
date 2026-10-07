@@ -14,7 +14,6 @@ export {
 	validateEntitlementDocument,
 	validateEvent,
 	validatePlacement,
-	validateGraphEntity,
 	validateFeatureConfig,
 } from './validate.js';
 export {

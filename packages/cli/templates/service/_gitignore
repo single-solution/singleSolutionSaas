@@ -3,9 +3,7 @@
 node_modules/
 .next/
 .vercel/
-.ss/
 coverage/
-ss-certify-report.json
 next-env.d.ts
 *.tsbuildinfo
 .DS_Store

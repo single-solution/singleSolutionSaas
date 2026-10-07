@@ -1,14 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import {
-	incrementalOverageCharge,
-	overageCharge,
-	periodBounds,
-	quotaAllows,
-	quotaState,
-	wallToInstant,
-	zoneOffset,
-} from '../src/quotas.js';
+import { overageCharge, periodBounds, quotaAllows, quotaState, wallToInstant, zoneOffset } from '../src/quotas.js';
 
 const H = 3_600_000;
 const iso = (/** @type {number} */ ms) => new Date(ms).toISOString();
@@ -322,27 +314,5 @@ describe('overage charges', () => {
 		expect(overageCharge({ used: 400, included: 500, rate: 0.01 })).toBe(0);
 		expect(overageCharge({ used: 400, included: null, rate: 0.01 })).toBe(0);
 		expect(overageCharge({ used: 350, included: 0, rate: { millicredits: 1, per: 100 } })).toBe(3);
-		expect(() => incrementalOverageCharge({ usedBefore: 5, usedAfter: 4, included: 0, rate: 1 })).toThrow(RangeError);
-	});
-
-	it('Σ incremental charges equals the charge of the total (property)', () => {
-		fc.assert(
-			fc.property(
-				fc.array(fc.nat(5000), { maxLength: 50 }),
-				fc.option(fc.nat(20000), { nil: null }),
-				fc.nat(1000),
-				fc.integer({ min: 1, max: 10_000 }),
-				(deltas, included, m, per) => {
-					const rate = { millicredits: m, per };
-					let used = 0;
-					let sum = 0;
-					for (const d of deltas) {
-						sum += incrementalOverageCharge({ usedBefore: used, usedAfter: used + d, included, rate });
-						used += d;
-					}
-					expect(sum).toBe(overageCharge({ used, included, rate }));
-				},
-			),
-		);
 	});
 });

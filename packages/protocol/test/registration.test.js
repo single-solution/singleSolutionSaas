@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
 	CONNECT_PATH,
+	canonicalJson,
 	canonicalUrl,
 	createConnectRequest,
 	createConnectResponse,
@@ -111,5 +112,19 @@ describe('connect handshake', () => {
 		expect(canonicalUrl('HTTPS://Portal.Test:443/')).toBe('https://portal.test');
 		for (const bad of [1, 'nope', 'ftp://x', 'https://u:p@x', 'https://x/?q', 'https://x/#f'])
 			expectThrowCode(() => canonicalUrl(bad), 'invalid_argument');
+	});
+});
+
+describe('canonicalJson', () => {
+	it('sorts keys, drops undefined members and nulls undefined array items', () => {
+		expect(canonicalJson({ b: [1, undefined, 'x'], a: { d: undefined, c: true }, e: null })).toBe(
+			'{"a":{"c":true},"b":[1,null,"x"],"e":null}',
+		);
+	});
+
+	it('refuses values JSON cannot represent', () => {
+		expect(() => canonicalJson(Number.NaN)).toThrow(TypeError);
+		expect(() => canonicalJson(() => 1)).toThrow(TypeError);
+		expect(() => canonicalJson(1n)).toThrow(TypeError);
 	});
 });

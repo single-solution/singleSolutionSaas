@@ -19,7 +19,6 @@ import {
 	issueWebsiteKey,
 	signEntitlementDocument,
 	signEvent,
-	signRequest,
 	verifyAssertion,
 	verifyConnectResponse,
 } from '@ss/protocol';
@@ -57,7 +56,6 @@ export const entitlementPayload = ({ now, validForMs = 5 * 60_000, ...input }) =
 	runtime: { state: 'active' },
 	resources: [],
 	dataScope: { prefix: `ss_${input.productSlug.replace(/-/g, '_')}_` },
-	experiments: [],
 	...input,
 });
 
@@ -202,10 +200,6 @@ export const createFakePortal = async ({
 				consumedLaunches.add(jti);
 				return json(200, { consumed });
 			}
-			case 'POST /v1/product/heartbeat':
-				return json(200, { ok: true });
-			case 'POST /v1/product/keys/rotate':
-				return json(200, { ok: true });
 			case 'POST /v1/product/events': {
 				published.push(body);
 				// like the Event Hub: per-event results, dedupe on (websiteId, idempotencyKey)
@@ -305,22 +299,6 @@ export const createFakePortal = async ({
 			const body = typeof payload === 'string' ? payload : JSON.stringify(payload);
 			const headers = await signEvent({ signer, body, timestamp: Math.floor(now() / 1000) });
 			return { headers: { ...headers, 'content-type': 'application/json' }, body };
-		},
-		/**
-		 * Sign a Portal → product request (`@ss/protocol` `signRequest`, audience = the product's appId).
-		 * @param {{ method: string, path: string, body?: unknown, audience?: string }} input `path` includes the query
-		 */
-		signRequest: async ({ method, path, body, audience }) => {
-			const raw = body === undefined ? '' : typeof body === 'string' ? body : JSON.stringify(body);
-			const headers = await signRequest({
-				signer,
-				method,
-				path,
-				audience: audience ?? appId,
-				body: raw,
-				timestamp: Math.floor(now() / 1000),
-			});
-			return { headers: { ...headers, ...(raw ? { 'content-type': 'application/json' } : {}) }, body: raw };
 		},
 		/**
 		 * Connect a product the way the Portal does (`POST <productUrl>/.well-known/ss-connect`, HMAC with the connect

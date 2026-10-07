@@ -8,7 +8,6 @@
 			"get": {
 				"operationId": "getStatus",
 				"summary": "Status of the placeholder element for the key's website",
-				"x-ss-certify": true,
 				"responses": {
 					"200": {
 						"description": "OK",

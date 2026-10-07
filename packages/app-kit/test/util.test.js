@@ -1,28 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-	collectionPrefix,
-	createSingleFlight,
-	isKitError,
-	kitError,
-	parseDurationMs,
-	readHeader,
-	stableJson,
-} from '../src/util.js';
+import { collectionPrefix, createSingleFlight, isKitError, kitError, readHeader, stableJson } from '../src/util.js';
 import { createLogger, noopLogger, redact } from '../src/logger.js';
 import { configFromEnv } from '../src/env.js';
 
 describe('util', () => {
-	it('parses ISO-8601 durations', () => {
-		expect(parseDurationMs('PT24H', 0)).toBe(86_400_000);
-		expect(parseDurationMs('P1DT30M', 0)).toBe(86_400_000 + 1_800_000);
-		expect(parseDurationMs('P2W', 0)).toBe(14 * 86_400_000);
-		expect(parseDurationMs('PT1.5S', 0)).toBe(1500);
-		expect(parseDurationMs('P1Y', 7)).toBe(7);
-		expect(parseDurationMs('P', 7)).toBe(7);
-		expect(parseDurationMs('PT', 7)).toBe(7);
-		expect(parseDurationMs(undefined, 9)).toBe(9);
-	});
-
 	it('builds collection prefixes', () => {
 		expect(collectionPrefix('coupon-box')).toBe('ss_coupon_box_');
 	});

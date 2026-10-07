@@ -21,19 +21,12 @@ export const MANIFEST_RULES = Object.freeze({
 	dependencyCycle: 'dependencyCycle',
 	packRequiresModeA: 'packRequiresModeA',
 	modeARequiresRenderer: 'modeARequiresRenderer',
-	modeARequiresBudget: 'modeARequiresBudget',
 	modeBRequiresHeadless: 'modeBRequiresHeadless',
 	modeCRequiresApi: 'modeCRequiresApi',
 	rendererRequiresHeadless: 'rendererRequiresHeadless',
 	rendererRequiresModeA: 'rendererRequiresModeA',
 	uiRequiresModeB: 'uiRequiresModeB',
 	statefulRequiresModeC: 'statefulRequiresModeC',
-	/**
-	 * Retired (never reported since v1.x): element `requires.resources` no longer has to be repeated at product level.
-	 * Product-level `requires.resources` now means "required by every subscription, whatever elements are enabled";
-	 * element-level kinds gate only that element. Kept so consumers matching on the id keep compiling.
-	 */
-	undeclaredResource: 'undeclaredResource',
 	duplicatePlanCode: 'duplicatePlanCode',
 	unknownPlan: 'unknownPlan',
 	unknownPlanElement: 'unknownPlanElement',
@@ -46,7 +39,6 @@ export const MANIFEST_RULES = Object.freeze({
 	duplicateMeteredUnit: 'duplicateMeteredUnit',
 	eventType: 'eventType',
 	priceBookEffectiveFrom: 'priceBookEffectiveFrom',
-	experimentsDisabled: 'experimentsDisabled',
 	eventNotSubscribed: 'eventNotSubscribed',
 	publishOutsideNamespace: 'publishOutsideNamespace',
 	platformEventNotPublishable: 'platformEventNotPublishable',
@@ -607,7 +599,7 @@ const hasApi = (element) => (element.api?.resources?.length ?? 0) > 0;
  * @param {ManifestElement} element
  * @returns {boolean}
  */
-const hasUi = (element) => Boolean(element.renderer) || element.placement === true || (element.budget?.js ?? 0) > 0;
+const hasUi = (element) => Boolean(element.renderer) || element.placement === true;
 
 /**
  * Run every semantic rule on a schema-valid manifest.
@@ -716,8 +708,6 @@ export const checkManifest = (manifest) => {
 			out.push(at([...base, 'modes'], MANIFEST_RULES.packRequiresModeA, 'every element of a pack must support mode A'));
 		if (modes.has('A') && !element.renderer)
 			out.push(at([...base, 'renderer'], MANIFEST_RULES.modeARequiresRenderer, 'mode A requires a renderer'));
-		if (modes.has('A') && (element.budget?.js ?? 0) <= 0)
-			out.push(at([...base, 'budget'], MANIFEST_RULES.modeARequiresBudget, 'mode A requires a positive budget.js'));
 		if (modes.has('B') && !element.headless)
 			out.push(at([...base, 'headless'], MANIFEST_RULES.modeBRequiresHeadless, 'mode B requires a headless core'));
 		if (element.renderer && !element.headless)
@@ -763,21 +753,8 @@ export const checkManifest = (manifest) => {
 					);
 			}
 		}
-		if (element.features !== undefined) {
+		if (element.features !== undefined)
 			out.push(...checkFeatureSchema(element.features, { path: [...base, 'features'], planCodes }));
-			if (element.experiments !== true) {
-				for (const [name, node] of Object.entries(element.features.properties)) {
-					if (node['x-experiment'] === true)
-						out.push(
-							at(
-								[...base, 'features', 'properties', name, 'x-experiment'],
-								MANIFEST_RULES.experimentsDisabled,
-								'x-experiment requires the element to set experiments: true',
-							),
-						);
-				}
-			}
-		}
 	}
 
 	/** @type {Set<string>} */

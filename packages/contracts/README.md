@@ -1,20 +1,19 @@
 # @ss/contracts
 
 Versioned JSON Schemas (2020-12) and validators that bind the Portal and every product (SSPS v1): product manifest,
-element feature schemas, entitlement document payload, event envelope + standard events, placement, Website Graph
-entities, and RFC 9457 problem details. Pure, functional ESM; the only dependencies are `ajv` and `ajv-formats`.
+element feature schemas, entitlement document payload, event envelope + standard events, placement, and RFC 9457
+problem details. Pure, functional ESM; the only dependencies are `ajv` and `ajv-formats`.
 
 ## API
 
 ```js
 import {
 	createValidator, // ({ schemas?, events? }) → { validate(id, value), has, validateManifest, validateEntitlementDocument,
-	//                  validateEvent, validatePlacement, validateGraphEntity, validateFeatureConfig }
+	//                  validateEvent, validatePlacement, validateFeatureConfig }
 	validateManifest,
 	validateEntitlementDocument,
 	validateEvent,
 	validatePlacement,
-	validateGraphEntity,
 	validateFeatureConfig,
 	checkManifest,
 	checkFeatureSchema,
@@ -36,7 +35,6 @@ import {
 	hostMatchesDomain,
 	SCHEMA_IDS,
 	ALL_SCHEMAS,
-	GRAPH_ENTITY_SCHEMAS,
 	STANDARD_EVENT_DATA,
 	MILLICREDITS_PER_CREDIT,
 } from '@ss/contracts';
@@ -53,11 +51,7 @@ if (!result.ok) return errors.fromValidation(result.problems, { code: 'invalid_m
 
 ## Wave-1 additions (F.18)
 
-- `@ss/contracts/budget` (Node only): `gzipSize`, `toKb`, `relativeImports`, `resolveModule`, `measureBundle({ elements,
-read, gzip? }) → { elements: [{ key, modules, gzipBytes, kb }], shared: { modules, gzipBytes, kb }, missing }` — the
-  one measurement of `ss app validate` and the Portal delivery compiler (own entry modules per element; modules named
-  by several elements and every imported chunk counted once as shared).
-- Manifest: product `budget.shared` (KB gzip of shared chunks), product `reads` (`slug` or `{ product, scopes? }`,
+- Manifest: product `reads` (`slug` or `{ product, scopes? }`,
   `readsOf(manifest)` normalises; rules `selfRead`, `duplicateRead`, `readScope`), element `stringKeys` (exact keys or
   `prefix*`), element `requires.optionalResources` (rule `optionalResourceRequired`).
 - Feature kind `placement` (`FEATURE_KINDS`, `PLACEMENT_MEMBERS`, keyword `x-placement: { members }`, plan bound
@@ -97,7 +91,7 @@ phone? } }` (`identitySectionSchema`, rule `duplicateIdentityKey`).
   (`resource_missing` while a kind is not connected). Product-level `requires.resources` means **always required**:
   every subscription needs those kinds, whatever elements are enabled, so a missing one disables every element. List a
   kind at product level only when every element needs it. The kinds a product may resolve are the union of both
-  levels. Rule `undeclaredResource` (element kinds had to be repeated at product level) is retired and never reported.
+  levels: `database`, `storage`, `ai`, `messaging`, `payments`.
 - **Catalog events** (website-scoped, additive v1): `item.created@1` (`itemId`, `title` required), `item.updated@1`
   (`itemId` required, optional `changed[]`) carry an item snapshot `{ itemId, title, status?, brand?, collections?
 (ids/handles), attributes? (≤ 50 scalar or scalar-array values), currency?, variants?: [{ variantId, price, sku?,
@@ -115,8 +109,8 @@ title?, attributes?, compareAtPrice?, cost?, inventory? }] }`: variant amounts a
   Portal). The Portal refuses others (`actor_not_allowed`); `actorAllowedForKeyKind(kind, actorType)` /
   `WEBSITE_KEY_ACTORS` state the rule.
 - **Element packs** have no endpoints or admin launch, only modes A/B, no `api.resources`, and only `graph.*` /
-  `events.publish:*` scopes; their state goes through the Website Graph. Service products need `endpoints.base`,
-  `register` and `events`.
+  `events.publish:*` scopes. Service products need `endpoints.base` and `endpoints.events`; their only capabilities
+  are `adminLaunch` and `identityIssuer`.
 - **Money** is integer minor units + ISO-4217 code. Several amounts sharing a context (cart, order) use one `currency` and
   integer `*Amount` fields; standalone values use `{ amount, currency }`.
 - **Time** is ISO-8601 UTC with `Z`; durations are ISO-8601 (`P365D`, `PT24H`); time zones are IANA names.

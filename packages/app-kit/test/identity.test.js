@@ -120,7 +120,6 @@ describe('route option identity', () => {
 				path: '/v1/beacon',
 				auth: 'website',
 				identity: 'optional',
-				idempotent: false,
 				handler: (ctx) => ({ identity: ctx.identity, problem: ctx.identityProblem }),
 			}),
 		]);

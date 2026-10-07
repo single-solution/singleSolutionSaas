@@ -61,13 +61,11 @@ export const checkEvent = (value) => {
 const nameOf = (type) => type.split('@')[0] ?? type;
 
 /**
- * @param {{ keyResolver: KeyResolver, replay: ReplayStore, now?: () => number, logger: Logger, toleranceSec?: number, trackEffects?: boolean }} options `trackEffects` counts handler runs per event id (for the dev probe)
+ * @param {{ keyResolver: KeyResolver, replay: ReplayStore, now?: () => number, logger: Logger, toleranceSec?: number }} options
  */
-export const createEvents = ({ keyResolver, replay, now = Date.now, logger, toleranceSec = 300, trackEffects = false }) => {
+export const createEvents = ({ keyResolver, replay, now = Date.now, logger, toleranceSec = 300 }) => {
 	/** @type {Map<string, Set<EventHandler>>} */
 	const handlers = new Map();
-	/** @type {Map<string, number>} successful handler runs per `websiteId|eventId` (dev probes only) */
-	const effects = new Map();
 
 	/**
 	 * Register a handler; returns an unsubscribe function.
@@ -103,10 +101,6 @@ export const createEvents = ({ keyResolver, replay, now = Date.now, logger, tole
 		];
 		try {
 			for (const handler of matching) await handler(event, meta);
-			if (trackEffects && matching.length > 0) {
-				const key = `${owner}|${event.id}`;
-				effects.set(key, (effects.get(key) ?? 0) + 1);
-			}
 		} catch (error) {
 			await replay.forget(dedupeId).catch(() => {});
 			throw error;
@@ -147,12 +141,5 @@ export const createEvents = ({ keyResolver, replay, now = Date.now, logger, tole
 		}
 	};
 
-	/**
-	 * How many times handlers ran for an event id (0 unless `trackEffects`).
-	 * @param {string} websiteId
-	 * @param {string} id
-	 */
-	const effectsOf = (websiteId, id) => effects.get(`${websiteId}|${id}`) ?? 0;
-
-	return Object.freeze({ handle, on, dispatch, effects: effectsOf });
+	return Object.freeze({ handle, on, dispatch });
 };

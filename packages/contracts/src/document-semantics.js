@@ -11,7 +11,6 @@ import { pointer } from './util.js';
 export const DOCUMENT_RULES = Object.freeze({
 	validityWindow: 'validityWindow',
 	unknownElement: 'unknownElement',
-	duplicateExperiment: 'duplicateExperiment',
 	duplicateResource: 'duplicateResource',
 	duplicateIdentityKey: 'duplicateIdentityKey',
 	timezone: 'timezone',
@@ -82,24 +81,6 @@ export const checkEntitlementDocument = (doc) => {
 	}
 	for (const key of Object.keys(doc.config)) {
 		if (!known(key)) out.push(at(['config', key], DOCUMENT_RULES.unknownElement, `config refers to unknown element '${key}'`));
-	}
-	/** @type {Set<string>} */
-	const experimentElements = new Set();
-	for (const [index, experiment] of doc.experiments.entries()) {
-		if (!known(experiment.element))
-			out.push(
-				at(['experiments', index, 'element'], DOCUMENT_RULES.unknownElement, `unknown element '${experiment.element}'`),
-			);
-		if (experimentElements.has(experiment.element)) {
-			out.push(
-				at(
-					['experiments', index],
-					DOCUMENT_RULES.duplicateExperiment,
-					`element '${experiment.element}' is assigned more than one variant`,
-				),
-			);
-		}
-		experimentElements.add(experiment.element);
 	}
 	/** @type {Set<string>} */
 	const resourceKinds = new Set();

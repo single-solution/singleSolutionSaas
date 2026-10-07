@@ -319,52 +319,6 @@ export const planMeteredSettlement = ({ usageByUnit, included = {}, overageRate,
 };
 
 /**
- * @typedef {string | { periodKey: string, amount?: number }} KeyLike
- */
-
-/**
- * Compares expected buckets with what the ledger holds.
- * - `missing`: expected but not in the ledger.
- * - `duplicates`: ledger keys present more than once.
- * - `extra`: ledger keys not expected.
- * - `mismatched`: keys whose amounts differ (only when both sides carry `amount`).
- * @param {{ expectedBuckets: readonly KeyLike[], ledgerKeys: readonly KeyLike[] }} input
- * @returns {{ missing: string[], duplicates: string[], extra: string[], mismatched: { periodKey: string, expected: number, actual: number }[] }}
- */
-export const reconcile = ({ expectedBuckets, ledgerKeys }) => {
-	/** @param {KeyLike} k */
-	const keyOf = (k) => (typeof k === 'string' ? k : k.periodKey);
-	/** @type {Map<string, number | undefined>} */
-	const expected = new Map(expectedBuckets.map((b) => [keyOf(b), typeof b === 'string' ? undefined : b.amount]));
-	/** @type {Map<string, number>} */
-	const counts = new Map();
-	/** @type {Map<string, number>} */
-	const amounts = new Map();
-	for (const entry of ledgerKeys) {
-		const key = keyOf(entry);
-		counts.set(key, (counts.get(key) ?? 0) + 1);
-		if (typeof entry !== 'string' && entry.amount !== undefined && !amounts.has(key)) amounts.set(key, entry.amount);
-	}
-	const mismatched = [...expected.entries()]
-		.filter(([key, amount]) => amount !== undefined && amounts.has(key) && amounts.get(key) !== amount)
-		.map(([periodKey, amount]) => ({
-			periodKey,
-			expected: /** @type {number} */ (amount),
-			actual: /** @type {number} */ (amounts.get(periodKey)),
-		}))
-		.sort((a, b) => (a.periodKey < b.periodKey ? -1 : 1));
-	return {
-		missing: [...expected.keys()].filter((key) => !counts.has(key)).sort(),
-		duplicates: [...counts.entries()]
-			.filter(([, n]) => n > 1)
-			.map(([key]) => key)
-			.sort(),
-		extra: [...counts.keys()].filter((key) => !expected.has(key)).sort(),
-		mismatched,
-	};
-};
-
-/**
  * Balance after applying charges (subtracted) and credits (added). All integer millicredits.
  * @param {{ balance: number, charges?: readonly (number | { amount: number })[], credits?: readonly (number | { amount: number })[] }} input
  * @returns {number}

@@ -4,7 +4,7 @@ Safe outbound networking shared by the Portal and products. It provides SSRF pol
 DNS-pinned guarded lookups, a guarded HTTP(S) client, MongoDB connection-string safety and AWS SigV4 signing.
 
 - Node only (`node:http`, `node:https`, `node:dns`, `node:crypto`). No dependencies. JavaScript ESM, functional, JSDoc-typed.
-- Every outbound call to a merchant- or developer-supplied destination (registration, manifest refresh, event
+- Every outbound call to a merchant- or developer-supplied destination (connect, event
   deliveries, connector checks, object stores, client databases) must go through this package.
 
 ## Threat model

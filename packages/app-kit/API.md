@@ -7,6 +7,7 @@ sensible defaults.
 ```js
 import {
 	createProduct,
+	OFFLINE_GRACE_MS,
 	configFromEnv,
 	createLogger,
 	noopLogger,
@@ -46,8 +47,6 @@ import {
 	createBackground,
 	CONTROL_DB_POOL_SIZE,
 	CLIENT_DB_POOL_SIZE,
-	REPLAY_COLLECTION,
-	REPLAY_HEADERS,
 	RESERVED_PROBLEM_MEMBERS,
 	presignUrl,
 	signHeaders,
@@ -55,7 +54,6 @@ import {
 	checkEvent,
 	CONTROL_EVENTS,
 	createAudit,
-	createPrivacy,
 	resolveStrings,
 	guardFilter,
 	guardPipeline,
@@ -77,7 +75,7 @@ import {
 	SWEEP_DEFAULT_LIMIT,
 	SWEEP_MAX_LIMIT,
 } from '@ss/app-kit';
-import { createFakePortal, createTestIdentityIssuer, entitlementPayload } from '@ss/app-kit/testing'; // tests / `ss dev` only
+import { createFakePortal, createTestIdentityIssuer, entitlementPayload } from '@ss/app-kit/testing'; // tests only
 // createTestIdentityIssuer({ alg, kid, issuer, audience, claimMap }) → { section, sign(claims, header?) }:
 //   a website identity issuer for tests — pass `section` as `setEntitlement({ identity })`, send `sign(...)` in SS-Identity
 ```
@@ -95,7 +93,6 @@ createProduct({
   strings,                  // { [lang]: { key: text } } or async (lang) => catalog | null — served at GET /v1/strings
   defaultLang,              // 'en'
   data: { indexes, migrations, createClient, clientOptions, idleMs },   // indexes/migrations applied lazily per website
-  privacy: { collections: [{ name, subjectField = 'customerId', fields: [] }] } | { export(input), anonymize(input) },
   connectors: { [kind]: { [provider]: (ctx) => adapter } },             // e.g. payments adapters; ctx = { descriptor, websiteId, slug, send, policy, fetch, now }
   outbound: { allowHosts, allowHttpForAllowed, ports, maxRedirects, timeoutMs, maxBytes, resolve },
                             // @ss/net createOutboundPolicy options for connector calls; allowHosts ignored when nodeEnv === 'production'
@@ -111,7 +108,6 @@ createProduct({
   onlineLaunchConsume,      // also burn launches at POST /v1/product/launch/consume
   requestIdHeader,          // 'x-request-id'
   cache: { entitlementTtlMs /* 5 min */, revocationSyncMs /* ≤ 5 min */ },
-  devProbes,                // true → mount /v1/ss-probe/* (only when nodeEnv !== 'production')
   nodeEnv,                  // default process.env.NODE_ENV
 }) → product = {
   manifest,
@@ -124,13 +120,12 @@ createProduct({
     handle({ headers, rawBody }) → { status, body },                   // POST /.well-known/ss-events (event signatures)
     on(type, handler) → unsubscribe,                                   // type: 'name@v' | 'name' | '*'; handler(event, { source, website? })
     dispatch(event, meta) → { duplicate },                             // dedupe on event id, then handlers
-    effects(websiteId, eventId) → number,                              // handler runs (dev probes only, else 0)
   },
-  manifestRoute: async () => ({ status: 200, body: manifest, headers }),  // GET /.well-known/ss-app.json
-        // headers: cache-control public, max-age=300; ss-manifest-signature: <@ss/protocol signManifest JWS> once the appId is known
+  manifestRoute: async () => ({ status: 200, body: manifest, headers }),  // GET /.well-known/ss-app.json (unsigned)
+        // body: the manifest with the connected base URL; headers: cache-control public, max-age=300
   launch: {
-    verify(token) → { ok: true, claims, role, scope } | { ok: false, code },   // role: merchant|demo|platform_admin|impersonate|partner|developer
-    exchange(token, { ttlMs }?) → { ok: true, session } | { ok: false, code },  // opaque session `ses_…`; impersonation ends at impExp
+    verify(token) → { ok: true, claims, role, scope } | { ok: false, code },   // ROLE_OF_KIND: merchant → merchant, admin → platform_admin
+    exchange(token, { ttlMs }?) → { ok: true, session } | { ok: false, code },  // opaque session `ses_…` (default 8 h)
     session(id) → session | null,  logout(id),
   },
   keys: {
@@ -138,11 +133,12 @@ createProduct({
       → { ok: true, website: { websiteId, merchantId, domain, allowSubdomains, env, scopes, kind, keyId } }
       | { ok: false, code: unauthorized|invalid_credentials|origin_not_allowed|scope_missing|forbidden|unavailable, detail },
     // a cold instance's concurrent first requests await the one in-flight revocation sync (single-flight) instead of
-    // answering 503; `unavailable` only when revocations could not be synced within the offline grace
+    // answering 503; `unavailable` only when revocations could not be synced within OFFLINE_GRACE_MS (24 h)
     revoke(keyIds), sync(), isRevoked(keyId),
   },
   entitlements: {
     forWebsite(websiteId) → { ok: true, doc, stale, version, fetchedAt } | { ok: false, reason: not_subscribed|unavailable|invalid },
+      // Portal down: the last verified document is served (stale: true) until validUntil + OFFLINE_GRACE_MS (fixed 24 h)
     refresh(websiteId),            // fetch now
     invalidate(websiteId),         // the next forWebsite(websiteId) fetches from the Portal (cached copy kept as offline fallback)
     can(doc, elementKey), feature(doc, 'element.feature'), config(doc, elementKey), featuresOf(doc, elementKey),
@@ -166,14 +162,15 @@ createProduct({
   },
   portal: {                                                            // signed client (client assertion, aud = Portal URL)
     entitlements(websiteId), revocations({ since }), usage(records, { idempotencyKey }), consumeLaunch({ jti }),
-    heartbeat({ version, status, queues? }), rotateKey({ publicJwk }), resolveResource({ websiteId, kind }), jwks(),
+    resolveResource({ websiteId, kind }), jwks(),
     publishEvent({ websiteId, type, data, idempotencyKey, id?, env?, occurredAt?, context? }) → envelope,
       // fills id (evt_… derived from (websiteId, type, idempotencyKey) unless given), occurredAt, env (from the website's
       // entitlement), actor { type: 'product', id: slug }, context { source: 'product', product: slug }; type must be in
       // the product namespace or manifest `events.publishes`. DURABLE: the envelope is written to the control-store outbox
       // (idempotent by event id), sent right away when the Portal answers, else retried with backoff by outbox.flush() /
-      // the next request for that website (never by a timer); Portal `rejected` results and permanent 4xx are dead-lettered (kept 7 days). A delivery
-      // failure never throws; invalid input still throws invalid_event.
+      // the next request for that website (never by a timer) within a bounded retry window (20 attempts, backoff ≤ 1 h);
+      // Portal `rejected` results, permanent 4xx and events past the window are dropped with an error log (no dead
+      // letters). A delivery failure never throws; invalid input still throws invalid_event.
     publishEvents(envelopes),                                          // raw: POST /v1/product/events { events: [...] }
     requestIdentityIssuer({ websiteId, issuer, jwksUrl | publicJwks, audience?, claimMap? })
       → { status: 'pending', request } | { status: 'active', issuer },
@@ -183,7 +180,7 @@ createProduct({
       // request equal to the active issuer answers active (200) — safe to repeat. Errors throw portal_error.
     baseUrl, jwksUrl,
   },
-  outbox: { flush({ maxBatches, websiteId }?) → { sent, duplicates, rejected, failed, batches }, stats() → { pending, sent, dead } },
+  outbox: { flush({ maxBatches, websiteId }?) → { sent, duplicates, rejected, failed, batches }, stats() → { pending, sent } },
     // event outbox (store `eventOutbox`, collection ss_kit_event_outbox): batches ≤ 50 events / ~200 kB per
     // POST /v1/product/events; per-event results { id, status: accepted|duplicate|rejected }; envelope dropped once sent
   outbound: {
@@ -226,9 +223,8 @@ createProduct({
     // (checked again on each DNS answer at connect time), no redirects for providers, size cap; endpoints/baseUrls that
     // fail the policy are refused up front with resource_invalid
     // payments: interface { createPayment, capture, refund, status, verifyWebhook } — provided by an injected adapter
-  audit: { record({ websiteId, actor: { type, id?, act? }, action, target?, before?, after?, requestId? }) → { ok, id? } },
+  audit: { record({ websiteId, actor: { type, id? }, action, target?, before?, after?, requestId? }) → { ok, id? } },
   handler(routes, options?) → (Request) → Promise<Response>,         // = createRequestHandler(product, routes, options)
-  heartbeat() → flushes the queues, then Portal heartbeat { version, status: 'ok', queues: { usagePending, usageDead, eventsPending, eventsDead } },
   close(),                                                             // close pooled client-DB connections
   context,                                                             // internal wiring used by the handler and standardRoutes
 }
@@ -245,17 +241,17 @@ JWKS and answers `{ appId, nonce, publicJwk, manifest }` signed with the same se
 a secret it answers 503. The served manifest carries the recorded https address as `endpoints.base`. Connecting again
 with the right secret replaces the binding; to lock a Portal out, change `CONNECT_SECRET` and connect from the right
 Portal. Other instances pick a new connection up within a second. Generated secrets: one 32-byte root secret (`setting:secrets`), derived per
-purpose with `product.secret(label)` (the idempotency HMAC key, product token secrets).
+purpose with `product.secret(label)` (e.g. product token secrets).
 
 ### Routes
 
 ```js
 createRequestHandler(product, routes, { basePath?, maxBodyBytes? = 1 MiB, requestIdHeader?, trustForwardedFor? = true })
 defineRoute({
-  method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path,   // `:id` segments are params; '/v1/data:export' is a literal segment
-  auth: 'website'|'launch'|'portal'|'none',
+  method: 'GET'|'POST'|'PUT'|'PATCH'|'DELETE', path,   // `:id` segments are params; '/v1/items:search' is a literal segment
+  auth: 'website'|'launch'|'none',
   scopes?, keyKind?: 'pk'|'sk', roles?, element?,      // element: 403 element_disabled unless enabled (402/403 for spend_cap/paused)
-  idempotent?: true|'optional'|false,                  // POST default true (428 without Idempotency-Key); replay (see below)
+  idempotent?: boolean,                                // true: a repeated Idempotency-Key → 409 duplicate_request (below); default false
   rateLimit?: { limit: number | (ctx) => number | Promise<number>, windowMs | windowSeconds, key?(ctx), bucket? },
                                                        // evaluated after auth, entitlement, JSON body and identity;
                                                        // limit ≥ 0 integer (0 = refuse all) or Infinity (no limit); an invalid
@@ -267,18 +263,15 @@ defineRoute({
   handler(ctx) → ok()/created()/noContent()/problem() result | Response | plain value (→ 200 JSON) | undefined (→ 204)
 })
 ctx = { request, requestId, method, path, params, query /* { name: first value } */, searchParams, headers, body, rawBody,
-        idempotencyKey, website, websiteId, entitlement: { doc, stale, version } | null, session | null, portal | null,
+        idempotencyKey, website, websiteId, entitlement: { doc, stale, version } | null, session | null,
         identity: { subject, email?, phone?, issuer, claims } | null, identityProblem: string | null, product, log }
 ```
 
-**Idempotency and privacy.** The product's control store keeps, per Idempotency-Key, only `{ _id: HMAC(principal, route,
-path, key), fingerprint: HMAC(method, path, query, body), response: { status, headers (allowlist: content-type,
-content-language, location, link, etag, last-modified, cache-control), replay: 'empty' | 'website' | 'none' } }` (HMAC key
-derived from the product signing key, TTL 24 h). The response **body** of a route with a website (`ctx.websiteId`) is
-stored in the merchant's own database (`ss_<slug>_idempotency` `{ websiteId, key, body, expireAt }` via
-`data.forWebsite`, unique `(websiteId, key)`, TTL 24 h). Routes without a website (e.g. `auth: 'portal'`) store no body;
-a replay of a response that had a body that is not available (no website, merchant DB down, expired) answers **409
-`idempotency_replay_no_body`** — never a second execution. 5xx results are not stored.
+**Duplicate refusal.** A route declaring `idempotent: true` refuses an `Idempotency-Key` it has already seen for the
+same website (else the session subject) and route within 24 h: **409 `duplicate_request`**, the handler does not run
+again. Only `idem:<sha256(principal, route, key)>` with its expiry is kept (the `replay` store), never a request or
+response body. A 5xx result forgets the key so the retry runs. Requests without a (valid) key run normally; routes
+without `idempotent: true` ignore the header (clients may send it everywhere).
 
 **Queue delivery on requests (no timers).** Nothing in the kit runs on a timer, polls or sweeps (PLAN F.19:
 event-driven only). An event is sent inside the request that publishes it. After a request, the kit sends the usage
@@ -286,7 +279,7 @@ and events queued on this instance since the last run and the due retries of the
 one batch per website and queue: a send that failed is retried by the next request of this product for that website.
 The run goes through the framework's `after()` when the adapter provided one (`toNextRoute(handler, { after })` with
 `import { after } from 'next/server.js'`), else in the background of the request. Mode `off` (the test default) leaves
-sending to explicit `usage.flush()` / `outbox.flush()` / `product.flush()`; `heartbeat()` sends everything first.
+sending to explicit `usage.flush()` / `outbox.flush()` / `product.flush()`.
 
 **No periodic product work.** Products register no crons and no background loops. Anything with an expiry is treated
 as expired when read and cleaned up when touched (or by a MongoDB TTL index: `ensureIndexes` accepts
@@ -299,13 +292,6 @@ a fixed pool (`CONTROL_DB_POOL_SIZE` = 5), `minPoolSize` 0, idle connections clo
 request. Merchant database pools are `CLIENT_DB_POOL_SIZE` (3) per instance, cached on `globalThis` and closed when
 idle (checked when the next website is served; no timer).
 
-```js
-
-```
-
-- `auth: 'portal'` verifies with `@ss/protocol` `verifyRequest({ method, path, audience: appId, headers, rawBody, keyResolver,
-replayStore })`. The path is the one the client addressed, including the query; `toNextRoute` keeps the path from before
-  it stripped `/api`.
 - `auth: 'launch'` takes the session from the `ss_session` cookie or `Authorization: Bearer ses_…`. The website is the
   session's only website or `X-SS-Website`, which must be within the session scope.
 
@@ -328,13 +314,9 @@ toNextRoute(handler, { stripPrefix = '/api' | false, after? }?) → { GET, POST,
 
 - `GET /v1/entitlement`, `GET /v1/config?element=a,b` and `POST /v1/events` (website key).
 - `GET /v1/strings?lang=` (none).
-- `POST /v1/data:export` and `POST /v1/data:anonymize` (portal; body `{ websiteId, subject?, requestId? }`).
-- `GET /.well-known/ss-app.json` and `POST /.well-known/ss-events`.
+- `GET /.well-known/ss-app.json` (unsigned manifest) and `POST /.well-known/ss-events`.
 - `POST /.well-known/ss-connect` (none; HMAC with `CONNECT_SECRET`, also while unconnected).
 - `GET /sso?launch=`, which sets the `ss_session` cookie and redirects with 303 to `endpoints.dashboard`.
-- With `createProduct({ devProbes: true })` (never in production), mounted by `standardRoutes`, website key:
-   - `GET /v1/ss-probe/data-guard` → `{ rejected, code }`: runs a query without `websiteId` through the guard.
-   - `GET /v1/ss-probe/events/:id` → `{ id, effects }`: how many times handlers ran for that event id.
 
 ### Stale uploads
 
@@ -364,7 +346,7 @@ later date as a backstop, and refuses to confirm a slot past its stale date (so 
 `createMongoStores({ db, prefix = 'ss_kit_', now? })` and `createMemoryStores({ now? })` return:
 
 ```
-{ replay, nonce, settings, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys }
+{ replay, nonce, settings, entitlements, usageQueue, eventOutbox, revocations, sessions, rateLimits, portalKeys }
 ```
 
 Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces are in `src/stores/types.js`.
@@ -396,7 +378,7 @@ These calls are signed with a client assertion. Formats are in PLAN.md F.9.
 
 - `GET /v1/product/entitlements?websiteId=` and `GET /v1/product/revocations?since=`.
 - `POST /v1/product/usage` (batch, with `Idempotency-Key`).
-- `POST /v1/product/launch/consume`, `POST /v1/product/heartbeat` and `POST /v1/product/keys/rotate`.
+- `POST /v1/product/launch/consume`.
 - `POST /v1/product/events` with `{ events: [...] }`.
 - `POST /v1/product/resources/resolve`.
 - `GET /.well-known/jwks.json`, which is unsigned. The last good copy is persisted in `portalKeys`.

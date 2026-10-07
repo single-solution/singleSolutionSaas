@@ -1,15 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	createMemoryStores,
-	created,
-	defineRoute,
-	noContent,
-	ok,
-	paginate,
-	problem,
-	standardRoutes,
-	toNextRoute,
-} from '../src/index.js';
+import { created, defineRoute, noContent, ok, paginate, problem, standardRoutes, toNextRoute } from '../src/index.js';
 import { MERCHANT, WEBSITE, entitle, setup, websiteKey } from './helpers.js';
 
 const BASE = 'https://coupons.example.dev';
@@ -68,6 +58,7 @@ const app = async (/** @type {Record<string, any>} */ overrides = {}) => {
 			keyKind: 'sk',
 			scopes: ['coupons.write'],
 			element: 'codes',
+			idempotent: true,
 			handler: (ctx) => {
 				counter += 1;
 				return created({ n: counter, body: ctx.body }, { location: `/v1/coupons/${counter}` });
@@ -86,7 +77,7 @@ const app = async (/** @type {Record<string, any>} */ overrides = {}) => {
 			path: '/v1/flaky',
 			auth: 'website',
 			keyKind: 'sk',
-			idempotent: 'optional',
+			idempotent: true,
 			handler: () => {
 				counter += 1;
 				if (counter % 2 === 1) throw new Error('db down');
@@ -128,7 +119,6 @@ const app = async (/** @type {Record<string, any>} */ overrides = {}) => {
 			path: '/v1/context/:id',
 			auth: 'website',
 			keyKind: 'sk',
-			idempotent: 'optional',
 			handler: (ctx) =>
 				ok({
 					website: ctx.website.websiteId,
@@ -145,7 +135,7 @@ const app = async (/** @type {Record<string, any>} */ overrides = {}) => {
 			method: 'GET',
 			path: '/v1/dashboard',
 			auth: 'launch',
-			roles: ['merchant', 'impersonate'],
+			roles: ['merchant'],
 			handler: (ctx) => ok({ role: ctx.session.role, websiteId: ctx.websiteId }),
 		}),
 		defineRoute({
@@ -275,55 +265,35 @@ describe('request handler', () => {
 		expect(await body(res)).toMatchObject({ status: 403, type: `${BASE}/problems/forbidden` });
 	});
 
-	it('replays idempotent POSTs and refuses key reuse with another body', async () => {
+	it('refuses a repeated Idempotency-Key on idempotent routes only', async () => {
 		const { handle, sk } = await app();
 		const headers = { authorization: `Bearer ${sk}`, 'idempotency-key': 'create-1' };
 		const first = await handle(req('/v1/coupons', { method: 'POST', json: { code: 'A' }, headers }));
 		expect(first.status).toBe(201);
 		expect(first.headers.get('location')).toBe('/v1/coupons/1');
-		// no merchant database is connected here, so the replay body could not be stored: 409, never a re-run
-		const replay = await handle(req('/v1/coupons', { method: 'POST', json: { code: 'A' }, headers }));
-		expect(replay.status).toBe(409);
-		expect(await body(replay)).toMatchObject({ type: `${BASE}/problems/idempotency_replay_no_body` });
-		const conflict = await handle(req('/v1/coupons', { method: 'POST', json: { code: 'B' }, headers }));
-		expect(await body(conflict)).toMatchObject({ status: 409, type: `${BASE}/problems/idempotency_conflict` });
-		const missing = await handle(req('/v1/coupons', { method: 'POST', json: {}, headers: { authorization: `Bearer ${sk}` } }));
-		expect(missing.status).toBe(428);
-		const invalid = await handle(
-			req('/v1/coupons', {
-				method: 'POST',
-				json: {},
-				headers: { authorization: `Bearer ${sk}`, 'idempotency-key': 'bad key' },
-			}),
-		);
-		expect(invalid.status).toBe(400);
+		for (const code of ['A', 'B']) {
+			const again = await handle(req('/v1/coupons', { method: 'POST', json: { code }, headers }));
+			expect(await body(again)).toMatchObject({ status: 409, type: `${BASE}/problems/duplicate_request` });
+		}
+		// without a (valid) key the request simply runs
+		const plain = { authorization: `Bearer ${sk}` };
+		expect((await handle(req('/v1/coupons', { method: 'POST', json: {}, headers: plain }))).status).toBe(201);
+		const invalid = { ...plain, 'idempotency-key': 'bad key' };
+		expect((await handle(req('/v1/coupons', { method: 'POST', json: {}, headers: invalid }))).status).toBe(201);
+		// a route that does not declare `idempotent` ignores the header
+		for (let i = 0; i < 2; i += 1) {
+			expect((await handle(req('/v1/context/x', { method: 'POST', json: {}, headers }))).status).toBe(200);
+		}
 	});
 
-	it('does not store 5xx results, so the retry runs again', async () => {
+	it('forgets the key of a 5xx result, so the retry runs again', async () => {
 		const { handle, sk } = await app();
 		const headers = { authorization: `Bearer ${sk}`, 'idempotency-key': 'flaky-1' };
 		expect((await handle(req('/v1/flaky', { method: 'POST', json: {}, headers }))).status).toBe(500);
 		const retried = await handle(req('/v1/flaky', { method: 'POST', json: {}, headers }));
 		expect(retried.status).toBe(200);
 		expect(await body(retried)).toEqual({ n: 2 });
-		// optional: works without a key too
-		expect(
-			(await handle(req('/v1/flaky', { method: 'POST', json: {}, headers: { authorization: `Bearer ${sk}` } }))).status,
-		).toBe(500);
-	});
-
-	it('reports in-progress idempotent requests', async () => {
-		const stores = createMemoryStores();
-		await stores.idempotency.begin('x', 'y', Date.now() + 1000);
-		const { handle, sk, product } = await app({
-			stores: { idempotency: { ...stores.idempotency, begin: async () => ({ state: 'pending' }) } },
-		});
-		expect(product).toBeDefined();
-		const res = await handle(
-			req('/v1/coupons', { method: 'POST', json: {}, headers: { authorization: `Bearer ${sk}`, 'idempotency-key': 'p' } }),
-		);
-		expect(res.status).toBe(409);
-		expect(res.headers.get('retry-after')).toBe('1');
+		expect((await handle(req('/v1/flaky', { method: 'POST', json: {}, headers }))).status).toBe(409);
 	});
 
 	it('limits body size and content type and parses JSON', async () => {
@@ -436,14 +406,19 @@ describe('request handler', () => {
 		expect(
 			(await handle(req('/v1/dashboard', { headers: { authorization: `Bearer ${id}`, 'x-ss-website': 'web_other' } }))).status,
 		).toBe(403);
-		const demo = await portal.issueLaunch({ subject: 'usr_2', kind: 'demo', user: { id: 'usr_2' } });
-		const demoSession = await product.launch.exchange(demo.token);
-		if (!demoSession.ok) throw new Error('exchange');
+		const admin = await portal.issueLaunch({
+			subject: 'usr_2',
+			kind: 'admin',
+			user: { id: 'usr_2' },
+			scope: { merchantId: MERCHANT },
+		});
+		const adminSession = await product.launch.exchange(admin.token);
+		if (!adminSession.ok) throw new Error('exchange');
 		expect(
-			(await handle(req('/v1/dashboard', { headers: { authorization: `Bearer ${demoSession.session.id}` } }))).status,
+			(await handle(req('/v1/dashboard', { headers: { authorization: `Bearer ${adminSession.session.id}` } }))).status,
 		).toBe(403);
 		expect(
-			(await handle(req('/v1/dashboard/codes', { headers: { authorization: `Bearer ${demoSession.session.id}` } }))).status,
+			(await handle(req('/v1/dashboard/codes', { headers: { authorization: `Bearer ${adminSession.session.id}` } }))).status,
 		).toBe(400);
 	});
 

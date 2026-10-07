@@ -52,7 +52,6 @@ describe('connect-secret onboarding', () => {
 		expect(logs.some((l) => l.msg === 'product connected to the Portal')).toBe(true);
 		const served = await product.manifestRoute();
 		expect(served.body.endpoints.base).toBe(BASE);
-		expect(served.headers['ss-manifest-signature']).toMatch(/\./);
 		await entitle(portal);
 		expect((await product.entitlements.forWebsite(WEBSITE)).ok).toBe(true);
 	});

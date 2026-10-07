@@ -143,7 +143,6 @@ export const entitlementDocumentSchema = deepFreeze({
 		'runtime',
 		'resources',
 		'dataScope',
-		'experiments',
 	],
 	additionalProperties: false,
 	properties: {
@@ -216,18 +215,5 @@ export const entitlementDocumentSchema = deepFreeze({
 		},
 		identity: identitySectionSchema,
 		website: websiteSectionSchema,
-		experiments: {
-			type: 'array',
-			maxItems: 200,
-			items: {
-				type: 'object',
-				required: ['element', 'variant'],
-				additionalProperties: false,
-				properties: {
-					element: ref('elementKey'),
-					variant: { type: 'string', minLength: 1, maxLength: 40, pattern: PATTERNS.slug },
-				},
-			},
-		},
 	},
 });

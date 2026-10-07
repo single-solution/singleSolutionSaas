@@ -2,7 +2,7 @@
  * `ss app assets` — generates a service product's `app/_lib/assets.js`: static JSON imports of `manifest.json`, every
  * element feature schema it references (`features.$ref`, inlined) and every `strings/<lang>.json` catalog. The Next.js
  * build bundles them into the server code, so no project file is read from disk at runtime (no
- * `outputFileTracingIncludes`). `serve.js` and the tests keep reading the files; `ss app validate` fails when the
+ * `outputFileTracingIncludes`). The tests and `createPlatform({ root })` keep reading the files; `ss app validate` fails when the
  * generated module is out of date, and the product's `prebuild` script regenerates it.
  * @module
  */

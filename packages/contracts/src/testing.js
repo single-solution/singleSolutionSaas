@@ -14,10 +14,9 @@ export const manifest = () => ({
 	endpoints: {
 		base: 'https://coupons.example.dev',
 		dashboard: '/dashboard',
-		demo: '/demo',
 		events: '/.well-known/ss-events',
 	},
-	capabilities: { adminLaunch: true, sandbox: true, localEnforcement: ['quota:redeem'], offlineGrace: 'PT24H' },
+	capabilities: { adminLaunch: true },
 	scopes: [
 		'graph.customer.read',
 		'graph.order.read',
@@ -34,7 +33,6 @@ export const manifest = () => ({
 			modes: ['C'],
 			stateful: true,
 			price: { hourly: 1000, metered: [{ unit: 'redemption', perUnit: 10, included: { starter: 500 } }] },
-			budget: { js: 0 },
 			dependsOn: [],
 			requires: { resources: ['database'] },
 			features: {
@@ -57,7 +55,6 @@ export const manifest = () => ({
 						title: 'Allow stacking',
 						default: false,
 						'x-kind': 'flag',
-						'x-experiment': true,
 					},
 					monthlyRedemptions: {
 						type: 'integer',
@@ -106,7 +103,6 @@ export const manifest = () => ({
 			rules: ['eligibility'],
 			hooks: ['beforeRedeem', 'afterRedeem'],
 			customFields: ['coupon'],
-			experiments: true,
 			api: { resources: ['coupons', 'redemptions'] },
 			headless: null,
 			renderer: null,
@@ -116,7 +112,6 @@ export const manifest = () => ({
 			name: 'Coupon apply box',
 			modes: ['A', 'B', 'C'],
 			price: { hourly: 0 },
-			budget: { js: 6 },
 			dependsOn: ['codes'],
 			placement: true,
 			headless: 'headless/applyBox.js#createApplyBox',
@@ -142,7 +137,6 @@ export const packManifest = () => ({
 			name: 'Notice bar',
 			modes: ['A', 'B'],
 			price: { hourly: 0 },
-			budget: { js: 3 },
 			placement: true,
 			headless: 'headless/bar.js#createBar',
 			renderer: 'ui/bar.js#render',
@@ -175,7 +169,6 @@ export const entitlement = () => ({
 	runtime: { state: 'active' },
 	resources: [{ kind: 'database', ref: 'res_db_1', status: 'connected' }],
 	dataScope: { prefix: 'ss_coupons_' },
-	experiments: [{ element: 'codes', variant: 'b' }],
 });
 
 /**
@@ -271,93 +264,6 @@ export const placement = () => ({
 	],
 	frequency: { maxPerSession: 1, cooldown: 'P1D', dismissMemory: 'P30D' },
 	audience: "inSegment('vip') and total() > 1000",
-});
-
-/** @param {string} id */
-const base = (id) => ({
-	id,
-	websiteId: WEBSITE,
-	merchantId: MERCHANT,
-	env: 'live',
-	createdAt: '2026-10-01T00:00:00Z',
-	updatedAt: '2026-10-01T00:00:00Z',
-	schemaVersion: 1,
-});
-
-/** Valid graph entities by name. */
-export const graph = () => ({
-	customer: {
-		...base('cus_1'),
-		identities: [
-			{ type: 'email', value: 'ana@example.com', verified: true, primary: true },
-			{ type: 'phone', value: '+923001234567' },
-			{ type: 'externalId', value: 'u-778', issuer: 'https://login.example.com' },
-		],
-		name: 'Ana',
-		locale: 'ur-PK',
-		consent: { marketing: { granted: true, updatedAt: '2026-10-01T00:00:00Z' } },
-		attributes: { tier: 'gold', visits: 3, sizes: ['m', 'l'] },
-		tags: ['vip'],
-		custom: { favouriteColour: 'green' },
-	},
-	item: {
-		...base('itm_1'),
-		type: 'device',
-		title: 'Phone X',
-		slug: 'phone-x',
-		status: 'active',
-		attributes: { storage: '128GB' },
-		variants: [{ id: 'v1', sku: 'PX-128', prices: [{ amount: 49900, currency: 'USD' }], quantity: 4 }],
-		media: [{ fileId: 'fil_1', role: 'primary', alt: 'Front' }],
-		prices: [{ amount: 49900, currency: 'USD', compareAtAmount: 59900 }],
-	},
-	order: {
-		...base('ord_1'),
-		number: 'A-1001',
-		customerId: 'cus_1',
-		status: 'paid',
-		currency: 'EUR',
-		lines: [{ itemId: 'itm_1', quantity: 1, unitAmount: 49900, totalAmount: 49900 }],
-		amounts: { subtotal: 49900, total: 49900 },
-		placedAt: '2026-10-01T00:00:00Z',
-	},
-	session: {
-		...base('ses_1'),
-		startedAt: '2026-10-01T00:00:00Z',
-		device: 'mobile',
-		landingPath: '/',
-		campaign: { source: 'newsletter', medium: 'email' },
-		pageViews: 3,
-	},
-	file: {
-		...base('fil_1'),
-		name: 'front.jpg',
-		contentType: 'image/jpeg',
-		size: 1024,
-		storageRef: 'bucket-key/2026/front.jpg',
-		folder: '/items/',
-		checksum: { algorithm: 'sha256', value: 'abc123' },
-		width: 800,
-		height: 600,
-	},
-	'consent-record': {
-		...base('cns_1'),
-		subjectType: 'anonymous',
-		subjectId: 'anon_1',
-		categories: { analytics: true, marketing: false },
-		policyVersion: '2026-09',
-		source: 'banner',
-		recordedAt: '2026-10-01T00:00:00Z',
-	},
-	'custom-field-definition': {
-		...base('cfd_1'),
-		entity: 'customer',
-		key: 'shoeSize',
-		label: 'Shoe size',
-		type: 'enum',
-		options: [{ value: '42' }, { value: '43' }],
-		filterable: true,
-	},
 });
 
 /** @returns {any} */

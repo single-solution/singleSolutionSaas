@@ -40,14 +40,14 @@ export {
 } from './display.js';
 export { Table } from './Table.js';
 export { Tabs, TabNav } from './Tabs.js';
-export { Dialog, Drawer, ConfirmDialog, useFocusTrap, focusableIn } from './overlay.js';
+export { Dialog, ConfirmDialog, useFocusTrap, focusableIn } from './overlay.js';
 export { TypedConfirmDialog } from './TypedConfirm.js';
 export { ToastProvider, useToast } from './Toast.js';
 export { CodeBlock, copyText } from './CodeBlock.js';
 export { AppShell } from './AppShell.js';
 export { THEME_SCRIPT, THEME_STORAGE_KEY, ThemeScript } from './theme-script.js';
 export { ThemeToggle, applyThemeChoice, readThemeChoice } from './theme.js';
-export { BarChart, ShareBars, Sparkline } from './charts.js';
+export { BarChart, ShareBars } from './charts.js';
 export { SchemaForm } from './SchemaForm.js';
 export { PlacementField, setMember as setPlacementMember } from './PlacementField.js';
 export * from './schema.js';

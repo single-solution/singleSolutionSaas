@@ -15,16 +15,6 @@ import {
 } from './event-envelope.js';
 import { placementSchema } from './placement.js';
 import { problemSchema } from './problem.js';
-import {
-	customerSchema,
-	itemSchema,
-	orderSchema,
-	sessionSchema,
-	fileSchema,
-	consentRecordSchema,
-	customFieldDefinitionSchema,
-} from './graph/index.js';
-import { SCHEMA_IDS } from './schema-ids.js';
 import { deepFreeze } from '../util.js';
 
 export * from './schema-ids.js';
@@ -35,20 +25,6 @@ export * from './entitlement-document.js';
 export * from './event-envelope.js';
 export * from './placement.js';
 export * from './problem.js';
-export * from './graph/index.js';
-
-/** Graph entity name → schema id. */
-export const GRAPH_ENTITY_SCHEMAS = Object.freeze({
-	customer: SCHEMA_IDS.graphCustomer,
-	item: SCHEMA_IDS.graphItem,
-	order: SCHEMA_IDS.graphOrder,
-	session: SCHEMA_IDS.graphSession,
-	file: SCHEMA_IDS.graphFile,
-	'consent-record': SCHEMA_IDS.graphConsentRecord,
-	'custom-field-definition': SCHEMA_IDS.graphCustomFieldDefinition,
-});
-
-/** @typedef {keyof typeof GRAPH_ENTITY_SCHEMAS} GraphEntityName */
 
 /** Every built-in schema, in dependency-free registration order. */
 export const ALL_SCHEMAS = deepFreeze([
@@ -63,11 +39,4 @@ export const ALL_SCHEMAS = deepFreeze([
 	...elementEventDataSchemas(),
 	placementSchema,
 	problemSchema,
-	customerSchema,
-	itemSchema,
-	orderSchema,
-	sessionSchema,
-	fileSchema,
-	consentRecordSchema,
-	customFieldDefinitionSchema,
 ]);

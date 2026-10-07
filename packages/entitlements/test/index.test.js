@@ -5,7 +5,6 @@ describe('public API', () => {
 	it('exports the documented functions and constants', () => {
 		for (const name of [
 			'normaliseProduct',
-			'elementDependencies',
 			'planDefaults',
 			'resolveEntitlement',
 			'periodBounds',
@@ -14,7 +13,6 @@ describe('public API', () => {
 			'planSettlement',
 			'planMeteredSettlement',
 			'nextCursor',
-			'reconcile',
 			'balanceAfter',
 			'hoursRemaining',
 			'projectedMonth',
@@ -25,6 +23,6 @@ describe('public API', () => {
 			expect(typeof api[/** @type {keyof typeof api} */ (name)]).toBe('function');
 		}
 		expect(api.MILLICREDITS_PER_CREDIT).toBe(1000);
-		expect(api.LAYERS).toEqual(['product', 'plan', 'platform', 'merchant', 'website', 'admin']);
+		expect(api.LAYERS).toEqual(['product', 'plan', 'platform', 'website', 'admin']);
 	});
 });

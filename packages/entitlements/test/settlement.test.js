@@ -10,7 +10,6 @@ import {
 	planSettlement,
 	priceBookResolver,
 	projectedMonth,
-	reconcile,
 } from '../src/settlement.js';
 import { coupons, deepFreeze } from './fixtures.js';
 
@@ -288,10 +287,6 @@ describe('resumability and catch-up', () => {
 		const first = settle({ from: at(0), to: at(3) });
 		const again = settle({ from: at(0), to: at(3) });
 		expect(again.buckets.map((b) => b.periodKey)).toEqual(first.buckets.map((b) => b.periodKey));
-		expect(
-			reconcile({ expectedBuckets: first.buckets, ledgerKeys: [...first.buckets, ...again.buckets].map((b) => b.periodKey) })
-				.duplicates,
-		).toHaveLength(3);
 	});
 
 	it('the cursor is monotonic and hour-aligned (property)', () => {
@@ -407,45 +402,6 @@ describe('planMeteredSettlement', () => {
 					expect(sum).toBe(Math.floor(total / per) * m + Math.floor(((total % per) * m) / per));
 				},
 			),
-		);
-	});
-});
-
-describe('reconcile', () => {
-	it('detects missing, duplicate, extra and mismatched entries', () => {
-		const expected = settle().buckets;
-		const ledger = [
-			{ periodKey: expected[0]?.periodKey ?? '', amount: expected[0]?.amount },
-			{ periodKey: expected[0]?.periodKey ?? '', amount: expected[0]?.amount },
-			{ periodKey: expected[1]?.periodKey ?? '', amount: 1 },
-			expected[2]?.periodKey ?? '',
-			'sub_1:2026-10-02T00:00:00Z',
-		];
-		expect(reconcile({ expectedBuckets: expected, ledgerKeys: ledger })).toEqual({
-			missing: ['sub_1:2026-10-01T13:00:00Z', 'sub_1:2026-10-01T14:00:00Z'],
-			duplicates: ['sub_1:2026-10-01T10:00:00Z'],
-			extra: ['sub_1:2026-10-02T00:00:00Z'],
-			mismatched: [{ periodKey: 'sub_1:2026-10-01T11:00:00Z', expected: 1600, actual: 1 }],
-		});
-		expect(reconcile({ expectedBuckets: ['a', 'b'], ledgerKeys: ['b', 'a'] })).toEqual({
-			missing: [],
-			duplicates: [],
-			extra: [],
-			mismatched: [],
-		});
-	});
-
-	it('a complete ledger always reconciles clean (property)', () => {
-		fc.assert(
-			fc.property(fc.uniqueArray(fc.string(), { maxLength: 30 }), fc.array(fc.nat(), { maxLength: 30 }), (keys, order) => {
-				const shuffled = [...keys].sort((a, b) => (order[keys.indexOf(a)] ?? 0) - (order[keys.indexOf(b)] ?? 0));
-				expect(reconcile({ expectedBuckets: keys, ledgerKeys: shuffled })).toEqual({
-					missing: [],
-					duplicates: [],
-					extra: [],
-					mismatched: [],
-				});
-			}),
 		);
 	});
 });

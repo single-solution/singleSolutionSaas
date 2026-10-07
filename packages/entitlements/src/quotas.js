@@ -321,15 +321,3 @@ export const quotaAllows = (state, quantity) =>
  */
 export const overageCharge = ({ used, included, rate }) =>
 	included === null ? 0 : chargeFor(Math.max(0, used - included), normaliseRate(rate));
-
-/**
- * Charge for moving period-to-date usage from `usedBefore` to `usedAfter`:
- * `overageCharge(after) − overageCharge(before)`. Summing increments over a period equals the charge
- * of the period total exactly.
- * @param {{ usedBefore: number, usedAfter: number, included: number | null, rate: import('./units.js').Rate | number }} input
- * @returns {number}
- */
-export const incrementalOverageCharge = ({ usedBefore, usedAfter, included, rate }) => {
-	if (usedAfter < usedBefore) throw new RangeError('usage cannot decrease within a period');
-	return overageCharge({ used: usedAfter, included, rate }) - overageCharge({ used: usedBefore, included, rate });
-};

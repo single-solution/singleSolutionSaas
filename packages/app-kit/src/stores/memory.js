@@ -1,12 +1,11 @@
 /**
  * In-memory stores — development and tests only (serverless instances do not share memory, so replay protection,
- * idempotency and rate limits are per-instance here). Production uses `createMongoStores`.
+ * duplicate refusal and rate limits are per-instance here). Production uses `createMongoStores`.
  * @module
  */
 
 /** @typedef {import('./types.js').Stores} Stores */
 /** @typedef {import('./types.js').QueuedUsage} QueuedUsage */
-/** @typedef {import('./types.js').StoredResponse} StoredResponse */
 
 /**
  * @param {() => number} now
@@ -34,7 +33,6 @@ const memoryReplay = (now) => {
  * @returns {Stores & { usageRecords: () => QueuedUsage[] }}
  */
 export const createMemoryStores = ({ now = Date.now } = {}) => {
-	/** @type {Map<string, Record<string, unknown>>} */
 	/** @type {Map<string, Record<string, any>>} */
 	const settings = new Map();
 	/** @type {Map<string, import('./types.js').EntitlementCacheEntry>} */
@@ -47,13 +45,11 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 	let revocationMeta = { cursor: null, syncedAt: null };
 	/** @type {Map<string, { data: Record<string, unknown>, expiresAt: number }>} */
 	const sessions = new Map();
-	/** @type {Map<string, { fingerprint: string, expiresAt: number, response: StoredResponse | null }>} */
-	const idempotency = new Map();
 	/** @type {Map<string, { count: number, resetAt: number }>} */
 	const windows = new Map();
 	/** @type {{ jwks: unknown, fetchedAt: number } | null} */
 	let portalKeys = null;
-	/** @type {Map<string, { id: string, envelope: Record<string, unknown> | null, attempts: number, status: 'pending' | 'sent' | 'dead', lastError?: string, nextAttemptAt: number, leaseUntil: number, expireAt: number | null }>} */
+	/** @type {Map<string, { id: string, envelope: Record<string, unknown> | null, attempts: number, status: 'pending' | 'sent', lastError?: string, nextAttemptAt: number, leaseUntil: number, expireAt: number | null }>} */
 	const outbox = new Map();
 
 	/** @param {QueuedUsage & { expireAt: number | null }} record */
@@ -212,15 +208,8 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 					Object.assign(record, { attempts: record.attempts + 1, nextAttemptAt, leaseUntil: 0, lastError: error });
 				}
 			},
-			deadLetter: async (ids, { now: t, error, retainMs }) => {
-				for (const id of ids) {
-					const record = outbox.get(id);
-					if (!record) continue;
-					Object.assign(record, { status: 'dead', leaseUntil: 0, lastError: error, expireAt: t + retainMs });
-				}
-			},
 			stats: async () => {
-				const out = { pending: 0, sent: 0, dead: 0 };
+				const out = { pending: 0, sent: 0 };
 				for (const record of outbox.values())
 					if (record.expireAt === null || record.expireAt > now()) out[record.status] += 1;
 				return out;
@@ -251,24 +240,6 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 			},
 			delete: async (id) => {
 				sessions.delete(id);
-			},
-		}),
-		idempotency: Object.freeze({
-			begin: async (key, fingerprint, expiresAt) => {
-				const entry = idempotency.get(key);
-				if (!entry || entry.expiresAt <= now()) {
-					idempotency.set(key, { fingerprint, expiresAt, response: null });
-					return { state: 'new' };
-				}
-				if (entry.fingerprint !== fingerprint) return { state: 'mismatch' };
-				return entry.response ? { state: 'done', response: entry.response } : { state: 'pending' };
-			},
-			complete: async (key, response) => {
-				const entry = idempotency.get(key);
-				if (entry) entry.response = response;
-			},
-			release: async (key) => {
-				idempotency.delete(key);
 			},
 		}),
 		rateLimits: Object.freeze({

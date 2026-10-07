@@ -80,23 +80,6 @@
  */
 
 /**
- * What the control store keeps of a completed idempotent response: status, an allowlisted subset of headers and
- * where the body is — never the body itself. `replay`: `empty` (no body), `website` (the body is in the merchant's own
- * database, `ss_<slug>_idempotency`, TTL 24 h), `none` (a body existed but was not stored: the route had no website,
- * or the merchant database write failed — a replay answers 409 `idempotency_replay_no_body`).
- * @typedef {{ status: number, headers: Record<string, string>, replay: 'empty' | 'website' | 'none' }} StoredResponse
- */
-
-/**
- * Idempotency-Key records for POST replay. `key` and `fingerprint` are HMACs (keyed with a secret derived from the
- * product signing key), so the control store holds no request content.
- * @typedef {object} IdempotencyStore
- * @property {(key: string, fingerprint: string, expiresAtMs: number) => Promise<{ state: 'new' } | { state: 'pending' } | { state: 'mismatch' } | { state: 'done', response: StoredResponse }>} begin
- * @property {(key: string, response: StoredResponse) => Promise<void>} complete
- * @property {(key: string) => Promise<void>} release
- */
-
-/**
  * Fixed-window counters.
  * @typedef {object} RateLimitStore
  * @property {(key: string, windowMs: number, now: number) => Promise<{ count: number, resetAt: number }>} hit
@@ -114,26 +97,25 @@
  * @property {string} id event id (the dedupe key)
  * @property {Record<string, unknown>} envelope the complete event envelope
  * @property {number} attempts
- * @property {'pending' | 'sent' | 'dead'} status
+ * @property {'pending' | 'sent'} status
  * @property {string} [lastError]
  */
 
 /**
  * Durable outbox of product events (`portal.publishEvent`), idempotent by event id. The envelope is dropped once the
- * event is sent (only the id is kept, for dedupe); dead events keep it until their retention ends.
+ * event is sent or dropped (only the id is kept, for dedupe).
  * @typedef {object} EventOutboxStore
  * @property {(event: { id: string, envelope: Record<string, unknown> }) => Promise<{ inserted: boolean }>} enqueue
  * @property {(options: { now: number, limit: number, leaseMs: number, owner: string, websiteId?: string }) => Promise<OutboxEvent[]>} lease
  *   due events, oldest first (only the website's with `websiteId`, the envelope's `websiteId`)
- * @property {(ids: string[], options: { now: number, retainMs: number }) => Promise<void>} ack mark sent (envelope dropped)
+ * @property {(ids: string[], options: { now: number, retainMs: number }) => Promise<void>} ack mark sent or dropped (envelope dropped)
  * @property {(ids: string[], options: { now: number, nextAttemptAt: number, error: string }) => Promise<void>} retry
- * @property {(ids: string[], options: { now: number, error: string, retainMs: number }) => Promise<void>} deadLetter
- * @property {() => Promise<{ pending: number, sent: number, dead: number }>} stats
+ * @property {() => Promise<{ pending: number, sent: number }>} stats
  */
 
 /**
  * @typedef {object} Stores
- * @property {ReplayStore} replay
+ * @property {ReplayStore} replay single-use ids: launches, events, seen `Idempotency-Key`s (`idem:` prefix)
  * @property {ReplayStore} nonce
  * @property {SettingsStore} settings
  * @property {EntitlementStore} entitlements
@@ -141,7 +123,6 @@
  * @property {EventOutboxStore} eventOutbox
  * @property {RevocationStore} revocations
  * @property {SessionStore} sessions
- * @property {IdempotencyStore} idempotency
  * @property {RateLimitStore} rateLimits
  * @property {PortalKeyStore} portalKeys
  */

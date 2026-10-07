@@ -1,12 +1,11 @@
 /**
  * Next.js App Router adapter: `export const { GET, POST, PATCH, DELETE } = toNextRoute(handler)` in a catch-all
  * `route.js`. A leading `/api` is stripped so routes are declared as `/v1/...` whether Next serves them under
- * `/api/v1/...` (e.g. through a `/v1/:path*` → `/api/v1/:path*` rewrite) or directly. The path the client addressed is
- * kept for Portal request signatures. Pass Next's `after` (`import { after } from 'next/server.js'`) so the usage and
+ * `/api/v1/...` (e.g. through a `/v1/:path*` → `/api/v1/:path*` rewrite) or directly. Pass Next's `after` (`import { after } from 'next/server.js'`) so the usage and
  * events a request queued (and its website's due retries) are sent after the response.
  * @module
  */
-import { rememberOriginalPath, rememberScheduler } from './handler.js';
+import { rememberScheduler } from './handler.js';
 
 /**
  * @param {Request} request
@@ -16,18 +15,15 @@ import { rememberOriginalPath, rememberScheduler } from './handler.js';
 const stripPrefix = (request, prefix) => {
 	const url = new URL(request.url);
 	if (url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`)) return request;
-	const original = `${url.pathname}${url.search}`;
 	url.pathname = url.pathname.slice(prefix.length) || '/';
 	const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
-	const rewritten = new Request(url, {
+	return new Request(url, {
 		method: request.method,
 		headers: request.headers,
 		...(hasBody ? { body: request.body, duplex: 'half' } : {}),
 		redirect: request.redirect,
 		signal: request.signal,
 	});
-	rememberOriginalPath(rewritten, original);
-	return rewritten;
 };
 
 /**
