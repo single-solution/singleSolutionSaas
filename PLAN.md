@@ -9,6 +9,169 @@
 | **Language**     | JavaScript (ESM), functional, JSDoc-typed, `tsc --checkJs --strict` in CI                                                                                                                                               |
 | **This file**    | The only planning document. Sections 1–16 + Appendices A–C = platform plan · **Part D** = product specifications (every element and what can be modified) · **Part E** = the Product Standard every product must follow |
 
+> **Read Part 0 first.** It records the owner's decisions from the 2026-10-07 interview and is **binding**: where anything
+> later in this file (sections 1–16, Appendices, Parts D–F) disagrees, Part 0 wins. Those older sections are kept as
+> history until they are rewritten. Nothing in Part 0 is built yet; building starts only when the owner says so.
+
+---
+
+# PART 0 — Owner decisions v2 (2026-10-07, binding)
+
+## 0.1 The idea in one paragraph
+
+We centralise the code that ibrahimMobiles has, so any merchant can use it. Each **product** is a standalone,
+separately hosted app that offers its functionality as an **API** plus **ready-made widgets**. A merchant builds their
+own website and their own admin; they drop in our widgets or design their own screens on our API. Our **Portal** is
+where we (admins) manage merchants, their websites, which products each website has, and credits; merchants use it to
+see their websites, tokens, install code, usage and credits, and to open each product's dashboard. Merchants' staff
+and shoppers never use the Portal or our product dashboards: they only use the merchant's own website and admin.
+
+## 0.2 People
+
+| Who                                    | Where they sign in                                                 | What they do                                                                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Our admins**                         | Portal (admin sign-in)                                             | Roles: **Owner** (everything, incl. admins and products), **Support** (merchants, websites, open products), **Finance** (credits and billing) |
+| **Merchant** (one login each)          | Portal                                                             | Sees their websites, products, tokens, install code, usage, credits; opens product dashboards; edits their own details. No team members.      |
+| **Merchant's users** (staff, shoppers) | The merchant's **own** website/admin, via our **Accounts** product | Whatever the merchant builds. Roles and allowlists from Accounts apply on the merchant's site, never in the Portal or our product dashboards. |
+
+- Admin creates every merchant (no self sign-up). The merchant gets a one-time set-password link.
+- Admin adds websites, adds products to websites, and adds credits. Merchants cannot do these themselves.
+- Two-step sign-in (authenticator) is optional for everyone.
+- Suspending a merchant stops their login **and** their products and charges.
+- Merchant details: business name, owner name and email, phone, address/country — editable by the merchant.
+
+## 0.3 Products (all in the first launch)
+
+| Product           | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Accounts**      | Sign-up/sign-in for the merchant's users (phone code via Notifications, email + password, email code / magic link, Google/Apple/Facebook with the merchant's keys); full user profiles incl. addresses, notes, blocked flag; ready-made + custom roles and rules; coordinates "download my data / delete my account" across products; keeps a copy of every product's activity log.                                                                                                                                                                                                                      |
+| **Ecommerce**     | Everything shop: catalog, categories, brands, variants, optional condition grades and serial numbers (IMEI), search, listings and filters, product page, cart, checkout (COD, bank transfer + proof), orders (couriers, invoices, packing slips), returns/warranty, **coupons, deals, loyalty**, reviews, wishlist, back-in-stock/price alerts, catalog SEO (meta, structured data, sitemaps, feeds, llms.txt), policies, shop-only details (payment methods, delivery info), reports. One product because placing an order reserves stock, counts offer use and spends points in **one database step**. |
+| **Chat**          | Everything the ibrahimMobiles chat does: widget, guests and signed-in users, AI with **any provider** (merchant's own key, picks a model), shop lookups (search, details, deals, savings quotes, top/new, my orders/account) via the merchant's Ecommerce token, proactive nudge, inbox and human handoff, attachments (merchant's own storage), new-chat alerts (email, unread badge, WhatsApp/SMS). Live updates pluggable (realtime service key or host websockets, else smart back-off). Guest rules and AI disclosure are merchant settings.                                                        |
+| **Notifications** | Sends WhatsApp, email, SMS, push and webhooks for any product, through the merchant's own provider keys, with retries and a delivery log.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Payments**      | Card/online payments with the merchant's own keys: Stripe, PayFast and local Pakistani gateways, PayPal, plus a generic adapter. Usable by non-shop sites too; Ecommerce uses it via token.                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Growth**        | Tracking pixels, cookie consent, conversion events, first-party analytics, notice bar, site-wide SEO (robots, verification, IndexNow, SEO checklist).                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+
+- The existing 17 products are **merged and reshaped** into these six (15 shop products → Ecommerce, Signups → Accounts,
+  Chatbot → Chat, new Notifications, Payments, Growth).
+- No "Admin panel" product: each product offers admin widgets and API; the merchant builds their own admin.
+
+## 0.4 How products work
+
+- **One dashboard per product**, for the merchant owner and our admins only, opened **from the Portal in a new tab**
+  (no separate product login). In it:
+   - features on/off per website (this decides what is charged), limits, behaviour settings;
+   - the client's own keys: their database, storage, AI, providers, other products' tokens;
+   - for our admins: global defaults, **prices** (credits per hour per feature, applied immediately), and a switcher to
+     any merchant/website (also reachable from the Portal's website page).
+- **No plans**: every feature has its own hourly price. No per-use charges. Limits are set in the product.
+- **Product reports, Portal charges**: when features change, the product reports the active features and their prices;
+  the Portal charges per hour and shows a per-feature breakdown.
+- **Independent products**: they never call each other automatically. Where one needs another, the merchant pastes
+  that product's token into it (e.g. Chat ← Ecommerce token for shop lookups; Accounts/Ecommerce/Chat ← Notifications
+  token to send; Ecommerce ← Payments token). Accounts sign-ins are trusted by every product.
+- **Client data** (orders, chats, users…) lives in the **client's own database**, connected inside each product.
+- **Business basics** (name, logo, contact, country, time zone) come from a **standard file on the merchant's website**
+  (e.g. `https://shop.com/.well-known/business.json`, we provide a template). Shop-only details stay in Ecommerce.
+- **Tokens**: per website **and** per product. A browser token (locked to the exact domain) for widgets; a secret server
+  token for API calls from the merchant's server/admin (merchant can reveal and regenerate it). Every domain is its
+  own website; nothing is free (no test mode).
+- **Removing a product from a website** stops it and its charges; its settings are kept so re-adding restores them.
+
+## 0.5 Credits
+
+- Shown as **credits only** (no money). Admin adds credits with payment details (amount paid, method, reference) as a
+  receipt. Credits are never deducted or corrected by hand.
+- Low balance: banner in the merchant console + email to merchant and admin.
+- At zero: **grace period** (admin setting, default 3 days) with warnings, then products stop.
+- Merchant sees usage **per product, per website, per day** with a per-feature breakdown.
+- Emails from the Portal: account setup link, password reset, low balance / grace / stopped, credits added.
+- A simple activity log of admin and merchant actions.
+
+## 0.6 Look and feel
+
+Friendly business style (like Stripe / Shopify admin), left sidebar, full width, spacious, no long scrolls (tabs and
+side panels), plain words, English (texts kept in files for later languages), light and dark.
+
+## 0.7 Flows
+
+### Admin sets up a merchant
+
+```mermaid
+flowchart LR
+  A[Admin: Create merchant] --> B[Setup link emailed / copied]
+  B --> C[Merchant sets password]
+  A --> D[Admin: Add website<br/>exact domain]
+  D --> E[Admin: Add product to website]
+  E --> F[Portal creates browser + server<br/>tokens for website x product]
+  A --> G[Admin: Add credits<br/>amount, method, reference]
+```
+
+### Connecting a product to the Portal (once per product)
+
+```mermaid
+flowchart LR
+  P[Deploy product<br/>MONGODB_URI + CONNECT_SECRET] --> Q[Admin: Products → Add<br/>URL + secret]
+  Q --> R[Portal signs request with secret]
+  R --> S[Product checks secret,<br/>pins Portal, returns its features + prices]
+  S --> T[Admin: set Active]
+```
+
+### Merchant configures a product
+
+```mermaid
+flowchart LR
+  M[Merchant in Portal] --> N[Website → product → Open]
+  N --> O[Product dashboard in new tab,<br/>already signed in]
+  O --> P1[Turn features on/off,<br/>limits, settings]
+  O --> P2[Add own keys: database, storage,<br/>AI, providers, other product tokens]
+  P1 --> R1[Product reports active features + prices]
+  R1 --> S1[Portal charges per hour]
+```
+
+### Merchant puts a product on their website
+
+```mermaid
+flowchart LR
+  W[Portal: website → product] --> X[Copy widget script + browser token]
+  W --> Y[Copy server token]
+  X --> Z[Widgets on merchant site<br/>shoppers / users]
+  Y --> Z2[Merchant's server & own admin<br/>call the product API]
+  Z2 --> Z3[Merchant's admin checks roles<br/>from Accounts before calling]
+```
+
+### Credits
+
+```mermaid
+flowchart LR
+  C1[Hourly charge from active features] --> C2{Balance}
+  C2 -->|low| C3[Banner + email]
+  C2 -->|zero| C4[Grace period<br/>admin-set, default 3 days]
+  C4 -->|still zero| C5[Products stop]
+  C6[Admin adds credits] --> C2
+```
+
+### Admin works inside a product
+
+```mermaid
+flowchart LR
+  A1[Admin in Portal] --> A2[Products → Open as admin]
+  A2 --> A3[Global defaults + prices]
+  A2 --> A4[Switcher: any merchant / website]
+  A5[Portal: merchant → website → Open] --> A4
+```
+
+## 0.8 Open items (to be decided before building)
+
+- Portal screens page by page (admin and merchant), and each product dashboard's screens.
+- Exact feature list and default hourly prices per product.
+- How the merchant's server mints short-lived tokens for our admin widgets on their own admin pages.
+
+## 0.9 Conflicts with the current build and deployment
+
+_To be filled from a code audit (in progress)._
+
+---
+
 ---
 
 ## 1. What we are building, and why it wins
