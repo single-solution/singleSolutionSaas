@@ -1,423 +1,325 @@
 'use client';
 /**
- * Finance: credits, adjustments and refunds (reference + note, confirmation dialog; idempotent by reference),
- * the hash-chained ledger of a merchant with chain verification, and finance alerts. Amounts are integer millicredits on the wire (PLAN F.1), credits on screen.
+ * Credits and billing (PLAN 0.5.8, 0.8.2): the receipt form with its confirm step (Owner and Finance), all receipts,
+ * charges by day, merchant or product, the merchants that need attention, and a merchant's Credits tab. Credits are
+ * whole numbers on screen and integer millicredits on the wire; receipts are never edited or reversed.
  * @module
  */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-	Badge,
 	Button,
-	Callout,
 	Card,
-	ConfirmDialog,
+	Dialog,
+	EmptyState,
 	Form,
 	FormActions,
 	FormError,
-	Icon,
 	Input,
 	PageHeader,
-	RadioGroup,
-	Stat,
-	StatusBadge,
 	Table,
-	TextArea,
-	describeProblem,
+	Tabs,
 	fieldErrors,
 	formatCredits,
-	formatDateTime,
-	formatNumber,
-	humanize,
 	useToast,
 } from '@ss/ui';
+import { BILLING } from '../../../texts/console.js';
 import { Link } from '../../link.js';
-import { adminFetch, useAdminResource, usePagedList } from '../client.js';
-import { ID, adminApi, adminRoutes } from '../paths.js';
-import { ActionProblem, AdminProblem, Crumbs, IdChip, parseSignedCredits, adminCan } from './common.js';
+import { BillingStats, DaysLeft, MerchantStatusBadge, ReceiptsTable } from '../../views/billing.js';
+import { adminFetch } from '../client.js';
+import { adminApi, adminRoutes } from '../paths.js';
+import { AdminProblem, adminCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
-/** Credit operations and their API segment. */
-export const CREDIT_KINDS = Object.freeze({
-	credits: { label: 'Add credits', verb: 'Add', help: 'A payment received (bank transfer, invoice).' },
-	adjustments: { label: 'Adjustment', verb: 'Adjust', help: 'A correction; may be negative (prefix with -).' },
-	refunds: { label: 'Refund', verb: 'Refund', help: 'Credits returned to the merchant.' },
-});
+const F = BILLING.receiptForm;
+
+/** @returns {string} */
+const oneTimeKey = () =>
+	typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+		? crypto.randomUUID()
+		: `rct-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 /**
- * @param {any} props loader result of `loadFinance` plus `admin`
+ * Add credits (PLAN 0.5.8): credits, amount paid, payment method and reference, then a confirm step that repeats the
+ * merchant, the credits, the amount paid and the new balance. The form carries a one-time key, so a double submit
+ * saves once.
+ * @param {{ merchant: { merchantId: string, name: string }, balance: number | null | undefined, onClose: () => void,
+ *   onAdded: () => void | Promise<void> }} props
  */
-export function FinanceView(props) {
-	const [merchantId, setMerchantId] = useState('');
-	const [lookupError, setLookupError] = useState(/** @type {string | null} */ (null));
-	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
-	return (
-		<div className="space-y-6">
-			<PageHeader title="Finance" subtitle="Credits, ledgers and alerts. Settlement happens whenever a balance is read." />
-			<Card
-				title="Merchant ledger and credits"
-				subtitle="Credit operations and the ledger live on the merchant's finance page.">
-				<form
-					className="flex flex-wrap items-end gap-3"
-					onSubmit={(e) => {
-						e.preventDefault();
-						const id = merchantId.trim();
-						if (!ID.merchant.test(id)) setLookupError('Enter a merchant id (mer_…).');
-						else window.location.assign(adminRoutes.ledger(id));
-					}}>
-					<Input
-						label="Merchant id"
-						value={merchantId}
-						onChange={(e) => setMerchantId(e.currentTarget.value)}
-						error={lookupError}
-						className="font-mono"
-						placeholder="mer_…"
-						fieldClassName="min-w-0 flex-1 sm:max-w-sm"
-					/>
-					<Button type="submit" icon={<Icon name="wallet" size={14} />}>
-						Open
-					</Button>
-				</form>
-			</Card>
-			<AlertsCard alerts={props.alerts} />
-		</div>
-	);
-}
-
-/** @param {{ alerts: any[] }} props */
-export function AlertsCard({ alerts }) {
-	return (
-		<Card title="Finance alerts" subtitle="Unpriced hours, ledger chain breaks and other money anomalies.">
-			<Table
-				caption="Finance alerts"
-				dense
-				rows={alerts}
-				rowKey={(a) => a.alertId}
-				empty="No alerts."
-				columns={[
-					{
-						key: 'kind',
-						header: 'Alert',
-						rowHeader: true,
-						render: (a) => <StatusBadge status="failing" label={humanize(a.kind)} />,
-					},
-					{ key: 'at', header: 'When', render: (a) => formatDateTime(a.at) },
-					{
-						key: 'merchantId',
-						header: 'Merchant',
-						render: (a) =>
-							a.merchantId ? (
-								<Link href={adminRoutes.ledger(a.merchantId)} className="font-mono text-xs text-primary hover:underline">
-									{a.merchantId}
-								</Link>
-							) : (
-								'—'
-							),
-					},
-					{
-						key: 'subscriptionId',
-						header: 'Subscription',
-						render: (a) =>
-							a.subscriptionId ? (
-								<Link
-									href={adminRoutes.subscription(a.subscriptionId)}
-									className="font-mono text-xs text-primary hover:underline">
-									{a.subscriptionId}
-								</Link>
-							) : (
-								'—'
-							),
-					},
-					{
-						key: 'details',
-						header: 'Details',
-						render: (a) => (
-							<span className="break-all font-mono text-[11px] text-muted">
-								{a.details ? JSON.stringify(a.details) : '—'}
-							</span>
-						),
-					},
-				]}
-			/>
-		</Card>
-	);
-}
-
-/**
- * @param {any} props loader result of `loadLedger` plus `admin`
- */
-export function LedgerView(props) {
-	const ok = props.ok === true;
-	const merchantId = ok ? props.merchant.merchantId : null;
-	const balance = useAdminResource(merchantId ? adminApi.balance(merchantId) : null, ok ? props.balance : null);
-	const ledger = usePagedList(
-		(cursor) => (merchantId ? adminApi.ledger(merchantId, { cursor, limit: 100 }) : null),
-		ok ? props.ledger : null,
-	);
-	const [verification, setVerification] = useState(/** @type {any} */ (null));
-	const [verifying, setVerifying] = useState(false);
-	const [verifyProblem, setVerifyProblem] = useState(/** @type {Problem | null} */ (null));
-	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.finance(), label: 'Back to finance' }} />;
-	const { merchant, admin } = props;
-	const canAdjust = adminCan(admin, 'credits.add');
-
-	const verify = async () => {
-		setVerifying(true);
-		setVerifyProblem(null);
-		const result = await adminFetch(adminApi.ledgerVerification(merchant.merchantId));
-		setVerifying(false);
-		if (result.ok) setVerification(result.data);
-		else setVerifyProblem(result.problem);
-	};
-	return (
-		<div className="space-y-6">
-			<PageHeader
-				breadcrumbs={
-					<Crumbs
-						items={[
-							{ label: 'Finance', href: adminRoutes.finance() },
-							{ label: merchant.name, href: adminRoutes.merchant(merchant.merchantId) },
-							{ label: 'Ledger' },
-						]}
-					/>
-				}
-				title={`Ledger · ${merchant.name}`}
-				badge={<StatusBadge status={merchant.status} />}
-				subtitle={<IdChip id={merchant.merchantId} label="merchant id" />}
-				actions={
-					<Button
-						variant="secondary"
-						onClick={() => void verify()}
-						loading={verifying}
-						icon={<Icon name="shield" size={14} />}>
-						Verify chain
-					</Button>
-				}
-			/>
-			{verification ? (
-				<Callout
-					tone={verification.ok ? 'success' : 'danger'}
-					title={verification.ok ? 'Ledger chain intact' : 'Ledger chain broken'}>
-					{formatNumber(verification.entries)} entries up to seq {formatNumber(verification.seq)} · ledger sum{' '}
-					{formatCredits(verification.balance)} · head{' '}
-					<span className="break-all font-mono text-xs">{verification.headHash}</span>
-					{(verification.problems ?? []).length > 0 ? (
-						<ul className="mt-2 list-disc pl-5 text-sm">
-							{verification.problems.map((/** @type {any} */ p, /** @type {number} */ i) => (
-								<li key={i}>
-									{p.seq !== null && p.seq !== undefined ? `seq ${p.seq}: ` : ''}
-									{p.message}
-								</li>
-							))}
-						</ul>
-					) : null}
-				</Callout>
-			) : null}
-			<ActionProblem problem={verifyProblem} />
-			<div className="grid gap-4 sm:grid-cols-2">
-				<Stat label="Balance" value={formatCredits(balance.data?.balanceMillicredits)} icon="wallet" />
-				<Stat
-					label="Entries loaded"
-					value={formatNumber(ledger.items.length)}
-					hint={ledger.cursor ? 'More below' : 'All entries'}
-				/>
-			</div>
-			{canAdjust ? (
-				<CreditOperationCard
-					merchant={merchant}
-					balanceMillicredits={balance.data?.balanceMillicredits}
-					onBooked={async () => {
-						await Promise.all([balance.reload(), ledger.reload()]);
-					}}
-				/>
-			) : null}
-			<Card title="Ledger entries" subtitle="Append-only and hash-chained, oldest first.">
-				<Table
-					caption="Ledger entries"
-					dense
-					rows={ledger.items}
-					rowKey={(l) => l.entryId}
-					empty="No ledger entries yet."
-					hasMore={Boolean(ledger.cursor)}
-					loadingMore={ledger.loading}
-					onLoadMore={() => void ledger.more()}
-					columns={[
-						{
-							key: 'seq',
-							header: 'Seq',
-							rowHeader: true,
-							align: 'right',
-							render: (l) => <span className="tabular-nums">{l.seq}</span>,
-						},
-						{ key: 'at', header: 'When', render: (l) => formatDateTime(l.at) },
-						{ key: 'type', header: 'Type', render: (l) => <Badge>{humanize(l.type)}</Badge> },
-						{
-							key: 'amount',
-							header: 'Amount',
-							align: 'right',
-							render: (l) => (
-								<span className={`tabular-nums ${l.amountMillicredits < 0 ? 'text-danger' : 'text-success'}`}>
-									{formatCredits(l.amountMillicredits, { signed: true })}
-								</span>
-							),
-						},
-						{
-							key: 'ref',
-							header: 'Reference / note',
-							render: (l) => (
-								<span className="block text-xs">
-									{l.reference ? <span className="block font-mono">{l.reference}</span> : null}
-									{l.note ? <span className="block text-muted">{l.note}</span> : null}
-									{l.periodKey ? <span className="block font-mono text-muted">{l.periodKey}</span> : null}
-								</span>
-							),
-						},
-						{
-							key: 'hash',
-							header: 'Hash',
-							render: (l) => (
-								<span className="font-mono text-[11px] text-muted" title={l.hash}>
-									{String(l.hash).slice(0, 12)}…
-								</span>
-							),
-						},
-					]}
-				/>
-				<ActionProblem problem={ledger.problem} />
-			</Card>
-		</div>
-	);
-}
-
-/**
- * Credits, adjustments and refunds of a merchant (`POST /v1/admin/merchants/:merchantId/{credits|adjustments|refunds}`,
- * reference + note, confirmation dialog). Shared by the ledger and the merchant page.
- * @param {{ merchant: { merchantId: string, name: string }, balanceMillicredits: number | null | undefined,
- *   onBooked: () => Promise<void> }} props
- */
-export function CreditOperationCard({ merchant, balanceMillicredits, onBooked }) {
+export function AddCreditsDialog({ merchant, balance, onClose, onAdded }) {
 	const toast = useToast();
-	const [kind, setKind] = useState(/** @type {'credits' | 'adjustments' | 'refunds'} */ ('credits'));
-	const [amount, setAmount] = useState('');
-	const [reference, setReference] = useState('');
-	const [note, setNote] = useState('');
+	const key = useMemo(oneTimeKey, []);
+	const [form, setForm] = useState({ credits: '', amountPaid: '', method: '', reference: '' });
 	const [errors, setErrors] = useState(/** @type {Record<string, string>} */ ({}));
-	const [pending, setPending] = useState(/** @type {null | { amountMillicredits: number }} */ (null));
+	const [reviewing, setReviewing] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-
+	const credits = /^\d{1,10}$/.test(form.credits.trim()) ? Number(form.credits.trim()) : 0;
+	/** @param {'credits' | 'amountPaid' | 'method' | 'reference'} name */
+	const field = (name) => ({
+		value: form[name],
+		onChange: (/** @type {import('react').ChangeEvent<HTMLInputElement>} */ e) =>
+			setForm({ ...form, [name]: e.currentTarget.value }),
+		error: errors[`/${name}`] ?? errors[name],
+	});
 	const review = () => {
 		/** @type {Record<string, string>} */
 		const local = {};
-		const parsed = parseSignedCredits(amount, { allowNegative: kind === 'adjustments' });
-		if (!parsed.ok) local.amountMillicredits = parsed.message;
-		if (!/^[\x21-\x7e]{1,120}$/.test(reference.trim()))
-			local.reference = 'A reference of 1–120 visible characters, no spaces (e.g. bank-2026-10-01).';
-		if (!note.trim()) local.note = 'Explain the operation (shown in the merchant statement).';
+		if (credits < 1) local.credits = F.creditsHelp;
+		if (!form.amountPaid.trim()) local.amountPaid = F.amountPaidHelp;
+		if (!form.method.trim()) local.method = F.method;
 		setErrors(local);
-		if (Object.keys(local).length > 0 || !parsed.ok) return;
-		setProblem(null);
-		setPending({ amountMillicredits: parsed.value });
+		if (Object.keys(local).length === 0) setReviewing(true);
 	};
-	const submit = async () => {
-		if (!pending) return;
+	const save = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.credit(merchant.merchantId, kind), {
+		const result = await adminFetch(adminApi.addReceipt(merchant.merchantId), {
 			method: 'POST',
-			body: { amountMillicredits: pending.amountMillicredits, reference: reference.trim(), note: note.trim() },
+			idempotencyKey: key,
+			body: {
+				credits,
+				amountPaid: form.amountPaid.trim(),
+				method: form.method.trim(),
+				...(form.reference.trim() ? { reference: form.reference.trim() } : {}),
+			},
 		});
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
 			setErrors(fieldErrors(result.problem));
+			setReviewing(false);
 			return;
 		}
-		toast.show({
-			title: result.data?.duplicate ? 'Already booked' : `${CREDIT_KINDS[kind].label} booked`,
-			description: result.data?.duplicate
-				? `Reference ${reference.trim()} was booked before; nothing changed.`
-				: `New balance ${formatCredits(result.data?.balanceMillicredits)}.`,
-		});
-		setPending(null);
-		setAmount('');
-		setReference('');
-		setNote('');
-		await onBooked();
+		toast.show({ title: F.added, description: `${BILLING.balance}: ${formatCredits(result.data?.summary?.balance)}` });
+		await onAdded();
+		onClose();
 	};
 	return (
-		<>
-			<Card title="Credit operation" subtitle="Booked once per reference: repeating a reference never books twice.">
-				<Form onSubmit={review} aria-label="Credit operation">
-					<RadioGroup
-						legend="Operation"
-						inline
-						value={kind}
-						onChange={(v) => setKind(/** @type {any} */ (v))}
-						options={Object.entries(CREDIT_KINDS).map(([value, k]) => ({ value, label: k.label }))}
-						help={CREDIT_KINDS[kind].help}
-					/>
-					<div className="grid gap-4 sm:grid-cols-2">
-						<Input
-							label="Amount (credits)"
-							inputMode="decimal"
-							value={amount}
-							onChange={(e) => setAmount(e.currentTarget.value)}
-							error={errors.amountMillicredits}
-							placeholder={kind === 'adjustments' ? '-12.5 or 12.5' : '100'}
-							suffix="credits"
-							required
-						/>
-						<Input
-							label="Reference"
-							value={reference}
-							onChange={(e) => setReference(e.currentTarget.value)}
-							error={errors.reference}
-							placeholder="bank-2026-10-01-0042"
-							className="font-mono"
-							maxLength={120}
-							required
-						/>
-					</div>
-					<TextArea
-						label="Note"
-						rows={2}
-						maxLength={500}
-						value={note}
-						onChange={(e) => setNote(e.currentTarget.value)}
-						error={errors.note}
-						required
-					/>
-					<FormActions>
-						<Button type="submit">Review</Button>
-					</FormActions>
-				</Form>
-			</Card>
-			<ConfirmDialog
-				open={pending !== null}
-				onClose={() => setPending(null)}
-				onConfirm={() => void submit()}
-				busy={busy}
-				danger={kind !== 'credits'}
-				title={`${CREDIT_KINDS[kind].verb} ${formatCredits(pending?.amountMillicredits ?? 0, { signed: kind === 'adjustments' })} for ${merchant.name}?`}
-				confirmLabel={`${CREDIT_KINDS[kind].verb} credits`}
-				error={problem ? describeProblem(problem) : null}>
-				<dl className="space-y-1 text-sm">
-					<div className="flex justify-between gap-4">
-						<dt className="text-muted">Operation</dt>
-						<dd>{CREDIT_KINDS[kind].label}</dd>
-					</div>
-					<div className="flex justify-between gap-4">
-						<dt className="text-muted">Reference</dt>
-						<dd className="font-mono">{reference.trim()}</dd>
-					</div>
-					<div className="flex justify-between gap-4">
-						<dt className="text-muted">Balance now</dt>
-						<dd>{formatCredits(balanceMillicredits)}</dd>
-					</div>
+		<Dialog
+			open
+			onClose={onClose}
+			title={reviewing ? F.confirmTitle : `${BILLING.addCredits} · ${merchant.name}`}
+			footer={
+				reviewing ? (
+					<>
+						<Button variant="secondary" onClick={() => setReviewing(false)} disabled={busy}>
+							{F.back}
+						</Button>
+						<Button onClick={() => void save()} loading={busy}>
+							{F.confirm}
+						</Button>
+					</>
+				) : (
+					<Button onClick={review}>{F.review}</Button>
+				)
+			}>
+			{reviewing ? (
+				<dl className="space-y-2 text-sm">
+					{[
+						[BILLING.receiptColumns.merchant, merchant.name],
+						[F.credits, formatCredits(credits * 1000)],
+						[F.amountPaid, form.amountPaid.trim()],
+						[F.method, form.method.trim()],
+						...(form.reference.trim() ? [[F.reference, form.reference.trim()]] : []),
+						[F.newBalance, typeof balance === 'number' ? formatCredits(balance + credits * 1000) : '—'],
+					].map(([label, value]) => (
+						<div key={label} className="flex justify-between gap-4">
+							<dt className="text-muted">{label}</dt>
+							<dd className="font-semibold text-fg">{value}</dd>
+						</div>
+					))}
+					<p className="pt-2 text-xs text-muted">{F.permanent}</p>
 				</dl>
-				<p className="text-sm text-muted">“{note.trim()}” — ledger entries cannot be edited or deleted.</p>
-			</ConfirmDialog>
-		</>
+			) : (
+				<Form onSubmit={review} aria-label={BILLING.addCredits}>
+					<Input label={F.credits} inputMode="numeric" help={F.creditsHelp} required {...field('credits')} />
+					<Input label={F.amountPaid} help={F.amountPaidHelp} maxLength={60} required {...field('amountPaid')} />
+					<Input label={F.method} maxLength={60} required {...field('method')} />
+					<Input label={F.reference} maxLength={120} {...field('reference')} />
+				</Form>
+			)}
+			<FormError problem={problem} />
+		</Dialog>
+	);
+}
+
+/**
+ * A merchant's Credits tab: the money numbers, receipts and day charges.
+ * @param {{ billing: any, receipts: any[], dayCharges: any[] }} props
+ */
+export function MerchantCredits({ billing, receipts, dayCharges }) {
+	return (
+		<div className="space-y-6">
+			{billing ? <BillingStats summary={billing} /> : null}
+			<Card title={BILLING.receiptsTitle} padded={false}>
+				<ReceiptsTable receipts={receipts} />
+			</Card>
+			<Card title={BILLING.dayChargesTitle} subtitle={BILLING.chargesNote} padded={false}>
+				<Table
+					caption={BILLING.dayChargesTitle}
+					rows={dayCharges}
+					rowKey={(d) => `${d.day}:${d.websiteId}:${d.appId}`}
+					empty={<EmptyState compact title={BILLING.noUsage} />}
+					columns={[
+						{ key: 'day', header: BILLING.usageColumns.day, rowHeader: true, sortable: true },
+						{ key: 'domain', header: BILLING.usageColumns.website, sortable: true },
+						{ key: 'product', header: BILLING.usageColumns.product, sortable: true },
+						{
+							key: 'lines',
+							header: BILLING.usageColumns.feature,
+							render: (d) => d.lines.map((/** @type {any} */ l) => `${l.feature} ${l.hours} h`).join(', '),
+						},
+						{
+							key: 'credits',
+							header: BILLING.usageColumns.credits,
+							align: 'right',
+							sortable: true,
+							render: (d) => formatCredits(d.credits),
+						},
+					]}
+				/>
+			</Card>
+		</div>
+	);
+}
+
+/**
+ * Credits and billing page (Owner and Finance; Support read-only).
+ * @param {any} props loader result of `loadBilling` plus `admin`
+ */
+export function FinanceView(props) {
+	const [adding, setAdding] = useState(/** @type {any} */ (null));
+	if (props.ok !== true) return <AdminProblem problem={props.problem} />;
+	const canAdd = adminCan(props.admin, 'credits.add');
+	const { filter, receipts, charges, attention } = props;
+	const reload = () => window.location.reload();
+	return (
+		<div className="space-y-6">
+			<PageHeader title={BILLING.billingTitle} />
+			<Tabs
+				label={BILLING.billingTitle}
+				tabs={[
+					{
+						id: 'attention',
+						label: BILLING.billingTabs.attention,
+						content: (
+							<Table
+								caption={BILLING.billingTabs.attention}
+								rows={attention}
+								rowKey={(m) => m.merchantId}
+								empty={<EmptyState compact title={BILLING.noAttention} />}
+								columns={[
+									{
+										key: 'merchantName',
+										header: BILLING.receiptColumns.merchant,
+										rowHeader: true,
+										render: (m) => (
+											<Link
+												href={adminRoutes.merchant(m.merchantId, 'credits')}
+												className="font-semibold text-primary hover:underline">
+												{m.merchantName ?? m.merchantId}
+											</Link>
+										),
+									},
+									{ key: 'status', header: 'Status', render: (m) => <MerchantStatusBadge status={m.status} /> },
+									{ key: 'balance', header: BILLING.balance, align: 'right', render: (m) => formatCredits(m.balance) },
+									{ key: 'daysLeft', header: BILLING.daysLeft, render: (m) => <DaysLeft summary={m} /> },
+									...(canAdd
+										? [
+												{
+													key: 'add',
+													header: '',
+													render: (/** @type {any} */ m) => (
+														<Button size="sm" variant="secondary" onClick={() => setAdding(m)}>
+															{BILLING.addCredits}
+														</Button>
+													),
+												},
+											]
+										: []),
+								]}
+							/>
+						),
+					},
+					{
+						id: 'receipts',
+						label: BILLING.billingTabs.receipts,
+						content: (
+							<div className="space-y-4">
+								<form method="get" className="flex flex-wrap items-end gap-3">
+									<Input
+										label={BILLING.receiptColumns.merchant}
+										name="merchantId"
+										defaultValue={filter.merchantId ?? ''}
+										placeholder="mer_…"
+									/>
+									<Input label={BILLING.filters.from} name="from" type="date" defaultValue={filter.from ?? ''} />
+									<Input label={BILLING.filters.to} name="to" type="date" defaultValue={filter.to ?? ''} />
+									<Input label={BILLING.receiptColumns.method} name="method" defaultValue={filter.method ?? ''} />
+									<FormActions>
+										<Button type="submit" variant="secondary">
+											{BILLING.filters.apply}
+										</Button>
+									</FormActions>
+								</form>
+								<ReceiptsTable receipts={receipts} showMerchant />
+							</div>
+						),
+					},
+					{
+						id: 'charges',
+						label: BILLING.billingTabs.charges,
+						content: (
+							<div className="space-y-4">
+								<p className="text-sm text-muted">{BILLING.chargesNote}</p>
+								<nav className="flex flex-wrap gap-2" aria-label={BILLING.billingTabs.charges}>
+									{
+										/** @type {const} */ (['day', 'merchant', 'product']).map((by) => (
+											<Link
+												key={by}
+												href={adminRoutes.finance({ by, from: filter.from, to: filter.to })}
+												aria-current={filter.by === by ? 'page' : undefined}
+												className={`rounded-xl border px-3 py-1.5 text-sm font-semibold ${filter.by === by ? 'border-primary text-primary' : 'border-line text-fg'}`}>
+												{BILLING.chargesBy[by]}
+											</Link>
+										))
+									}
+								</nav>
+								<Table
+									caption={BILLING.billingTabs.charges}
+									rows={/** @type {any[]} */ (charges?.rows ?? [])}
+									rowKey={(r) => r.key}
+									empty={<EmptyState compact title={BILLING.noUsage} />}
+									columns={[
+										{
+											key: 'label',
+											header: BILLING.chargesBy[/** @type {'day'} */ (filter.by)],
+											rowHeader: true,
+											sortable: true,
+										},
+										{
+											key: 'credits',
+											header: BILLING.usageColumns.credits,
+											align: 'right',
+											sortable: true,
+											render: (r) => formatCredits(r.credits),
+										},
+									]}
+								/>
+							</div>
+						),
+					},
+				]}
+			/>
+			{adding ? (
+				<AddCreditsDialog
+					merchant={{ merchantId: adding.merchantId, name: adding.merchantName ?? adding.merchantId }}
+					balance={adding.balance}
+					onClose={() => setAdding(null)}
+					onAdded={reload}
+				/>
+			) : null}
+		</div>
 	);
 }

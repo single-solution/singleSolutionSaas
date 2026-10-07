@@ -50,7 +50,7 @@ export const planEntries = (manifest) => {
 };
 
 /**
- * Price summary: cheapest and full hourly cost, whether usage is metered, trial hours.
+ * Price summary: cheapest and full hourly cost, whether usage is metered (no trials, PLAN 0.5.8).
  * @param {Manifest} manifest
  */
 export const priceSummary = (manifest) => {
@@ -63,7 +63,6 @@ export const priceSummary = (manifest) => {
 		allElementsHourlyMillicredits: all,
 		metered: manifest.elements.some((e) => (e.price.metered ?? []).length > 0),
 		free: all === 0 && !manifest.elements.some((e) => (e.price.metered ?? []).some((m) => m.perUnit > 0)),
-		trialHours: manifest.trialHours ?? 0,
 		priceBook: { version: manifest.priceBook.version, effectiveFrom: manifest.priceBook.effectiveFrom },
 	};
 };

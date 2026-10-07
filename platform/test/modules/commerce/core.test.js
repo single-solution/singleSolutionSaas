@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { normaliseProduct, planSettlement } from '@ss/entitlements';
 import {
 	canonicalEntry,
 	chainEntries,
@@ -11,30 +10,11 @@ import {
 	sumAmounts,
 	verifyChain,
 } from '../../../src/modules/commerce/core/ledger.js';
-import {
-	overlaySwitches,
-	pauseReasonOf,
-	pinAt,
-	resolverState,
-	runsNextHour,
-	sameElements,
-	statusOf,
-	timelineEvents,
-	withHold,
-} from '../../../src/modules/commerce/core/subscription.js';
-import {
-	dataScopePrefix,
-	firstHourCharge,
-	knownUnits,
-	productOf,
-	quotaFeatures,
-	settlementCatalog,
-	unitPeriod,
-} from '../../../src/modules/commerce/core/catalog.js';
+import { overlaySwitches, resolverState, statusOf, withHold } from '../../../src/modules/commerce/core/subscription.js';
+import { dataScopePrefix, knownUnits, productOf, quotaFeatures } from '../../../src/modules/commerce/core/catalog.js';
 import {
 	DOCUMENT_TTL_MS,
 	documentHash,
-	enabledElements,
 	isFresh,
 	nextVersion,
 	quotaCrossed,
@@ -44,42 +24,40 @@ import {
 	websiteSection,
 } from '../../../src/modules/commerce/core/documents.js';
 import {
-	checkCreditOperation,
+	checkDayRange,
 	checkElementSwitch,
 	checkPlanChange,
 	checkReason,
-	checkSpendCap,
-	checkStatementQuery,
+	checkReceipt,
 	checkSubscribe,
 	checkUsageBatch,
 	checkUsageRecord,
 } from '../../../src/modules/commerce/core/validate.js';
-import { bookOrThrow, meteredDraft, settlementDraft, subscriptionBurn } from '../../../src/modules/commerce/core/billing.js';
-import { APP, M1, M2, W1, couponsManifest, freeManifest } from './fixtures.js';
+import { APP, M1, M2, W1, couponsManifest } from './fixtures.js';
 
 const T = Date.parse('2026-10-01T10:00:00Z');
-const H = 3_600_000;
 const SUB = 'sub_0123456789abcdefghjkmnpq';
 
 describe('ledger chain', () => {
 	const drafts = [
 		{
-			type: /** @type {const} */ ('deposit'),
+			type: /** @type {const} */ ('receipt'),
 			amount: 5000,
-			entryKey: 'deposit:a',
+			entryKey: 'receipt:a',
 			reference: 'a',
-			note: 'n',
 			actor: { type: 'admin', id: 'adm' },
+			details: { amountPaid: 'PKR 5,000', method: 'cash' },
 		},
 		{
-			type: /** @type {const} */ ('settlement'),
-			amount: -1500,
-			entryKey: 'k1',
-			periodKey: 'k1',
-			periodStart: new Date(T),
-			details: { x: 1 },
+			type: /** @type {const} */ ('day_charge'),
+			amount: -1000,
+			entryKey: 'day:web_1:app_1:2026-10-01',
+			day: '2026-10-01',
+			websiteId: 'web_1',
+			appId: 'app_1',
+			details: { lines: [{ feature: 'codes', hours: 1, amount: 1000 }] },
 		},
-		{ type: /** @type {const} */ ('settlement'), amount: 0, entryKey: 'k2', periodKey: 'k2' },
+		{ type: /** @type {const} */ ('day_charge'), amount: -500, entryKey: 'k2', day: '2026-10-02' },
 	];
 	let n = 0;
 	const chain = () =>
@@ -129,7 +107,7 @@ describe('ledger chain', () => {
 		const { hash, ...rest } = e;
 		expect(canonicalEntry({ ...rest, createdAt: new Date(), _id: 'other' })).toBe(canonicalEntry(e));
 		expect(entryHash(e.prevHash, rest)).toBe(hash);
-		expect(entryHash(e.prevHash, { ...rest, note: 'changed' })).not.toBe(hash);
+		expect(entryHash(e.prevHash, { ...rest, reference: 'changed' })).not.toBe(hash);
 		expect(entryHash(e.prevHash, { ...rest, at: e.at.toISOString() })).toBe(hash);
 		expect(ledgerActor(null)).toBeNull();
 		expect(ledgerActor({ type: 'admin', id: 'a', ...{ role: 'owner' } })).toEqual({ type: 'admin', id: 'a' });
@@ -137,23 +115,20 @@ describe('ledger chain', () => {
 
 	it('validates drafts', () => {
 		expect(draftProblem({ type: /** @type {any} */ ('gift'), amount: 1, entryKey: 'k' })).toMatch(/unknown/);
-		expect(draftProblem({ type: 'deposit', amount: 1.5, entryKey: 'k' })).toMatch(/integer/);
-		expect(draftProblem({ type: 'deposit', amount: 1, entryKey: '' })).toMatch(/entryKey/);
-		expect(draftProblem({ type: 'settlement', amount: 1, entryKey: 'k' })).toMatch(/charges/);
-		expect(draftProblem({ type: 'metered', amount: 1, entryKey: 'k' })).toMatch(/charges/);
-		expect(draftProblem({ type: 'deposit', amount: 0, entryKey: 'k' })).toMatch(/deposits/);
-		expect(draftProblem({ type: 'refund', amount: 5, entryKey: 'k' })).toMatch(/refunds/);
-		expect(draftProblem({ type: 'adjustment', amount: 0, entryKey: 'k' })).toMatch(/adjustments/);
-		expect(draftProblem({ type: 'adjustment', amount: -3, entryKey: 'k' })).toBeNull();
+		expect(draftProblem({ type: 'receipt', amount: 1.5, entryKey: 'k' })).toMatch(/integer/);
+		expect(draftProblem({ type: 'receipt', amount: 1, entryKey: '' })).toMatch(/entryKey/);
+		expect(draftProblem({ type: 'receipt', amount: 0, entryKey: 'k' })).toMatch(/receipts/);
+		expect(draftProblem({ type: 'day_charge', amount: 0, entryKey: 'k' })).toMatch(/day charges/);
+		expect(draftProblem({ type: 'day_charge', amount: -3, entryKey: 'k' })).toBeNull();
 		expect(() =>
 			chainEntries({
 				merchantId: M1,
 				head: { seq: 0, hash: 'h' },
-				drafts: [{ type: 'deposit', amount: -1, entryKey: 'k' }],
+				drafts: [{ type: 'receipt', amount: -1, entryKey: 'k' }],
 				at: new Date(),
 				ids: () => 'x',
 			}),
-		).toThrow(/deposits/);
+		).toThrow(/receipts/);
 	});
 
 	it('property: any single-field tamper of any entry is detected', () => {
@@ -161,7 +136,7 @@ describe('ledger chain', () => {
 		fc.assert(
 			fc.property(
 				fc.integer({ min: 0, max: 2 }),
-				fc.constantFrom('amount', 'type', 'entryKey', 'note', 'at', 'websiteId'),
+				fc.constantFrom('amount', 'type', 'entryKey', 'reference', 'at', 'websiteId'),
 				(i, field) => {
 					const tampered = entries.map((e, j) => {
 						if (j !== i) return e;
@@ -183,54 +158,15 @@ describe('ledger chain', () => {
 describe('subscription state', () => {
 	it('derives status and resolver state from holds', () => {
 		expect(statusOf({ holds: [] })).toBe('active');
-		expect(statusOf({ holds: ['spend_cap'] })).toBe('paused');
+		expect(statusOf({ holds: ['paused'] })).toBe('paused');
 		expect(statusOf({ holds: ['paused', 'suspended'] })).toBe('suspended');
 		expect(statusOf({ holds: [], cancelledAt: new Date() })).toBe('cancelled');
 		expect(statusOf({})).toBe('active');
-		expect(resolverState({ holds: ['spend_cap'] })).toEqual({ status: 'active', spendCap: true });
-		expect(resolverState({ holds: ['insufficient_credits', 'spend_cap'] })).toEqual({ status: 'paused', spendCap: false });
-		expect(resolverState({ holds: ['suspended'] })).toEqual({ status: 'suspended', spendCap: false });
-		expect(resolverState({ holds: [], cancelledAt: new Date() })).toEqual({ status: 'cancelled', spendCap: false });
-		expect(resolverState({})).toEqual({ status: 'active', spendCap: false });
-		expect(pauseReasonOf('insufficient_credits')).toBe('balance');
-		expect(pauseReasonOf('paused')).toBe('paused');
-		expect(withHold(['spend_cap'], 'paused', true)).toEqual(['paused', 'spend_cap']);
-		expect(withHold(['paused', 'spend_cap'], 'paused', false)).toEqual(['spend_cap']);
-		expect(runsNextHour({ holds: [] })).toBe(true);
-		expect(runsNextHour({ holds: ['spend_cap'] })).toBe(false);
-		expect(runsNextHour({ holds: ['spend_cap'] }, { ignoreSpendCap: true })).toBe(true);
-		expect(runsNextHour({ holds: ['paused', 'spend_cap'] }, { ignoreSpendCap: true })).toBe(false);
-		expect(runsNextHour({ holds: [], cancelledAt: new Date() })).toBe(false);
-	});
-
-	it('finds the pin in effect', () => {
-		const pins = [
-			{ version: 'b', manifestVersion: 2, planCode: 'pro', at: new Date(T + 2 * H) },
-			{ version: 'a', manifestVersion: 1, planCode: null, at: new Date(T) },
-		];
-		expect(pinAt(pins, T - H).version).toBe('a');
-		expect(pinAt(pins, T + H).version).toBe('a');
-		expect(pinAt(pins, T + 2 * H).version).toBe('b');
-		expect(() => pinAt([], T)).toThrow(/pin/);
-	});
-
-	it('turns snapshots into timeline events', () => {
-		expect(
-			timelineEvents([
-				{ at: T, elements: ['a', 'b'] },
-				{ at: T + H, elements: ['b', 'c'] },
-				{ at: T + 2 * H, elements: ['b', 'c'] },
-			]),
-		).toEqual([
-			{ at: '2026-10-01T10:00:00.000Z', element: 'a', enabled: true },
-			{ at: '2026-10-01T10:00:00.000Z', element: 'b', enabled: true },
-			{ at: '2026-10-01T11:00:00.000Z', element: 'c', enabled: true },
-			{ at: '2026-10-01T11:00:00.000Z', element: 'a', enabled: false },
-		]);
-		expect(sameElements(['b', 'a'], ['a', 'b'])).toBe(true);
-		expect(sameElements(['a'], ['a', 'b'])).toBe(false);
-		expect(sameElements(null, [])).toBe(false);
-		expect(sameElements(['a'], ['b'])).toBe(false);
+		expect(resolverState({ holds: ['paused'] })).toEqual({ status: 'paused' });
+		expect(resolverState({ holds: ['suspended'] })).toEqual({ status: 'suspended' });
+		expect(resolverState({})).toEqual({ status: 'active' });
+		expect(withHold(['suspended'], 'paused', true)).toEqual(['paused', 'suspended']);
+		expect(withHold(['paused', 'suspended'], 'paused', false)).toEqual(['suspended']);
 	});
 
 	it('overlays commerce switches onto config layers (keeping config locks)', () => {
@@ -247,37 +183,10 @@ describe('subscription state', () => {
 describe('catalog helpers', () => {
 	const product = productOf(/** @type {any} */ (couponsManifest()));
 
-	it('derives prefixes, units, quotas and the first hour', () => {
+	it('derives prefixes, units and quotas', () => {
 		expect(dataScopePrefix('coupon-box')).toBe('ss_coupon_box_');
 		expect([...knownUnits(product)]).toEqual(['redemption']);
 		expect(quotaFeatures(product)).toEqual([{ key: 'codes.redemptions', unit: 'redemption', period: 'month', hardStop: true }]);
-		expect(unitPeriod(product, 'redemption')).toBe('month');
-		expect(unitPeriod(product, 'other')).toBe('month');
-		expect(firstHourCharge(product, 'starter', T)?.amount).toBe(1500);
-		expect(firstHourCharge(product, 'pro', T)?.amount).toBe(3750);
-		expect(firstHourCharge(product, null, T)?.amount).toBe(0); // no plan: product defaults (off)
-		expect(firstHourCharge(product, 'starter', Date.parse('2025-01-01T00:00:00Z'))).toBeNull();
-	});
-
-	it('builds a settlement catalog over every pinned manifest version', () => {
-		const v1 = couponsManifest();
-		const v2 = couponsManifest({
-			version: '2.0.0',
-			priceBook: '2026-10',
-			effectiveFrom: '2026-10-01T00:00:00Z',
-			codesHourly: 2000,
-		});
-		const extra = { ...v2, elements: [...v2.elements, { key: 'extra', name: 'X', modes: ['C'], price: { hourly: 7 } }] };
-		const catalog = settlementCatalog(/** @type {any} */ ([v1, extra]));
-		expect(catalog.priceBooks.map((b) => [b.version, b.elements.codes, b.elements.extra])).toEqual([
-			['2026-01', 1000, 0],
-			['2026-10', 2000, 7],
-		]);
-		expect(catalog.priceBooks[0]?.metered.redemption?.included).toEqual({ starter: 5, pro: 100 });
-		expect(settlementCatalog(/** @type {any} */ ([freeManifest()])).priceBooks).toHaveLength(1);
-		expect(() => settlementCatalog([])).toThrow(/no manifests/);
-		expect(bookOrThrow(catalog, '2026-10').version).toBe('2026-10');
-		expect(() => bookOrThrow(catalog, 'nope')).toThrow(/unknown price book/);
 	});
 });
 
@@ -299,12 +208,11 @@ describe('document helpers', () => {
 		expect(nextVersion({ version: 4, contentHash: 'h' }, 'g')).toEqual({ version: 5, bumped: true });
 	});
 
-	it('reads billable elements and hard-stop quotas', () => {
+	it('reads hard-stop quotas', () => {
 		const resolved = {
 			elements: { b: { enabled: true }, a: { enabled: true }, c: { enabled: false } },
 			features: { 'a.q': { value: 10, blocked: false }, 'a.s': { value: 3 }, 'a.cfg': { value: 'x' } },
 		};
-		expect(enabledElements(resolved)).toEqual(['a', 'b']);
 		const watch = quotaWatch(
 			[
 				{ key: 'a.q', unit: 'u', period: 'month', hardStop: true },
@@ -348,44 +256,42 @@ describe('validation', () => {
 		expect(checkReason('x', 'dflt')).toMatchObject({ ok: false });
 	});
 
-	it('credit operations and the spend cap', () => {
-		expect(checkCreditOperation('credit', { amountMillicredits: 5, reference: 'r1', note: ' n ' })).toEqual({
+	it('receipts (PLAN 0.5.8) and day ranges', () => {
+		expect(checkReceipt({ credits: 5, amountPaid: ' PKR 5,000 ', method: 'Bank', reference: 'TX-1' })).toEqual({
 			ok: true,
-			value: { amountMillicredits: 5, reference: 'r1', note: 'n' },
+			value: { amount: 5000, amountPaid: 'PKR 5,000', method: 'Bank', reference: 'TX-1' },
 		});
-		expect(checkCreditOperation('credit', { amountMillicredits: -5, reference: 'r1', note: 'n' })).toMatchObject({ ok: false });
-		expect(checkCreditOperation('refund', { amountMillicredits: 0, reference: 'r1', note: 'n' })).toMatchObject({ ok: false });
-		expect(checkCreditOperation('adjustment', { amountMillicredits: -5, reference: 'r1', note: 'n' })).toMatchObject({
-			ok: true,
+		expect(checkReceipt({ credits: 1, amountPaid: 'x', method: 'y', reference: '' })).toMatchObject({
+			value: { reference: null },
 		});
-		expect(checkCreditOperation('adjustment', { amountMillicredits: 0, reference: 'r1', note: 'n' })).toMatchObject({
+		expect(checkReceipt({ credits: 0, amountPaid: 'x', method: 'y' })).toMatchObject({ ok: false });
+		expect(
+			checkReceipt({ credits: 1.5, amountPaid: '', method: 'y'.repeat(61), reference: 'r'.repeat(121), x: 1 }),
+		).toMatchObject({
 			ok: false,
+			errors: expect.arrayContaining([{ path: '/credits', message: expect.any(String) }]),
 		});
-		expect(checkCreditOperation('credit', { amountMillicredits: 1.5, reference: 'has space', note: '', x: 1 })).toMatchObject({
-			ok: false,
-		});
-		expect(checkCreditOperation('credit', 'x')).toMatchObject({ ok: false });
-		expect(checkSpendCap({ limit: 10 })).toEqual({ ok: true, value: { limit: 10 } });
-		expect(checkSpendCap({ limit: 0 })).toMatchObject({ ok: false });
-		expect(checkSpendCap({ limit: 1, other: 1 })).toMatchObject({ ok: false });
-		expect(checkSpendCap(5)).toMatchObject({ ok: false });
-	});
-
-	it('statement queries', () => {
+		expect(checkReceipt('x')).toMatchObject({ ok: false });
 		const now = Date.parse('2026-10-15T12:00:00Z');
-		expect(checkStatementQuery({}, now)).toEqual({
+		expect(checkDayRange({}, now)).toEqual({
 			ok: true,
-			value: { from: Date.parse('2026-10-01T00:00:00Z'), to: now + 1, websiteId: null },
+			value: { from: '2026-09-16', to: '2026-10-15', websiteId: null, merchantId: null, method: null },
 		});
-		expect(checkStatementQuery({ from: '2026-09-01', to: '2026-09-02T00:00:00Z', websiteId: W1 }, now)).toMatchObject({
+		expect(
+			checkDayRange({ from: '2026-09-01', to: '2026-09-02', websiteId: W1, merchantId: M1, method: 'Bank' }, now),
+		).toMatchObject({
 			ok: true,
-			value: { websiteId: W1 },
+			value: { websiteId: W1, merchantId: M1, method: 'Bank' },
 		});
-		expect(checkStatementQuery({ from: 'yesterday' }, now)).toMatchObject({ ok: false });
-		expect(checkStatementQuery({ from: '2026-09-02', to: '2026-09-01' }, now)).toMatchObject({ ok: false });
-		expect(checkStatementQuery({ from: '2024-01-01', to: '2026-01-01' }, now)).toMatchObject({ ok: false });
-		expect(checkStatementQuery({ websiteId: 'bad' }, now)).toMatchObject({ ok: false });
-		expect(checkStatementQuery({ from: '' }, now)).toMatchObject({ ok: true });
+		for (const query of [
+			{ from: 'yesterday' },
+			{ from: '2026-09-02', to: '2026-09-01' },
+			{ from: '2024-01-01', to: '2026-01-01' },
+			{ websiteId: 'bad' },
+			{ merchantId: 'bad' },
+			{ method: 'm'.repeat(61) },
+		])
+			expect(checkDayRange(query, now)).toMatchObject({ ok: false });
 	});
 
 	it('usage batches and records', () => {
@@ -413,84 +319,6 @@ describe('validation', () => {
 		expect(checkUsageRecord({ ...good, quantity: -1 })).toMatchObject({ reason: 'invalid_quantity' });
 		expect(checkUsageRecord({ ...good, quantity: 1.5 })).toMatchObject({ reason: 'invalid_quantity' });
 		expect(checkUsageRecord({ ...good, occurredAt: 'today' })).toMatchObject({ reason: 'invalid_occurred_at' });
-	});
-});
-
-describe('billing composition', () => {
-	const catalog = settlementCatalog(/** @type {any} */ ([couponsManifest()]));
-	const sub = { _id: SUB, websiteId: W1, appId: APP };
-	const plan = planSettlement({
-		subscription: { id: SUB, startedAt: '2026-10-01T10:00:00Z', priceBookVersion: '2026-01' },
-		priceBook: catalog,
-		elementTimeline: [{ at: '2026-10-01T10:00:00Z', element: 'codes', enabled: true }],
-		from: '2026-10-01T10:00:00Z',
-		to: '2026-10-01T12:00:00Z',
-	});
-
-	it('settlement and metered drafts', () => {
-		const [bucket] = plan.buckets;
-		const draft = settlementDraft(sub, /** @type {any} */ (bucket));
-		expect(draft).toMatchObject({ type: 'settlement', amount: -1000, entryKey: `${SUB}:2026-10-01T10:00:00Z`, websiteId: W1 });
-		expect(settlementDraft(sub, /** @type {any} */ ({ ...bucket, amount: 0 })).amount).toBe(0);
-		const book = bookOrThrow(catalog, '2026-01');
-		const metered = meteredDraft({
-			sub,
-			bucket: /** @type {any} */ (bucket),
-			book,
-			planCode: 'starter',
-			quantities: { redemption: 8 },
-			before: { redemption: 0 },
-		});
-		expect(metered).toMatchObject({ type: 'metered', amount: -30, entryKey: `${SUB}:2026-10-01T10:00:00Z:metered` });
-		const later = meteredDraft({
-			sub,
-			bucket: /** @type {any} */ (bucket),
-			book,
-			planCode: 'starter',
-			quantities: { redemption: 2 },
-			before: { redemption: 1 },
-		});
-		expect(later?.amount).toBe(0); // 1 + 2 ≤ 5 included
-		expect(
-			meteredDraft({
-				sub,
-				bucket: /** @type {any} */ (bucket),
-				book,
-				planCode: null,
-				quantities: { redemption: 1 },
-				before: {},
-			})?.amount,
-		).toBe(-10);
-		expect(
-			meteredDraft({
-				sub,
-				bucket: /** @type {any} */ (bucket),
-				book,
-				planCode: 'starter',
-				quantities: { other: 4, redemption: 0 },
-				before: {},
-			}),
-		).toBeNull();
-	});
-
-	it('burn rates', () => {
-		const pins = [{ version: '2026-01', at: T }];
-		expect(subscriptionBurn({ product: catalog, pins, startedAt: T, elements: ['codes', 'apply_box', 'gone'], at: T })).toBe(
-			1500,
-		);
-		expect(
-			subscriptionBurn({
-				product: catalog,
-				pins: [{ version: '2026-01', at: T + H }],
-				startedAt: T,
-				elements: ['codes'],
-				at: T,
-			}),
-		).toBe(0);
-	});
-
-	it('exports the product normaliser', () => {
-		expect(normaliseProduct).toBeTypeOf('function');
 	});
 });
 

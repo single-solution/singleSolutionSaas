@@ -61,6 +61,21 @@ export const createDeps = (ctx) => {
 		getMerchant: (merchantId) => ctx.service('identity').getMerchant(merchantId),
 		/** @param {string} websiteId */
 		getWebsite: (websiteId) => ctx.service('identity').getWebsite(websiteId),
+		/**
+		 * Names of merchants (deleted ones included) by id.
+		 * @param {readonly string[]} ids
+		 * @returns {Promise<Map<string, { name: string, deleted: boolean }>>}
+		 */
+		merchantNames: async (ids) => {
+			const identity = ctx.service('identity');
+			return typeof identity.merchantNames === 'function' ? identity.merchantNames(ids) : new Map();
+		},
+		/**
+		 * Recipients of a merchant's billing e-mails.
+		 * @param {string} merchantId
+		 * @returns {Promise<{ merchantName: string, merchantEmail: string | null, adminEmails: string[] }>}
+		 */
+		billingContacts: (merchantId) => ctx.service('identity').billingContacts(merchantId),
 		/** @param {string} appId */
 		getApp: (appId) => ctx.service('catalog').getApp(appId),
 		manifestOf,

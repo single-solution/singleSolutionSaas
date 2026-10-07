@@ -8,8 +8,7 @@
  *   missing asset (bytes checked against the descriptor's hashes; the version becomes current with the last one) →
  *   Active → merchant signs up, adds a website, receives credits and subscribes (standard plan: gallery, price block,
  *   structured data on) → the website bundle compiles with exactly those elements, serving the pack modules
- *   immutably → an add-on (reviews block) joins the bundle, then every element → hourly settlement charges the
- *   elements' prices.
+ *   immutably → an add-on (reviews block) joins the bundle, then every element → the billing is read (usage is never charged, PLAN 0.5.3).
  */
 import { randomBytes, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -252,9 +251,9 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		});
 		expect(website.status, website.text).toBe(201);
 		state.websiteId = website.json.website.websiteId;
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-pdp-topup', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-pdp-topup' },
 		});
 		expect(credits.status, credits.text).toBe(201);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
@@ -333,23 +332,14 @@ describe('Product Detail Page pack delivered by the real Portal', () => {
 		expect(alias.headers.get('etag')).toBe(`"${everything.json.version}"`);
 	});
 
-	it('settles complete hours at the switched-on elements’ hourly prices', async () => {
+	it('shows the billing: usage records are never charged', async () => {
 		const { call, clock, state } = ctx;
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.advance(2 * HOUR);
-		// no cron: reading the statement settles the merchant's complete hours first
-		const iso = (/** @type {number} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const statement = await call(
-			'GET',
-			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(iso(hour0 - HOUR))}&to=${encodeURIComponent(iso(clock.now() + HOUR))}`,
-			{ cookie: state.merchant },
-		);
-		expect(statement.status, statement.text).toBe(200);
-		const second = statement.json.entries.find(
-			(/** @type {any} */ entry) =>
-				entry.type === 'settlement' && entry.periodKey === `${state.subscriptionId}:${iso(hour0 + HOUR)}`,
-		);
-		// every element on: gallery 100 + related 100 + faq 100 + sticky_buy_bar 100 + hosted_page 300 millicredits per hour
-		expect(second?.amountMillicredits, statement.text).toBe(-700);
+		// charges follow the price-list and switch histories only (PLAN 0.5.3; reports fill them in 0.12 step 5)
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ status: 'active', balance: 100_000, spentThisMonth: 0 });
+		const usage = await call('GET', `/v1/merchants/${state.merchantId}/usage`, { cookie: state.merchant });
+		expect(usage.json.rows).toEqual([]);
 	});
 });

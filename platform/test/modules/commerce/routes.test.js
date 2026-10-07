@@ -24,7 +24,6 @@ describe('commerce routes and tenant isolation', () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_routes', clock });
 		await h.credit(M1, 100_000);
-		await h.credit(M2, 100_000);
 		const owner1 = await h.login({ kind: 'merchant', subject: M1 });
 		const owner2 = await h.login({ kind: 'merchant', subject: M2 });
 		const admin = await h.login({ kind: 'admin', subject: 'adm_owner' });
@@ -86,12 +85,9 @@ describe('commerce routes and tenant isolation', () => {
 			['POST', `${base1}/pause`, {}],
 			['POST', `${base1}/resume`, {}],
 			['POST', `${base1}/cancel`, {}],
-			['GET', `/v1/merchants/${M1}/balance`, undefined],
-			['GET', `/v1/merchants/${M1}/meter`, undefined],
-			['GET', `/v1/merchants/${M1}/statement`, undefined],
-			['GET', `/v1/merchants/${M1}/spend-cap`, undefined],
-			['PUT', `/v1/merchants/${M1}/spend-cap`, { limit: 1 }],
-			['DELETE', `/v1/merchants/${M1}/spend-cap`, undefined],
+			['GET', `/v1/merchants/${M1}/billing`, undefined],
+			['GET', `/v1/merchants/${M1}/usage`, undefined],
+			['GET', `/v1/merchants/${M1}/receipts`, undefined],
 		])) {
 			const res = await h.call(method, path, {
 				headers: { ...owner2, ...(method === 'POST' ? idem() : {}) },
@@ -135,77 +131,67 @@ describe('commerce routes and tenant isolation', () => {
 			'active',
 		);
 
-		// money views
+		// money views (each runs the check first)
+		await h.service.recordPriceList({ appId: APP, features: [{ key: 'codes', name: 'Codes', price: 1000 }] });
+		await h.service.recordProductAdded({ merchantId: M1, websiteId: W1, appId: APP });
+		await h.service.recordSwitches({ merchantId: M1, websiteId: W1, appId: APP, on: ['codes'] });
 		clock.set(T0 + 2 * HOUR + 5 * 60_000);
-		// settlement happens on read: the balance below settles M1's complete hours first
-		const balance = await h.call('GET', `/v1/merchants/${M1}/balance`, { headers: owner1 });
-		expect(balance.json.balanceMillicredits).toBeLessThan(100_000);
-		const meter = await h.call('GET', `/v1/merchants/${M1}/meter`, { headers: owner1 });
-		expect(meter.json).toMatchObject({ merchantId: M1, burnRatePerHour: 1750 }); // pro without the ai resource
-		expect(meter.json.hoursRemaining).toBe(Math.floor(balance.json.balanceMillicredits / 1750));
-		const statement = await h.call('GET', `/v1/merchants/${M1}/statement?from=2026-10-01&websiteId=${W1}`, { headers: owner1 });
-		expect(statement.json).toMatchObject({ websiteId: W1, openingBalanceMillicredits: null });
-		expect(statement.json.entries.every((/** @type {any} */ e) => e.websiteId === W1)).toBe(true);
-		expect((await h.call('GET', `/v1/merchants/${M1}/statement?from=nope`, { headers: owner1 })).status).toBe(422);
-		const full = await h.call('GET', `/v1/merchants/${M1}/statement?from=2026-10-01`, { headers: owner1 });
-		expect(full.json.openingBalanceMillicredits).toBe(0);
-		expect(full.json.closingBalanceMillicredits).toBe(balance.json.balanceMillicredits);
+		const billing = await h.call('GET', `/v1/merchants/${M1}/billing`, { headers: owner1 });
+		expect(billing.json).toMatchObject({ merchantId: M1, status: 'active', balance: 97_000, dailySpend: 24_000, daysLeft: 4 });
+		const usage = await h.call('GET', `/v1/merchants/${M1}/usage?from=2026-10-01&to=2026-10-01&websiteId=${W1}`, {
+			headers: owner1,
+		});
+		expect(usage.json.rows).toMatchObject([{ feature: 'codes', featureName: 'Codes', hours: 3, amount: 3000 }]);
+		expect((await h.call('GET', `/v1/merchants/${M1}/usage?from=nope`, { headers: owner1 })).status).toBe(422);
 
-		// monthly spend cap
-		const cap = `/v1/merchants/${M1}/spend-cap`;
-		expect((await h.call('PUT', cap, { headers: owner2, body: { limit: 5 } })).status).toBe(403);
-		expect((await h.call('PUT', cap, { headers: owner1, body: { limit: 0 } })).status).toBe(422);
-		expect((await h.call('PUT', cap, { headers: owner1, body: { limit: 1_000_000 } })).json.limit).toBe(1_000_000);
-		expect((await h.call('GET', cap, { headers: owner1 })).json).toMatchObject({ limit: 1_000_000, reached: false });
-		expect((await h.call('DELETE', cap, { headers: owner2 })).status).toBe(403);
-		expect((await h.call('DELETE', cap, { headers: admin })).status).toBe(204);
-		expect((await h.call('GET', cap, { headers: owner1 })).json.limit).toBeNull();
-
-		// adding credits: Owner and Finance only
-		const credit = (/** @type {Record<string, string>} */ who, /** @type {string} */ segment, /** @type {unknown} */ body) =>
-			h.call('POST', `/v1/admin/merchants/${M1}/${segment}`, { headers: { ...who, ...idem() }, body });
-		expect((await credit(owner1, 'credits', { amountMillicredits: 5, reference: 'x', note: 'n' })).status).toBe(401);
-		expect((await credit(support, 'credits', { amountMillicredits: 5, reference: 'x', note: 'n' })).status).toBe(403);
-		expect((await credit(admin, 'credits', { amountMillicredits: -5, reference: 'x', note: 'n' })).status).toBe(422);
-		const added = await credit(admin, 'credits', { amountMillicredits: 50_000, reference: 'wire-77', note: 'bank transfer' });
+		// adding credits: Owner and Finance only, with the receipt form (PLAN 0.5.8)
+		const receipt = (/** @type {Record<string, string>} */ who, /** @type {unknown} */ body) =>
+			h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...who, ...idem() }, body });
+		const form = { credits: 50, amountPaid: 'PKR 5,000', method: 'Bank transfer', reference: 'wire-77' };
+		expect((await receipt(owner1, form)).status).toBe(401);
+		expect((await receipt(support, form)).status).toBe(403);
+		expect((await receipt(admin, { ...form, credits: 0 })).status).toBe(422);
+		const key = idem();
+		const added = await h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...admin, ...key }, body: form });
 		expect(added.status).toBe(201);
-		expect(added.json.entry).toMatchObject({ type: 'deposit', amountMillicredits: 50_000, reference: 'wire-77' });
-		expect(
-			(await credit(admin, 'credits', { amountMillicredits: 50_000, reference: 'wire-77', note: 'again' })).json.duplicate,
-		).toBe(true);
-		expect((await credit(admin, 'credits', { amountMillicredits: 1, reference: 'wire-77', note: 'other' })).status).toBe(409);
-		expect(
-			(await credit(admin, 'adjustments', { amountMillicredits: -1000, reference: 'promo-fix', note: 'correction' })).status,
-		).toBe(201);
-		expect(
-			(await credit(admin, 'refunds', { amountMillicredits: 10_000_000, reference: 'rf-1', note: 'too much' })).status,
-		).toBe(409);
-		expect(
-			(await credit(admin, 'refunds', { amountMillicredits: 1000, reference: 'rf-1', note: 'returned' })).json.entry
-				.amountMillicredits,
-		).toBe(-1000);
-		const audit = await h.portal.shared.audit.list({ merchantId: M1 });
-		expect(audit.map((a) => a.action)).toEqual(
-			expect.arrayContaining(['credits.added', 'credits.adjusted', 'credits.refunded']),
-		);
-
-		// Support sees receipts and charges (view); Finance too
-		expect((await h.call('GET', `/v1/admin/merchants/${M1}/ledger?limit=2`, { headers: support })).status).toBe(200);
+		expect(added.json.receipt).toMatchObject({ credits: 50_000, amountPaid: 'PKR 5,000', method: 'Bank transfer' });
+		expect(added.json.summary.balance).toBe(147_000);
+		// a double submit with the same one-time key saves once
+		const again = await h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { ...admin, ...key }, body: form });
+		expect(again.headers.get('idempotent-replayed')).toBe('true');
 		const finance = await h.login({ kind: 'admin', subject: 'adm_finance' });
-		expect((await credit(finance, 'credits', { amountMillicredits: 5, reference: 'fin-1', note: 'n' })).status).toBe(201);
-		const first = await h.call('GET', `/v1/admin/merchants/${M1}/ledger?limit=2`, { headers: finance });
-		expect(first.json.items.map((/** @type {any} */ e) => e.seq)).toEqual([1, 2]);
-		const next = await h.call('GET', `/v1/admin/merchants/${M1}/ledger?limit=2&cursor=${first.json.nextCursor}`, {
-			headers: finance,
-		});
-		expect(next.json.items.map((/** @type {any} */ e) => e.seq)).toEqual([3, 4]);
-		expect((await h.call('GET', `/v1/admin/merchants/${M1}/ledger/verification`, { headers: finance })).json).toMatchObject({
-			ok: true,
-		});
-		// no on-demand settlement or reconciliation routes: settlement happens on read
-		expect((await h.call('POST', '/v1/admin/commerce/reconciliation', { headers: { ...admin, ...idem() } })).status).toBe(404);
-		expect((await h.call('GET', '/v1/admin/commerce/alerts', { headers: finance })).json.items).toEqual([]);
-		expect((await h.call('POST', '/v1/admin/commerce/settlement', { headers: { ...finance, ...idem() } })).status).toBe(404);
+		expect((await receipt(finance, { ...form, reference: undefined })).status).toBe(201);
+		// the amount paid is shown to admins only
+		const own = await h.call('GET', `/v1/merchants/${M1}/receipts`, { headers: owner1 });
+		expect(own.json.items).toHaveLength(3);
+		expect(own.json.items.every((/** @type {any} */ r) => !('amountPaid' in r))).toBe(true);
+		const seen = await h.call('GET', `/v1/merchants/${M1}/receipts`, { headers: support });
+		expect(seen.json.items[1]).toMatchObject({ amountPaid: 'PKR 5,000' });
+		expect((await h.portal.shared.audit.list({ merchantId: M1 })).map((a) => a.action)).toContain('credits.added');
+
+		// Credits and billing: Support views, Finance views
+		for (const path of [
+			`/v1/admin/merchants/${M1}/day-charges`,
+			`/v1/admin/billing/merchants?ids=${M1},${M2},bad`,
+			'/v1/admin/billing/attention',
+			'/v1/admin/billing/receipts?method=Bank%20transfer',
+			'/v1/admin/billing/charges?by=merchant',
+		]) {
+			expect([path, (await h.call('GET', path, { headers: support })).status]).toEqual([path, 200]);
+			expect((await h.call('GET', path, { headers: owner1 })).status).toBe(401);
+		}
+		expect(
+			(await h.call('GET', `/v1/admin/billing/merchants?ids=${M1},${M2},bad`, { headers: finance })).json.items,
+		).toHaveLength(2);
+		expect(
+			(await h.call('GET', '/v1/admin/billing/receipts?method=Bank%20transfer', { headers: finance })).json.items,
+		).toHaveLength(3);
+		expect((await h.call('GET', '/v1/admin/billing/charges?by=week', { headers: finance })).status).toBe(422);
+		expect((await h.call('GET', '/v1/admin/billing/charges?from=x', { headers: finance })).status).toBe(422);
+		expect((await h.call('GET', '/v1/admin/billing/receipts?merchantId=x', { headers: finance })).status).toBe(422);
+		// the removed money routes are gone
+		for (const path of [`/v1/merchants/${M1}/balance`, `/v1/merchants/${M1}/spend-cap`, '/v1/admin/commerce/alerts'])
+			expect((await h.call('GET', path, { headers: admin })).status).toBe(404);
 
 		// product routes: only the app's own subscription
 		const app1 = await h.productAuth(APP);
@@ -218,7 +204,7 @@ describe('commerce routes and tenant isolation', () => {
 		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W1}`, { headers: await app2() })).status).toBe(404);
 		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W3}`, { headers: await app2() })).status).toBe(404);
 		expect((await h.call('GET', '/v1/product/entitlements', { headers: await app1() })).status).toBe(422);
-		const usage = await h.call('POST', '/v1/product/usage', {
+		const usageBatch = await h.call('POST', '/v1/product/usage', {
 			headers: { ...(await app2()), ...idem() },
 			body: {
 				records: [
@@ -233,7 +219,7 @@ describe('commerce routes and tenant isolation', () => {
 				],
 			},
 		});
-		expect(usage.json.results).toEqual([{ idempotencyKey: 'x1', status: 'rejected', reason: 'subscription_mismatch' }]);
+		expect(usageBatch.json.results).toEqual([{ idempotencyKey: 'x1', status: 'rejected', reason: 'subscription_mismatch' }]);
 		expect((await h.call('POST', '/v1/product/usage', { headers: await app1(), body: { records: [] } })).status).toBe(428);
 
 		// cancel last

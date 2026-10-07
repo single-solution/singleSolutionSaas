@@ -51,6 +51,17 @@ export const fakeModules = (world, { withConfig = true, withConnectors = true, w
 			listWebsites: async (/** @type {string} */ merchantId) =>
 				[...world.websites.values()].filter((w) => w.merchantId === merchantId),
 			identityFor: async (/** @type {string} */ websiteId) => structuredClone(world.identities.get(websiteId) ?? null),
+			merchantNames: async (/** @type {readonly string[]} */ ids) =>
+				new Map(
+					ids
+						.filter((id) => world.merchants.has(id))
+						.map((id) => [id, { name: /** @type {any} */ (world.merchants.get(id)).name, deleted: false }]),
+				),
+			billingContacts: async (/** @type {string} */ merchantId) => ({
+				merchantName: world.merchants.get(merchantId)?.name ?? merchantId,
+				merchantEmail: `owner@${merchantId}.example`,
+				adminEmails: ['finance@portal.example'],
+			}),
 		}),
 	}),
 	defineModule({

@@ -8,8 +8,7 @@
  *   127.0.0.1, dev allowlist) → a shopper subscribes to back-in-stock with the website's pk_ key → the website sends
  *   inventory.changed@1 (0 → 5) to the Portal Event Hub, twice, plus a second event with the same change and an
  *   in-process redelivery → exactly one message reaches the provider → the shopper opens the unsubscribe link (GET
- *   changes nothing) and confirms (POST) → usage reported once → hourly settlement charges the base price and the
- *   metered send.
+ *   changes nothing) and confirms (POST) → usage reported once → the billing is read (usage is never charged, PLAN 0.5.3).
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product over https on localhost with a
  * throw-away certificate trusted for this process only (the manifest's `endpoints.base` must be https).
@@ -405,9 +404,9 @@ describe.skipIf(!hasOpenssl)('Alerts & Waitlists on the real Portal', () => {
 		});
 		expect(website.status, JSON.stringify(website.json)).toBe(201);
 		state.websiteId = website.json.website.websiteId;
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-topup-1', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-topup-1' },
 		});
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
@@ -580,47 +579,19 @@ describe.skipIf(!hasOpenssl)('Alerts & Waitlists on the real Portal', () => {
 		expect((await response.json()).type).toMatch(/\/problems\/contact_suppressed$/);
 	});
 
-	it('reports the send once and settles complete hours (base price + metered alert_send)', async () => {
+	it('reports the send once and shows the billing: usage records are never charged', async () => {
 		const { call, state, clock, product } = ctx;
 		const flushed = await product.product.usage.flush();
 		expect(flushed.sent + flushed.duplicates).toBeGreaterThanOrEqual(1);
 		expect(flushed.rejected).toBe(0);
 		const usage = await ctx.portalDb.collection('commerce_usage').find({ subscriptionId: state.subscriptionId }).toArray();
 		expect(usage.filter((/** @type {any} */ record) => record.unit === 'alert_send')).toHaveLength(1);
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.set(hour0 + 2 * HOUR + 5 * 60_000);
-		// no cron: reading the statement settles the merchant's complete hours first
-		const statement = await call(
-			'GET',
-			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(new Date(hour0 - HOUR).toISOString())}&to=${encodeURIComponent(new Date(clock.now() + HOUR).toISOString())}`,
-			{ cookie: state.merchant },
-		);
-		expect(statement.status, JSON.stringify(statement.json)).toBe(200);
-		const settlements = statement.json.entries.filter(
-			(/** @type {any} */ entry) =>
-				['settlement', 'metered'].includes(entry.type) && entry.subscriptionId === state.subscriptionId,
-		);
-		const iso = (/** @type {any} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const entries = JSON.stringify(
-			statement.json.entries.map((/** @type {any} */ e) => [e.type, e.periodKey, e.amountMillicredits]),
-		);
-		// starter: triggers 100 + types 200 + capture 200 + dispatch 300 + unsubscribe 50 millicredits per hour
-		expect(
-			settlements.find((/** @type {any} */ e) => e.periodKey === `${state.subscriptionId}:${iso(hour0 + HOUR)}`)
-				?.amountMillicredits,
-			entries,
-		).toBe(-850);
-		// one alert_send at 1 millicredit (starter includes no sends), in the hour the Portal received it
-		expect(
-			settlements.find((/** @type {any} */ e) => e.periodKey === `${state.subscriptionId}:${iso(hour0)}:metered`)
-				?.amountMillicredits,
-			entries,
-		).toBe(-1);
-		const balance = await call('GET', `/v1/merchants/${state.merchantId}/balance`, { cookie: state.merchant });
-		const charged = settlements.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
-		const trial = statement.json.entries
-			.filter((/** @type {any} */ entry) => entry.type === 'adjustment')
-			.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
-		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
+		// charges follow the price-list and switch histories only (PLAN 0.5.3; reports fill them in 0.12 step 5)
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ status: 'active', balance: 100_000, spentThisMonth: 0 });
+		const charges = await call('GET', `/v1/merchants/${state.merchantId}/usage`, { cookie: state.merchant });
+		expect(charges.json.rows).toEqual([]);
 	});
 });

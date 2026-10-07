@@ -178,6 +178,23 @@ export const createIdentityService = (ctx, options = {}) => {
 			return { merchantId: String(doc._id), name: doc.name, status: doc.status };
 		},
 		merchantNames: merchants.namesOf,
+		/**
+		 * Who gets a merchant's billing e-mails (PLAN 0.5.10): the merchant's login e-mail and every active Owner and
+		 * Finance admin.
+		 * @param {string} merchantId
+		 */
+		billingContacts: async (merchantId) => {
+			const merchant = await merchants.loadAny(merchantId);
+			const admins = await repo.admins
+				.find({ role: { $in: ['owner', 'finance'] }, status: 'active' })
+				.project({ email: 1 })
+				.toArray();
+			return {
+				merchantName: String(merchant.name),
+				merchantEmail: merchant.status === 'deleted' ? null : (merchant.email ?? null),
+				adminEmails: admins.map((a) => String(a.email)),
+			};
+		},
 		/** Totals of admin Overview: merchants (not deleted) and websites (not removed). */
 		counts: async () => ({
 			merchants: await repo.merchants.countDocuments({ status: { $ne: 'deleted' } }),

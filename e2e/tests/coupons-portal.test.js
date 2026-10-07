@@ -7,8 +7,7 @@
  *   connects a database connector (MongoMemory URI, dev allowlist) → the merchant's server creates a single-use code
  *   through the product API → two concurrent checkouts reserve it: exactly one wins → the website sends
  *   order.completed@1 to the Portal Event Hub → signed delivery to the product → the reservation is redeemed in the
- *   merchant's own database → usage (`redemption`) reaches the Portal → hourly settlement charges the elements and
- *   books the metered hour.
+ *   merchant's own database → usage (`redemption`) reaches the Portal → the billing is read (usage is never charged, PLAN 0.5.3).
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product over https on localhost with a
  * throw-away certificate trusted for this process only (the manifest's `endpoints.base` must be https).
@@ -382,12 +381,12 @@ describe.skipIf(!hasOpenssl)('Coupons on the real Portal', () => {
 		});
 		expect(website.status, JSON.stringify(website.json)).toBe(201);
 		state.websiteId = website.json.website.websiteId;
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-topup-1', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-topup-1' },
 		});
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
-		expect(credits.json.balanceMillicredits).toBe(100_000);
+		expect(credits.json.summary.balance).toBe(100_000);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
 			cookie: state.staff,
 			body: { appId: state.appId, planCode: 'starter' },
@@ -537,45 +536,14 @@ describe.skipIf(!hasOpenssl)('Coupons on the real Portal', () => {
 		state.redeemedAt = Date.parse(String(reservation?.redeemedAt));
 	});
 
-	it('settles complete hours: elements charged in credits, the metered redemption booked', async () => {
+	it('shows the billing: usage records are never charged', async () => {
 		const { call, state, clock } = ctx;
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.set(hour0 + 2 * HOUR + 5 * 60_000);
-		// no cron: reading the statement settles the merchant's complete hours first
-		const statement = await call(
-			'GET',
-			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(new Date(hour0 - HOUR).toISOString())}&to=${encodeURIComponent(new Date(clock.now() + HOUR).toISOString())}`,
-			{ cookie: state.merchant },
-		);
-		expect(statement.status, JSON.stringify(statement.json)).toBe(200);
-		const entries = statement.json.entries.filter((/** @type {any} */ entry) => entry.subscriptionId === state.subscriptionId);
-		const iso = (/** @type {any} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const second = entries.find(
-			(/** @type {any} */ entry) =>
-				entry.type === 'settlement' && entry.periodKey === `${state.subscriptionId}:${iso(hour0 + HOUR)}`,
-		);
-		// starter: codes 250 + eligibility 150 + actions 100 + limits 100 + api 150 + apply_box 50 millicredits per hour
-		expect(
-			second?.amountMillicredits,
-			JSON.stringify(entries.map((/** @type {any} */ e) => [e.type, e.periodKey, e.amountMillicredits])),
-		).toBe(-800);
-		const redemptionHour = Math.floor(state.redeemedAt / HOUR) * HOUR;
-		const metered = entries.find(
-			(/** @type {any} */ entry) =>
-				entry.type === 'metered' && entry.periodKey === `${state.subscriptionId}:${iso(redemptionHour)}:metered`,
-		);
-		expect(metered, JSON.stringify(entries.map((/** @type {any} */ e) => [e.type, e.periodKey]))).toBeTruthy();
-		// the first 500 redemptions of a month are included in starter: booked at zero
-		expect(metered.amountMillicredits).toBe(0);
-		expect(JSON.stringify(metered.details)).toContain('redemption');
-		const balance = await call('GET', `/v1/merchants/${state.merchantId}/balance`, { cookie: state.merchant });
-		const charged = entries
-			.filter((/** @type {any} */ entry) => entry.type === 'settlement' || entry.type === 'metered')
-			.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
-		const trial = statement.json.entries
-			.filter((/** @type {any} */ entry) => entry.type === 'adjustment')
-			.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
-		expect(charged).toBeLessThan(0);
-		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
+		// charges follow the price-list and switch histories only (PLAN 0.5.3; reports fill them in 0.12 step 5)
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ status: 'active', balance: 100_000, spentThisMonth: 0 });
+		const usage = await call('GET', `/v1/merchants/${state.merchantId}/usage`, { cookie: state.merchant });
+		expect(usage.json.rows).toEqual([]);
 	});
 });

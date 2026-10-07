@@ -56,19 +56,19 @@ export const loadSession = async (api) => {
 };
 
 /**
- * Frame data: websites (switcher) and the meter (low-balance banner).
+ * Frame data: websites (switcher) and the billing summary (banners; the check runs for the merchant, PLAN 0.6).
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadFrame = async (api, merchantId) => {
-	const [websites, meter, notifications] = await Promise.all([
+	const [websites, billing, notifications] = await Promise.all([
 		api.get(paths.websites(merchantId)),
-		api.get(paths.meter(merchantId)),
+		api.get(paths.billing(merchantId)),
 		api.get(paths.notifications(merchantId)),
 	]);
 	return {
 		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
-		meter: orElse(meter, null),
+		billing: /** @type {any} */ (orElse(billing, null)),
 		// F.16: pending actions such as a product asking to become a website's identity issuer
 		notifications: /** @type {any[]} */ (orElse(notifications, { items: [] }).items ?? []),
 	};
@@ -110,11 +110,11 @@ const websiteBase = async (api, merchantId, websiteId) => {
  * @param {string} websiteId
  */
 export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
-	const [{ website, catalog }, subscriptions, resources, meter, identity, snippet] = await Promise.all([
+	const [{ website, catalog }, subscriptions, resources, billing, identity, snippet] = await Promise.all([
 		websiteBase(api, merchantId, websiteId),
 		api.get(paths.subscriptions(merchantId, websiteId)),
 		api.get(paths.resources(merchantId, websiteId)),
-		api.get(paths.meter(merchantId)),
+		api.get(paths.billing(merchantId)),
 		api.get(paths.identity(merchantId, websiteId)),
 		api.get(paths.snippet(merchantId, websiteId)),
 	]);
@@ -127,7 +127,7 @@ export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
 		catalog,
 		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
 		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
-		meter: orElse(meter, null),
+		billing: /** @type {any} */ (orElse(billing, null)),
 		// F.16: a product's pending request to become the identity issuer (shown as a notice)
 		issuerRequest: /** @type {any} */ (identity.ok ? (identity.data?.request ?? null) : null),
 		// the install code (404 until the website has a compiled bundle)
@@ -141,10 +141,9 @@ export const loadWebsiteOverview = async (api, merchantId, websiteId) => {
  * @param {string} websiteId
  */
 export const loadProducts = async (api, merchantId, websiteId) => {
-	const [{ website, catalog }, subscriptions, balance, resources, catalogResult] = await Promise.all([
+	const [{ website, catalog }, subscriptions, resources, catalogResult] = await Promise.all([
 		websiteBase(api, merchantId, websiteId),
 		api.get(paths.subscriptions(merchantId, websiteId)),
-		api.get(paths.balance(merchantId)),
 		api.get(paths.resources(merchantId, websiteId)),
 		api.get(paths.catalog()),
 	]);
@@ -156,7 +155,6 @@ export const loadProducts = async (api, merchantId, websiteId) => {
 		website: website.ok ? website.data : null,
 		catalog,
 		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
-		balanceMillicredits: /** @type {number | null} */ (orElse(balance, { balanceMillicredits: null }).balanceMillicredits),
 		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
 	};
 };
@@ -171,15 +169,13 @@ export const loadProducts = async (api, merchantId, websiteId) => {
  */
 export const loadSubscription = async (api, merchantId, websiteId, subscriptionId) => {
 	const config = paths.config(merchantId, websiteId, subscriptionId);
-	const [website, subscription, overview, preview, history, meter, resources, balance] = await Promise.all([
+	const [website, subscription, overview, preview, history, resources] = await Promise.all([
 		api.get(paths.website(merchantId, websiteId)),
 		api.get(paths.subscription(merchantId, subscriptionId)),
 		api.get(config),
 		api.post(`${config}/preview`, { change: {} }),
 		api.get(`${config}/history`),
-		api.get(paths.meter(merchantId)),
 		api.get(paths.resources(merchantId, websiteId)),
-		api.get(paths.balance(merchantId)),
 	]);
 	const failed = firstFailure(website, subscription);
 	if (failed) return failed;
@@ -200,31 +196,24 @@ export const loadSubscription = async (api, merchantId, websiteId, subscriptionI
 		overview: orElse(overview, null),
 		effective: /** @type {any} */ (orElse(preview, { preview: null }).preview ?? null),
 		history: orElse(history, { items: [], nextCursor: null }),
-		meterLine: /** @type {any} */ (
-			(orElse(meter, { subscriptions: [] }).subscriptions ?? []).find(
-				(/** @type {any} */ l) => l.subscriptionId === subscriptionId,
-			) ?? null
-		),
 		resources: /** @type {any[]} */ (orElse(resources, { resources: [] }).resources ?? []),
-		balanceMillicredits: /** @type {number | null} */ (orElse(balance, { balanceMillicredits: null }).balanceMillicredits),
 		configProblem: overview.ok ? null : overview.problem,
 	};
 };
 
 /**
+ * Website → Usage (PLAN 0.5.11): the website's usage per UTC day × product × feature.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  * @param {string} websiteId
- * @param {{ from?: string, to?: string }} [range] `YYYY-MM-DD` (UTC days; `to` inclusive)
+ * @param {{ from?: string, to?: string }} [range] `YYYY-MM-DD` (UTC days, inclusive; default the last 30 days)
  */
 export const loadUsage = async (api, merchantId, websiteId, range = {}) => {
 	const from = isoDay(range.from);
 	const to = isoDay(range.to);
-	const [{ website, catalog }, meter, statement, subscriptions] = await Promise.all([
-		websiteBase(api, merchantId, websiteId),
-		api.get(paths.meter(merchantId)),
-		api.get(paths.statement(merchantId, { websiteId, from, to: to ? nextDay(to) : null })),
-		api.get(paths.subscriptions(merchantId, websiteId)),
+	const [website, usage] = await Promise.all([
+		api.get(paths.website(merchantId, websiteId)),
+		api.get(paths.usage(merchantId, { websiteId, from, to })),
 	]);
 	const failed = firstFailure(website);
 	if (failed) return failed;
@@ -232,17 +221,11 @@ export const loadUsage = async (api, merchantId, websiteId, range = {}) => {
 		ok: /** @type {const} */ (true),
 		merchantId,
 		website: website.ok ? website.data : null,
-		catalog,
-		meter: orElse(meter, null),
-		statement: orElse(statement, null),
-		statementProblem: statement.ok ? null : statement.problem,
-		subscriptions: /** @type {any[]} */ (orElse(subscriptions, { items: [] }).items ?? []),
+		usage: /** @type {any} */ (orElse(usage, null)),
+		usageProblem: usage.ok ? null : usage.problem,
 		range: { from, to },
 	};
 };
-
-/** @param {string} day */
-const nextDay = (day) => new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
 /**
  * @param {ConsoleApi} api
@@ -319,6 +302,8 @@ export const loadResources = async (api, merchantId, websiteId) => {
 };
 
 /**
+ * Usage and credits (PLAN 0.8.2 Merchant): balance and days left, usage per product × website × day × feature, and
+ * the credit receipts.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  * @param {{ from?: string, to?: string, websiteId?: string }} [filter]
@@ -328,41 +313,23 @@ export const loadCredits = async (api, merchantId, filter = {}) => {
 	const to = isoDay(filter.to);
 	const websiteId =
 		typeof filter.websiteId === 'string' && /^web_[0-9a-z]{10,64}$/.test(filter.websiteId) ? filter.websiteId : null;
-	const [balance, meter, statement, websites, catalog] = await Promise.all([
-		api.get(paths.balance(merchantId)),
-		api.get(paths.meter(merchantId)),
-		api.get(paths.statement(merchantId, { from, to: to ? nextDay(to) : null, websiteId })),
+	const [billing, usage, receipts, websites] = await Promise.all([
+		api.get(paths.billing(merchantId)),
+		api.get(paths.usage(merchantId, { from, to, websiteId })),
+		api.get(paths.receipts(merchantId)),
 		api.get(paths.websites(merchantId)),
-		api.get(paths.catalog()),
 	]);
-	const failed = firstFailure(balance);
+	const failed = firstFailure(billing);
 	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
 		merchantId,
-		balance: balance.ok ? balance.data : null,
-		meter: orElse(meter, null),
-		statement: orElse(statement, null),
-		statementProblem: statement.ok ? null : statement.problem,
+		billing: /** @type {any} */ (billing.ok ? billing.data : null),
+		usage: /** @type {any} */ (orElse(usage, null)),
+		usageProblem: usage.ok ? null : usage.problem,
+		receipts: /** @type {any[]} */ (orElse(receipts, { items: [] }).items ?? []),
 		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
-		catalog: /** @type {any[]} */ (orElse(catalog, { items: [] }).items ?? []),
 		filter: { from, to, websiteId },
-	};
-};
-
-/**
- * @param {ConsoleApi} api
- * @param {string} merchantId
- */
-export const loadSpendCap = async (api, merchantId) => {
-	const [cap, meter] = await Promise.all([api.get(paths.spendCap(merchantId)), api.get(paths.meter(merchantId))]);
-	const failed = firstFailure(cap);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		cap: /** @type {any} */ (cap.ok ? cap.data : null),
-		meter: orElse(meter, null),
 	};
 };
 

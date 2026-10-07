@@ -30,10 +30,10 @@ import {
 	SubscriptionLookupView,
 	effectiveRows,
 } from '../../src/console/admin/views/config.js';
-import { FinanceView, LedgerView } from '../../src/console/admin/views/finance.js';
+import { FinanceView, MerchantCredits } from '../../src/console/admin/views/finance.js';
 import { ConnectorsAdminView, checkSummary } from '../../src/console/admin/views/operations.js';
 import { layerChange, layerValues } from '../../src/console/admin/views/layer.js';
-import { adminCan, parseSignedCredits } from '../../src/console/admin/views/common.js';
+import { adminCan } from '../../src/console/admin/views/common.js';
 import { createSystemStore } from '../../src/infra/system.js';
 import { ENCRYPTION_KEY, PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
@@ -296,10 +296,11 @@ describe('admin console smoke', () => {
 		// ------------------------------------------------------------------ money and a subscription with admin overrides
 		expect(
 			(
-				await staff.api.post(adminApi.credit(merchantId, 'credits'), {
-					amountMillicredits: 250_000,
+				await staff.api.post(adminApi.addReceipt(merchantId), {
+					credits: 250,
+					amountPaid: 'PKR 25,000',
+					method: 'Bank transfer',
 					reference: 'bank-1',
-					note: 'wire',
 				})
 			).ok,
 		).toBe(true);
@@ -431,14 +432,15 @@ describe('admin console smoke', () => {
 		expect(policiesHtml).toContain('Platform hello');
 		expect(policiesHtml).toContain('default copy');
 
-		const finance = await admin.loadFinance(staff.api);
-		expect(text(ssr(<FinanceView {...finance} admin={staffMember} />))).toContain('Finance alerts');
-		const ledger = await admin.loadLedger(staff.api, merchantId);
-		const ledgerHtml = text(ssr(<LedgerView {...ledger} admin={staffMember} />));
-		expect(ledgerHtml).toContain('bank-1');
-		expect(ledgerHtml).toContain('Credit operation');
-		const chain = await staff.api.get(adminApi.ledgerVerification(merchantId));
-		expect(chain).toMatchObject({ ok: true, data: { ok: true } });
+		const finance = await admin.loadBilling(staff.api, { merchantId, by: 'merchant', method: 'Bank transfer' });
+		expect(finance).toMatchObject({ ok: true, filter: { merchantId, by: 'merchant' } });
+		expect(text(ssr(<FinanceView {...finance} admin={staffMember} />))).toContain('Credits and billing');
+		const page = await admin.loadMerchant(staff.api, merchantId);
+		const creditsHtml = text(
+			ssr(<MerchantCredits billing={page.ok ? page.billing : null} receipts={page.ok ? page.receipts : []} dayCharges={[]} />),
+		);
+		expect(creditsHtml).toContain('bank-1');
+		expect(creditsHtml).toContain('PKR 25,000');
 
 		expect(text(ssr(<ConnectorsAdminView {...await admin.loadConnectors(staff.api, { kind: 'database' })} />))).toContain(
 			'No connectors match',
@@ -456,7 +458,6 @@ describe('admin console smoke', () => {
 			[AppView, gone],
 			[PoliciesView, gone],
 			[FinanceView, gone],
-			[LedgerView, gone],
 			[ConnectorsAdminView, gone],
 			[ActivityView, gone],
 			[AdminsView, gone],
@@ -501,11 +502,6 @@ describe('admin console smoke', () => {
 	});
 
 	it('pure helpers of the admin views', () => {
-		expect(parseSignedCredits('12.5')).toEqual({ ok: true, value: 12_500 });
-		expect(parseSignedCredits('-1', { allowNegative: true })).toEqual({ ok: true, value: -1000 });
-		expect(parseSignedCredits('-1').ok).toBe(false);
-		expect(parseSignedCredits('0').ok).toBe(false);
-		expect(parseSignedCredits('abc').ok).toBe(false);
 		expect(query({ a: 'x', b: null, c: '', d: 2 })).toBe('?a=x&d=2');
 		expect(query({})).toBe('');
 		expect(adminRoutes.activity({ merchantId: 'mer_1' })).toBe('/admin/activity?merchantId=mer_1');

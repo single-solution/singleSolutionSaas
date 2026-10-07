@@ -9,8 +9,7 @@
  *   the Portal to be the website's identity issuer (product route, pending) → the merchant approves it (the Portal
  *   fetches the per-website JWKS from Signups) → the re-signed entitlement document reaches Loyalty → Loyalty accepts
  *   the Signups token as the customer (`GET /v1/wallet` with SS-Identity) → customer.created@1 from Signups is routed
- *   by the Event Hub to Loyalty → usage (otp_send) reported exactly once → hourly settlement charges the Signups
- *   subscription. Plus the widgets: staff upload the `ss pack build` output ("Upload widgets") and the compiled website
+ *   by the Event Hub to Loyalty → usage (otp_send) reported exactly once → the billing is read (usage is never charged, PLAN 0.5.3). Plus the widgets: staff upload the `ss pack build` output ("Upload widgets") and the compiled website
  *   script mounts the real sign-in widget, bound to Signups' base URL.
  *
  * The Portal and the gateway are served over http on 127.0.0.1 (allowed outside production); the products over https
@@ -479,9 +478,9 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		});
 		expect(website.status, JSON.stringify(website.json)).toBe(201);
 		state.websiteId = website.json.website.websiteId;
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-topup-1', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-topup-1' },
 		});
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
 		for (const name of ['signups', 'loyalty']) {
@@ -632,7 +631,7 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		).toBe(401);
 	});
 
-	it('routes Signups’ customer.created@1 through the Event Hub, reports usage once and settles the hours', async () => {
+	it('routes Signups’ customer.created@1 through the Event Hub, reports usage once and shows the billing (usage records are never charged)', async () => {
 		const { call, state, drain, signups, clock } = ctx;
 		const drained = await drain();
 		expect(drained.stats.failed).toBe(0);
@@ -642,24 +641,10 @@ describe.skipIf(!hasOpenssl)('Signups & Identity on the real Portal (bring-your-
 		const flushed = await signups.running.product.usage.flush();
 		expect(flushed.sent + flushed.duplicates).toBeGreaterThanOrEqual(1);
 		expect(flushed.rejected).toBe(0);
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.set(hour0 + 2 * HOUR + 5 * 60_000);
-		// no cron: reading the statement settles the merchant's complete hours first
-		const statement = await call(
-			'GET',
-			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(new Date(hour0 - HOUR).toISOString())}&to=${encodeURIComponent(new Date(clock.now() + HOUR).toISOString())}`,
-			{ cookie: state.merchant },
-		);
-		const iso = (/** @type {number} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const second = statement.json.entries.find(
-			(/** @type {any} */ entry) =>
-				entry.type === 'settlement' && entry.periodKey === `${state.signupsSubscriptionId}:${iso(hour0 + HOUR)}`,
-		);
-		// starter: profile 200 + sessions 300 + otp 300 + widget 0 + account_pages 100 millicredits per hour
-		expect(
-			second?.amountMillicredits,
-			JSON.stringify(statement.json.entries.map((/** @type {any} */ e) => [e.type, e.periodKey, e.amountMillicredits])),
-		).toBe(-900);
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ spentThisMonth: 0 });
 	});
 
 	it('delivers the real sign-in widget in the compiled website script after staff upload it ("Upload widgets")', async () => {

@@ -115,76 +115,94 @@ export const checkReason = (input, fallback) => {
 	return result(errors, () => ({ reason: typeof input.reason === 'string' ? input.reason : fallback }));
 };
 
+/** Largest receipt, in credits (keeps every amount an exact integer of millicredits). */
+export const MAX_RECEIPT_CREDITS = 1_000_000_000;
+
 /**
- * Staff credit operations. `kind` decides the sign rule: credits and refunds take a positive amount, adjustments any
- * non-zero amount.
- * @param {'credit' | 'adjustment' | 'refund'} kind
- * @param {unknown} input
- * @returns {Checked<{ amountMillicredits: number, reference: string, note: string }>}
+ * @param {unknown} value
+ * @param {number} max
+ * @returns {string | null} trimmed text of 1..max characters, or null
  */
-export const checkCreditOperation = (kind, input) => {
+const text = (value, max) => {
+	if (typeof value !== 'string') return null;
+	const trimmed = value.trim();
+	return trimmed.length > 0 && trimmed.length <= max ? trimmed : null;
+};
+
+/**
+ * The receipt form (PLAN 0.5.8): `credits` (whole, ≥ 1), `amountPaid` (free text ≤ 60, shown exactly as typed),
+ * `method` (free text ≤ 60), optional `reference` (≤ 120).
+ * @param {unknown} input
+ * @returns {Checked<{ amount: number, amountPaid: string, method: string, reference: string | null }>}
+ */
+export const checkReceipt = (input) => {
 	if (!isObject(input)) return { ok: false, errors: [{ path: '', message: 'body must be an object' }] };
 	/** @type {FieldError[]} */
 	const errors = [];
-	noExtra(input, ['amountMillicredits', 'reference', 'note'], errors);
-	const amount = input.amountMillicredits;
-	if (!Number.isSafeInteger(amount))
-		errors.push({ path: '/amountMillicredits', message: 'amount must be integer millicredits' });
-	else if (kind === 'adjustment' ? amount === 0 : /** @type {number} */ (amount) <= 0)
-		errors.push({ path: '/amountMillicredits', message: kind === 'adjustment' ? 'amount cannot be 0' : 'amount must be > 0' });
-	if (typeof input.reference !== 'string' || !/^[\x21-\x7e]{1,120}$/.test(input.reference))
-		errors.push({ path: '/reference', message: 'reference must be 1..120 visible ASCII characters' });
-	if (typeof input.note !== 'string' || input.note.trim().length === 0 || input.note.length > 500)
-		errors.push({ path: '/note', message: 'note must be 1..500 characters' });
+	noExtra(input, ['credits', 'amountPaid', 'method', 'reference'], errors);
+	const credits = input.credits;
+	if (
+		!Number.isSafeInteger(credits) ||
+		/** @type {number} */ (credits) < 1 ||
+		/** @type {number} */ (credits) > MAX_RECEIPT_CREDITS
+	)
+		errors.push({ path: '/credits', message: 'credits must be a whole number of 1 or more' });
+	const amountPaid = text(input.amountPaid, 60);
+	if (!amountPaid) errors.push({ path: '/amountPaid', message: 'amount paid is required (up to 60 characters)' });
+	const method = text(input.method, 60);
+	if (!method) errors.push({ path: '/method', message: 'payment method is required (up to 60 characters)' });
+	const reference =
+		input.reference === undefined || input.reference === null || input.reference === '' ? null : text(input.reference, 120);
+	if (reference === null && !(input.reference === undefined || input.reference === null || input.reference === ''))
+		errors.push({ path: '/reference', message: 'reference is up to 120 characters' });
 	return result(errors, () => ({
-		amountMillicredits: /** @type {number} */ (amount),
-		reference: /** @type {string} */ (input.reference),
-		note: /** @type {string} */ (input.note).trim(),
+		amount: /** @type {number} */ (credits) * 1000,
+		amountPaid: /** @type {string} */ (amountPaid),
+		method: /** @type {string} */ (method),
+		reference,
 	}));
 };
 
-/**
- * Body of `PUT /v1/merchants/:merchantId/spend-cap`: `{ limit }`, positive integer millicredits per UTC month.
- * @param {unknown} input
- * @returns {Checked<{ limit: number }>}
- */
-export const checkSpendCap = (input) => {
-	if (!isObject(input)) return { ok: false, errors: [{ path: '', message: 'body must be an object' }] };
-	/** @type {FieldError[]} */
-	const errors = [];
-	noExtra(input, ['limit'], errors);
-	if (!Number.isSafeInteger(input.limit) || /** @type {number} */ (input.limit) < 1)
-		errors.push({ path: '/limit', message: 'limit must be a positive integer of millicredits' });
-	return result(errors, () => ({ limit: /** @type {number} */ (input.limit) }));
-};
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * A range of UTC days (`from`, `to` inclusive, `YYYY-MM-DD`; default the last 30 days) with optional filters
+ * (`websiteId`, `merchantId`, `method`).
  * @param {Record<string, string | undefined>} query
  * @param {number} now
- * @returns {Checked<{ from: number, to: number, websiteId: string | null }>}
+ * @returns {Checked<{ from: string, to: string, websiteId: string | null, merchantId: string | null, method: string | null }>}
  */
-export const checkStatementQuery = (query, now) => {
+export const checkDayRange = (query, now) => {
 	/** @type {FieldError[]} */
 	const errors = [];
-	/**
-	 * @param {string | undefined} value
-	 * @param {string} name
-	 * @param {number} fallback
-	 */
-	const instant = (value, name, fallback) => {
+	const today = new Date(now).toISOString().slice(0, 10);
+	const monthAgo = new Date(now - 29 * 86_400_000).toISOString().slice(0, 10);
+	/** @param {string | undefined} value @param {string} name @param {string} fallback */
+	const day = (value, name, fallback) => {
 		if (value === undefined || value === '') return fallback;
-		const ms = /^\d{4}-\d{2}-\d{2}(T[\d:.]+Z)?$/.test(value) ? Date.parse(value) : Number.NaN;
-		if (Number.isNaN(ms)) errors.push({ path: `/${name}`, message: `${name} must be an ISO-8601 UTC date or instant` });
-		return ms;
+		if (!DAY.test(value) || Number.isNaN(Date.parse(value)))
+			errors.push({ path: `/${name}`, message: `${name} must be a UTC day YYYY-MM-DD` });
+		return value;
 	};
-	const monthStart = Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth(), 1);
-	const from = instant(query.from, 'from', monthStart);
-	const to = instant(query.to, 'to', now + 1); // exclusive bound: include entries written at `now`
-	if (errors.length === 0 && from >= to) errors.push({ path: '/to', message: 'to must be after from' });
-	if (errors.length === 0 && to - from > 400 * 86_400_000) errors.push({ path: '/to', message: 'range is limited to 400 days' });
+	const from = day(query.from, 'from', monthAgo);
+	const to = day(query.to, 'to', today);
+	if (errors.length === 0 && from > to) errors.push({ path: '/to', message: 'to must not be before from' });
+	if (errors.length === 0 && Date.parse(to) - Date.parse(from) > 400 * 86_400_000)
+		errors.push({ path: '/to', message: 'range is limited to 400 days' });
 	if (query.websiteId !== undefined && !isId(query.websiteId, 'web'))
 		errors.push({ path: '/websiteId', message: 'invalid websiteId' });
-	return result(errors, () => ({ from, to, websiteId: query.websiteId ?? null }));
+	if (query.merchantId !== undefined && !isId(query.merchantId, 'mer'))
+		errors.push({ path: '/merchantId', message: 'invalid merchantId' });
+	const method = query.method === undefined || query.method === '' ? null : text(query.method, 60);
+	if (query.method !== undefined && query.method !== '' && method === null)
+		errors.push({ path: '/method', message: 'method is up to 60 characters' });
+	return result(errors, () => ({
+		from,
+		to,
+		websiteId: query.websiteId ?? null,
+		merchantId: query.merchantId ?? null,
+		method,
+	}));
 };
 
 /**

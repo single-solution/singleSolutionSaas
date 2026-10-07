@@ -5,34 +5,20 @@
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { AppShell, Button, Callout, Icon, ToastProvider, formatCredits, formatHours } from '@ss/ui';
+import { AppShell, Button, Callout, Icon, ToastProvider, formatCredits } from '@ss/ui';
 import { MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { WEBSITE_TABS, routes } from '../paths.js';
+import { BillingBanner } from './billing.js';
 import { accentStyle } from './brand.js';
-
-/** Hours of credits left under which the banner warns. */
-export const LOW_BALANCE_HOURS = 24;
+import { contactLine } from './sign-in.js';
 
 /**
- * Low-balance state of a meter: `empty` (≤ 0 — everything pauses), `low` (< 24 h at the current burn), or null.
- * @param {any} meter
- * @returns {'empty' | 'low' | null}
+ * @param {{ me: any, merchantId: string | null, websites: any[], billing: any, children: import('react').ReactNode,
+ *   notifications?: any[], branding?: { name: string, accent: string, support?: any } }} props
  */
-export const balanceState = (meter) => {
-	if (!meter || typeof meter.balanceMillicredits !== 'number') return null;
-	if (meter.balanceMillicredits <= 0 && (meter.burnRatePerHour > 0 || (meter.subscriptions ?? []).length > 0)) return 'empty';
-	if (typeof meter.hoursRemaining === 'number' && meter.burnRatePerHour > 0 && meter.hoursRemaining < LOW_BALANCE_HOURS)
-		return 'low';
-	return null;
-};
-
-/**
- * @param {{ me: any, merchantId: string | null, websites: any[], meter: any, children: import('react').ReactNode,
- *   notifications?: any[], branding?: { name: string, accent: string } }} props
- */
-export function ConsoleShell({ me, merchantId, websites, meter, children, notifications = [], branding }) {
+export function ConsoleShell({ me, merchantId, websites, billing, children, notifications = [], branding }) {
 	const pathname = usePathname() ?? '';
 	const match = /^\/websites\/(web_[0-9a-z]+)(?:\/([a-z-]+))?/.exec(pathname);
 	const currentWebsiteId = match?.[1] ?? null;
@@ -49,8 +35,7 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 			label: 'Workspace',
 			items: [
 				{ href: routes.websites(), label: MERCHANT.menu.websites, icon: 'globe', current: is('/websites') && !current },
-				{ href: routes.credits(), label: 'Credits', icon: 'wallet', current: is('/credits') },
-				{ href: routes.spendCap(), label: 'Spend cap', icon: 'sliders', current: is('/spend-policies') },
+				{ href: routes.credits(), label: MERCHANT.menu.usage, icon: 'wallet', current: is('/credits') },
 				{ href: routes.account(), label: MERCHANT.menu.account, icon: 'user', current: is('/account') },
 			],
 		},
@@ -80,32 +65,9 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 		window.location.assign(routes.login());
 	};
 
-	const state = balanceState(meter);
-	const balanceBanner =
-		state === 'empty' ? (
-			<Callout
-				tone="danger"
-				title="Your credit balance is empty"
-				actions={
-					<Link href={routes.credits()} className="text-sm font-semibold underline">
-						View credits
-					</Link>
-				}>
-				Every subscription is paused until credits are added. Paused time is never billed.
-			</Callout>
-		) : state === 'low' ? (
-			<Callout
-				tone="warning"
-				title={`About ${formatHours(meter.hoursRemaining)} of credits left`}
-				actions={
-					<Link href={routes.credits()} className="text-sm font-semibold underline">
-						View credits
-					</Link>
-				}>
-				At the current spend of {formatCredits(meter.burnRatePerHour)} per hour your subscriptions pause when the balance
-				reaches zero.
-			</Callout>
-		) : null;
+	// the billing banner (low balance, grace, stopped) cannot be dismissed and shows the support contact
+	const balanceBanner = <BillingBanner summary={billing} contact={contactLine(branding?.support)} />;
+	const hasBalanceBanner = ['low_balance', 'grace', 'stopped'].includes(billing?.status);
 	// F.16: a product asks to become a website's identity issuer (approve or reject on Website → Identity)
 	const requests = (Array.isArray(notifications) ? notifications : []).filter((n) => n?.kind === 'identity_issuer_request');
 	const requestBanner =
@@ -126,9 +88,9 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 			</Callout>
 		) : null;
 	const banner =
-		balanceBanner || requestBanner ? (
+		hasBalanceBanner || requestBanner ? (
 			<div className="space-y-3">
-				{balanceBanner}
+				{hasBalanceBanner ? balanceBanner : null}
 				{requestBanner}
 			</div>
 		) : null;
@@ -170,13 +132,13 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 					}
 					actions={
 						<>
-							{meter && typeof meter.balanceMillicredits === 'number' ? (
+							{billing && typeof billing.balance === 'number' ? (
 								<Link
 									href={routes.credits()}
 									className="hidden items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong sm:inline-flex"
 									title="Credit balance">
 									<Icon name="wallet" size={14} />
-									<span className="tabular-nums">{formatCredits(meter.balanceMillicredits)}</span>
+									<span className="tabular-nums">{formatCredits(billing.balance)}</span>
 								</Link>
 							) : null}
 							<Button variant="ghost" size="sm" onClick={signOut} icon={<Icon name="logout" size={14} />}>

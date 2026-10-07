@@ -2,7 +2,7 @@ import { loadCredits } from '../../../src/console/loaders.js';
 import { CreditsView } from '../../../src/console/views/credits.js';
 import { merchantContext, one } from '../_lib/server.js';
 
-export const metadata = { title: 'Credits' };
+export const metadata = { title: 'Usage and credits' };
 
 /** @param {{ searchParams: Promise<Record<string, string | string[] | undefined>> }} props */
 export default async function CreditsPage({ searchParams }) {

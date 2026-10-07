@@ -4,7 +4,7 @@
  *
  * - **Deferred tasks**: whatever the request deferred (`ctx.defer(task)`, or `afterResponse(task)` from
  *   `request-scope.js` deep in a module: the job a request enqueued, the deliveries of an event it ingested, the
- *   settlement of a merchant whose product reported usage). Tasks deferred while these run are run too.
+ *   e-mails it sent). Tasks deferred while these run are run too.
  * - **Product calls**: when a product called the Portal (`product` auth), `onProductCall(appId)` follows the request
  *   (the Event Hub retries that product's due deliveries).
  *

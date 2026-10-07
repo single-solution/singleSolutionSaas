@@ -18,7 +18,6 @@ export const routes = Object.freeze({
 	resources: (/** @type {string} */ id) => `/websites/${e(id)}/resources`,
 	identity: (/** @type {string} */ id) => `/websites/${e(id)}/identity`,
 	credits: () => '/credits',
-	spendCap: () => '/spend-policies',
 	account: () => '/account',
 });
 
@@ -26,7 +25,7 @@ export const routes = Object.freeze({
 export const WEBSITE_TABS = Object.freeze([
 	{ key: 'overview', label: 'Overview', href: routes.website },
 	{ key: 'products', label: 'Products', href: routes.products },
-	{ key: 'usage', label: 'Usage & spend', href: routes.usage },
+	{ key: 'usage', label: 'Usage', href: routes.usage },
 	{ key: 'keys', label: 'Keys', href: routes.keys },
 	{ key: 'resources', label: 'Resources', href: routes.resources },
 	{ key: 'identity', label: 'Identity', href: routes.identity },
@@ -74,13 +73,12 @@ export const api = Object.freeze({
 	config: (/** @type {string} */ m, /** @type {string} */ w, /** @type {string} */ s) =>
 		`/v1/merchants/${e(m)}/websites/${e(w)}/subscriptions/${e(s)}/config`,
 	launch: (/** @type {string} */ m, /** @type {string} */ appId) => `/v1/merchants/${e(m)}/apps/${e(appId)}/launch`,
-	balance: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/balance`,
-	meter: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/meter`,
-	statement: (
+	billing: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/billing`,
+	usage: (
 		/** @type {string} */ m,
 		/** @type {{ from?: string | null, to?: string | null, websiteId?: string | null }} */ q = {},
-	) => `/v1/merchants/${e(m)}/statement${query(q)}`,
-	spendCap: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/spend-cap`,
+	) => `/v1/merchants/${e(m)}/usage${query(q)}`,
+	receipts: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/receipts`,
 	activity: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/activity`,
 	connectors: (
 		/** @type {string} */ m,

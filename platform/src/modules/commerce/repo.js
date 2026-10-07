@@ -5,7 +5,7 @@
  * @module
  */
 import { isDuplicateKey } from '../../infra/util.js';
-import { ACCOUNTS, ALERTS, COUNTERS, DOCUMENTS, LEDGER, PAUSES, SPEND_CAPS, SUBSCRIPTIONS, TIMELINE, USAGE } from './schema.js';
+import { ACCOUNTS, BILLING, COUNTERS, DOCUMENTS, HISTORY, LEDGER, PRICE_LISTS, SUBSCRIPTIONS, USAGE } from './schema.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../../infra/db.js').MutableOps} MutableOps */
@@ -19,15 +19,14 @@ export const createCommerceRepo = (ctx) => {
 	/** @param {string} name */
 	const tenant = (name) => /** @type {import('../../infra/db.js').TenantRepository} */ (ctx.collection(name));
 	const subscriptions = tenant(SUBSCRIPTIONS);
-	const timeline = tenant(TIMELINE);
-	const pauses = tenant(PAUSES);
 	const documents = tenant(DOCUMENTS);
 	const usage = tenant(USAGE);
 	const counters = tenant(COUNTERS);
 	const ledger = tenant(LEDGER);
 	const accounts = tenant(ACCOUNTS);
-	const spendCaps = tenant(SPEND_CAPS);
-	const alerts = /** @type {ReadOps} */ (ctx.collection(ALERTS));
+	const history = tenant(HISTORY);
+	const billing = tenant(BILLING);
+	const priceLists = /** @type {ReadOps} */ (ctx.collection(PRICE_LISTS));
 	/** @param {string} m */
 	const subsOf = (m) => /** @type {MutableOps} */ (subscriptions.forMerchant(m));
 
@@ -69,85 +68,6 @@ export const createCommerceRepo = (ctx) => {
 				{ ...update, $inc: { ...(update.$inc ?? {}), rev: 1 } },
 				{ returnDocument: 'after' },
 			),
-		/**
-		 * Subscriptions with an unsettled complete hour before `target`, in (merchantId, _id) order after `after`.
-		 * @param {{ target: Date, after: { merchantId: string, id: string } | null, merchantId?: string | null, limit: number }} input
-		 * @returns {Promise<Doc[]>}
-		 */
-		dueForSettlement: ({ target, after, merchantId = null, limit }) =>
-			subscriptions
-				.acrossMerchants()
-				.find({
-					settlementDone: false,
-					settledThrough: { $lt: target },
-					...(merchantId ? { merchantId } : {}),
-					...(after
-						? { $or: [{ merchantId: { $gt: after.merchantId } }, { merchantId: after.merchantId, _id: { $gt: after.id } }] }
-						: {}),
-				})
-				.sort({ merchantId: 1, _id: 1 })
-				.limit(limit)
-				.toArray(),
-		/**
-		 * Move the settlement cursor forward (never backwards); independent of `rev` so it never races holds.
-		 * @param {Doc} sub @param {Date} cursor @param {boolean} done
-		 */
-		advanceCursor: (sub, cursor, done) =>
-			subsOf(sub.merchantId).updateOne(
-				{ merchantId: sub.merchantId, _id: sub._id, settledThrough: { $lte: cursor } },
-				{ $set: { settledThrough: cursor, settlementDone: done } },
-			),
-		/** @param {string | null} after @param {number} limit @returns {Promise<Doc[]>} */
-		subscriptionsAfter: (after, limit) =>
-			subscriptions
-				.acrossMerchants()
-				.find(after ? { _id: { $gt: after } } : {})
-				.sort({ _id: 1 })
-				.limit(limit)
-				.toArray(),
-
-		// ---- timeline
-		/** @param {Doc} sub @param {Date} at @param {string[]} elements */
-		appendTimeline: (sub, at, elements) =>
-			timeline.forMerchant(sub.merchantId).insertOne({ subscriptionId: sub._id, websiteId: sub.websiteId, at, elements }),
-		/** @param {string} merchantId @param {string} subscriptionId @returns {Promise<Doc | null>} */
-		lastTimeline: (merchantId, subscriptionId) =>
-			timeline.forMerchant(merchantId).findOne({ merchantId, subscriptionId }, { sort: { at: -1, _id: -1 } }),
-		/**
-		 * The snapshot in effect at `from` plus every snapshot in `(from, to]`, ascending.
-		 * @param {string} merchantId @param {string} subscriptionId @param {Date} from @param {Date} to
-		 * @returns {Promise<Doc[]>}
-		 */
-		timelineWindow: async (merchantId, subscriptionId, from, to) => {
-			const ops = timeline.forMerchant(merchantId);
-			const before = await ops.findOne({ merchantId, subscriptionId, at: { $lte: from } }, { sort: { at: -1, _id: -1 } });
-			const within = await ops
-				.find({ merchantId, subscriptionId, at: { $gt: from, $lte: to } })
-				.sort({ at: 1, _id: 1 })
-				.toArray();
-			return before ? [before, ...within] : within;
-		},
-
-		// ---- pauses
-		/** @param {Doc} sub @param {string} reason @param {Date} from */
-		openPause: async (sub, reason, from) => {
-			const ops = /** @type {MutableOps} */ (pauses.forMerchant(sub.merchantId));
-			const open = await ops.findOne({ merchantId: sub.merchantId, subscriptionId: sub._id, reason, to: null });
-			if (!open) await ops.insertOne({ subscriptionId: sub._id, reason, from, to: null });
-		},
-		/** @param {Doc} sub @param {string | null} reason null = every open pause @param {Date} to */
-		closePauses: (sub, reason, to) =>
-			/** @type {MutableOps} */ (pauses.forMerchant(sub.merchantId)).updateMany(
-				{ merchantId: sub.merchantId, subscriptionId: sub._id, to: null, ...(reason ? { reason } : {}) },
-				{ $set: { to } },
-			),
-		/** @param {string} merchantId @param {string} subscriptionId @param {Date} from @param {Date} to @returns {Promise<Doc[]>} */
-		pausesOverlapping: (merchantId, subscriptionId, from, to) =>
-			pauses
-				.forMerchant(merchantId)
-				.find({ merchantId, subscriptionId, from: { $lt: to }, $or: [{ to: null }, { to: { $gt: from } }] })
-				.sort({ from: 1 })
-				.toArray(),
 
 		// ---- documents
 		/** @param {string} merchantId @param {string} subscriptionId @returns {Promise<Doc | null>} */
@@ -177,21 +97,6 @@ export const createCommerceRepo = (ctx) => {
 		// ---- usage
 		/** @param {string} merchantId @param {Doc} record */
 		insertUsage: (merchantId, record) => usage.forMerchant(merchantId).insertOne(record),
-		/**
-		 * Authoritative quantity per unit in one hour, from the records.
-		 * @param {string} merchantId @param {string} subscriptionId @param {Date} bucket
-		 * @returns {Promise<Record<string, number>>}
-		 */
-		usageInBucket: async (merchantId, subscriptionId, bucket) => {
-			const rows = await usage
-				.forMerchant(merchantId)
-				.aggregate([
-					{ $match: { merchantId, subscriptionId, bucket } },
-					{ $group: { _id: '$unit', quantity: { $sum: '$quantity' } } },
-				])
-				.toArray();
-			return Object.fromEntries(rows.map((r) => [String(r._id), Number(r.quantity)]));
-		},
 		/** @param {string} merchantId @param {string} subscriptionId @param {string} unit @param {Date} hour @param {number} quantity */
 		incCounter: async (merchantId, subscriptionId, unit, hour, quantity) => {
 			const ops = /** @type {MutableOps} */ (counters.forMerchant(merchantId));
@@ -209,13 +114,6 @@ export const createCommerceRepo = (ctx) => {
 				await run(); // concurrent upsert of the same counter
 			}
 		},
-		/** @param {string} merchantId @param {string} subscriptionId @param {string} unit @param {Date} hour @param {number} quantity */
-		setCounter: (merchantId, subscriptionId, unit, hour, quantity) =>
-			/** @type {MutableOps} */ (counters.forMerchant(merchantId)).updateOne(
-				{ merchantId, _id: `${subscriptionId}:${unit}:${hour.toISOString()}` },
-				{ $set: { quantity }, $setOnInsert: { subscriptionId, unit, hour } },
-				{ upsert: true },
-			),
 		/**
 		 * Σ counters per unit for hours in `[from, to)`.
 		 * @param {string} merchantId @param {string} subscriptionId @param {readonly string[]} units @param {Date} from @param {Date} to
@@ -236,39 +134,71 @@ export const createCommerceRepo = (ctx) => {
 		// ---- ledger and accounts
 		/** @param {string} merchantId */
 		ledgerOf: (merchantId) => ledger.forMerchant(merchantId),
+		/** Every merchant's ledger, for admin lists (exact filters only). */
+		allLedgers: () => ledger.acrossMerchants(),
 		/** @param {string} merchantId */
 		accountOps: (merchantId) => /** @type {MutableOps} */ (accounts.forMerchant(merchantId)),
-		/** @param {string | null} after @param {number} limit @returns {Promise<Doc[]>} */
-		accountsAfter: (after, limit) =>
-			accounts
-				.acrossMerchants()
-				.find(after ? { _id: { $gt: after } } : {})
-				.sort({ _id: 1 })
-				.limit(limit)
+
+		// ---- money histories (PLAN 0.5.7 a)
+		/** @param {Doc} doc */
+		insertPriceList: (doc) => priceLists.insertOne(doc),
+		/** @param {readonly string[]} appIds @param {Date} to @returns {Promise<Doc[]>} */
+		priceListsOf: (appIds, to) =>
+			appIds.length === 0
+				? Promise.resolve([])
+				: priceLists
+						.find({ appId: { $in: [...appIds] }, at: { $lte: to } })
+						.sort({ at: 1, _id: 1 })
+						.toArray(),
+		/**
+		 * Append to a merchant's history; a `key` makes it happen once (false when it already did).
+		 * @param {string} merchantId @param {Doc} doc
+		 */
+		appendHistory: async (merchantId, doc) => {
+			try {
+				await history.forMerchant(merchantId).insertOne(doc);
+				return true;
+			} catch (error) {
+				if (doc.key && isDuplicateKey(error)) return false;
+				throw error;
+			}
+		},
+		/** @param {string} merchantId @param {Date} to @returns {Promise<Doc[]>} */
+		historyOf: (merchantId, to) =>
+			history
+				.forMerchant(merchantId)
+				.find({ merchantId, at: { $lte: to } })
+				.sort({ at: 1, _id: 1 })
 				.toArray(),
 
-		// ---- spend cap
+		// ---- billing state
 		/** @param {string} merchantId @returns {Promise<Doc | null>} */
-		spendCapOf: (merchantId) => spendCaps.forMerchant(merchantId).findOne({ merchantId, _id: merchantId }),
-		/** @param {string} merchantId @param {Doc} set */
-		putSpendCap: (merchantId, set) =>
-			/** @type {MutableOps} */ (spendCaps.forMerchant(merchantId)).updateOne(
-				{ merchantId, _id: merchantId },
-				{ $set: set },
-				{ upsert: true },
-			),
-		/** @param {string} merchantId */
-		deleteSpendCap: (merchantId) =>
-			/** @type {MutableOps} */ (spendCaps.forMerchant(merchantId)).deleteOne({ merchantId, _id: merchantId }),
-
-		// ---- alerts
-		/** @param {Doc} alert */
-		insertAlert: (alert) => alerts.insertOne(alert),
-		/** @param {{ merchantId?: string | null, limit: number }} query @returns {Promise<Doc[]>} */
-		listAlerts: ({ merchantId = null, limit }) =>
-			alerts
-				.find(merchantId ? { merchantId } : {})
-				.sort({ at: -1, _id: -1 })
+		billingOf: (merchantId) => billing.forMerchant(merchantId).findOne({ merchantId, _id: merchantId }),
+		/**
+		 * Conditional update of a merchant's billing state (`expect` fields must still hold); creates it when `expect` is
+		 * null. False when another check got there first.
+		 * @param {string} merchantId @param {Doc | null} expect @param {Doc} set
+		 */
+		updateBilling: async (merchantId, expect, set) => {
+			const ops = /** @type {MutableOps} */ (billing.forMerchant(merchantId));
+			if (expect === null) {
+				try {
+					await ops.insertOne({ _id: merchantId, ...set });
+					return true;
+				} catch (error) {
+					if (isDuplicateKey(error)) return false;
+					throw error;
+				}
+			}
+			const res = await ops.updateOne({ merchantId, _id: merchantId, ...expect }, { $set: set });
+			return res.matchedCount === 1;
+		},
+		/** @param {readonly string[]} states @param {number} limit @returns {Promise<Doc[]>} */
+		billingInStates: (states, limit) =>
+			billing
+				.acrossMerchants()
+				.find({ state: { $in: [...states] } })
+				.sort({ merchantId: 1 })
 				.limit(limit)
 				.toArray(),
 	});

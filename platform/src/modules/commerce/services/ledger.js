@@ -2,11 +2,10 @@
  * The merchant ledger: append-only, hash-chained, integer millicredits, with a cached balance on the account.
  *
  * Appends run under a per-merchant lease lock (`commerce.ledger:<merchantId>`) and, inside it, in **one database
- * transaction** (`ctx.withTransaction`): the entries (unique `merchantId+seq`, `merchantId+entryKey`, global
- * `periodKey`) and the account's conditional `$inc` commit together or not at all. The ledger stays the source of
+ * transaction** (`ctx.withTransaction`): the entries (unique `merchantId+seq` and `merchantId+entryKey`) and the account's conditional `$inc` commit together or not at all. The ledger stays the source of
  * truth and the account (balance, seq, head hash) a cache: an append still first **rolls forward** any entries
  * beyond the account's `seq` (records written before appends were transactional, or by a writer outside this
- * path), so the cache can always be repaired from the chain. A retried settlement finds its keys already present;
+ * path), so the cache can always be repaired from the chain. A repeated check finds its day keys already present;
  * the unique `seq` index keeps the chain linear even if a lease expired.
  * @module
  */
@@ -112,14 +111,12 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 	};
 
 	/**
-	 * Append drafts. Drafts whose `entryKey` already exists are skipped (idempotent). `guard(account)` runs under the
-	 * lock after roll-forward and may throw a problem (e.g. a refund larger than the balance).
+	 * Append drafts. Drafts whose `entryKey` already exists are skipped (idempotent).
 	 * @param {string} merchantId
 	 * @param {readonly EntryDraft[]} drafts
-	 * @param {{ guard?: (account: Account) => void }} [options]
 	 * @returns {Promise<{ appended: LedgerEntry[], duplicates: string[], balance: number }>}
 	 */
-	const append = async (merchantId, drafts, { guard } = {}) => {
+	const append = async (merchantId, drafts) => {
 		for (let attempt = 1; ; attempt += 1) {
 			const lock = await acquire(merchantId);
 			try {
@@ -127,7 +124,6 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 				return await ctx.withTransaction(async (session) => {
 					const opts = { session };
 					const account = await rollForward(merchantId, await accountOf(merchantId, session), session);
-					guard?.(account);
 					const keys = [...new Set(drafts.map((d) => d.entryKey))];
 					const existing = new Set(
 						(
@@ -185,17 +181,6 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 	};
 
 	/**
-	 * Current balance: the cached account plus any entries not yet rolled into it (no lock needed).
-	 * @param {string} merchantId
-	 * @returns {Promise<number>}
-	 */
-	const balance = async (merchantId) => {
-		const account = await accountOf(merchantId);
-		const pending = await pendingOf(merchantId, account);
-		return account.balance + pending.reduce((sum, e) => sum + e.amount, 0);
-	};
-
-	/**
 	 * Verify the full chain and the cached account (after repairing a crashed append when the chain allows it).
 	 * @param {string} merchantId
 	 */
@@ -221,27 +206,6 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 	};
 
 	/**
-	 * Entries of a merchant (ascending `at`), optionally for one website, in `[from, to)`.
-	 * @param {string} merchantId
-	 * @param {{ from?: number | null, to?: number | null, websiteId?: string | null, types?: readonly string[] | null,
-	 *   afterSeq?: number | null, limit?: number }} [query]
-	 * @returns {Promise<Doc[]>}
-	 */
-	const entries = (
-		merchantId,
-		{ from = null, to = null, websiteId = null, types = null, afterSeq = null, limit = 1000 } = {},
-	) => {
-		/** @type {Record<string, any>} */
-		const filter = { merchantId };
-		if (from !== null || to !== null)
-			filter.at = { ...(from !== null ? { $gte: new Date(from) } : {}), ...(to !== null ? { $lt: new Date(to) } : {}) };
-		if (websiteId) filter.websiteId = websiteId;
-		if (types) filter.type = { $in: [...types] };
-		if (afterSeq !== null) filter.seq = { $gt: afterSeq };
-		return repo.ledgerOf(merchantId).find(filter).sort({ seq: 1 }).limit(limit).toArray();
-	};
-
-	/**
 	 * Σ amounts of matching entries.
 	 * @param {string} merchantId
 	 * @param {Record<string, any>} match extra filter (merchantId is added)
@@ -255,10 +219,7 @@ export const createLedger = ({ ctx, repo, onChainBroken }) => {
 		return Number(rows[0]?.total ?? 0);
 	};
 
-	/** @param {string} merchantId @param {string} entryKey @returns {Promise<Doc | null>} */
-	const byKey = (merchantId, entryKey) => repo.ledgerOf(merchantId).findOne({ merchantId, entryKey });
-
-	return Object.freeze({ append, balance, verify, entries, sum, accountOf, byKey });
+	return Object.freeze({ append, verify, sum });
 };
 /** @typedef {Record<string, any>} Doc */
 /** @typedef {import('mongodb').ClientSession} Session */

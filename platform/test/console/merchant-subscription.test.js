@@ -83,7 +83,7 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 
 		// a product with no plans, needing a resource
 		const entry = /** @type {any} */ (products.catalog[0]);
-		const variant = { ...entry, plans: [], requires: ['database'], price: { ...entry.price, metered: true, trialHours: 2 } };
+		const variant = { ...entry, plans: [], requires: ['database'], price: { ...entry.price, metered: true } };
 		withToasts(
 			<ProductsView
 				{...products}
@@ -196,13 +196,13 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		withToasts(
 			<SubscriptionView
 				{...after}
-				subscription={{ ...after.subscription, status: 'active', holds: ['spend_cap', 'custom_hold'] }}
+				subscription={{ ...after.subscription, status: 'active', holds: ['paused', 'custom_hold'] }}
 				product={{ ...after.product, kind: 'service', plans: [] }}
 				history={{ items: after.history.items, nextCursor: 'cursor-x' }}
 				configProblem={{ status: 503, title: 'Unavailable', detail: 'Config is down.' }}
 			/>,
 		);
-		expect(shows('Raise the spend cap')).toBe(true);
+		expect(shows('Subscription paused')).toBe(true);
 		await press('Open in product');
 		await b.waitCall('POST', `/v1/merchants/${merchantId}/apps/${appId}/launch`);
 		await settle(2);
@@ -279,59 +279,14 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		expect(diffLine({ key: 'bar.x', op: 'removed', before: { value: null } })).toBe('bar.x reset (was unlimited)');
 		expect(diffLine({ key: 'bar.y', before: { value: [1] }, after: undefined })).toBe('bar.y: [1] → —');
 
-		// ---------------------------------------------------------------- usage: charts from ledger entries
+		// ---------------------------------------------------------------- website usage (PLAN 0.5.11)
 		const usage = await loaders.loadUsage(b.api, merchantId, websiteId, { from: '2026-01-01', to: '2026-12-31' });
 		if (!usage.ok) throw new Error('usage');
-		const at = new Date().toISOString();
-		render(
-			<UsageView
-				{...usage}
-				meter={{
-					...(usage.meter ?? {}),
-					balanceMillicredits: 100_000,
-					burnRatePerHour: 1750,
-					hoursRemaining: 12,
-					monthToDate: 3500,
-					projectedMonth: 90_000,
-					periodEnd: at,
-					subscriptions: [{ websiteId, subscriptionId, burnRatePerHour: 1750 }],
-				}}
-				statement={{
-					entries: [
-						{
-							entryId: 'e1',
-							type: 'settlement',
-							amountMillicredits: -1750,
-							periodStart: '2026-10-01T10:00:00.000Z',
-							appId,
-							details: {
-								breakdown: [
-									{ kind: 'base', amount: 100 },
-									{ kind: 'element', element: 'bar', amount: 1250 },
-									{ kind: 'element', element: 'gone', amount: 400 },
-								],
-							},
-						},
-						{
-							entryId: 'e2',
-							type: 'metered',
-							amountMillicredits: -30,
-							at: '2026-10-02T00:00:00.000Z',
-							appId,
-							details: { lines: [{ unit: 'view', quantity: 3, amount: 30 }] },
-						},
-						{ entryId: 'e3', type: 'deposit', amountMillicredits: 5000, at: '2026-10-01T00:00:00.000Z' },
-					],
-				}}
-				statementProblem={{ status: 400, title: 'Bad range' }}
-			/>,
-		);
-		expect(shows('Spend per day')).toBe(true);
-		expect(shows('Notice bar base')).toBe(true);
-		expect(shows('3 used')).toBe(true);
-		expect(document.querySelectorAll('svg, [role="img"], [role="meter"]').length).toBeGreaterThan(0);
-		await press('Amount');
-		await press('Hour');
+		render(<UsageView {...usage} />);
+		expect(shows('Spend per UTC day') && shows('No usage in this period.')).toBe(true);
+		cleanup();
+		render(<UsageView {...usage} usageProblem={{ status: 499, title: 'Bad range', code: 'custom_range' }} />);
+		expect(shows('Bad range')).toBe(true);
 		cleanup();
 		render(<UsageView ok={false} problem={{ status: 403, title: 'Forbidden', code: 'forbidden' }} />);
 		expect(shows('No access')).toBe(true);

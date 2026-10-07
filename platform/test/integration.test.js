@@ -798,9 +798,17 @@ describe('Settings (stored in the database, never in the environment; Owner only
 				).status,
 			).toBe(422);
 
+		const billing = await call('PUT', '/v1/admin/settings/billing', {
+			headers: as(owner),
+			body: { graceDays: 0, lowBalanceDays: 30 },
+		});
+		expect(billing.json.billing).toEqual({ graceDays: 0, lowBalanceDays: 30 });
+		for (const body of [{ graceDays: 31, lowBalanceDays: 3 }, { graceDays: 3, lowBalanceDays: 0 }, { graceDays: 1.5 }])
+			expect((await call('PUT', '/v1/admin/settings/billing', { headers: as(owner), body })).status).toBe(422);
+
 		const entries = await db.collection('platform_audit').find({ action: 'settings.changed' }).toArray();
 		expect(new Set(entries.map((e) => e.target.id))).toEqual(
-			new Set(['mail', 'branding', 'branding_logo', 'support', 'security']),
+			new Set(['mail', 'branding', 'branding_logo', 'support', 'security', 'billing']),
 		);
 		expect(entries.every((e) => e.actor.type === 'admin' && e.actor.id === 'adm_owner')).toBe(true);
 		expect(JSON.stringify(entries)).not.toContain('s3cret');

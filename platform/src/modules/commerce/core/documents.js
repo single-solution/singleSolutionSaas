@@ -1,6 +1,6 @@
 /**
- * Entitlement document helpers (pure): validity window, cache freshness, version bumps and the facts settlement and
- * quota checks read from a resolution.
+ * Entitlement document helpers (pure): validity window, cache freshness, version bumps and the facts quota checks
+ * read from a resolution.
  * @module
  */
 
@@ -42,17 +42,6 @@ export const nextVersion = (stored, contentHash) =>
 	stored && stored.contentHash === contentHash
 		? { version: stored.version, bumped: false }
 		: { version: (stored?.version ?? 0) + 1, bumped: true };
-
-/**
- * Elements enabled in a resolution (sorted) — the billable state settlement samples.
- * @param {{ elements: Record<string, { enabled: boolean }> }} resolved
- * @returns {string[]}
- */
-export const enabledElements = (resolved) =>
-	Object.entries(resolved.elements)
-		.filter(([, el]) => el.enabled)
-		.map(([key]) => key)
-		.sort();
 
 /**
  * Hard-stop quotas of a resolution, with their effective limits (to detect exhaustion on usage ingest).

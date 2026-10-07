@@ -236,7 +236,7 @@ describe('catalog reads', () => {
 				expect.objectContaining({ key: 'apply_box', price: { hourlyMillicredits: 0, metered: [] } }),
 			],
 			plans: [expect.objectContaining({ code: 'starter', includedHourlyMillicredits: 1000 })],
-			price: expect.objectContaining({ fromHourlyMillicredits: 1000, metered: true, trialHours: 48 }),
+			price: expect.objectContaining({ fromHourlyMillicredits: 1000, metered: true }),
 		});
 		expect(alpha.elements[0]).not.toHaveProperty('features');
 		expect((await t.call('GET', '/v1/catalog/products?kind=pack')).json.items).toEqual([]);

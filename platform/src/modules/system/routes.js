@@ -118,6 +118,13 @@ export const systemRoutes = (service) => [
 		permission: P.settingsPortalWrite,
 		handler: async (ctx) => ok(await service.setSecurity({ body: ctx.body, ...who(ctx) })),
 	}),
+	defineRoute({
+		method: 'PUT',
+		path: '/v1/admin/settings/billing',
+		auth: 'admin',
+		permission: P.settingsPortalWrite,
+		handler: async (ctx) => ok(await service.setBilling({ body: ctx.body, ...who(ctx) })),
+	}),
 	// ---- Overview and Activity
 	defineRoute({
 		method: 'GET',

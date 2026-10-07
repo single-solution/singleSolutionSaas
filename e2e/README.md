@@ -3,7 +3,7 @@
 Tests that need two or more deployables: every product against the **real** Portal, in process, on one
 MongoMemoryReplSet. Each test creates the first admin (password, then TOTP), connects the product through Admin → Apps → Add product
 (product URL + connect secret), activates it, signs a merchant up, adds a website, credits and a subscription, connects the merchant's
-resources and drives the product's own flow through the Event Hub, then checks usage and hourly settlement.
+resources and drives the product's own flow through the Event Hub, then checks usage records and the merchant's billing.
 
 | Test                              | Product(s)                                                                                            |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------- |

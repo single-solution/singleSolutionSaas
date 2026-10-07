@@ -98,34 +98,46 @@ uploadPath, changed }`. A pack slug creates the pack (inactive, version 1) or a 
 
 ## commerce (`modules/commerce`)
 
-Subscriptions, element switches, entitlement documents, usage, quotas, ledger (append-only, hash-chained),
-credits, settlement, spend caps.
+Subscriptions, element switches, entitlement documents, usage records, quotas, and credits and billing (PLAN 0.5).
 
-- `subscribe({ websiteId, appId, planCode? })` → subscription (active apps only; requires ≥ 1 hour of credits; pins
-  price book). A manifest
-  `trialHours` is granted once per website × app at the first subscribe as an `adjustment` ledger entry
-  (`entryKey trial:<websiteId>:<appId>`, worth `trialHours ×` the first hour's charge; it counts towards the one-hour
-  minimum; audited `credits.trial_granted`).
+- `subscribe({ websiteId, appId, planCode? })` → subscription (active apps only; pins the price book; no minimum
+  balance). Subscriptions, plans and pauses stay until 0.12 step 5 replaces them with products on websites; they no
+  longer charge anything.
 - `getSubscription(subscriptionId)`, `subscriptionsForWebsite(websiteId)`
 - `setElement({ subscriptionId, elementKey, enabled, actor })`
 - `pause / resume / cancel({ subscriptionId, reason, actor })`
 - `documentFor({ websiteId, appId })` → compact JWS (signed by Portal signer, cached until content hash changes)
-- `recordUsage({ appId, records })` → `{ results }` (F.9)
-- `addCredits({ merchantId, amountMillicredits, reference, note, actor })`, `adjust`, `refund`
-- **Spend cap** (`commerce_spend_caps`, `_id` = merchantId, `{ limit, updatedAt, updatedBy }`): `spendCap(merchantId)`
-  → `{ limit, spent, remaining, reached, periodStart, periodEnd }` (UTC month), `setSpendCap(merchantId, { limit },
-caller)`, `removeSpendCap(merchantId, caller)` (audited `spend_cap.*`). Routes `GET|PUT|DELETE
-/v1/merchants/:merchantId/spend-cap` (`billing.read` / `billing.manage`). When the month's spend plus the coming
-  hours' burn would exceed the cap, live subscriptions get the `spend_cap` hold until the month ends.
-- `balance(merchantId)`, `meter(merchantId)` — both settle the merchant's due complete hours first (lazy settlement:
-  `runSettlement({ merchantId })`, 2 s budget, idempotent per `periodKey`; a failure never fails the read)
-- `statement(merchantId, { from, to, websiteId? })`
+- `recordUsage({ appId, records })` → `{ results }` (F.9); usage records feed quotas and are never charged (0.5.3)
+- **Money histories** (0.5.7 a, stamped with Portal time; filled from product reports in step 5):
+  `recordPriceList({ appId, features: [{ key, name, price }] })` (`commerce_price_lists`; one hourly price per feature
+  in millicredits, never negative), `recordProductAdded / recordProductRemoved({ merchantId, websiteId, appId })` and
+  `recordSwitches({ merchantId, websiteId, appId, on })` (`commerce_history`); merchant suspension and resumption are
+  recorded by `onMerchantStatus`; grace starts and stops by the check.
+- **The money function** (`core/money.js`, pure): `replay({ from, to, cut, balance, phase, events, graceDays,
+graceEnds })` → charges per website × product × feature × hour, the balance, grace and stop, the daily spend and the
+  products' hourly cost; `billingStateOf`, `merchantStatusOf`, `productStatusOf`, `isLowBalance`, `daysLeftOf`,
+  `usageRows`, `dayCharges`.
+- **Ledger** (`commerce_ledger`, append-only, hash-chained): only `receipt` (+) and `day_charge` (−, one per website ×
+  product × UTC day with `{ lines: [{ feature, hours, amount }] }`, idempotent by `day:<websiteId>:<appId>:<day>`).
+  `verifyChain(merchantId)`.
+- **Check** `check(merchantId)` (0.5.7): replays from the stored settled-through day, writes complete days, records
+  grace starts and stops once, caches `{ state, balance, dailySpend }` in `commerce_billing` and sends the low-balance,
+  grace-started or products-stopped e-mail when the state is entered (compare-and-set, to the merchant and every Owner
+  and Finance admin). It runs when a Portal page shows a merchant.
+- Views (each runs the check): `billingSummary(merchantId)` → `{ status, balance, dailySpend, daysLeft, lowBalance,
+graceEnd, stoppedAt, spentThisMonth, products: [{ websiteId, appId, status, featuresOn, hourlyCost, dailyCost }] }`;
+  `usage(merchantId, { from, to, websiteId? })` (0.5.11 rows, UTC days, today live); `receiptsOf(merchantId,
+{ forAdmin })`; `dayChargesOf(merchantId)`; `billingSummaries(ids)`, `attention()`, `allReceipts(query)`,
+  `charges({ from, to, by })`.
+- `addReceipt({ merchantId, amount, amountPaid, method, reference, actor })` (0.5.8; audited `credits.added`, e-mail
+  `credits_added` to the merchant).
+- Routes: `GET /v1/merchants/:m/billing|usage|receipts` (`billing.read`), `POST /v1/admin/merchants/:m/receipts`
+  (`credits.add`, idempotent), `GET /v1/admin/merchants/:m/day-charges`, `GET /v1/admin/billing/merchants?ids=`,
+  `…/attention`, `…/receipts`, `…/charges?by=day|merchant|product` (`billing.read`).
 - `invalidate(subscriptionId)`, `invalidateWebsite(websiteId)`, `invalidateApp(appId)` (re-resolve and re-sign the
   documents of every live subscription of an app, e.g. after a manifest is accepted) → `{ invalidated }`
 - `previewDocument({ subscriptionId, layers })` → the canonical, unsigned document the subscription would get with
   `layers` (config dry runs; nothing stored or emitted)
-- Settlement on read (F.19, no cron): `settleDue(merchantId)` runs before balance, meter and statement reads, product
-  document fetches (`documentFor`), subscription changes, and right after a product's usage batch.
 - Reads configuration layers `{ platform, website, admin }` from `config.layersFor(subscriptionId)`; resource status from
   `connectors.statusFor(websiteId)`; the website's identity issuer from `identity.identityFor(websiteId)` (document
   `identity` section; it extends the content hash, so an issuer change or key rotation bumps the version) and the

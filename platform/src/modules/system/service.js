@@ -279,6 +279,31 @@ export const createSystemService = (ctx) => {
 			return settings();
 		},
 
+		/**
+		 * Billing rules (PLAN 0.5.4): grace days 0–30 and the low-balance threshold 1–30 days of spend, whole days. A
+		 * change applies to grace periods that start later.
+		 * @param {{ body: unknown, actor: Actor, requestId: string, ip: string | null }} input
+		 */
+		setBilling: async ({ body, actor, requestId, ip }) => {
+			const input = objectOf(body);
+			/** @type {FieldError[]} */
+			const errors = [];
+			for (const name of /** @type {const} */ (['graceDays', 'lowBalanceDays'])) {
+				const { min, max } = SETTINGS_BOUNDS[name];
+				const value = input[name];
+				if (!Number.isInteger(value) || /** @type {number} */ (value) < min || /** @type {number} */ (value) > max)
+					errors.push({ path: `/${name}`, message: `must be a whole number of days ${min}..${max}` });
+			}
+			refuse(errors, 'The billing rules are invalid.');
+			const billing = {
+				graceDays: /** @type {number} */ (input.graceDays),
+				lowBalanceDays: /** @type {number} */ (input.lowBalanceDays),
+			};
+			await system().update({ billing });
+			await record(actor, 'billing', { after: billing, requestId, ip });
+			return settings();
+		},
+
 		/** What sign-in pages, consoles and e-mails show: the Branding and the support contact. */
 		publicBranding: async () => {
 			const { branding, support } = ctx.config.settings;

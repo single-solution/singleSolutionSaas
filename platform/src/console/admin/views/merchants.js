@@ -11,7 +11,6 @@ import { useEffect, useState } from 'react';
 import {
 	Badge,
 	Button,
-	ButtonLink,
 	Callout,
 	Card,
 	CodeBlock,
@@ -36,8 +35,9 @@ import {
 	formatDateTime,
 	useToast,
 } from '@ss/ui';
-import { ADMIN, MERCHANT_FIELDS } from '../../../texts/console.js';
+import { ADMIN, BILLING, MERCHANT_FIELDS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
+import { MerchantStatusBadge, ProductStatusBadge } from '../../views/billing.js';
 import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
 import { ActivityTable } from '../../views/login-settings.js';
 import { SubscribeDialog } from '../../views/products.js';
@@ -45,20 +45,24 @@ import { AddWebsiteForm } from '../../views/websites.js';
 import { adminFetch, usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
 import { AdminProblem, adminCan } from './common.js';
+import { AddCreditsDialog, MerchantCredits } from './finance.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
 /**
- * Status badge of a merchant, plus Setup pending (a separate grey badge, PLAN 0.6).
- * @param {{ merchant: any }} props
+ * Status badge of a merchant (PLAN 0.5.5: the billing status from the check, suspended first), plus Setup pending (a
+ * separate grey badge, PLAN 0.6).
+ * @param {{ merchant: any, billing?: any }} props
  */
-export function MerchantStatus({ merchant }) {
+export function MerchantStatus({ merchant, billing = null }) {
+	const status = merchant.status === 'suspended' ? 'suspended' : (billing?.status ?? merchant.status);
 	return (
 		<span className="inline-flex flex-wrap items-center gap-1">
-			<StatusBadge
-				status={merchant.status}
-				label={ADMIN.status[/** @type {'active'} */ (merchant.status)] ?? merchant.status}
-			/>
+			{status in BILLING.merchantStatus ? (
+				<MerchantStatusBadge status={status} />
+			) : (
+				<StatusBadge status={status} label={ADMIN.status[/** @type {'active'} */ (status)] ?? status} />
+			)}
 			{merchant.setupPending ? <Badge tone="neutral">{ADMIN.setupPending}</Badge> : null}
 		</span>
 	);
@@ -176,6 +180,8 @@ export function MerchantsView(props) {
 	const toast = useToast();
 	const ok = props.ok === true;
 	const filter = ok ? props.filter : { status: null, q: null };
+	/** @param {string} id @returns {any} */
+	const billingOf = (id) => (ok ? (props.billing?.[id] ?? null) : null);
 	const [q, setQ] = useState(filter.q ?? '');
 	const [status, setStatus] = useState(filter.status ?? '');
 	const list = usePagedList(
@@ -323,7 +329,27 @@ export function MerchantsView(props) {
 							</span>
 						),
 					},
-					{ key: 'status', header: ADMIN.columns.status, render: (m) => <MerchantStatus merchant={m} /> },
+					{
+						key: 'status',
+						header: ADMIN.columns.status,
+						render: (m) => <MerchantStatus merchant={m} billing={billingOf(m.merchantId)} />,
+					},
+					{
+						key: 'balance',
+						header: `${BILLING.balance} · ${BILLING.dailySpend}`,
+						align: 'right',
+						render: (m) =>
+							billingOf(m.merchantId) ? (
+								<span className="block tabular-nums">
+									{formatCredits(billingOf(m.merchantId).balance)}
+									<span className="block text-xs text-muted">
+										{formatCredits(billingOf(m.merchantId).dailySpend)} / day
+									</span>
+								</span>
+							) : (
+								'—'
+							),
+					},
 					{ key: 'createdAt', header: ADMIN.columns.created, sortable: true, render: (m) => formatDate(m.createdAt) },
 					{ key: 'lastSignInAt', header: ADMIN.columns.lastSignIn, render: (m) => formatDateTime(m.lastSignInAt) },
 				]}
@@ -431,7 +457,14 @@ export function MerchantView(props) {
 	const productsOn = (w) =>
 		subs.filter((s) => (s.websiteId === w.websiteId || s.websiteId === w.twinId) && s.status !== 'cancelled');
 	const can = (/** @type {string} */ p) => adminCan(admin, p);
-	const balance = props.balance?.balanceMillicredits;
+	const billing = props.billing ?? null;
+	const balance = billing?.balance;
+	/** @param {string} appId @param {any} w */
+	const lineOf = (appId, w) =>
+		(billing?.products ?? []).find(
+			(/** @type {any} */ l) => l.appId === appId && (l.websiteId === w.websiteId || l.websiteId === w.twinId),
+		) ?? null;
+	const [crediting, setCrediting] = useState(false);
 
 	/**
 	 * @param {string} path
@@ -486,6 +519,7 @@ export function MerchantView(props) {
 
 	const actions = (
 		<div className="flex flex-wrap gap-2">
+			{can('credits.add') ? <Button onClick={() => setCrediting(true)}>{BILLING.addCredits}</Button> : null}
 			{can('merchants.suspend') ? (
 				merchant.status === 'suspended' ? (
 					<Button variant="secondary" onClick={() => setDialog('resume')}>
@@ -533,7 +567,7 @@ export function MerchantView(props) {
 				</Link>
 				<PageHeader
 					title={merchant.name}
-					badge={<MerchantStatus merchant={merchant} />}
+					badge={<MerchantStatus merchant={merchant} billing={billing} />}
 					subtitle={typeof balance === 'number' ? formatCredits(balance) : undefined}
 					actions={actions}
 				/>
@@ -567,11 +601,22 @@ export function MerchantView(props) {
 												render: (w) => (
 													<span className="flex flex-wrap gap-1">
 														{productsOn(w).map((s) => (
-															<StatusBadge
-																key={s.subscriptionId}
-																status={s.status}
-																label={s.productSlug ?? s.appId}
-															/>
+															<span key={s.subscriptionId} className="inline-flex items-center gap-1 text-xs">
+																<span className="font-semibold">{s.productSlug ?? s.appId}</span>
+																{lineOf(s.appId, w) ? (
+																	<>
+																		<ProductStatusBadge
+																			status={lineOf(s.appId, w).status}
+																			featuresOn={lineOf(s.appId, w).featuresOn}
+																		/>
+																		<span className="text-muted">
+																			{formatCredits(lineOf(s.appId, w).dailyCost)} / day
+																		</span>
+																	</>
+																) : (
+																	<StatusBadge status={s.status} />
+																)}
+															</span>
 														))}
 													</span>
 												),
@@ -612,14 +657,7 @@ export function MerchantView(props) {
 							id: 'credits',
 							label: ADMIN.tabs.credits,
 							content: (
-								<Card>
-									<p className="text-sm text-muted">{typeof balance === 'number' ? formatCredits(balance) : '—'}</p>
-									{can('billing.read') ? (
-										<ButtonLink as={Link} href={adminRoutes.ledger(merchantId)} variant="secondary" className="mt-3">
-											{ADMIN.menu.billing}
-										</ButtonLink>
-									) : null}
-								</Card>
+								<MerchantCredits billing={billing} receipts={props.receipts ?? []} dayCharges={props.dayCharges ?? []} />
 							),
 						},
 						{
@@ -723,6 +761,14 @@ export function MerchantView(props) {
 				/>
 			</Dialog>
 			<CopyLinkDialog link={link} onClose={() => setLink(null)} />
+			{crediting ? (
+				<AddCreditsDialog
+					merchant={{ merchantId, name: merchant.name }}
+					balance={balance}
+					onClose={() => setCrediting(false)}
+					onAdded={() => window.location.reload()}
+				/>
+			) : null}
 			{addingTo ? (
 				<SubscribeDialog
 					merchantId={merchantId}
@@ -730,9 +776,7 @@ export function MerchantView(props) {
 					products={(props.catalog ?? []).filter(
 						(/** @type {any} */ p) => !productsOn(addingTo).some((s) => s.appId === p.appId),
 					)}
-					balanceMillicredits={typeof balance === 'number' ? balance : null}
 					fetcher={adminFetch}
-					creditsHref={null}
 					onClose={() => setAddingTo(null)}
 					onSubscribed={(sub) => {
 						setSubs((list) => [...list, sub]);

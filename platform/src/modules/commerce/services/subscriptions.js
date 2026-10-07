@@ -2,20 +2,18 @@
  * Subscriptions, element switches, holds and signed entitlement documents.
  *
  * Every state change re-resolves the subscription (`refresh`): the resolution is signed into a document whose
- * `version` is bumped only when `contentHash` changes (then `entitlement.changed@1` is emitted with the document), and
- * the billable element set (the resolution with the subscription forced active — pauses are billed through pause
- * intervals, not through elements) is appended to the timeline when it differs from the last snapshot.
+ * `version` is bumped only when `contentHash` changes (then `entitlement.changed@1` is emitted with the document).
+ * Money is not charged from subscriptions: it follows the price-list and switch histories (`core/money.js`).
  * @module
  */
 import { createId } from '@ss/contracts';
 import { configLayers } from './deps.js';
-import { ceilHour, currentPriceBook, floorHour, periodBounds, resolveEntitlement, toDocument } from '@ss/entitlements';
+import { currentPriceBook, periodBounds, resolveEntitlement, toDocument } from '@ss/entitlements';
 import { signEntitlementDocument } from '@ss/protocol';
 import { problem } from '../../../infra/http.js';
-import { dataScopePrefix, firstHourCharge, quotaFeatures } from '../core/catalog.js';
+import { dataScopePrefix, quotaFeatures } from '../core/catalog.js';
 import {
 	documentHash,
-	enabledElements,
 	isFresh,
 	nextVersion,
 	quotaWatch,
@@ -23,12 +21,11 @@ import {
 	validityWindow,
 	websiteSection,
 } from '../core/documents.js';
-import { overlaySwitches, resolverState, sameElements, statusOf, withHold } from '../core/subscription.js';
+import { overlaySwitches, resolverState, statusOf, withHold } from '../core/subscription.js';
 
 /** @typedef {import('../../../infra/modules.js').ModuleContext} ModuleContext */
 /** @typedef {import('../repo.js').CommerceRepo} CommerceRepo */
 /** @typedef {import('./deps.js').Deps} Deps */
-/** @typedef {import('./ledger.js').Ledger} Ledger */
 /** @typedef {import('../core/catalog.js').Product} Product */
 /** @typedef {import('../core/subscription.js').Hold} Hold */
 /** @typedef {Record<string, any>} Doc */
@@ -64,13 +61,12 @@ export const subscriptionView = (sub) => ({
 	pins: sub.pins.map((/** @type {Doc} */ p) => ({ ...p, at: new Date(p.at).toISOString() })),
 	startedAt: new Date(sub.startedAt).toISOString(),
 	cancelledAt: sub.cancelledAt ? new Date(sub.cancelledAt).toISOString() : null,
-	settledThrough: new Date(sub.settledThrough).toISOString(),
 });
 
 /**
- * @param {{ ctx: ModuleContext, repo: CommerceRepo, deps: Deps, ledger: Ledger }} input
+ * @param {{ ctx: ModuleContext, repo: CommerceRepo, deps: Deps }} input
  */
-export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
+export const createSubscriptions = ({ ctx, repo, deps }) => {
 	/**
 	 * @param {Caller} caller
 	 * @param {string} action
@@ -155,22 +151,13 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 				merchantId: sub.merchantId,
 			},
 			layers: overlaySwitches(config, sub.switches),
-			runtime: { resources, usage, spendCap: state.spendCap },
+			runtime: { resources, usage, spendCap: false },
 			now,
 		};
 		const resolved = resolveEntitlement(input);
-		const billable =
-			state.status === 'active' && !state.spendCap
-				? resolved
-				: resolveEntitlement({
-						...input,
-						subscription: { ...input.subscription, status: 'active' },
-						runtime: { ...input.runtime, spendCap: false },
-					});
 		const site = websiteSection(website);
 		return {
 			resolved,
-			billing: enabledElements(billable),
 			product,
 			manifest,
 			resources,
@@ -209,12 +196,6 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		return { notInPlan, unmet };
 	};
 
-	/** @param {Doc} sub @param {string[]} elements @param {number} now */
-	const recordTimeline = async (sub, elements, now) => {
-		const last = await repo.lastTimeline(sub.merchantId, sub._id);
-		if (!last || !sameElements(last.elements, elements)) await repo.appendTimeline(sub, new Date(now), elements);
-	};
-
 	/**
 	 * Map a resolution onto the canonical document (validated by `toDocument`).
 	 * @param {{ sub: Doc, website: Doc, resolved: ReturnType<typeof resolveEntitlement>, product: Product,
@@ -247,7 +228,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	};
 
 	/**
-	 * Re-resolve, record the billable timeline, sign and cache the document. Returns null for cancelled subscriptions.
+	 * Re-resolve, sign and cache the document. Returns null for cancelled subscriptions.
 	 * @param {Doc} sub
 	 * @returns {Promise<{ jws: string, version: number, document: Record<string, unknown> } | null>}
 	 */
@@ -258,17 +239,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		}
 		const website = await deps.getWebsite(sub.websiteId);
 		const now = ctx.now();
-		const {
-			resolved,
-			billing,
-			product,
-			manifest,
-			resources,
-			identity,
-			website: site,
-			contentHash,
-		} = await resolve(sub, website, now);
-		await recordTimeline(sub, billing, now);
+		const { resolved, product, manifest, resources, identity, website: site, contentHash } = await resolve(sub, website, now);
 		for (let attempt = 0; attempt < 4; attempt += 1) {
 			const stored = await repo.documentOf(sub.merchantId, sub._id);
 			const { version, bumped } = nextVersion(
@@ -339,28 +310,21 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	 * @param {Doc} initial
 	 * @param {Hold} hold
 	 * @param {boolean} on
-	 * @param {Caller & { reason: string, resumeAt?: string | null }} caller
+	 * @param {Caller & { reason: string }} caller
 	 * @returns {Promise<Doc>}
 	 */
 	const setHold = async (initial, hold, on, caller) => {
 		let sub = initial;
 		for (let attempt = 0; attempt < 5; attempt += 1) {
 			if (sub.cancelledAt || sub.holds.includes(hold) === on) return sub;
-			const at = new Date(ctx.now());
-			if (on) await repo.openPause(sub, hold, at);
 			const holds = withHold(sub.holds, hold, on);
 			const updated = await repo.updateSubscription(sub, {
-				$set: {
-					holds,
-					status: statusOf({ cancelledAt: sub.cancelledAt, holds }),
-					...(hold === 'spend_cap' ? { spendCapResumeAt: on ? (caller.resumeAt ?? null) : null } : {}),
-				},
+				$set: { holds, status: statusOf({ cancelledAt: sub.cancelledAt, holds }) },
 			});
 			if (!updated) {
 				sub = await load(sub._id, sub.merchantId);
 				continue;
 			}
-			if (!on) await repo.closePauses(updated, hold, at);
 			await audit(caller, on ? 'subscription.hold_added' : 'subscription.hold_released', updated, {
 				before: { status: sub.status, holds: sub.holds },
 				after: { status: updated.status, holds: updated.holds },
@@ -390,7 +354,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	};
 
 	/**
-	 * Subscribe a website to an app (requires a positive balance covering one hour of the would-be charge).
+	 * Subscribe a website to an app (no minimum balance, PLAN 0.5.8).
 	 * @param {{ websiteId: string, appId: string, planCode?: string | null, merchantId?: string | null } & Caller} input
 	 */
 	const subscribe = async ({ websiteId, appId, planCode = null, merchantId = null, ...caller }) => {
@@ -404,19 +368,8 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		if (planCode !== null && !product.plans[planCode])
 			throw problem('validation_failed', 'Unknown plan.', { errors: [{ path: '/planCode', message: `no plan ${planCode}` }] });
 		const now = ctx.now();
-		const first = firstHourCharge(product, planCode, now);
-		if (!first) throw problem('conflict', 'The product has no effective price book.');
-		// manifest trialHours: granted once per website × app (unique entryKey) as an adjustment at the first subscribe,
-		// worth trialHours × the first hour's charge; it counts towards the one-hour minimum
-		const trialHours = Number.isInteger(manifest.trialHours) ? /** @type {number} */ (manifest.trialHours) : 0;
-		const trialKey = `trial:${websiteId}:${appId}`;
-		const trialAmount =
-			trialHours > 0 && first.amount > 0 && !(await ledger.byKey(website.merchantId, trialKey))
-				? trialHours * first.amount
-				: 0;
-		const balance = (await ledger.balance(website.merchantId)) + trialAmount;
-		if (balance <= 0 || balance < first.amount)
-			throw problem('credits_exhausted', `At least one hour of credits (${first.amount} millicredits) is required.`);
+		const book = currentPriceBook(product, now);
+		if (!book) throw problem('conflict', 'The product has no effective price book.');
 		const at = new Date(now);
 		/** @type {Doc} */
 		const sub = {
@@ -428,8 +381,8 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 			planCode,
 			manifestVersion: app.currentVersion,
 			productVersion: manifest.product.version,
-			priceBookVersion: first.priceBook.version,
-			pins: [{ version: first.priceBook.version, manifestVersion: app.currentVersion, planCode, at }],
+			priceBookVersion: book.version,
+			pins: [{ version: book.version, manifestVersion: app.currentVersion, planCode, at }],
 			status: 'active',
 			holds: [],
 			switches: { website: {}, admin: {} },
@@ -438,20 +391,14 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 			startedAt: at,
 			cancelledAt: null,
 			endedAt: null,
-			settledThrough: new Date(floorHour(now)),
-			settlementDone: false,
-			spendCapResumeAt: null,
 		};
-		const { billing } = await resolve(sub, website, now);
 		try {
 			await repo.insertSubscription(sub);
 		} catch (error) {
 			if (repo.isDuplicateKey(error)) throw problem('conflict', 'This website already subscribes to this product.');
 			throw error;
 		}
-		await repo.appendTimeline(sub, at, billing);
 		await audit(caller, 'subscription.created', sub, { after: subscriptionView(sub) });
-		if (trialAmount > 0) await grantTrial(sub, { entryKey: trialKey, amount: trialAmount, hours: trialHours }, caller);
 		await deps.emit(
 			'subscription.activated@1',
 			{ subscriptionId: sub._id, websiteId, reason: 'subscribed' },
@@ -459,38 +406,6 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		);
 		await refreshQuietly(sub);
 		return subscriptionView(sub);
-	};
-
-	/**
-	 * Append the trial adjustment of a first subscription (idempotent through its unique `entryKey`) and audit it.
-	 * @param {Doc} sub
-	 * @param {{ entryKey: string, amount: number, hours: number }} trial
-	 * @param {Caller} caller
-	 */
-	const grantTrial = async (sub, { entryKey, amount, hours }, caller) => {
-		const { appended } = await ledger.append(sub.merchantId, [
-			{
-				type: 'adjustment',
-				amount,
-				entryKey,
-				reference: entryKey,
-				note: `trial: ${hours} h of ${sub.productSlug}`,
-				subscriptionId: sub._id,
-				websiteId: sub.websiteId,
-				appId: sub.appId,
-				actor: SYSTEM_ACTOR,
-			},
-		]);
-		if (appended.length === 0) return;
-		await ctx.audit.record({
-			actor: /** @type {any} */ (SYSTEM_ACTOR),
-			action: 'credits.trial_granted',
-			target: { type: 'merchant', id: sub.merchantId, merchantId: sub.merchantId, websiteId: sub.websiteId },
-			after: { amountMillicredits: amount, hours, entryKey, subscriptionId: sub._id },
-			requestId: caller.requestId ?? null,
-			ip: caller.ip ?? null,
-			reason: 'trial',
-		});
 	};
 
 	/**
@@ -592,7 +507,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 	};
 
 	/**
-	 * Releases a manual pause (other holds — credits, caps, suspension — stay until their cause is gone).
+	 * Releases a manual pause (a suspension stays until the merchant is resumed).
 	 * @param {{ subscriptionId: string, reason?: string, merchantId?: string | null } & Caller} input
 	 */
 	const resume = async ({ subscriptionId, reason = 'merchant_request', merchantId = null, ...caller }) => {
@@ -610,11 +525,10 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		const now = ctx.now();
 		const at = new Date(now);
 		const updated = await repo.updateSubscription(sub, {
-			$set: { cancelledAt: at, endedAt: at, status: 'cancelled', settleUntil: new Date(ceilHour(now)) },
+			$set: { cancelledAt: at, endedAt: at, status: 'cancelled' },
 			$unset: { live: '' },
 		});
 		if (!updated) throw problem('conflict', 'The subscription changed concurrently; retry.');
-		await repo.closePauses(updated, null, at);
 		await repo.deleteDocument(updated.merchantId, updated._id);
 		await deps.requestCompile(updated.websiteId);
 		await audit(caller, 'subscription.cancelled', updated, {

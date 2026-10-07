@@ -2,7 +2,8 @@
 /**
  * Settings (PLAN 0.8.2; Owner only): E-mail sending (SMTP host, port, user, password, sender name and address; Send
  * test e-mail to the signed-in admin), Branding (name, accent, logo), Support contact (e-mail, phone, optional WhatsApp)
- * and Security (Session length, Require two-step for admins). Billing rules join in step 3. Every change is written to
+ * Security (Session length, Require two-step for admins) and Billing rules (grace days, low-balance threshold). Every
+ * change is written to
  * Activity and reaches every Portal instance within seconds.
  * @module
  */
@@ -338,6 +339,53 @@ function SecurityTab({ settings, onSaved }) {
 	);
 }
 
+/** @param {{ settings: any, onSaved: (s: any) => void }} props */
+function BillingRulesTab({ settings, onSaved }) {
+	const grace = settings.bounds?.graceDays ?? { min: 0, max: 30 };
+	const low = settings.bounds?.lowBalanceDays ?? { min: 1, max: 30 };
+	const [graceDays, setGraceDays] = useState(String(settings.billing?.graceDays ?? 3));
+	const [lowBalanceDays, setLowBalanceDays] = useState(String(settings.billing?.lowBalanceDays ?? 3));
+	const { busy, problem, save } = useSave(onSaved);
+	const errors = fieldErrors(problem);
+	return (
+		<Card>
+			<Form
+				onSubmit={() =>
+					save(adminApi.settingsBilling(), 'PUT', { graceDays: Number(graceDays), lowBalanceDays: Number(lowBalanceDays) })
+				}
+				busy={busy}
+				aria-label={ADMIN.settingsTabs.billing}>
+				<Input
+					label={ADMIN.billingRules.graceDays}
+					inputMode="numeric"
+					min={grace.min}
+					max={grace.max}
+					value={graceDays}
+					onChange={(e) => setGraceDays(e.currentTarget.value)}
+					help={ADMIN.billingRules.graceHelp}
+					error={errors.graceDays}
+					required
+				/>
+				<Input
+					label={ADMIN.billingRules.lowBalanceDays}
+					inputMode="numeric"
+					min={low.min}
+					max={low.max}
+					value={lowBalanceDays}
+					onChange={(e) => setLowBalanceDays(e.currentTarget.value)}
+					help={ADMIN.billingRules.lowBalanceHelp}
+					error={errors.lowBalanceDays}
+					required
+				/>
+				<FormError problem={problem} fields={['graceDays', 'lowBalanceDays']} />
+				<Button type="submit" loading={busy}>
+					{LOGIN.save}
+				</Button>
+			</Form>
+		</Card>
+	);
+}
+
 /**
  * @param {any} props loader result of `loadSettings`
  */
@@ -365,6 +413,11 @@ export function SettingsView(props) {
 						id: 'security',
 						label: ADMIN.settingsTabs.security,
 						content: <SecurityTab settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'billing',
+						label: ADMIN.settingsTabs.billing,
+						content: <BillingRulesTab settings={settings} onSaved={setSettings} />,
 					},
 				]}
 			/>

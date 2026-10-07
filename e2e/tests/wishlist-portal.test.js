@@ -8,7 +8,7 @@
  *   with the website's pk_ key and a guest token → the shopper signs in (SS-Identity) and the guest list merges into
  *   the account → they opt in to signals on the list and share it (read-only link, no personal data) → the merchant's
  *   server sends price.changed@1 to the Portal Event Hub with an sk_ key, twice → exactly one wishlist.price_dropped@1
- *   reaches the Portal Event Hub → hourly settlement charges the five elements. Plus the widgets: staff upload the
+ *   reaches the Portal Event Hub → the billing is read (usage is never charged, PLAN 0.5.3). Plus the widgets: staff upload the
  *   `ss pack build` output ("Upload widgets") and the compiled website script mounts the real wishlist widget.
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product over https on localhost with a
@@ -425,9 +425,9 @@ describe.skipIf(!hasOpenssl)('Wishlist on the real Portal', () => {
 			},
 		});
 		expect(issuer.status, JSON.stringify(issuer.json)).toBe(200);
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-topup-1', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-topup-1' },
 		});
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
@@ -533,23 +533,15 @@ describe.skipIf(!hasOpenssl)('Wishlist on the real Portal', () => {
 		]);
 	});
 
-	it('settles complete hours at the price of the five pro elements', async () => {
+	it('shows the billing: usage records are never charged', async () => {
 		const { call, state, clock } = ctx;
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.set(hour0 + 2 * HOUR + 5 * 60_000);
-		// no cron: reading the statement settles the merchant's complete hours first
-		const statement = await call(
-			'GET',
-			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(new Date(hour0 - HOUR).toISOString())}&to=${encodeURIComponent(new Date(clock.now() + HOUR).toISOString())}`,
-			{ cookie: state.merchant },
-		);
-		expect(statement.status, JSON.stringify(statement.json)).toBe(200);
-		const iso = (/** @type {any} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const entry = statement.json.entries.find(
-			(/** @type {any} */ e) => e.type === 'settlement' && e.periodKey === `${state.subscriptionId}:${iso(hour0 + HOUR)}`,
-		);
-		// lists 100 + guest_merge 50 + share 50 + price_drop_hook 100 + widgets 100 millicredits per hour
-		expect(entry?.amountMillicredits, JSON.stringify(statement.json.entries)).toBe(-400);
+		// charges follow the price-list and switch histories only (PLAN 0.5.3; reports fill them in 0.12 step 5)
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ status: 'active', balance: 100_000, spentThisMonth: 0 });
+		const usage = await call('GET', `/v1/merchants/${state.merchantId}/usage`, { cookie: state.merchant });
+		expect(usage.json.rows).toEqual([]);
 	});
 
 	it('delivers the real wishlist widget in the compiled website script after staff upload it ("Upload widgets")', async () => {

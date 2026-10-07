@@ -22,13 +22,14 @@ import {
 	homeOf,
 } from '../../src/console/views/sign-in.js';
 import { ConnectorsView, buildCredentials, credentialFields } from '../../src/console/views/connectors.js';
-import { CreditsView, SpendCapView } from '../../src/console/views/credits.js';
+import { CreditsView } from '../../src/console/views/credits.js';
+import { BillingBanner, DaysLeft, ProductStatusBadge } from '../../src/console/views/billing.js';
 import { KeysView } from '../../src/console/views/keys.js';
 import { ProductsView, hourlyEstimate } from '../../src/console/views/products.js';
-import { ConsoleShell, balanceState } from '../../src/console/views/shell.js';
+import { ConsoleShell } from '../../src/console/views/shell.js';
 import { SubscriptionView, availability, requestedOn } from '../../src/console/views/subscription.js';
 import { ConfigurePanel, effectiveValues, featureLocks } from '../../src/console/views/configure.js';
-import { UsageView, spendBreakdown } from '../../src/console/views/usage.js';
+import { UsageView } from '../../src/console/views/usage.js';
 import { WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
 import { createTestLogger, startMongo, testConfig } from '../helpers.js';
 import { browserOf as client, uploadPack, withMemoryStorage } from './merchant-harness.js';
@@ -137,10 +138,11 @@ describe('merchant console smoke', () => {
 
 		// ---------------------------------------------------------------- the admin seeds a listed product and credits
 		const appId = await uploadPack(staff.fetch);
-		const credit = await staff.api.post(`/v1/admin/merchants/${merchantId}/credits`, {
-			amountMillicredits: 250_000,
+		const credit = await staff.api.post(`/v1/admin/merchants/${merchantId}/receipts`, {
+			credits: 250,
+			amountPaid: 'PKR 25,000',
+			method: 'Bank transfer',
 			reference: 'bank-1',
-			note: 'wire',
 		});
 		expect(credit.ok).toBe(true);
 
@@ -173,14 +175,13 @@ describe('merchant console smoke', () => {
 				})
 			).ok,
 		).toBe(true);
-		expect((await merchant.api.request('PUT', `/v1/merchants/${merchantId}/spend-cap`, { limit: 50_000 })).ok).toBe(true);
 
 		// ---------------------------------------------------------------- render the console
 		const frame = await loaders.loadFrame(merchant.api, merchantId);
 		expect(frame.websites.map((w) => w.websiteId).sort()).toEqual([websiteId, twinId].sort());
 		const shell = text(
 			ssr(
-				<ConsoleShell me={session.me} merchantId={merchantId} websites={frame.websites} meter={frame.meter}>
+				<ConsoleShell me={session.me} merchantId={merchantId} websites={frame.websites} billing={frame.billing}>
 					<p>child</p>
 				</ConsoleShell>,
 			),
@@ -243,7 +244,7 @@ describe('merchant console smoke', () => {
 
 		const usage = await loaders.loadUsage(merchant.api, merchantId, websiteId, { from: '2026-01-01', to: '2026-12-31' });
 		expect(usage.ok).toBe(true);
-		expect(text(ssr(<UsageView {...usage} />))).toContain('Spend per day');
+		expect(text(ssr(<UsageView {...usage} />))).toContain('Spend per UTC day');
 
 		const keys = await loaders.loadKeys(merchant.api, merchantId, websiteId);
 		const keysHtml = text(ssr(<KeysView {...keys} />));
@@ -265,10 +266,7 @@ describe('merchant console smoke', () => {
 					/>,
 				),
 			),
-		).toContain('Statement');
-
-		const cap = await loaders.loadSpendCap(merchant.api, merchantId);
-		expect(text(ssr(<SpendCapView {...cap} />))).toContain('50 credits');
+		).toContain('Credit receipts');
 
 		const account = await loaders.loadAccount(merchant.api, merchantId);
 		const accountHtml = text(ssr(<AccountView {...account} />));
@@ -315,10 +313,24 @@ describe('merchant console smoke', () => {
 		expect(homeOf('admin', '/credits')).toBe('/admin');
 		expect(contactLine({ email: 'a@b.co', phone: '+1', whatsapp: '+2' })).toBe('a@b.co, +1, WhatsApp +2');
 		expect(contactLine(null)).toBe('support');
-		expect(balanceState(null)).toBeNull();
-		expect(balanceState({ balanceMillicredits: 0, burnRatePerHour: 1000, subscriptions: [] })).toBe('empty');
-		expect(balanceState({ balanceMillicredits: 5000, burnRatePerHour: 1000, hoursRemaining: 5 })).toBe('low');
-		expect(balanceState({ balanceMillicredits: 5000, burnRatePerHour: 0, hoursRemaining: null })).toBeNull();
+		// billing banners, status labels and days left (PLAN 0.5.4, 0.6)
+		expect(ssr(<BillingBanner summary={null} contact="x" />)).toBe('');
+		expect(ssr(<BillingBanner summary={{ status: 'active' }} contact="x" />)).toBe('');
+		expect(text(ssr(<BillingBanner summary={{ status: 'low_balance', daysLeft: 2 }} contact="help@x" />))).toContain(
+			'About 2 days left',
+		);
+		expect(text(ssr(<BillingBanner summary={{ status: 'low_balance', daysLeft: 0 }} contact="help@x" />))).toContain(
+			'less than 1 day',
+		);
+		expect(
+			text(ssr(<BillingBanner summary={{ status: 'grace', graceEnd: '2026-10-04T11:00:00.000Z' }} contact="help@x" />)),
+		).toContain('Grace ends');
+		expect(text(ssr(<BillingBanner summary={{ status: 'stopped' }} contact="help@x" />))).toContain('help@x');
+		expect(text(ssr(<DaysLeft summary={{ stoppedAt: '2026-10-04T11:00:00.000Z' }} />))).toContain('Stopped since');
+		expect(text(ssr(<DaysLeft summary={{ daysLeft: null }} />))).toContain('—');
+		expect(text(ssr(<DaysLeft summary={{ daysLeft: 1 }} />))).toContain('1 day');
+		expect(text(ssr(<ProductStatusBadge status="active" />))).toContain('No features on');
+		expect(text(ssr(<ProductStatusBadge status="grace" featuresOn={['a']} />))).toContain('In grace');
 		const fields = credentialFields('database', 'mongodb');
 		expect(buildCredentials('database', fields, { uri: ' mongodb+srv://u:p@h/db ' })).toEqual({
 			credentials: { uri: ' mongodb+srv://u:p@h/db ' },
@@ -354,35 +366,5 @@ describe('merchant console smoke', () => {
 		]))
 			expect(credentialFields(kind, provider).length).toBeGreaterThan(2);
 		expect(credentialFields('other', 'x')).toEqual([]);
-		const spend = spendBreakdown([
-			{
-				type: 'settlement',
-				amountMillicredits: -1750,
-				periodStart: '2026-10-01T10:00:00.000Z',
-				appId: 'app_1',
-				details: {
-					breakdown: [
-						{ kind: 'base', amount: 0 },
-						{ kind: 'element', element: 'bar', amount: 1250 },
-						{ kind: 'element', element: 'badge', amount: 500 },
-					],
-				},
-			},
-			{
-				type: 'metered',
-				amountMillicredits: -30,
-				at: '2026-10-02T00:00:00.000Z',
-				appId: 'app_1',
-				details: { lines: [{ unit: 'view', quantity: 3, amount: 30 }] },
-			},
-			{ type: 'deposit', amountMillicredits: 5000, at: '2026-10-01T00:00:00.000Z' },
-		]);
-		expect(spend.total).toBe(1780);
-		expect([...spend.byDay]).toEqual([
-			['2026-10-01', 1750],
-			['2026-10-02', 30],
-		]);
-		expect(spend.byElement.get('app_1:bar')).toBe(1250);
-		expect(spend.byUnit.get('app_1:view')).toEqual({ amount: 30, quantity: 3 });
 	});
 });

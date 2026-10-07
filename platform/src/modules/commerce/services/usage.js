@@ -1,7 +1,7 @@
 /**
  * Usage ingestion (F.9 `POST /v1/product/usage`): exactly once per `(subscriptionId, idempotencyKey)` by a unique
- * index on the append-only usage records. Records are bucketed by the UTC hour in which the Portal **received** them,
- * so a settled hour never changes; hourly counters are a fast cache that settlement re-derives from the records.
+ * index on the append-only usage records, bucketed by the UTC hour in which the Portal **received** them, with hourly
+ * counters for quotas. Usage is never charged (PLAN 0.5.3: charges do not depend on traffic).
  * A record that makes a hard-stop quota exhausted invalidates the subscription's document (feature `quota_exhausted`).
  * @module
  */
@@ -22,7 +22,7 @@ import { checkUsageRecord } from '../core/validate.js';
 export const createUsage = ({ ctx, repo, deps, subscriptions }) => {
 	/**
 	 * @param {{ appId: string, records: readonly unknown[] }} input
-	 * @returns {Promise<{ results: UsageResult[], merchants: string[] }>} `merchants`: whose usage was accepted
+	 * @returns {Promise<{ results: UsageResult[] }>}
 	 */
 	const recordUsage = async ({ appId, records }) => {
 		const now = ctx.now();
@@ -82,14 +82,11 @@ export const createUsage = ({ ctx, repo, deps, subscriptions }) => {
 			units.add(record.unit);
 			touched.set(sub._id, units);
 		}
-		/** @type {Set<string>} */
-		const merchants = new Set();
 		for (const [subscriptionId, units] of touched) {
 			const sub = /** @type {any} */ (await subs.get(subscriptionId));
-			merchants.add(String(sub.merchantId));
 			await checkQuotas(sub, units, now);
 		}
-		return { results, merchants: [...merchants] };
+		return { results };
 	};
 
 	/**

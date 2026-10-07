@@ -1662,6 +1662,31 @@ retry counts) are constants in code, not settings.
    - **Kept until later steps**: test twins, website keys, product issuers and website settings (step 5); the spend
      cap stays merchant-editable until step 3 removes it; the `issuer_request` mail stays until step 5.
    - **Two-step QR code**: drawn in the browser with `qrcode-generator` (one small dependency, no network call).
+   - **Step 3, histories until step 5**: the price-list and switch histories are written by tests only (service
+     functions `recordPriceList`, `recordProductAdded` / `recordProductRemoved`, `recordSwitches`, which step 5 calls
+     from reports). Until then today's subscriptions, plans and usage records charge nothing, the live Chatbot keeps
+     working unchanged, and the old settlement entries, holds for credits and spend caps, trials and the meter are
+     gone. Merchant suspension and resumption are already recorded.
+   - **Grace while suspended**: a grace period does not start while the merchant is suspended; it starts on resume if
+     the balance is still ≤ 0 with spend (0.5.6 lists a resume as a cause). A running grace period still ends on time.
+   - **Ties at one instant**: events stored at the same millisecond apply in the order price lists, then histories
+     (in storage order), then receipts.
+   - **Grace end kept**: the end of a grace period is stored when the check first finds it (history `grace_started`),
+     so a later Settings change or a repeated replay never moves it.
+   - **Days written by a check** are those before the current UTC day; the merchant's settled-through day and the grace
+     phase at it are stored in `commerce_billing`, with the cached balance, daily spend and state.
+   - **Billing e-mails** carry no button (no link); they show the balance, days left or the stop time and end with the
+     support contact. Credits added goes to the merchant's login e-mail only.
+   - **Receipt limits**: at most 1,000,000,000 credits per receipt (so every amount stays an exact integer); the one-time
+     key is the request's Idempotency-Key, created when the form opens.
+   - **Charges by day / merchant / product** on Credits and billing list complete UTC days written by checks; today is
+     live on each merchant's own pages.
+   - **Status changes reach products** (`status.changed`, restart after a receipt) with the notices of 0.4.12 in step
+     5; until then a stop is shown in the Portal only.
+   - **`@ss/entitlements`** keeps its old settlement and spend helpers until the shared kit is replaced (step 4); the
+     Portal no longer uses them.
+   - **Admin Overview** money totals (credits added and spent this month) and the 30-day home charts are left for the
+     Overview work; step 3 shows them on Credits and billing, the merchant page and Usage and credits.
 
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 

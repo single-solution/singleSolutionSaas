@@ -5,18 +5,7 @@
  * @module
  */
 import { useState } from 'react';
-import {
-	Badge,
-	Breadcrumbs,
-	ButtonLink,
-	Callout,
-	ErrorState,
-	Icon,
-	copyText,
-	describeProblem,
-	parseCredits,
-	problemCode,
-} from '@ss/ui';
+import { Badge, Breadcrumbs, ButtonLink, Callout, ErrorState, Icon, copyText, describeProblem, problemCode } from '@ss/ui';
 import { can } from '../../../infra/rbac.js';
 import { ADMIN } from '../../../texts/console.js';
 import { Link } from '../../link.js';
@@ -90,22 +79,6 @@ export function IdChip({ id, label }) {
 		</span>
 	);
 }
-
-/**
- * Credits typed by staff, optionally signed (`-12.5` for a negative adjustment) → integer millicredits.
- * @param {string} input
- * @param {{ allowNegative?: boolean }} [options]
- * @returns {{ ok: true, value: number } | { ok: false, message: string }}
- */
-export const parseSignedCredits = (input, { allowNegative = false } = {}) => {
-	const text = String(input ?? '').trim();
-	const negative = text.startsWith('-');
-	if (negative && !allowNegative) return { ok: false, message: 'Enter a positive amount.' };
-	const parsed = parseCredits(negative ? text.slice(1) : text);
-	if (!parsed.ok) return parsed;
-	if (parsed.value === 0) return { ok: false, message: 'The amount cannot be 0.' };
-	return { ok: true, value: negative ? -parsed.value : parsed.value };
-};
 
 /**
  * An admin's role badge.

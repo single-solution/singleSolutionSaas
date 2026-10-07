@@ -92,20 +92,32 @@ export const loadMerchants = async (api, filter = {}) => {
 	const list = await api.get(paths.merchants({ status, q, cursor: pick(filter.cursor, CURSOR), limit: 50 }));
 	const failed = firstFailure(list);
 	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), filter: { status, q }, page: pageOf(list) };
+	const page = pageOf(list);
+	// status, balance and daily spend of the merchants on screen (each one checked, PLAN 0.6)
+	const ids = page.items.map((m) => String(m.merchantId));
+	const billing = ids.length > 0 ? itemsOf(await api.get(paths.billingMerchants(ids))) : [];
+	return {
+		ok: /** @type {const} */ (true),
+		filter: { status, q },
+		page,
+		billing: Object.fromEntries(billing.map((b) => [b.merchantId, b])),
+	};
 };
 
 /**
- * Merchant page: the merchant, its websites with their products, balance, receipts and activity.
+ * Merchant page: the merchant, its websites with their products, the billing summary (checked), receipts, day charges
+ * and activity.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadMerchant = async (api, merchantId) => {
-	const [merchant, websites, subscriptions, balance, activity, catalog] = await Promise.all([
+	const [merchant, websites, subscriptions, billing, receipts, dayCharges, activity, catalog] = await Promise.all([
 		api.get(paths.merchant(merchantId)),
 		api.get(paths.websites(merchantId)),
 		api.get(paths.subscriptions(merchantId)),
-		api.get(paths.balance(merchantId)),
+		api.get(paths.billing(merchantId)),
+		api.get(paths.receipts(merchantId)),
+		api.get(paths.dayCharges(merchantId)),
 		api.get(paths.merchantActivity(merchantId)),
 		api.get(paths.catalog()),
 	]);
@@ -116,7 +128,9 @@ export const loadMerchant = async (api, merchantId) => {
 		merchant: /** @type {any} */ (merchant.ok ? merchant.data : {}),
 		websites: itemsOf(websites).filter((w) => w.env === 'live'),
 		subscriptions: itemsOf(subscriptions),
-		balance: orElse(balance, null),
+		billing: /** @type {any} */ (orElse(billing, null)),
+		receipts: itemsOf(receipts),
+		dayCharges: itemsOf(dayCharges),
 		activity: pageOf(activity),
 		catalog: itemsOf(catalog),
 	};
@@ -228,35 +242,33 @@ export const loadSubscription = async (api, subscriptionId) => {
 	};
 };
 
-/**
- * Finance overview: alerts.
- * @param {ConsoleApi} api
- */
-export const loadFinance = async (api) => {
-	const alerts = await api.get(paths.alerts());
-	const failed = firstFailure(alerts);
-	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), alerts: itemsOf(alerts) };
-};
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Ledger of one merchant (first page, ascending `seq`), balance and profile.
+ * Credits and billing (PLAN 0.8.2): all receipts (filter by merchant, UTC days, method), charges by day, merchant or
+ * product, and the merchants that need attention (checked now).
  * @param {ConsoleApi} api
- * @param {string} merchantId
+ * @param {{ merchantId?: string, from?: string, to?: string, method?: string, by?: string }} [filter]
  */
-export const loadLedger = async (api, merchantId) => {
-	const [merchant, balance, ledger] = await Promise.all([
-		api.get(paths.merchant(merchantId)),
-		api.get(paths.balance(merchantId)),
-		api.get(paths.ledger(merchantId, { limit: 100 })),
+export const loadBilling = async (api, filter = {}) => {
+	const merchantId = pick(filter.merchantId, ID.merchant);
+	const from = pick(filter.from, DAY);
+	const to = pick(filter.to, DAY);
+	const method = pick(filter.method?.trim(), /^[^<>]{1,60}$/);
+	const by = oneOf(filter.by, ['day', 'merchant', 'product']) ?? 'day';
+	const [receipts, charges, attention] = await Promise.all([
+		api.get(paths.allReceipts({ merchantId, from, to, method })),
+		api.get(paths.charges({ by, from, to })),
+		api.get(paths.attention()),
 	]);
-	const failed = firstFailure(merchant, ledger);
+	const failed = firstFailure(receipts);
 	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
-		merchant: /** @type {any} */ (merchant.ok ? merchant.data : null),
-		balance: orElse(balance, null),
-		ledger: pageOf(ledger),
+		filter: { merchantId, from, to, method, by },
+		receipts: itemsOf(receipts),
+		charges: /** @type {any} */ (orElse(charges, null)),
+		attention: itemsOf(attention),
 	};
 };
 

@@ -8,7 +8,7 @@
  *   allowlist; the Portal's connection check calls its /models) → issues a pk_ key → a guest opens a conversation
  *   through the product REST from the website's origin → the product resolves the merchant's AI credentials through
  *   the Portal and the fake provider answers → conversation and messages in the merchant's own database → ai_token
- *   usage reported → hourly settlement charges the elements and the metered tokens.
+ *   usage reported → the billing is read (usage is never charged, PLAN 0.5.3).
  *
  * The Portal is served over http on 127.0.0.1 (allowed outside production); the product and the AI provider over
  * https on localhost with a throw-away certificate trusted for this process only.
@@ -422,9 +422,9 @@ describe.skipIf(!hasOpenssl)('Chatbot & Support on the real Portal', () => {
 		});
 		expect(website.status, JSON.stringify(website.json)).toBe(201);
 		state.websiteId = website.json.website.websiteId;
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-topup-1', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-topup-1' },
 		});
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
@@ -536,36 +536,14 @@ describe.skipIf(!hasOpenssl)('Chatbot & Support on the real Portal', () => {
 		expect((await ctx.product.product.usage.flush()).sent).toBe(0);
 	});
 
-	it('settles complete hours: elements and metered AI tokens are charged in credits', async () => {
+	it('shows the billing: usage records are never charged', async () => {
 		const { call, state, clock } = ctx;
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.set(hour0 + 2 * HOUR + 5 * 60_000);
-		// no cron: reading the statement settles the merchant's complete hours first
-		const statement = await call(
-			'GET',
-			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(new Date(hour0 - HOUR).toISOString())}&to=${encodeURIComponent(new Date(clock.now() + HOUR).toISOString())}`,
-			{ cookie: state.merchant },
-		);
-		expect(statement.status, JSON.stringify(statement.json)).toBe(200);
-		const settlements = statement.json.entries.filter(
-			(/** @type {any} */ e) => (e.type === 'settlement' || e.type === 'metered') && e.subscriptionId === state.subscriptionId,
-		);
-		const iso = (/** @type {number} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const summary = JSON.stringify(
-			statement.json.entries.map((/** @type {any} */ e) => [e.type, e.periodKey, e.amountMillicredits]),
-		);
-		// starter: window 400 + launcher 100 + ai_replies 500 + knowledge 200 + handoff 100 + lead_capture 150 + moderation 100
-		const second = settlements.find((/** @type {any} */ e) => e.periodKey === `${state.subscriptionId}:${iso(hour0 + HOUR)}`);
-		expect(second?.amountMillicredits, summary).toBe(-1550);
-		// ai_token: 260 012 tokens − 250 000 included = 10 012 → 1 millicredit per 1 000 → 10; conversation: 1 of 300 included → 0
-		const metered = settlements.find((/** @type {any} */ e) => e.periodKey === `${state.subscriptionId}:${iso(hour0)}:metered`);
-		expect(metered?.amountMillicredits, summary).toBe(-10);
-		const balance = await call('GET', `/v1/merchants/${state.merchantId}/balance`, { cookie: state.merchant });
-		const charged = settlements.reduce((/** @type {number} */ sum, /** @type {any} */ e) => sum + e.amountMillicredits, 0);
-		const trial = statement.json.entries
-			.filter((/** @type {any} */ e) => e.type === 'adjustment')
-			.reduce((/** @type {number} */ sum, /** @type {any} */ e) => sum + e.amountMillicredits, 0);
-		expect(charged).toBeLessThan(0);
-		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
+		// charges follow the price-list and switch histories only (PLAN 0.5.3; reports fill them in 0.12 step 5)
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ status: 'active', balance: 100_000, spentThisMonth: 0 });
+		const usage = await call('GET', `/v1/merchants/${state.merchantId}/usage`, { cookie: state.merchant });
+		expect(usage.json.rows).toEqual([]);
 	});
 });

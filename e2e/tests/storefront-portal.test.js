@@ -8,8 +8,7 @@
  *   Active → listed in the catalog with its 13 elements → merchant signs up, adds a website, gets credits, subscribes
  *   (pro) → compile the website bundle → the immutable loader holds the plan's default elements, the pack modules are
  *   served byte for byte → the compiled loader runs in a page (JSDOM) and mounts the real grid, filters and theme from
- *   the served modules → switching on every add-on compiles a new live bundle → hourly settlement charges the
- *   subscription's priced elements.
+ *   the served modules → switching on every add-on compiles a new live bundle → the billing is read (usage is never charged, PLAN 0.5.3).
  * System test (the `e2e/` workspace): it runs the Portal (`@ss/platform/testing`) and the pack (`@ss/product-storefront/pack`).
  */
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -251,9 +250,9 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		});
 		expect(website.status, JSON.stringify(website.json)).toBe(201);
 		state.websiteId = website.json.website.websiteId;
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-topup-1', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-topup-1' },
 		});
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
@@ -412,26 +411,14 @@ describe('Storefront Blocks delivered by the real Portal', () => {
 		expect((await call('POST', `${site}/delivery/compile`, { cookie: state.merchant })).status).toBe(200);
 	});
 
-	it('settles complete hours: the priced elements are charged in credits', async () => {
+	it('shows the billing: usage records are never charged', async () => {
 		const { call, state, clock } = ctx;
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		// two complete hours after the subscription's hour, past the settlement lag (2 min): independent of the minute
-		clock.advance(hour0 + 2 * HOUR + 5 * 60_000 - clock.now());
-		// no cron: reading the statement settles the merchant's complete hours first
-		const from = encodeURIComponent(new Date(hour0 - HOUR).toISOString());
-		const to = encodeURIComponent(new Date(clock.now() + HOUR).toISOString());
-		const statement = await call('GET', `/v1/merchants/${state.merchantId}/statement?from=${from}&to=${to}`, {
-			cookie: state.merchant,
-		});
-		expect(statement.status, JSON.stringify(statement.json)).toBe(200);
-		const settlements = statement.json.entries.filter(
-			(/** @type {any} */ entry) => entry.type === 'settlement' && entry.subscriptionId === state.subscriptionId,
-		);
-		const iso = (/** @type {number} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const second = settlements.find(
-			(/** @type {any} */ entry) => entry.periodKey === `${state.subscriptionId}:${iso(hour0 + HOUR)}`,
-		);
-		// pro switched on: grid 200 + filters 150 + hero 100 millicredits per hour (theme and notice bar are free)
-		expect(second?.amountMillicredits, JSON.stringify(settlements)).toBe(-450);
+		// charges follow the price-list and switch histories only (PLAN 0.5.3; reports fill them in 0.12 step 5)
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ status: 'active', balance: 100_000, spentThisMonth: 0 });
+		const usage = await call('GET', `/v1/merchants/${state.merchantId}/usage`, { cookie: state.merchant });
+		expect(usage.json.rows).toEqual([]);
 	});
 });

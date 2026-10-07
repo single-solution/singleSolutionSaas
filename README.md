@@ -266,7 +266,7 @@ with real values is kept in the repository folder: `.gitignore` ignores every `.
   5.1 MB (each console page); the proxy 1.6 MB. No test or CLI code is traced.
 - **Request body (limit 4.5 MB).** Every body cap is at most 3.9 MB (JSON default 1 MB; CSV/JSON imports 3.9 MB; Portal
   pack uploads 2 MB); photos and files go straight to storage with presigned URLs.
-- **Duration.** No `maxDuration` is needed: work after a response is bounded (Portal jobs 8 s, lazy settlement 2 s,
+- **Duration.** No `maxDuration` is needed: work after a response is bounded (Portal jobs 8 s,
   staff "Retry now" 8 s and 100 deliveries, products one batch per queue and website), outbound calls time out in
   5–15 s, and there are no crons.
 
@@ -276,13 +276,12 @@ with real values is kept in the repository folder: `.gitignore` ignores every `.
   `CRON_SECRET`, no timer, no polling and no background loop. Running nothing costs nothing.
 - **Work happens when something happens.** An ingested event is delivered right after the request that ingested it; a
   failed delivery is retried when the next event goes to that product or the product next calls the Portal (or staff
-  press "Retry now"). Billing is computed when read: a merchant's complete hours settle whenever its balance, meter or
-  statement is read, a product fetches an entitlement document or reports usage for one of its websites, or a
-  subscription changes — so low-balance and spend-limit holds reach the products' entitlement documents. Products
+  press "Retry now"). Billing is checked on use: opening a Portal page that shows a merchant charges its
+  hours since the last check, writes complete UTC days and works out low balance, grace and stop (PLAN 0.5.7). Products
   treat expiries on read, clean up when rows are touched (or by TTL indexes) and put merchant-started work behind
   dashboard buttons. Connectors are checked when saved or resolved.
 - **Offline documents.** A product holding a still-valid entitlement document (10 minutes, plus its cache) may keep
-  serving until it next refreshes it; a hold therefore takes effect within minutes, without any timer.
+  serving until it next refreshes it; a change therefore takes effect within minutes, without any timer.
 - **Small connection pools.** About 15 deployments share M0's ~500 connections, so pools are a fixed 5 per instance (Portal
   and products), merchant databases 3, and clients are cached on
   `globalThis` and reused across requests.

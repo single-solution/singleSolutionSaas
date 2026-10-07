@@ -5,15 +5,14 @@
 import { defineCollection } from '../../infra/db.js';
 
 export const SUBSCRIPTIONS = 'commerce_subscriptions';
-export const TIMELINE = 'commerce_timeline';
-export const PAUSES = 'commerce_pauses';
 export const DOCUMENTS = 'commerce_documents';
 export const USAGE = 'commerce_usage';
 export const COUNTERS = 'commerce_usage_counters';
 export const LEDGER = 'commerce_ledger';
 export const ACCOUNTS = 'commerce_accounts';
-export const SPEND_CAPS = 'commerce_spend_caps';
-export const ALERTS = 'commerce_alerts';
+export const PRICE_LISTS = 'commerce_price_lists';
+export const HISTORY = 'commerce_history';
+export const BILLING = 'commerce_billing';
 
 const DAY_S = 86_400;
 
@@ -23,7 +22,7 @@ export const collections = Object.freeze([
 		name: SUBSCRIPTIONS,
 		tenant: 'merchant',
 		description:
-			'Subscriptions (website × app): plan, price-book pins, holds/status, element switches, settlement cursor. `live` is set while not cancelled.',
+			'Subscriptions (website × app): plan, price-book pins, holds/status, element switches. `live` is set while not cancelled.',
 		indexes: [
 			{
 				keys: { websiteId: 1, appId: 1 },
@@ -34,23 +33,7 @@ export const collections = Object.freeze([
 			{ keys: { websiteId: 1, createdAt: 1 }, name: 'by_website' },
 			{ keys: { appId: 1, live: 1 }, name: 'by_app' },
 			{ keys: { merchantId: 1, status: 1 }, name: 'by_merchant_status' },
-			{ keys: { settlementDone: 1, settledThrough: 1, merchantId: 1, _id: 1 }, name: 'settlement_due' },
 		],
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: TIMELINE,
-		tenant: 'merchant',
-		appendOnly: true,
-		description: 'Billable element snapshots { subscriptionId, at, elements[] } written whenever the effective set changes.',
-		indexes: [{ keys: { merchantId: 1, subscriptionId: 1, at: 1 }, name: 'by_subscription_at' }],
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: PAUSES,
-		tenant: 'merchant',
-		description: 'Pause intervals per hold { subscriptionId, reason, from, to|null } (paused time is never billed).',
-		indexes: [{ keys: { merchantId: 1, subscriptionId: 1, from: 1 }, name: 'by_subscription_from' }],
 	}),
 	defineCollection({
 		module: 'commerce',
@@ -75,7 +58,7 @@ export const collections = Object.freeze([
 		module: 'commerce',
 		name: COUNTERS,
 		tenant: 'merchant',
-		description: 'Hourly usage counters per subscription × unit (_id = sub:unit:hour); repaired from records at settlement.',
+		description: 'Hourly usage counters per subscription × unit (_id = sub:unit:hour), for quotas.',
 		indexes: [{ keys: { merchantId: 1, subscriptionId: 1, unit: 1, hour: 1 }, name: 'by_subscription_unit_hour' }],
 	}),
 	defineCollection({
@@ -83,41 +66,48 @@ export const collections = Object.freeze([
 		name: LEDGER,
 		tenant: 'merchant',
 		appendOnly: true,
-		description: 'Append-only, hash-chained merchant ledger in integer millicredits.',
+		description:
+			'Append-only, hash-chained merchant ledger in integer millicredits: receipts and day charges only (PLAN 0.5.7 b).',
 		indexes: [
 			{ keys: { merchantId: 1, seq: 1 }, name: 'chain', unique: true },
 			{ keys: { merchantId: 1, entryKey: 1 }, name: 'entry_key', unique: true },
-			{
-				keys: { periodKey: 1 },
-				name: 'period_key',
-				unique: true,
-				partialFilterExpression: { periodKey: { $type: 'string' } },
-			},
-			{ keys: { merchantId: 1, at: 1 }, name: 'by_at' },
-			{ keys: { merchantId: 1, subscriptionId: 1, periodStart: 1 }, name: 'by_subscription_period' },
-			{ keys: { merchantId: 1, type: 1, periodStart: 1 }, name: 'by_type_period' },
+			{ keys: { merchantId: 1, type: 1, at: 1 }, name: 'by_type_at' },
+			{ keys: { merchantId: 1, type: 1, day: 1 }, name: 'by_type_day' },
+			{ keys: { type: 1, at: -1 }, name: 'receipts_by_at' },
+			{ keys: { type: 1, day: 1 }, name: 'charges_by_day' },
 		],
 	}),
 	defineCollection({
 		module: 'commerce',
 		name: ACCOUNTS,
 		tenant: 'merchant',
-		description: 'Merchant credit account (_id = merchantId): cached balance, chain head (seq, headHash).',
+		description: 'Merchant ledger account (_id = merchantId): written balance, chain head (seq, headHash).',
 	}),
 	defineCollection({
 		module: 'commerce',
-		name: SPEND_CAPS,
-		tenant: 'merchant',
-		description: 'Optional monthly spend cap per merchant (_id = merchantId): limit in millicredits per UTC month.',
-	}),
-	defineCollection({
-		module: 'commerce',
-		name: ALERTS,
+		name: PRICE_LISTS,
 		appendOnly: true,
-		description: 'Money alerts (chain breaks, unpriced hours) for staff review.',
+		description: 'Price lists per product, stamped with Portal time: { appId, at, features: [{ key, name, price }] }.',
+		indexes: [{ keys: { appId: 1, at: 1 }, name: 'by_app_at' }],
+	}),
+	defineCollection({
+		module: 'commerce',
+		name: HISTORY,
+		tenant: 'merchant',
+		appendOnly: true,
+		description:
+			'Money histories per merchant, stamped with Portal time: feature reports (switches) per website × product and status changes (added, removed, suspended, resumed, grace_started, stopped).',
 		indexes: [
-			{ keys: { at: -1 }, name: 'by_at' },
-			{ keys: { merchantId: 1, at: -1 }, name: 'by_merchant_at' },
+			{ keys: { merchantId: 1, at: 1, _id: 1 }, name: 'by_merchant_at' },
+			{ keys: { key: 1 }, name: 'once', unique: true, partialFilterExpression: { key: { $type: 'string' } } },
 		],
+	}),
+	defineCollection({
+		module: 'commerce',
+		name: BILLING,
+		tenant: 'merchant',
+		description:
+			'Billing state per merchant (_id = merchantId): settled-through day, grace/stop phase there, cached balance, daily spend and state (e-mails are sent once per state).',
+		indexes: [{ keys: { state: 1, merchantId: 1 }, name: 'by_state' }],
 	}),
 ]);

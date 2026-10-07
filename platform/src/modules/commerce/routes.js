@@ -2,16 +2,19 @@
  * HTTP routes of the `commerce` module: thin adapters from requests to the service.
  *
  * - Product (F.9, `auth: 'product'`): `GET /v1/product/entitlements`, `POST /v1/product/usage`.
- * - Merchant console (`merchant` or `staff`): subscriptions, element switches, plan, pause/resume/cancel, balance,
- *   meter, statement, monthly spend cap. Subscription routes authorise after the lookup with the subscription's website.
- * - Admin (`staff`): credits, adjustments, refunds, ledger + verification, alerts.
+ * - Consoles (`merchant` or `admin`): subscriptions, element switches, plan, pause/resume/cancel (until PLAN 0.12 step
+ *   5); the billing summary, usage and receipts of a merchant. Subscription routes authorise after the lookup with the
+ *   subscription's website. Every route that shows a merchant's money runs the check first (PLAN 0.5.7).
+ * - Admin: add credits (receipt), a merchant's day charges, all receipts, charges by day / merchant / product, merchants
+ *   that need attention, and the billing of the merchants on a page.
  * @module
  */
-import { defineRoute, ok, created, noContent, paginate, problem } from '../../infra/http.js';
+import { defineRoute, ok, created, problem } from '../../infra/http.js';
 import {
+	checkDayRange,
 	checkElementSwitch,
-	checkCreditOperation,
 	checkPlanChange,
+	checkReceipt,
 	checkReason,
 	checkSubscribe,
 	checkUsageBatch,
@@ -37,8 +40,9 @@ const ownMerchant = (c) => {
 
 /**
  * @param {CommerceService} service
+ * @param {() => number} now the Portal clock
  */
-export const commerceRoutes = (service) => {
+export const commerceRoutes = (service, now) => {
 	/**
 	 * Load a subscription of the path merchant and authorise `permission` on its website.
 	 * @param {RequestContext} c @param {string} permission
@@ -70,31 +74,6 @@ export const commerceRoutes = (service) => {
 						...callerOf(c),
 					}),
 				});
-			},
-		});
-
-	/**
-	 * @param {'credit' | 'adjustment' | 'refund'} kind
-	 * @param {string} segment
-	 */
-	const staffCredit = (kind, segment) =>
-		defineRoute({
-			method: 'POST',
-			path: `/v1/admin/merchants/:merchantId/${segment}`,
-			auth: 'admin',
-			permission: 'credits.add',
-			idempotent: true,
-			handler: async (c) => {
-				const checked = checkCreditOperation(kind, c.body);
-				if (!checked.ok) return invalid(checked.errors, 'The credit operation is invalid.');
-				const input = { merchantId: c.params.merchantId ?? '', ...checked.value, ...callerOf(c) };
-				const out =
-					kind === 'credit'
-						? await service.addCredits(input)
-						: kind === 'adjustment'
-							? await service.adjust(input)
-							: await service.refund(input);
-				return out.duplicate ? ok(out) : created(out);
 			},
 		});
 
@@ -203,83 +182,96 @@ export const commerceRoutes = (service) => {
 		lifecycle('cancel'),
 		defineRoute({
 			method: 'GET',
-			path: '/v1/merchants/:merchantId/balance',
+			path: '/v1/merchants/:merchantId/billing',
 			auth: ['merchant', 'admin'],
 			permission: 'billing.read',
-			handler: async (c) => service.balance(c.params.merchantId ?? ''),
+			handler: async (c) => service.billingSummary(c.params.merchantId ?? ''),
 		}),
 		defineRoute({
 			method: 'GET',
-			path: '/v1/merchants/:merchantId/meter',
-			auth: ['merchant', 'admin'],
-			permission: 'billing.read',
-			handler: async (c) => service.meter(c.params.merchantId ?? ''),
-		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/merchants/:merchantId/statement',
+			path: '/v1/merchants/:merchantId/usage',
 			auth: ['merchant', 'admin'],
 			permission: 'billing.read',
 			resource: (c) => ({ merchantId: c.params.merchantId ?? null, websiteId: c.query.websiteId ?? null }),
-			handler: async (c) => service.statementForQuery(c.params.merchantId ?? '', c.query),
+			handler: async (c) => {
+				const checked = checkDayRange(c.query, now());
+				if (!checked.ok) return invalid(checked.errors, 'The usage range is invalid.');
+				return service.usage(c.params.merchantId ?? '', checked.value);
+			},
 		}),
 		defineRoute({
 			method: 'GET',
-			path: '/v1/merchants/:merchantId/spend-cap',
+			path: '/v1/merchants/:merchantId/receipts',
 			auth: ['merchant', 'admin'],
 			permission: 'billing.read',
-			handler: async (c) => service.spendCap(c.params.merchantId ?? ''),
-		}),
-		defineRoute({
-			method: 'PUT',
-			path: '/v1/merchants/:merchantId/spend-cap',
-			auth: ['merchant', 'admin'],
-			permission: 'settings.write',
-			handler: async (c) => service.setSpendCap(c.params.merchantId ?? '', c.body, callerOf(c)),
-		}),
-		defineRoute({
-			method: 'DELETE',
-			path: '/v1/merchants/:merchantId/spend-cap',
-			auth: ['merchant', 'admin'],
-			permission: 'settings.write',
-			handler: async (c) => {
-				await service.removeSpendCap(c.params.merchantId ?? '', callerOf(c));
-				return noContent();
-			},
+			handler: async (c) => ({
+				items: await service.receiptsOf(c.params.merchantId ?? '', { forAdmin: c.actor?.type === 'admin' }),
+			}),
 		}),
 
 		// ---------------------------------------------------------------- admin console
-		staffCredit('credit', 'credits'),
-		staffCredit('adjustment', 'adjustments'),
-		staffCredit('refund', 'refunds'),
 		defineRoute({
-			method: 'GET',
-			path: '/v1/admin/merchants/:merchantId/ledger',
+			method: 'POST',
+			path: '/v1/admin/merchants/:merchantId/receipts',
 			auth: 'admin',
-			permission: 'billing.read',
+			permission: 'credits.add',
+			idempotent: true,
 			handler: async (c) => {
-				const page = paginate(
-					{ cursor: c.query.cursor, limit: c.query.limit, url: c.request.url },
-					{ defaultLimit: 100, maxLimit: 500 },
-				);
-				const afterSeq = typeof page.after === 'number' ? page.after : null;
-				const items = await service.ledgerEntries(c.params.merchantId ?? '', { afterSeq, limit: page.fetchLimit });
-				return page.respond(items, (e) => e.seq);
+				const checked = checkReceipt(c.body);
+				if (!checked.ok) return invalid(checked.errors, 'The receipt is invalid.');
+				return created(await service.addReceipt({ merchantId: c.params.merchantId ?? '', ...checked.value, ...callerOf(c) }));
 			},
 		}),
 		defineRoute({
 			method: 'GET',
-			path: '/v1/admin/merchants/:merchantId/ledger/verification',
+			path: '/v1/admin/merchants/:merchantId/day-charges',
 			auth: 'admin',
 			permission: 'billing.read',
-			handler: async (c) => service.verifyChain(c.params.merchantId ?? ''),
+			handler: async (c) => ({ items: await service.dayChargesOf(c.params.merchantId ?? '') }),
 		}),
 		defineRoute({
 			method: 'GET',
-			path: '/v1/admin/commerce/alerts',
+			path: '/v1/admin/billing/merchants',
 			auth: 'admin',
 			permission: 'billing.read',
-			handler: async (c) => ({ items: await service.alerts({ merchantId: c.query.merchantId ?? null }) }),
+			handler: async (c) => {
+				const ids = String(c.query.ids ?? '')
+					.split(',')
+					.filter((id) => /^mer_[a-z0-9]+$/.test(id));
+				return { items: await service.billingSummaries(ids) };
+			},
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/billing/attention',
+			auth: 'admin',
+			permission: 'billing.read',
+			handler: async () => ({ items: await service.attention() }),
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/billing/receipts',
+			auth: 'admin',
+			permission: 'billing.read',
+			handler: async (c) => {
+				const checked = checkDayRange(c.query, now());
+				if (!checked.ok) return invalid(checked.errors, 'The filter is invalid.');
+				return { items: await service.allReceipts(checked.value) };
+			},
+		}),
+		defineRoute({
+			method: 'GET',
+			path: '/v1/admin/billing/charges',
+			auth: 'admin',
+			permission: 'billing.read',
+			handler: async (c) => {
+				const by = c.query.by ?? 'day';
+				if (by !== 'day' && by !== 'merchant' && by !== 'product')
+					return invalid([{ path: '/by', message: 'by must be day, merchant or product' }], 'The grouping is invalid.');
+				const checked = checkDayRange(c.query, now());
+				if (!checked.ok) return invalid(checked.errors, 'The range is invalid.');
+				return service.charges({ from: checked.value.from, to: checked.value.to, by });
+			},
 		}),
 	];
 };

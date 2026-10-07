@@ -330,15 +330,15 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 
 		// ---------------------------------------------------------------- the frame: website switcher, banners, sign out
 		const frame = await loaders.loadFrame(e.api, beta.merchantId);
-		const low = { balanceMillicredits: 5000, burnRatePerHour: 1000, hoursRemaining: 5, subscriptions: [] };
+		const low = { status: 'low_balance', balance: 5000, dailySpend: 24_000, daysLeft: 0 };
 		render(
 			<PathnameContext.Provider value={`/websites/${site.twin.websiteId}/keys`}>
 				<ConsoleShell
 					me={beta.me}
 					merchantId={beta.merchantId}
 					websites={frame.websites}
-					meter={low}
-					branding={{ name: 'Acme', accent: '#112233' }}
+					billing={low}
+					branding={{ name: 'Acme', accent: '#112233', support: { email: 'help@ss.test' } }}
 					notifications={[
 						{ kind: 'identity_issuer_request', websiteId: site.website.websiteId, domain: 'beta.example.com', request: {} },
 					]}>
@@ -346,7 +346,7 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 				</ConsoleShell>
 			</PathnameContext.Provider>,
 		);
-		expect(shows('child') && shows('of credits left') && shows('Acme')).toBe(true);
+		expect(shows('child') && shows('Credits are running low') && shows('help@ss.test') && shows('Acme')).toBe(true);
 		expect(shows('beta.example.com · test')).toBe(true);
 		const [siteSelect] = /** @type {HTMLSelectElement[]} */ ([...document.querySelectorAll('select')]);
 		type(/** @type {HTMLSelectElement} */ (siteSelect), '');
@@ -364,12 +364,12 @@ describe('merchant console interactions (jsdom): sign-in, Account, websites, fra
 					me={beta.me}
 					merchantId={beta.merchantId}
 					websites={frame.websites}
-					meter={{ balanceMillicredits: 0, burnRatePerHour: 1000, subscriptions: [{}] }}>
+					billing={{ status: 'stopped', balance: -1000, dailySpend: 24_000, stoppedAt: '2026-10-04T11:00:00.000Z' }}>
 					<p>x</p>
 				</ConsoleShell>
 			</PathnameContext.Provider>,
 		);
-		expect(shows('Your credit balance is empty')).toBe(true);
+		expect(shows('Products are stopped')).toBe(true);
 		cleanup();
 		render(<QrCode text="otpauth://totp/x" size={64} />);
 		expect(document.querySelector('svg')?.getAttribute('width')).toBe('64');

@@ -8,7 +8,7 @@
  *   sends order.completed@1 to the Portal Event Hub → signed delivery to the product → review request in the merchant's
  *   own database → the verified customer (the website's own login token, verified offline from the signed entitlement)
  *   submits a review with the pk_ key → auto-approved by the default rules@1 rule → rating summary and Product JSON-LD
- *   reflect it → usage (`review`) reported → hourly settlement charges credits. Plus the widgets: staff upload the
+ *   reflect it → usage (`review`) reported → the billing is read (usage is never charged, PLAN 0.5.3). Plus the widgets: staff upload the
  *   `ss pack build` output ("Upload widgets") and the compiled website script mounts the real reviews widget, bound to
  *   the product's base URL.
  *
@@ -413,12 +413,12 @@ describe.skipIf(!hasOpenssl)('Reviews & Ratings on the real Portal', () => {
 			},
 		});
 		expect(issuer.status, JSON.stringify(issuer.json)).toBe(200);
-		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/credits`, {
+		const credits = await call('POST', `/v1/admin/merchants/${state.merchantId}/receipts`, {
 			cookie: state.staff,
-			body: { amountMillicredits: 100_000, reference: 'e2e-topup-1', note: 'end-to-end test credits' },
+			body: { credits: 100, amountPaid: 'PKR 10,000', method: 'Bank transfer', reference: 'e2e-topup-1' },
 		});
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
-		expect(credits.json.balanceMillicredits).toBe(100_000);
+		expect(credits.json.summary.balance).toBe(100_000);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
 			cookie: state.staff,
 			body: { appId: state.appId, planCode: 'starter' },
@@ -568,41 +568,15 @@ describe.skipIf(!hasOpenssl)('Reviews & Ratings on the real Portal', () => {
 		expect(await ctx.product.product.usage.flush()).toMatchObject({ sent: 0 });
 	});
 
-	it('settles complete hours: the subscription is charged in credits', async () => {
+	it('shows the billing: usage records are never charged', async () => {
 		const { call, state, clock } = ctx;
-		const hour0 = Math.floor(state.subscribedAt / HOUR) * HOUR;
-		clock.set(hour0 + 2 * HOUR + 5 * 60_000);
-		// no cron: reading the statement settles the merchant's complete hours first
-		const statement = await call(
-			'GET',
-			`/v1/merchants/${state.merchantId}/statement?from=${encodeURIComponent(new Date(hour0 - HOUR).toISOString())}&to=${encodeURIComponent(new Date(clock.now() + HOUR).toISOString())}`,
-			{ cookie: state.merchant },
-		);
-		expect(statement.status, JSON.stringify(statement.json)).toBe(200);
-		const settlements = statement.json.entries.filter(
-			(/** @type {any} */ entry) => entry.type === 'settlement' && entry.subscriptionId === state.subscriptionId,
-		);
-		const iso = (/** @type {any} */ ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
-		const second = settlements.find(
-			(/** @type {any} */ entry) => entry.periodKey === `${state.subscriptionId}:${iso(hour0 + HOUR)}`,
-		);
-		// starter: collection 300 + moderation 200 + content 100 + display 200 + structured_data 100 millicredits per hour
-		expect(
-			second?.amountMillicredits,
-			JSON.stringify({
-				entries: statement.json.entries.map((/** @type {any} */ e) => [e.type, e.periodKey, e.amountMillicredits]),
-			}),
-		).toBe(-900);
-		expect(settlements.some((/** @type {any} */ entry) => entry.periodKey === `${state.subscriptionId}:${iso(hour0)}`)).toBe(
-			true,
-		);
-		const balance = await call('GET', `/v1/merchants/${state.merchantId}/balance`, { cookie: state.merchant });
-		const charged = settlements.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
-		const trial = statement.json.entries
-			.filter((/** @type {any} */ entry) => entry.type === 'adjustment')
-			.reduce((/** @type {any} */ sum, /** @type {any} */ entry) => sum + entry.amountMillicredits, 0);
-		expect(charged).toBeLessThan(0);
-		expect(balance.json.balanceMillicredits).toBe(100_000 + trial + charged);
+		// charges follow the price-list and switch histories only (PLAN 0.5.3; reports fill them in 0.12 step 5)
+		clock.set(clock.now() + 2 * HOUR);
+		const billing = await call('GET', `/v1/merchants/${state.merchantId}/billing`, { cookie: state.merchant });
+		expect(billing.status, JSON.stringify(billing.json)).toBe(200);
+		expect(billing.json).toMatchObject({ status: 'active', balance: 100_000, spentThisMonth: 0 });
+		const usage = await call('GET', `/v1/merchants/${state.merchantId}/usage`, { cookie: state.merchant });
+		expect(usage.json.rows).toEqual([]);
 	});
 
 	it('delivers the real reviews widget in the compiled website script after staff upload it ("Upload widgets")', async () => {

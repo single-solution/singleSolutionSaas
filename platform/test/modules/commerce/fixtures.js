@@ -142,7 +142,17 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0), opt
 	const config = await testConfig();
 	const { logger, entries } = createTestLogger();
 	const db = mongo.db(dbName);
-	const portal = createPortal({ config, db, modules: [commerceModule, ...fakeModules(world, options)], logger, now: clock.now });
+	/** @type {{ to: string, template: string, data: Record<string, string> }[]} */
+	const mails = [];
+	const mailer = { available: true, send: async (/** @type {any} */ message) => void mails.push(message) };
+	const portal = createPortal({
+		config,
+		db,
+		modules: [commerceModule, ...fakeModules(world, options)],
+		logger,
+		now: clock.now,
+		mailer: /** @type {any} */ (mailer),
+	});
 	await portal.ensureIndexes();
 	/** @type {import('../../../src/modules/commerce/service.js').CommerceService} */
 	const service = /** @type {any} */ (portal.modules.service('commerce'));
@@ -181,9 +191,9 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0), opt
 		});
 	};
 
-	/** @param {string} merchantId @param {number} amount @param {string} [reference] */
-	const credit = (merchantId, amount, reference = `ref-${Math.random().toString(36).slice(2)}`) =>
-		service.addCredits({ merchantId, amountMillicredits: amount, reference, note: 'test top-up', actor: STAFF });
+	/** @param {string} merchantId @param {number} amount millicredits (whole credits) @param {string | null} [reference] */
+	const credit = (merchantId, amount, reference = null) =>
+		service.addReceipt({ merchantId, amount, amountPaid: 'PKR 1,000', method: 'Bank transfer', reference, actor: STAFF });
 
 	return {
 		portal,
@@ -195,6 +205,7 @@ export const bootCommerce = async ({ mongo, dbName, clock = createClock(T0), opt
 		credit,
 		clock,
 		db,
+		mails,
 		logs: entries,
 		ctx: portal.modules.context('commerce'),
 	};

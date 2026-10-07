@@ -11,7 +11,7 @@ import { closeMongoClients } from '../../src/infra/db.js';
 import * as loaders from '../../src/console/loaders.js';
 import { KeysView } from '../../src/console/views/keys.js';
 import { CheckReport, ConnectorsView, providerLabel } from '../../src/console/views/connectors.js';
-import { CreditsView, SpendCapView } from '../../src/console/views/credits.js';
+import { CreditsView } from '../../src/console/views/credits.js';
 import { byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
@@ -21,7 +21,6 @@ import {
 	clickEl,
 	createWorld,
 	dialog,
-	fill,
 	fillDialog,
 	press,
 	pressDialog,
@@ -301,100 +300,68 @@ describe('merchant console interactions (jsdom): keys, resources, credits', () =
 		expect(providerLabel('mongodb')).toBe('MongoDB');
 		expect(providerLabel('my-gateway')).toMatch(/gateway/i);
 
-		// ---------------------------------------------------------------- credits statement with filters
+		// ---------------------------------------------------------------- usage and credits with filters
 		render(<CreditsView {...await loaders.loadCredits(b.api, merchantId, { from: day(-30), to: day(1), websiteId })} />);
-		expect(shows('Statement')).toBe(true);
+		expect(shows('Usage and credits') && shows('Credit receipts') && shows('bank-1')).toBe(true);
+		expect(shows('PKR')).toBe(false); // the amount paid is shown to admins only
 		expect(byLabel(document, 'Website').value).toBe(websiteId);
-		await press('Amount');
-		await press('Type');
 		cleanup();
 		const credits = await loaders.loadCredits(b.api, merchantId, {});
 		if (!credits.ok) throw new Error('credits');
 		render(
 			<CreditsView
 				{...credits}
-				meter={{
-					balanceMillicredits: 0,
-					burnRatePerHour: 1000,
-					hoursRemaining: 0,
-					subscriptions: [{}],
-					monthToDate: 5,
-					projectedMonth: 9,
-				}}
-				statementProblem={{ status: 400, title: 'Bad range' }}
-				statement={{
-					openingBalanceMillicredits: 1000,
-					closingBalanceMillicredits: 2000,
-					totals: { deposit: 5000, settlement: -4000 },
-					entries: [
+				billing={{ ...credits.billing, status: 'grace', balance: -500, graceEnd: new Date().toISOString(), daysLeft: 0 }}
+				usageProblem={{ status: 499, title: 'Bad range', code: 'custom_range' }}
+			/>,
+		);
+		expect(shows('In grace') && shows('Grace ends') && shows('Bad range')).toBe(true);
+		cleanup();
+		render(
+			<CreditsView
+				{...credits}
+				usage={{
+					from: '2026-10-01',
+					to: '2026-10-02',
+					total: 3000,
+					days: [
+						{ day: '2026-10-01', amount: 2000 },
+						{ day: '2026-10-02', amount: 1000 },
+					],
+					rows: [
 						{
-							entryId: 'e1',
-							type: 'settlement',
-							amountMillicredits: -4000,
-							at: new Date().toISOString(),
-							appId,
+							day: '2026-10-01',
 							websiteId,
+							domain: 'shop.example.com',
+							appId,
+							product: 'Notice',
+							feature: 'bar',
+							featureName: 'Bar',
+							hours: 2,
+							amount: 2000,
 						},
 						{
-							entryId: 'e2',
-							type: 'settlement',
-							amountMillicredits: -10,
-							at: new Date().toISOString(),
+							day: '2026-10-02',
+							websiteId,
+							domain: 'shop.example.com',
 							appId,
-							websiteId: 'web_gone',
+							product: 'Notice',
+							feature: 'bar',
+							featureName: 'Bar',
+							hours: 1,
+							amount: 1000,
 						},
-						{ entryId: 'e3', type: 'deposit', amountMillicredits: 5000, at: new Date().toISOString(), reference: 'bank-1' },
 					],
 				}}
 			/>,
 		);
-		expect(shows('Opening') && shows('Closing') && shows('bank-1')).toBe(true);
+		expect(shows('Spend per UTC day') && shows('Bar') && shows('3 credits')).toBe(true);
+		await press('Hours charged');
+		await press('Credits');
 		cleanup();
 		render(<CreditsView ok={false} problem={{ status: 403, title: 'Forbidden', code: 'forbidden' }} />);
-		cleanup();
-
-		// ---------------------------------------------------------------- spend cap
-		withToasts(<SpendCapView {...await loaders.loadSpendCap(b.api, merchantId)} />);
-		expect(shows('No cap')).toBe(true);
-		expect(buttons('Remove cap')).toHaveLength(0);
-		fill('Monthly cap', '0');
-		await press('Save');
-		expect(shows('Enter an amount above zero.')).toBe(true);
-		fill('Monthly cap', 'abc');
-		await press('Save');
-		expect(b.calls.some((c) => c.method === 'PUT' && c.path.endsWith('/spend-cap'))).toBe(false);
-		fill('Monthly cap', '50');
-		await press('Save');
-		await until(() => shows('Spend cap saved'));
-		await until(() => shows('50 credits'));
-		const put = b.calls.find((c) => c.method === 'PUT' && c.path.endsWith('/spend-cap'));
-		expect(put?.status).toBe(200);
-		fill('Monthly cap', '1000000000000000');
-		await press('Save');
-		await settle(2);
-		await press('Remove cap');
-		await pressDialog('Remove cap');
-		await until(() => shows('Spend cap removed'));
-		await until(() => shows('No cap'));
-		cleanup();
-		// a reached cap is explained; removing an already removed cap is harmless or shows the problem
-		const cap = await loaders.loadSpendCap(b.api, merchantId);
-		if (!cap.ok) throw new Error('spend cap');
-		withToasts(
-			<SpendCapView
-				{...cap}
-				cap={{ limit: 1000, spent: 1000, remaining: 0, reached: true, periodEnd: new Date().toISOString() }}
-				meter={{ burnRatePerHour: 1000 }}
-			/>,
-		);
-		expect(shows('The spend cap is reached') && shows('Current spend')).toBe(true);
-		await press('Remove cap');
-		await pressDialog('Remove cap');
-		await until(() => b.calls.filter((c) => c.method === 'DELETE' && c.path.endsWith('/spend-cap')).length >= 2);
-		await settle(2);
-		cleanup();
-		render(<SpendCapView ok={false} problem={{ status: 403, title: 'Forbidden', code: 'forbidden' }} />);
 		expect(shows('No access')).toBe(true);
+		cleanup();
 		restore();
 	});
 });

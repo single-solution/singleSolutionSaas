@@ -403,10 +403,11 @@ export const createWorld = async ({ db }) => {
 
 	/** @param {string} merchantId @param {number} millicredits @param {string} reference */
 	const credit = async (merchantId, millicredits, reference) => {
-		const r = await staff.api.post(`/v1/admin/merchants/${merchantId}/credits`, {
-			amountMillicredits: millicredits,
+		const r = await staff.api.post(`/v1/admin/merchants/${merchantId}/receipts`, {
+			credits: Math.round(millicredits / 1000),
+			amountPaid: 'PKR 1,000',
+			method: 'Bank transfer',
 			reference,
-			note: 'wire',
 		});
 		if (!r.ok) throw new Error(`credit: ${JSON.stringify(r.problem)}`);
 	};

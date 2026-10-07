@@ -362,16 +362,8 @@ export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, syst
 		}
 	};
 
-	/** Subscribe (credits first) and return the subscription. @param {string} websiteId @param {string} appId */
+	/** Subscribe and return the subscription (no credits needed). @param {string} websiteId @param {string} appId */
 	const subscribe = async (websiteId, appId) => {
-		const website = /** @type {any} */ (world.websites.get(websiteId));
-		await commerce.addCredits({
-			merchantId: website.merchantId,
-			amountMillicredits: 100_000,
-			reference: `ref-${randomUUID()}`,
-			note: 'test',
-			actor: /** @type {any} */ ({ type: 'admin', id: 'adm_finance', role: 'finance' }),
-		});
 		return commerce.subscribe({ websiteId, appId, planCode: 'free', actor: /** @type {any} */ (MERCHANT_ACTOR) });
 	};
 

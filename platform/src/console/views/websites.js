@@ -25,15 +25,16 @@ import {
 	Stepper,
 	Table,
 	fieldErrors,
-	formatCreditsPerHour,
 	formatDate,
 	humanize,
 	useToast,
+	formatCredits,
 } from '@ss/ui';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
-import { AUTH, MERCHANT } from '../../texts/console.js';
+import { AUTH, BILLING, MERCHANT } from '../../texts/console.js';
+import { ProductStatusBadge } from './billing.js';
 import { PageProblem, WebsiteHeader, productName } from './common.js';
 import { contactLine } from './sign-in.js';
 
@@ -275,13 +276,14 @@ export function InstallCodeCard({ snippet }) {
  */
 export function WebsiteOverviewView(props) {
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const { website, catalog, resources, meter, issuerRequest, snippet } = props;
+	const { website, catalog, resources, billing, issuerRequest, snippet } = props;
 	const subs = /** @type {any[]} */ (props.subscriptions ?? []).filter((s) => s.status !== 'cancelled');
-	const lines = /** @type {any[]} */ (meter?.subscriptions ?? []).filter((l) => l.websiteId === website.websiteId);
-	const burn = lines.reduce((sum, l) => sum + (l.burnRatePerHour ?? 0), 0);
+	// products on this website with their status and daily cost (PLAN 0.5.4)
+	const lines = /** @type {any[]} */ (billing?.products ?? []).filter((l) => l.websiteId === website.websiteId);
+	const daily = lines.reduce((sum, l) => sum + (l.dailyCost ?? 0), 0);
 	const connected = /** @type {any[]} */ (resources).filter((r) => r.status === 'connected').length;
-	/** @param {string} id */
-	const burnOf = (id) => lines.find((l) => l.subscriptionId === id)?.burnRatePerHour ?? 0;
+	/** @param {string} appId */
+	const lineOf = (appId) => lines.find((l) => l.appId === appId) ?? null;
 	return (
 		<div className="space-y-6">
 			<WebsiteHeader website={website} active="overview" />
@@ -304,12 +306,7 @@ export function WebsiteOverviewView(props) {
 					hint={`${subs.filter((s) => s.status === 'active').length} active`}
 					icon="box"
 				/>
-				<Stat
-					label="Spend now"
-					value={formatCreditsPerHour(burn)}
-					hint="Across this website's subscriptions"
-					icon="activity"
-				/>
+				<Stat label={BILLING.dailyCost} value={formatCredits(daily)} hint="At today's prices" icon="activity" />
 				<Stat label="Resources" value={`${connected}/${resources.length}`} hint="Connected" icon="plug" />
 			</div>
 			<InstallCodeCard snippet={snippet} />
@@ -351,9 +348,13 @@ export function WebsiteOverviewView(props) {
 								</div>
 								<div className="flex items-center gap-3">
 									<span className="text-sm tabular-nums text-muted">
-										{formatCreditsPerHour(burnOf(s.subscriptionId))}
+										{formatCredits(lineOf(s.appId)?.dailyCost ?? 0)} / day
 									</span>
-									<StatusBadge status={s.status} />
+									{lineOf(s.appId) ? (
+										<ProductStatusBadge status={lineOf(s.appId).status} featuresOn={lineOf(s.appId).featuresOn} />
+									) : (
+										<StatusBadge status={s.status} />
+									)}
 								</div>
 							</li>
 						))}

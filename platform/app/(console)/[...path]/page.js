@@ -14,7 +14,6 @@ import Login, { metadata as LoginMeta } from '../_views/login.js';
 import ResetPassword, { metadata as ResetPasswordMeta } from '../_views/reset-password.js';
 import SetPassword, { metadata as SetPasswordMeta } from '../_views/set-password.js';
 import ConfirmEmail, { metadata as ConfirmEmailMeta } from '../_views/confirm-email.js';
-import SpendCap, { metadata as SpendCapMeta } from '../_views/spend-policies.js';
 import Websites, { metadata as WebsitesMeta } from '../_views/websites.js';
 import WebsitesWebsiteId, { metadata as WebsitesWebsiteIdMeta } from '../_views/websites-websiteId.js';
 import WebsitesWebsiteIdIdentity, { metadata as WebsitesWebsiteIdIdentityMeta } from '../_views/websites-websiteId-identity.js';
@@ -39,7 +38,6 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['reset-password'], ResetPassword, ResetPasswordMeta, false],
 	[['set-password'], SetPassword, SetPasswordMeta, false],
 	[['confirm-email'], ConfirmEmail, ConfirmEmailMeta, false],
-	[['spend-policies'], SpendCap, SpendCapMeta, true],
 	[['websites'], Websites, WebsitesMeta, true],
 	[['websites', ':websiteId'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, true],
 	[['websites', ':websiteId', 'identity'], WebsitesWebsiteIdIdentity, WebsitesWebsiteIdIdentityMeta, true],

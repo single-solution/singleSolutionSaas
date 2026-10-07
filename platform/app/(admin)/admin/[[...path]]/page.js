@@ -19,7 +19,6 @@ import Merchants, { metadata as MerchantsMeta } from '../_views/merchants.js';
 import Settings, { metadata as SettingsMeta } from '../_views/settings.js';
 import Subscriptions, { metadata as SubscriptionsMeta } from '../_views/subscriptions.js';
 import AppsAppId, { metadata as AppsAppIdMeta } from '../_views/apps-appId.js';
-import FinanceMerchantId, { metadata as FinanceMerchantIdMeta } from '../_views/finance-merchantId.js';
 import MerchantsMerchantId, { metadata as MerchantsMerchantIdMeta } from '../_views/merchants-merchantId.js';
 import SubscriptionsSubscriptionId, {
 	metadata as SubscriptionsSubscriptionIdMeta,
@@ -42,7 +41,6 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['settings'], Settings, SettingsMeta, true],
 	[['subscriptions'], Subscriptions, SubscriptionsMeta, true],
 	[['apps', ':appId'], AppsAppId, AppsAppIdMeta, true],
-	[['finance', ':merchantId'], FinanceMerchantId, FinanceMerchantIdMeta, true],
 	[['merchants', ':merchantId'], MerchantsMerchantId, MerchantsMerchantIdMeta, true],
 	[['subscriptions', ':subscriptionId'], SubscriptionsSubscriptionId, SubscriptionsSubscriptionIdMeta, true],
 	[['apps', ':appId', 'policies'], AppsAppIdPolicies, AppsAppIdPoliciesMeta, true],

@@ -45,7 +45,6 @@ const OFF_REASONS = /** @type {Record<string, string>} */ ({
 	dependency: 'Needs another element switched on',
 	paused: 'Subscription paused',
 	suspended: 'Suspended',
-	spend_cap: 'Spend cap reached',
 	cancelled: 'Cancelled',
 	not_in_plan: 'Not in your plan',
 	merchant_disabled: 'Switched off',
@@ -98,7 +97,7 @@ export function SubscriptionView(props) {
 	const [confirm, setConfirm] = useState(/** @type {null | { rollback: number }} */ (null));
 	const [loadingMore, setLoadingMore] = useState(false);
 	if (!props.ok || !sub) return <PageProblem problem={props.problem} />;
-	const { merchantId, website, product, meterLine } = props;
+	const { merchantId, website, product } = props;
 	const configPath = api.config(merchantId, website.websiteId, sub.subscriptionId);
 	const live = sub.status !== 'cancelled';
 	const name = product?.name ?? sub.productSlug;
@@ -348,7 +347,6 @@ export function SubscriptionView(props) {
 			{(sub.holds ?? []).length > 0 && sub.status !== 'cancelled' ? (
 				<Callout tone="warning" title="Not running">
 					{(sub.holds ?? []).map((/** @type {string} */ h) => OFF_REASONS[h] ?? humanize(h)).join(' · ')}.
-					{(sub.holds ?? []).includes('spend_cap') ? ' Raise the spend cap to resume.' : ''}
 				</Callout>
 			) : null}
 			{props.configProblem ? <Callout tone="warning">{describeProblem(props.configProblem)}</Callout> : null}
@@ -356,11 +354,9 @@ export function SubscriptionView(props) {
 				<KeyValueList
 					columns={3}
 					items={[
-						{ label: 'Spend now', value: formatCreditsPerHour(meterLine?.burnRatePerHour ?? 0) },
 						{ label: 'Started', value: formatDate(sub.startedAt) },
 						{ label: 'Price book', value: `v${sub.priceBookVersion}` },
 						{ label: 'Product version', value: sub.productVersion },
-						{ label: 'Settled through', value: formatDateTime(sub.settledThrough) },
 						{ label: 'Config version', value: overview ? String(overview.version) : '—' },
 					]}
 				/>

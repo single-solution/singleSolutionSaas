@@ -28,7 +28,7 @@ import { OverviewView } from '../../src/console/admin/views/overview.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
 import { AppView, AppsView } from '../../src/console/admin/views/apps.js';
 import { PoliciesView, SubscriptionAdminView } from '../../src/console/admin/views/config.js';
-import { FinanceView, LedgerView } from '../../src/console/admin/views/finance.js';
+import { AddCreditsDialog, FinanceView } from '../../src/console/admin/views/finance.js';
 import { ConnectorsAdminView } from '../../src/console/admin/views/operations.js';
 import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { IdChip } from '../../src/console/admin/views/common.js';
@@ -342,10 +342,11 @@ describe('admin console interactions (jsdom)', () => {
 		});
 		await until(() => staff.calls.some((c) => c.path === adminApi.status(appId) && c.status === 200));
 		cleanup();
-		await staff.api.post(adminApi.credit(merchantId, 'credits'), {
-			amountMillicredits: 100_000,
+		await staff.api.post(adminApi.addReceipt(merchantId), {
+			credits: 100,
+			amountPaid: 'PKR 10,000',
+			method: 'Cash',
 			reference: 'seed-1',
-			note: 'seed',
 		});
 		const sub = await staff.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
 			appId,
@@ -660,52 +661,40 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => staff.calls.some((c) => c.path === adminApi.platformRollback(appId) && c.status === 200));
 		cleanup();
 
-		// ---------------------------------------------------------------- finance
-		render(<FinanceView {...await admin.loadFinance(staff.api)} admin={me} />);
-		fill('Merchant id', 'x');
-		await press('Open');
-		expect(shows('Enter a merchant id (mer_…).')).toBe(true);
-		fill('Merchant id', merchantId);
-		await press('Open');
-		expect(shows('Force settlement') || shows('Run reconciliation')).toBe(false);
+		// ---------------------------------------------------------------- credits and billing
+		render(
+			<ToastProvider>
+				<FinanceView {...await admin.loadBilling(staff.api, { merchantId })} admin={me} />
+			</ToastProvider>,
+		);
+		expect(shows('No merchant is low, in grace or stopped.')).toBe(true);
 		cleanup();
 
-		render(<LedgerView {...await admin.loadLedger(staff.api, merchantId)} admin={me} />);
-		await press('Review');
-		expect(shows('Enter an amount in credits')).toBe(true);
-		fill('Amount (credits)', '12.5');
-		fill('Reference', 'bank-2');
-		fill('Note', 'second wire');
-		await press('Review');
-		await press('Add credits');
-		await until(() => staff.calls.some((c) => c.path === adminApi.credit(merchantId, 'credits') && c.status === 201));
-		await act(async () => {
-			/** @type {HTMLInputElement} */ (
-				[...document.querySelectorAll('input[type="radio"]')].find((r) => r.getAttribute('value') === 'adjustments')
-			).click();
-		});
-		fill('Amount (credits)', '-2');
-		fill('Reference', 'adj-1');
-		fill('Note', 'correction');
-		await press('Review');
-		await press('Adjust credits');
-		await until(() => staff.calls.some((c) => c.path === adminApi.credit(merchantId, 'adjustments') && c.status === 201));
-		await act(async () => {
-			/** @type {HTMLInputElement} */ (
-				[...document.querySelectorAll('input[type="radio"]')].find((r) => r.getAttribute('value') === 'credits')
-			).click();
-		});
-		fill('Amount (credits)', '12.5');
-		fill('Reference', 'bank-2');
-		fill('Note', 'again');
-		await press('Review');
-		await press('Add credits');
-		await until(
-			() =>
-				shows('Already booked') || staff.calls.filter((c) => c.path === adminApi.credit(merchantId, 'credits')).length >= 2,
+		let added = 0;
+		render(
+			<ToastProvider>
+				<AddCreditsDialog
+					merchant={{ merchantId, name: 'Shop' }}
+					balance={100_000}
+					onClose={() => {}}
+					onAdded={() => void (added += 1)}
+				/>
+			</ToastProvider>,
 		);
-		await press('Verify chain');
-		await until(() => shows('Ledger chain intact'));
+		await press('Review');
+		expect(shows('A whole number of 1 or more.')).toBe(true);
+		fill('Credits', '25');
+		fill('Amount paid', 'PKR 2,500');
+		fill('Payment method', 'Bank transfer');
+		fill('Reference (optional)', 'bank-2');
+		await press('Review');
+		expect(shows('Confirm the receipt')).toBe(true);
+		expect(shows('125 credits')).toBe(true); // the new balance
+		await press('Back');
+		await press('Review');
+		await press('Add credits');
+		await until(() => added === 1);
+		expect(staff.calls.filter((c) => c.path === adminApi.addReceipt(merchantId) && c.status === 201)).toHaveLength(1);
 		cleanup();
 
 		// ---------------------------------------------------------------- connectors (fabricated rows)

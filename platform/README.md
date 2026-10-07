@@ -43,7 +43,8 @@ src/
   modules/
     index.js                 the module list
     README.md                how to write a module
-    system/                  Portal settings (mail, branding, support, security), Overview and Activity
+    commerce/                subscriptions, documents, usage records; credits and billing (core/money.js, checks)
+    system/                  Portal settings (mail, branding, support, security, billing rules), Overview, Activity
 scripts/                     db.js (indexes | migrate), dev-mongo.js, dev-env.js
 test/                        vitest; integration tests on one shared MongoMemoryReplSet (the @ss/config Mongo setup)
 ```
@@ -57,7 +58,7 @@ CSRF for cookie sessions (403) → RBAC permission (403) → rate limit (429 + `
 key defaults to an generated idempotency secret), so a stored fingerprint of a body holding a password or a
 credential cannot be brute-forced offline. Route option `idempotent` (POST only): `false` (the default), `true` (key
 required, the response is stored and replayed — website create, admin invites, merchant create, app connect,
-pack upload, connector create, credits/adjustments/refunds, subscribe, product usage), `'optional'`, or
+pack upload, connector create, receipts (add credits), subscribe, product usage), `'optional'`, or
 `'no-store'` — for requests or responses that carry secrets (login, MFA, password routes, website-key create and
 rotate): the key is optional, only the status and
 the fingerprint are stored, and a retry with the same key answers **409 `idempotency_replay_no_body`** (detail names
@@ -110,8 +111,7 @@ dummy hash. **TOTP**: RFC 6238 SHA-1, 6 digits, 30 s, ±1 step, single use (stor
   majority commit; the whole transaction is retried on `TransientTransactionError`, the commit on
   `UnknownTransactionCommitResult`). Pass `{ session }` to every repository call inside it (repositories forward
   driver options; the guards still apply). The callback may run more than once: keep mail, events and HTTP outside.
-  The commerce ledger appends entries and moves the account in one transaction; website transfers move the website,
-  its domain claim and grants in one.
+  The commerce ledger appends entries and moves the account in one transaction.
 - **Audit**: `platform_audit` is append-only (`audit.record`, `audit.list`); the commerce ledger keeps its own hash
   chain and verification.
 
@@ -130,13 +130,12 @@ payload is a sealed event. Every request runs in a request scope (`infra/request
   a product's due deliveries (a few) when the next event is delivered to that product and when that product next calls
   the Portal (the `productCalled` port follows every `product`-auth request); a failed website compile is retried when
   the website's loader is next served; admins can press "Retry deliveries" (app page);
-- **settlement is computed when read**: a merchant settles (idempotently per `periodKey`) before its balance, meter or
-  statement is read, when a product fetches an entitlement document or reports usage for one of its websites (usage:
-  right after the response), and before a subscription change; low-balance and spend-cap holds are evaluated at the
-  same moments, so the document a product fetches reflects a hold. A product with a still-valid document (10 minutes,
-  plus its cache) may keep serving until it refreshes it;
+- **billing is checked on use** (PLAN 0.5.7): when a Portal page shows a merchant (the merchant console its own,
+  admin pages the merchants on screen), the check replays the hours since the merchant was last settled with the
+  pure money function (`modules/commerce/core/money.js`), writes the day charges of complete UTC days, works out low
+  balance, grace and stop and sends any due billing e-mail once per state; product status fetches join in 0.12 step 5;
 - **time-based state is judged on read**: a rotated website key's revocation takes effect by time in the revocation
-  list; a spend-cap hold ends with the UTC month;
+  list; a grace period ends at its stored end time;
 - **connectors** are checked when saved (create, edit, assign, test) and when a product resolves one whose last check
   is older than 50 minutes (after the response).
 
@@ -144,7 +143,7 @@ Deferred work runs through Next `after()` (`toNextRoute(handler, { after })` in 
 also serves `/w/*` and `/.well-known/jwks.json` through `next.config.js` rewrites).
 `createPortal({ background: { mode: 'off' } })` (the default when `NODE_ENV=test`) runs none of it.
 
-There are no on-demand maintenance operations: settlement runs on read, connectors are checked on save and
+There are no on-demand maintenance operations: billing is checked on use, connectors are checked on save and
 resolve, and failed jobs retry when their item is next touched.
 
 ## Environment
@@ -180,8 +179,8 @@ the Portal) set them — their last entry.
   password, plus the two-step code once it is on.
 - **Admin → Settings** (`/v1/admin/settings…`, Owner, audited): Mail (host, port, TLS, user, password sealed with
   `ENCRYPTION_KEY`, sender name and address, send a test e-mail), Branding (name, accent colour, logo ≤ 200 kB PNG,
-  JPEG or WebP served at `/branding/logo`), Support (e-mail, phone, WhatsApp) and Security (Session length, Require
-  two-step for admins). Every instance applies a change within 5 seconds (a cheap read of the settings
+  JPEG or WebP served at `/branding/logo`), Support (e-mail, phone, WhatsApp), Security (Session length, Require
+  two-step for admins) and Billing rules (grace days 0–30, low-balance threshold 1–30 days of spend). Every instance applies a change within 5 seconds (a cheap read of the settings
   version).
 - **Indexes and migrations** run automatically on the first request after a deploy, once per schema version, under a
   lock (`scripts/db.js` stays for developers: dry runs, applying ahead of time).
@@ -225,7 +224,8 @@ request's cookies, browsers `fetch` the same `/v1/*` routes); destructive action
   two-step sign-in with 10 recovery codes, own Activity.
 - **Pages:** Overview · Merchants (search by name, e-mail or domain; bulk suspend, resume, send setup links; **Add
   merchant**; merchant page with details, websites, products, credits, activity; suspend, resume, setup link, turn
-  off two-step, delete) · apps · finance · Activity (filters by actor, merchant, action, dates) · Admins (Owner:
+  off two-step, delete; Add credits with a confirm step; Credits tab) · apps · Credits and billing (receipts, charges
+  by day / merchant / product, needs attention) · Activity (filters by actor, merchant, action, dates) · Admins (Owner:
   invite, resend or copy, correct invite e-mail, change role, turn off two-step, remove; always one Owner) · Settings.
 
 | Route                                            | Rights (PLAN 0.10.2)                     | Notes                                                                        |
@@ -235,7 +235,7 @@ request's cookies, browsers `fetch` the same `/v1/*` routes); destructive action
 | `POST /v1/admin/merchants/bulk`                  | per action                               | suspend, resume, setup links                                                 |
 | `GET\|POST /v1/admin/admins…`                    | `admins.manage` (Owner)                  | invite, role, remove, turn off two-step                                      |
 | `GET /v1/admin/activity`, `/v1/admin/overview`   | `activity.read`, `overview.read`         | Activity stores no personal details and is never edited                      |
-| `GET\|PUT /v1/admin/settings…`                   | `settings.read`, `portal_settings.write` | Mail, Branding, Support, Security                                            |
+| `GET\|PUT /v1/admin/settings…`                   | `settings.read`, `portal_settings.write` | Mail, Branding, Support, Security, Billing rules                             |
 | `POST /v1/admin/apps/connect`, `/v1/admin/packs` | `products.manage`                        | add a product or a pack version                                              |
 
 ## Local development

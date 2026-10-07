@@ -28,11 +28,10 @@ describe('summary', () => {
 			allElementsHourlyMillicredits: 1000,
 			metered: true,
 			free: false,
-			trialHours: 48,
 			priceBook: { version: '2026-10-01', effectiveFrom: '2026-10-01T00:00:00Z' },
 		});
 		const pack = packManifest();
-		expect(priceSummary(pack)).toMatchObject({ fromHourlyMillicredits: 0, free: true, metered: false, trialHours: 0 });
+		expect(priceSummary(pack)).toMatchObject({ fromHourlyMillicredits: 0, free: true, metered: false });
 	});
 
 	it('builds catalog entries', () => {

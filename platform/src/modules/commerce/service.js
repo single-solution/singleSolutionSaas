@@ -1,29 +1,17 @@
 /**
  * Public service of the `commerce` module (INTERFACES.md): subscriptions, element switches, entitlement documents,
- * usage, ledger, credits, settlement and the monthly spend cap. Other modules call it via
- * `ctx.service('commerce')`; failures are thrown as RFC 9457 problems (`infra/http.js` `problem`).
+ * usage records, and credits and billing (PLAN 0.5: histories, the check, receipts, usage and billing views). Other
+ * modules call it via `ctx.service('commerce')`; failures are thrown as RFC 9457 problems (`infra/http.js` `problem`).
  * @module
  */
 import { createCommerceRepo } from './repo.js';
+import { createBilling } from './services/billing.js';
 import { createDeps } from './services/deps.js';
 import { createLedger } from './services/ledger.js';
-import { createMoney, entryView } from './services/money.js';
-import { createSettlement } from './services/settlement.js';
 import { createSubscriptions } from './services/subscriptions.js';
 import { createUsage } from './services/usage.js';
-import { createId } from '@ss/contracts';
-import { problem } from '../../infra/http.js';
-import { afterResponse } from '../../infra/request-scope.js';
-import { checkStatementQuery } from './core/validate.js';
 
 /** @typedef {import('../../infra/modules.js').ModuleContext} ModuleContext */
-
-/**
- * @param {unknown} value
- * @returns {number}
- */
-const instant = (value) =>
-	value instanceof Date ? value.getTime() : typeof value === 'string' ? Date.parse(value) : Number(value);
 
 /**
  * @param {ModuleContext} ctx
@@ -35,64 +23,24 @@ export const createCommerceService = (ctx) => {
 		ctx,
 		repo,
 		onChainBroken: async (merchantId, message) => {
-			await repo.insertAlert({
-				_id: createId('alr', { randomBytes: ctx.randomBytes }),
-				at: new Date(ctx.now()),
-				kind: 'ledger_chain_broken',
-				merchantId,
-				subscriptionId: null,
-				details: { message },
-			});
 			ctx.logger.error('ledger chain broken', { merchantId, message });
 		},
 	});
-	const subscriptions = createSubscriptions({ ctx, repo, deps, ledger });
-	const settlement = createSettlement({ ctx, repo, deps, ledger, subscriptions });
-	const money = createMoney({ ctx, repo, deps, ledger, settlement });
+	const subscriptions = createSubscriptions({ ctx, repo, deps });
+	const billing = createBilling({ ctx, repo, deps, ledger });
 	const usage = createUsage({ ctx, repo, deps, subscriptions });
 
-	/**
-	 * Settle the merchant of a website before reading or changing its money-relevant state (F.19: settlement on read).
-	 * @param {unknown} websiteId
-	 */
-	const settleWebsite = async (websiteId) => {
-		if (typeof websiteId !== 'string') return;
-		const website = await Promise.resolve(deps.getWebsite(websiteId)).catch(() => null);
-		if (website?.merchantId) await money.settleDue(String(website.merchantId));
-	};
-	/** @param {unknown} subscriptionId */
-	const settleSubscription = async (subscriptionId) => {
-		if (typeof subscriptionId !== 'string') return;
-		const sub = await repo.subscriptionById(subscriptionId).catch(() => null);
-		if (sub?.merchantId) await money.settleDue(String(sub.merchantId));
-	};
-	/**
-	 * A subscription change settles the merchant's due hours first.
-	 * @template {{ subscriptionId: string }} I
-	 * @template R
-	 * @param {(input: I) => Promise<R>} change
-	 * @returns {(input: I) => Promise<R>}
-	 */
-	const settledFirst = (change) => async (input) => {
-		await settleSubscription(input.subscriptionId);
-		return change(input);
-	};
-
 	return {
-		// subscriptions
-		/** @type {typeof subscriptions.subscribe} */
-		subscribe: async (input) => {
-			await settleWebsite(input.websiteId);
-			return subscriptions.subscribe(input);
-		},
+		// subscriptions (until the switch to products on websites, PLAN 0.12 step 5)
+		subscribe: subscriptions.subscribe,
 		getSubscription: subscriptions.getSubscription,
 		subscriptionsForWebsite: subscriptions.subscriptionsForWebsite,
 		subscriptionsOfMerchant: subscriptions.subscriptionsOfMerchant,
-		setElement: settledFirst(subscriptions.setElement),
-		changePlan: settledFirst(subscriptions.changePlan),
-		pause: settledFirst(subscriptions.pause),
-		resume: settledFirst(subscriptions.resume),
-		cancel: settledFirst(subscriptions.cancel),
+		setElement: subscriptions.setElement,
+		changePlan: subscriptions.changePlan,
+		pause: subscriptions.pause,
+		resume: subscriptions.resume,
+		cancel: subscriptions.cancel,
 		invalidate: subscriptions.invalidate,
 		/** @param {string} websiteId */
 		invalidateWebsite: async (websiteId) => {
@@ -124,75 +72,35 @@ export const createCommerceService = (ctx) => {
 		previewDocument: subscriptions.previewDocument,
 		/** Resource needs of a website's live subscriptions (connectors resolve and the console Resources page). */
 		resourceNeeds: subscriptions.resourceNeedsOf,
-		onMerchantStatus: subscriptions.onMerchantStatus,
-		// documents and usage
 		/**
-		 * The signed document of a subscription. The merchant is settled first, so a low-balance or spend-limit hold
-		 * reaches the document a product fetches.
-		 * @type {typeof subscriptions.documentFor}
+		 * Identity hook: a suspended merchant suspends every subscription, and suspended hours are never charged.
+		 * @param {{ merchantId: string, status: 'active' | 'suspended' }} input
 		 */
-		documentFor: async (input) => {
-			await settleWebsite(input.websiteId);
-			return subscriptions.documentFor(input);
+		onMerchantStatus: async (input) => {
+			await billing.recordMerchantStatus(input.merchantId, input.status);
+			return subscriptions.onMerchantStatus(input);
 		},
-		/**
-		 * Record a product's usage batch; the merchants it concerns are settled right after the response.
-		 * @param {Parameters<typeof usage.recordUsage>[0]} input
-		 */
-		recordUsage: async (input) => {
-			const out = await usage.recordUsage(input);
-			for (const merchantId of out.merchants) afterResponse(() => money.settleDue(merchantId));
-			return { results: out.results };
-		},
-		// money
-		addCredits: money.addCredits,
-		adjust: money.adjust,
-		refund: money.refund,
-		balance: money.balance,
-		/**
-		 * @param {string} merchantId
-		 * @param {{ from: number | string | Date, to: number | string | Date, websiteId?: string | null }} range
-		 */
-		statement: (merchantId, { from, to, websiteId = null }) =>
-			money.statement(merchantId, { from: instant(from), to: instant(to), websiteId }),
-		/**
-		 * Statement for console query parameters (`from`, `to` ISO dates or instants, optional `websiteId`); the default
-		 * range is the current UTC month to now.
-		 * @param {string} merchantId
-		 * @param {Record<string, string | undefined>} query
-		 */
-		statementForQuery: (merchantId, query) => {
-			const checked = checkStatementQuery(query, ctx.now());
-			if (!checked.ok) throw problem('validation_failed', 'The statement range is invalid.', { errors: checked.errors });
-			return money.statement(merchantId, checked.value);
-		},
-		meter: money.meter,
-		spendCap: money.spendCap,
-		setSpendCap: money.setSpendCap,
-		removeSpendCap: money.removeSpendCap,
+		// documents and usage records
+		documentFor: subscriptions.documentFor,
+		/** @param {Parameters<typeof usage.recordUsage>[0]} input */
+		recordUsage: usage.recordUsage,
+		// credits and billing (PLAN 0.5)
+		recordPriceList: billing.recordPriceList,
+		recordProductAdded: billing.recordProductAdded,
+		recordProductRemoved: billing.recordProductRemoved,
+		recordSwitches: billing.recordSwitches,
+		check: billing.check,
+		billingSummary: billing.summary,
+		billingSummaries: billing.summaries,
+		usage: billing.usage,
+		receiptsOf: billing.receiptsOf,
+		dayChargesOf: billing.dayChargesOf,
+		addReceipt: billing.addReceipt,
+		attention: billing.attention,
+		allReceipts: billing.allReceipts,
+		charges: billing.charges,
 		/** @param {string} merchantId */
 		verifyChain: (merchantId) => ledger.verify(merchantId),
-		/** @param {string} merchantId @param {{ afterSeq?: number | null, limit?: number }} [page] */
-		ledgerEntries: async (merchantId, { afterSeq = null, limit = 100 } = {}) =>
-			(await ledger.entries(merchantId, { afterSeq, limit })).map(entryView),
-		// settlement on read
-		settleDue: money.settleDue,
-		/**
-		 * The settlement pass behind settlement on read (all merchants, or `merchantId`); unbounded unless a deadline
-		 * is given.
-		 * @param {Parameters<typeof settlement.runSettlement>[0]} [options]
-		 */
-		runSettlement: (options = {}) => settlement.runSettlement(options),
-		/** @param {{ merchantId?: string | null, limit?: number }} [query] */
-		alerts: async ({ merchantId = null, limit = 100 } = {}) =>
-			(await repo.listAlerts({ merchantId, limit })).map((a) => ({
-				alertId: a._id,
-				at: new Date(a.at).toISOString(),
-				kind: a.kind,
-				merchantId: a.merchantId,
-				subscriptionId: a.subscriptionId,
-				details: a.details,
-			})),
 	};
 };
 /** @typedef {ReturnType<typeof createCommerceService>} CommerceService */

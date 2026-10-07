@@ -60,6 +60,42 @@ export const MAIL_TEXTS = Object.freeze({
 		action: null,
 		footer: 'If you did not ask for this, contact support.',
 	},
+	low_balance: {
+		subject: (d) => `${d.brand}: credits are running low`,
+		lines: (d) => [
+			`${d.merchantName ?? 'Your account'} has ${d.balance ?? 'few credits'} left, about ${d.daysLeft ?? 'a few days'} at the current spend.`,
+			'Add credits to keep the products running.',
+		],
+		action: null,
+		footer: 'Contact support to add credits.',
+	},
+	grace_started: {
+		subject: (d) => `Credits ran out: products stop on ${d.stopAt ?? 'the end of the grace period'}`,
+		lines: (d) => [
+			`The credits of ${d.merchantName ?? 'your account'} ran out. The products keep working until ${d.stopAt ?? 'the end of the grace period'}, and those hours are charged.`,
+			'Add credits before then to keep them running; new credits pay the debt first.',
+		],
+		action: null,
+		footer: 'Contact support to add credits.',
+	},
+	products_stopped: {
+		subject: (d) => `${d.brand}: products stopped`,
+		lines: (d) => [
+			`The grace period of ${d.merchantName ?? 'your account'} ended on ${d.stoppedAt ?? 'its end date'} with no credits left, so its products stopped.`,
+			'They restart as soon as new credits bring the balance above 0.',
+		],
+		action: null,
+		footer: 'Contact support to add credits.',
+	},
+	credits_added: {
+		subject: (d) => `${d.credits ?? 'Credits'} added to your ${d.brand} account`,
+		lines: (d) => [
+			`${d.credits ?? 'Credits'} were added to ${d.merchantName ?? 'your account'}.`,
+			`The balance is now ${d.balance ?? 'updated'}.`,
+		],
+		action: null,
+		footer: 'No action is needed.',
+	},
 	test_email: {
 		subject: (d) => `${d.brand} test e-mail`,
 		lines: () => ['This is a test e-mail from the Portal. E-mail sending works.'],

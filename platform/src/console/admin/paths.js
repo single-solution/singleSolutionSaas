@@ -27,8 +27,9 @@ export const adminRoutes = Object.freeze({
 	policies: (/** @type {string} */ id) => `/admin/apps/${e(id)}/policies`,
 	subscriptions: (/** @type {{ id?: string | null }} */ q = {}) => `/admin/subscriptions${query(q)}`,
 	subscription: (/** @type {string} */ id) => `/admin/subscriptions/${e(id)}`,
-	finance: () => '/admin/finance',
-	ledger: (/** @type {string} */ merchantId) => `/admin/finance/${e(merchantId)}`,
+	finance: (
+		/** @type {{ tab?: string | null, merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null, by?: string | null }} */ q = {},
+	) => `/admin/finance${query(q)}`,
 	connectors: (/** @type {{ merchantId?: string | null, kind?: string | null, status?: string | null }} */ q = {}) =>
 		`/admin/connectors${query(q)}`,
 	activity: (
@@ -73,6 +74,7 @@ export const adminApi = Object.freeze({
 	settingsLogo: () => '/v1/admin/settings/branding/logo',
 	settingsSupport: () => '/v1/admin/settings/support',
 	settingsSecurity: () => '/v1/admin/settings/security',
+	settingsBilling: () => '/v1/admin/settings/billing',
 
 	// catalog
 	apps: (/** @type {{ status?: string | null, kind?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
@@ -95,14 +97,19 @@ export const adminApi = Object.freeze({
 	catalog: () => '/v1/catalog/products',
 	subscriptions: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/subscriptions`,
 	subscription: (/** @type {string} */ m, /** @type {string} */ s) => `/v1/merchants/${e(m)}/subscriptions/${e(s)}`,
-	balance: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/balance`,
-	meter: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/meter`,
-	credit: (/** @type {string} */ m, /** @type {'credits' | 'adjustments' | 'refunds'} */ kind) =>
-		`/v1/admin/merchants/${e(m)}/${kind}`,
-	ledger: (/** @type {string} */ m, /** @type {{ cursor?: string | null, limit?: number }} */ q = {}) =>
-		`/v1/admin/merchants/${e(m)}/ledger${query(q)}`,
-	ledgerVerification: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/ledger/verification`,
-	alerts: (/** @type {{ merchantId?: string | null }} */ q = {}) => `/v1/admin/commerce/alerts${query(q)}`,
+	billing: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/billing`,
+	usage: (/** @type {string} */ m, /** @type {{ from?: string | null, to?: string | null }} */ q = {}) =>
+		`/v1/merchants/${e(m)}/usage${query(q)}`,
+	receipts: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/receipts`,
+	addReceipt: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/receipts`,
+	dayCharges: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/day-charges`,
+	billingMerchants: (/** @type {readonly string[]} */ ids) => `/v1/admin/billing/merchants${query({ ids: ids.join(',') })}`,
+	attention: () => '/v1/admin/billing/attention',
+	allReceipts: (
+		/** @type {{ merchantId?: string | null, from?: string | null, to?: string | null, method?: string | null }} */ q = {},
+	) => `/v1/admin/billing/receipts${query(q)}`,
+	charges: (/** @type {{ by?: string | null, from?: string | null, to?: string | null }} */ q = {}) =>
+		`/v1/admin/billing/charges${query(q)}`,
 
 	// config
 	adminConfig: (/** @type {string} */ s) => `/v1/admin/subscriptions/${e(s)}/config`,

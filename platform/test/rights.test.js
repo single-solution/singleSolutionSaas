@@ -378,30 +378,31 @@ describe('rights: products on websites, features, credits, receipts and charges'
 		{
 			name: 'Add credits',
 			columns: {
-				owner: async (x) => expect(allowed(await x.as(x.owner, 'POST', `/v1/admin/merchants/${M1}/credits`, {}))).toBe(true),
+				owner: async (x) => expect(allowed(await x.as(x.owner, 'POST', `/v1/admin/merchants/${M1}/receipts`, {}))).toBe(true),
 				support: async (x) =>
-					expect((await x.as(x.support, 'POST', `/v1/admin/merchants/${M1}/credits`, {})).status).toBe(403),
+					expect((await x.as(x.support, 'POST', `/v1/admin/merchants/${M1}/receipts`, {})).status).toBe(403),
 				finance: async (x) =>
-					expect(allowed(await x.as(x.finance, 'POST', `/v1/admin/merchants/${M1}/credits`, {}))).toBe(true),
+					expect(allowed(await x.as(x.finance, 'POST', `/v1/admin/merchants/${M1}/receipts`, {}))).toBe(true),
 				merchant: async (x) =>
-					expect((await x.as(x.merchant, 'POST', `/v1/admin/merchants/${M1}/credits`, {})).status).toBe(401),
+					expect((await x.as(x.merchant, 'POST', `/v1/admin/merchants/${M1}/receipts`, {})).status).toBe(401),
 			},
 			anonymous: (x) =>
-				x.h.call('POST', `/v1/admin/merchants/${M1}/credits`, { headers: { 'idempotency-key': 'anon' }, body: {} }),
+				x.h.call('POST', `/v1/admin/merchants/${M1}/receipts`, { headers: { 'idempotency-key': 'anon' }, body: {} }),
 		},
 		{
 			name: 'See receipts and charges (Support: view; merchant: own)',
 			columns: {
-				owner: async (x) => expect((await x.as(x.owner, 'GET', `/v1/admin/merchants/${M1}/ledger`)).status).toBe(200),
-				support: async (x) => expect((await x.as(x.support, 'GET', `/v1/admin/merchants/${M1}/ledger`)).status).toBe(200),
-				finance: async (x) => expect((await x.as(x.finance, 'GET', `/v1/merchants/${M1}/statement`)).status).toBe(200),
+				owner: async (x) => expect((await x.as(x.owner, 'GET', `/v1/admin/merchants/${M1}/day-charges`)).status).toBe(200),
+				support: async (x) =>
+					expect((await x.as(x.support, 'GET', `/v1/admin/merchants/${M1}/day-charges`)).status).toBe(200),
+				finance: async (x) => expect((await x.as(x.finance, 'GET', `/v1/merchants/${M1}/usage`)).status).toBe(200),
 				merchant: async (x) => {
-					expect((await x.as(x.merchant, 'GET', `/v1/merchants/${M1}/statement`)).status).toBe(200);
-					expect((await x.as(x.other, 'GET', `/v1/merchants/${M1}/statement`)).status).toBe(403);
-					expect((await x.as(x.merchant, 'GET', `/v1/admin/merchants/${M1}/ledger`)).status).toBe(401);
+					expect((await x.as(x.merchant, 'GET', `/v1/merchants/${M1}/usage`)).status).toBe(200);
+					expect((await x.as(x.other, 'GET', `/v1/merchants/${M1}/usage`)).status).toBe(403);
+					expect((await x.as(x.merchant, 'GET', `/v1/admin/merchants/${M1}/day-charges`)).status).toBe(401);
 				},
 			},
-			anonymous: (x) => x.h.call('GET', `/v1/merchants/${M1}/statement`),
+			anonymous: (x) => x.h.call('GET', `/v1/merchants/${M1}/usage`),
 		},
 	]);
 });

@@ -4,17 +4,15 @@
  * links to the merchant's genesis hash. Any edit, deletion, insertion or reordering of a stored entry breaks the chain
  * and is reported by {@link verifyChain}.
  *
- * Amounts are signed: credits (deposits, positive adjustments) are positive, charges (settlement, metered, refunds of
- * credits back to the merchant's bank) are negative. The balance is the sum of all amounts.
+ * It holds exactly two kinds of entry (PLAN 0.5.7 b): **receipt** (+credits, 0.5.8) and **day charge** (−credits; one per
+ * website × product × UTC day with per-feature lines). The sum of all amounts is the written balance; today's charges
+ * are worked out live (`core/money.js`).
  * @module
  */
 import { sha256Hex, stableStringify } from '@ss/entitlements';
 
-export const LEDGER_TYPES = Object.freeze(/** @type {const} */ (['deposit', 'settlement', 'metered', 'adjustment', 'refund']));
+export const LEDGER_TYPES = Object.freeze(/** @type {const} */ (['receipt', 'day_charge']));
 /** @typedef {typeof LEDGER_TYPES[number]} LedgerType */
-
-/** Charge types (spend): what settlement writes. */
-export const CHARGE_TYPES = Object.freeze(/** @type {const} */ (['settlement', 'metered']));
 
 /**
  * @typedef {object} LedgerActor
@@ -27,16 +25,13 @@ export const CHARGE_TYPES = Object.freeze(/** @type {const} */ (['settlement', '
  * @typedef {object} EntryDraft
  * @property {LedgerType} type
  * @property {number} amount signed integer millicredits
- * @property {string} entryKey unique per merchant (periodKey for settlements, `<type>:<reference>` for staff entries)
- * @property {string | null} [periodKey]
- * @property {Date | null} [periodStart] bucket start (settlement/metered)
- * @property {string | null} [subscriptionId]
+ * @property {string} entryKey unique per merchant (`day:<websiteId>:<appId>:<day>` for day charges)
+ * @property {string | null} [day] UTC day `YYYY-MM-DD` (day charges)
  * @property {string | null} [websiteId]
  * @property {string | null} [appId]
- * @property {string | null} [reference]
- * @property {string | null} [note]
+ * @property {string | null} [reference] receipt reference
  * @property {LedgerActor | null} [actor]
- * @property {unknown} [details] breakdown lines, metered lines … (JSON)
+ * @property {unknown} [details] receipt `{ amountPaid, method }` or day-charge `{ lines }` (JSON)
  */
 
 /**
@@ -81,13 +76,10 @@ export const canonicalEntry = (entry) =>
 		type: entry.type,
 		amount: entry.amount,
 		entryKey: entry.entryKey,
-		periodKey: entry.periodKey ?? null,
-		periodStart: iso(entry.periodStart),
-		subscriptionId: entry.subscriptionId ?? null,
+		day: entry.day ?? null,
 		websiteId: entry.websiteId ?? null,
 		appId: entry.appId ?? null,
 		reference: entry.reference ?? null,
-		note: entry.note ?? null,
 		actor: ledgerActor(entry.actor),
 		at: iso(entry.at),
 		details: entry.details ?? null,
@@ -111,10 +103,8 @@ export const draftProblem = (draft) => {
 	if (!Number.isSafeInteger(draft.amount)) return 'amount must be an integer number of millicredits';
 	if (typeof draft.entryKey !== 'string' || draft.entryKey.length === 0 || draft.entryKey.length > 300)
 		return 'entryKey is required';
-	if ((draft.type === 'settlement' || draft.type === 'metered') && draft.amount > 0) return 'charges cannot be positive';
-	if (draft.type === 'deposit' && draft.amount <= 0) return 'deposits must be positive';
-	if (draft.type === 'refund' && draft.amount >= 0) return 'refunds must be negative';
-	if (draft.type === 'adjustment' && draft.amount === 0) return 'adjustments cannot be zero';
+	if (draft.type === 'receipt' && draft.amount <= 0) return 'receipts must be positive';
+	if (draft.type === 'day_charge' && draft.amount >= 0) return 'day charges must be negative';
 	return null;
 };
 
@@ -138,13 +128,10 @@ export const chainEntries = ({ merchantId, head, drafts, at, ids }) => {
 			type: draft.type,
 			amount: draft.amount,
 			entryKey: draft.entryKey,
-			periodKey: draft.periodKey ?? null,
-			periodStart: draft.periodStart ?? null,
-			subscriptionId: draft.subscriptionId ?? null,
+			day: draft.day ?? null,
 			websiteId: draft.websiteId ?? null,
 			appId: draft.appId ?? null,
 			reference: draft.reference ?? null,
-			note: draft.note ?? null,
 			actor: ledgerActor(draft.actor),
 			at,
 			details: draft.details ?? null,
