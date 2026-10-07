@@ -97,7 +97,7 @@ import { currentOrigin } from './request-scope.js';
  * @property {string | null} pass
  */
 
-/** Version reported by /healthz, /readyz and /v1/system/info. */
+/** Version reported by /v1/system/info. */
 export const PORTAL_VERSION = '0.1.0';
 /** Control-plane connection pool per instance. */
 export const MONGO_POOL_SIZE = 5;

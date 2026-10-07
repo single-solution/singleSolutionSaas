@@ -102,8 +102,6 @@ export const createEmulatorServer = ({
 		try {
 			if (method === 'GET' && url.pathname === '/.well-known/jwks.json')
 				return sendJson(response, 200, portal.jwks(), { 'cache-control': 'max-age=60' });
-			if (method === 'GET' && url.pathname === '/healthz')
-				return sendJson(response, 200, { ok: true, portalUrl: portal.portalUrl });
 			if (url.pathname.startsWith('/v1/product/')) {
 				const raw = method === 'GET' ? '' : await readBody(request);
 				/** @type {unknown} */

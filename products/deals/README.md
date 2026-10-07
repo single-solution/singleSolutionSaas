@@ -86,16 +86,16 @@ Missing line details come from the synced catalog (`PUT /v1/items/{itemId}`, `PO
 `openapi.json` documents every operation with examples (generated from the real engine). `sk_` = server key, `pk_` =
 browser key (shopper from `SS-Identity`, the website's own login token).
 
-| Operation   | Route                                                                                                                        |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Deals       | `GET/POST /v1/deals` · `POST /v1/deals:check` · `GET/PATCH/DELETE /v1/deals/{id}` · `POST …/pause` · `…/resume` (sk)         |
-| Quotes      | `POST /v1/quotes` (pk/sk, rate limited, metered) · `GET /v1/quotes/{id}` · `POST …/commit` · `POST …/release` (sk)           |
-| Catalog     | `GET /v1/items` · `GET/PUT/DELETE /v1/items/{itemId}` · `POST /v1/items:batch` (sk)                                          |
-| Offers      | `GET /v1/offers?items=` · `POST /v1/offers:evaluate` (pk/sk)                                                                 |
-| Price locks | `POST /v1/price-locks` · `POST /v1/price-locks:verify` (pk/sk)                                                               |
-| Deals page  | `GET /v1/deals-page` · `GET /v1/deals-page/{dealId}/items` (pk/sk)                                                           |
-| Reports     | `GET /v1/reports?from=&to=` · `GET /v1/reports/deals/{dealId}` (sk)                                                          |
-| Standard    | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export`, `/v1/data:anonymize` |
+| Operation   | Route                                                                                                                |
+| ----------- | -------------------------------------------------------------------------------------------------------------------- |
+| Deals       | `GET/POST /v1/deals` · `POST /v1/deals:check` · `GET/PATCH/DELETE /v1/deals/{id}` · `POST …/pause` · `…/resume` (sk) |
+| Quotes      | `POST /v1/quotes` (pk/sk, rate limited, metered) · `GET /v1/quotes/{id}` · `POST …/commit` · `POST …/release` (sk)   |
+| Catalog     | `GET /v1/items` · `GET/PUT/DELETE /v1/items/{itemId}` · `POST /v1/items:batch` (sk)                                  |
+| Offers      | `GET /v1/offers?items=` · `POST /v1/offers:evaluate` (pk/sk)                                                         |
+| Price locks | `POST /v1/price-locks` · `POST /v1/price-locks:verify` (pk/sk)                                                       |
+| Deals page  | `GET /v1/deals-page` · `GET /v1/deals-page/{dealId}/items` (pk/sk)                                                   |
+| Reports     | `GET /v1/reports?from=&to=` · `GET /v1/reports/deals/{dealId}` (sk)                                                  |
+| Standard    | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                |
 
 Errors are RFC 9457 problems with stable codes (`kind_disabled`, `deal_limit_reached`, `deal_exhausted`,
 `quote_expired`, `quote_committed`, `total_mismatch`, `price_lock_expired`, `rate_limited`, …).

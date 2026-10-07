@@ -200,7 +200,7 @@ describe('two instances on shared MongoDB control stores', () => {
 		);
 		expect(stale.status).toBe(200);
 		expect(stale.headers.get('ss-entitlement-stale')).toBe('true');
-		expect((await c.handle(new Request('https://coupons.example.dev/readyz'))).status).toBe(200);
+		expect((await c.handle(new Request('https://coupons.example.dev/.well-known/ss-app.json'))).status).toBe(200);
 		await a.product.close();
 	});
 });

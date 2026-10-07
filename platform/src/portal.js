@@ -5,7 +5,6 @@
  * The returned object is what the Next.js adapters in `app/` call:
  * - `handle(request)` — the Portal API (`/v1/*`)
  * - `jwks()` — the published JWKS (Portal keys and website-key signing keys, distinct kids)
- * - `readyz()` — dependency check
  * - `ensureIndexes()`, `migrate()` — operational entry points (scripts, deploy pipeline)
  * @module
  */
@@ -43,19 +42,9 @@ export const REQUEST_JOB_BUDGET_MS = 8_000;
 /** @typedef {import('./infra/logger.js').Logger} Logger */
 
 /**
- * Liveness: no dependencies, no configuration.
- * @param {{ version?: string, now?: () => number }} [options]
- */
-export const healthz = ({ version = 'dev', now = Date.now } = {}) =>
-	new Response(JSON.stringify({ status: 'ok', version, time: new Date(now()).toISOString() }), {
-		status: 200,
-		headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
-	});
-
-/**
  * @param {{ config: Readonly<PortalConfig>, db: import('mongodb').Db, modules: ReadonlyArray<Readonly<ModuleDefinition>>,
  *   logger: Logger, now?: () => number, randomBytes?: (n: number) => Uint8Array, random?: () => number,
- *   pingTimeoutMs?: number, mailer?: import('./infra/mailer.js').Mailer, system?: import('./infra/system.js').SystemStore | null,
+ *   mailer?: import('./infra/mailer.js').Mailer, system?: import('./infra/system.js').SystemStore | null,
  *   background?: { mode?: 'on' | 'off', fallback?: import('./infra/http.js').AfterScheduler } }} options
  *   `background`: work after responses (default `off` when `config.env` is `test`); `fallback` runs it when the
  *   adapter gave no `after()` (default: in the background of the request)
@@ -68,7 +57,6 @@ export const createPortal = ({
 	now = Date.now,
 	randomBytes = defaultRandomBytes,
 	random = Math.random,
-	pingTimeoutMs = 2_000,
 	mailer,
 	system = null,
 	background: backgroundOptions = {},
@@ -218,38 +206,6 @@ export const createPortal = ({
 				status: 200,
 				headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=300, stale-while-revalidate=60' },
 			}),
-		/** Readiness: the control-plane database answers a ping within `pingTimeoutMs`. */
-		readyz: async () => {
-			/** @type {'ok' | 'down'} */
-			let database = 'ok';
-			/** @type {ReturnType<typeof setTimeout> | undefined} */
-			let timer;
-			try {
-				await Promise.race([
-					db.command({ ping: 1 }),
-					new Promise((_, reject) => {
-						timer = setTimeout(() => reject(new Error('timeout')), pingTimeoutMs);
-					}),
-				]);
-			} catch (error) {
-				database = 'down';
-				logger.warn('readiness check failed', { error });
-			} finally {
-				clearTimeout(timer);
-			}
-			const ready = database === 'ok';
-			return new Response(
-				JSON.stringify({ status: ready ? 'ready' : 'unavailable', version: config.version, checks: { database } }),
-				{
-					status: ready ? 200 : 503,
-					headers: {
-						'content-type': 'application/json',
-						'cache-control': 'no-store',
-						...(ready ? {} : { 'retry-after': '10' }),
-					},
-				},
-			);
-		},
 		/** @param {{ dryRun?: boolean }} [options] */
 		ensureIndexes: ({ dryRun = false } = {}) => ensureIndexes(db, registry, { dryRun, logger }),
 		/** @param {{ dryRun?: boolean }} [options] */

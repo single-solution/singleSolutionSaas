@@ -71,15 +71,15 @@ The collections are `ss_wishlist_{lists,stock,notifications,audit,idempotency}`:
 
 `openapi.json` documents every operation (`x-ss-key-kind: "sk"` marks server-only routes).
 
-| Operation | Route                                                                                                                            |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Lists     | `GET`/`POST /v1/lists` · `GET`/`PATCH`/`DELETE /v1/lists/{id}` (`default` alias)                                                 |
-| Items     | `POST /v1/lists/{id}/items` · `DELETE /v1/lists/{id}/items/{entryId}`                                                            |
-| Guests    | `POST /v1/guests` · `POST /v1/guests:merge`                                                                                      |
-| Shares    | `POST /v1/shares` · `POST /v1/shares:revoke` · `GET /v1/shares/{token}`                                                          |
-| Signals   | `GET /v1/notifications` (sk)                                                                                                     |
-| Widgets   | `POST /v1/wishlist` (state: owner, lists, settings; issues, renews or merges guest tokens)                                       |
-| Standard  | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export\|anonymize`, `/v1/session` |
+| Operation | Route                                                                                                     |
+| --------- | --------------------------------------------------------------------------------------------------------- |
+| Lists     | `GET`/`POST /v1/lists` · `GET`/`PATCH`/`DELETE /v1/lists/{id}` (`default` alias)                          |
+| Items     | `POST /v1/lists/{id}/items` · `DELETE /v1/lists/{id}/items/{entryId}`                                     |
+| Guests    | `POST /v1/guests` · `POST /v1/guests:merge`                                                               |
+| Shares    | `POST /v1/shares` · `POST /v1/shares:revoke` · `GET /v1/shares/{token}`                                   |
+| Signals   | `GET /v1/notifications` (sk)                                                                              |
+| Widgets   | `POST /v1/wishlist` (state: owner, lists, settings; issues, renews or merges guest tokens)                |
+| Standard  | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export\|anonymize`, `/v1/session` |
 
 ## Run
 

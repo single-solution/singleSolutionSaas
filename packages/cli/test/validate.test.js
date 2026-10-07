@@ -239,12 +239,12 @@ describe('ss app validate', () => {
 		await mkdir(path.join(dir, 'app/about'), { recursive: true });
 		await writeFile(path.join(dir, 'app/about/page.js'), 'export default function About() {\n\treturn null;\n}\n');
 		expect(rules(await validateProject(dir))).not.toContain('server.entries');
-		await mkdir(path.join(dir, 'app/healthz'), { recursive: true });
-		await writeFile(path.join(dir, 'app/healthz/route.js'), "export const GET = () => new Response('ok');\n");
+		await mkdir(path.join(dir, 'app/ping'), { recursive: true });
+		await writeFile(path.join(dir, 'app/ping/route.js'), "export const GET = () => new Response('ok');\n");
 		let report = await validateProject(dir);
 		expect(report.ok).toBe(false);
 		expect(report.problems.find((problem) => problem.rule === 'server.entries')?.message).toContain('3 server entry points');
-		await rm(path.join(dir, 'app/healthz'), { recursive: true });
+		await rm(path.join(dir, 'app/ping'), { recursive: true });
 		await mkdir(path.join(dir, 'app/inbox/[id]'), { recursive: true });
 		await writeFile(path.join(dir, 'app/inbox/[id]/page.js'), 'export default function Inbox() {\n\treturn null;\n}\n');
 		expect(rules(await validateProject(dir))).toContain('server.entries');

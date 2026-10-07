@@ -288,7 +288,6 @@ export const createMemoryStores = ({ now = Date.now } = {}) => {
 				portalKeys = { jwks, fetchedAt };
 			},
 		}),
-		ping: async () => {},
 		usageRecords: () => [...usage.values()].map((record) => publicUsage(record)),
 	};
 };

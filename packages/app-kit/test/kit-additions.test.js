@@ -334,10 +334,10 @@ describe('product.outbound.fetch', () => {
 });
 
 describe('standard routes still work with the kit additions', () => {
-	it('serves healthz', async () => {
+	it('serves the manifest', async () => {
 		const { product } = await setup();
 		const handle = product.handler(standardRoutes(product));
-		expect((await handle(req('/healthz'))).status).toBe(200);
+		expect((await handle(req('/.well-known/ss-app.json'))).status).toBe(200);
 	});
 });
 

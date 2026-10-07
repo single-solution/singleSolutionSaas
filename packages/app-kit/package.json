@@ -1,7 +1,7 @@
 {
 	"name": "@ss/app-kit",
 	"version": "0.1.0",
-	"description": "Everything a service product needs to follow the Product Standard: registration, launches, website keys, entitlements with offline grace, usage reporting, events, client-owned data access, connectors, audit, health.",
+	"description": "Everything a service product needs to follow the Product Standard: registration, launches, website keys, entitlements with offline grace, usage reporting, events, client-owned data access, connectors, audit.",
 	"type": "module",
 	"license": "UNLICENSED",
 	"exports": {

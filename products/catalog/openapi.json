@@ -3938,54 +3938,6 @@
 				"security": []
 			}
 		},
-		"/healthz": {
-			"get": {
-				"operationId": "healthz",
-				"tags": ["standard"],
-				"summary": "Liveness.",
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				},
-				"security": []
-			}
-		},
-		"/readyz": {
-			"get": {
-				"operationId": "readyz",
-				"tags": ["standard"],
-				"summary": "Readiness.",
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				},
-				"security": []
-			}
-		},
 		"/v1/events": {
 			"post": {
 				"operationId": "postEvents",

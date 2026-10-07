@@ -73,7 +73,7 @@ the customer in the cart.
 | Distribution | `POST /v1/share-links` · `GET /v1/share-links/{code}` · `GET …/{code}/qr` (SVG) · `GET /v1/exports/{couponId}` (CSV)                       |
 | Reporting    | `GET /v1/reports?from=&to=`                                                                                                                |
 | Apply box    | `GET /v1/elements/apply_box/view` · `POST /v1/elements/apply_box/actions/apply` (element stub, pk)                                         |
-| Standard     | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export`, `/v1/data:anonymize`               |
+| Standard     | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                                      |
 
 Errors are RFC 9457 problems with stable codes (`code_not_found`, `exhausted`, `not_eligible`, `outside_schedule`,
 `currency_mismatch`, `identity_required`, `customer_limit_reached`, `not_combinable`, `velocity_limited`,

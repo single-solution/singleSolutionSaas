@@ -1,7 +1,7 @@
 /**
  * `createProduct` — one call wires the Product Standard for a service product: registration, events, launches,
  * website keys, entitlements with offline grace, usage, the signed Portal client, client-owned data, connectors,
- * audit, health and the request handler. Every side effect is injected (fetch, clock, randomness, logger, stores).
+ * audit and the request handler. Every side effect is injected (fetch, clock, randomness, logger, stores).
  * @module
  */
 import { PROBLEM_CODES, createId, createProblemFactory, eventGlobMatches, eventNamespace, validateManifest } from '@ss/contracts';
@@ -22,7 +22,6 @@ import { createConnectors } from './connectors/index.js';
 import { createData } from './data.js';
 import { createEntitlements } from './entitlements.js';
 import { checkEvent, createEvents } from './events.js';
-import { createHealth } from './health.js';
 import { createIdentity } from './identity.js';
 import { createRequestHandler } from './http/handler.js';
 import { createWebsiteKeys } from './keys.js';
@@ -146,7 +145,6 @@ export const createProduct = (options) => {
 	if (!options.stores) logger.warn('using in-memory stores: development only (use createMongoStores in production)');
 	/** @type {Stores} */
 	const stores = { ...defaults, ...(options.stores ?? {}) };
-	if (options.stores && !options.stores.ping) delete stores.ping;
 
 	const connection = createConnection({
 		settings: stores.settings,
@@ -327,7 +325,6 @@ export const createProduct = (options) => {
 	};
 	const replayBodies = createReplayBodies({ data, now, logger });
 	const events = createEvents({ keyResolver, replay: stores.replay, now, logger, trackEffects: devProbes });
-	const health = createHealth({ product: manifest.product, portal, ping: stores.ping ?? null, now });
 	const privacy = createPrivacy({ data, now, ...(options.privacy ?? {}) });
 
 	events.on('entitlement.changed', async (event) => {
@@ -525,7 +522,6 @@ export const createProduct = (options) => {
 		data,
 		connectors,
 		audit,
-		health,
 		context,
 		/** @param {ReadonlyArray<import('./http/routes.js').RouteDefinition>} routes @param {Parameters<typeof createRequestHandler>[2]} [handlerOptions] */
 		handler: (routes, handlerOptions) => createRequestHandler(product, routes, handlerOptions),

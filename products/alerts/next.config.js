@@ -19,7 +19,7 @@ const config = {
 	transpilePackages: ['@ss/ui'],
 	// public paths stay as they are (the Portal, websites and tests call them); one function serves them all
 	async rewrites() {
-		return ['/v1/:path*', '/healthz', '/readyz', '/.well-known/:path*', '/sso', '/c/:token', '/u/:token'].map((source) => ({
+		return ['/v1/:path*', '/.well-known/:path*', '/sso', '/c/:token', '/u/:token'].map((source) => ({
 			source,
 			destination: `/api${source}`,
 		}));

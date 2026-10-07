@@ -1871,15 +1871,37 @@
 				"operationId": "runDueDeletions",
 				"tags": ["data_rights"],
 				"summary": "Dashboard \"Run due deletions\": execute the deletion requests whose cooling-off ended (at most 100 per call). A due customer is also deleted whenever it is read; nothing runs on a timer.",
-				"security": [{ "dashboardSession": [] }],
-				"parameters": [{ "name": "X-SS-Website", "in": "header", "required": false, "schema": { "type": "string" } }],
+				"security": [
+					{
+						"dashboardSession": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "X-SS-Website",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
 						"content": {
 							"application/json": {
-								"schema": { "type": "object", "properties": { "deleted": { "type": "integer" } } },
-								"example": { "deleted": 1 }
+								"schema": {
+									"type": "object",
+									"properties": {
+										"deleted": {
+											"type": "integer"
+										}
+									}
+								},
+								"example": {
+									"deleted": 1
+								}
 							}
 						}
 					},
@@ -2040,59 +2062,6 @@
 								},
 								"example": {
 									"accepted": 1
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/healthz": {
-			"get": {
-				"operationId": "healthz",
-				"tags": ["standard"],
-				"summary": "Liveness.",
-				"security": [],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"status": "ok"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/readyz": {
-			"get": {
-				"operationId": "readyz",
-				"tags": ["standard"],
-				"summary": "Readiness (own database; Portal reachability reported as degraded).",
-				"security": [],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"status": "ok",
-									"checks": {}
 								}
 							}
 						}

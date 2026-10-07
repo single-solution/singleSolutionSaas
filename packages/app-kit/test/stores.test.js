@@ -204,11 +204,6 @@ describe.each(Object.entries(factories))('%s stores', (_name, factory) => {
 		await portalKeys.put({ keys: [2] }, 6);
 		expect(await portalKeys.get()).toEqual({ jwks: { keys: [2] }, fetchedAt: 6 });
 	});
-
-	it('pings', async () => {
-		const stores = factory(Date.now);
-		await expect(stores.ping?.()).resolves.toBeUndefined();
-	});
 });
 
 describe('mongo stores specifics', () => {

@@ -159,17 +159,6 @@ describe('standard routes', () => {
 		expect(await resolveStrings(undefined, 'de')).toEqual({ lang: 'en', strings: {} });
 	});
 
-	it('health endpoints', async () => {
-		const { call, portal } = await app();
-		expect(await body(await call('/healthz'))).toEqual({ status: 'ok', product: 'coupon-box', version: '1.4.0' });
-		expect(await body(await call('/readyz'))).toMatchObject({
-			status: 'ok',
-			checks: { portal: { ok: true, cached: false }, productDb: { ok: true } },
-		});
-		portal.setDown(true);
-		expect(await body(await call('/readyz'))).toMatchObject({ status: 'ok', checks: { portal: { cached: true } } });
-	});
-
 	it('well-known manifest, events passthrough, and toggles', async () => {
 		const { call, portal } = await app();
 		const served = await call('/.well-known/ss-app.json');

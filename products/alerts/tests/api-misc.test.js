@@ -251,8 +251,8 @@ describe('adapters', () => {
 			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}`, logger: noopLogger },
 		});
 		try {
-			const health = await fetch(`${server.url}/healthz`);
-			expect(health.status).toBe(200);
+			const manifest = await fetch(`${server.url}/.well-known/ss-app.json`);
+			expect(manifest.status).toBe(200);
 			const page = await fetch(`${server.url}/u/garbage`);
 			expect(page.status).toBe(404);
 			expect(page.headers.get('content-type')).toMatch(/text\/html/);

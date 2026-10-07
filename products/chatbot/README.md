@@ -74,7 +74,7 @@ visitors,audit}` in the merchant DB, `websiteId` first in every index, TTL index
 | Flows, tools  | `GET /v1/flows` · `POST /v1/flows:check` · `POST /v1/flows:simulate` · `GET /v1/tools` · `POST /v1/tools/{name}/invoke` · `POST /v1/tools:signing-secret`                                                                     |
 | Engagement    | `GET /v1/proactive` · `POST /v1/proactive:evaluate` · `POST /v1/proactive:dismiss` · `GET/POST /v1/leads` · `GET /v1/leads/{id}` · `GET/POST /v1/ratings`                                                                     |
 | Transcripts   | `GET /v1/transcripts` · `GET /v1/transcripts/{conversationId}?format=json\|text` · `POST /v1/moderation:check`                                                                                                                |
-| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export`, `/v1/data:anonymize`, `/v1/session`, `/sso`                                                                           |
+| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`, `/v1/session`, `/sso`                                                                                                  |
 
 Errors are RFC 9457 problems with stable codes (`guest_limit_reached`, `conversation_closed`, `message_rejected`,
 `too_many_conversations`, `already_rated`, `invalid_transition`, `limit_reached`, `unknown_tool`, `source_failed`,

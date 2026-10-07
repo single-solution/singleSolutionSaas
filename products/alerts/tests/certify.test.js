@@ -63,7 +63,7 @@ describe('ss certify', () => {
 		).toEqual([]);
 		expect(report.ok).toBe(true);
 		expect(report.summary.passed).toBe(report.checks.length);
-		expect(report.summary.passed).toBeGreaterThanOrEqual(47);
+		expect(report.summary.passed).toBeGreaterThanOrEqual(45);
 		expect(table).toContain('CERTIFIABLE (Listed)');
 	}, 180_000);
 });

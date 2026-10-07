@@ -78,7 +78,7 @@ describe('ss certify (service)', () => {
 			'gating.element-disabled',
 			'idempotency.replay',
 			'pagination.cursor',
-			'standard.healthz',
+			'standard.strings',
 			'events.idempotent',
 			'events.tampered',
 			'data.guard',
@@ -147,7 +147,7 @@ describe('ss certify (service)', () => {
 			const marked = await certify();
 			expect(failed(marked)).toEqual([]);
 			expect(marked.checks.find((check) => check.id === 'certify.target')?.detail).toBe('/v1/notes of notes (x-ss-certify)');
-			spec.paths['/healthz'] = { ...spec.paths['/healthz'], 'x-ss-certify': true };
+			spec.paths['/v1/strings'] = { ...spec.paths['/v1/strings'], 'x-ss-certify': true };
 			await writeFile(file, JSON.stringify(spec, null, '\t'));
 			const twice = await certify();
 			expect(failed(twice)).toContain('certify.target');

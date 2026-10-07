@@ -86,7 +86,7 @@ describe('ss certify against a generated app-kit product', () => {
 			table,
 		).toEqual([]);
 		expect(report.ok).toBe(true);
-		expect(report.summary.passed).toBeGreaterThanOrEqual(47);
+		expect(report.summary.passed).toBeGreaterThanOrEqual(46);
 		expect(table).toContain('CERTIFIABLE (Listed)');
 	}, 120_000);
 

@@ -1,5 +1,5 @@
 /**
- * The product's only route handler. next.config.js rewrites every public path here — /v1/*, /healthz, /readyz,
+ * The product's only route handler. next.config.js rewrites every public path here — /v1/*,
  * /.well-known/* (ss-app.json, ss-connect, ss-events, …), /sso, /i/:websiteId/.well-known/openid-configuration — and the app-kit router
  * (which strips the `/api` prefix) applies auth, gating, CORS preflight, idempotency, limits and RFC 9457 problems.
  */

@@ -729,8 +729,6 @@ export const runCertification = async ({
 			['/v1/entitlement', 'GET', true],
 			['/v1/config', 'GET', true],
 			['/v1/strings?lang=en', 'GET', true],
-			['/healthz', 'GET', false],
-			['/readyz', 'GET', false],
 		])) {
 			await check(`standard.${pathname.split('?')[0]?.replace(/^\/(?:v1\/)?/, '')}`, `${method} ${pathname}`, async () => {
 				const result = await call(pathname, { method, headers: auth ? bearer(sk) : {} });

@@ -65,10 +65,9 @@ afterAll(async () => {
 });
 
 describe('ss dev emulator end to end (with @ss/protocol verification on the product side)', () => {
-	it('serves JWKS and health, and protects the admin API', async () => {
+	it('serves JWKS and protects the admin API', async () => {
 		const jwks = await (await fetch(`${portalUrl}/.well-known/jwks.json`)).json();
 		expect(jwks.keys[0]).toMatchObject({ kty: 'OKP', crv: 'Ed25519', kid: 'portal-dev-1' });
-		expect((await (await fetch(`${portalUrl}/healthz`)).json()).ok).toBe(true);
 		expect((await admin('state', undefined, 'wrong')).status).toBe(401);
 		expect((await fetch(`${portalUrl}/nope`)).status).toBe(404);
 		expect((await admin('unknown', {})).status).toBe(400);
@@ -155,10 +154,10 @@ describe('ss dev emulator end to end (with @ss/protocol verification on the prod
 	it('keeps the product running while the Portal is down (restartable server)', async () => {
 		await server.stop();
 		await server.stop();
-		await expect(fetch(`${portalUrl}/healthz`)).rejects.toThrow();
+		await expect(fetch(`${portalUrl}/.well-known/jwks.json`)).rejects.toThrow();
 		await server.start();
 		await server.start();
-		expect((await fetch(`${portalUrl}/healthz`)).status).toBe(200);
+		expect((await fetch(`${portalUrl}/.well-known/jwks.json`)).status).toBe(200);
 		expect(server.port).toBe(Number(new URL(portalUrl).port));
 	});
 });

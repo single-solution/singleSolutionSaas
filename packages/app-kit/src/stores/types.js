@@ -144,7 +144,6 @@
  * @property {IdempotencyStore} idempotency
  * @property {RateLimitStore} rateLimits
  * @property {PortalKeyStore} portalKeys
- * @property {() => Promise<void>} [ping] readiness check of the backing database
  */
 
 export {};

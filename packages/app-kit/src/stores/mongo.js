@@ -97,9 +97,6 @@ export const createMongoStores = ({ db, prefix = 'ss_kit_', now = Date.now }) =>
 	return {
 		collections: names,
 		ensureIndexes,
-		ping: async () => {
-			await db.command({ ping: 1 });
-		},
 		replay: replayStore(names.replay),
 		nonce: replayStore(names.nonce),
 		settings: Object.freeze({

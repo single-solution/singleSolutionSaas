@@ -177,26 +177,6 @@ export const standardRoutes = (product, { wellKnown = true, sso = true } = {}) =
 			},
 		}),
 		defineRoute({
-			method: 'GET',
-			path: '/healthz',
-			auth: 'none',
-			connected: false,
-			handler: () => {
-				const { status, body } = product.health.healthz();
-				return ok(body, { status, headers: { 'cache-control': 'no-store' } });
-			},
-		}),
-		defineRoute({
-			method: 'GET',
-			path: '/readyz',
-			auth: 'none',
-			connected: false,
-			handler: async () => {
-				const { status, body } = await product.health.readyz();
-				return ok(body, { status, headers: { 'cache-control': 'no-store' } });
-			},
-		}),
-		defineRoute({
 			method: 'POST',
 			path: '/v1/data:export',
 			auth: 'portal',

@@ -82,7 +82,7 @@ key):
 | Q&A             | `GET/POST /v1/questions` · `GET /v1/questions/{id}` · `POST /v1/questions/{id}/answers` · `…/publish` · `…/reject` · `…/answers/{answerId}/publish` and `…/reject`                                                                                |
 | Import          | `POST /v1/imports` `{ csv, dryRun? }` (≤ 8 MiB)                                                                                                                                                                                                   |
 | Analytics       | `GET /v1/analytics?from=&to=&bucket=`                                                                                                                                                                                                             |
-| Standard        | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export`, `/v1/data:anonymize`                                                                                                                      |
+| Standard        | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                                                                                                                                             |
 
 Errors are RFC 9457 problems with stable codes (`not_verified`, `already_reviewed`, `review_limit`, `invalid_token`,
 `request_closed`, `not_pending`, `photo_invalid`, `storage_unavailable`, `name_required`, `identity_required`, …).

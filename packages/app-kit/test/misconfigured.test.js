@@ -45,7 +45,7 @@ describe('configuration problems', () => {
 		const { product, handle, logs } = productWith({ problems: [MONGODB_URI_REQUIRED, MONGODB_URI_REQUIRED, ''] });
 		expect(product.problems).toEqual([MONGODB_URI_REQUIRED]);
 		expect(logs.some((entry) => entry.level === 'error')).toBe(true);
-		for (const path of ['/healthz', '/readyz', '/.well-known/ss-app.json', '/v1/entitlement', '/nope']) {
+		for (const path of ['/.well-known/ss-app.json', '/v1/strings', '/v1/entitlement', '/nope']) {
 			const res = await handle(new Request(`${BASE}${path}`));
 			expect(res.status).toBe(503);
 			expect(res.headers.get('content-type')).toBe('application/json');
@@ -59,7 +59,7 @@ describe('configuration problems', () => {
 	it('a product without problems serves as before', async () => {
 		const { product, handle } = productWith();
 		expect(product.problems).toEqual([]);
-		expect((await handle(new Request(`${BASE}/healthz`))).status).toBe(200);
+		expect((await handle(new Request(`${BASE}/.well-known/ss-app.json`))).status).toBe(200);
 	});
 
 	it('a missing or too-short CONNECT_SECRET keeps the product running; connect names the problem', async () => {
@@ -68,7 +68,7 @@ describe('configuration problems', () => {
 			['short', /CONNECT_SECRET is shorter than 32 characters/],
 		])) {
 			const { handle } = productWith(secret === undefined ? {} : { connectSecret: secret });
-			expect((await handle(new Request(`${BASE}/healthz`))).status).toBe(200);
+			expect((await handle(new Request(`${BASE}/.well-known/ss-app.json`))).status).toBe(200);
 			const res = await handle(new Request(`${BASE}/.well-known/ss-connect`, { method: 'POST', body: '{}' }));
 			expect(res.status).toBe(503);
 			const body = await res.json();

@@ -173,11 +173,11 @@ describe('request handler', () => {
 		expect(doc).toMatchObject({ type: `${BASE}/problems/not_found`, title: 'Not found', status: 404, instance: '/nope' });
 		expect(doc.requestId).toMatch(/^req_[0-9a-z]{26}$/);
 		expect(missing.headers.get('x-request-id')).toBe(doc.requestId);
-		const echoed = await handle(req('/healthz', { headers: { 'x-request-id': 'abc-123' } }));
+		const echoed = await handle(req('/.well-known/ss-app.json', { headers: { 'x-request-id': 'abc-123' } }));
 		expect(echoed.headers.get('x-request-id')).toBe('abc-123');
-		const unsafe = await handle(req('/healthz', { headers: { 'x-request-id': 'bad id!' } }));
+		const unsafe = await handle(req('/.well-known/ss-app.json', { headers: { 'x-request-id': 'bad id!' } }));
 		expect(unsafe.headers.get('x-request-id')).toMatch(/^req_/);
-		const wrongMethod = await handle(req('/healthz', { method: 'DELETE' }));
+		const wrongMethod = await handle(req('/.well-known/ss-app.json', { method: 'DELETE' }));
 		expect(wrongMethod.status).toBe(405);
 		expect(wrongMethod.headers.get('allow')).toBe('GET');
 		const thrown = await handle(req('/v1/throws-problem'));
@@ -185,7 +185,7 @@ describe('request handler', () => {
 		expect((await handle(req('/v1/unknown-code'))).status).toBe(500);
 		const literal = await handle(req('/v1/coupons/special'));
 		expect(await body(literal)).toEqual({ special: true });
-		const head = await handle(req('/healthz', { method: 'HEAD' }));
+		const head = await handle(req('/.well-known/ss-app.json', { method: 'HEAD' }));
 		expect(head.status).toBe(200);
 		expect(await head.text()).toBe('');
 	});
@@ -197,7 +197,7 @@ describe('request handler', () => {
 		expect(preflight.headers.get('access-control-allow-origin')).toBe(ORIGIN);
 		expect(preflight.headers.get('access-control-allow-methods')).toBe('GET, POST');
 		expect((await handle(req('/nope', { method: 'OPTIONS' }))).status).toBe(404);
-		const noCors = await handle(req('/healthz', { method: 'OPTIONS', headers: { origin: ORIGIN } }));
+		const noCors = await handle(req('/.well-known/ss-app.json', { method: 'OPTIONS', headers: { origin: ORIGIN } }));
 		expect(noCors.headers.get('access-control-allow-origin')).toBeNull();
 		const actual = await handle(req('/v1/coupons', { headers: { authorization: `Bearer ${pk}`, origin: ORIGIN } }));
 		expect(actual.status).toBe(200);

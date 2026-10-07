@@ -83,7 +83,7 @@ metadata: { websiteId, product, kind, types, subscriptionIds } }`, `Authorizatio
 | Waitlist      | `GET /v1/waitlist?type=&itemId=` (sk) · `GET /v1/waitlist/position?subscriptionId=`                                 |
 | Unsubscribe   | `GET /v1/unsubscribe/{token}` (preview) · `POST /v1/unsubscribe` · hosted `GET`/`POST /u/{token}`, `/c/{token}`     |
 | Analytics     | `GET /v1/analytics?days=` (sk)                                                                                      |
-| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export\|anonymize`   |
+| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export\|anonymize`                          |
 
 Errors are RFC 9457 problems with stable codes (`contact_invalid`, `consent_required`, `entry_not_allowed`,
 `in_stock`, `limit_reached`, `contact_suppressed`, `rate_limited`, `token_invalid`, `csv_invalid`, …).

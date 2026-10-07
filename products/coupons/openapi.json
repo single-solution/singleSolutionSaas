@@ -2642,56 +2642,6 @@
 				}
 			}
 		},
-		"/healthz": {
-			"get": {
-				"operationId": "healthz",
-				"tags": ["standard"],
-				"security": [],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"status": "ok"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/readyz": {
-			"get": {
-				"operationId": "readyz",
-				"tags": ["standard"],
-				"security": [],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"status": "ok"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/data:export": {
 			"post": {
 				"operationId": "data_export",

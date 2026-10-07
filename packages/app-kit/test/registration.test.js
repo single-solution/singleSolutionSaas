@@ -31,13 +31,12 @@ const unconnected = async ({ clock = createClock(), stores, nodeEnv = 'test', co
 };
 
 describe('connect-secret onboarding', () => {
-	it('refuses product routes before a Portal connects; health and the manifest answer', async () => {
+	it('refuses product routes before a Portal connects; the manifest answers', async () => {
 		const { product, handle } = await unconnected();
 		const entitlement = await handle(new Request(`${BASE}/v1/entitlement`));
 		expect(entitlement.status).toBe(503);
 		expect((await entitlement.json()).detail).toMatch(/Add product/);
 		expect((await handle(new Request(`${BASE}/setup`))).status).toBe(404);
-		expect((await handle(new Request(`${BASE}/healthz`))).status).toBe(200);
 		expect((await handle(new Request(`${BASE}/.well-known/ss-app.json`))).status).toBe(200);
 		expect(product.connected()).toBe(false);
 		expect(() => product.portal.baseUrl).toThrow(/not connected/);

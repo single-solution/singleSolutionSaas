@@ -225,7 +225,6 @@ export const createFakeProduct = ({
 			if (broken.sessionView) return problem(response, 404, 'not_found');
 			return session ? send(response, 200, session) : problem(response, 401, 'unauthorized');
 		}
-		if (route === 'GET /healthz' || route === 'GET /readyz') return send(response, 200, { ok: true });
 		if (route === 'POST /v1/data:export' || route === 'POST /v1/data:anonymize') {
 			if (!(await portalSigned(request.headers, raw, method, `${url.pathname}${url.search}`)))
 				return problem(response, 401, 'unauthorized');

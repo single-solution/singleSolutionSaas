@@ -23,7 +23,6 @@ export { REPLAY_COLLECTION, REPLAY_HEADERS } from './http/replay.js';
 export { presignUrl, signHeaders } from './connectors/sigv4.js';
 export { createEvents, checkEvent, CONTROL_EVENTS } from './events.js';
 export { createAudit } from './audit.js';
-export { createHealth } from './health.js';
 export { createIdentity, verifyIdentityToken, identityTokenOf, IDENTITY_HEADER, IDENTITY_MAX_AGE_MS } from './identity.js';
 export { createPrivacy } from './privacy.js';
 export { createRequestHandler } from './http/handler.js';

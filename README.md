@@ -266,10 +266,10 @@ Directory**.
 **Vercel Hobby limits and how each is met** (measured on `next build`; kept as low as possible, not just under):
 
 - **Functions per deployment (limit 12).** Each product deploys **2**: one route handler (`app/api/[...path]`, which
-  `next.config.js` rewrites `/v1/*`, `/healthz`, `/readyz`, `/.well-known/*`, `/sso` and product paths to, URLs
+  `next.config.js` rewrites `/v1/*`, `/.well-known/*`, `/sso` and product paths to, URLs
   unchanged) and one dashboard page (`app/dashboard/[[...section]]`); `/` is static and there is no proxy (the route
   handler answers 503 `misconfigured` itself, the dashboard shows the reasons). The **Portal** deploys **5**: the API
-  catch-all (also `/w/*`, `/p/*`, `/healthz`, `/readyz`, `/.well-known/jwks.json`), one console page, one admin page,
+  catch-all (also `/w/*`, `/p/*`, `/.well-known/jwks.json`), one console page, one admin page,
   `_not-found` and the CSP-nonce proxy. `ss app validate` fails a product with more than 2 server entry points or with
   `outputFileTracingIncludes`; runtime files are bundled through the generated `app/_lib/assets.js` (`prebuild`).
 - **Function size (limit 250 MB).** Traced server files per function: products 4.1–4.4 MB, Portal 4.5 MB (API) and

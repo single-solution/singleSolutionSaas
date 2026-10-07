@@ -5,7 +5,7 @@ import { created, defineRoute, ok } from '../src/infra/http.js';
 import { defineModule } from '../src/infra/modules.js';
 import { COLLECTIONS } from '../src/infra/schema.js';
 import { systemModule } from '../src/modules/system/index.js';
-import { createPortal, healthz } from '../src/portal.js';
+import { createPortal } from '../src/portal.js';
 import { createBackground } from '../src/infra/background.js';
 import { afterResponse } from '../src/infra/request-scope.js';
 import { toNextRoute } from '../src/infra/http.js';
@@ -104,7 +104,6 @@ const boot = async ({ dbName, modules, clock = createClock(), db, background, sy
 		modules: modules ?? [systemModule, probeModule()],
 		logger,
 		now: clock.now,
-		pingTimeoutMs: 200,
 		...(background ? { background } : {}),
 		...(system ? { system } : {}),
 	});
@@ -163,22 +162,8 @@ describe('Portal end to end', () => {
 		// Portal keys and the dedicated website-key signing key, distinct kids
 		expect(jwks.keys.map((/** @type {any} */ k) => k.kid)).toEqual(['portal-2026-10', 'portal-2026-04', 'website-2026-10']);
 		expect(JSON.stringify(jwks)).not.toContain('"d"');
-		const ready = await portal.readyz();
-		expect([ready.status, (await ready.json()).checks]).toEqual([200, { database: 'ok' }]);
-		const live = healthz({ version: '9', now: () => 0 });
-		expect(await live.json()).toEqual({ status: 'ok', version: '9', time: '1970-01-01T00:00:00.000Z' });
 		expect((await call('GET', '/v1/probe/fail')).status).toBe(200);
 		expect((await call('GET', '/v1/probe/foreign')).status).toBe(500); // modules cannot reach other modules' collections
-	});
-
-	it('reports not-ready when the database does not answer', async () => {
-		const db = { collection: () => ({}), command: () => new Promise(() => {}) };
-		const { portal, entries } = await boot({ dbName: 'unused', db, modules: [] });
-		const res = await portal.readyz();
-		expect(res.status).toBe(503);
-		expect(res.headers.get('retry-after')).toBe('10');
-		expect((await res.json()).checks).toEqual({ database: 'down' });
-		expect(entries.some((e) => e.msg === 'readiness check failed')).toBe(true);
 	});
 
 	it('staff sessions: MFA, RBAC, CSRF, audit', async () => {
@@ -751,17 +736,17 @@ describe('runtime', () => {
 		// the Next.js adapters delegate to the cached instance
 		const api = await import('../app/api/[...path]/route.js');
 		expect((await api.GET(new Request('https://portal.example.test/api/v1/system/info'))).status).toBe(200);
-		// /healthz, /readyz and /.well-known/jwks.json are rewritten to the same catch-all (GET/HEAD only)
+		// /.well-known/jwks.json is rewritten to the same catch-all (GET/HEAD only)
 		const system = (/** @type {string} */ path, method = 'GET') =>
 			api[/** @type {'GET'} */ (method)](new Request(`https://portal.example.test/api${path}`, { method }));
 		expect((await (await system('/.well-known/jwks.json')).json()).keys).toHaveLength(2);
-		expect((await system('/readyz')).status).toBe(200);
-		expect((await system('/healthz')).status).toBe(200);
-		expect((await system('/healthz', 'HEAD')).status).toBe(200);
-		expect((await system('/healthz', 'POST')).status).toBe(404);
+		expect((await system('/.well-known/jwks.json', 'HEAD')).status).toBe(200);
+		expect((await system('/.well-known/jwks.json', 'POST')).status).toBe(404);
 		resetPortal();
 		await expect(getPortal({ env: {} })).rejects.toThrow(/MONGODB_URI/);
-		expect((await system('/readyz')).status).toBe(503); // config invalid
+		const invalid = await system('/v1/system/info'); // config invalid
+		expect(invalid.status).toBe(503);
+		expect((await invalid.json()).status).toBe('misconfigured');
 		resetPortal();
 	}, 60_000);
 });

@@ -101,19 +101,19 @@ nothing runs on a timer.
 `openapi.json` documents every operation with examples (`sk_` = server key, `pk_` = browser key; customer routes take
 the access token in `SS-Identity`, server keys may name `?customerId=` instead).
 
-| Operation      | Route                                                                                                                        |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Codes          | `POST /v1/otp` `{ channel, to, purpose?, locale?, deviceId? }` → 202 · `POST /v1/otp/{id}/verify` `{ code, consents? }`      |
-| Magic links    | `POST /v1/magic-links` `{ email, redirect? }` → 202 · `POST /v1/magic-links:consume` `{ token }`                             |
-| Sessions       | `POST /v1/sessions:refresh` · `:logout` · `:revoke-all` · `GET /v1/sessions` · `DELETE /v1/sessions/{id}`                    |
-| Issuer         | `GET /v1/issuer` (sk) · `POST /v1/issuer:rotate` (sk) · `GET /.well-known/jwks/{websiteId}.json` · discovery                 |
-| Customers (sk) | `GET /v1/customers?email=&phone=` · `POST /v1/customers` · `GET/PATCH/DELETE /v1/customers/{id}`                             |
-| Profile        | `GET /v1/profile` · `PATCH /v1/profile` (field schema; identifiers change only through `purpose: "link"`)                    |
-| Account        | `GET /v1/account`                                                                                                            |
-| Consent        | `GET /v1/consents` · `POST /v1/consents`                                                                                     |
-| Data rights    | `POST /v1/data-requests` `{ type }` · `GET /v1/data-requests` · `GET /v1/data-requests/{id}/export` · `DELETE …/{id}`        |
-| Risk (sk)      | `GET /v1/risk-events`                                                                                                        |
-| Standard       | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export`, `/v1/data:anonymize` |
+| Operation      | Route                                                                                                                   |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Codes          | `POST /v1/otp` `{ channel, to, purpose?, locale?, deviceId? }` → 202 · `POST /v1/otp/{id}/verify` `{ code, consents? }` |
+| Magic links    | `POST /v1/magic-links` `{ email, redirect? }` → 202 · `POST /v1/magic-links:consume` `{ token }`                        |
+| Sessions       | `POST /v1/sessions:refresh` · `:logout` · `:revoke-all` · `GET /v1/sessions` · `DELETE /v1/sessions/{id}`               |
+| Issuer         | `GET /v1/issuer` (sk) · `POST /v1/issuer:rotate` (sk) · `GET /.well-known/jwks/{websiteId}.json` · discovery            |
+| Customers (sk) | `GET /v1/customers?email=&phone=` · `POST /v1/customers` · `GET/PATCH/DELETE /v1/customers/{id}`                        |
+| Profile        | `GET /v1/profile` · `PATCH /v1/profile` (field schema; identifiers change only through `purpose: "link"`)               |
+| Account        | `GET /v1/account`                                                                                                       |
+| Consent        | `GET /v1/consents` · `POST /v1/consents`                                                                                |
+| Data rights    | `POST /v1/data-requests` `{ type }` · `GET /v1/data-requests` · `GET /v1/data-requests/{id}/export` · `DELETE …/{id}`   |
+| Risk (sk)      | `GET /v1/risk-events`                                                                                                   |
+| Standard       | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                   |
 
 Errors are RFC 9457 problems with stable codes (`code_invalid` — RFC 9457 extension member `attemptsRemaining` (also `errors[0]` `attempts_remaining`, kept for v1 clients) —,
 `code_expired`, `attempts_exhausted`, `too_soon`, `send_limit`, `velocity_limit`, `identifier_invalid`,

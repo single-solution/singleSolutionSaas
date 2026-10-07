@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAudit, createHealth, createPortalClient, createProduct } from '../src/index.js';
+import { createAudit, createPortalClient, createProduct } from '../src/index.js';
 import { createJwks, createKeyResolver, createSigner, generateSigningKey, verifyManifest } from '@ss/protocol';
 import { PORTAL_URL, WEBSITE, createClock, entitle, manifest, setup } from './helpers.js';
 import { createFakePortal, entitlementPayload } from '../src/testing.js';
@@ -216,41 +216,6 @@ describe('portal client', () => {
 		await expect(client.usage([])).rejects.toMatchObject({ code: 'portal_error', details: { status: 400 } });
 		const unregistered = createPortalClient({ portalUrl: 'https://portal.test', appId: async () => null, signer, fetch });
 		await expect(unregistered.heartbeat({ version: '1' })).rejects.toMatchObject({ code: 'not_registered' });
-	});
-});
-
-describe('health', () => {
-	it('reports an unreachable product database as 503 and caches Portal checks', async () => {
-		const clock = createClock();
-		let portalCalls = 0;
-		const health = createHealth({
-			product: { slug: 's', version: '1' },
-			portal: {
-				jwks: async () => {
-					portalCalls += 1;
-					throw new Error('down');
-				},
-			},
-			ping: async () => {
-				throw new Error('db');
-			},
-			now: clock.now,
-		});
-		expect(await health.readyz()).toMatchObject({
-			status: 503,
-			body: { status: 'unavailable', checks: { portal: { ok: false }, productDb: { ok: false } } },
-		});
-		await health.readyz();
-		expect(portalCalls).toBe(1);
-		const slow = createHealth({
-			product: { slug: 's', version: '1' },
-			portal: { jwks: () => new Promise(() => {}) },
-			timeoutMs: 10,
-		});
-		expect(await slow.readyz()).toMatchObject({
-			status: 200,
-			body: { status: 'degraded', checks: { productDb: { skipped: true } } },
-		});
 	});
 });
 

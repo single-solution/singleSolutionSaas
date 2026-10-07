@@ -55,7 +55,6 @@ import {
 	checkEvent,
 	CONTROL_EVENTS,
 	createAudit,
-	createHealth,
 	createPrivacy,
 	resolveStrings,
 	guardFilter,
@@ -228,7 +227,6 @@ createProduct({
     // fail the policy are refused up front with resource_invalid
     // payments: interface { createPayment, capture, refund, status, verifyWebhook } — provided by an injected adapter
   audit: { record({ websiteId, actor: { type, id?, act? }, action, target?, before?, after?, requestId? }) → { ok, id? } },
-  health: { healthz() → { status, body }, readyz() → { status: 200|503, body: { status: ok|degraded|unavailable, checks } } },
   handler(routes, options?) → (Request) → Promise<Response>,         // = createRequestHandler(product, routes, options)
   heartbeat() → flushes the queues, then Portal heartbeat { version, status: 'ok', queues: { usagePending, usageDead, eventsPending, eventsDead } },
   close(),                                                             // close pooled client-DB connections
@@ -237,8 +235,8 @@ createProduct({
 ```
 
 **Connection (`/.well-known/ss-connect`).** A product is configured with its control database and `CONNECT_SECRET`
-(`connectSecret`, ≥ 32 chars). Until it is connected, every route except `/.well-known/ss-connect`, `/healthz`,
-`/readyz` and `/.well-known/ss-app.json` answers 503 ("not connected… Portal: Admin → Apps → Add product"). The Portal
+(`connectSecret`, ≥ 32 chars). Until it is connected, every route except `/.well-known/ss-connect` and
+`/.well-known/ss-app.json` answers 503 ("not connected… Portal: Admin → Apps → Add product"). The Portal
 (Admin → Apps → Add product: URL + secret) sends `POST /.well-known/ss-connect` with `{ portalUrl, jwks, appId,
 baseUrl, nonce }`, `SS-Connect-Timestamp` and `SS-Connect-Signature` (HMAC-SHA256 with the secret, `@ss/protocol`
 `createConnectRequest`). `handleConnect` verifies it (`verifyConnectRequest`: constant time, ± 5 min, nonce single-use
@@ -330,7 +328,6 @@ toNextRoute(handler, { stripPrefix = '/api' | false, after? }?) → { GET, POST,
 
 - `GET /v1/entitlement`, `GET /v1/config?element=a,b` and `POST /v1/events` (website key).
 - `GET /v1/strings?lang=` (none).
-- `GET /healthz` and `GET /readyz`.
 - `POST /v1/data:export` and `POST /v1/data:anonymize` (portal; body `{ websiteId, subject?, requestId? }`).
 - `GET /.well-known/ss-app.json` and `POST /.well-known/ss-events`.
 - `POST /.well-known/ss-connect` (none; HMAC with `CONNECT_SECRET`, also while unconnected).
@@ -367,7 +364,7 @@ later date as a backstop, and refuses to confirm a slot past its stale date (so 
 `createMongoStores({ db, prefix = 'ss_kit_', now? })` and `createMemoryStores({ now? })` return:
 
 ```
-{ replay, nonce, settings, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys, ping }
+{ replay, nonce, settings, entitlements, usageQueue, eventOutbox, revocations, sessions, idempotency, rateLimits, portalKeys }
 ```
 
 Mongo stores also provide `ensureIndexes()` and `collections`. The interfaces are in `src/stores/types.js`.
@@ -382,7 +379,7 @@ is JSON, and no URL, key or other secret is read from the environment.
 
 **Misconfiguration.** `problems` (`configProblems(env)`) lists what keeps the deployment from serving, one sentence per
 problem naming the variable, never its value (today: `MONGODB_URI` missing in production). Pass them to
-`createProduct({ problems })`: the product still starts, and every route — `/healthz` and `/.well-known/ss-app.json`
+`createProduct({ problems })`: the product still starts, and every route — `/.well-known/ss-app.json`
 included — answers `503 { status: 'misconfigured', problems }` (`misconfiguredResponse`), so the deployer and the
 Portal's Add product dialog see the reason. Products have no proxy function (it would be one more deployed function):
 their dashboard page checks `configProblems` and shows the reasons. `@ss/app-kit/proxy` remains for apps that want

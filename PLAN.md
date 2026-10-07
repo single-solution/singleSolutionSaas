@@ -1044,7 +1044,6 @@ export const createApplyBox = ({ config, strings, client, identity, emit }) => (
 | Batch         | `POST /v1/<resource>:batch` with per-item results                                                                                                                                                                                    |
 | Time & money  | ISO-8601 UTC timestamps; money as integer minor units + currency code                                                                                                                                                                |
 | Custom fields | `custom: {}` object on entities that declare `customFields`, validated by merchant-defined schema                                                                                                                                    |
-| Health        | `GET /healthz` (no auth, cheap), `GET /readyz` (dependencies)                                                                                                                                                                        |
 | Docs          | OpenAPI 3.1 generated from code; examples for every operation; SDK generated from the spec                                                                                                                                           |
 
 Every product exposes the **same standard resources** in addition to its own: `GET /v1/entitlement` (what this website has enabled, from cache), `GET /v1/config` (effective config for the element(s) requested), `POST /v1/events` (element/domain events the site wants to push into this product), `GET /v1/strings?lang=`.
@@ -1089,7 +1088,7 @@ Offline verification of website keys and entitlement documents (app-kit); origin
 
 ### 11. Observability standard
 
-Structured JSON logs with `requestId`, `websiteId`, `element`; metrics: request latency, error rate, queue depth, usage reported, cache hit rate; health/readiness endpoints; heartbeat with version; error reporting hook; per-website delivery logs for webhooks.
+Structured JSON logs with `requestId`, `websiteId`, `element`; metrics: request latency, error rate, queue depth, usage reported, cache hit rate; heartbeat with version; error reporting hook; per-website delivery logs for webhooks.
 
 ---
 
@@ -1214,7 +1213,6 @@ Recorded as the core packages were built on branch `platform-v1`. Each package's
 - **Portal → product requests** are signed over `ss-request.v1.${ts}.${METHOD}.${audience=appId}.${canonicalPath}.${sha256(body)}` (`@ss/protocol` `signRequest`/`verifyRequest`), distinct from event signatures (`ss-event.v1.`), so a signed call cannot be replayed to another endpoint, method or product. Canonical path: WHATWG dot-segment resolution, upper-case percent escapes, unreserved escapes decoded, query params sorted by name then value; trailing slash significant. Body-only event signatures are used only for the declared events endpoint.
 - **Portal JWKS is persisted** in the product's control store (last good copy) so cold serverless instances can verify during Portal outages; serving remains bounded by `validUntil` + grace and revocation staleness.
 - **Revocations fail closed:** if not synced for longer than the offline grace (or never synced while the Portal is down), website keys are refused with 503. Every sync merges revocations stored by other instances.
-- `readyz` fails only when the product's own database is down; an unreachable Portal reports `degraded` (200).
 - **Tenant guard** on client-owned data: `websiteId` equality required (no `$in`), `$where` and cross-collection stages (`$lookup`, `$unionWith`, `$out`, `$merge`, incl. inside `$facet`) blocked; inserts are stamped with `websiteId`, `merchantId`, `env`.
 - **Collection prefix** is derived from the manifest slug (`ss_<slug with - → _>_`) and must equal the signed document's `dataScope.prefix`; a mismatch refuses service.
 - Audit entries go to the merchant's database (`ss_<slug>_audit`) unless an audit sink is configured. Connection pools are process-wide per descriptor.

@@ -74,7 +74,7 @@ Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `l
 | Tiers, expiry          | `GET /v1/tiers` · `POST /v1/expiry:run`                                                                      |
 | Referrals              | `POST /v1/referral-codes` · `POST /v1/referrals` · `GET /v1/referrals/{customerId}`                          |
 | Adjustments            | `POST /v1/adjustments` · `GET /v1/adjustments`                                                               |
-| Standard               | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/healthz`, `/readyz`, `/v1/data:export        | anonymize` |
+| Standard               | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export                               | anonymize` |
 
 Errors are RFC 9457 problems with stable codes (`insufficient_points`, `below_minimum`, `above_maximum`,
 `offers_not_allowed`, `self_referral`, `identity_required`, …).

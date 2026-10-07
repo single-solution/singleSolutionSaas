@@ -15,7 +15,6 @@ app/                         thin Next.js adapters — no logic
   api/[...path]/route.js     every module route (toNextRoute → portal.handle)
   w/[...path]/ p/[...path]/  delivery plane: bundles, pack and UI-bundle modules (/w/*), preview proxy (/p/*) → portal.handle
   .well-known/jwks.json/     published JWKS: Portal keys (current + previous) + website-key signing keys
-  healthz/  readyz/          liveness (no deps) / readiness (config + DB ping)
   layout.js  page.js         placeholder console shell
 proxy.js                     per-request CSP nonce for HTML pages
 instrumentation.js           validates configuration when a server instance starts
@@ -144,7 +143,7 @@ payload is a sealed event. Every request runs in a request scope (`infra/request
   last check is older than 50 minutes (after the response).
 
 Deferred work runs through Next `after()` (`toNextRoute(handler, { after })` in the one route handler, `app/api`, which
-also serves `/w/*`, `/p/*`, `/healthz`, `/readyz` and `/.well-known/jwks.json` through `next.config.js` rewrites).
+also serves `/w/*`, `/p/*` and `/.well-known/jwks.json` through `next.config.js` rewrites).
 `createPortal({ background: { mode: 'off' } })` (the default when `NODE_ENV=test`) runs none of it.
 
 There are no on-demand maintenance operations: settlement runs on read, connectors are checked on save and

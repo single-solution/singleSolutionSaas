@@ -1954,8 +1954,21 @@
 				"operationId": "refreshDueSources",
 				"tags": ["knowledge"],
 				"summary": "Dashboard \"Refresh due pages\": fetch the configured pages that are due (never fetched, or older than refresh_hours), at most 5 per call. Nothing refreshes them on a timer.",
-				"security": [{ "dashboardSession": [] }],
-				"parameters": [{ "name": "X-SS-Website", "in": "header", "required": false, "schema": { "type": "string" } }],
+				"security": [
+					{
+						"dashboardSession": []
+					}
+				],
+				"parameters": [
+					{
+						"name": "X-SS-Website",
+						"in": "header",
+						"required": false,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
@@ -1964,12 +1977,22 @@
 								"schema": {
 									"type": "object",
 									"properties": {
-										"refreshed": { "type": "integer" },
-										"failed": { "type": "integer" },
-										"remaining": { "type": "integer" }
+										"refreshed": {
+											"type": "integer"
+										},
+										"failed": {
+											"type": "integer"
+										},
+										"remaining": {
+											"type": "integer"
+										}
 									}
 								},
-								"example": { "refreshed": 2, "failed": 0, "remaining": 0 }
+								"example": {
+									"refreshed": 2,
+									"failed": 0,
+									"remaining": 0
+								}
 							}
 						}
 					},
@@ -3230,56 +3253,6 @@
 								"example": {
 									"accepted": 1,
 									"duplicates": 0
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/healthz": {
-			"get": {
-				"operationId": "healthz",
-				"tags": ["standard"],
-				"security": [],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"status": "ok"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/readyz": {
-			"get": {
-				"operationId": "readyz",
-				"tags": ["standard"],
-				"security": [],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"status": "ok"
 								}
 							}
 						}
