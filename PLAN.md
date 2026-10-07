@@ -1,117 +1,1006 @@
 # Single Solution — Platform Plan (single source of truth)
 
-|                  |                                                                                                                                                                                                                         |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Status**       | Direction approved · pre-implementation · greenfield (existing `singleSolutionSaas` code retired; UI look and ideas carry over)                                                                                         |
-| **Date**         | 2026-10-01 · Owner: Bilal (single-solution)                                                                                                                                                                             |
-| **Deliverables** | **A. Control plane** (Portal) · **B. Delivery plane** (Loader, Edge Injection, hosted pages) · **C. Products** (independent) · **D. Contracts & kit**                                                                   |
-| **Hosting**      | Vercel Hobby + MongoDB Atlas M0 ($0, F.19), one project/database per deployable; no vendor-specific code                                                                                                                |
-| **Language**     | JavaScript (ESM), functional, JSDoc-typed, `tsc --checkJs --strict` in CI                                                                                                                                               |
-| **This file**    | The only planning document. Sections 1–16 + Appendices A–C = platform plan · **Part D** = product specifications (every element and what can be modified) · **Part E** = the Product Standard every product must follow |
+|                  |                                                                                                                                                                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Status**       | Part 0 decided 2026-10-07 · not built yet; building starts only when the owner says so · built by changing the existing code in place, with no old-and-new period (0.9 lists what changes; 0.12 gives the order) |
+| **Date**         | 2026-10-07 · Owner: Bilal (single-solution)                                                                                                                                                                      |
+| **Deliverables** | **A. Portal** · **B. Six products** (0.3) · **C. Shared kit** (`packages/*`, 0.9)                                                                                                                                |
+| **Hosting**      | Vercel Hobby + one MongoDB Atlas M0 while testing; move to a commercial host before charging merchants (0.12 step 14)                                                                                            |
+| **Language**     | JavaScript (ESM), functional, JSDoc-typed, `tsc --checkJs --strict` in CI                                                                                                                                        |
+| **This file**    | The only planning document. **Part 0 is the plan** and overrides everything else in this file, this header included. Everything after Part 0 is history, except the older rules listed in 0.10.                  |
 
-> **Read Part 0 first.** It records the owner's decisions from the 2026-10-07 interview and is **binding**: where anything
-> later in this file (sections 1–16, Appendices, Parts D–F) disagrees, Part 0 wins. Those older sections are kept as
-> history until they are rewritten. Nothing in Part 0 is built yet; building starts only when the owner says so.
+> **Read Part 0 first.** It records the owner's decisions (interviews of 2026-10-07) and is **binding**. Part 0 plus the
+> older rules listed in 0.10 are the only things to build from. Everything else in this file (sections 1–16, Appendices
+> A–C, Parts D–F) is **history**: a source of ideas, never a requirement, and it loses to Part 0 wherever they differ.
+> If a search lands after Part 0, check Part 0 and 0.10 first. If Part 0 and 0.10 say nothing on a point, **ask the
+> owner**; do not fill the gap from history or invent an answer. 0.1 is the only summary of what we build, and 0.7 holds
+> the only walkthroughs. Nothing in Part 0 is built yet; building starts only when the owner says so.
 
 ---
 
-# PART 0 — Owner decisions v2 (2026-10-07, binding)
+# PART 0 — The plan (owner decisions of 2026-10-07, binding)
 
-## 0.1 The idea in one paragraph
+**Contents**: 0.0 Words · 0.1 Idea and scope · 0.2 People, roles and logins · 0.3 Products · 0.4 How products work · 0.5
+Credits and billing · 0.6 Look and feel · 0.7 Flows · 0.8 Further decisions, Portal screens and Chat · 0.9 Conflicts
+with the current build · 0.10 What still applies from older parts · 0.11 Environment variables · 0.12 Build order · 0.13
+Rules for building agents.
 
-We centralise the code that ibrahimMobiles has, so any merchant can use it. Each **product** is a standalone,
-separately hosted app that offers its functionality as an **API** plus **ready-made widgets**. A merchant builds their
-own website and their own admin; they drop in our widgets or design their own screens on our API. Our **Portal** is
-where we (admins) manage merchants, their websites, which products each website has, and credits; merchants use it to
-see their websites, tokens, install code, usage and credits, and to open each product's dashboard. Merchants' staff
-and shoppers never use the Portal or our product dashboards: they only use the merchant's own website and admin.
+**Conventions**: "must" and "never" are requirements. Times are UTC unless a rule says otherwise. `<…>` is a
+placeholder. References such as "0.4.4" point inside Part 0; references such as "F.5" or "§11" point to the older parts
+and bind only as far as 0.10 says.
 
-## 0.2 People
+## 0.0 Words
 
-| Who                                    | Where they sign in                                                 | What they do                                                                                                                                  |
-| -------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Our admins**                         | Portal (admin sign-in)                                             | Roles: **Owner** (everything, incl. admins and products), **Support** (merchants, websites, open products), **Finance** (credits and billing) |
-| **Merchant** (one login each)          | Portal                                                             | Sees their websites, products, tokens, install code, usage, credits; opens product dashboards; edits their own details. No team members.      |
-| **Merchant's users** (staff, shoppers) | The merchant's **own** website/admin, via our **Accounts** product | Whatever the merchant builds. Roles and allowlists from Accounts apply on the merchant's site, never in the Portal or our product dashboards. |
+One meaning per word. New code, screens, APIs and docs use only these words, with these meanings.
 
-- Admin creates every merchant (no self sign-up). The merchant gets a one-time set-password link.
-- Admin adds websites, adds products to websites, and adds credits. Merchants cannot do these themselves.
-- Two-step sign-in (authenticator) is optional for everyone.
-- Suspending a merchant stops their login **and** their products and charges.
-- Merchant details: business name, owner name and email, phone, address/country — editable by the merchant.
+**People and access**
 
-## 0.3 Products (all in the first launch)
+- **Admin**: one of our own people, with a Portal login and exactly one role: Owner, Support or Finance.
+- **Owner**: the admin role that can do everything (0.2), including Products, prices, global defaults, Admins, Settings
+  and deleting merchants.
+- **Support**: the admin role for merchants, websites, products on websites, tokens, suspending and resuming, and
+  opening product dashboards for a merchant's website. It cannot add credits or change prices, global defaults,
+  products, admins or Settings.
+- **Finance**: the admin role for Credits and billing (add credits, receipts, charges), with merchants and websites
+  read-only. It never sees tokens and never opens product dashboards.
+- **Merchant**: one business customer: a single record holding its business details and exactly one login. Only an admin
+  creates one. It has no team members.
+- **Merchant's users**: the people who use the merchant's own website and admin: visitors and the merchant's staff. They
+  never use the Portal or product dashboards.
+- **Merchant's staff**: the merchant's users who work in the merchant's own admin (for example answering chats).
+  Products learn who they are from tickets (0.4.5). "Staff" never means our admins.
+- **Visitor**: a person using a visitor widget or the visitor API on the merchant's website, either signed in through
+  Accounts or a guest.
+- **Login**: an e-mail address and a password, with optional two-step, belonging to exactly one admin or one merchant.
+  The e-mail is unique across the whole Portal.
+- **Two-step**: a 6-digit authenticator-app code asked after the password. Optional for everyone; an Owner can require
+  it for admins.
+- **Recovery codes**: 10 single-use codes shown once when a person turns two-step on. Each one can replace one two-step
+  code.
+- **Setup link**: a single-use link to set a first password (72 hours for merchants, 24 hours for admins). It works only
+  while the login has no password.
+- **Typed confirmation**: a confirm dialog whose button works only after the admin types the exact name it shows (the
+  business name, the domain or the product name).
 
-| Product           | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Accounts**      | Sign-up/sign-in for the merchant's users (phone code via Notifications, email + password, email code / magic link, Google/Apple/Facebook with the merchant's keys); full user profiles incl. addresses, notes, blocked flag; ready-made + custom roles and rules; coordinates "download my data / delete my account" across products; keeps a copy of every product's activity log.                                                                                                                                                                                                                      |
-| **Ecommerce**     | Everything shop: catalog, categories, brands, variants, optional condition grades and serial numbers (IMEI), search, listings and filters, product page, cart, checkout (COD, bank transfer + proof), orders (couriers, invoices, packing slips), returns/warranty, **coupons, deals, loyalty**, reviews, wishlist, back-in-stock/price alerts, catalog SEO (meta, structured data, sitemaps, feeds, llms.txt), policies, shop-only details (payment methods, delivery info), reports. One product because placing an order reserves stock, counts offer use and spends points in **one database step**. |
-| **Chat**          | Everything the ibrahimMobiles chat does: widget, guests and signed-in users, AI with **any provider** (merchant's own key, picks a model), shop lookups (search, details, deals, savings quotes, top/new, my orders/account) via the merchant's Ecommerce token, proactive nudge, inbox and human handoff, attachments (merchant's own storage), new-chat alerts (email, unread badge, WhatsApp/SMS). Live updates pluggable (realtime service key or host websockets, else smart back-off). Guest rules and AI disclosure are merchant settings.                                                        |
-| **Notifications** | Sends WhatsApp, email, SMS, push and webhooks for any product, through the merchant's own provider keys, with retries and a delivery log.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| **Payments**      | Card/online payments with the merchant's own keys: Stripe, PayFast and local Pakistani gateways, PayPal, plus a generic adapter. Usable by non-shop sites too; Ecommerce uses it via token.                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Growth**        | Tracking pixels, cookie consent, conversion events, first-party analytics, notice bar, site-wide SEO (robots, verification, IndexNow, SEO checklist).                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+**Websites and products**
 
-- The existing 17 products are **merged and reshaped** into these six (15 shop products → Ecommerce, Signups → Accounts,
-  Chatbot → Chat, new Notifications, Payments, Growth).
-- No "Admin panel" product: each product offers admin widgets and API; the merchant builds their own admin.
+- **Portal**: the web app we host. Our admins use it to manage merchants, websites, products on websites, credits,
+  admins and settings. Merchants use it to see their websites, tokens, install code, usage and credits, and to open
+  product dashboards.
+- **Deployable**: one separately hosted app with its own database and environment variables: the Portal, or one product.
+- **Website**: one exact, normalised domain owned by one merchant (0.2). `shop.com` and `www.shop.com` are two websites.
+  A domain belongs to at most one website platform-wide.
+- **Product**: one of the six separately hosted apps, with ids `accounts`, `ecommerce`, `chat`, `notifications`,
+  `payments` and `growth`. Each offers an API plus widgets and has its own setup dashboard.
+- **Connected product**: a product an Owner connected in Portal → Products. It is either active (offered in Add product)
+  or inactive (not offered; websites that already have it are unaffected).
+- **Product on website**: a website paired with a product, added by an Owner or Support admin, with its own browser
+  token and server token. It is either added or removed.
+- **Product dashboard**: a product's setup app, opened from the Portal in a new tab. Tabs: Overview, Features, Settings,
+  Connections, Developers, plus Defaults and Prices for Owners. It never shows business data.
+- **Admin view**: a product dashboard opened by an Owner or Support admin, with the website switcher and an Admin view
+  banner.
+- **Switcher**: the website picker in a product dashboard. Merchants see their own websites that have the product;
+  admins see every website that has it. Removed ones are never listed.
+- **Launch**: a single-use, 60-second, Portal-signed token (kind merchant or admin) that opens a product dashboard. The
+  product exchanges it for its own session.
+- **Widget**: a ready-made piece of UI served by a product's `widget.js`. **Visitor widgets** serve visitors and use the
+  browser token. **Admin widgets** run in the merchant's own admin and use tickets.
+- **Headless**: building your own UI on a product's API. There is no SDK and there are no framework adapters.
+- **API**: a product's `/v1` HTTP routes. Each route belongs to exactly one feature and works only while that feature is
+  on.
+
+**Features and settings**
+
+- **Feature**: one on/off switch inside a product, with a permanent key, a name, a description and an hourly price. Only
+  Owner or Support admins switch it, and the switches decide what is charged.
+- **Feature key**: the permanent identifier of a feature. It never changes, even when the feature is renamed.
+- **Setting**: a value, edited in the product dashboard, that changes how a feature behaves on one website.
+- **Limit**: a setting that caps use. The merchant sets it within hard maximums fixed in the product's code. Rate limits
+  that protect our hosting are code constants, not settings.
+- **Global default**: an Owner-set value used by every website that has not saved its own value for that setting.
+  Changing it changes those websites at once.
+- **Widget texts**: every word a widget shows. Each has an English default in the product's string files, and the
+  merchant can overwrite any of them per website (0.4.10).
+- **Connections**: the product dashboard tab holding the merchant's own database, storage, AI and provider keys, and
+  pasted tokens. Values are encrypted and write-only.
+- **Pasted token**: another product's server token for the same website, entered in a product's Connections so that one
+  product can call the other.
+
+**Money**
+
+- **Credit**: the only money unit merchants see. 1 credit = 1000 millicredits.
+- **Millicredit**: the integer unit every amount is stored in: 1/1000 of a credit.
+- **Price**: credits per hour for one feature. The same for every merchant and website, set by an Owner in the product's
+  Prices screen, starting at 0, with up to 3 decimals.
+- **Receipt**: a ledger entry that adds whole credits, recorded by an Owner or Finance admin with amount paid, payment
+  method and reference. It is never edited or reversed.
+- **Amount paid**: free text on a receipt (for example `PKR 5,000`), shown exactly as typed, to admins only, and never
+  totalled.
+- **Charge**: credits the Portal takes for one switched-on feature, for one UTC clock hour, on one product on a website.
+- **Day charge**: the stored ledger entry for one product on a website for one UTC day, with per-feature lines (hours,
+  credits). Today's charges are computed live and not stored.
+- **Charging**: the state in which hours are charged: product-on-website status active or grace.
+- **Balance**: a merchant's single credit total, shared by all their websites: receipts minus stored day charges minus
+  today's charges so far.
+- **Debt**: a negative balance, caused by charged grace hours. The next receipts pay it first.
+- **Hourly cost / daily cost**: for one product on one website, the sum of the current hourly prices of its switched-on
+  features; daily cost is 24 times that, shown as a projection.
+- **Daily spend**: 24 × the sum of the current hourly prices of every switched-on feature on all of a merchant's
+  products on websites, removed ones excluded.
+- **Days left**: balance ÷ daily spend, rounded down. Shown as — when daily spend is 0.
+- **Use**: any request a product receives for a website.
+- **Check (settle)**: the Portal working out, for one merchant, the elapsed hours and charges, low balance, grace and
+  stop, and any due billing e-mail. It runs when a product fetches a status or a Portal page shows that merchant.
+
+**Statuses**
+
+- **Status**: in Part 0, always a billing or lifecycle state. Never system health or uptime. Other states are always
+  named in full: connection state (0.4.3), conversation status (Chat), product Active or Inactive.
+- **Merchant status**: exactly one of suspended, stopped, in grace, low balance or active, checked in that order
+  (0.5.5). Setup pending is a separate badge.
+- **Product-on-website status**: exactly one of removed, suspended, stopped, grace or active, checked in that order
+  (0.5.5). It is sent to the product and shown on cards and chips.
+- **Low balance**: daily spend > 0 and 0 < balance < threshold days × daily spend.
+- **Grace period**: a fixed window that starts at the first moment the balance is ≤ 0 while daily spend > 0, and lasts
+  the grace days set when it started. Products keep working and keep being charged. It ends only when a receipt brings
+  the balance above 0 or when its end time passes (0.5.6).
+- **Stopped**: the state after a grace period ended with the balance still ≤ 0, until a receipt brings the balance
+  above 0. Products refuse service and nothing is charged. The merchant can still sign in, open dashboards and see
+  usage; only an admin can add credits.
+- **Suspended**: a state set by an Owner or Support admin, with an internal reason. The merchant cannot sign in, all
+  their products refuse service, and nothing is charged until they are resumed.
+- **Removed**: the status of a product on a website after an admin removed it. Its tokens are refused and nothing is
+  charged; its settings, connections and tokens are kept for a re-add.
+- **Status response**: the Portal's answer to `GET /v1/product/websites/:websiteId/status`, which products cache for at
+  most 5 minutes.
+- **Notice**: a signed Portal → product message (`status.changed`, `token.revoked`, `sessions.revoked` or
+  `website.deleted`) telling the product to drop a cache or delete a website's data.
+- **Price report**: the product → Portal message (`PUT /v1/product/prices`) listing every feature with its hourly price.
+- **Feature report**: the product → Portal message (`PUT /v1/product/websites/:websiteId/features`) listing the
+  switched-on feature keys for one website and the admin who changed them. The switches are saved only after the Portal
+  accepts it.
+
+**Tokens**
+
+- **Browser token**: a public, Portal-signed token for one product on one website. Accepted only from https on the exact
+  domain and from localhost, and only on visitor routes and widgets.
+- **Server token**: a secret, Portal-signed token for one product on one website, for the merchant's server only.
+  Refused when sent with an Origin header. Revealed and regenerated only in the Portal.
+- **Ticket**: a 15-minute token a product signs for one member of the merchant's staff, one website, one browser origin
+  and a set of permissions. The merchant's server requests it with the server token; admin widgets use it.
+- **Permission**: a named right inside a product that a ticket can carry (for Chat: `inbox.read`, `inbox.reply`,
+  `inbox.manage`, `knowledge.edit`, `reports.read`).
+- **Accounts sign-in**: a 15-minute token from Accounts that identifies one of a merchant's users on one website. A
+  product trusts it only when the Accounts token is pasted, and it never authorises admin actions.
+- **Origin**: scheme + host + port of a web page, as browsers send it in the Origin header (for example
+  `https://admin.shop.com`).
+
+**Data**
+
+- **Product database**: a product's own database (its `MONGODB_URI`). It holds switches, settings, connections, prices,
+  defaults, sessions, Recent changes and cached status, and no business data.
+- **Merchant database**: the merchant's own MongoDB, connected in a product, where all of that product's business data
+  for the website lives.
+- **Business data**: the records the merchant's business creates or reads day to day (conversations, knowledge entries,
+  saved replies, leads, orders, users).
+- **Recent changes**: a product's own record of changes made in its dashboard (features, prices, defaults, settings,
+  connections), shown on its Overview.
+- **Activity log**: a list of actions (who, when, what, target). Portal Activity covers Portal actions and reported
+  feature and price changes. Each product also keeps a log of staff actions done through its widgets or API, in the
+  merchant database.
+- **business.json**: the file at `https://<domain>/.well-known/business.json` giving the business name, logo, e-mail,
+  phone, address, country and time zone. Products read it; the Portal never does.
+- **Support contact**: the e-mail, phone and optional WhatsApp in Portal Settings, shown to merchants on the welcome
+  screen, the suspension message, banners, Features screens and e-mails.
+- **Data rights**: every product's export and delete routes for one end user. Accounts calls them using pasted server
+  tokens.
+
+**Chat words**
+
+- **Visitor chat**: one Chat feature covering the ready chat widget and the visitor API for a custom chat UI.
+- **Inbox**: Chat's admin widget where the merchant's staff read and answer conversations.
+- **Handoff**: moving a Chat conversation to a person. The conversation is flagged Waiting for a person and the AI stops
+  replying until a staff member replies.
+- **Flow**: a short list of scripted chat steps, started by a page rule or a keyword (0.8.3).
+- **Lead**: contact details a visitor left in Chat, saved in the merchant database.
+- **Back-off checking**: Chat's in-browser schedule for checking new messages: fixed code constants, no websockets, no
+  server timers.
+- **AI tokens**: the usage units an AI provider reports (input + output), counted by Chat's AI token caps. Never an
+  access token.
+- **Reports (Chat)**: the Chat feature and widget that show chat numbers. Not the same as price and feature reports.
+
+**Process**
+
+- **Shared kit**: the `packages/*` libraries (app-kit, protocol, contracts, entitlements, net, ui, cli, config, rules,
+  web) used by the Portal and the products.
+- **Grilling**: the in-depth owner interview held right before a product is built. It decides that product's exact
+  feature list and dashboard contents.
+- **The switch**: the deploy in 0.12 step 5 that moves the Portal to the new model. The test databases `ss_portal` and
+  `ss_chatbot` are reset at it.
+- **Parked folder**: an old product folder moved to `parked/` at the repository root: kept for reference, outside the
+  pnpm workspace, CI and deployments (0.12 step 4).
+- **History**: everything in this file after Part 0, except the rules listed in 0.10. A source of ideas, never a
+  requirement.
+
+**Old words.** Do not use these in new code, screens, APIs or docs:
+
+| Old word                                                                  | Use instead                     |
+| ------------------------------------------------------------------------- | ------------------------------- |
+| element                                                                   | feature                         |
+| subscription                                                              | product on website              |
+| entitlement document                                                      | status (status response)        |
+| staff (our people), superadmin                                            | admin (Owner, Support, Finance) |
+| staff (the merchant's people)                                             | merchant's staff                |
+| apps                                                                      | products                        |
+| connectors, resources                                                     | connections                     |
+| website keys `pk_` / `sk_`                                                | browser token / server token    |
+| activity (meaning a call into a product)                                  | use                             |
+| headless chat, visitor chat widget                                        | visitor chat                    |
+| pack, loader, plan, trial, test mode, live/test, Website Graph, Event Hub | nothing: removed (0.10)         |
+
+## 0.1 The idea and the scope
+
+We centralise the code that ibrahimMobiles has, so any merchant can use it. Each **product** is a standalone, separately
+hosted app that offers its functionality as an **API** plus **ready-made widgets**. A merchant builds their own website
+and their own admin; they drop in our widgets or design their own screens on our API. Our **Portal** is where we
+(admins) manage merchants, their websites, which products each website has, and credits; merchants use it to see their
+websites, tokens, install code, usage and credits, and to open each product's dashboard. Merchants' users never use the
+Portal or our product dashboards: they only use the merchant's own website and admin.
+
+- **Scope rule**: build only what Part 0 names. None of the following is built: health, ready or status endpoints;
+  status pages; uptime checks; monitoring, telemetry or diagnostic screens; crons, timers or background loops (0.10);
+  extra admin tools, exports, presets or nice-to-haves that Part 0 does not list. If something seems needed but Part 0
+  and 0.10 do not cover it, ask the owner instead of building it.
+- 0.1 is the only summary of what we build. 0.7 holds the only walkthroughs.
+
+## 0.2 People, roles and logins
+
+| Who                                    | Where they sign in                                                                                                 | What they do                                                                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Our admins**                         | Portal (the one sign-in page)                                                                                      | One role each: **Owner**, **Support** or **Finance** (rights below).                                                                          |
+| **Merchant** (one login each)          | Portal (the same sign-in page)                                                                                     | Sees their websites, products, tokens, install code, usage and credits; opens product dashboards; edits their own details. No team members.   |
+| **Merchant's users** (staff, visitors) | The merchant's **own** website and admin (signing in through our **Accounts** product or the merchant's own login) | Whatever the merchant builds. Roles and allowlists from Accounts apply on the merchant's site, never in the Portal or our product dashboards. |
+
+- Admins create every merchant (no self sign-up). The merchant gets a setup link.
+- Owner and Support admins add websites and products on websites; Owner and Finance admins add credits. Merchants cannot
+  do these themselves.
+
+### Rights per role
+
+The Portal API checks these rights on every request; hiding a button is not enough. Menus hide what a role cannot use.
+Each product checks the dashboard rights on its own server for every request.
+
+| Action                                                                              | Owner | Support | Finance     | Merchant                             |
+| ----------------------------------------------------------------------------------- | ----- | ------- | ----------- | ------------------------------------ |
+| See Overview and Activity                                                           | yes   | yes     | yes         | own only                             |
+| Create merchants; edit merchant details                                             | yes   | yes     | view        | edits own (Account)                  |
+| Suspend and resume merchants                                                        | yes   | yes     | –           | –                                    |
+| Resend or copy merchant setup links                                                 | yes   | yes     | –           | –                                    |
+| Turn off another person's two-step                                                  | yes   | –       | –           | –                                    |
+| Delete a merchant                                                                   | yes   | –       | –           | –                                    |
+| Add and remove websites                                                             | yes   | yes     | view        | views own                            |
+| Add and remove products on websites                                                 | yes   | yes     | view        | views own                            |
+| Reveal, copy and regenerate server tokens                                           | yes   | yes     | –           | own                                  |
+| Open a product dashboard for a website                                              | yes   | yes     | – (refused) | own websites                         |
+| Switch features on and off                                                          | yes   | yes     | –           | – (sees them read-only)              |
+| Edit settings, widget texts, theme and connections                                  | yes   | yes     | –           | own (settings: active features only) |
+| Edit global defaults and prices                                                     | yes   | –       | –           | –                                    |
+| Products: connect, reconnect, set active/inactive, Open as admin with no website    | yes   | –       | –           | –                                    |
+| Add credits                                                                         | yes   | –       | yes         | –                                    |
+| See receipts and charges                                                            | yes   | view    | yes         | own, without amount paid             |
+| Admins: invite, resend (or copy) invite, correct invite e-mail, change role, remove | yes   | –       | –           | –                                    |
+| Settings (e-mail, billing rules, branding, support contact, security)               | yes   | –       | –           | –                                    |
+
+### Logins
+
+- Every login, admin or merchant, is one e-mail address plus a password. An e-mail belongs to at most one admin or one
+  merchant across the whole Portal. Creating or changing a login to an e-mail already in use is refused, so the single
+  sign-in page and Forgot password always know which console to open.
+- **First admin**: while no admin exists, the sign-in page offers Create admin (name, e-mail, password). It creates an
+  Owner. The check is atomic, so only one can ever be created this way. The first visitor wins, so the deployer creates
+  the Owner right after deploying, and right after the reset at the switch (0.8.1). Later admins join only by invite
+  (0.8.2 Admins).
+- **Setup links** (merchants and admins) are single-use and work only while that login has no password. They last 72
+  hours for merchants and 24 hours for admins; password-reset links last 30 minutes. Resend creates a new link and
+  cancels the previous one. It is offered only until the password is set; after that the person uses Forgot password on
+  the sign-in page. The admin may copy the link instead of e-mailing it; a copied link is shown once, only to that
+  admin, and the copy is logged in Activity. Until the password is set, the admin can correct the e-mail. No admin can
+  get a link that replaces an existing password. A suspended merchant's links never sign them in.
+- **Changing a login**: to change the login e-mail or password, or to turn two-step off, a person needs their current
+  password, plus a two-step code (or a recovery code) when two-step is on. A new e-mail takes effect only after the
+  person clicks the link sent to it; the old address gets a notice. A password change ends all other sessions of that
+  login, in the Portal and in product dashboards (`sessions.revoked`, 0.4.12). The same rules apply to admins.
+- **Sessions**: a sign-in lasts the Security setting Session length (0.8.2 Settings), the same for admins and merchants.
+  Product dashboard sessions never last longer than the Portal session that launched them.
+
+### Two-step sign-in
+
+- Optional for everyone, admins and merchants. Turning it on: scan the QR code with an authenticator app, confirm one
+  code, then receive **10 recovery codes**, shown once. Each recovery code works once instead of a two-step code. Making
+  a new set (password + code) cancels the old set.
+- Turning it off yourself: password + a two-step or recovery code.
+- **Lost authenticator and recovery codes**: an Owner turns off two-step for that merchant (merchant page) or that admin
+  (Admins page), after a confirm. The person gets an e-mail saying so, the action is logged in Activity, their recovery
+  codes are deleted, and they can set two-step up again. An Owner cannot do this for themselves; if the only Owner loses
+  both, only direct database access helps, so keep at least two Owners.
+- While Settings → Security → Require two-step for admins is on, an admin without two-step must set it up right after
+  signing in, before any other page opens.
+
+### Merchants
+
+- A merchant is one record: business details plus one login. There are no users, teams or memberships under it.
+- Fields: business name (required); owner name (required); owner e-mail (required; it is the login e-mail); phone
+  (optional; free text with country code); address (optional; free text); country (optional; ISO 3166-1 list; stored as
+  the ISO 3166-1 alpha-2 code and shown by name). The admin fills them in at creation. The merchant edits all of them in
+  Account. Admins edit them on the Details tab, except the login e-mail once the merchant has set a password.
+- Deleting a merchant: 0.5.9.
+
+### Suspend and resume
+
+- Suspend (Owner or Support, reason required) takes effect at once. The merchant cannot sign in; the sign-in page shows
+  `Your account is suspended. Contact <support contact>.` All their Portal and product dashboard sessions end, the
+  Portal refuses their launches, every product on their websites gets status suspended (0.5.5), and charges stop from
+  the next hour.
+- The reason is internal: admins see it and it is in Activity; the merchant does not.
+- Admins can still open those product dashboards. Credits can still be added, but adding them does not resume the
+  merchant.
+- Resume (Owner or Support) restores everything, and the status is worked out again from the balance (0.5). Suspension
+  neither pauses nor extends a running grace period. Nothing is deleted.
+
+### Websites
+
+- A website is one exact domain: lowercase, punycode, with no scheme, path, port or trailing dot. IP addresses,
+  localhost, single-label names and wildcards are refused (F.3 normalisation).
+- `shop.com` and `www.shop.com` are two websites, with separate tokens and separate charges; the admin adds the host the
+  site actually serves.
+- A domain belongs to at most one website across all merchants. A domain cannot be edited: to fix a wrong domain, remove
+  the website and add the right one (0.5.9).
+- Products key everything by website id, never by domain.
+
+## 0.3 Products (all six in the first launch)
+
+| Product           | What it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Accounts**      | Sign-up and sign-in for the merchant's users (phone code via Notifications, e-mail + password, e-mail code / magic link, Google/Apple/Facebook with the merchant's keys); full user profiles incl. addresses, notes and a blocked flag; ready-made and custom roles and rules for the merchant's users; coordinates "download my data / delete my account" across products and keeps a copy of every product's activity log (0.4.11). Extras kept as switches: shopper orders tab, risk checks, terms acceptance.                                                                                                                                              |
+| **Ecommerce**     | Everything shop: catalog, categories, brands, variants, optional condition grades and serial numbers (IMEI), search, listings and filters, product page, cart, checkout (COD, bank transfer + proof), orders (couriers, invoices, packing slips), returns/warranty, **coupons, deals, loyalty**, reviews, wishlist, back-in-stock/price alerts, catalog SEO (meta, structured data, sitemaps, feeds, llms.txt), policies, shop-only details (payment methods, delivery info, currency), reports. One product because placing an order reserves stock, counts offer use and spends points in **one database transaction**, with no network calls between parts. |
+| **Chat**          | Everything the ibrahimMobiles chat does, plus kept extras. Full specification: 0.8.3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Notifications** | Sends WhatsApp, e-mail, SMS, push and webhooks for any product, through the merchant's own provider keys, with retries and a delivery log.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| **Payments**      | Card and online payments with the merchant's own keys: Stripe, PayFast and local Pakistani gateways, PayPal, plus a generic adapter. Usable by non-shop sites too; Ecommerce uses it through a pasted token.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| **Growth**        | Tracking pixels, cookie consent, conversion events, first-party analytics, notice bar, site-wide SEO (robots, verification, IndexNow, SEO checklist).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+
+- These six products are the whole catalogue. A product's exact feature list comes only from its grilling, right before
+  it is built (0.12); Chat's list is already decided (0.8.3). Until a product is grilled, 0.3 is its only scope.
+- Nothing outside 0.3 is built: no Automation, Ops Monitor, Files & Drive, Reports builder, Content product, Messaging
+  campaigns, Configurator product, booking system, or any other Part D §28 idea. (Chat's book-a-slot tool calls the
+  merchant's own booking system, 0.8.3.)
+- The existing 17 products are **merged and reshaped** into these six: the 15 shop products → Ecommerce, Signups →
+  Accounts, Chatbot → Chat; Notifications, Payments and Growth are new.
+- There is no "Admin panel" product: each product offers admin widgets and an API, and the merchant builds their own
+  admin.
+- **Messaging goes through Notifications.** Only Notifications holds messaging provider keys and talks to messaging
+  providers. `packages/app-kit/src/connectors/smtp.js` and the HTTP messaging connector stay in `@ss/app-kit` until step
+  6, then move into `products/notifications` and are deleted from the kit. The Portal keeps its own mailer
+  (`platform/src/infra/mailer.js`). Every other product sends through Notifications, using the pasted Notifications
+  token. Without that token, its sending features show `Notifications not connected`. The Portal's own e-mails use the
+  Portal's SMTP settings (0.8.2 Settings), not Notifications. Campaigns and segments are not built unless Notifications'
+  grilling adds them.
+- **AI**: there is no AI gateway, no platform AI key, no AI usage metering and no AI operator in the Portal. Chat calls
+  the AI provider directly, with the merchant's key from Chat's Connections, through `@ss/net`.
+- **Nothing regional in code**: region-specific providers (PayFast, Pakistani gateways, local couriers) are optional
+  adapters a merchant picks. Code never assumes a country, currency, language or time zone; those come from
+  business.json and the product's settings.
+- **Payment confirmation**: Ecommerce never marks an order paid because of anything the browser sends back (return URL
+  parameters, client callbacks). It marks an order paid only after Payments confirms that payment server-to-server, for
+  the same website and the order's exact amount, using the Payments token pasted into Ecommerce. How unconfirmed orders
+  are rechecked without timers is decided when Payments and Ecommerce are grilled.
+- **Growth inputs**: how Growth learns about orders, carts and item changes in other products is decided when Growth is
+  grilled. Until then, no product sends anything to Growth, and no event hub or product-to-product event path is built.
+
+### Where ibrahimMobiles code goes
+
+| ibrahimMobiles area                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Goes to                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Assistant chat, inquiries inbox, guest limits, handoff, chat alerts                                                                                                                                                                                                                                                                                                                                                                                                                                | Chat                                                            |
+| OTP, sessions, profiles and addresses, account pages, roles and allowlists of the merchant's users, copies of activity logs                                                                                                                                                                                                                                                                                                                                                                        | Accounts                                                        |
+| Categories, attributes, brands, products, variants, grades, serials/IMEI, CSV, product page blocks and variant selector, storefront cards/grid/filters, search, cart, checkout (COD, bank transfer + proof), order placement and lifecycle, couriers, invoices, packing slips, risk caps, payments/refunds ledger, returns/warranty, coupons, deals, cart locks, loyalty, reviews, wishlist, stock/price alerts, catalog SEO (meta, structured data, sitemaps, feeds, llms.txt), policies, reports | Ecommerce                                                       |
+| Message sending, outbox, SMTP/WhatsApp/SMS providers                                                                                                                                                                                                                                                                                                                                                                                                                                               | Notifications                                                   |
+| Card and online gateways                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Payments (new)                                                  |
+| Consent banner, tags/pixels, conversion events, telemetry/vitals/first-party analytics, notice bar, robots, verification, IndexNow, SEO checklist                                                                                                                                                                                                                                                                                                                                                  | Growth                                                          |
+| Presigned uploads                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Shared kit (each product uploads to the merchant's own storage) |
+| Admin roles, two-step and audit for our team                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Portal (Owner, Support, Finance)                                |
+| Cron jobs and digests                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Not ported (0.10)                                               |
+
+Anything not listed is decided in that product's grilling. ibrahimMobiles is never modified.
 
 ## 0.4 How products work
 
-- **One dashboard per product**, for the merchant owner and our admins only, opened **from the Portal in a new tab**
-  (no separate product login). In it:
-   - features on/off per website (this decides what is charged), limits, behaviour settings;
-   - the client's own keys: their database, storage, AI, providers, other products' tokens;
-   - for our admins: global defaults, **prices** (credits per hour per feature, applied immediately), and a switcher to
-     any merchant/website (also reachable from the Portal's website page).
-- **No plans**: every feature has its own hourly price. No per-use charges. Limits are set in the product.
-- **Product reports, Portal charges**: when features change, the product reports the active features and their prices;
-  the Portal charges per hour and shows a per-feature breakdown.
-- **Independent products**: they never call each other automatically. Where one needs another, the merchant pastes
-  that product's token into it (e.g. Chat ← Ecommerce token for shop lookups; Accounts/Ecommerce/Chat ← Notifications
-  token to send; Ecommerce ← Payments token). Accounts sign-ins are trusted by every product.
-- **Client data** (orders, chats, users…) lives in the **client's own database**, connected inside each product.
-- **Business basics** (name, logo, contact, country, time zone) come from a **standard file on the merchant's website**
-  (e.g. `https://shop.com/.well-known/business.json`, we provide a template). Shop-only details stay in Ecommerce.
-- **Tokens**: per website **and** per product. A browser token (locked to the exact domain) for widgets; a secret server
-  token for API calls from the merchant's server/admin (merchant can reveal and regenerate it). Every domain is its
-  own website; nothing is free (no test mode).
-- **Removing a product from a website** stops it and its charges; its settings are kept so re-adding restores them.
-- **Who hosts what**: we host the **Portal** (to manage merchants) and the **products** (the actual functionality, each
-  with its own documentation). The merchant hosts their **own website, admin, database and storage**. Merchants use a
-  product only through its **widgets or API**; features that are not active do not work, even if previously used.
-- **The product dashboard is setup only**: Overview, Features, Settings, Connections, Developers (docs per feature,
-  tokens, widget snippets, API reference, examples). It shows no business data. Opens for the website clicked in the
-  Portal, with a website switcher.
-- **Everyday data work happens on the merchant's own site/admin** (e.g. replying in the chat inbox, adding products,
-  handling orders and refunds, approving reviews, managing users and roles) through our **widgets** or the merchant's
-  own screens on our **API**, using the server token. The merchant's admin checks roles from Accounts before calling.
-- **Admins helping a merchant**: decided per product.
+These rules are the same in every product. A product's grilling adds its own features and settings, never different
+rules.
 
-## 0.5 Credits
+### 0.4.1 Who hosts what
 
-- Shown as **credits only** (no money). Admin adds credits with payment details (amount paid, method, reference) as a
-  receipt. Credits are never deducted or corrected by hand.
-- Low balance: banner in the merchant console + email to merchant and admin.
-- At zero: **grace period** (admin setting, default 3 days) with warnings, then products stop.
-- Merchant sees usage **per product, per website, per day** with a per-feature breakdown.
-- Emails from the Portal: account setup link, password reset, low balance / grace / stopped, credits added.
-- A simple activity log of admin and merchant actions.
+- We host the **Portal** (to manage merchants) and the **six products** (the functionality, each with its own docs). The
+  merchant hosts their **own website, admin, database and storage**.
+- A product offers exactly two things: **widgets** and its **API**. Merchants use a product only through them. A feature
+  that is off does not work, even if it was used before.
+- **Everyday work happens on the merchant's own site and admin** (replying in the chat inbox, adding products, handling
+  orders and refunds, approving reviews, managing users and roles), through our widgets or the merchant's own screens on
+  our API. The merchant's admin checks its user's role (from Accounts or its own login) before it calls the API with the
+  server token or asks for a ticket.
+- **One product dashboard per product**, for the merchant and our admins only, opened from the Portal in a new tab (no
+  separate product login). It is **setup only**: it holds how the product behaves for a website (switches, settings,
+  connections, docs) and shows no business data.
+- **Products are independent**: a product calls another product only with a pasted token (0.4.6). Products never find or
+  call each other on their own.
+
+### 0.4.2 Features, settings, limits, defaults and prices
+
+- **No plans**: every feature has its own hourly price (0.5.2). There are no per-use charges, locks, plan maxima or
+  policy layers.
+- **Features** are switched on and off per website only by our admins (Owner, Support); merchants see them read-only.
+  The switches decide what is charged. A product added to a website starts with all features off.
+- **Settings** of active features, limits included, are edited by the merchant and by our admins. Settings of features
+  that are off are hidden from merchants; admins see all settings, so they can prepare a feature before switching it on.
+  The settings and data of a feature that is turned off are kept, and work again when it is turned back on.
+- **Limits** are settings of the feature they belong to, within hard maximums fixed in the product's code (for example
+  Chat's 10 MB attachment cap). Rate limits that protect our hosting (requests per minute per website and per visitor)
+  are constants in code, not settings.
+- **Global defaults** (Owner only): a global default applies to every website that has not saved its own value for that
+  setting, so changing a default changes those websites at once. A website's saved value wins, and Reset to default
+  clears it.
+- **Prices** (Owner only): global, one hourly price per feature for every merchant and website (0.5.2).
+- Every API route and every widget belongs to exactly one feature and works only while that feature is on. The docs show
+  the feature next to each route and widget.
+- Feature keys are permanent. A feature can be on only when the features it needs are on (0.4.3 Features screen).
+
+### 0.4.3 The product dashboard
+
+- **Tabs**, the same in every product: a left sidebar with **Overview · Features · Settings · Connections ·
+  Developers**, plus **Defaults** and **Prices** for Owners only. Long settings are split into sections. It opens for
+  the website clicked in the Portal, with a website switcher. Dashboards look the same as the Portal (0.6).
+- **Opening**: Open in the Portal makes a single-use launch (60 s, F.5). The product exchanges it for its own session
+  cookie (HttpOnly, Secure, SameSite=Lax, host-only), which ends when the launching Portal session ends; the launch
+  carries that time as `sessionExpiresAt`.
+   - A merchant launch names the merchant, their websites that have this product (not removed) and the website to open.
+     The switcher lists only those websites, and the server checks every dashboard request against that list.
+   - An admin launch carries the admin's id, name and role: Owner or Support (the Portal refuses Finance). An admin may
+     switch to any website that has the product.
+   - The launch also carries the branding (name, accent, logo URL) and the support contact.
+   - The merchant can open a product whose status is active, grace or stopped, with a banner: `In grace until <time>` or
+     `Stopped: out of credits`. Nobody can open a removed product (it has no card in the Portal and is not in the
+     switcher). A suspended merchant cannot open any product; admins can, with a `Suspended` banner.
+   - The Portal's `sessions.revoked` notice ends dashboard sessions at once when a merchant is suspended or deleted, an
+     admin is removed or changes role, or a person changes their password or signs out of the Portal (0.4.12).
+   - Product dashboards refuse any write whose Origin is not the product's own address (the base URL it was connected
+     with). Neither product dashboards nor the Portal can be shown inside frames.
+- **Admin view**: a top bar with the switcher, which is searchable and lists every website that has this product,
+  grouped by merchant, including stopped and suspended ones (removed excluded), plus a banner
+  `Admin view: <merchant> / <domain>`. Owners also see **Defaults** (the Settings screens, editing global defaults for
+  all websites) and **Prices**. Open as admin from Portal → Products opens Defaults with no website picked; the other
+  five tabs need a picked website. Support sees the switcher, Features on/off, Settings and Connections, never Prices or
+  Defaults. A merchant session can never switch features or open Prices or Defaults, and can edit only the settings of
+  active features. Both views have a Back to Portal link.
+- **Our admins and business data**: our admins never see business data through a product dashboard. Whether a later
+  product gives admins any other help is decided in its grilling (Chat: setup only, 0.8.3).
+- **Overview**: a status banner (active / `In grace until <time>` / `Stopped` / `Suspended`); the features that are on;
+  today's cost (credits charged so far today, UTC, for this product on this website, from the status response's
+  `todayMillicredits`); a setup checklist listing only what switched-on features need (merchant database connected and
+  last test passed, the other connections, widget installed, business.json found); and Recent changes. Widget installed
+  means a visitor-widget request from the real domain (not localhost) in the last 7 days, shown with its last-seen time.
+- **Features screen**: one row per feature with its name, a one-line description, its hourly price in credits, on/off,
+  `Needs: <features>` when it depends on others, and a docs link. Merchants see it read-only, with
+  `To change features, contact <support contact>` and no request button. Admins tick several features and press Save
+  once; this sends one feature report to the Portal (0.4.12), after a confirm that shows the new hourly cost. A feature
+  whose dependency is off cannot be ticked: the screen names the dependency and never switches it on automatically.
+  Turning a feature off also turns off the features that need it, after a confirm that lists them. A switched-on feature
+  is charged even when a connection it needs is missing; it then shows `Not working: connect <X>`.
+- **Connections screen**: each item shows `Needed by: <features>`, a status (Connected, Not connected, or Test failed
+  with the message) and the actions Test, Replace and Remove. Each item is tested live when saved. Saved secrets are
+  write-only: merchants and our admins alike see them masked (last 4 characters). No API, export, log or switcher ever
+  returns them.
+   - **Database** means a MongoDB connection string only.
+   - **Storage** means any S3-compatible bucket (endpoint, region, bucket, access key id, secret). Uploads go from the
+     browser straight to the bucket with a short presigned PUT that fixes the type and size, so the merchant must allow
+     their site's origin in the bucket's CORS (the docs show the rule).
+   - Every address a merchant enters is fetched through `@ss/net` (F.10): storage endpoint, OpenAI-compatible base URL,
+     provider endpoints, webhook and booking URLs, knowledge pages and business.json. Merchant database connections use
+     its guarded DNS lookup.
+- **Recent changes**: every change made in a product dashboard (features, prices, defaults, settings, widget texts,
+  theme, connections) is recorded with who, what and when in the product database and shown on Overview. Feature and
+  price changes also reach Portal Activity through the reports (0.4.12).
+- **Developers**: the product's docs (0.4.10) with features that are off marked, the website's browser token filled in,
+  the server token as the placeholder `SS_SERVER_TOKEN`, and a `Manage tokens in the Portal` link.
+
+### 0.4.4 Tokens
+
+- Each product on a website has exactly **two tokens**, created by the Portal when the product is added. Each is
+  Portal-signed (EdDSA, F.5) and names one website (id and exact domain), one product (id) and its kind (browser or
+  server). Tokens carry no environment, scopes, subdomain option or address. A product accepts only tokens that name it,
+  and refuses any other with the same error as an invalid token.
+- Each token carries a unique id (`jti`) and has no expiry. Regenerating adds the old token's id to the revocation list,
+  and 0.4.12 row 6 returns revoked token ids. Removing a product never revokes its tokens (the status refuses them), so
+  re-adding restores the same ids. Removing a website revokes both ids.
+- **Browser token**: public, stored and shown in full. Accepted only from `https://<exact domain>` (default port, no
+  subdomains) and from `localhost`, `*.localhost`, `127.0.0.1` or `[::1]` on any port over http or https (0.8.1 Local
+  testing); nothing else. It reaches only the product's visitor routes, which may do only what a visitor on that site
+  could do and are rate-limited per website and per visitor. A browser-token API request without an Origin header is
+  refused with the same error as an invalid token. Loading `widget.js` itself needs no Origin.
+- **Server token**: secret, for the merchant's server only. It reaches every route of that product for that website.
+  Products send no CORS headers on server-token routes and refuse any server-token request that carries an Origin
+  header.
+- The Portal stores server tokens **encrypted with `ENCRYPTION_KEY`** (0.4.8), not hashed, so they can be revealed. They
+  are revealed, copied and regenerated only in the Portal (website → Install and tokens), by the merchant or by an Owner
+  or Support admin; Finance never sees tokens. Every reveal and regenerate is logged in Activity, the merchant sees
+  admins' reveals in their own activity, and reveal responses are never cached.
+- **Regenerating** a token revokes the old one at once: as soon as the `token.revoked` notice arrives, and never more
+  than 5 minutes later (0.8.1). Regenerating the server token also ends every ticket made with the old one.
+- Products verify tokens offline against the Portal's keys and the revocation list (0.4.12). There is no online token
+  check, no test mode and no live/test pair.
+
+### 0.4.5 Tickets for admin widgets
+
+Admin widgets on the merchant's own admin use **tickets**, never the browser token and never the server token.
+
+1. The merchant's server checks its user's sign-in and role (from Accounts or its own login).
+2. It calls the product's `POST /v1/tickets` with the server token and
+   `{ user: { id, name, email }, permissions, origin }`. `permissions` come from the product's published list. `origin`
+   is the origin of the admin page that will use the ticket: any `https://` origin, or `localhost`, `*.localhost`,
+   `127.0.0.1` or `[::1]` on any port over http or https. Anything else is refused.
+3. The product returns `{ ticket, expiresAt }`: a ticket it signs, valid for exactly 15 minutes, bound to that website,
+   product, user and origin, and to only those requested permissions that belong to switched-on features.
+
+- A ticket is accepted only on that product's admin routes for that website, and only on requests whose Origin header
+  equals the ticket's origin. Those routes answer CORS only for that origin. The admin page's origin needs no website of
+  its own and costs nothing extra.
+- The admin widget takes a `getTicket()` function from the merchant's page; it calls the merchant's own server (the
+  docs' server snippet), which re-checks the user every time. The widget calls it at start and 1 minute before expiry,
+  and shows `Signed out` if it fails.
+- A ticket can never be used to get another ticket. It is kept in memory only (never localStorage or cookies). Tickets
+  are refused while the product-on-website status is stopped, suspended or removed.
+- Regenerating the server token ends every ticket made with it as soon as the product learns of it (0.4.12). The server
+  token never reaches a browser.
+- **Staff come from tickets**: the user named in a ticket is the member of the merchant's staff doing the action. A
+  product records each such user (id, name, e-mail, last seen) in the merchant database, shows their name on what they
+  do (for example Chat replies and notes), and offers them wherever it lists staff (for example Chat assignment). This
+  works with any login; Accounts is not needed.
+- Each product's docs ship a ready server snippet (Node.js fetch, which also works in Next.js route handlers, plus a
+  cURL example).
+
+### 0.4.6 Pasted product tokens and Accounts sign-ins
+
+- **Pasted tokens**: a product calls another product only with that product's server token for the same website. The
+  merchant pastes the token into the calling product's Connections. The calling product uses it only for the uses its
+  Connections page lists, and calls exactly as the merchant's own server would. Examples: Chat ← Ecommerce token for
+  shop lookups; Accounts, Ecommerce and Chat ← Notifications token to send; Ecommerce ← Payments token; Accounts ← every
+  product's token for data rights.
+- A pasted token is checked when it is saved: it must be a Portal-signed server token of the expected product, for the
+  same website; anything else is refused. It is stored encrypted, shown only as its last 4 characters, used only
+  server-to-server, and sent only to that product's current address, which the calling product gets from the Portal
+  (`GET /v1/product/directory/:productId`, 0.4.12). Tokens carry no addresses.
+- A call can fail because the token is refused (for example it was regenerated) or because the other product is stopped
+  or removed for that website. Then the features that need it act as unavailable (for example the AI says it cannot look
+  up orders right now), the Overview checklist shows the connection as broken, and everything else keeps working.
+- **Accounts sign-ins**: a product trusts Accounts sign-ins for a website only after the merchant pastes that website's
+  Accounts server token into the product's Connections. The product then fetches that website's Accounts public keys
+  from Accounts (through `@ss/net`, cached) and verifies each sign-in offline: it must be signed by Accounts, issued for
+  the same website and not expired. Accounts sign-ins last 15 minutes and are renewed by Accounts' widget, so a blocked
+  or deleted user stops being trusted within 15 minutes.
+- An Accounts sign-in only says who the visitor or user is. Whatever roles it carries, it never authorises admin actions
+  in any product; those need the server token or a ticket.
+- Some products may also accept a merchant's own login for visitors (decided in their grilling; Chat never does). For
+  those, the issuer and its public-keys URL are set in that product's Connections, never in the Portal. The Portal's
+  identity issuers, the Website → Identity tab and issuer approval are removed.
+
+### 0.4.7 Status of a product on a website: what every product must do
+
+The Portal decides each product-on-website status (0.5.5), and the product obeys it. The product learns it from the
+status response and notices (0.4.12) and checks it on use (0.8.1).
+
+| Status    | Charged | Visitor widgets                                                                   | API (browser token, server token, ticket)                                  | Merchant opens dashboard              | Admin opens dashboard             |
+| --------- | ------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------- | --------------------------------- |
+| active    | yes     | work                                                                              | work                                                                       | yes                                   | yes                               |
+| grace     | yes     | work; visitors see nothing about grace                                            | work                                                                       | yes, banner `In grace until <time>`   | yes, same banner                  |
+| stopped   | no      | render nothing; an already open chat window shows `Chat is unavailable right now` | 403, problem code `product_unavailable`, reason `stopped`; tickets refused | yes, banner `Stopped: out of credits` | yes, same banner                  |
+| suspended | no      | render nothing                                                                    | 403 `product_unavailable`, reason `suspended`; tickets refused             | no (cannot sign in)                   | yes, banner `Suspended`           |
+| removed   | no      | render nothing                                                                    | 403 `product_unavailable`, reason `removed`; tickets refused               | no                                    | no (no card, not in the switcher) |
+
+- Data and settings are kept in every status. Everything works again, with nothing re-pasted, as soon as the status is
+  active or grace again.
+- When a feature is off, its widgets render nothing and its routes answer 403 `feature_off`.
+- Until the merchant database is connected, widgets render nothing and the API answers 403 `database_not_connected`
+  (0.4.8).
+- If the Portal cannot be reached, a product keeps the last status for up to 24 hours (F.9 offline grace), then refuses
+  with 503, problem code `portal_unreachable`.
+- Invalid, revoked or wrong-product tokens and tickets get 401, problem code `invalid_token`.
+- The status response carries `graceEndsAt`, so a product treats the website as stopped from that time by itself, unless
+  a fresher status says otherwise.
+
+### 0.4.8 Where data lives, the settings store and encrypted keys
+
+- **Business data lives only in the merchant database**, connected in each product's Connections. Each product's
+  collections there are prefixed `ss_<product id>_` (Chat: `ss_chat_`). Every query carries `websiteId` (tenant guard,
+  0.10). Changing the database never moves old data. There is no Website Graph and no shared customer model.
+- **The product database** (its `MONGODB_URI`) holds only: its Portal connection (pinned `PORTAL_URL`, Portal keys,
+  product key); per-website feature switches, settings, widget texts and theme (kept when the product is removed,
+  deleted when the website is removed, 0.5.9); global defaults and prices; Connections; ticket signing keys; dashboard
+  sessions; Recent changes; the cached status, revocation list and business.json copy; widget last-seen time per
+  website; rate-limit counters and idempotency records (TTL); the Accounts public-key cache; the last sent and accepted
+  price list (version, feature keys) and a pending-report flag.
+- Until the merchant database is connected, the product's widgets show nothing, its API answers 403
+  `database_not_connected`, and the Overview checklist says what is missing; switched-on features are still charged.
+- **Settings store** (shared kit): one value per website × setting, validated against the feature's settings schema
+  (0.4.13). Reading a setting returns the website's saved value, else the global default, else the schema default. Reset
+  to default deletes the saved value. Every change is written to Recent changes. Widget texts and the theme are stored
+  the same way.
+- **Encrypted keys**: every stored secret that must be read back is encrypted with the deployable's `ENCRYPTION_KEY`
+  (0.11), and that key is used for nothing else.
+   - In a product: every Connections value (merchant database URI, storage keys, AI and provider keys, pasted tokens)
+     and any secret the product generates for the merchant (for example Chat's tool signing secret).
+   - In the Portal: server tokens, the SMTP password and two-step secrets.
+   - Signing keys (the Portal's token and launch keys, a product's own key and ticket keys), the session secret and the
+     idempotency secret stay generated and stored as today (F.19), not encrypted with `ENCRYPTION_KEY`. Passwords stay
+     hashed; recovery codes stay HMAC-hashed.
+   - `ENCRYPTION_KEY` is never stored in a database, never logged and never sent anywhere.
+   - **If `ENCRYPTION_KEY` is lost or changed**, old values cannot be read. Products show those connections as
+     `Not connected`, and merchants re-enter their keys and re-paste tokens. The Portal shows
+     `Cannot be shown: regenerate` for server tokens; old tokens keep working at products until they are regenerated,
+     because products verify signatures, not stored values. An Owner re-enters the SMTP password. People with two-step
+     sign in with a recovery code, or an Owner turns their two-step off, and they set it up again.
+
+### 0.4.9 business.json
+
+- Business basics come from `https://<exact website domain>/.well-known/business.json`, version 1:
+  `{ name, logo (https image URL), email, phone, address, country (ISO 3166-1 alpha-2), timeZone (IANA) }`. Only `name`
+  is required. Currency and other shop details live in Ecommerce. Every product's docs ship the template.
+- A product fetches the file server-side through `@ss/net`, with no redirects to other hosts and a 64 kB cap. It fetches
+  it when its dashboard opens for that website, from a Refresh button, and on use when its copy is older than 24 hours
+  (right after that request; the old copy is used meanwhile). It validates the file against the template and keeps the
+  last good copy. Every value is treated as plain text, never HTML.
+- If the file or a field is missing or invalid, the defaults are: name = the domain, time zone = UTC, other fields
+  empty. Overview then shows `business.json not found or invalid`, and the product keeps working.
+- The Portal never reads the file; the merchant's details in the Portal are account and billing details.
+
+### 0.4.10 Widgets, widget texts, styling and docs
+
+- Each product with widgets serves one script from its own deployment:
+  `<script src="<product base URL>/widget.js" data-token="<browser token>" async></script>`. The script mounts the
+  visitor widgets of switched-on features and exposes a JS API (`window.SSChat` for Chat). It mounts admin widgets into
+  elements the merchant places (for example `<div data-ss-chat="inbox"></div>`), using tickets (0.4.5).
+- On an admin page the same `widget.js` is included without `data-token`. Visitor widgets are mounted only when
+  `data-token` is present. The page registers its ticket function with `window.SS<Product>.admin({ getTicket })` (for
+  Chat, `window.SSChat.admin({ getTicket })`), and admin widgets then mount into their `data-ss-<product>` elements.
+- The merchant decides where widgets appear; targeting exists only as a product's own settings (for example Chat's hide
+  on pages).
+- **Styling**: each product has one theme per website, used by all its widgets, visitor and admin: colours, font family
+  (inherit, or a font the site already loads; we host no fonts), corner radius, and Light, Dark or Follow device. There
+  is also a custom CSS box. Widgets render inside a Shadow DOM so the site's CSS cannot break them, and the custom CSS
+  is injected into that shadow root only.
+- **Widget texts: every word is editable.** Every word any widget shows (visitor and admin widgets: buttons, labels,
+  placeholders, system messages, errors) has an English default in the product's `strings/` files. The merchant can
+  overwrite any of them per website in Settings → Texts, in any language, so the whole widget can be translated. There
+  is one version per website; there are no per-language catalogs. A text with placeholders (for example `{position}`) is
+  saved only if it keeps the same placeholders. Reset to default restores the English text. Texts are settings, so
+  global defaults apply. The Portal and product dashboards themselves are English, with texts in files, and are not
+  editable.
+- **Docs**: each product serves public docs at `<base>/docs`, with no sign-in and no tokens: per-feature guides, widget
+  snippets, the ticket server snippet and an API reference generated from its OpenAPI file. The connect answer gives the
+  script and docs URLs (0.4.12), and the Portal shows them in Install and tokens. A product without widgets (for example
+  Notifications) shows only its tokens and the docs link.
+- There is no Loader, no Edge Injection and no hosted page on merchants' domains. Anything that must appear on the
+  merchant's domain (sitemaps, robots.txt, llms.txt, feeds, structured data, policy pages) is served by the merchant's
+  site from the product's API, with a ready snippet in the docs.
+- There is one environment: `env` (live/test) is removed from tokens, status, stored documents, the tenant guard, routes
+  and paths.
+
+### 0.4.11 Data rights and activity-log copies
+
+- Data rights and log copies use pasted tokens only; nothing is automatic.
+- Every product, Chat included, ships two kit routes from its first release, for one end user of a website, called with
+  that product's own server token: **export**, which returns that user's records, and **delete**, which deletes or
+  anonymises them as the product's grilling decides (Chat: 0.8.3 Retention). The user is identified by Accounts user id,
+  e-mail and phone. These routes are the exception to F.20's removal of the privacy export and anonymise routes.
+- The merchant pastes each other product's server token into Accounts' Connections. When a signed-in user asks, Accounts
+  calls each connected product's export or delete route and combines the results. The export is given only to that user,
+  through a single-use link valid for 15 minutes.
+- A product into which the merchant pasted the Accounts token sends each activity-log entry to Accounts right after the
+  action: actor, action, target and time, never message contents. A failed send is retried on that product's next
+  request for that website; unsent copies are marked on the activity-log entries in the merchant database. Without the
+  token, a product keeps its log only in the merchant database.
+
+### 0.4.12 Product ↔ Portal contract
+
+This replaces the F.9 wire formats. Product → Portal calls are signed with the product key pinned at connect (as today).
+The Portal answers them only for websites that have this product (removed ones included where a row says so). The Portal
+uses the last accepted price report for feature names, descriptions, dependencies and prices. The manifest's feature
+list is used only to build price-list version 1 at connect.
+
+| #   | Call                                                                                                                                                                          | Purpose and rules                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Connect (Portal → product, `/.well-known/ss-connect`)                                                                                                                         | The F.5 handshake, unchanged: HMAC with `CONNECT_SECRET` both ways. The Portal sends its `PORTAL_URL`, which the product pins together with the Portal keys; the product also stores the base URL it was connected with as its own address. The answer carries the product's manifest (0.4.13) and its current price list (all 0 on first connect, stored as price-list version 1). On reconnect, the returned price list is handled as a price report; switch state is not re-sent and charging continues. The connect and reconnect request carries the Portal's last accepted price-list version, and the product continues from it.                                                                                             |
+| 2   | `PUT /v1/product/prices` with `{ version, features: [{ key, name, description, dependsOn, millicreditsPerHour }] }`                                                           | Sent when an Owner saves the Prices screen. The product saves the new prices only after the Portal accepts the report. If the Portal refuses or cannot be reached, nothing changes and the Owner sees an error; there is no background retry. It is also sent on the first request after a deploy that changed the feature list, and only that kind of send is retried on the next request when it fails. Refused whole, changing nothing, when a price is not an integer ≥ 0 or the version is not higher than the last accepted one. A feature missing from the list stops being charged everywhere at once. A new feature starts off on every website. Feature keys never change.                                                |
+| 3   | `PUT /v1/product/websites/:websiteId/features` with `{ version, on, adminId, adminName }`                                                                                     | Sent when an admin saves the Features screen; `on` lists the switched-on feature keys. The product saves the switches only after the Portal accepts. If the Portal refuses or cannot be reached, nothing changes and the admin sees an error; there is no background retry. Refused whole when a key is unknown, a switched-on feature has no price, a dependency is off, the website × product never existed, the version is not higher, or `adminId` is not a current Owner or Support admin. Accepted for a product that is stopped, suspended or removed (nothing is charged while that lasts). The Portal timestamps it with its own clock and writes it to Activity with the admin, using its own stored name for that admin. |
+| 4   | `GET /v1/product/websites/:websiteId/status` returning `{ websiteId, merchantId, merchantName, domain, status, graceEndsAt, todayMillicredits, featuresVersion, validUntil }` | `status` is `active`, `grace`, `stopped`, `suspended` or `removed`. Fetching it is a use (0.8.1): the Portal settles that merchant first. Products cache it until `validUntil`, at most 5 minutes. `todayMillicredits` is an integer. `graceEndsAt` and `validUntil` are ISO-8601 UTC strings; `graceEndsAt` is null outside grace. `featuresVersion` is the last accepted feature-report version for that website × product; the product sends `featuresVersion + 1`. Answers for removed products too (status `removed`). For a deleted website, or a website × product that never existed, it answers 404 with problem code `website_not_found`.                                                                                 |
+| 5   | `GET /v1/product/websites?cursor=`                                                                                                                                            | The websites that have this product, removed ones excluded, each as `{ websiteId, domain, merchantId, merchantName, status }`; used by the admin switcher.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| 6   | `GET /v1/product/revocations?since=` returning `{ tokenIds, cursor }`                                                                                                         | As today, but listing revoked token ids (`jti`, 0.4.4); fetched together with the status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 7   | `GET /v1/product/directory/:productId` returning `{ baseUrl }`                                                                                                                | Where to send a pasted token.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 8   | `POST /v1/product/launch/consume` with `{ jti }` returning `{ consumed }`                                                                                                     | As today.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+
+**Notices** (Portal → product) go to `POST <product base>/.well-known/ss-events`, signed with `SS-Signature` as today,
+with body `{ type, websiteId?, subject? }`. There are four types:
+
+- `status.changed`: a product on a website was added or removed, or its status changed (credits added, suspend, resume,
+  grace started, stop). The product drops its cached status and fetches it again.
+- `token.revoked`: a token was regenerated. The product fetches the revocation list again.
+- `sessions.revoked`: end one person's dashboard sessions (merchant suspended or deleted, admin removed or role changed,
+  password changed, signed out of the Portal).
+- `website.deleted`: a website was removed (0.5.9). The product deletes everything it holds for that website in its
+  product database (switches, settings, widget texts, theme, connections, Recent changes, cached status). It never
+  touches the merchant database.
+
+Notices are sent right after the request that caused them, to every product concerned. A failed notice is kept and
+retried right after (`after()`) that product's next call to the Portal, oldest first, and dropped once the product
+answers 2xx. Grace-started and stopped notices are sent by the check that finds them. Removed:
+`GET /v1/product/entitlements`, `POST /v1/product/usage`, `POST /v1/product/resources/resolve`,
+`POST /v1/product/events`, `resource.changed`, and every website, product and shopper event.
+
+### 0.4.13 Product standard
+
+This replaces Part E.
+
+- Every product is one deployable unit (F.17) with these folders: `core/` (pure logic), `api/` (routes), `adapters/`
+  (merchant database, storage, providers, Portal), `ui/` (widgets), `app/` (dashboard pages), `strings/` (English
+  texts), `schemas/` (settings schemas), `tests/`, `docs/`. Imports go from api to core or adapters, from adapters to
+  core, and from ui to core, never the reverse.
+- **API rules**: `/v1` paths; RFC 9457 problems with a stable code; cursor pagination; `Idempotency-Key` on routes that
+  create things or move money; ISO-8601 UTC times; money as integer minor units plus a currency; an OpenAPI file
+  generated from the routes. Every merchant-data query carries `websiteId` (kit tenant guard).
+- Browser-token routes serve visitors; server-token and ticket routes serve the merchant's server and admin. Headless
+  means building your own UI on that API; there is no headless SDK and there are no React/Vue/Svelte adapters.
+- `manifest.json` declares only: `id`, `name`, `version`, `endpoints` (base, dashboard), `widgetScriptUrl` (or null),
+  `docsUrl`, `features` (key, name, description, dependsOn, settings schema), `permissions` (key, name, feature) and
+  `widgets` (key, feature, visitor or admin). It carries no prices; prices live in the product database, start at 0 and
+  are set by an Owner.
+- Removed from manifests and code: kind/pack, plans, priceBook, trialHours, prices, metered units, scopes, events,
+  placement, hooks, slots, modes A/B/C, the standard routes `/v1/entitlement`, `/v1/config` and `/v1/events`, and TTL
+  retention by default.
+- `ss app init` and `ss app validate` change to this standard when the shared kit is rebuilt (0.12 step 4).
+  `eslint-plugin-ss` is not built.
+
+## 0.5 Credits and billing
+
+Merchants see **credits only**, never money. Only the Portal's clock counts for money.
+
+### 0.5.1 Amounts
+
+- Every credit amount (hourly prices, receipts, charges, balances) is stored as **integer millicredits** (1 credit =
+  1000, F.1). The rounding unit is 1 millicredit; no amount is ever stored with a fraction of a millicredit.
+- Prices accept up to 3 decimals; receipts accept whole credits of 1 or more.
+- Amounts are shown with up to 3 decimals (trailing zeros dropped) and a minus sign when negative.
+
+### 0.5.2 Prices
+
+- One hourly price per feature, global: the same for every merchant and website. Never negative. Every feature starts at
+  **0**; an Owner sets prices in each product's Prices screen. There are no per-merchant prices, discounts, price books
+  or pins. No e-mail is sent when a price changes.
+- A price change takes effect the moment the Portal stores the price report. It applies to every later hour, and to any
+  feature first switched on after the change inside the current hour. An hour already charged is never re-priced.
+
+### 0.5.3 Charging
+
+- A product on a website is **charging** while its status is **active or grace**. Hours while it is stopped, suspended
+  or removed are never charged.
+- Charging at instant t means the status at t is active or grace, and grace covers [start, end). An hour is charged for
+  a feature only if that feature was on at some instant of the hour while charging.
+- The charging unit is the UTC clock hour [hh:00, hh+1:00). A switched-on feature is charged once for every clock hour
+  in which it was on at any moment while charging. The charge uses the price in force at the first moment in that hour
+  when the feature was both on and charging, and counts from that moment, so the current hour is in the balance straight
+  away. A charge is always the full hourly price; hours are never split.
+- Switching a feature off, removing the product, or stopping or suspending the merchant in the middle of an hour never
+  gives back the started hour. Switching a feature back on in the same hour never charges that hour again: there is at
+  most one charge per website × product × feature × hour. The same feature on two websites is charged twice.
+- A report, status change or receipt takes effect when the Portal stores it, never at a time a product sends, and
+  nothing is applied to the past.
+- Charges follow only the last accepted feature report. They do not depend on traffic, on reaching a limit, on setup
+  being finished (database, keys), or on whether the product can be reached; the Portal never checks product health. If
+  a product is down, charges continue until an admin removes the product from the website, and removing works even when
+  the product cannot be reached.
+- The Portal accepts feature reports for a product on a website that is stopped, suspended or removed, and charges
+  nothing while that status lasts. When the status is charging again, charging resumes from the stored switches.
+  Re-adding a removed product resets its switches to all off (0.5.9). Reports for a website × product that never existed
+  are refused.
+- This replaces today's `@ss/entitlements` logic, which reads state only at each hour's first active instant and settles
+  only finished hours.
+
+### 0.5.4 Balance, daily spend, low balance and days left
+
+- Each merchant has **one balance**, shared by all their websites: all receipts − all stored day charges − today's
+  charges so far. It can be negative (debt), because grace hours are charged (0.5.6).
+- **Hourly cost** of a product on a website = the sum of the current hourly prices of its switched-on features. **Daily
+  cost** = 24 × hourly cost; a projection, shown on product cards.
+- **Daily spend** of a merchant = 24 × the sum of the current hourly prices of all switched-on features on all their
+  products, on websites where the product is not removed.
+- **Low balance** means daily spend > 0 and 0 < balance < threshold days × daily spend, compared on exact values, not
+  the rounded display.
+- **Days left** = balance ÷ daily spend, rounded down. It shows `less than 1 day` below 1, and — when daily spend is 0.
+  In grace it shows `Grace ends <date time>` instead; when stopped, `Stopped since <date time>`.
+- Settings bounds (0.8.2 Settings): low-balance threshold 1–30 whole days, default 3; grace 0–30 whole days, default 3
+  (0 stops as soon as grace would start).
+
+### 0.5.5 Statuses and their order
+
+- **Merchant status**, first match wins: **suspended** (an admin suspended them) › **stopped** (a grace period ended
+  with the balance ≤ 0 and no receipt has since brought it above 0) › **in grace** (a grace period is running) › **low
+  balance** › **active**. When daily spend is 0, the merchant is never low balance; a running grace period keeps running
+  and a stop stays until the balance is above 0. **Setup pending** (password not set yet) is a separate badge, not a
+  status.
+- **Product-on-website status**, first match wins: **removed** › **suspended** › **stopped** › **grace** › **active**.
+  The merchant's status applies to all their products on websites that are not removed; low balance counts as active.
+- Stored and API values: merchant status `active` | `low_balance` | `grace` | `stopped` | `suspended`;
+  product-on-website status `active` | `grace` | `stopped` | `suspended` | `removed`. Labels are as in 0.6.
+
+### 0.5.6 Grace period, debt and stop
+
+- A grace period starts at the first moment at which balance ≤ 0 and daily spend > 0 both hold, whatever caused it (a
+  charge, a switch-on, a price change, a resume, a re-add), provided no grace period is running and the merchant is not
+  stopped. That moment is worked out from the ledger and the histories (0.5.7), never from when someone noticed.
+- Grace ends exactly grace-days later, using the setting's value at its start. Later Settings changes apply only to new
+  grace periods. Suspension neither pauses nor extends a grace period.
+- **During grace, products work normally and their hours are charged**, so the balance goes below zero (debt).
+- Warnings during grace: the banner in the merchant console (showing the stop time; it cannot be dismissed), the product
+  dashboard banner, and one e-mail when grace starts. There are no reminder e-mails.
+- At the end of grace the merchant is **stopped** (one e-mail), and no hour starting at or after the end is charged.
+  With 0 grace days only the products-stopped e-mail is sent (0.5.10 past-state rule).
+- **Credits pay the debt first.** A receipt that brings the balance above 0 ends grace or a stop at once, and the Portal
+  sends `status.changed` so products restart. A receipt that leaves the balance ≤ 0 changes nothing, and the original
+  grace end stays.
+- A grace period ends only when a receipt brings the balance above 0 or when its end time passes. Daily spend falling to
+  0 neither ends nor resets it. After a grace period ends with the balance ≤ 0, the merchant stays stopped until a
+  receipt brings the balance above 0. No new grace period starts in the meantime, and switching a priced feature on does
+  not restart products. A new grace period starts only when the balance drops to ≤ 0 after having been above 0.
+
+### 0.5.7 Checks on use and money records
+
+- **Checks run only on use** (0.8.1): when a product fetches a status, and when a Portal page shows a merchant. Each
+  check replays the time since the merchant was last settled, in order and hour by hour across all their websites. It
+  charges each hour, finds the exact moment the balance reached ≤ 0 and the exact grace end, and charges nothing after
+  that end, even if the check happens days later.
+- Lists, totals, merchant pages and status responses all use the same pure money function, so their numbers always
+  match.
+- Any view may compute any merchant's balance, charges and status live with the pure function without writing anything.
+  Only a check writes day charges, billing-state changes, notices and e-mails.
+- **Money records in the Portal**:
+   - (a) Append-only histories stamped with Portal time: price lists per product, feature reports per website × product,
+     status changes (add, remove, suspend, resume, grace start, stop) and receipts.
+   - (b) The **ledger**, append-only and hash-chained, with exactly two kinds of entry: **receipt** (+credits) and **day
+     charge** (−credits). There is one day charge per website × product × UTC day, holding per-feature lines (feature
+     key, hours, credits), idempotent by website × product × day. A day charge is written by the first check after that
+     UTC day ends; quiet days are written in order. Today is worked out live from (a) by the same pure function. Days
+     with 0 credits are not written, and views treat a missing day as 0.
+   - (c) A cached balance and billing state per merchant.
+- This replaces F.1's two entries per subscription-hour and its zero-amount entries.
+
+### 0.5.8 Adding credits (receipts)
+
+- Owner and Finance add credits as a **receipt** with these fields: **credits** (whole number of 1 or more, required);
+  **amount paid** (free text, required, up to 60 characters, for example `PKR 5,000`; shown exactly as typed, never
+  totalled or converted); **payment method** (free text, required, up to 60 characters); **reference** (free text,
+  optional, up to 120 characters).
+- A confirm step repeats the merchant, the credits, the amount paid and the new balance before saving. The form carries
+  a one-time key, so a double submit saves once.
+- Receipts are never edited, voided, refunded or reversed, so a mistaken receipt stays. There are no negative receipts,
+  adjustments, refunds, trial credits, spend caps, bundles or discounts, and no minimum balance to add a product.
+  Credits are never deducted or corrected by hand.
+- The amount paid is shown to admins only; merchants see credits only.
+
+### 0.5.9 Adding and removing products and websites; deleting a merchant
+
+- **Add product to a website** (Owner or Support): website page → Products → Add product. It lists active connected
+  products not yet on the website. The chosen product is added with all features off, and the Portal creates its two
+  tokens, or restores them if the product was removed from this website before.
+- **Remove product from a website** (Owner or Support, typed confirmation with the product name): website page → product
+  card menu → Remove. Its status becomes removed: it stops, nothing is charged from the next hour, and its tokens are
+  refused. Its settings and connections are kept in the product. Adding it again restores the settings, the connections
+  and the same tokens (no re-pasting), with all features off like every add; our admin then switches features on again.
+  Removing works even when the product cannot be reached.
+- **Remove a website** (Owner or Support, typed confirmation with the domain): allowed only after all its products are
+  removed; until then the button is disabled with `Remove its products first`. Then:
+   - the website and its tokens stop for good (revoked, never restored);
+   - the Portal sends `website.deleted` to every product the website ever had, and each product deletes that website's
+     switches, settings, widget texts, theme, connections and Recent changes from its product database; the merchant
+     database is never touched;
+   - the domain is free again at once, for any merchant; adding it again creates a new website with new tokens and
+     nothing restored;
+   - past usage, day charges and Activity entries are kept and shown under the domain, marked Removed.
+- **Delete a merchant** (Owner only, typed confirmation with the business name): allowed only when the merchant has no
+  websites (removed websites do not count), whatever the balance. The dialog shows the leftover credits, which are
+  **forfeited** (a debt is dropped). The login and personal details (owner name, e-mail, phone, address, country,
+  two-step) are erased, all their sessions end, and the e-mail is free for a new login. Receipts, day charges and
+  Activity entries are kept for records under the business name, marked Deleted. In those Activity entries the owner
+  name, e-mail addresses, phone and address are replaced by "Deleted merchant". A deleted merchant does not appear in
+  Merchants lists and cannot be restored.
+
+### 0.5.10 Portal e-mails
+
+- The complete list: merchant setup link; admin invite; password reset; login e-mail change confirmation (to the new
+  address) and notice (to the old address); two-step turned off by an Owner (to the person); low balance; grace started
+  (`Credits ran out: products stop on <date>`); products stopped; credits added.
+- Low balance, grace started and products stopped go to the merchant's login e-mail and to every Owner and Finance
+  admin. All other e-mails go only to the person concerned.
+- Each billing-state e-mail is sent once, when the merchant enters that state. An atomic compare-and-set on the stored
+  billing state decides this, so two requests at once send one e-mail. It can be sent again only after the merchant has
+  left that state. If a check finds the merchant already past a state, only the e-mail for the current state is sent.
+  Credits added is sent for every receipt.
+- E-mails are sent right after the response of the request that triggered them (F.19 `after()`). Without SMTP settings,
+  e-mails are skipped (setup links can still be copied) and admin Overview shows a warning.
+- The low-balance banner in the merchant console stays until the state ends and cannot be dismissed. All e-mails and
+  banners show the support contact.
+
+### 0.5.11 Usage
+
+- One row per product × website × UTC day × feature, showing hours charged and credits; zero-price features show 0.
+  Today's row is live. Feature names come from the current price list; a feature no longer in the price list shows the
+  name from the last price list that had it. Removed products and websites keep their past rows.
+- All Portal days, months, 30-day charts and this-month totals are UTC and labelled UTC; single timestamps show in the
+  viewer's local time.
+- Spent this month = the merchant's charges in the current UTC month, today included. Earned this month (Products page)
+  = that product's charges in the current UTC month, today included.
+
+### 0.5.12 Activity log
+
+- Each entry records who, when, what and the target, and is kept forever (personal details of a deleted merchant are
+  blanked, 0.5.9).
+- Logged: sign-ins and failed sign-ins; password, e-mail and two-step changes (including an Owner turning off someone's
+  two-step); setup and reset links issued or copied; merchant created, edited, suspended, resumed or deleted; website
+  added or removed; product added or removed on a website; token revealed or regenerated; credits added; product
+  connected, reconnected, or set active or inactive; admin invited, role changed or removed; Settings changed; product
+  dashboard opened; every feature and price change a product reports, with the admin who made it.
+- Admins see everything, filterable by merchant, admin and date. A merchant sees the entries about their own account,
+  with admins shown under the Branding name (default Single Solution).
 
 ## 0.6 Look and feel
 
-- **Brand**: Single Solution, indigo/violet accent, friendly business style (like Stripe / Shopify admin).
+- **Brand**: Single Solution, indigo/violet accent, friendly business style (like Stripe / Shopify admin). Name, accent
+  and logo can be changed in Settings → Branding.
 - **Layout**: main left sidebar plus an **inner sidebar** on list sections (a searchable list of items for quick
-  switching; the selected item opens with a **header and tabs**). Full width, spacious, no long scrolls.
+  switching; the selected item opens with a **header and tabs**). Full width, spacious, no long scrolls: long settings
+  are split into tabs or sections, and lists are paged.
 - **Merchant menu**: Overview · Websites · Usage and credits · Account.
-- **Admin menu**: Overview · Merchants · Products · Credits and billing · Admins · Settings · Activity.
-- **Website page**: header, tabs (Products · Install and tokens · Usage); Products tab shows product cards (status,
+- **Admin menu**: Overview · Merchants · Products · Credits and billing · Admins · Settings · Activity, plus My account
+  in the user menu. Each role sees only the items it can use (0.2).
+- **Website page**: header, tabs (Products · Install and tokens · Usage); the Products tab shows product cards (status,
   daily cost, Open).
 - **Merchant page (admin)**: header (name, status, balance, actions) and tabs (Websites · Credits · Details · Activity).
-- **Lists**: tables with filters, sorting and bulk actions; search inside each list (no global search).
+- **Lists**: tables with filters, sorting and search inside each list (no global search). Bulk actions exist only on
+  Merchants: Suspend / Resume (one reason for all) and Resend setup link (for merchants without a password). No other
+  list has bulk actions, and there is no CSV export. The Merchants search also matches owner e-mail and website domains;
+  this is how an admin finds a website.
+- **Inner sidebar**: used on admin Merchants and Products and on merchant Websites. With nothing selected, the section
+  shows the full table (filters, sort, search, paged at 50). Selecting a row opens its page: the inner sidebar shows the
+  searchable list (name + status dot), and the page shows the header and tabs. Credits and billing, Admins and Activity
+  are plain tables.
 - **Forms**: centred dialogs; a full page only when a form would still scroll a lot after a smarter layout.
 - **Home cards**: numbers with small 30-day charts.
 - **Product dashboards** look the same as the Portal.
-- Fully usable on phones and tablets. Light and dark (follows the device, with a switch). English, texts kept in files.
+- **Light and dark**, following the device, with a switch. The Portal and product dashboards are English, with texts
+  kept in files. Widget texts are editable by merchants (0.4.10).
+
+### Status labels and colours
+
+- Merchant (0.5.5): Active green, Low balance amber, In grace amber, Stopped red, Suspended red; Setup pending is a grey
+  badge.
+- Product on a website: Active green, In grace amber, Stopped red, Suspended red; an active product with no features on
+  shows grey `No features on`. Removed products show no card or chip.
+- Opening a Portal page runs the check (0.5.7) for the merchants it shows: the merchant console checks its own merchant,
+  and admin pages check the merchants on screen (lists are paged at 50).
+
+### Phones and tablets
+
+- No horizontal page scroll from 360 px wide. Below 1024 px, the main sidebar becomes a menu button, and the inner
+  sidebar becomes the list page (tap an item to open it, with a Back link). Tables keep the name, status and amount
+  columns and scroll the rest inside the table. Below 640 px, dialogs become full-screen sheets and tabs scroll
+  sideways.
+- The same applies to product dashboards and admin widgets (the inbox shows the list, then the conversation with Back).
 
 ## 0.7 Flows
 
@@ -119,22 +1008,36 @@ and shoppers never use the Portal or our product dashboards: they only use the m
 
 ```mermaid
 flowchart LR
-  A[Admin: Create merchant] --> B[Setup link emailed / copied]
+  A[Owner / Support: Create merchant] --> B[Setup link emailed / copied]
   B --> C[Merchant sets password]
-  A --> D[Admin: Add website<br/>exact domain]
-  D --> E[Admin: Add product to website]
-  E --> F[Portal creates browser + server<br/>tokens for website x product]
-  A --> G[Admin: Add credits<br/>amount, method, reference]
+  A --> D[Owner / Support: Add website<br/>exact domain]
+  D --> E[Owner / Support: Add product to website]
+  E --> F[Portal creates browser + server tokens<br/>for website x product, all features off]
+  A --> G[Owner / Finance: Add credits<br/>credits, amount paid, method, reference]
 ```
 
 ### Connecting a product to the Portal (once per product)
 
 ```mermaid
 flowchart LR
-  P[Deploy product<br/>MONGODB_URI + CONNECT_SECRET] --> Q[Admin: Products → Add<br/>URL + secret]
-  Q --> R[Portal signs request with secret]
-  R --> S[Product checks secret,<br/>pins Portal, returns its features + prices]
-  S --> T[Admin: set Active]
+  P[Deploy product<br/>MONGODB_URI, CONNECT_SECRET, ENCRYPTION_KEY] --> Q[Owner: Products → Add<br/>URL + secret]
+  Q --> R[Portal signs request with secret<br/>and sends PORTAL_URL]
+  R --> S[Product checks secret, pins Portal,<br/>returns manifest + price list, all 0 at first]
+  S --> T[Owner: set Active]
+```
+
+### Admin works inside a product (the only way charges change)
+
+```mermaid
+flowchart LR
+  A1[Admin in Portal] --> A2[Products → Open as admin]
+  A2 --> A3[Owner: global defaults + prices]
+  A3 --> A9[Product sends price report]
+  A2 --> A4[Switcher: any merchant / website]
+  A5[Portal: merchant → website → Open] --> A4
+  A4 --> A6[Owner / Support: features on/off<br/>for a website]
+  A6 --> A7[Product sends feature report]
+  A7 --> A8[Portal accepts and charges per hour]
 ```
 
 ### Merchant configures a product
@@ -143,239 +1046,1034 @@ flowchart LR
 flowchart LR
   M[Merchant in Portal] --> N[Website → product → Open]
   N --> O[Product dashboard in new tab,<br/>already signed in]
-  O --> P1[Turn features on/off,<br/>limits, settings]
+  O --> P1[Edit settings of active features,<br/>widget texts, theme]
   O --> P2[Add own keys: database, storage,<br/>AI, providers, other product tokens]
-  P1 --> R1[Product reports active features + prices]
-  R1 --> S1[Portal charges per hour]
 ```
 
 ### Merchant puts a product on their website
 
 ```mermaid
 flowchart LR
-  W[Portal: website → product] --> X[Copy widget script + browser token]
-  W --> Y[Copy server token]
-  X --> Z[Widgets on merchant site<br/>shoppers / users]
-  Y --> Z2[Merchant's server & own admin<br/>call the product API]
-  Z2 --> Z3[Merchant's admin checks roles<br/>from Accounts before calling]
+  W[Portal: website → Install and tokens] --> X[Copy widget script + browser token]
+  W --> Y[Copy server token to the merchant's server]
+  X --> Z[Visitor widgets on the merchant's site]
+  Y --> Z1[Merchant's admin checks its user's role]
+  Z1 --> Z2[Merchant's server calls the product API]
+  Z1 --> Z3[Merchant's server asks for a ticket]
+  Z3 --> Z4[Admin widgets in the merchant's own admin]
+```
+
+### Admin widget with a ticket
+
+```mermaid
+sequenceDiagram
+  participant W as Admin widget on the merchant's admin page
+  participant S as Merchant's server
+  participant P as Product
+  W->>S: getTicket()
+  S->>S: Check the user's sign-in and role
+  S->>P: POST /v1/tickets with server token, user, permissions, origin
+  P-->>S: ticket and expiresAt, 15 minutes
+  S-->>W: ticket
+  W->>P: Admin API call with the ticket, Origin must match
+  Note over W,P: 1 minute before expiry the widget calls getTicket() again
+```
+
+### Status on use
+
+```mermaid
+flowchart LR
+  U[Request reaches a product<br/>for a website] --> V{Cached status<br/>younger than 5 minutes?}
+  V -->|yes| X1[Serve or refuse<br/>by the cached status]
+  V -->|no| Y1[Fetch status from the Portal]
+  Y1 --> Z1[Portal settles the merchant:<br/>charges, grace, stop, e-mails]
+  Z1 --> X1
+  N1[Notice from the Portal] --> D1[Drop the cache, fetch again]
 ```
 
 ### Credits
 
 ```mermaid
 flowchart LR
-  C1[Hourly charge from active features] --> C2{Balance}
+  C1[Hourly charge for switched-on features<br/>while active or in grace] --> C2{Balance}
   C2 -->|low| C3[Banner + email]
-  C2 -->|zero| C4[Grace period<br/>admin-set, default 3 days]
-  C4 -->|still zero| C5[Products stop]
-  C6[Admin adds credits] --> C2
+  C2 -->|at or below 0 while spending| C4[Grace period, still charged<br/>admin-set, default 3 days]
+  C4 -->|grace ended, balance still at or below 0| C5[Products stop, no charges]
+  C6[Owner / Finance adds credits] --> C7{Balance above 0?}
+  C7 -->|yes| C8[Debt paid first, products restart]
+  C7 -->|no| C9[No change, grace end stays]
 ```
 
-### Admin works inside a product
+### Removing a website and deleting a merchant
 
 ```mermaid
 flowchart LR
-  A1[Admin in Portal] --> A2[Products → Open as admin]
-  A2 --> A3[Global defaults + prices]
-  A2 --> A4[Switcher: any merchant / website]
-  A5[Portal: merchant → website → Open] --> A4
+  R1[Remove every product<br/>on the website] --> R2[Owner / Support: Remove website<br/>typed domain]
+  R2 --> R3[Tokens stop for good,<br/>products delete its settings and keys]
+  R2 --> R4[Domain free again]
+  R2 --> R5{Merchant has<br/>no websites left?}
+  R5 -->|yes| R6[Owner: Delete merchant<br/>typed name, credits forfeited]
+  R6 --> R7[Login and personal details erased,<br/>receipts and charges kept]
 ```
 
-## 0.8 Further decisions (2026-10-07)
+## 0.8 Further decisions, Portal screens and Chat
 
-- **Grace and stops without scheduled jobs**: checked on use. Every call into a product counts as activity; balance,
-  grace ending, stopping and credit e-mails are evaluated at that moment (and whenever the Portal is opened).
-- **Local testing**: a website's browser token also works on `localhost` for that website (charged as part of it). No
-  test mode.
-- **Live data**: Atlas holds only test data, so `ss_portal` and `ss_chatbot` are **reset** at the switch (recreate the
-  first admin, re-add products).
-- **Kept**: Chat extras (flows, knowledge base, lead capture, satisfaction surveys, transcripts, moderation) and Accounts
-  extras (shopper orders tab, risk checks, terms acceptance), as switchable features. **Dropped**: website transfer,
-  admin notes on merchants.
-- **Prices**: every feature starts at **0**; our admin sets prices in each product's admin price screen.
-- **Widget styling**: theme settings (colours, fonts, corner radius, light/dark) plus a custom CSS box, set in the
-  product dashboard.
-- **Admin widgets on the merchant's own admin** use **short-lived tickets**: the merchant's server checks the user's role,
-  then asks the product for a ticket with its secret server token; the ticket is valid ~15 minutes for that website and
-  only the permissions granted, and renews automatically while the user stays signed in to the merchant's admin. The
-  secret never reaches a browser. Each product's Developers docs ship a ready server snippet.
-- **ibrahimMobiles** is connected only after the SaaS is built.
-- **Product depth**: each product is grilled in depth **right before it is built** (Chat first), and finished fully
-  before moving to the next.
+### 0.8.1 Decisions
 
-### Portal screens
+- **Checks on use, without scheduled jobs.** A use is any request a product receives for a website. A product keeps each
+  website's status for at most 5 minutes. A use with no fresh copy makes the product fetch the status again. That fetch
+  is the moment the Portal settles that merchant's hours, works out low balance, grace and stop, and sends any due
+  billing e-mail (0.5). Opening a Portal page does the same for the merchants it shows. Products never call the Portal
+  on every request. Changes made in the Portal (credits added, suspend, resume, product added or removed, token
+  regenerated, website removed) reach products at once through notices (0.4.12), and the 5-minute refresh covers a lost
+  notice. **Immediately** in this plan means as soon as the notice arrives, and never more than 5 minutes later while
+  the product can reach the Portal. While it cannot (offline grace, 0.4.7), the change takes effect on the product's
+  first successful fetch, and after 24 hours the product refuses everything with 503.
+- **Local testing**: a website's browser token also works on pages served from `localhost`, `*.localhost`, `127.0.0.1`
+  or `[::1]`, on any port, over http or https. Localhost is not a website: it cannot be added, has no tokens of its own,
+  and costs nothing beyond the normal hourly feature prices. Localhost use never counts as widget installed, and
+  business.json is always read from the real domain. Calls from localhost use the website's real database, keys and
+  providers, so they make real orders, messages and payments; the docs and snippets say so plainly. No test mode.
+  `@ss/protocol` `originAllowed` accepts local origins for every browser token (today it accepts them only for test
+  keys).
+- **Replace in place**: the old model is replaced in place, with no period where old and new run side by side and no
+  compatibility layer (0.12). The 16 old product folders other than `products/chatbot` are parked (0.12 step 4) until
+  the product that replaces them ships.
+- **Live data**: Atlas holds only test data, so `ss_portal` and `ss_chatbot` are **reset at the switch** (0.12 step 5).
+  The deployer creates the first Owner (0.2); products are connected as each one ships (steps 6–11). Product ids are
+  `accounts`, `ecommerce`, `chat`, `notifications`, `payments` and `growth`. No old data is moved and no migration code
+  is written for old data.
+- **Portal address**: the Portal's address is the environment variable `PORTAL_URL` (0.11), its final public address. It
+  is used for links in e-mails, as the issuer of the tokens and launches the Portal signs, and as the CSRF origin (the
+  Portal refuses writes whose Origin differs). Products pin it at connect. It is never derived from request headers
+  (Host, X-Forwarded-Host, X-Forwarded-Proto). Changing it means reconnecting every product (Products → Reconnect).
+- **Encryption key**: each deployable has its own `ENCRYPTION_KEY` (0.4.8, 0.11).
+- **Prices**: every feature starts at 0; an Owner sets prices in each product's Prices screen (0.5.2).
+- **Kept as switchable features**: the Chat extras listed in 0.8.3, and the Accounts extras (shopper orders tab, risk
+  checks, terms acceptance). **Dropped**: website transfer, admin notes on merchants, and the Chat items listed as not
+  built in 0.8.3.
+- **ibrahimMobiles** is connected only after the SaaS is built (0.12 step 14), and is never modified. Its own assistant
+  text goes into Chat's AI instructions setting when it connects.
+- **Product depth**: each product is grilled in depth right before it is built (Chat is already specified in 0.8.3) and
+  finished fully before moving to the next (0.12).
 
-**Sign-in**: one sign-in page for admins and merchants; the Portal opens the right console. Two-step code when enabled.
-A brand-new merchant with nothing yet sees a short welcome ("Your admin will add your websites and products") with
-contact details.
+### 0.8.2 Portal screens
+
+**Sign-in**: one sign-in page for admins and merchants; the Portal opens the right console. A two-step code (or a
+recovery code) is asked when two-step is on. Forgot password e-mails a reset link to admins and merchants. A suspended
+merchant is not let in and sees `Your account is suspended. Contact <support contact>.` While no admin exists, the page
+offers Create admin (0.2). While two-step is required for admins, an admin without it must set it up right after signing
+in, before any other page opens. A merchant with no websites sees a short welcome
+(`Your admin will add your websites and products`) with the support contact.
 
 **Admin**
 
-- **Overview**: totals (merchants, websites, active products, credits added and spent this month), needs attention (low,
-  in grace, stopped), recent activity, per-product numbers; numbers with 30-day charts.
-- **Merchants** (inner sidebar list + table): columns name + owner e-mail, status (active, low balance, in grace,
-  stopped, suspended), balance + daily spend, websites + products; filters, sort, bulk actions. Merchant page header:
-  name, status, balance; actions **Add credits**, **Suspend / resume** (reason required), **Resend setup link**,
-  **Delete** (only with no websites and zero balance). Tabs: Websites · Credits · Details · Activity.
-   - Websites tab: rows with domain, product chips (status colour), daily cost; a row opens the website page.
-   - **Add product to a website**: admin picks the product; it is added with **all features off**. Only **our admin**
-     switches features on/off inside the product dashboard (the merchant sees Features read-only and edits settings of
-     active features).
-- **Website page** (admin and merchant): header + tabs **Products** (product cards: status, daily cost, Open) ·
-  **Install and tokens** (one block per product: widget script, browser token, server token with reveal / copy /
-  regenerate — regenerating stops the old token immediately — and a docs link) · **Usage** (30-day chart + table by
-  product and feature).
-- **Products**: status + address + connected date, websites using it (tab with merchants/websites and their charges),
-  credits earned this month + 30-day chart; actions Open as admin, Set active/inactive, Reconnect (URL + secret).
-- **Credits and billing**: all receipts (filter by merchant, date, method), charges by day/merchant/product, needs
-  attention. "Add credits" receipt: credits, amount paid, payment method (free text), reference.
-- **Admins**: invite by e-mail with a role (Owner, Support, Finance); they get a setup link.
-- **Settings**: e-mail sending (provider, sender, test e-mail), billing rules (grace days, low-balance threshold in
-  **days of spend**, default 3), branding (name, logo, accent), security (session length, optional "require two-step
-  for admins").
-- **Activity**: admins see every action.
+- **Overview**: totals (merchants, websites, active products, credits added and spent this month), needs attention
+  (merchants that are low, in grace or stopped), recent activity, per-product numbers (for each connected product, the
+  websites using it and the credits it earned this month); numbers with 30-day charts. Active products = products on
+  websites with status active or grace and at least one feature on. A warning shows while SMTP is not set.
+- **Merchants** (inner sidebar list + table): columns name + owner e-mail, status, balance + daily spend, websites +
+  products; filters, sort, search and bulk actions (0.6). **Add merchant** (Owner, Support) opens a dialog with the
+  merchant fields (0.2); saving creates the merchant and e-mails the setup link (or offers to copy it).
+   - Merchant page header: name, status, balance; actions **Add credits** (Owner, Finance), **Suspend / Resume** (Owner,
+     Support; a reason is required to suspend), **Resend setup link** / **Copy setup link** (Owner, Support; only until
+     the password is set), **Turn off two-step** (Owner; only while it is on), **Delete** (Owner; only with no websites;
+     removed websites do not count; 0.5.9).
+   - Tabs: **Websites** (rows with domain, product chips with status colour, daily cost; a row opens the website page;
+     **Add website** dialog with the exact domain, for Owner and Support) · **Credits** (this merchant's receipts and
+     day charges) · **Details** (the merchant fields; Owner and Support edit them) · **Activity**.
+- **Website page** (admin and merchant): header (domain, merchant) and tabs:
+   - **Products**: product cards (status, daily cost, Open). Admin actions (Owner, Support): **Add product** (0.5.9),
+     **Remove** in the card menu (0.5.9), **Remove website** in the header menu (0.5.9). Only our admins switch
+     features, inside the product dashboard; the merchant sees Features read-only and edits settings of active features.
+   - **Install and tokens**: one block per product: the widget script tag with the browser token filled in (only for
+     products with widgets); the browser token (copy); the server token (reveal / copy / regenerate; regenerating needs
+     a typed confirmation with the product name that explains the old token stops at once); and the docs link. Finance
+     does not see this tab.
+   - **Usage**: 30-day chart + table by product and feature (0.5.11).
+- **Products** (Owner only): the list action **Add product** opens a dialog for the product URL and connect secret; new
+  products start inactive. The product page header shows name, Active or Inactive, address and connected date, with the
+  actions **Open as admin**, **Set active / inactive** and **Reconnect**. Tabs: Overview (credits earned this month +
+  30-day chart, number of websites) and Websites (merchant, domain, features on, daily cost).
+   - Inactive means the product is not offered in Add product. Nothing else changes: websites that have it keep working
+     and paying, and merchants can still open it.
+   - Reconnect runs on the existing product with a new URL and/or secret. The product must answer with the same product
+     id, and all websites, tokens, switches and charges stay. The returned price list is handled as a price report.
+   - Connected products are never deleted, only set inactive.
+- **Credits and billing** (Owner and Finance; Support read-only): all receipts (filter by merchant, date, method),
+  charges by day / merchant / product, needs attention. Add credits opens the receipt form (0.5.8).
+- **Admins** (Owner only): a list with name, e-mail, role, two-step on/off and last sign-in. Actions: **Invite**
+  (e-mail + role; sends a setup link; the invitee sets their name and password), **Resend invite** or **Copy invite
+  link** and **Correct invite e-mail** (only until the invite is accepted, as 0.2 Logins), **Change role**, **Turn off
+  two-step**, **Remove**. Activity entries keep the removed admin's name. There is always at least one Owner: the last
+  Owner cannot be removed or demoted, and no one can remove themselves. A role change or removal takes effect at once
+  and ends all that admin's sessions, in the Portal and in product dashboards.
+- **Settings** (Owner only):
+   - **E-mail sending**: SMTP (host, port, user, password, sender name and address), which works with any provider. Send
+     test e-mail sends to the signed-in admin.
+   - **Billing rules**: grace days (0–30) and the low-balance threshold in days of spend (1–30), default 3 each (0.5.4).
+   - **Branding**: name, accent and logo, default Single Solution, indigo/violet. The logo is PNG, JPEG or WebP, at most
+     200 kB, never SVG; it is stored in the Portal database and served by the Portal at `/branding/logo`, because the
+     Portal has no file storage. Branding is used by the Portal, its e-mails and product dashboards (passed in the
+     launch).
+   - **Support contact**: e-mail, phone and optional WhatsApp, shown on the new-merchant welcome, the suspended message,
+     billing banners, product Features screens and Portal e-mails.
+   - **Security**: Session length (hours, default 12), the same for admins and merchants (product dashboard sessions
+     never last longer); Require two-step for admins (off by default).
+- **Activity**: every entry (0.5.12), filterable by merchant, admin and date.
+- **My account** (every admin, from the user menu): name, login e-mail, password, two-step (on/off, recovery codes), own
+  activity.
 
 **Merchant**
 
 - **Overview**: balance + days left at current spend, 30-day spend chart, websites with product chips and Open buttons,
-  warnings (low, grace, stopped, suspended).
+  warnings (low, grace, stopped).
 - **Websites**: list → website page (as above, without admin actions).
-- **Usage and credits**: spend per product × website × day × feature; credit receipts.
-- **Account**: business details (name, phone, address, country), login e-mail (confirmed by e-mail) and password,
-  two-step sign-in (on/off, recovery codes), own activity.
+- **Usage and credits**: spend per product × website × day × feature; credit receipts (date, credits, method, reference;
+  the amount paid is shown to admins only).
+- **Account**: business details (business name, owner name, phone, address, country), login e-mail (confirmed by e-mail)
+  and password, two-step sign-in (on/off, recovery codes), own activity.
 
-### Chat (first product) — decisions
+### 0.8.3 Chat — full specification
 
-Everything the ibrahimMobiles chat does, plus the kept extras. **Every option below is managed inside the Chat
-product** (settings per website; our admin sets defaults and prices). Features are split very finely (each its own
-switch and hourly price, starting at 0).
+Chat is the rebuild of today's `products/chatbot` on the new shared kit (0.12 step 8). It does everything the
+ibrahimMobiles chat does, plus the kept extras below. Every option is managed inside the Chat product (settings per
+website; Owners set global defaults and prices). Each feature has its own switch and hourly price, starting at 0. No
+owner interview is needed before building it: this section is the specification. "As in ibrahimMobiles" or "as today"
+names code to port, not history to follow.
 
-**Draft feature list (switches)**: visitor chat widget · headless chat (API for custom UI) · AI replies · backup AI
-provider · AI instructions · knowledge base (FAQ/articles) · website pages as knowledge · shop tools: product search and
-details · shop tools: deals and savings quotes · shop tools: top/new products · shop tools: my orders and account ·
-guest chat · signed-in chat (Accounts) with guest-to-account merge · proactive idle nudge · proactive page rules ·
-proactive exit intent · human handoff · inbox · assignment · internal notes · saved replies · conversation context
-panel · AI conversation summary · attachments · staff alerts · typing indicator and read receipts · lead capture and
-flows · ratings · transcripts by e-mail · moderation · reports · knowledge editor · AI token caps.
+#### Features (final list)
 
-- **AI**: providers OpenAI, Anthropic, Google Gemini built in, plus any OpenAI-compatible service (base URL + key);
-  merchant picks or types the model. Answers use merchant instructions, FAQ/knowledge entries, chosen website pages, and
-  live shop data through the merchant's Ecommerce token. Behaviour on AI failure (backup provider, message, handoff) is
-  a setting. AI disclosure label is the merchant's choice. Spending protection: daily/monthly token caps.
+Every feature also needs the merchant database (0.4.8). A needed connection is not a feature: the feature can be on
+without it, is charged, and shows `Not working: connect <X>`. Features marked step 10 need Ecommerce: they are added to
+Chat when Ecommerce is built (0.12 step 10) and are not in Chat's feature list before that. Feature keys are permanent.
+
+| Feature                                                 | Key                | Needs features                 | Needs connection                             | Step |
+| ------------------------------------------------------- | ------------------ | ------------------------------ | -------------------------------------------- | ---- |
+| Visitor chat (ready widget + visitor API)               | `visitor_chat`     | —                              | —                                            | 8    |
+| Guest chat                                              | `guest_chat`       | `visitor_chat`                 | —                                            | 8    |
+| Signed-in chat, with guest-to-account merge             | `signed_in_chat`   | `visitor_chat`                 | Accounts token                               | 8    |
+| AI replies                                              | `ai_replies`       | `visitor_chat`                 | AI provider key                              | 8    |
+| Backup AI provider                                      | `ai_backup`        | `ai_replies`                   | backup AI provider key                       | 8    |
+| AI instructions                                         | `ai_instructions`  | `ai_replies`                   | —                                            | 8    |
+| AI token caps                                           | `ai_caps`          | `ai_replies`                   | —                                            | 8    |
+| AI cost alerts                                          | `ai_cost_alerts`   | `ai_caps`                      | Notifications token                          | 8    |
+| Language lock                                           | `language_lock`    | `ai_replies`                   | —                                            | 8    |
+| Knowledge base (FAQ entries, articles)                  | `knowledge_base`   | `ai_replies`                   | —                                            | 8    |
+| Website pages as knowledge                              | `knowledge_pages`  | `ai_replies`                   | —                                            | 8    |
+| Knowledge editor (widget)                               | `knowledge_editor` | `knowledge_base`               | —                                            | 8    |
+| Custom webhook tools                                    | `webhook_tools`    | `ai_replies`                   | —                                            | 8    |
+| Book-a-slot tool                                        | `book_slot`        | `ai_replies`                   | — (booking URL is a setting)                 | 8    |
+| Shop tools: product search and details                  | `shop_search`      | `ai_replies`                   | Ecommerce token                              | 10   |
+| Shop tools: deals and savings quotes                    | `shop_deals`       | `ai_replies`                   | Ecommerce token                              | 10   |
+| Shop tools: top and new products                        | `shop_top`         | `ai_replies`                   | Ecommerce token                              | 10   |
+| Shop tools: my orders and account                       | `shop_my_orders`   | `ai_replies`, `signed_in_chat` | Ecommerce token                              | 10   |
+| Track-shipment tool                                     | `track_shipment`   | `ai_replies`, `signed_in_chat` | Ecommerce token                              | 10   |
+| Product cards with add-to-cart                          | `product_cards`    | `shop_search`                  | Ecommerce token                              | 10   |
+| Proactive idle nudge                                    | `proactive_idle`   | `visitor_chat`                 | —                                            | 8    |
+| Proactive page rules                                    | `proactive_pages`  | `visitor_chat`                 | —                                            | 8    |
+| Proactive exit intent                                   | `proactive_exit`   | `visitor_chat`                 | —                                            | 8    |
+| Lead capture and flows                                  | `leads_flows`      | `visitor_chat`                 | —                                            | 8    |
+| Custom fields                                           | `custom_fields`    | `visitor_chat`                 | —                                            | 8    |
+| Attachments                                             | `attachments`      | `visitor_chat`                 | storage                                      | 8    |
+| Typing indicator and read receipts                      | `typing_receipts`  | `visitor_chat`                 | —                                            | 8    |
+| Ratings                                                 | `ratings`          | `visitor_chat`                 | —                                            | 8    |
+| Transcripts by e-mail                                   | `transcripts`      | `visitor_chat`                 | Notifications token                          | 8    |
+| Inbox (widget)                                          | `inbox`            | `visitor_chat`                 | —                                            | 8    |
+| Human handoff                                           | `handoff`          | `inbox`                        | —                                            | 8    |
+| Assignment                                              | `assignment`       | `inbox`                        | —                                            | 8    |
+| Staff presence, max concurrent chats and queue position | `presence_queue`   | `handoff`, `assignment`        | —                                            | 8    |
+| Internal notes                                          | `internal_notes`   | `inbox`                        | —                                            | 8    |
+| Saved replies                                           | `saved_replies`    | `inbox`                        | —                                            | 8    |
+| Conversation context panel                              | `context_panel`    | `inbox`                        | Ecommerce token for shop info (from step 10) | 8    |
+| AI conversation summary                                 | `ai_summary`       | `inbox`, `ai_replies`          | —                                            | 8    |
+| Staff alerts                                            | `staff_alerts`     | `inbox`                        | Notifications token                          | 8    |
+| Moderation                                              | `moderation`       | —                              | —                                            | 8    |
+| Reports (widget)                                        | `reports`          | —                              | —                                            | 8    |
+
+**Not built** (even where `products/chatbot` or Part D has them): teams and automatic assignment (round-robin, least
+loaded, rules); SLA targets and breach alerts; priorities and tags; snooze, merge, transfer and auto-close; channels
+other than the website widget (WhatsApp, Messenger, Instagram, e-mail-to-inbox, SMS); today's JSON flow graph and any
+visual flow builder; per-language text catalogs; transcript retention days; topic grouping in reports; guest order
+lookup by order number; a realtime service or websockets. Tuning knobs (BM25, chunk sizes, timeouts, poll intervals,
+retry counts) are constants in code, not settings.
+
+**Rules between features**
+
+- The Features screen warns when visitor chat is on but neither guest chat nor signed-in chat is on (no one can start a
+  chat), and when neither AI replies nor the inbox is on (no one answers).
+- When a feature is off: AI instructions off → the AI uses Chat's built-in neutral instructions; guest chat off →
+  visitors must sign in before their first message; signed-in chat off → everyone chats as a guest; human handoff off →
+  there is no talk-to-a-person option and the AI never hands off (staff can still reply in the inbox); AI token caps off
+  → no caps; knowledge editor off → knowledge is managed through the API only.
+
+#### Visitor chat and widget look
+
+- One switch covers the ready chat widget and the visitor API (for a custom chat UI). Both use the browser token; Chat
+  cannot tell them apart and does not try.
+- The widget's JS API is `window.SSChat`, including `identify(token)`, `setPage(context)` and `onUnread(callback)`
+  (below).
 - **Widget look**: launcher style and position (hide on pages), window style (floating, side panel, full screen on
-  mobile), branding (bot name, avatar, header, separate guest and signed-in welcome messages), theme + custom CSS.
-- **Handoff**: visitor asks, AI decides, keyword/rule triggers, office hours (outside hours collect a message).
-- **Guests**: message limit, optional name/contact capture, chat kept on sign-in, remembered for N days on the device.
-- **Signed-in visitors**: **Accounts sign-ins only** (Chat-specific; other products may also accept a merchant's own
-  login).
-- **Proactive**: idle nudge, page rules, exit intent.
-- **Inbox** (admin widget on the merchant's admin, via tickets): statuses and filters, assignment to the merchant's
-  users, internal notes, saved replies; context panel with visitor details, shop info, AI summary, ratings.
-- **Staff alerts**: e-mail / WhatsApp / SMS to a recipient list the merchant sets, sent via Notifications; unread badge.
-- **Attachments**: merchant sets allowed types and max size (capped at a safe maximum); files go straight to the
-  merchant's own storage.
-- **Widgets**: visitor chat (+ headless), inbox, knowledge editor, reports.
-- **Live updates**: based on where Chat is hosted; on our Vercel hosting that means smart back-off checking (no
-  websockets, no realtime key).
-- **Retention**: chats kept forever.
-- **Dashboard**: Overview (what's on, today's cost, setup checklist: database connected, AI key set, widget installed) ·
-  Features (read-only for merchants) · Settings · Connections (database + storage, AI providers primary/backup,
-  Ecommerce / Notifications / Accounts tokens) · Developers (docs per feature, widget snippets, ticket snippet, API).
+  mobile), branding (bot name, avatar, header, separate guest and signed-in welcome messages), theme and custom CSS
+  (0.4.10). Every word in the widget is editable (0.4.10).
 
-### Still open
+#### AI
 
-- Each product dashboard's screens (decided per product before building it).
-- Exact feature list per product (prices start at 0).
+- Providers: OpenAI, Anthropic and Google Gemini built in, plus any OpenAI-compatible service (base URL + key). The
+  model is free text, with suggestions from a list kept in code per provider; models are not fetched live.
+- Answers use Chat's built-in neutral instructions (no store-, country- or language-specific text) plus the name and
+  contact from business.json; the merchant's own text when AI instructions is on (up to 12,000 characters, as in
+  ibrahimMobiles); and knowledge, website pages and shop data only from features that are on.
+- Behaviour on AI failure is a setting: backup provider (when on), a message, and/or handoff.
+- **AI label**: the merchant's choice. By default AI replies carry a label (text `AI assistant`, editable in Texts); the
+  merchant may hide it. While it is hidden, Settings show a warning: laws in some places (for example the EU AI Act and
+  California's bot disclosure law) require telling visitors they are talking to a bot, and the merchant is responsible
+  for following the law where they operate.
+- **AI token caps** count AI tokens (input + output, as reported by the provider; primary and backup together) per
+  website, with daily and monthly windows in the business.json time zone (UTC if missing). At a cap, AI replies stop
+  until the window resets, and the on-failure setting applies (message and/or handoff; never the backup provider).
+- **AI cost alerts**: when the month's AI tokens cross a set share of the monthly cap (setting, default 80%), one alert
+  goes through the Notifications token to the staff alert recipient list, once per monthly window (as today's chatbot
+  `cost_alert_percent`).
+- AI reply limits per visitor and per IP, and the human-like typing pace, carry over from ibrahimMobiles.
+- **Language lock**: as today (`products/chatbot/core/language.js`, from ibrahimMobiles). The visitor's language is
+  detected from each message and the AI must answer in it. An answer in another language is retried once; if it still
+  fails, the on-failure setting applies. Settings: allowed languages (empty = any) and marker words for Latin-script
+  languages.
+- **Custom webhook tools**: as today (`products/chatbot/core/tools.js`). The merchant defines tools in Settings → Tools
+  (name, description, typed parameters, HTTPS URL, whether to include the signed-in visitor's id and e-mail). The call
+  timeout and the maximum response size are constants in code, the same for every tool and for the book-a-slot calls.
+  The AI may call them. Chat sends each call as a POST through `@ss/net`, signed (HMAC over timestamp and body) with the
+  website's tool signing secret, which the merchant reveals, copies and regenerates in Settings → Tools; it is stored
+  encrypted (0.4.8).
+- **Book-a-slot tool**: the AI offers free time slots and books one for the visitor through the merchant's own booking
+  endpoint (an HTTPS URL in Settings → Tools), called and signed like a webhook tool, with two fixed requests defined in
+  Chat's docs: list free slots for a date range, and book a slot with the visitor's name and contact. We build no
+  booking system.
+
+#### Shop tools (step 10)
+
+- Shop tools follow ibrahimMobiles' assistant tools (`apps/web/src/lib/chat/assistant/tools.ts`, `offerQuote.ts`):
+  `search_catalog`, `get_product_details`, `quote_product_savings` (a product's price after active deals),
+  `list_active_deals`, `get_top_products` (top and new), `get_my_orders` and `get_my_account`; `escalate_to_human`
+  belongs to handoff. The track-shipment tool adds `track_shipment`.
+- Chat's docs define the Ecommerce endpoint each tool calls, and Ecommerce implements exactly those. Shop tools only
+  read.
+- My orders and account, and track shipment, run only for a visitor whose Accounts sign-in Chat verified on that
+  request. Chat forwards that sign-in to Ecommerce, which verifies it itself and returns only that user's data: the last
+  5 orders with status and total, loyalty points and the name; for track shipment, the courier, tracking number,
+  tracking link and latest status of that user's orders. It never returns full street addresses or phone numbers. The AI
+  never chooses or changes the user, website or token, and tool arguments naming another user are ignored.
+- **Product cards with add-to-cart**: products returned by shop tools show in the chat as cards (image, name, price,
+  link to the product page) with an Add to cart button. How Add to cart reaches the Ecommerce cart is decided in
+  Ecommerce's grilling.
+
+#### Guests and signed-in visitors
+
+- **Guests**, with defaults from ibrahimMobiles: a message limit per conversation of 5 (0 = no limit), remembered on the
+  device for 90 days, and ibrahimMobiles' guest and signed-in welcome texts. At the limit, the visitor sees
+  `Sign in to continue`, linking to the Sign-in page URL setting and returning to the same page, when signed-in chat is
+  on. Otherwise they see `Leave your contact and we will reply` when lead capture is on, and otherwise
+  `Message limit reached`. Contact capture: never, before the first message, or when handed to a person (setting).
+- **Signed-in visitors**: Accounts sign-ins only (0.4.6; needs the Accounts token). The merchant's page passes the
+  visitor's Accounts sign-in to the widget with `SSChat.identify(token)`, and calls `SSChat.identify(null)` on sign-out.
+  Chat verifies the sign-in offline and uses the Accounts user id as the visitor id. Visitors signed in only to the
+  merchant's own login count as guests. A guest's open conversation moves to the account only when the same device
+  presents both its guest key and a verified Accounts sign-in for that website.
+
+#### Proactive
+
+- **Idle nudge**: default 7 minutes without activity, as in ibrahimMobiles.
+- **Page rules**: a path pattern + a delay in seconds + a message; the first matching rule wins.
+- **Exit intent**: the pointer leaves the top of the window; desktop only.
+- Each shows at most once per visitor session, never while the chat window is open, and not again for N days after the
+  visitor dismisses one (setting, default 7).
+- The page can call `SSChat.setPage({ kind, productId, productName })` with `kind` one of `product`, `category`,
+  `deals`, `cart` or `other`, so the nudge and the opener can mention what the visitor is viewing, as ibrahimMobiles'
+  ProductChatBeacon does. A chat started on a product page sends that page context with the first message. Without
+  setPage, Chat uses the page URL and title.
+- Path patterns (page rules, flow page rules and hide on pages): an exact path, `*` = one segment, `**` = any (for
+  example `/products/**`).
+
+#### Handoff
+
+- As in ibrahimMobiles. Triggers: the visitor asks (button or phrases), the AI decides (escalate tool), a keyword rule
+  matches, or N AI failures happen in a row (setting).
+- On handoff, the conversation is flagged Waiting for a person, the AI stops replying in it, and a `Chat needs you`
+  staff alert goes out (when staff alerts are on). A staff reply clears the flag and lets the AI reply again, unless
+  staff paused the AI for that conversation.
+- Office hours are a Handoff setting in the business.json time zone (UTC if missing). Outside office hours, the visitor
+  is told when staff are back and the message waits in the inbox.
+- A guest with no known contact is asked for a name and contact, which are saved on the conversation, and as a lead when
+  lead capture is on.
+
+#### Lead capture and flows
+
+- **Lead capture** asks for the fields the merchant picks (name, e-mail, phone, message, and custom fields when that
+  feature is on), with an optional consent text. It runs at the guest limit, outside office hours, at handoff for a
+  guest with no known contact, and in flows. Each lead is saved in the merchant database with its conversation and page,
+  counted in reports and read through the API.
+- **Flows** are simple step lists, edited as a form in Settings → Flows. Each flow has a name, a start rule and steps.
+  Steps: **message** (text); **question with buttons** (text + buttons; the chosen answer is saved on the conversation);
+  **collect a field** (name, e-mail, phone, free text, or a custom field; validated); **hand off** (skipped when handoff
+  is off); **end**. Steps run top to bottom; there is no branching.
+- A flow starts by a **page rule** (a path pattern and an optional delay in seconds: it starts when the visitor opens
+  the chat on a matching page, or when the delay passes, which shows its first message like a proactive message with the
+  same once-per-session limits) or by a **keyword** (a visitor message contains one of its keywords or phrases). The
+  first matching flow in the list wins. A flow runs at most once per conversation and is not interrupted by another
+  flow. If the visitor types instead of tapping a button, the flow ends and the message is handled normally (AI or
+  inbox).
+- Collected fields are saved on the conversation; contact fields also create a lead.
+
+#### Inbox, staff and assignment
+
+- **Inbox** (admin widget, via tickets). Statuses as in ibrahimMobiles (`packages/shared/src/chat/inquiryStatus.ts`):
+  Open, Awaiting visitor, Resolved. A staff reply moves Open to Awaiting visitor, and a visitor message reopens a
+  Resolved conversation. Flags: Waiting for a person (after handoff), and AI paused (a per-conversation staff toggle, as
+  in ibrahimMobiles). The existing chatbot's Pending, Snoozed and Closed statuses are dropped.
+- Filters: status; assigned (me / unassigned / anyone, when assignment is on); waiting for a person; guest or signed in.
+  Search covers visitor name, e-mail, phone and message text. Newest activity comes first, with unread counts per
+  conversation and in total.
+- The inbox shows assignment, internal notes, saved replies (created and edited there), custom fields, the context panel
+  and the AI summary only when those features are on.
+- **Staff list from tickets** (0.4.5): every user named in a ticket who has opened the inbox is recorded (id, name,
+  e-mail, last seen) and offered for assignment. Their name is shown on their replies and notes. It works with any
+  login; Accounts is not needed.
+- **Assignment** is manual: a user with `inbox.manage` assigns or unassigns a conversation to anyone on the staff list.
+  There are no teams and no automatic assignment.
+- **Staff presence, max concurrent chats and queue position** (as today's `products/chatbot/core/inbox.js`, without
+  teams or automatic assignment):
+   - Each staff member sets Online, Away or Offline in the inbox. Someone whose inbox has not checked in for 5 minutes
+     is shown as Offline (judged when read). Presence is shown in the staff list and the assignment picker.
+   - Max concurrent chats: a default in Settings (empty = no limit, otherwise 1–200), which a user with `inbox.manage`
+     can change per staff member. A staff member who has that many Open conversations assigned cannot be given more; the
+     picker shows them as Full.
+   - Queue position (setting, on by default when the feature is on): after handoff, while the conversation is
+     unassigned, the visitor sees their place in the queue (unassigned conversations waiting for a person on that
+     website, handed off earlier, + 1), updated on the normal back-off checks.
+- **Custom fields**: the merchant defines extra fields for conversations and leads in Settings (label, key, type: text,
+  number, yes/no or a choice list). Staff with `inbox.manage` fill conversation fields in the inbox; flows and lead
+  capture can collect them; the API returns them.
+
+#### Context panel, unread and typing
+
+- **Context panel**: the visitor's name, e-mail and phone (from the Accounts sign-in or guest capture), the page and
+  product the chat started on, the device, and the number of conversations. Then shop info (from step 10), which needs
+  the Ecommerce token and a signed-in visitor: the last 5 orders with status and total, and loyalty points. Then the AI
+  summary and ratings.
+- **Unread and typing**: the visitor's launcher shows replies they have not seen yet. The visitor sees typing while an
+  AI reply is being prepared; staff typing is not sent. Staff see Seen once the visitor has opened staff replies, and
+  the visitor sees Seen once staff have opened the conversation. Both update on the normal back-off checks.
+
+#### Staff alerts and attachments
+
+- **Staff alerts** go through the Notifications token to the recipient list the merchant sets, plus the assigned staff
+  member's e-mail when there is one, as in ibrahimMobiles (`packages/shared/src/notifications/inquiryStaffNotify.ts`).
+  New message: sent on a visitor message, at most once per conversation until a staff member replies or opens it. Chat
+  needs you: sent on handoff. Each alert links to the Inbox address setting (for example `https://admin.shop.com/inbox`)
+  with the conversation id.
+- **Unread badge**: the inbox widget's unread count. It is also available to the merchant's own menu through
+  `SSChat.onUnread(callback)` and `GET /v1/inbox/unread` (ticket or server token). There is no separate badge widget.
+- **Attachments**: staff can always attach. Visitors can attach according to a setting: off, signed-in only or everyone
+  (default off). Allowed types are chosen from images (JPEG, PNG, WebP, GIF) and PDF; SVG, HTML and executables are
+  never allowed. Max size is a setting, default 5 MB, with a hard cap of 10 MB. Uploads go from the browser straight to
+  the merchant's storage with a presigned PUT that fixes type and size, and Chat stores only the object key. Images may
+  show inline; PDFs are served only as downloads. Visitor uploads count toward the guest message limit and the rate
+  limits. The attach button is hidden while no storage is connected.
+
+#### Ratings, transcripts, moderation, summary and reports
+
+- **Ratings**: as today's chatbot CSAT settings (rating scale, when to ask, optional comment).
+- **Transcripts by e-mail**, via the Notifications token: a visitor can ask for a copy at the end of a chat (a signed-in
+  visitor's Accounts e-mail is prefilled), and staff can send one from the inbox.
+- **Moderation** is the existing chatbot moderation (`products/chatbot/core/moderation.js`): PII redaction (cards, IBAN,
+  e-mail, phone, IP), a leak filter on AI answers, a link policy, and the merchant's blocked-terms list.
+- **AI conversation summary**: made when a conversation is handed to a person, and on demand (Summarise in the context
+  panel). It is saved on the conversation and counted in the AI token caps.
+- **Reports widget**: for a date range in the business.json time zone (default the last 30 days), it shows conversations
+  per day, visitor messages, conversations answered only by AI vs handed to a person, median first staff reply time,
+  resolved count, average rating and number of ratings, leads captured, and AI tokens used. Everything is read from the
+  merchant database. There is no topic grouping.
+
+#### Live updates and retention
+
+- **Live updates**: back-off checking from the browser, with fixed constants in code (not settings), as in
+  ibrahimMobiles (`packages/shared/src/chat/chatTransport.ts`) and today's chatbot defaults. While the window is open
+  and the tab visible, it checks every 10 s; after 5 minutes without activity, every 20 s; after 15 minutes without
+  activity it stops. There are no checks while the tab is hidden, and an immediate check when it becomes visible or on
+  any visitor input. After a send, while an AI reply is pending, it checks every 3 s for 45 s. With the window closed,
+  the launcher checks unread on page load, on tab focus (at most once a minute) and every 5 minutes while visible, as
+  ibrahimMobiles' unread store does. The inbox widget uses the same back-off while visible. No websockets and no
+  realtime key. These are requests from an open browser, which 0.10 allows: the no-polling rule means no server-side
+  timers. The checking code sits behind one small adapter, so another transport can be added if hosting changes.
+- **Retention**: Chat never deletes conversations because of their age; there are no retention days. Conversations are
+  deleted only when the merchant deletes them through the API, or by a delete request coordinated by Accounts (0.4.11).
+  Such a request deletes that user's conversations, messages and attachments, including guest chats merged into the
+  account; an export returns them.
+
+#### Chat data
+
+- **In Chat's product database**: switches; settings (AI instructions, tools, booking URL, flows, custom field
+  definitions and the rest); widget texts; theme and custom CSS; encrypted connections and the tool signing secret;
+  prices; global defaults; cached status; the business.json copy; Recent changes; dashboard sessions.
+- **In the merchant database** (prefix `ss_chat_`): conversations, messages, guest records, the staff list (with
+  presence and max chats), leads, ratings, internal notes, saved replies, custom field values, knowledge entries, the
+  website page list and crawled page text, AI summaries, AI token counts, and Chat's activity log. The activity log
+  records staff actions done through widgets and the API (reply, assign, note, status, knowledge edits) and is forwarded
+  to Accounts when the Accounts token is pasted (0.4.11).
+- Chat neither consumes nor publishes platform events: events and event scopes are removed from its manifest. Shop data
+  comes only from Ecommerce lookups made with the pasted token.
+
+#### Widgets and ticket permissions
+
+- **Widgets**: visitor chat (with `window.SSChat`); inbox; knowledge editor (FAQ entries, articles, and the website
+  pages to learn from when that feature is on; pages are fetched when added and by a Fetch again button, never on a
+  schedule); reports.
+- **Ticket permissions**: `inbox.read` (see conversations, set your own presence), `inbox.reply` (reply and attach),
+  `inbox.manage` (status, assignment, notes, saved replies, custom field values, per-person max chats),
+  `knowledge.edit`, `reports.read`. A widget shows only what its ticket allows.
+- `inbox.read`, `inbox.reply` and `inbox.manage` belong to `inbox`; `knowledge.edit` to `knowledge_editor`;
+  `reports.read` to `reports`. Actions inside a permission that need another feature (assignment, internal notes, saved
+  replies, custom fields) also need that feature on.
+
+#### Our admins and Chat
+
+- Our admins see and change only Chat's setup: features, settings, connections, global defaults and prices. They never
+  see conversations, knowledge content, leads or reports. Chat data stays in the merchant database and is used only
+  through the merchant's own widgets and API.
+
+#### Chat dashboard
+
+- **Overview**: as 0.4.3. The setup checklist shows only the items needed by switched-on features: database connected
+  (last test passed), storage connected (attachments), AI key set (AI replies; the backup key when backup is on),
+  booking URL set (book-a-slot), the Ecommerce / Notifications / Accounts tokens (for features that need them), widget
+  installed, and business.json found (warning only).
+- **Features**: read-only for merchants (0.4.3).
+- **Settings**: Assistant (bot name, avatar, AI instructions, AI label on/off with the law warning, on-failure
+  behaviour, token caps, cost alert share, the don't-know answer, language lock options); Tools (webhook tools, tool
+  signing secret, booking URL); Widget look, theme and custom CSS; Texts (every widget word, welcome messages included);
+  Guests; Proactive rules; Flows; Lead capture fields and consent text; Custom fields; Handoff and office hours (queue
+  position); Inbox (Inbox address, staff alert recipients, default max concurrent chats); Attachments; Ratings;
+  Transcripts; Moderation.
+- **Connections**: database, storage, AI provider primary and backup with model, and the Ecommerce / Notifications /
+  Accounts tokens.
+- **Developers**: as 0.4.3.
+- The current chatbot dashboard's Inbox and Knowledge pages (`products/chatbot/app/dashboard/_views/inbox.js`,
+  `inbox-id.js`, `knowledge.js`) are removed; their functions are the inbox and knowledge editor widgets.
+
+### 0.8.4 Still open
+
+- **The grilling of each later product** (Notifications, Accounts, Payments, Ecommerce, Growth), held right before it is
+  built (0.12). It decides the exact feature list and keys, what goes in each dashboard tab, the settings, the merchant
+  database collections, what its export and delete routes return, and these open points:
+   - whether the product accepts a merchant's own login for visitors (0.4.6);
+   - whether our admins get any help beyond setup (0.4.3);
+   - Payments and Ecommerce: how unconfirmed payments are rechecked without timers (0.3);
+   - Ecommerce: the endpoints for Chat's shop tools, track shipment and product cards (written in Chat's docs first),
+     and how Add to cart works from a chat card;
+   - Growth: how it learns about orders, carts and item changes (0.3).
+- **Before charging real merchants** (0.12 step 14): which commercial host, the mail setup and the final domains, chosen
+  by the owner.
+- **Open owner questions** (from the Part 0 review of 2026-10-07). Each is answered by the owner and written into the
+  section named before the step that needs it is built:
+   - **Start** (0.12): is building authorised now, and must step 1 be finished before step 2?
+   - **Deploys during steps 2–4** (0.12): are steps 2–4 deployed to production? If not, the owner turns off automatic
+     production deploys from `main` for the Portal and `products/chatbot` before the first step-2 commit, and they stay
+     off until the step-5 switch (Portal) and step 8 (Chat); this is then added to 0.12 and to the Deploying owner
+     tasks.
+   - **Step 5 test product** (0.12 step 5): may step 5 be verified in e2e against a minimal test product generated by
+     `ss app init` under `e2e/fixtures/` (test-only, never deployed)?
+   - **Session length** (0.2, 0.8.2): is it an absolute lifetime from sign-in with no idle timeout, and what range is
+     allowed (for example 1–336 hours)?
+   - **Signing out** (0.2, 0.4.12): does signing out of one Portal session end all of that person's dashboard sessions,
+     or only the ones it launched? This decides what `subject` in `sessions.revoked` identifies (the admin or merchant
+     id, or also a `launchingSessionId`).
+   - **Sign-in throttling** (0.2): do we keep today's throttling and lockouts (per account and per IP, progressive), and
+     do they also cover two-step codes, recovery codes, Forgot password and setup-link use?
+   - **E-mail-change link** (0.2): how long is the confirmation link for a new login e-mail valid? (Proposed:
+     single-use, refused if the new e-mail has become a login in the meantime.)
+   - **Admin invite links** (0.2, 0.8.2): can an admin invite link be copied, and can its e-mail be corrected before it
+     is accepted? (Written as yes, following 0.2 Logins; confirm.)
+   - **Require two-step for admins** (0.2): does it apply from each admin's next request (every page redirects to
+     two-step setup) or only from their next sign-in, including for an admin whose two-step an Owner turned off while
+     the requirement is on?
+   - **Merchant field lengths** (0.2): what are the maximum lengths for business name, owner name, phone and address, or
+     may the builder choose them?
+   - **Suspended merchant links** (0.2): while suspended, may a merchant use a setup or reset link to set a password
+     (without being signed in), or are the links refused?
+   - **Removed admin's e-mail** (0.8.2): does removing an admin free their e-mail for a new login?
+   - **Old billing removal** (0.12 steps 3 and 5): does step 3 remove plan, per-use and price-book billing too, or does
+     that wait for step 5? Trials are then removed in only one of the two steps.
+   - **Totals for all merchants** (0.5.7, 0.8.2): must admin Overview totals, needs attention and Merchants sort or
+     filter by balance or status always be computed live for all merchants, or may they use the cached billing state
+     (0.5.7 c) for merchants not on screen?
+   - **Grace while suspended** (0.5.6): can a grace period start while the merchant is suspended, or only once they are
+     resumed?
+   - **Launch delivery** (0.4.3, 0.13): does the launch stay `GET /sso?launch=` as today, or move to an auto-submitted
+     form POST?
+   - **Settings of several features** (0.4.2): confirm the rule: each widget text belongs to its widget's feature; theme
+     and custom CSS are visible while any feature with a widget is on; a setting used by several features is visible
+     while any of them is on. Settings schemas would then list each setting's feature or features.
+   - **Global Recent changes** (0.4.3): do global changes (prices, defaults) appear on every website's Overview marked
+     Global, or only on the Defaults or Prices screens?
+   - **Cross-product shapes** (0.4.6, 0.4.11, 0.12 step 4): are the data-rights routes, the activity-copy message and
+     Accounts' receiving route, and the Accounts sign-in claims and public-keys path fixed in step 4 (written into
+     0.4.11 and 0.4.6 for approval, documented in `@ss/contracts`) or in Accounts' grilling (step 7)? Does an export or
+     delete match a user on any of id, e-mail or phone, or only on the Accounts user id, with e-mail and phone for
+     guests?
+   - **`ss pack build`** (0.9 Shared kit, 0.12 step 4): is it removed, or kept (renamed, for example `ss widget build`)
+     to bundle a product's `widget.js`?
+   - **Add product ids** (0.8.2 Products): should Add product refuse ids other than the six in 0.3, and ids already
+     connected (`use Reconnect`)? This interacts with the step-5 test product question.
+   - **Money alerts** (0.9 Portal): is the commerce money-alerts collection (ledger chain breaks, unpriced hours) kept,
+     or removed in step 3?
+
+Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 
 ## 0.9 Conflicts with the current build and deployment
 
-From a read-only audit of the whole repo (2026-10-07, every conflict checked against the code). **Part 0 changes almost
-every part of today's build.** The Portal keeps its sign-in, credit ledger, product connection and dashboard sign-on;
-plans, per-use billing, settings, merchants' keys, the event hub and the widget loader leave the Portal (moved into
-products or dropped). The 17 products become 6 (Notifications, Payments, Growth are new).
+From a read-only audit of the whole repository (2026-10-07, every conflict checked against the code). **Part 0 changes
+almost every part of today's build.** The Portal keeps its sign-in, credit ledger, product connection and dashboard
+sign-on; plans, per-use billing, settings, merchants' keys, the event hub and the widget loader leave the Portal (moved
+into products or dropped). The 17 products become 6 (Notifications, Payments and Growth are new). Everything is changed
+in place, in the order of 0.12.
 
 ### Portal
 
-| Area                                             | Today                                                                        | Change                                                                     |
-| ------------------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Merchant sign-up                                 | Public sign-up page (live)                                                   | Remove; admin creates every merchant (setup link exists)                   |
-| Team members                                     | Invites, roles, per-website grants, ownership transfer                       | Remove; one login per merchant                                             |
-| One login, many merchants                        | One e-mail can own several merchants (switcher)                              | One login = one merchant; split shared logins                              |
-| Suspend                                          | Only pauses billing/products; merchant can still sign in and open dashboards | Block sign-in and launches, revoke sessions                                |
-| Merchant details                                 | Business name only                                                           | Add owner name, e-mail, phone, address/country; merchant can edit          |
-| Websites and products                            | Merchants add websites and subscribe themselves                              | Admin only                                                                 |
-| Test websites                                    | Every website has a test twin; test keys work on localhost                   | Remove (decide how merchants test locally)                                 |
-| Website settings (time zone, language, currency) | Stored in the Portal, sent to products                                       | Remove (business.json + Ecommerce)                                         |
-| Tokens                                           | Per website, scoped by hand, subdomains allowed, secret shown once           | Per website × product; exact domain; revealable secret                     |
-| Install code                                     | Portal stores widget files in a bucket and builds one script per website     | Each product serves its own script; remove the loader, bucket, `STORAGE_*` |
-| Feature switches and settings                    | In the Portal (layers, overrides, policy)                                    | Move into product dashboards                                               |
-| Signed document to products                      | Big document (settings, prices, key status, limits)                          | Small status per website × product (active, grace, stopped, removed)       |
-| Merchant's own keys                              | Portal vault; products fetch at runtime                                      | Move into each product dashboard (encrypted there)                         |
-| Sign-in provider approval                        | Products ask, merchant approves in Portal                                    | Remove; products trust Accounts                                            |
-| Plans, trials, per-use charges, spend cap        | All present                                                                  | Remove; per-feature hourly prices reported by products                     |
-| Running out of credits                           | Stops at zero, no grace, no warnings                                         | Grace period (admin setting) + banner + e-mails                            |
-| Adding credits                                   | Add / adjustment / refund with a note                                        | One receipt-style "Add credits" (amount, method, reference)                |
-| Removing a product                               | Final; settings lost                                                         | Keep settings so re-adding restores                                        |
-| Usage view                                       | Per website, per-use units                                                   | Per product × website × day × feature                                      |
-| Event hub, shopper events                        | Products send events through the Portal                                      | Remove (shopper events → Growth); keep Portal→product notices              |
-| Admin roles                                      | superadmin, admin, support, finance                                          | Owner, Support, Finance (migrate in the same deploy)                       |
-| Two-step sign-in                                 | Cannot be turned off once on                                                 | Optional for everyone, with a turn-off                                     |
-| Opening a product                                | Same tab, from a subscription page                                           | New tab, from website page; admin "Open as admin" + switcher               |
-| Website transfer, merchant notes                 | Exist                                                                        | Not in Part 0 (owner decides)                                              |
-| Menus, wording, texts                            | Old menus, "staff", texts inline                                             | New menus, plain words, "admins", texts in files                           |
+| Area                                             | Today                                                                        | Change                                                                                                                                                                                                                                                      |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Merchant sign-up                                 | Public sign-up page (live)                                                   | Remove; admins create every merchant (setup link exists)                                                                                                                                                                                                    |
+| Team members                                     | Invites, roles, per-website grants, ownership transfer                       | Remove; one login per merchant                                                                                                                                                                                                                              |
+| One login, many merchants                        | One e-mail can own several merchants (switcher)                              | One login = one merchant; e-mail unique across admins and merchants (0.2)                                                                                                                                                                                   |
+| First admin                                      | Superadmin `admin` without an e-mail, first visitor wins (F.19)              | Owner with name, e-mail and password, first visitor wins (0.2)                                                                                                                                                                                              |
+| Portal address                                   | Each request's origin (Host, X-Forwarded-Proto)                              | `PORTAL_URL` environment variable; never from request headers (0.8.1)                                                                                                                                                                                       |
+| Encryption keys                                  | Generated into the Portal database                                           | `ENCRYPTION_KEY` environment variable (0.4.8)                                                                                                                                                                                                               |
+| Suspend                                          | Only pauses billing/products; merchant can still sign in and open dashboards | Block sign-in and launches, revoke sessions (0.2)                                                                                                                                                                                                           |
+| Merchant details                                 | Business name only                                                           | Add owner name, e-mail, phone, address, country; merchant can edit                                                                                                                                                                                          |
+| Websites and products                            | Merchants add websites and subscribe themselves                              | Owner and Support only                                                                                                                                                                                                                                      |
+| Removing a website                               | Domain held for 30 days                                                      | Only after its products are removed; domain free at once; products delete its settings and keys (0.5.9)                                                                                                                                                     |
+| Test websites                                    | Every website has a test twin; test keys work on localhost                   | Remove; browser tokens also work on localhost (0.8.1)                                                                                                                                                                                                       |
+| Website settings (time zone, language, currency) | Stored in the Portal, sent to products                                       | Remove (business.json + Ecommerce), and remove the Overview/Keys/Resources/Identity website tabs; the website page has only Products, Install and tokens, Usage                                                                                             |
+| Tokens                                           | Per website, scoped by hand, subdomains allowed, secret shown once           | Per website × product; exact domain; revealable secret, encrypted with `ENCRYPTION_KEY` (0.4.4)                                                                                                                                                             |
+| Install code                                     | Portal stores widget files in a bucket and builds one script per website     | Each product serves its own script; remove the loader, bucket, `STORAGE_*`                                                                                                                                                                                  |
+| Feature switches and settings                    | In the Portal (layers, overrides, policy)                                    | Move into product dashboards                                                                                                                                                                                                                                |
+| Signed document to products                      | Big document (settings, prices, key status, limits)                          | Small status per website × product (active, grace, stopped, suspended, removed; 0.4.12)                                                                                                                                                                     |
+| Merchant's own keys                              | Portal vault; products fetch at runtime                                      | Move into each product's Connections (encrypted with that product's `ENCRYPTION_KEY`)                                                                                                                                                                       |
+| Sign-in provider approval                        | Products ask, merchant approves in Portal                                    | Remove; products trust Accounts through the pasted Accounts token (0.4.6)                                                                                                                                                                                   |
+| Plans, trials, per-use charges, spend cap        | All present                                                                  | Remove; per-feature hourly prices reported by products                                                                                                                                                                                                      |
+| Running out of credits                           | Stops at zero, no grace, no warnings                                         | Charged grace period (admin setting) + banner + e-mails; credits pay the debt first (0.5.6)                                                                                                                                                                 |
+| Adding credits                                   | Add / adjustment / refund with a note                                        | One receipt-style Add credits (credits, amount paid as free text, method, reference)                                                                                                                                                                        |
+| Removing a product                               | Final; settings lost                                                         | Keep settings and tokens so re-adding restores them                                                                                                                                                                                                         |
+| Usage view                                       | Per website, per-use units                                                   | Per product × website × day × feature                                                                                                                                                                                                                       |
+| Event hub, shopper events                        | Products send events through the Portal                                      | Remove; shopper events are decided when Growth is grilled; Portal → product notices are kept as 0.4.12 defines                                                                                                                                              |
+| Admin roles                                      | superadmin, admin, support, finance                                          | Owner, Support, Finance only; the superadmin and admin names are removed from code; the code knows only owner, support and finance; no mapping code is written, because development and test databases are recreated and `ss_portal` is reset at the switch |
+| Two-step sign-in                                 | Cannot be turned off once on                                                 | Optional for everyone, with a turn-off; recovery codes for everyone; an Owner can turn off someone else's (0.2)                                                                                                                                             |
+| Opening a product                                | Same tab, from a subscription page                                           | New tab, from the website page; admin Open as admin + switcher                                                                                                                                                                                              |
+| Website transfer, merchant notes                 | Exist                                                                        | Remove (dropped, 0.8.1)                                                                                                                                                                                                                                     |
+| Menus, wording, texts                            | Old menus, "staff", texts inline                                             | New menus, the words in 0.0, texts in files                                                                                                                                                                                                                 |
 
 ### Products
 
-| Area                                         | Today                                                            | Change                                                                                                                               |
-| -------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 15 shop products                             | 13 apps + 2 packs (~94k lines), separate databases               | Merge into one Ecommerce; one catalog, one order record, one API                                                                     |
-| Placing an order                             | Checkout calls Coupons/Deals/Loyalty/Catalog over the internet   | One database step inside Ecommerce                                                                                                   |
-| Duplicates                                   | Item data copied up to 10 times; rules built 2–3 times           | One of each                                                                                                                          |
-| Sending messages                             | Orders, after-sales, reviews, alerts, Signups send directly      | Through Notifications                                                                                                                |
-| Settings and keys                            | Read-only, from the Portal                                       | Editable in each product dashboard; keys stored encrypted                                                                            |
-| Plans, trials, test mode, per-use            | In all 17 product files                                          | Remove; add a price screen (admin) and feature/price reports                                                                         |
-| Chat                                         | Chatbot: no shop tools, text only, polling only, no staff alerts | Add shop tools (Ecommerce token), attachments, realtime option, alerts; decide extras (flows, knowledge, leads, surveys, moderation) |
-| Accounts                                     | Signups: codes and magic links, shoppers only                    | Add password and Google/Apple/Facebook, users' roles and rules, notes, addresses                                                     |
-| Notifications, Payments, Growth              | Do not exist (pieces scattered)                                  | Build new                                                                                                                            |
-| Product dashboards                           | Top tabs, no global defaults or prices, no admin switcher        | Left sidebar, Overview · Features · Settings · Connections · Developers, admin prices and switcher                                   |
-| Admin widgets for merchant admins            | None (all widgets are shopper-facing)                            | Add (needs open item: short-lived tokens)                                                                                            |
-| Renames (Chatbot → Chat, Signups → Accounts) | Names built into IDs and data names                              | Keep old IDs or pin old data names                                                                                                   |
+| Area                                         | Today                                                            | Change                                                                                                                                                                                                                                                               |
+| -------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 15 shop products and Signups                 | 13 apps + 2 packs (~94k lines) plus Signups, separate databases  | Parked (0.12 step 4); the shop products are merged into one Ecommerce (one catalog, one order record, one API; step 10) and Signups becomes Accounts (step 7)                                                                                                        |
+| Placing an order                             | Checkout calls Coupons/Deals/Loyalty/Catalog over the internet   | One database transaction inside Ecommerce                                                                                                                                                                                                                            |
+| Duplicates                                   | Item data copied up to 10 times; rules built 2–3 times           | One of each                                                                                                                                                                                                                                                          |
+| Sending messages                             | Orders, after-sales, reviews, alerts, Signups send directly      | Through Notifications                                                                                                                                                                                                                                                |
+| Settings and keys                            | Read-only, from the Portal                                       | Editable in each product dashboard; keys encrypted with `ENCRYPTION_KEY`                                                                                                                                                                                             |
+| Plans, trials, test mode, per-use            | In all 17 product files                                          | Remove; add a Prices screen (Owner) and price and feature reports                                                                                                                                                                                                    |
+| Chat                                         | Chatbot: no shop tools, text only, polling only, no staff alerts | Rebuilt on the new kit (step 8): staff alerts, transcripts and cost alerts (Notifications token), signed-in chat (Accounts token), attachments, kept extras as switches (0.8.3); shop tools and product cards added with Ecommerce (step 10); back-off checking only |
+| Accounts                                     | Signups: codes and magic links, shoppers only                    | Add password and Google/Apple/Facebook, users' roles and rules, notes, addresses                                                                                                                                                                                     |
+| Notifications, Payments, Growth              | Do not exist (pieces scattered)                                  | Build new                                                                                                                                                                                                                                                            |
+| Product dashboards                           | Top tabs, no global defaults or prices, no admin switcher        | Left sidebar, Overview · Features · Settings · Connections · Developers, Owner Defaults and Prices, admin switcher                                                                                                                                                   |
+| Admin widgets for merchant admins            | None (all widgets are shopper-facing)                            | Add, using tickets (0.4.5)                                                                                                                                                                                                                                           |
+| Renames (Chatbot → Chat, Signups → Accounts) | Names built into IDs and data names                              | New ids (`accounts`, `ecommerce`, `chat`, `notifications`, `payments`, `growth`); data is reset, so no old names are kept; `products/chatbot` becomes `products/chat` in step 8                                                                                      |
 
 ### Shared kit
 
-Remove plans, trials, per-use reporting, test mode, the loader/pack model and the event-hub rules. Add the feature/price
-report, a status document, a local settings store, an encrypted key store, the pasted-token client, a `business.json`
-reader, per website × product tokens, data-rights and log-forwarding routes, admin switcher and roles. Rename "element"
-→ "feature" and "subscription" → "product on website".
+- **Portal modules after Part 0.** `identity`: admins, merchants, websites, tokens per website × product; no teams,
+  issuers, test twins, transfer, notes or multi-merchant logins. `catalog`: connect, active/inactive, launches, price
+  and feature reports, notices; no packs or widget uploads. `commerce`: receipts, hourly charges from feature reports,
+  grace and stop, usage views; no plans, trials, spend cap, metered usage or price books. `system`: Settings, activity
+  log, mail. Removed entirely: `config`, `connectors`, `delivery` and `integration`.
+- **Packages.** `@ss/entitlements` keeps only the hourly charge maths (millicredits, UTC hours, per-feature lines, grace
+  replay) and loses plans, quotas, spend, resolve and the document. `@ss/web` loses the loader, placement, audience,
+  frequency, the events client and consent; a product may still bundle its own widget script. `@ss/contracts` and
+  `@ss/protocol` lose manifest plans, prices, scopes and events, entitlement documents, event catalogues, env and
+  allowSubdomains, and gain the 0.4.12 shapes and the 0.4.4 token claims. `@ss/cli` loses `--kind pack` and the upload
+  output of `ss pack build`. `@ss/app-kit` loses usage, events and the outbox, Portal-resolved connectors, Portal
+  identity issuers and env. It keeps `identity.verify`, fed from the product's own Connections. It gains the settings
+  store, the encrypted connection store, the pasted-token client, the business.json reader, the status cache and notice
+  handler, the price and feature reporters, tickets, the data-rights and log-forwarding routes, the Shadow DOM widget
+  mount, widget texts, the Recent changes record, and the admin switcher and roles.
+- Rename "element" → "feature" and "subscription" → "product on website" everywhere (0.0).
 
 ### Live deployment and data
 
-- **Portal** env shrinks to `MONGODB_URI` (remove `STORAGE_*`, delete the bucket). **Chat** keeps `MONGODB_URI` +
-  `CONNECT_SECRET`; each new product gets its own. Function counts unchanged (Portal 5, each product 2).
-- **Every existing key stops working**; merchants get new tokens per website × product and re-paste scripts. The old
-  `/w/<website>/loader.js` breaks once the loader is removed.
-- **Live Chatbot** breaks unless Portal and Chat deploy together or the Portal serves the old document for a while;
-  merchants re-enter database and AI keys in the Chat dashboard.
-- **Data**: many `ss_portal` collections become unused; plans and old product IDs sit in subscriptions; the ledger is
-  hash-chained (old entries stay readable). **Cheapest if Atlas holds only test data: reset `ss_portal` and
-  `ss_chatbot`, recreate the first admin, re-add products.**
+- **Environment**: the Portal's becomes `MONGODB_URI` + `PORTAL_URL` + `ENCRYPTION_KEY` (remove `STORAGE_*` and delete
+  the bucket); each product's becomes `MONGODB_URI` + `CONNECT_SECRET` + `ENCRYPTION_KEY` (0.11). Function counts are
+  unchanged (Portal 5, each product 2).
+- **At the switch** (0.12 step 5) every existing key stops working, the old `/w/<website>/loader.js` stops, and the live
+  Chatbot stops working. This is accepted because all data is test data. Chat comes back in step 8.
+- **Data**: `ss_portal` and `ss_chatbot` are reset at the switch; the first Owner is created again, and products are
+  connected as each one ships (steps 6–11). The ledger stays hash-chained.
 - Preview deploys must not share the production database. An old untracked root `.env` holds a `MONGODB_URI`: change
-  that password if it is live, and delete the file.
-- Vercel Hobby is for non-commercial use: move hosting before charging merchants.
+  that password if it is live, and delete the file (0.12 step 1).
+- Vercel Hobby is for non-commercial use: move hosting before charging merchants (0.12 step 14).
 
-### Suggested build order (keeps something working at each step)
+## 0.10 What still applies from older parts
 
-1. Protect the live system (production-only database variables, separate preview databases, remove the stray `.env`).
-2. Portal people and access (no sign-up, no teams, admin-only websites/products, new admin roles, suspend blocks sign-in).
-3. Portal credits (receipt-style add, grace period with e-mails, no spend cap/trial, new usage view).
-4. New shared kit beside the old one.
-5. Portal supports old and new (feature/price reports, status document, new tokens).
-6. Move the live Chatbot to Chat on the new kit.
-7. Build products in order: Notifications → Accounts → Payments → Ecommerce → Growth.
-8. Merchants switch to the new scripts and tokens; then remove the loader, packs, bucket.
-9. Remove the remaining old Portal parts (key vault, event hub, per-use billing, settings module).
-10.   Portal and product screens (can run alongside any step). 11. Tests, CI, docs. 12. Before charging: move hosting,
-      set up mail, final domains for Payments and Accounts.
+Everything after Part 0 is history except the rules below, which bind wherever Part 0 does not change them.
+
+### Still binding
+
+- **Language** (header, F.6): JavaScript ESM, functional, JSDoc + `tsc --checkJs --strict`; no classes, no `console`, no
+  `.ts` files. ibrahimMobiles is TypeScript and is rewritten in JavaScript, not copied.
+- **Splittable units** (F.17) and the F.6 repository layout; tests that need two or more deployables live in `e2e/`.
+- **No background work** (F.19): no crons, timers, timed queue drains or background loops. Work happens inside, or right
+  after (`after()`), the request that caused it. Time-based state is judged when read; data that can simply disappear
+  uses TTL indexes; work a merchant must start is a dashboard button. Also from F.19: Vercel Hobby + Atlas M0 while
+  testing, and the connection budget. F.19's "no polling" is about servers; a browser checking its own conversation is
+  allowed.
+- **Outbound calls** (F.10): `@ss/net` for every outbound call to an address a merchant or admin entered.
+- **Connect and signing** (F.5, F.9): the connect handshake (`CONNECT_SECRET`, HMAC both ways,
+  `/.well-known/ss-connect`, pinned Portal URL and keys); EdDSA-signed tokens and the JWS rules; single-use launches of
+  kinds merchant and admin; the persisted Portal JWKS and the launch-to-session exchange; revocation lists.
+- **Money units** (F.1): integer millicredits and UTC hours. Its metered, price-book, finished-hour and spend-cap parts
+  are void (0.5).
+- **Formats** (F.3): ids, domain normalisation and the RFC 9457 problem format. `rules@1` (F.4) may be used inside a
+  product but is not required.
+- **Tenant guard** (F.9): `websiteId` on every merchant-data query, with no `$in` and no cross-collection stages;
+  inserts are stamped with `websiteId` and `merchantId`, with no env.
+- **Offline grace** (F.9, F.20): a fixed 24 hours while the Portal cannot be reached.
+- **F.20 removals** stay removed, except the per-user export and delete routes that Part 0 brings back (0.4.11).
+
+### Replaced — do not build
+
+- Plans, layers, locks and the `config` module (§9, F.2, F.11).
+- Entitlement documents and every F.9 wire format except launch/consume and revocations (replaced by 0.4.12).
+- F.5 `pk_`/`sk_` website keys with HMAC-only storage, env and allowSubdomains, and §11's secret shown once (replaced by
+  0.4.4).
+- Usage metering and per-use units; price books and pins; trials and the subscribe-needs-credits rule; the monthly spend
+  cap; settling only finished hours; zero-amount hourly ledger entries; pausing at zero with no grace and
+  hours-remaining alerts; adjustments, refunds and trial credits; prices in manifests (§1, §6.2, §7, §16, F.1, F.11,
+  F.19, F.20; replaced by 0.5).
+- Resources/resolve and the `connectors` module (§1a, F.9, F.11).
+- The Event Hub, product events, event scopes, the outbox and the `integration` module (§5.2, Part E §9, F.11, F.15,
+  F.19).
+- The Loader, packs, `delivery`, `/w/*`, widget upload, `STORAGE_*`, the placement engine and per-language text
+  overrides (§4, F.7, F.13, F.18, F.20).
+- Edge Injection and hosted pages (§4.2, §4.3), and the preview proxy (§4.4).
+- The Website Graph (§5.1).
+- Identity issuers and website settings in the Portal (F.14, F.16).
+- Live/test twins and test mode (F.11, F.12, Part E §7).
+- Teams, website transfer and staff notes (F.11, A.27); the F.12 website tabs.
+- F.19's first admin without an e-mail, its "Mail is the only admin setting", its Portal address from the request, its
+  encryption keys generated into the database, and its session lifetimes as constants (replaced by 0.2, 0.8.1, 0.8.2 and
+  0.11).
+- Part D §0 levels L0–L8; Part E's manifest, modes A/B/C, React/Vue/Svelte adapters and standard routes (replaced by
+  0.4.13).
+- The AI gateway (§10); Appendix A pricing and bundles; the §14 roadmap and §16 launch set.
+- Anything else in the older parts that Part 0 does not name.
+
+### How the older parts are handled
+
+- They stay in this file unchanged, as history. Part D §1–§29 are reference only, used when a product is grilled.
+- Appendix B (source map), Appendix C (glossary) and the §13 porting paragraph are replaced by 0.3 (Where ibrahimMobiles
+  code goes), 0.0 and 0.13.
+- Code docs (every `README.md`, `packages/app-kit/API.md`, `platform/src/modules/INTERFACES.md`,
+  `products/*/docs/guide.md`, `packages/cli/templates/*`) describe the build before Part 0; where they disagree with
+  Part 0, Part 0 wins. Each is rewritten in the build step that changes its unit. Until then, the first build step that
+  touches the unit adds this first line:
+  `Describes the build before PLAN.md Part 0 (2026-10-07); where they differ, Part 0 wins.`
+- Once the owner confirms Part 0 is built, everything after Part 0 moves to `docs/history/PLAN-v1.md`, leaving PLAN.md
+  as Part 0 only. This happens only when the owner says so.
+
+## 0.11 Environment variables
+
+| Deployable   | Variable         | What it is                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Portal       | `MONGODB_URI`    | The Portal's own database (`ss_portal`). Never a merchant database.                                                                                                                                                                                                                                                                                                          |
+| Portal       | `PORTAL_URL`     | The Portal's final public address, scheme + host (+ port if not default), no path and no trailing slash, for example `https://portal.example.com`. Used for e-mail links, as token and launch issuer and as the CSRF origin; products pin it at connect (0.8.1). https is required, except for `localhost`, `*.localhost`, `127.0.0.1` and `[::1]` in development and tests. |
+| Portal       | `ENCRYPTION_KEY` | Random, at least 32 characters. Encrypts the Portal's stored secrets (0.4.8).                                                                                                                                                                                                                                                                                                |
+| Each product | `MONGODB_URI`    | The product database (0.4.8). Never a merchant database.                                                                                                                                                                                                                                                                                                                     |
+| Each product | `CONNECT_SECRET` | Random, at least 32 characters. Typed once into Portal → Products → Add; the Portal never stores it. Changing it locks the old binding out until Reconnect.                                                                                                                                                                                                                  |
+| Each product | `ENCRYPTION_KEY` | Random, at least 32 characters, different for each deployable. Encrypts the product's stored secrets (0.4.8).                                                                                                                                                                                                                                                                |
+
+- Nothing else is read in production. `STORAGE_*` is removed with the loader. There are no host-specific variables, no
+  tuning variables, no product URL variable and no cron secret.
+- A deployable fails at start with a clear error naming the missing or invalid variable (never its value).
+- The deployable's own source reads only the three variables listed, in every environment. Only test and e2e harness
+  code (for example a test database URI) may read other variables, and they never appear in `.env.example`.
+- Secrets not in this list (signing keys, session secret, idempotency secret) are generated on first start into the
+  deployable's own database, as today (F.19).
+- Each deployable keeps a `.env.example` listing exactly these names. No `.env` file with real values is ever committed.
+
+## 0.12 Build order
+
+- **Order**: the Portal first (steps 1–5), then **Notifications → Accounts → Chat → Payments → Ecommerce → Growth**
+  (steps 6–11). Chat comes after Accounts and Notifications so the Chat features that need them work when Chat ships.
+  Steps 12 and 13 run alongside; step 14 comes before charging real merchants.
+- **Replace in place**: there is no old-and-new period, no compatibility layer and no migration of old data. Steps 2, 3
+  and 5 all change the Portal; nothing from before the switch (step 5) is kept, so between steps the Portal only has to
+  keep passing CI.
+- **One step at a time.** A step is done only when every "done when" item is true and verified (0.13). `main` passes CI
+  at the end of every step. Each step heading is followed by a line `Done: <date>, verified by <who>`, empty until then.
+  A step starts only after the previous step's Done line is filled.
+- **Screens in every step**: each step's done-when includes that the Portal and dashboard screens it adds or changes
+  match 0.6 and 0.8.2 (dashboards 0.4.3), in light and dark and from 360 px, with texts in files. Step 12 is a final
+  sweep before step 13 closes.
+- **Every product step except Chat starts with an in-depth owner interview (grilling).** Its decisions are written into
+  Part 0 as a new section of 0.8 (like 0.8.3 for Chat) and approved by the owner before any code is written. Chat is
+  already specified (0.8.3).
+- **Deploying** (Vercel projects, environment variables, Atlas users and domains) is done by the owner; the building
+  agent prepares everything and lists exactly what to set.
+
+**Done when, for every product (steps 6–11)**, besides the step's own items:
+
+- It is built to 0.4 and to the product standard (0.4.13), passes `ss app validate`, and uses only the words in 0.0.
+- It connects to the Portal and sends price and feature reports; every feature starts at price 0 and off.
+- It obeys every status (0.4.7), tested for active, grace, stopped, suspended and removed, and handles all four notices.
+- It accepts its browser token only from the exact domain and localhost, refuses server tokens with an Origin header,
+  and (if it has admin widgets) issues origin-bound tickets (0.4.5).
+- It ships the export and delete routes and Accounts log forwarding (0.4.11). If it has widgets: the Texts settings with
+  every widget word editable (0.4.10), and the theme and custom CSS. If it has admin widgets: origin-bound tickets and
+  the ticket snippet in `/docs`. Every product: public docs at `/docs`.
+- Its dashboard has the 0.4.3 tabs, admin view and Recent changes, and shows no business data.
+- The e2e suite runs it against the real Portal (connect, reports, statuses, tokens, tickets, notices, data rights).
+- `.env.example` lists exactly `MONGODB_URI`, `CONNECT_SECRET`, `ENCRYPTION_KEY`.
+- For a product built before Accounts (step 6), the export and delete routes and the log-forwarding client are tested
+  against the kit's test double. The e2e tests against the real Accounts are added in step 7, which is not done until
+  they pass for every product already shipped.
+
+#### Step 1 — Protect the live system
+
+Done: <date>, verified by <who>
+
+- Production deployments have their own database variables; preview deployments use their own databases or none, never
+  production's.
+- The untracked root `.env` is deleted.
+- `.gitignore` ignores `.env*` everywhere except `.env.example` (patterns: `.env*`, `**/.env*`, `!.env.example`,
+  `!**/.env.example`).
+- The owner confirms the Atlas password from that file is changed, or was never live.
+
+#### Step 2 — Portal: people and access
+
+Done: <date>, verified by <who>
+
+- No public sign-up; admins create merchants; setup links, password resets and login changes work as 0.2 says.
+- No teams, merchant invites, per-website grants, ownership transfer or multi-merchant logins; one login = one merchant;
+  e-mails unique across admins and merchants.
+- Roles are Owner, Support and Finance; old role names are gone from code and data (0.9); the rights table (0.2) is
+  enforced by the API, with one API test per row and per role column (Owner, Support, Finance, Merchant) asserting
+  allowed or 403, plus 401 for a caller who is not signed in; merchant tests also assert that another merchant's records
+  are refused.
+- First admin: Create admin makes an Owner with name, e-mail and password; the superadmin without an e-mail is gone.
+- Two-step is optional for everyone, with 10 recovery codes; an Owner can turn off someone else's two-step (e-mail sent,
+  Activity logged); Require two-step for admins works.
+- Suspend blocks sign-in and launches and ends sessions; Resume restores.
+- Merchant fields, the Details tab and the merchant Account page match 0.2 and 0.8.2; My account exists for admins.
+- Websites follow 0.2 (exact, unique domains; added and removed only by Owner and Support). Remove website (0.5.9) frees
+  the domain (its `website.deleted` notice is added in step 5). Delete merchant works as 0.5.9.
+- Website transfer and merchant notes are removed.
+- `PORTAL_URL` and `ENCRYPTION_KEY` are read (0.11) and used as 0.8.1 and 0.4.8 say; nothing derives the Portal address
+  from request headers; the SMTP password and two-step secrets are encrypted with `ENCRYPTION_KEY`.
+- Settings → E-mail sending, Branding, Support contact and Security work as 0.8.2. The Admins page works as 0.8.2
+  (invite, resend, change role, turn off two-step, remove, last-Owner rule, no self-removal). Every people-and-access
+  event in 0.5.12 is written to Activity, and the Activity screen filters by merchant, admin and date. The setup,
+  invite, reset, e-mail-change and two-step-off e-mails of 0.5.10 are sent, or skipped with the Overview warning when
+  SMTP is not set.
+
+#### Step 3 — Portal: credits and billing
+
+Done: <date>, verified by <who>
+
+- The receipt form matches 0.5.8 (free-text amount paid); adjustments, refunds, trial credits, trials, the spend cap and
+  hours-remaining alerts are removed.
+- One pure money function implements 0.5.1–0.5.7: hourly charging with the mid-hour rules, charged grace and debt, stop,
+  restart only above 0, both status orders, low balance and days left. Tests cover every rule.
+- The money function, receipts, ledger and screens are built and tested on price-list and switch histories written by
+  tests; step 5 fills those histories from real reports.
+- The ledger holds only receipts and day charges. In step 3, checks run when Portal pages show merchants; the status
+  route adds checks in step 5. Billing e-mails are sent once per state (0.5.10).
+- Usage (0.5.11), banners, status labels (0.6), Credits and billing, and Settings → Billing rules match Part 0.
+
+#### Step 4 — New shared kit, in place
+
+Done: <date>, verified by <who>
+
+- First, the 16 old product folders other than `products/chatbot` (`aftersales`, `alerts`, `catalog`, `checkout`,
+  `configurator`, `coupons`, `deals`, `grades`, `loyalty`, `orders`, `pdp`, `reviews`, `search`, `signups`,
+  `storefront`, `wishlist`) are moved from `products/` to `parked/`, unchanged. `parked/` is outside the pnpm workspace
+  globs, root scripts, CI and the e2e workspace; e2e tests that need a parked product are parked with it. The owner
+  disconnects their deployments. Each parked folder is deleted when the product that replaces it ships (`signups` in
+  step 7, the other 15 in step 10).
+- `products/chatbot` stays in the workspace as the starting point for Chat, but from this step until step 8 it is left
+  out of CI and root checks, and its live deployment is left alone:
+   - CI's unit list excludes `products/chatbot` (`ls … | grep -v '^products/chatbot$'`), and root scripts add
+     `--filter '!./products/chatbot'`.
+   - `e2e/tests/chatbot-portal.test.js` and e2e's dependency on `@ss/product-chatbot` are removed (Chat's e2e is
+     rewritten in step 8). Parked e2e tests go to `parked/e2e/<file>`. Until step 5 adds tests, the e2e config sets
+     `passWithNoTests`.
+   - Step 8 removes these exclusions.
+- `packages/*` match 0.9 Shared kit: the removals are done and the additions exist with tests (settings store, encrypted
+  connection store, pasted-token client, business.json reader, status cache and notice handler, price and feature
+  reporters, origin-bound tickets, data-rights and log-forwarding routes, Shadow DOM widget mount, widget texts, Recent
+  changes, admin switcher and roles, tenant guard without env).
+- `ss app init` generates the 0.4.13 layout and `ss app validate` checks it.
+- Every package passes its own `check` (F.17 coverage thresholds: 90 % lines, 90 % functions, 85 % branches) and the
+  splittable-unit test.
+- The Portal still passes its `check`; if it cannot without step 5, steps 4 and 5 are done together.
+
+#### Step 5 — Portal on the new model (the switch)
+
+Done: <date>, verified by <who>
+
+- Tokens per website × product (0.4.4): EdDSA-signed, encrypted with `ENCRYPTION_KEY`, revealed, copied and regenerated
+  with Activity entries; revocation list; the Install and tokens tab.
+- The whole contract in 0.4.12 works: connect with `PORTAL_URL` pinning, price reports, feature reports, status, the
+  websites list, revocations, the directory, launch consume, and the four notices with retry.
+- Launches carry the 0.4.3 claims; Finance launches are refused; `sessions.revoked` is sent in every case 0.4.3 lists.
+- Billing runs from the reports through step 3's money function.
+- Removed from the Portal: the loader, packs, widget uploads, the `delivery` module, the bucket and `STORAGE_*`, the key
+  vault and the `connectors` module, the Event Hub and the `integration` module, the `config` module (settings, layers,
+  overrides, policy), website settings and the Overview/Keys/Resources/Identity tabs, identity issuers, test twins,
+  plans, trials, per-use billing, price books, and the entitlement document and its routes.
+- The Portal's modules are `identity`, `catalog`, `commerce` and `system` only (0.9).
+- Portal → Products (0.8.2: Add product, Active/Inactive, Reconnect with the same id, Open as admin, Overview and
+  Websites tabs), the website page Products tab (0.5.9 add, remove and restore; cards with status and daily cost; Remove
+  website disabled until products are removed), Install and tokens (0.8.2) and the per-product numbers on admin Overview
+  work and are tested.
+- The owner deploys it with `ss_portal` and `ss_chatbot` reset and `PORTAL_URL` and `ENCRYPTION_KEY` set, and creates
+  the first Owner. The live Chatbot stops (accepted).
+
+#### Step 6 — Notifications
+
+Done: <date>, verified by <who>
+
+- Grilled first; decisions written into Part 0 and approved.
+- Meets the every-product list above.
+- Holds all messaging provider keys; the kit's SMTP and HTTP messaging adapters have moved here; other products can send
+  through a pasted Notifications token.
+- Deployed by the owner and connected.
+
+#### Step 7 — Accounts
+
+Done: <date>, verified by <who>
+
+- Grilled first; decisions written into Part 0 and approved.
+- Meets the every-product list above.
+- Other products verify Accounts sign-ins offline through a pasted Accounts token (0.4.6); sign-ins last 15 minutes and
+  are renewed by Accounts' widget.
+- Data-rights coordination and activity-log copies work across connected products (0.4.11); the Accounts extras are
+  switches.
+- `parked/signups` is deleted.
+- Deployed by the owner and connected.
+
+#### Step 8 — Chat
+
+Done: <date>, verified by <who>
+
+- No grilling: 0.8.3 is the specification.
+- `products/chatbot` is rebuilt on the new kit, renamed `products/chat` with product id `chat`, and is back in CI and
+  root checks.
+- Meets the every-product list above.
+- Every 0.8.3 feature marked step 8 works end to end; signed-in chat is tested with the real Accounts, and staff alerts,
+  transcripts and AI cost alerts with the real Notifications.
+- Nothing from the 0.8.3 "Not built" list remains in the code; the old dashboard Inbox and Knowledge pages and the
+  manifest events are removed.
+- Deployed by the owner (its product database starts empty) and connected.
+
+#### Step 9 — Payments
+
+Done: <date>, verified by <who>
+
+- Grilled first; decisions written into Part 0 and approved.
+- Meets the every-product list above.
+- Ecommerce (and non-shop sites) can confirm a payment server-to-server for the same website and the exact amount (0.3).
+- Deployed by the owner and connected.
+
+#### Step 10 — Ecommerce
+
+Done: <date>, verified by <who>
+
+- Grilled first; decisions written into Part 0 and approved.
+- Meets the every-product list above. Built from the 15 parked shop folders and ibrahimMobiles as references.
+- Placing an order is one database transaction (stock, offer use, points) with no network calls between parts; orders
+  are marked paid only after Payments confirms (0.3).
+- Implements the endpoints Chat's docs define for shop tools, track shipment and product cards. Chat gains the step-10
+  features (`shop_search`, `shop_deals`, `shop_top`, `shop_my_orders`, `track_shipment`, `product_cards`) and the
+  context panel's shop info, with e2e tests against the real Ecommerce.
+- The 15 parked shop folders are deleted, and `parked/` with them once it is empty.
+- Deployed by the owner and connected.
+
+#### Step 11 — Growth
+
+Done: <date>, verified by <who>
+
+- Grilled first (including how it learns about orders, carts and item changes); decisions written into Part 0 and
+  approved.
+- Meets the every-product list above.
+- Deployed by the owner and connected.
+
+#### Step 12 — Screens and wording (alongside every step)
+
+Done: <date>, verified by <who>
+
+- Portal screens match 0.6 and 0.8.2; product dashboards match 0.4.3; light and dark; phones and tablets as 0.6 says.
+- Every Portal and dashboard text is in files; every widget word is editable (0.4.10).
+- Only the words in 0.0 are used in code, screens, APIs and docs.
+
+#### Step 13 — Tests, CI and docs (alongside, finished last)
+
+Done: <date>, verified by <who>
+
+- Every unit passes its own `check` (F.17 coverage thresholds: 90 % lines, 90 % functions, 85 % branches).
+- The e2e suite covers every product against the real Portal.
+- The CI matrix lists exactly the units in the workspace (no parked folders); no `vercel.json` has crons.
+- Every code doc is rewritten for Part 0 (0.10); each deployable's `.env.example` matches 0.11.
+
+#### Step 14 — Before charging real merchants (owner)
+
+Done: <date>, verified by <who>
+
+- Hosting is moved off Vercel Hobby to a commercial host (no code change needed).
+- Portal SMTP is set up and a test e-mail arrives.
+- Final domains are set for the Portal (`PORTAL_URL`; products reconnected if it changed) and every product, especially
+  Payments and Accounts (payment callbacks and sign-in providers need final domains).
+- Then ibrahimMobiles is connected, as a separate piece of work (0.8.1).
+
+## 0.13 Rules for building agents
+
+- **Read Part 0 first**, all of it, before writing code, then the keep list in 0.10. Use the words in 0.0.
+- **Ask, don't guess.** When Part 0 and 0.10 are silent or unclear on a point, ask the owner. Do not fill the gap from
+  history (sections 1–16, Appendices, Parts D–F), from old code, from code docs or from your own ideas. Old code and
+  ibrahimMobiles are sources of behaviour only where Part 0 says "as today" or "as in ibrahimMobiles".
+- **No extras.** Build only what Part 0 names (0.1 scope rule): no health, ready or status endpoints, status pages,
+  uptime checks, monitoring, telemetry or diagnostic screens; no crons, timers, timed queue drains or background loops;
+  no extra admin tools, exports, presets or nice-to-haves.
+- **Keep units splittable** (F.17): the Portal, each product and each package builds and checks as if it were its own
+  repository; no path imports between units; system tests live in `e2e/`.
+- **Nothing store-specific in code**: no ibrahimMobiles names, texts, prices, currencies, countries, languages, time
+  zones, couriers or gateways hardcoded. They come from business.json, settings, widget texts or the merchant's
+  connections. Region-specific providers are optional adapters.
+- **JavaScript only** (0.10). ibrahimMobiles is rewritten, not copied, and is never modified.
+- **Porting from ibrahimMobiles**: port logic and tests, rewritten in JavaScript. Its constants become product settings
+  with safe bounds, or code constants. Its data model becomes the product's own collections in the merchant database.
+  Messaging goes through Notifications, and card payments through Payments.
+- **Follow the build order** (0.12): one step at a time; grill before each product except Chat; write the grilling's
+  decisions into Part 0 for the owner to approve before building.
+- **Work on `main` only** in the singleSolutionSaas repository: no branches and no pull requests unless the owner asks.
+  Commit in small, working steps. End every commit message with a `Co-Authored-By:` trailer naming the agent's model,
+  for example `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+- **Verify before claiming done**: run the touched units' `check` and the e2e suite, try the flow in the running app
+  where there is a screen, and tick each "done when" item only after checking it. Report what was verified and what was
+  not. Never call a step done with failing checks.
+- **Secrets**: never commit real secrets or `.env` files; never log secrets or token values; never put tokens or
+  personal data in URLs, except single-use, short-lived links that are the token's only delivery: setup, reset, e-mail
+  confirmation, data-export download, and the 60-second launch while it stays `GET /sso?launch=` (open question, 0.8.4).
+- **Part 0 changes only with the owner**: if building shows that Part 0 is wrong or incomplete, stop and ask; change
+  Part 0 only after the owner decides.
 
 ---
 
