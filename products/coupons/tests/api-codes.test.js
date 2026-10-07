@@ -36,6 +36,12 @@ describe('coupons', () => {
 		});
 		expect(duplicate.status).toBe(409);
 		expect(duplicate.json.type).toMatch(/\/code_taken$/);
+		// a repeated Idempotency-Key on a coupon create is refused without running again
+		const body = { name: 'Once', count: 2, action: { type: 'percent', percent: 5 } };
+		expect((await h.call('POST', '/v1/coupons', { body, idempotencyKey: 'idk_once' })).status).toBe(201);
+		const repeated = await h.call('POST', '/v1/coupons', { body, idempotencyKey: 'idk_once' });
+		expect(repeated.status).toBe(409);
+		expect(repeated.json.type).toMatch(/\/duplicate_request$/);
 	});
 
 	it('generates a shared code from a pattern, or bulk unique single-use codes', async () => {

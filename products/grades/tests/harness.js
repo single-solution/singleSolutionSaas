@@ -235,7 +235,7 @@ export const createHarness = async ({ config = {}, elements = {}, storage = true
 
 	/**
 	 * A dashboard session (`ses_…`) from a launch exchanged at /sso.
-	 * @param {'merchant' | 'demo' | 'admin' | 'impersonate'} [kind]
+	 * @param {'merchant' | 'admin'} [kind]
 	 * @param {Record<string, unknown>} [extra]
 	 */
 	const session = async (kind = 'merchant', extra = {}) => {
@@ -243,7 +243,7 @@ export const createHarness = async ({ config = {}, elements = {}, storage = true
 			kind,
 			subject: 'usr_merchant',
 			user: { id: 'usr_merchant' },
-			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 			...extra,
 		});
 		const sso = await handle(new Request(`https://grades.example.com/sso?launch=${encodeURIComponent(token)}`));

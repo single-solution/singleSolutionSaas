@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Loyalty & Rewards API",
 		"version": "1.0.0",
-		"description": "Mode C API of Loyalty & Rewards (SSPS v1). All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that move points require `Idempotency-Key`; replays return the original response."
+		"description": "Mode C API of Loyalty & Rewards (SSPS v1). All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create point movements accept an optional `Idempotency-Key`: a key already used for the same route within 24 h answers 409 `duplicate_request`."
 	},
 	"servers": [
 		{
@@ -98,7 +98,7 @@
 			"post": {
 				"operationId": "earnPoints",
 				"tags": ["earn_rules"],
-				"summary": "Credit points manually or from your server (idempotent on Idempotency-Key, or on `reference` when given). sk_ only.",
+				"summary": "Credit points manually or from your server (a repeated Idempotency-Key answers 409; deduplicated on `reference` when given). sk_ only.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKey"
@@ -112,7 +112,7 @@
 								"$ref": "#/components/schemas/EarnInput"
 							},
 							"example": {
-								"customerId": "cus_certify",
+								"customerId": "cus_example",
 								"points": 25,
 								"reason": "welcome"
 							}
@@ -661,7 +661,7 @@
 			"post": {
 				"operationId": "redeemPoints",
 				"tags": ["redeem"],
-				"summary": "Redeem points at a checkout (idempotent on Idempotency-Key, or on `reference`). The value is deducted by your checkout.",
+				"summary": "Redeem points at a checkout (a repeated Idempotency-Key answers 409; deduplicated on `reference`). The value is deducted by your checkout.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKey"
@@ -1078,7 +1078,7 @@
 			"post": {
 				"operationId": "runExpiry",
 				"tags": ["expiry"],
-				"summary": "Run the expiry work for this website now (FIFO expiry, notices, tier reviews); nothing runs on a schedule. Idempotency-Key optional; runs are idempotent.",
+				"summary": "Run the expiry work for this website now (FIFO expiry, notices, tier reviews); nothing runs on a schedule. Runs are idempotent.",
 				"responses": {
 					"200": {
 						"description": "OK",
@@ -1516,124 +1516,6 @@
 				}
 			}
 		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "data_export",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "data_anonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data anonymize.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/dashboard/expiry:run": {
 			"post": {
 				"operationId": "postV1DashboardExpiryRun",
@@ -1706,11 +1588,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
+				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
+				},
+				"description": "Optional. On routes that create records, a key already used for the same route within 24 h answers 409 duplicate_request."
 			},
 			"Cursor": {
 				"name": "cursor",

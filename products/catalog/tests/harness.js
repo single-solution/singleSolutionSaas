@@ -11,7 +11,7 @@ import { createFakePortal } from '@ss/app-kit/testing';
 import { createId } from '@ss/contracts';
 import { generateSigningKey } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
-import { buildRoutes, createCatalog, wireEvents } from '../api/routes.js';
+import { HANDLER_OPTIONS, buildRoutes, createCatalog, wireEvents } from '../api/routes.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -119,9 +119,7 @@ export const createHarness = async ({ config = {}, elements = {}, website = { cu
 		},
 	});
 	const catalog = wireEvents(createCatalog(app));
-	const handle = createRequestHandler(catalog.product, buildRoutes(catalog), {
-		maxBodyBytes: 3_900_000,
-	});
+	const handle = createRequestHandler(catalog.product, buildRoutes(catalog), HANDLER_OPTIONS);
 
 	let version = 0;
 	/**
@@ -245,7 +243,7 @@ export const createHarness = async ({ config = {}, elements = {}, website = { cu
 
 	/**
 	 * A dashboard session (`ses_…`, usable as a bearer) of a launch kind.
-	 * @param {'merchant' | 'demo' | 'admin'} [kind]
+	 * @param {'merchant' | 'admin'} [kind]
 	 * @param {Record<string, unknown>} [extra]
 	 */
 	const session = async (kind = 'merchant', extra = {}) => {
@@ -254,7 +252,7 @@ export const createHarness = async ({ config = {}, elements = {}, website = { cu
 				kind,
 				subject: 'usr_merchant',
 				user: { id: 'usr_merchant' },
-				scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+				scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 				...extra,
 			}),
 		);

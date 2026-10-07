@@ -10,7 +10,6 @@
 			"default": "best_for_customer",
 			"enum": ["best_for_customer", "priority"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": {
 				"widget": "select",
 				"group": "Policy",

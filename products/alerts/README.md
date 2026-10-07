@@ -8,7 +8,7 @@ per language, frequency caps, quiet hours in the website's time zone, batching a
 lives in the merchant's own MongoDB** (connected in the Portal); this deployment keeps only caches, queues and website
 ids.
 
-Built on `@ss/app-kit` (shared-secret Portal connect, SSO launches, website keys, entitlements with offline grace, events, usage,
+Built on `@ss/app-kit` (shared-secret Portal connect, SSO launches, website keys, entitlements, events, usage,
 client-owned data, connectors, bring-your-own identity) and `@ss/rules` (custom-type conditions). Business rules live
 only in `core/` (pure) and `headless/`. Ported from ibrahimMobiles (`packages/shared/src/stockAlerts.ts`,
 `packages/db/src/stockAlerts.ts`, the WhatsApp unsubscribe page): the before/after decision of `shouldSendStockAlert`,
@@ -45,7 +45,8 @@ allows it.
 
 ## How it works
 
-- **Exactly once.** A trigger run is unique per event id / Idempotency-Key. A subscription is told about a change by
+- **Exactly once.** A trigger run is unique per event id / Idempotency-Key (the key is scoped to the calling key and route, so
+  another caller's identical key never reaches your run). A subscription is told about a change by
   being **claimed** (`pending → claimed`, compare-and-set on its `cycle`) before its alert is queued, so duplicate
   deliveries, a second event reporting the same change and concurrent instances never tell anyone twice.
 - **Claim before send.** The outbox (`ss_alerts_messages`) is drained with `findOneAndUpdate` (`queued → sending`,
@@ -67,8 +68,7 @@ allows it.
   `{ id, channel, to: { email } | { phone }, lang, subject?, text, headers?: { List-Unsubscribe, List-Unsubscribe-Post },
 metadata: { websiteId, product, kind, types, subscriptionIds } }`, `Authorization` per the connector, `Idempotency-Key`.
 - **Data.** `ss_alerts_{subscriptions,messages,triggers,items,counters,suppressions,audit}` in the merchant database,
-  `websiteId` first in every index, TTL on expiry fields, versioned migrations; export / anonymise by customer id,
-  e-mail or phone via the Portal-signed standard routes.
+  `websiteId` first in every index, TTL on expiry fields, versioned migrations.
 
 ## API (Mode C)
 
@@ -83,7 +83,7 @@ metadata: { websiteId, product, kind, types, subscriptionIds } }`, `Authorizatio
 | Waitlist      | `GET /v1/waitlist?type=&itemId=` (sk) · `GET /v1/waitlist/position?subscriptionId=`                                 |
 | Unsubscribe   | `GET /v1/unsubscribe/{token}` (preview) · `POST /v1/unsubscribe` · hosted `GET`/`POST /u/{token}`, `/c/{token}`     |
 | Analytics     | `GET /v1/analytics?days=` (sk)                                                                                      |
-| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export\|anonymize`                          |
+| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`                                                        |
 
 Errors are RFC 9457 problems with stable codes (`contact_invalid`, `consent_required`, `entry_not_allowed`,
 `in_stock`, `limit_reached`, `contact_suppressed`, `rate_limited`, `token_invalid`, `csv_invalid`, …).
@@ -99,22 +99,18 @@ tokens only, native controls, polite live region.
 
 Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs (active, subscribed, sent, failed, notified and
 unsubscribe rates), latest subscriptions and messages (addresses masked) and, for merchants, **Send due now** on the
-Messages page (`POST /v1/dashboard/messages:dispatch`: the same outbox run as the API). Demo launches show sandbox data decided by
-the real type rules; impersonation shows the audit banner.
+Messages page (`POST /v1/dashboard/messages:dispatch`: the same outbox run as the API). Merchant and admin (staff)
+launches are supported.
 
-## Develop and certify
+## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator (ss.dev.json)
-pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000
-pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
+pnpm dev                       # Next.js on :3000 (MONGODB_URI and CONNECT_SECRET from .env.local)
+pnpm validate                  # ss app validate: manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB
 ```
 
-`tests/certify.test.js` runs the full `ss certify` suite (every check must pass). The system test `e2e/tests/alerts-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
+The system test `e2e/tests/alerts-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
 real Portal in process: staff bootstrap → Add product (URL + connect secret) → activation → merchant signup → website → credits →
 starter subscription → database **and messaging** connectors (a fake HTTP provider on 127.0.0.1, dev allowlist) → a
 shopper subscribes with the `pk_` key → `inventory.changed@1` (0 → 5) through the Event Hub, duplicated → exactly one
@@ -128,8 +124,7 @@ message at the provider → unsubscribe (GET changes nothing, POST stops) → us
 2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
-   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
 
 The address recorded at connect is also the origin of the hosted unsubscribe pages.
 
@@ -138,8 +133,6 @@ The address recorded at connect is also the origin of the hosted unsubscribe pag
 - Messaging: app-kit's built-in `generic-http` and `smtp` adapters match the Portal's descriptors, so the product
   registers none. Over SMTP, e-mail alerts go out as plain text with the List-Unsubscribe headers; SMS needs an HTTP
   gateway (`channel_unsupported`, not retried); SMTP 5xx replies fail permanently, 4xx replies and timeouts are retried.
-- `ss certify` uses the resource marked `x-ss-certify: true` in `openapi.json` (`POST /v1/triggers`) and has samples for
-  every catalogued event (`inventory.changed@1`, `price.changed@1` included).
 - `keys.verify` awaits the in-flight revocation sync on a cold instance (no 503 for concurrent first requests).
 - The waitlist tier is read from `ctx.identity.claims` (the payload app-kit verified), not by decoding the token again.
 - Manifest: product-level `requires` lists only `database`; `messaging` is required by `dispatch`.

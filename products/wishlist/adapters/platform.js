@@ -7,8 +7,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
-import { INDEXES, MIGRATIONS, repositoriesFor } from './db.js';
-import { createPrivacyHandlers } from './privacy.js';
+import { INDEXES, MIGRATIONS } from './db.js';
 import { createTokens, randomId, tokenSecret } from './tokens.js';
 
 /**
@@ -90,20 +89,15 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	}
 	/* v8 ignore stop */
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
-	/** @type {any} */
-	let product = null;
-	const repoFor = repositoriesFor({ data: { forWebsite: (id, stamp) => product.data.forWebsite(id, stamp) } }, { now });
-	product = createProduct(
+	const product = createProduct(
 		/** @type {any} */ ({
 			manifest,
 			strings,
 			logger: createLogger({ level: config.logLevel }),
 			problems: config.problems,
-			privacy: createPrivacyHandlers({ repoFor, now }),
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
-			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
-			// SSRF policy for merchant databases: in development the `ss dev` client database lives on loopback; app-kit
+			// SSRF policy for merchant databases: in development a local client database lives on loopback; app-kit
 			// ignores the allowlist when NODE_ENV=production
 			outbound: {
 				allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],

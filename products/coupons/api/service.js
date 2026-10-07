@@ -8,7 +8,7 @@
  *      │                   │  └──release / order.cancelled@1 / refund──▶ released
  *      └──claim refused──▶ failed      └──TTL passed (job or lazily)──▶ expired ──late completion──▶ redeemed
  *
- * Exactly once: reservation ids derive from the request (`reference`, else the Idempotency-Key); every transition is a
+ * Exactly once: reservation ids derive from the caller and the request (`reference`, else the Idempotency-Key); every transition is a
  * compare-and-set on `status`; claims are taken with atomic conditional counters and recorded on the reservation, and
  * given back only by the caller that removes them from that list; redemption counters are counted once per code
  * (`counted`); usage records and published events carry deterministic idempotency keys.
@@ -28,7 +28,10 @@ import { codeView, couponView, editableOf, mergePatch, quoteView, reservationVie
 /** @typedef {import('../adapters/repositories.js').Repositories} Repositories */
 /** @typedef {import('./settings.js').Settings} Settings */
 /** @typedef {{ websiteId: string, domain: string, settings: Settings, repos: Repositories }} Site */
-/** @typedef {{ customerId?: string | null, identified?: boolean, address?: string | null }} Requester */
+/**
+ * @typedef {{ customerId?: string | null, identified?: boolean, address?: string | null, caller?: string }} Requester
+ *   `caller` identifies who sends the request (the website key kind + id) and scopes ids derived from client keys
+ */
 /** @typedef {{ ok: false, reason: string, path?: string }} Failure */
 /** @typedef {ReturnType<typeof quoteView>} QuoteView */
 /**
@@ -60,8 +63,6 @@ const SWEEP_PAGE = 100;
 const GENERATION_ROUNDS = 5;
 /** Codes inserted per database round trip. */
 const INSERT_CHUNK = 1000;
-/** Listed coupons shown by the apply box view. */
-const LISTED_LIMIT = 10;
 
 /**
  * @param {ServiceDeps} deps
@@ -159,7 +160,6 @@ export const createCouponsService = ({
 			},
 			stacking: body.stacking ?? {},
 			validity: body.validity ?? {},
-			listed: body.listed === true,
 			custom: body.custom ?? {},
 		};
 		if (body.code !== undefined) {
@@ -265,7 +265,6 @@ export const createCouponsService = ({
 				},
 				stacking: merged.stacking ?? {},
 				validity: merged.validity ?? {},
-				listed: merged.listed === true,
 				custom: merged.custom ?? {},
 				...(merged.status === 'archived' && current.status !== 'archived' ? { archivedAt: iso(now()) } : {}),
 			};
@@ -689,16 +688,28 @@ export const createCouponsService = ({
 	};
 
 	/**
-	 * Reserve codes for a checkout (idempotent on `reference`, else on the Idempotency-Key).
+	 * Reserve codes for a checkout (idempotent on `reference`, else on the Idempotency-Key; without either every call is
+	 * a new reservation).
 	 * @param {Site} site
-	 * @param {{ codes: string[], cart: Record<string, any>, orderId?: string, reference?: string, key: string }} input
+	 * The derived id is scoped by caller and route, and an existing reservation is answered only to the caller that made
+	 * it (else 409 `duplicate_request`).
+	 * @param {{ codes: string[], cart: Record<string, any>, orderId?: string, reference?: string, key?: string, route?: string }} input
 	 * @param {Requester} requester
 	 * @returns {Promise<{ ok: true, reservation: Record<string, any>, duplicate: boolean } | { ok: false, reason: string, rejected?: Array<{ code: string, reason: string }>, quote?: unknown }>}
 	 */
 	const reserve = async (site, input, requester) => {
-		const id = `rsv_${hash(`${site.websiteId}|${input.reference ? `ref:${input.reference}` : `key:${input.key}`}`)}`;
+		const caller = requester.caller ?? 'internal';
+		const dedupe = input.reference ? `ref:${input.reference}` : input.key ? `key:${input.key}` : null;
+		const id = dedupe
+			? `rsv_${hash(`${site.websiteId}|${caller}|${input.route ?? 'reservations'}|${dedupe}`)}`
+			: randomId('rsv');
+		/** @param {Record<string, any>} found */
+		const answer = (found) =>
+			found.requestedBy === caller
+				? /** @type {const} */ ({ ok: true, reservation: found, duplicate: true })
+				: /** @type {const} */ ({ ok: false, reason: 'duplicate_request' });
 		const existing = await reservationOf(site, id);
-		if (existing) return { ok: true, reservation: existing, duplicate: true };
+		if (existing) return answer(existing);
 		const cart = cartFor(site, input.cart, requester);
 		const subject = subjectOf(cart, requester);
 		if (!(await velocityAllows(site, subject, 'reservation'))) return { ok: false, reason: 'velocity_limited' };
@@ -716,6 +727,7 @@ export const createCouponsService = ({
 			id,
 			status: 'pending',
 			reference: input.reference ?? null,
+			requestedBy: caller,
 			orderId: input.orderId ?? null,
 			customerId: cart.customer.id,
 			identified: cart.customer.identified,
@@ -751,7 +763,7 @@ export const createCouponsService = ({
 		};
 		if (!(await site.repos.reservations.insert(reservation))) {
 			const raced = await site.repos.reservations.get(id);
-			if (raced) return { ok: true, reservation: raced, duplicate: true };
+			if (raced) return answer(raced);
 		}
 		const taken = await takeAll(site, id, claimsOf(site, reservation, coupons, codeDocs));
 		if (!taken.ok) {
@@ -962,7 +974,7 @@ export const createCouponsService = ({
 		/**
 		 * Reserve and redeem at once (servers that only learn about the order at the end).
 		 * @param {Site} site
-		 * @param {{ codes: string[], cart: Record<string, any>, orderId?: string, reference?: string, key: string }} input
+		 * @param {{ codes: string[], cart: Record<string, any>, orderId?: string, reference?: string, key?: string, route?: string }} input
 		 * @param {Requester} requester
 		 */
 		redeemNow: async (site, input, requester) => {
@@ -1147,31 +1159,6 @@ export const createCouponsService = ({
 				csv: toCsv(['code', 'status', 'max_uses', 'taken', 'redeemed', 'link'], rows),
 				filename: `coupon-${couponId}.csv`,
 			};
-		},
-
-		/**
-		 * Listed coupons (apply box suggestions) with their share links.
-		 * @param {Site} site
-		 */
-		listed: async (site) => {
-			/** @type {Array<{ name: string, code: string, url: string | null }>} */
-			const out = [];
-			for (const coupon of await site.repos.coupons.listed(LISTED_LIMIT)) {
-				if (coupon?.mode !== 'shared') continue;
-				const [code] = await site.repos.codes.byCoupon(coupon.id, { fetchLimit: 1 });
-				if (!code || code.status !== 'active') continue;
-				out.push({
-					name: coupon.name,
-					code: code.code,
-					url: shareLink({
-						domain: site.domain,
-						path: site.settings.distribution.share_path,
-						param: site.settings.codes.auto_apply_param,
-						code: code.code,
-					}),
-				});
-			}
-			return out;
 		},
 
 		/**

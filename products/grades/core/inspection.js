@@ -318,3 +318,15 @@ export const reportView = ({ unit, inspection, checklist, index, badgeStyle, pho
 		inspector: showInspector ? (inspection.inspector ?? null) : null,
 	};
 };
+
+/**
+ * A checklist answer in words.
+ * @param {{ kind: string, value: unknown, max: number | null }} result
+ * @param {import('./text.js').Translate} t
+ */
+export const answerText = (result, t) =>
+	result.kind === 'pass_fail'
+		? t(result.value === true ? 'inspection.pass' : 'inspection.fail')
+		: result.kind === 'score'
+			? t('inspection.points', { value: Number(result.value), max: result.max ?? Number(result.value) })
+			: String(result.value);

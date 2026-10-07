@@ -2003,7 +2003,6 @@
 				"operationId": "listInboundOrders",
 				"summary": "Orders received through the inbound API, newest first",
 				"x-ss-key-kind": "sk",
-				"x-ss-certify": true,
 				"parameters": [
 					{
 						"name": "cursor",

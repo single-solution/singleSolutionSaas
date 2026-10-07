@@ -51,9 +51,10 @@ history to the customer after sign-in. Server (`sk_`) routes act for the merchan
   flow trigger → handoff decision → waiting for a person? (AI only after the grace window) → AI (budget check,
   knowledge passages, tools loop, language check and retry, bubble split, moderation outbound) → store the customer
   message and the replies in one append that moves the conversation summary atomically → events and usage.
-- **Exactly once.** Conversation, message, lead and agent ids derive from the Idempotency-Key; stores are upserts;
-  usage (`conversation:<id>`, `ai:<conversation>:<message>:<n>`, `tool:<…>`) and events carry derived keys. app-kit
-  replays the stored response of a repeated POST.
+- **Exactly once.** Conversation, message, lead and agent ids derive from the Idempotency-Key hashed with the website,
+  the caller (customer, guest marker, dashboard session or server key) and the route, so another caller's identical key
+  never reaches your records (a fresh random key when none is sent, or for an anonymous browser); stores are upserts; usage (`conversation:<id>`, `ai:<conversation>:<message>:<n>`, `tool:<…>`)
+  and events carry derived keys. app-kit refuses a repeated key on creating POSTs within 24 h (409 `duplicate_request`).
 - **AI providers** are app-kit connector adapters (`adapters/ai.js`) over the kit's HTTP connector; request/response
   mapping is pure (`core/providers.js`). Unknown/absent model or connector → the conversation goes to a person.
 - **Data.** `ss_chatbot_{conversations,messages,entries,chunks,sources,leads,ratings,agents,counters,orders,customers,
@@ -74,7 +75,7 @@ visitors,audit}` in the merchant DB, `websiteId` first in every index, TTL index
 | Flows, tools  | `GET /v1/flows` · `POST /v1/flows:check` · `POST /v1/flows:simulate` · `GET /v1/tools` · `POST /v1/tools/{name}/invoke` · `POST /v1/tools:signing-secret`                                                                     |
 | Engagement    | `GET /v1/proactive` · `POST /v1/proactive:evaluate` · `POST /v1/proactive:dismiss` · `GET/POST /v1/leads` · `GET /v1/leads/{id}` · `GET/POST /v1/ratings`                                                                     |
 | Transcripts   | `GET /v1/transcripts` · `GET /v1/transcripts/{conversationId}?format=json\|text` · `POST /v1/moderation:check`                                                                                                                |
-| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`, `/v1/session`, `/sso`                                                                                                  |
+| Standard      | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/session`, `/sso`                                                                                                                                           |
 
 Errors are RFC 9457 problems with stable codes (`guest_limit_reached`, `conversation_closed`, `message_rejected`,
 `too_many_conversations`, `already_rated`, `invalid_transition`, `limit_reached`, `unknown_tool`, `source_failed`,
@@ -86,28 +87,24 @@ of `ss-chatbot-tool.v1.<t>.<body>` with the secret from `POST /v1/tools:signing-
 standard `{ state, actions, subscribe, validate, strings, destroy }` shape over an `@ss/web/element` API client; timers,
 visibility and token storage are injected (`headless/transport.js`), so they run anywhere. **Drop-in (Mode A).**
 `ui/window.js`, `ui/launcher.js`, `ui/proactive.js` — `render({ state, actions, strings, theme, slots, dom })`, design
-tokens only, budgets 20 / 8 / 8 KB.
+tokens only; `ss pack build .` bundles them for the Portal's "Upload widgets".
 
 ## Dashboard (SSO)
 
 `/sso?launch=` → `ss_session`: overview KPIs, inbox (status filter), a live conversation (polled with the same transport,
 replies, canned replies, internal notes, status), knowledge (FAQ entries, page states, "Refresh due pages"), settings (link to the
-subscription's configuration in the Portal and the AI connector state). Demo launches show sample conversations;
-impersonation shows the audit banner; replies by dashboard users create their agent record when the inbox is on.
+subscription's configuration in the Portal and the AI connector state). Merchant and admin (staff) launches; replies by
+dashboard users create their agent record when the inbox is on.
 
-## Develop and certify
+## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator (ss.dev.json)
-pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss app validate                # 0 problems
-ss certify . --url http://localhost:3000
-pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB, certify
+pnpm dev                       # Next.js on :3000 (MONGODB_URI empty = in-memory control store; CONNECT_SECRET in .env.local)
+ss app validate .              # 0 problems
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB
 ```
 
-`tests/certify.test.js` runs the full `ss certify` suite (47/47). The system test `e2e/tests/chatbot-portal.test.js` (monorepo workspace `@ss/e2e`) runs the real Portal in
+The system test `e2e/tests/chatbot-portal.test.js` (monorepo workspace `@ss/e2e`) runs the real Portal in
 process: staff → Add product (URL + connect secret) → activation → merchant signup → website → credits → starter subscription →
 database and AI connectors (a fake OpenAI-compatible provider on local https; the Portal's check calls `/models`) →
 `pk_` key → a guest opens a conversation from the website's origin → the product resolves the merchant's AI credentials
@@ -121,8 +118,7 @@ elements, 10 mc metered for the tokens above the included amount).
 2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
-   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
 
 ## Changelog
 

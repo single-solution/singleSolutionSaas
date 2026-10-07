@@ -36,7 +36,6 @@ larger limits, 100 000 evaluations / h included). Every setting is a feature in 
 | `POST /v1/quotes`                                    | pk / sk   | price_deltas |
 | `POST /v1/url-params:build`, `:parse`                | pk / sk   | url_sync     |
 | `GET /v1/widgets/:configurator?search=`              | pk / sk   | widget       |
-| `GET /v1/elements/widget/view` (Loader element stub) | pk        | widget       |
 | `/v1/dashboard/*` (SSO session)                      | session   | schema       |
 
 \* browser keys read only published configurators, as a concrete public view (stock as in / out of stock).
@@ -57,7 +56,7 @@ core/       pure: schema.js (validate + normalise), compile.js, resolve.js (the 
 headless/   configurator.js (widget, Mode B over the API), resolver.js (local resolver), priceDeltas.js, urlSync.js
 ui/         configurator.js (Mode A renderer + `update` keeping focus), token-only styles
 api/        routes.js, service.js, events.js, settings.js, dashboard.js, samples.js, session.js
-adapters/   platform.js (app-kit product), db.js (repositories, indexes), privacy.js
+adapters/   platform.js (app-kit product), db.js (repositories, indexes)
 app/        Next.js wiring and the merchant dashboard (overview, editor, live preview, catalog link, rules, settings)
 ```
 

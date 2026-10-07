@@ -142,8 +142,6 @@
 	"dashboard.pick_website": "Choose a website in the Portal to open its chat dashboard.",
 	"dashboard.not_subscribed": "This website has no active Chatbot & Support subscription.",
 	"dashboard.signed_in_as": "Signed in as {user} ({role})",
-	"dashboard.audit_banner": "Staff session on behalf of the merchant (actor {actor}). Actions are audited.",
-	"dashboard.demo_banner": "Demo: sample conversations computed with the real product logic. Nothing is stored.",
 	"dashboard.nav.overview": "Overview",
 	"dashboard.nav.inbox": "Inbox",
 	"dashboard.nav.knowledge": "Knowledge",

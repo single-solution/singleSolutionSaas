@@ -11,19 +11,10 @@
 	"endpoints": {
 		"base": "https://aftersales.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:claims.max_lines_per_claim",
-			"limit:claims.max_open_claims_per_customer",
-			"limit:photos.max_photos_per_claim",
-			"limit:messages.max_messages_per_claim"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": [
 		"events.subscribe:order.*",
@@ -55,9 +46,6 @@
 			"inventory.changed@1"
 		]
 	},
-	"budget": {
-		"shared": 1
-	},
 	"elements": [
 		{
 			"key": "claims",
@@ -67,9 +55,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 300
-			},
-			"budget": {
-				"js": 6
 			},
 			"dependsOn": [],
 			"features": {
@@ -111,9 +96,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["claims"],
 			"requires": {
 				"resources": ["storage"]
@@ -138,9 +120,6 @@
 			"price": {
 				"hourly": 200
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["claims"],
 			"features": {
 				"$ref": "schemas/queue.features.json"
@@ -161,9 +140,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["queue"],
 			"features": {
@@ -186,9 +162,6 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["queue"],
 			"features": {
 				"$ref": "schemas/restock.features.json"
@@ -209,9 +182,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 2
 			},
 			"dependsOn": [],
 			"features": {
@@ -240,9 +210,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["claims"],
 			"requires": {

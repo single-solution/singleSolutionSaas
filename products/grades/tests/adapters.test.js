@@ -1,13 +1,12 @@
-/** adapters/ and the composition helpers: tokens, keyset filters, platform wiring, settings and the plain server. */
+/** adapters/ and the composition helpers: tokens, keyset filters, platform wiring, settings and the composed request handler. */
 import { describe, expect, it } from 'vitest';
-import { noopLogger } from '@ss/app-kit';
+import { createRequestHandler, noopLogger } from '@ss/app-kit';
 import { generateSigningKey } from '@ss/protocol';
 import { afterPair, beforePair, createRepositories, isDuplicateKey } from '../adapters/db.js';
 import { createPlatform, loadManifest, loadStrings } from '../adapters/platform.js';
 import { createReportTokens, stableId } from '../adapters/tokens.js';
-import { failure, invalid, pageContext } from '../api/routes.js';
+import { buildRoutes, createGrades, failure, invalid, pageContext, wireEvents } from '../api/routes.js';
 import { ELEMENT_KEYS, settingsFrom } from '../api/settings.js';
-import { startServer } from '../serve.js';
 import { ROOT } from './harness.js';
 
 describe('tokens', () => {
@@ -44,21 +43,9 @@ describe('db helpers', () => {
 });
 
 describe('route helpers', () => {
-	it('reads the Loader page context and maps failures to problems', () => {
-		expect(pageContext({ ctx: JSON.stringify({ itemId: 'itm_1', path: '/' }), tier: 'good' })).toEqual({
-			itemId: 'itm_1',
-			tier: 'good',
-			token: null,
-			collection: null,
-		});
-		expect(pageContext({ ctx: '[1]', itemId: 'a b', tier: 'Bad', collection: 'c', token: 'grr_x' })).toEqual({
-			itemId: null,
-			tier: null,
-			token: 'grr_x',
-			collection: 'c',
-		});
-		expect(pageContext({ ctx: '{' })).toEqual({ itemId: null, tier: null, token: null, collection: null });
-		expect(pageContext({ ctx: 'x'.repeat(3000) }).itemId).toBeNull();
+	it('reads the page values of a query and maps failures to problems', () => {
+		expect(pageContext({ itemId: 'itm_1', tier: 'good' })).toEqual({ itemId: 'itm_1', tier: 'good', collection: null });
+		expect(pageContext({ itemId: 'a b', tier: 'Bad', collection: 'c' })).toEqual({ itemId: null, tier: null, collection: 'c' });
 		expect(invalid([{ path: '/a', code: 'bad_value' }])).toMatchObject({
 			code: 'validation_failed',
 			errors: [{ path: '/a', code: 'bad_value', message: 'bad value' }],
@@ -107,21 +94,22 @@ describe('platform', () => {
 		await unconnected.close?.();
 	});
 
-	it('serves over plain http and https-less hosts through serve.js', async () => {
+	it('composes the request handler from the platform and the routes', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'grades-serve-1' });
-		const server = await startServer({
-			port: 0,
-			root: ROOT,
+		const app = await createPlatform({
 			env: {},
+			root: ROOT,
 			overrides: { portalUrl: 'http://127.0.0.1:9', signingKey: `${privateJwk.kid}:${privateJwk.d}`, logger: noopLogger },
 		});
+		const grades = wireEvents(createGrades(app));
+		const handle = createRequestHandler(grades.product, buildRoutes(grades));
 		try {
-			const manifest = await fetch(`${server.url}/.well-known/ss-app.json`);
+			const manifest = await handle(new Request('http://127.0.0.1/.well-known/ss-app.json'));
 			expect((await manifest.json()).product.slug).toBe('grades');
-			const posted = await fetch(`${server.url}/v1/tier-assignments`, { method: 'POST', body: '{}' });
+			const posted = await handle(new Request('http://127.0.0.1/v1/tier-assignments', { method: 'POST', body: '{}' }));
 			expect(posted.status).toBe(401);
 		} finally {
-			await server.close();
+			await app.close();
 		}
 	});
 });

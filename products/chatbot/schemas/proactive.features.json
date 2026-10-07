@@ -45,7 +45,6 @@
 			},
 			"x-kind": "config",
 			"x-plan": { "starter": { "max": 3 }, "pro": { "max": 50 } },
-			"x-experiment": true,
 			"x-ui": { "widget": "list", "group": "Messages", "order": 1 }
 		},
 		"max_per_day": {

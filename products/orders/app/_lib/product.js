@@ -7,7 +7,7 @@ import { after } from 'next/server.js';
 import { createRequestHandler, toNextRoute, startupFailedResponse } from '@ss/app-kit';
 import { createPlatform } from '../../adapters/platform.js';
 import { assets } from './assets.js';
-import { buildRoutes, createOrders, wireEvents } from '../../api/routes.js';
+import { HANDLER_OPTIONS, buildRoutes, createOrders, wireEvents } from '../../api/routes.js';
 
 const KEY = Symbol.for('ss.products.orders');
 
@@ -31,12 +31,7 @@ export const getOrders = () => (shared().orders ??= createPlatform({ assets }).t
 export const forward = (method) => async (/** @type {Request} */ request, /** @type {unknown} */ context) => {
 	const state = shared();
 	state.next ??= getOrders().then((instance) =>
-		toNextRoute(
-			createRequestHandler(instance.product, buildRoutes(instance), {
-				maxBodyBytes: 3_900_000,
-			}),
-			{ after },
-		),
+		toNextRoute(createRequestHandler(instance.product, buildRoutes(instance), HANDLER_OPTIONS), { after }),
 	);
 	/** @type {Record<string, (request: Request, context?: unknown) => Promise<Response>>} */
 	let handlers;

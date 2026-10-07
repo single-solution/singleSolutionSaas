@@ -181,8 +181,8 @@ describe('identity issuer request (the merchant approves in the Portal)', () => 
 		expect(refused.json.detail).toMatch(/identityIssuer/);
 	});
 
-	it('the dashboard sends the request for merchant launches, not for the demo', async () => {
-		/** @param {Awaited<ReturnType<typeof createHarness>>} harness @param {'merchant' | 'demo'} kind @param {Record<string, unknown>} scope */
+	it('the dashboard sends the request for a website launch, not without one', async () => {
+		/** @param {Awaited<ReturnType<typeof createHarness>>} harness @param {'merchant' | 'admin'} kind @param {Record<string, unknown>} scope */
 		const sessionOf = async (harness, kind, scope) => {
 			const { token } = await harness.portal.issueLaunch({
 				kind,
@@ -208,7 +208,7 @@ describe('identity issuer request (the merchant approves in the Portal)', () => 
 		} finally {
 			await fresh.close();
 		}
-		expect((await press(r, await sessionOf(r, 'demo', {}))).status).toBe(403);
+		expect((await press(r, await sessionOf(r, 'admin', { merchantId: 'mer_0123456789abcdefghjkmnpq' }))).status).toBe(400);
 	});
 });
 

@@ -1,11 +1,12 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Loyalty Mode C API and the
- * dashboard API (SSO sessions). Nothing runs on a timer. Every product route is gated by its element: a disabled element
- * answers 403 element_disabled in every mode. POSTs that move state require an Idempotency-Key (app-kit stores and
- * replays the response); handlers are thin — validation and rules live in core/.
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Loyalty Mode C API and the dashboard API (SSO sessions). Nothing runs on a timer. Every product route is
+ * gated by its element: a disabled element answers 403 element_disabled in every mode. Routes that create ledger
+ * movements declare `idempotent: true` (app-kit refuses a repeated Idempotency-Key with 409); the services also dedupe on
+ * the key or the business reference. Handlers are thin — validation and rules live in core/.
  */
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
+import { createId } from '@ss/contracts';
 import { checkCondition, compileCondition } from '../core/rules.js';
 import { newMember } from '../core/member.js';
 import {
@@ -52,6 +53,17 @@ const failure = (reason) => {
 	if (reason === 'conflict') return problem('conflict', 'The member changed concurrently; retry the request.');
 	if (reason === 'not_found') return problem('not_found', 'Not found.');
 	return problem(reason, reason.replace(/_/g, ' '));
+};
+
+/**
+ * Who sent a request: the verified customer, the dashboard session's subject, or the website key (kind + id).
+ * @param {any} ctx
+ */
+const callerOf = (ctx) => {
+	if (ctx.identity?.subject) return `customer:${ctx.identity.subject}`;
+	if (ctx.session) return `session:${ctx.session.subject}`;
+	if (ctx.website) return `${ctx.website.kind}:${ctx.website.keyId}`;
+	return 'anonymous';
 };
 
 /** Cursor of a ledger page: `<occurredAt>|<id>`. @param {{ occurredAt: string, id: string }} tx */
@@ -107,6 +119,16 @@ export const buildRoutes = (loyalty) => {
 	/** @param {any} ctx */
 	const site = (ctx) => siteOf(ctx.websiteId, ctx.entitlement.doc);
 	/**
+	 * Source key of a request: derived from its Idempotency-Key scoped by website, caller and route (so two callers
+	 * reusing one key never land on the same movement), else fresh (the movement is then simply new).
+	 * @param {any} ctx
+	 * @param {string} route
+	 */
+	const keyOf = (ctx, route) =>
+		ctx.idempotencyKey
+			? `idk_${app.hash(`${ctx.websiteId}|${callerOf(ctx)}|${route}|${ctx.idempotencyKey}`)}`
+			: createId('req');
+	/**
 	 * Customer of a request. `pk_` keys: the federated customer verified by app-kit (`ctx.identity.subject`, the
 	 * website's own identity issuer from the entitlement document), else a valid Loyalty wallet token (fallback for
 	 * websites without an issuer). `sk_` keys may name one (`?customerId=`).
@@ -142,7 +164,7 @@ export const buildRoutes = (loyalty) => {
 		return page.respond(items.map(transactionView), txCursor);
 	};
 
-	/** Dashboard session → website and settings (null = pick a website / demo). @param {any} ctx */
+	/** Dashboard session → website and settings (null = pick a website). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? site(ctx) : null);
 
 	return [
@@ -167,6 +189,7 @@ export const buildRoutes = (loyalty) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/earnings',
+			idempotent: true,
 			...website('earn_rules'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -174,7 +197,7 @@ export const buildRoutes = (loyalty) => {
 				if (problems.length > 0) return invalid(problems);
 				const result = await service.earn(s, {
 					...ctx.body,
-					key: ctx.idempotencyKey,
+					key: keyOf(ctx, 'earnings'),
 					actor: { type: 'api', id: ctx.website.keyId },
 				});
 				if (!result.ok) return failure(result.reason);
@@ -253,7 +276,6 @@ export const buildRoutes = (loyalty) => {
 			method: 'POST',
 			path: '/v1/rules:check',
 			...website('earn_rules'),
-			idempotent: false,
 			handler: (ctx) => {
 				const source = ctx.body?.source;
 				if (typeof source !== 'string') return invalid([{ path: '/source', code: 'required' }]);
@@ -263,12 +285,13 @@ export const buildRoutes = (loyalty) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/activities',
+			idempotent: true,
 			...website('earn_rules'),
 			handler: async (ctx) => {
 				const problems = validateActivity(ctx.body);
 				if (problems.length > 0) return invalid(problems);
 				const s = await site(ctx);
-				const result = await service.activity(s, { ...ctx.body, id: ctx.body.id ?? ctx.idempotencyKey });
+				const result = await service.activity(s, { ...ctx.body, id: ctx.body.id ?? keyOf(ctx, 'activities') });
 				if (!result.ok && result.reason !== 'skipped') return failure(result.reason);
 				return ok({ earned: result.ok ? result.tx.points : 0, transaction: result.ok ? transactionView(result.tx) : null });
 			},
@@ -279,7 +302,6 @@ export const buildRoutes = (loyalty) => {
 			method: 'POST',
 			path: '/v1/redemptions:quote',
 			...website('redeem'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateQuote(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -289,11 +311,12 @@ export const buildRoutes = (loyalty) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/redemptions',
+			idempotent: true,
 			...website('redeem'),
 			handler: async (ctx) => {
 				const problems = validateRedeem(ctx.body);
 				if (problems.length > 0) return invalid(problems);
-				const result = await service.redeem(await site(ctx), { ...ctx.body, key: ctx.idempotencyKey });
+				const result = await service.redeem(await site(ctx), { ...ctx.body, key: keyOf(ctx, 'redemptions') });
 				if (!result.ok) return failure(result.reason);
 				return created(redemptionView(result.redemption), { location: `/v1/redemptions/${result.redemption.id}` });
 			},
@@ -407,7 +430,6 @@ export const buildRoutes = (loyalty) => {
 			method: 'POST',
 			path: '/v1/expiry:run',
 			...website('expiry'),
-			idempotent: 'optional',
 			handler: async (ctx) => ok(await service.runExpiry(await site(ctx))),
 		}),
 
@@ -426,6 +448,7 @@ export const buildRoutes = (loyalty) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/referrals',
+			idempotent: true,
 			...website('referrals'),
 			handler: async (ctx) => {
 				const problems = validateReferral(ctx.body);
@@ -454,6 +477,7 @@ export const buildRoutes = (loyalty) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/adjustments',
+			idempotent: true,
 			...website('adjustments'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -465,7 +489,7 @@ export const buildRoutes = (loyalty) => {
 				if (problems.length > 0) return invalid(problems);
 				const result = await service.adjust(s, {
 					...ctx.body,
-					key: ctx.idempotencyKey,
+					key: keyOf(ctx, 'adjustments'),
 					actor: { type: 'api', id: ctx.website.keyId },
 				});
 				return result.ok ? created(transactionView(result.tx)) : failure(result.reason);
@@ -486,6 +510,7 @@ export const buildRoutes = (loyalty) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/adjustments',
+			idempotent: true,
 			auth: 'launch',
 			element: 'adjustments',
 			roles: [...DASHBOARD_WRITE_ROLES],
@@ -499,10 +524,8 @@ export const buildRoutes = (loyalty) => {
 				});
 				if (problems.length > 0) return invalid(problems);
 				const view = sessionView(ctx.session);
-				const actor = view.actor
-					? { type: 'staff', id: view.actor }
-					: { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' };
-				const result = await service.adjust(s, { ...ctx.body, key: ctx.idempotencyKey, actor });
+				const actor = { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' };
+				const result = await service.adjust(s, { ...ctx.body, key: keyOf(ctx, 'dashboard.adjustments'), actor });
 				return result.ok ? created(transactionView(result.tx)) : failure(result.reason);
 			},
 		}),
@@ -512,7 +535,6 @@ export const buildRoutes = (loyalty) => {
 			auth: 'launch',
 			element: 'expiry',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				if (!s) return problem('bad_request', 'Open the dashboard for a website.');
@@ -523,7 +545,6 @@ export const buildRoutes = (loyalty) => {
 			method: 'POST',
 			path: '/v1/dashboard/rules:check',
 			auth: 'launch',
-			idempotent: false,
 			handler: (ctx) => {
 				const source = ctx.body?.source;
 				return typeof source === 'string' ? ok(checkCondition(source)) : invalid([{ path: '/source', code: 'required' }]);
@@ -536,7 +557,7 @@ export const buildRoutes = (loyalty) => {
  * Register the event consumers (app-kit dedupes deliveries on the event id). Nothing runs on a timer: lapsed points,
  * due tier reviews and expiry notices are handled for a member when a request reads or moves it, and the merchant can
  * run the whole website's expiry from the dashboard ("Run expiry now") or `POST /v1/expiry:run`. Called once per
- * product by the composition roots (app/_lib/product.js, serve.js).
+ * product by the composition roots (app/_lib/product.js, the e2e suite).
  * @param {Loyalty} loyalty
  */
 export const wireEvents = (loyalty) => {

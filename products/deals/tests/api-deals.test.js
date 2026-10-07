@@ -1,10 +1,10 @@
 /**
  * API on MongoDB: deal management (validation from configured bounds, kinds switched by their element, limits,
  * merge patch, lifecycle), the catalog mirror (API and events), offers and price locks for product pages, the deals
- * page, reporting, the dashboard API (SSO) and privacy. Data lands in the merchant database only (`ss_deals_*`).
+ * page, reporting and the dashboard API (SSO). Data lands in the merchant database only (`ss_deals_*`).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { resolveDashboard } from '../api/dashboard.js';
 import { createHarness, MERCHANT, T0, WEBSITE, WEBSITE_2 } from './harness.js';
 
 const ORIGIN = { origin: 'https://shop.example.com' };
@@ -428,7 +428,7 @@ describe('offers, price locks and the deals page', () => {
 	});
 });
 
-describe('reporting, dashboard and privacy', () => {
+describe('reporting and dashboard', () => {
 	it('reports orders with deals, discount, uplift and margin', async () => {
 		const withDeal = await h.call('POST', '/v1/quotes', {
 			body: { currency: 'EUR', customer: { id: 'cus_r' }, lines: [{ itemId: 'itm_shoe', quantity: 1, unitAmount: 11_500 }] },
@@ -460,7 +460,7 @@ describe('reporting, dashboard and privacy', () => {
 			kind,
 			subject: 'usr_merchant',
 			user: { id: 'usr_merchant' },
-			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 			...extra,
 		});
 		const sso = await h.handle(new Request(`https://deals.example.com/sso?launch=${encodeURIComponent(token)}`));
@@ -509,56 +509,32 @@ describe('reporting, dashboard and privacy', () => {
 		);
 		const audited = await h.collection('audit').findOne({ websiteId: WEBSITE, action: 'deal.paused', target: created.json.id });
 		expect(audited?.actor).toMatchObject({ type: 'merchant', id: 'usr_merchant' });
-		// demo sessions are read-only and have no website
-		const demo = { key: await launch('demo') };
-		expect((await h.call('POST', '/v1/dashboard/deals', { ...demo, body: {} })).status).toBe(403);
-		expect((await h.call('GET', '/v1/dashboard/overview', demo)).status).toBe(400);
+		// staff (admin launch) act as staff; without a website the dashboard API asks for one
+		const staff = { key: await launch('admin') };
+		await h.call('POST', `/v1/dashboard/deals/${created.json.id}/status`, { ...staff, body: { status: 'active' } });
+		const byStaff = await h.collection('audit').findOne({ websiteId: WEBSITE, action: 'deal.active', target: created.json.id });
+		expect(byStaff?.actor).toMatchObject({ type: 'staff', id: 'usr_merchant' });
+		const noWebsite = { key: await launch('admin', { scope: { merchantId: MERCHANT } }) };
+		expect((await h.call('POST', '/v1/dashboard/deals', { ...noWebsite, body: {} })).status).toBe(400);
+		expect((await h.call('GET', '/v1/dashboard/overview', noWebsite)).status).toBe(400);
 		expect((await h.call('GET', '/v1/session', bearer)).json).toMatchObject({ kind: 'merchant', role: 'merchant' });
 	});
 
-	it('resolves the dashboard pages for every launch kind and builds the demo with the real engine', async () => {
+	it('resolves the dashboard pages for merchant and admin launches', async () => {
 		expect((await resolveDashboard({ deals: h.deals, sessionId: null })).state).toBe('signin');
 		const live = await resolveDashboard({ deals: h.deals, sessionId: await launch('merchant') });
 		expect(live.state).toBe('ready');
 		if (live.state !== 'ready') return;
-		expect(live.data).toMatchObject({ demo: false, canWrite: true, websiteId: WEBSITE });
+		expect(live.data).toMatchObject({ canWrite: true, websiteId: WEBSITE });
 		expect((await live.data.deals()).length).toBeGreaterThan(0);
 		const first = (await live.data.deals())[0];
 		expect((await live.data.deal(/** @type {any} */ (first).id))?.id).toBe(/** @type {any} */ (first).id);
 		expect(live.portalLink).toContain(`/websites/${WEBSITE}/subscriptions/`);
 		expect((await live.data.overview()).report).toBeTruthy();
-		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_1' });
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT } });
 		expect((await resolveDashboard({ deals: h.deals, sessionId: admin })).state).toBe('pick_website');
 		await h.entitle({ elements: { quote_api: false } });
 		expect((await resolveDashboard({ deals: h.deals, sessionId: await launch('merchant') })).state).toBe('not_subscribed');
 		await h.entitle();
-		const demo = await resolveDashboard({ deals: h.deals, sessionId: await launch('demo') });
-		expect(demo.state === 'ready' && demo.data.demo).toBe(true);
-		const sandbox = demoDashboard({ now: Date.parse('2026-10-02T19:00:00Z') });
-		const overview = await sandbox.overview();
-		expect(overview.sample.deals.length).toBeGreaterThanOrEqual(2);
-		expect(overview.live).toBeGreaterThanOrEqual(3);
-		expect((await sandbox.deals()).map((d) => d.id)).toContain('dl_demo_socks');
-		expect(await sandbox.deal('dl_demo_flash')).toMatchObject({ usage: { uses: 12 } });
-		expect(await sandbox.deal('nope')).toBeNull();
-	});
-
-	it('exports and anonymises personal data through the Portal-signed standard routes', async () => {
-		const sign = async (/** @type {string} */ path, /** @type {any} */ body) => {
-			const signed = await h.portal.signRequest({ method: 'POST', path, body });
-			return h.handle(
-				new Request(`https://deals.example.com${path}`, {
-					method: 'POST',
-					headers: { ...signed.headers, 'content-type': 'application/json' },
-					body: signed.body,
-				}),
-			);
-		};
-		const exported = await sign('/v1/data:export', { websiteId: WEBSITE, subject: { customerId: 'cus_r' } });
-		expect(exported.status).toBe(200);
-		const text = await exported.text();
-		expect(text).toContain('ord_r1');
-		expect((await sign('/v1/data:anonymize', { websiteId: WEBSITE, subject: { customerId: 'cus_r' } })).status).toBe(200);
-		expect(await h.collection('applications').countDocuments({ websiteId: WEBSITE, customerId: 'cus_r' })).toBe(0);
 	});
 });

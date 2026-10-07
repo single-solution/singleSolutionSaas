@@ -1,14 +1,14 @@
-/** Alert types, waitlist tiers from identity claims, analytics, dashboard, privacy, adapters and the plain server. */
+/** Alert types, waitlist tiers from identity claims, analytics, dashboard, adapters and the request handler. */
 import { afterEach, describe, expect, it } from 'vitest';
-import { noopLogger } from '@ss/app-kit';
+import { createRequestHandler, noopLogger } from '@ss/app-kit';
 import { generateSigningKey } from '@ss/protocol';
 import { createPlatform, loadManifest, loadStrings } from '../adapters/platform.js';
 import { createTokens, randomId, stableId, tokenSecret } from '../adapters/tokens.js';
-import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { resolveDashboard } from '../api/dashboard.js';
+import { buildRoutes, createAlerts, wireEvents } from '../api/routes.js';
 import { fromServer } from '../api/events.js';
 import { escapeHtml } from '../api/pages.js';
 import { sessionView } from '../api/session.js';
-import { startServer } from '../serve.js';
 import { createHarness, MERCHANT, mongoUri, ROOT, WEBSITE, WEBSITE_2 } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>> | null} */
@@ -105,7 +105,7 @@ describe('analytics', () => {
 });
 
 describe('dashboard', () => {
-	it('resolves sessions: sign-in, demo, live (overview, subscriptions, messages), not subscribed, pick a website', async () => {
+	it('resolves sessions: sign-in, live (overview, subscriptions, messages), not subscribed, pick a website', async () => {
 		const t = await harness();
 		await t.subscribe({}, { key: t.pk });
 		await t.deliver('inventory.changed@1', { itemId: 'itm_1', quantity: 1, previousQuantity: 0 });
@@ -127,17 +127,12 @@ describe('dashboard', () => {
 		});
 		const live = await resolveDashboard({ alerts, sessionId: merchant });
 		if (live.state !== 'ready') throw new Error(live.state);
-		expect(live.data.demo).toBe(false);
 		expect(await live.data.overview()).toMatchObject({ active: 0, analytics: { messages: { sent: 1 } } });
 		expect((await live.data.subscriptions())[0]).toMatchObject({ status: 'notified', contact: null });
 		expect((await live.data.messages())[0]).toMatchObject({ status: 'sent' });
 		const route = await t.call('GET', '/v1/dashboard/overview', { key: merchant });
 		expect(route.json).toMatchObject({ active: 0, analytics: { subscriptions: { total: 1 } } });
 		expect((await t.call('GET', '/v1/session', { key: merchant })).json).toMatchObject({ kind: 'merchant', role: 'merchant' });
-		const demo = await sessionFor({ kind: 'demo', subject: 'usr_demo', scope: {} });
-		const sandbox = await resolveDashboard({ alerts, sessionId: demo });
-		if (sandbox.state !== 'ready') throw new Error(sandbox.state);
-		expect(sandbox.data.demo).toBe(true);
 		const other = await sessionFor({
 			kind: 'merchant',
 			subject: 'usr_2',
@@ -149,49 +144,14 @@ describe('dashboard', () => {
 		expect((await t.call('GET', '/v1/dashboard/overview', { key: admin })).status).toBe(400);
 	});
 
-	it('builds demo data with the real type rules', async () => {
-		const demo = demoDashboard({ now: Date.parse('2026-10-01T00:00:00Z') });
-		const overview = await demo.overview();
-		expect(overview.active).toBe(1);
-		expect(overview.analytics.messages.sent).toBe(3);
-		expect((await demo.subscriptions()).map((s) => s.status)).toEqual(['notified', 'notified', 'notified', 'pending']);
-		expect(await demo.messages()).toHaveLength(3);
-		expect(sessionView({ kind: 'impersonate', role: 'impersonate', scope: { actor: 'staff_1' } })).toEqual({
-			kind: 'impersonate',
-			role: 'impersonate',
-			scope: { actor: 'staff_1' },
+	it('describes who is signed in', () => {
+		expect(sessionView({ kind: 'admin', role: 'platform_admin', scope: { merchantId: MERCHANT } })).toEqual({
+			kind: 'admin',
+			role: 'platform_admin',
+			scope: { merchantId: MERCHANT },
 			user: null,
-			actor: 'staff_1',
 		});
 		expect(sessionView({ kind: 'merchant', role: 'merchant', subject: 'usr_1' }).user).toBe('usr_1');
-	});
-});
-
-describe('privacy', () => {
-	it('exports and anonymises a subject by customer id, e-mail or phone', async () => {
-		const t = await harness({ config: { capture: { channels: ['email', 'sms'] } } });
-		await t.subscribe({ customerId: 'cus_1' });
-		await t.subscribe({ itemId: 'itm_2', channel: 'sms', phone: '+447700900123', email: undefined });
-		await t.deliver('inventory.changed@1', { itemId: 'itm_1', quantity: 1, previousQuantity: 0 });
-		const privacy = t.alerts.product.context.privacy;
-		const all = await privacy.export({ websiteId: WEBSITE });
-		expect(all.collections.subscriptions).toHaveLength(2);
-		const byEmail = await privacy.export({ websiteId: WEBSITE, subject: { email: 'JANE@example.com' } });
-		expect(byEmail).toMatchObject({ subject: { email: 'JANE@example.com' } });
-		expect(byEmail.collections.subscriptions).toHaveLength(1);
-		expect(byEmail.collections.messages).toHaveLength(1);
-		const anonymized = await privacy.anonymize({ websiteId: WEBSITE, subject: { customerId: 'cus_1' } });
-		expect(anonymized.anonymized).toEqual({ subscriptions: 1, messages: 1 });
-		const byPhone = await privacy.anonymize({ websiteId: WEBSITE, subject: { phone: '+44 7700 900123' } });
-		expect(byPhone.anonymized.subscriptions).toBe(1);
-		const rows = await t.collection('subscriptions').find({ websiteId: WEBSITE }).toArray();
-		expect(rows.every((row) => row.address === null && row.anonymizedAt)).toBe(true);
-		expect(rows.find((row) => row.target.itemId === 'itm_2')?.status).toBe('unsubscribed');
-		expect((await t.collection('messages').findOne({ websiteId: WEBSITE }))?.to).toBeNull();
-		expect(await privacy.anonymize({ websiteId: WEBSITE })).toEqual({
-			websiteId: WEBSITE,
-			anonymized: { subscriptions: 0, messages: 0 },
-		});
 	});
 });
 
@@ -240,26 +200,31 @@ describe('adapters', () => {
 		await unconnected.close?.();
 	});
 
-	it('serves the routes over plain node:http with a control database', async () => {
+	it('serves the routes with a control database', async () => {
 		const { privateJwk } = await generateSigningKey({ kid: 'alerts-serve-1' });
-		const server = await startServer({
-			port: 0,
-			root: ROOT,
-			env: {
-				MONGODB_URI: mongoUri(`alerts_control_${Date.now()}`),
-			},
-			overrides: { portalUrl: 'https://portal.test', signingKey: `${privateJwk.kid}:${privateJwk.d}`, logger: noopLogger },
-		});
+		const alerts = wireEvents(
+			createAlerts(
+				await createPlatform({
+					root: ROOT,
+					env: { MONGODB_URI: mongoUri(`alerts_control_${Date.now()}`) },
+					overrides: {
+						portalUrl: 'https://portal.test',
+						signingKey: `${privateJwk.kid}:${privateJwk.d}`,
+						logger: noopLogger,
+					},
+				}),
+			),
+		);
+		const handle = createRequestHandler(alerts.product, buildRoutes(alerts));
+		const base = 'https://alerts.example.com';
 		try {
-			const manifest = await fetch(`${server.url}/.well-known/ss-app.json`);
-			expect(manifest.status).toBe(200);
-			const page = await fetch(`${server.url}/u/garbage`);
+			expect((await handle(new Request(`${base}/.well-known/ss-app.json`))).status).toBe(200);
+			const page = await handle(new Request(`${base}/u/garbage`));
 			expect(page.status).toBe(404);
 			expect(page.headers.get('content-type')).toMatch(/text\/html/);
-			const posted = await fetch(`${server.url}/u/garbage`, { method: 'POST', body: 'x' });
-			expect(posted.status).toBe(404);
+			expect((await handle(new Request(`${base}/u/garbage`, { method: 'POST', body: 'x' }))).status).toBe(404);
 		} finally {
-			await server.close();
+			await alerts.app.close();
 		}
 	});
 });

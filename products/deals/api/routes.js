@@ -1,9 +1,9 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Deals Mode C API and the
- * dashboard API (SSO sessions). Every product route is gated by its element: a disabled element answers 403
- * element_disabled in every mode. POSTs that create or move state require an Idempotency-Key (app-kit stores and
- * replays the response); quote, offer and lock calls are rate limited per website with the configured
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Deals Mode C API and the dashboard API (SSO sessions). Every product route is gated by its element: a
+ * disabled element answers 403 element_disabled in every mode. Routes that create deals, quotes or price locks declare
+ * `idempotent: true` (a repeated Idempotency-Key answers 409 duplicate_request); committing a quote again for the same
+ * order answers the original application. Quote, offer and lock calls are rate limited per website with the configured
  * `quote_api.rate_per_minute`. Handlers are thin — validation and rules live in core/.
  */
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
@@ -156,7 +156,7 @@ export const buildRoutes = (deals) => {
 		return { from, to };
 	};
 
-	/** Dashboard session → site (null = pick a website / demo). @param {any} ctx */
+	/** Dashboard session → site (null = pick a website). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? site(ctx) : null);
 	const pickWebsite = () => problem('bad_request', 'Open the dashboard for a website.');
 
@@ -185,6 +185,7 @@ export const buildRoutes = (deals) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/deals',
+			idempotent: true,
 			...website('quote_api'),
 			handler: async (ctx) => createDeal(await site(ctx), ctx.body, actorOf(ctx)),
 		}),
@@ -192,7 +193,6 @@ export const buildRoutes = (deals) => {
 			method: 'POST',
 			path: '/v1/deals:check',
 			...website('quote_api'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateDeal(ctx.body, s.settings.dealRules);
@@ -257,7 +257,6 @@ export const buildRoutes = (deals) => {
 				method: 'POST',
 				path: `/v1/deals/:id/${verb}`,
 				...website('quote_api'),
-				idempotent: 'optional',
 				handler: async (ctx) => {
 					const result = await service.setStatus(await site(ctx), ctx.params.id, status, actorOf(ctx));
 					return result.ok ? ok(result.deal) : failure(result);
@@ -269,6 +268,7 @@ export const buildRoutes = (deals) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/quotes',
+			idempotent: true,
 			...website('quote_api', null),
 			rateLimit: quoteRate,
 			handler: async (ctx) => {
@@ -305,7 +305,6 @@ export const buildRoutes = (deals) => {
 			method: 'POST',
 			path: '/v1/quotes/:id/release',
 			...website('quote_api'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const result = await service.release(await site(ctx), ctx.params.id);
 				return result.ok ? ok(result.application) : failure(result);
@@ -364,7 +363,6 @@ export const buildRoutes = (deals) => {
 			method: 'POST',
 			path: '/v1/items:batch',
 			...website('quote_api'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const list = isObject(ctx.body) && Array.isArray(ctx.body.items) ? ctx.body.items : null;
@@ -418,7 +416,6 @@ export const buildRoutes = (deals) => {
 			path: '/v1/offers:evaluate',
 			...website('badges', null),
 			rateLimit: quoteRate,
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateOffers(ctx.body, { maxItems: s.settings.quote.max_lines });
@@ -431,6 +428,7 @@ export const buildRoutes = (deals) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/price-locks',
+			idempotent: true,
 			...website('price_locks', null),
 			rateLimit: quoteRate,
 			handler: async (ctx) => {
@@ -439,7 +437,7 @@ export const buildRoutes = (deals) => {
 				if (problems.length > 0) return invalid(problems);
 				const result = await service.offers(s, ctx.body, {
 					customer: customerOf(ctx, s),
-					meter: ctx.idempotencyKey ?? ctx.requestId,
+					meter: ctx.requestId,
 					forceLock: true,
 				});
 				return created({
@@ -459,7 +457,6 @@ export const buildRoutes = (deals) => {
 			method: 'POST',
 			path: '/v1/price-locks:verify',
 			...website('price_locks', null),
-			idempotent: false,
 			handler: async (ctx) => {
 				const token = isObject(ctx.body) ? ctx.body.token : undefined;
 				if (typeof token !== 'string') return invalid([{ path: '/token', code: 'required' }]);
@@ -560,6 +557,7 @@ export const buildRoutes = (deals) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/deals',
+			idempotent: true,
 			auth: 'launch',
 			element: 'quote_api',
 			roles: [...DASHBOARD_WRITE_ROLES],
@@ -588,7 +586,6 @@ export const buildRoutes = (deals) => {
 			path: '/v1/dashboard/quotes:preview',
 			auth: 'launch',
 			element: 'quote_api',
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				if (!s) return pickWebsite();

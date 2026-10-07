@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Signups & Identity API",
 		"version": "1.0.0",
-		"description": "Mode C API of Signups & Identity (SSPS v1): passwordless sign-in (one-time codes, magic links), customer profiles, sessions issued by the website’s own identity issuer (EdDSA JWTs verified offline by any product; JWKS per website), account pages, risk checks, consent and data rights. All data lives in the merchant’s own database; messages go only through the merchant’s own messaging connector. Times are ISO-8601 UTC; phone numbers are E.164. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that send a message or create a record require `Idempotency-Key`; token-issuing POSTs are single-use by construction. Browser keys (pk_) identify the customer with the access token in `SS-Identity`."
+		"description": "Mode C API of Signups & Identity (SSPS v1): passwordless sign-in (one-time codes, magic links), customer profiles, sessions issued by the website’s own identity issuer (EdDSA JWTs verified offline by any product; JWKS per website), account pages, risk checks, consent and data rights. All data lives in the merchant’s own database; messages go only through the merchant’s own messaging connector. Times are ISO-8601 UTC; phone numbers are E.164. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that send a message or create a record accept an optional `Idempotency-Key`: a repeated key within 24 h is refused with 409 duplicate_request; token-issuing POSTs are single-use by construction. Browser keys (pk_) identify the customer with the access token in `SS-Identity`."
 	},
 	"servers": [
 		{
@@ -149,7 +149,7 @@
 			"post": {
 				"operationId": "createCustomer",
 				"tags": ["profile"],
-				"summary": "Create (import) a customer from your server. Identifiers are optional and unique per website; `verified` marks identifiers you already verified. The answer carries no personal data (replayable POST answers are cached): GET /v1/customers/{id} for the record. sk_ only.",
+				"summary": "Create (import) a customer from your server. Identifiers are optional and unique per website; `verified` marks identifiers you already verified. The answer carries no personal data: GET /v1/customers/{id} for the record. sk_ only.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKey"
@@ -1135,22 +1135,6 @@
 				"summary": "Ask the Portal to make Signups this website’s identity issuer (the body of GET /v1/issuer `portal.body`, sent with the product’s own credentials). The Portal keeps the request pending until the merchant approves it (Website → Identity); once approved the same call answers active, so it is safe to repeat. Signups also sends it once by itself on entitlement.changed@1 while the issuer is not registered. sk_ only.",
 				"x-ss-key-kind": "sk",
 				"responses": {
-					"202": {
-						"description": "Pending the merchant’s approval",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/IssuerRegistration"
-								},
-								"example": {
-									"status": "pending",
-									"registered": false,
-									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
-									"requestedAt": "2026-10-01T10:00:00.000Z"
-								}
-							}
-						}
-					},
 					"200": {
 						"description": "Already the website’s active issuer",
 						"content": {
@@ -1161,6 +1145,22 @@
 								"example": {
 									"status": "active",
 									"registered": true,
+									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
+									"requestedAt": "2026-10-01T10:00:00.000Z"
+								}
+							}
+						}
+					},
+					"202": {
+						"description": "Pending the merchant’s approval",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/IssuerRegistration"
+								},
+								"example": {
+									"status": "pending",
+									"registered": false,
 									"issuer": "https://signups.example.com/i/web_0123456789abcdefghjkmnpq",
 									"requestedAt": "2026-10-01T10:00:00.000Z"
 								}
@@ -1671,7 +1671,7 @@
 			"post": {
 				"operationId": "createDataRequest",
 				"tags": ["data_rights"],
-				"summary": "export: completed at once; the data is downloaded with GET `download` within data_rights.export_link_minutes (POST answers are cached for replays, so they never carry the data). delete: scheduled after data_rights.cooling_off_days (cancellable; 0 = now). 409 data_request_pending when a deletion is already scheduled.",
+				"summary": "export: completed at once; the data is downloaded with GET `download` within data_rights.export_link_minutes (the POST answer never carries the data). delete: scheduled after data_rights.cooling_off_days (cancellable; 0 = now). 409 data_request_pending when a deletion is already scheduled.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKey"
@@ -2071,143 +2071,6 @@
 					}
 				}
 			}
-		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "dataExport",
-				"tags": ["standard"],
-				"summary": "Portal-signed export of a customer (subject: customerId | email | phone) or of the website.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object"
-							},
-							"example": {
-								"websiteId": "web_0123456789abcdefghjkmnpq",
-								"subject": {
-									"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr"
-								},
-								"requestId": "req_0abc"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_0123456789abcdefghjkmnpq",
-									"subject": {
-										"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr"
-									},
-									"exportedAt": "2026-10-01T09:00:00.000Z",
-									"data": {
-										"customer": {
-											"id": "cus_0mf2k3x1rabcdefghjkmnpqr",
-											"email": "ada@example.com",
-											"phone": "+442071838750",
-											"verified": {
-												"email": "verified",
-												"phone": "unverified"
-											},
-											"externalId": null,
-											"status": "active",
-											"profile": {
-												"given_name": "Ada"
-											},
-											"missingFields": [],
-											"addresses": [
-												{
-													"id": "adr_0mf2k3x1rabcdefghjkmnpqr",
-													"line1": "1 Example Street",
-													"city": "London",
-													"country": "GB",
-													"is_default": true
-												}
-											],
-											"custom": {},
-											"consents": {
-												"terms": {
-													"version": "2026-10",
-													"acceptedAt": "2026-10-01T09:00:00.000Z"
-												}
-											},
-											"createdAt": "2026-10-01T09:00:00.000Z",
-											"lastSignInAt": "2026-10-01T09:00:00.000Z",
-											"signInCount": 4
-										}
-									}
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "dataAnonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed anonymisation of a customer (as a deletion: sessions ended, personal data removed).",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object"
-							},
-							"example": {
-								"websiteId": "web_0123456789abcdefghjkmnpq",
-								"subject": {
-									"customerId": "cus_0mf2k3x1rabcdefghjkmnpqr"
-								},
-								"requestId": "req_0abd"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_0123456789abcdefghjkmnpq",
-									"anonymized": {
-										"customers": 1
-									}
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
 		}
 	},
 	"components": {
@@ -2234,11 +2097,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
+				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
+				},
+				"description": "Optional. On routes that create records, a key already used for the same route within 24 h answers 409 duplicate_request."
 			},
 			"Cursor": {
 				"name": "cursor",

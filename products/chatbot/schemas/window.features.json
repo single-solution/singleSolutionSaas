@@ -10,7 +10,6 @@
 			"default": "bubble",
 			"enum": ["bubble", "side_panel", "full_screen_mobile"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Appearance", "order": 1 }
 		},
 		"avatar_url": {
@@ -59,7 +58,6 @@
 			"maxItems": 8,
 			"items": { "type": "string", "minLength": 1, "maxLength": 80 },
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "list", "group": "Conversation", "order": 7 }
 		},
 		"persistent_history": {

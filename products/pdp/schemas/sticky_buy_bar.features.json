@@ -27,7 +27,6 @@
 			"enum": ["after_cta", "after_scroll", "always"],
 			"x-kind": "config",
 			"description": "after_cta: once the page’s own buy button scrolled out of view.",
-			"x-experiment": true,
 			"x-ui": {
 				"widget": "select",
 				"group": "Show rules",

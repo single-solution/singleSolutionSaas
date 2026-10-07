@@ -53,9 +53,7 @@ export default async function Identity({ searchParams }) {
 			),
 			h('p', { className: 'mt-4 text-sm' }, t('dashboard.identity.claims')),
 			h('p', { className: 'mt-1 text-sm text-muted' }, t('dashboard.identity.keys', { count: issuer.keys.length })),
-			!issuer.registered && !context.data.demo && context.data.websiteId
-				? h(RegisterIssuer, { websiteId: context.data.websiteId })
-				: null,
+			!issuer.registered && context.data.websiteId ? h(RegisterIssuer, { websiteId: context.data.websiteId }) : null,
 			context.portalLink
 				? h(
 						'p',

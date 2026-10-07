@@ -63,7 +63,15 @@ describe('documents and search', () => {
 		const invalid = await h.call('POST', '/v1/documents', { body: { type: 'nope', price: -1 } });
 		expect(invalid.status).toBe(422);
 		expect(invalid.json.errors.map((/** @type {any} */ e) => e.code)).toEqual(['type_unknown', 'minor_units']);
-		expect((await h.call('POST', '/v1/documents', { body: { type: 'page' }, idempotencyKey: null })).status).toBe(428);
+		// no Idempotency-Key runs normally; a repeated key for the same route is refused
+		const unkeyed = await h.call('POST', '/v1/documents', { body: { type: 'page' }, idempotencyKey: null });
+		expect(unkeyed.status).toBe(201);
+		const keyed = await h.call('POST', '/v1/documents', { body: { type: 'page' }, idempotencyKey: 'idk_once' });
+		expect(keyed.status).toBe(201);
+		const repeated = await h.call('POST', '/v1/documents', { body: { type: 'page' }, idempotencyKey: 'idk_once' });
+		expect(repeated.status).toBe(409);
+		expect(repeated.json.type).toMatch(/duplicate_request$/);
+		for (const id of [unkeyed.json.id, keyed.json.id]) await h.call('DELETE', `/v1/documents/${id}`);
 	});
 
 	it('keeps the vocabulary in step and searches with pk_ without private fields', async () => {
@@ -221,7 +229,7 @@ describe('rate limits, suggestions, analytics and clicks', () => {
 	});
 });
 
-describe('catalog events, overlay views and dashboard routes', () => {
+describe('catalog events and dashboard routes', () => {
 	/** @type {Awaited<ReturnType<typeof createHarness>>} */
 	let h;
 	beforeAll(async () => {
@@ -258,25 +266,14 @@ describe('catalog events, overlay views and dashboard routes', () => {
 		await h.entitle({ config: { index: { document_types: TYPES }, sources: { catalog_url_template: '/items/{itemId}' } } });
 	});
 
-	it('serves the overlay element views for the Loader stub', async () => {
-		await h.index([{ id: 'lamp', type: 'item', url: '/lamp', fields: { title: 'Desk lamp' } }]);
-		const view = await h.call('GET', '/v1/elements/overlay/view', { key: h.pk });
-		expect(view.json).toMatchObject({ fields: [{ name: 'q', type: 'text' }], actions: [{ action: 'search' }] });
-		const found = await h.call('POST', '/v1/elements/overlay/actions/search', { key: h.pk, body: { fields: { q: 'lamp' } } });
-		expect(found.json.items).toEqual([{ text: 'Desk lamp', href: '/lamp' }]);
-		const none = await h.call('POST', '/v1/elements/overlay/actions/search', { key: h.pk, body: { q: 'zzzz' } });
-		expect(none.json.body).toBeTruthy();
-		expect((await h.call('POST', '/v1/elements/overlay/actions/search', { key: h.pk, body: { q: 5 } })).status).toBe(200);
-	});
-
 	it('runs dashboard actions for merchants only, audited', async () => {
 		const merchant = await h.session('merchant');
 		const check = await h.call('POST', '/v1/dashboard/engine/check', { key: merchant });
 		expect(check.status, check.text).toBe(200);
 		expect(check.json.engine.configured).toBe('auto');
 		expect((await h.call('POST', '/v1/dashboard/sources/nope/crawl', { key: merchant })).status).toBe(404);
-		const demo = await h.session('demo');
-		expect((await h.call('POST', '/v1/dashboard/engine/check', { key: demo })).status).toBe(403);
+		const nowhere = await h.session('merchant', { scope: { merchantId: 'mer_x' } });
+		expect((await h.call('POST', '/v1/dashboard/engine/check', { key: nowhere })).status).toBe(400);
 		expect((await h.call('GET', '/v1/session', { key: merchant })).json).toMatchObject({ kind: 'merchant' });
 	});
 });

@@ -61,7 +61,6 @@
 			"default": "cards",
 			"enum": ["cards", "compare", "single"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Appearance", "order": 2 }
 		},
 		"show_warranty": {

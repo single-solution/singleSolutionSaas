@@ -38,7 +38,7 @@ export default async function Sources({ searchParams }) {
 			{
 				title: t('dashboard.sources.crawls'),
 				actions:
-					sources.items.length > 0 && context.data.canWrite && context.data.websiteId
+					sources.items.length > 0 && context.data.canWrite
 						? h(ActionButton, {
 								path: '/v1/dashboard/crawl-due',
 								label: t('dashboard.sources.crawl_due'),
@@ -87,7 +87,7 @@ export default async function Sources({ searchParams }) {
 												: '',
 										)
 									: null,
-								source.allowed && context.data.canWrite && context.data.websiteId
+								source.allowed && context.data.canWrite
 									? h(ActionButton, {
 											path: `/v1/dashboard/sources/${encodeURIComponent(source.key)}/crawl`,
 											label: t(

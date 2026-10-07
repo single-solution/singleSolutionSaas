@@ -32,7 +32,7 @@ export default async function Knowledge({ searchParams }) {
 							),
 						),
 					),
-			context.data.canWrite && context.data.websiteId ? h(EntryForm, { websiteId: context.data.websiteId }) : null,
+			context.data.canWrite ? h(EntryForm, { websiteId: context.data.websiteId }) : null,
 		),
 		h(
 			Card,
@@ -52,9 +52,7 @@ export default async function Knowledge({ searchParams }) {
 					),
 				),
 			),
-			context.data.canWrite && context.data.websiteId && sources.length > 0
-				? h(RefreshSources, { websiteId: context.data.websiteId })
-				: null,
+			context.data.canWrite && sources.length > 0 ? h(RefreshSources, { websiteId: context.data.websiteId }) : null,
 		),
 	);
 }

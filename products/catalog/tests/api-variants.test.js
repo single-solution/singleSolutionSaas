@@ -188,7 +188,8 @@ describe('variants', () => {
 				orderId: 'ord_100',
 			},
 		});
-		expect(replay.json.id).toBe(held.json.id);
+		expect(replay.status).toBe(409);
+		expect(replay.json.type).toMatch(/duplicate_request$/);
 		const after = await h.call('GET', `/v1/items/${itemId}`);
 		expect(after.json.variants.map((/** @type {any} */ v) => v.quantity)).toEqual([small.quantity - 2, medium.quantity - 1]);
 		expect((await h.call('GET', `/v1/stock-reservations/${held.json.id}`)).json.status).toBe('held');

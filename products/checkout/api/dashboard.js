@@ -1,19 +1,16 @@
 /**
- * Dashboard data (SSO pages): the same views for a live website (merchant database) and for demo launches (sample
- * data in memory — nothing is stored, nothing can be changed).
+ * Dashboard data (SSO pages): the views of the open website (merchant database).
  */
 import { orderView } from '../core/orders.js';
-import { settingsFrom } from './settings.js';
 
-/** Dashboard roles that may change data (demo sessions are read-only). */
-export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin', 'impersonate']);
+/** Dashboard roles that may change data. */
+export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin']);
 
 /** Orders listed per dashboard page. */
 export const DASHBOARD_PAGE = 50;
 
 /**
  * @typedef {object} DashboardData
- * @property {boolean} demo
  * @property {boolean} canWrite
  * @property {string | null} websiteId
  * @property {import('./settings.js').Settings} settings
@@ -54,7 +51,6 @@ export const kpisOf = (rows) => {
  * @returns {DashboardData}
  */
 export const liveDashboard = ({ application, site, canWrite }) => ({
-	demo: false,
 	canWrite,
 	websiteId: site.websiteId,
 	settings: site.settings,
@@ -83,60 +79,6 @@ export const liveDashboard = ({ application, site, canWrite }) => ({
 	integrations: () => application.integrationStatus(site),
 });
 
-/** A sample order of the demo. @param {number} now @param {string} id @param {string} status @param {string} method */
-const sampleOrder = (now, id, status, method) =>
-	orderView({
-		id,
-		number: id.slice(-6),
-		status,
-		placedAt: new Date(now - 3_600_000),
-		expiresAt: status === 'pending_payment' ? new Date(now + 47 * 3_600_000) : null,
-		currency: 'EUR',
-		lines: [{ itemId: 'itm_demo', variantId: 'var_demo', title: 'Sample item', quantity: 2, unitAmount: 2500 }],
-		totals: {
-			currency: 'EUR',
-			subtotal: 5000,
-			itemDiscount: 0,
-			couponDiscount: 500,
-			shipping: 490,
-			shippingDiscount: 0,
-			surcharge: 0,
-			loyalty: 0,
-			tax: 0,
-			total: 4990,
-		},
-		contact: { name: 'Sample shopper' },
-		delivery: { key: 'standard', kind: 'ship', label: 'Delivery' },
-		payment: {
-			method,
-			kind: 'manual',
-			status: status === 'confirmed' ? 'paid' : 'unpaid',
-			advance: 0,
-			dueNow: method === 'bank_transfer' ? 4990 : 0,
-			dueLater: method === 'cod' ? 4990 : 0,
-		},
-		timeline: [{ status, at: new Date(now - 3_600_000).toISOString() }],
-	});
-
-/** @param {{ now: number }} input @returns {DashboardData} */
-export const demoDashboard = ({ now }) => {
-	const list = [
-		sampleOrder(now, 'ord_demo_000003', 'awaiting_confirmation', 'cod'),
-		sampleOrder(now, 'ord_demo_000002', 'pending_payment', 'bank_transfer'),
-		sampleOrder(now, 'ord_demo_000001', 'confirmed', 'bank_transfer'),
-	];
-	return {
-		demo: true,
-		canWrite: false,
-		websiteId: null,
-		settings: settingsFrom({ can: () => true, config: () => ({}), website: { currency: 'EUR' } }),
-		overview: async () => ({ orders: 3, open: 2, currencies: [{ currency: 'EUR', orders: 1, revenue: 4990 }] }),
-		orders: async ({ status = null }) => list.filter((order) => !status || order.status === status),
-		order: async (id) => list.find((order) => order.id === id) ?? null,
-		integrations: async () => ({ key: null, coupons: false, deals: false, loyalty: false, catalog: false }),
-	};
-};
-
 /**
  * @typedef {{ state: 'signin' } | { state: 'pick_website' | 'not_subscribed', session: Record<string, any> }
  *   | { state: 'ready', session: Record<string, any>, data: DashboardData, portalLink: string | null }} DashboardContext
@@ -151,7 +93,6 @@ export const resolveDashboard = async ({ application, sessionId, website = null 
 	const { product, siteOf, app } = application;
 	const session = sessionId ? await product.launch.session(sessionId) : null;
 	if (!session) return { state: 'signin' };
-	if (session.role === 'demo') return { state: 'ready', session, data: demoDashboard({ now: app.now() }), portalLink: null };
 	const scope = session.scope ?? {};
 	const allowed = [scope.websiteId, ...(Array.isArray(scope.websiteIds) ? scope.websiteIds : [])].filter(
 		(/** @type {unknown} */ id) => typeof id === 'string' && id.length > 0,

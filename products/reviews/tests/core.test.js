@@ -629,15 +629,14 @@ describe('reviews', () => {
 			author: 'Ann L.',
 			verifiedPurchase: null,
 			reply: null,
-			removed: false,
 			photos: [{ id: 'p', url: 'https://cdn/p' }],
 		});
 		expect(
 			publicReview(
-				{ ...pending, photos: null, anonymizedAt: new Date(), author: null, reply: { body: 'x', at: 'a', by: null } },
+				{ ...pending, photos: null, author: null, reply: { body: 'x', at: 'a', by: null } },
 				{ nameFormat: 'first_name', showReply: true, showVerified: true, photoUrl: () => null },
 			),
-		).toMatchObject({ removed: true, author: null, reply: { body: 'x', at: 'a' }, photos: [] });
+		).toMatchObject({ author: null, reply: { body: 'x', at: 'a' }, photos: [] });
 		expect(publicReview(pending, { nameFormat: 'first_name', showReply: true, showVerified: true })).toMatchObject({
 			photos: [],
 		});

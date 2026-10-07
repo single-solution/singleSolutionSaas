@@ -25,7 +25,7 @@ a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — no
 | `moderation`      | C       |      200 | Content checks (merchant's blocked words in any script, links, minimum length → queue or reject), then rules@1 rules in order (approve / reject / queue, reason codes), default action; unverified reviews never auto-approve unless allowed; manual queue, rejection reasons, public merchant replies                                                                                                     |
 | `content`         | C       |      100 | Rating scale (3–10), title and text limits, author name length, attribute ratings (e.g. quality, value, fit with low/high labels)                                                                                                                                                                                                                                                                          |
 | `photos`          | C       |      100 | Presigned uploads straight to the merchant's **storage connector** (jpeg/png/webp, size and count limits, HEAD-verified on attach), presigned or public view links; requires `storage`                                                                                                                                                                                                                     |
-| `display`         | A, B, C |      200 | Summary (average, count, distribution, attribute averages), list with sorting, filters (rating, verified, photos) and keyset pagination, stars for product lists, the write-a-review form; default renderer (`stars` / `summary` / `list`), headless core, Loader stub view                                                                                                                                |
+| `display`         | A, B, C |      200 | Summary (average, count, distribution, attribute averages), list with sorting, filters (rating, verified, photos) and keyset pagination, stars for product lists, the write-a-review form; default renderer (`stars` / `summary` / `list`), headless core                                                                                                                                                  |
 | `structured_data` | C       |      100 | `GET /v1/structured-data/{itemId}` → schema.org `Product` with `AggregateRating` and `Review` nodes from approved reviews only (minimum count, how many, which), brand                                                                                                                                                                                                                                     |
 | `qna`             | C       |      200 | Questions per item (identified or anyone), merchant answers, customer answers (verified buyers or identified), moderation of both, limits                                                                                                                                                                                                                                                                  |
 | `import`          | C       |      100 | RFC 4180 CSV import with mapped column names, per-row validation, dry run, duplicates skipped by `external_id`, imported as approved or through moderation                                                                                                                                                                                                                                                 |
@@ -51,8 +51,8 @@ when a request backs them).
 - **Verified purchase = an open review request.** One request per order (id derived from the order, upserted), listing
   its items. A review is verified when an open request of that customer contains the item and the window has not
   passed; the item is then marked reviewed and the request completes when every item is.
-- **Exactly once.** A review's id derives from the Idempotency-Key, so a retried submission converges on one document;
-  the usage record (`review:<id>`) and the events (`submitted:<id>`, `approved:<id>`) derive from it. The one-review-per
+- **Exactly once.** Submissions accept an optional Idempotency-Key: a repeated key is refused (409
+  `duplicate_request`) and the review's id derives from it, so a retry never stores twice; the usage record (`review:<id>`) and the events (`submitted:<id>`, `approved:<id>`) derive from it. The one-review-per
   key (`customer|item|order`) is a unique index; imports dedupe on `external_id`. A request message carries the
   provider idempotency key `review-request:<id>:<n>`; deliveries are claimed by compare-and-set on `nextAt` with a lease.
 - **Rollups are exact.** After every change that touches approved reviews the item's rollup is recomputed with
@@ -62,8 +62,7 @@ when a request backs them).
 - **Data.** Collections `ss_reviews_{reviews,items,requests,orders,photos,questions,audit}` in the merchant database,
   `websiteId` first in every index, created lazily; TTL retention for requests and orders (`P730D`); pending photo
   slots are stale after `P30D` and swept on the next upload or from the dashboard (object and slot deleted), with a TTL a week later as a
-  backstop; versioned migrations; export/anonymise through the Portal-signed standard routes (anonymising keeps
-  the rating, removes author, text, photos and contact).
+  backstop; versioned migrations.
 
 ## API (Mode C)
 
@@ -77,12 +76,12 @@ key):
 | Request flow    | `GET /v1/request-flow` · `POST /v1/request-flow:run`                                                                                                                                                                                              |
 | Moderation      | `GET /v1/moderation` (queue + counts) · `POST /v1/moderation/{id}/approve` · `…/reject` `{ reason }` · `…/reply` · `DELETE …/reply` · `POST /v1/moderation:check`                                                                                 |
 | Content, photos | `GET /v1/review-form` · `POST /v1/review-photos` (presigned PUT) · `GET /v1/review-photos/{id}`                                                                                                                                                   |
-| Display         | `GET /v1/ratings?itemIds=` (stars) · `GET /v1/ratings/{itemId}` (summary + display settings) · `GET /v1/elements/display/view` (Loader stub)                                                                                                      |
+| Display         | `GET /v1/ratings?itemIds=` (stars) · `GET /v1/ratings/{itemId}` (summary + display settings)                                                                                                                                                      |
 | Structured data | `GET /v1/structured-data/{itemId}?name=&url=&image=&sku=` → `application/ld+json`                                                                                                                                                                 |
 | Q&A             | `GET/POST /v1/questions` · `GET /v1/questions/{id}` · `POST /v1/questions/{id}/answers` · `…/publish` · `…/reject` · `…/answers/{answerId}/publish` and `…/reject`                                                                                |
 | Import          | `POST /v1/imports` `{ csv, dryRun? }` (≤ 8 MiB)                                                                                                                                                                                                   |
 | Analytics       | `GET /v1/analytics?from=&to=&bucket=`                                                                                                                                                                                                             |
-| Standard        | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                                                                                                                                             |
+| Standard        | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`                                                                                                                                                                                      |
 
 Errors are RFC 9457 problems with stable codes (`not_verified`, `already_reviewed`, `review_limit`, `invalid_token`,
 `request_closed`, `not_pending`, `photo_invalid`, `storage_unavailable`, `name_required`, `identity_required`, …).
@@ -92,7 +91,7 @@ Public reads (`pk_`) are cacheable (`display.cache_seconds`, `structured_data.ca
 API client → `{ state, actions: { load, setSort, setFilter, loadMore, loadStars, openForm, closeForm, submit },
 subscribe, validate, strings, t, countText, destroy }`; `validate` uses the same core validation as the API with the
 limits from `GET /v1/review-form`. **Drop-in (Mode A).** `ui/reviews.js#render({ state, actions, strings, theme: {
-variant: 'stars' | 'summary' | 'list' }, slots, dom })`, design tokens only, ≤ 14 KB declared.
+variant: 'stars' | 'summary' | 'list' }, slots, dom })`, design tokens only.
 
 ## Dashboard (SSO)
 
@@ -100,27 +99,25 @@ Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs, the mod
 rejected) with approve, reject with a reason and public replies, questions to publish, reject or answer, and settings
 (link to the subscription's configuration in the Portal — the product never stores merchant configuration). Merchants
 also get **Send due requests now** (`POST /v1/dashboard/request-flow:run`) and **Clean up photo uploads**
-(`POST /v1/dashboard/photos:sweep`) on the overview. Every action is audited with the merchant or staff actor; demo launches show sandbox reviews moderated by the real core.
+(`POST /v1/dashboard/photos:sweep`) on the overview. Every action is audited with the merchant or staff actor.
 
-## Develop and certify
+## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator (ss.dev.json)
-pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss dev emit order.completed --website web_devwebsite01
-ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000   # restart the product first (fresh token)
-pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
+cp .env.example .env.local     # MONGODB_URI (empty = in-memory control store) + a random CONNECT_SECRET (≥ 32 chars)
+pnpm dev                       # Next.js on :3000
+# local Portal → Admin → Apps → Add product → http://localhost:3000 + the CONNECT_SECRET
+pnpm validate                  # ss app validate: manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB
+ss pack build .                # the display widget (Mode A) → upload dist/pack in the Portal (app page → Upload widgets)
 ```
 
-The suite includes `tests/certify.test.js` (the full `ss certify` suite, every check must pass). The system test
-`e2e/tests/reviews-portal.test.js` (monorepo workspace `@ss/e2e`) runs the product against the real Portal in process (staff bootstrap → Add product (URL + connect secret) → activation → merchant
-signup → website + its identity issuer → credits → starter subscription → database connector → `order.completed@1`
-through the Event Hub → review request in the merchant DB → the verified customer reviews with the `pk_` key and their
-own login token → auto-approved by the default rule → summary and JSON-LD reflect it → `review` usage → hourly
-settlement).
+The system test `e2e/tests/reviews-portal.test.js` (monorepo workspace `@ss/e2e`) composes this product from its
+`./platform` and `./routes` exports and runs it against the real Portal in process (staff bootstrap → Add product (URL +
+connect secret) → activation → merchant signup → website + its identity issuer → credits → starter subscription →
+database connector → `order.completed@1` through the Event Hub → review request in the merchant DB → the verified
+customer reviews with the `pk_` key and their own login token → auto-approved by the default rule → summary and JSON-LD
+reflect it → `review` usage → hourly settlement).
 
 ## Deploy
 
@@ -129,8 +126,8 @@ settlement).
 2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
-   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
+4. `ss pack build .` and upload `dist/pack` on the app page (**Upload widgets**) so the drop-in display widget is delivered.
 
 ## Notes and limits
 

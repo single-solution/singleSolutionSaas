@@ -1,9 +1,8 @@
 /**
  * Leads, proactive messages, transcripts, moderation, identity (claim, persistent history), guest and rate limits,
- * server-side (sk_) use, element gating, privacy export / anonymisation and the budget alert — on the real router.
+ * server-side (sk_) use, element gating and the budget alert — on the real router.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createId } from '@ss/contracts';
 import { createTestIdentityIssuer } from '@ss/app-kit/testing';
 import { createHarness, T0, WEBSITE, WEBSITE_2 } from './harness.js';
 
@@ -267,15 +266,17 @@ describe('identity, history and limits', () => {
 			custom: { orderId: 'ord_9' },
 		});
 		expect(created.json.marker).toBeUndefined();
-		const replay = await h.call('POST', '/v1/conversations', {
+		const first = await h.call('POST', '/v1/conversations', {
 			idempotencyKey: 'idk_same_start',
 			body: { customerId: 'cus_srv' },
 		});
+		expect(first.status).toBe(201);
 		const again = await h.call('POST', '/v1/conversations', {
 			idempotencyKey: 'idk_same_start',
 			body: { customerId: 'cus_srv' },
 		});
-		expect(again.json.conversation.id).toBe(replay.json.conversation.id);
+		expect(again.status).toBe(409);
+		expect(again.json.type).toMatch(/duplicate_request$/);
 		expect((await h.call('POST', '/v1/conversations', { body: { customerId: 7 } })).status).toBe(422);
 		const listed = await h.call('GET', '/v1/conversations?customerId=cus_srv&limit=1');
 		expect(listed.json.items).toHaveLength(1);
@@ -348,7 +349,7 @@ describe('transcripts and moderation', () => {
 	});
 });
 
-describe('gating, privacy, events and budget alerts', () => {
+describe('gating, events and budget alerts', () => {
 	it('answers 403 for elements that are off, in every mode', async () => {
 		await h.entitle({
 			identity: issuer.section,
@@ -381,30 +382,6 @@ describe('gating, privacy, events and budget alerts', () => {
 		const conv = await start({ text: 'anyone?' });
 		expect(conv.replies).toEqual([]);
 		await h.entitle({ identity: issuer.section });
-	});
-
-	it('exports and anonymises a subject (Portal-signed)', async () => {
-		await h.call('POST', '/v1/conversations', { body: { customerId: 'cus_privacy', text: 'my secret question' } });
-		const rawBody = JSON.stringify({ websiteId: WEBSITE, subject: { customerId: 'cus_privacy' }, requestId: createId('req') });
-		/** @type {Record<string, any>} */
-		const results = {};
-		for (const operation of ['export', 'anonymize']) {
-			const signed = await h.portal.signRequest({ method: 'POST', path: `/v1/data:${operation}`, body: rawBody });
-			const response = await h.handle(
-				new Request(`https://chatbot.example.com/v1/data:${operation}`, {
-					method: 'POST',
-					headers: { ...signed.headers, 'idempotency-key': createId('idk') },
-					body: rawBody,
-				}),
-			);
-			expect(response.status).toBe(200);
-			results[operation] = await response.json();
-		}
-		expect(results.export.collections.messages.some((/** @type {any} */ m) => m.body === 'my secret question')).toBe(true);
-		const message = await h
-			.collection('messages')
-			.findOne({ websiteId: WEBSITE, customerId: 'cus_privacy', author: 'customer' });
-		expect(message?.body).toBeNull();
 	});
 
 	it('ignores events of websites without a subscription and other event types', async () => {

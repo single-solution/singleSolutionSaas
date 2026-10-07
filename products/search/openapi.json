@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Site Search API",
 		"version": "1.0.0",
-		"description": "Mode C API of Site Search (SSPS v1). The index lives in the merchant's own database. Search runs on MongoDB Atlas Search when the database is on Atlas and the product-managed index is ready, else on the portable engine; both return the same shape. Prices are integer minor units. Times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`. `pk_` keys (browsers, domain-locked) search, get suggestions and count clicks, rate limited per website, never seeing or matching private fields; `sk_` keys (servers) do everything. Every search is metered (unit `query`). Events consumed: item.created@1, item.updated@1, item.deleted@1."
+		"description": "Mode C API of Site Search (SSPS v1). The index lives in the merchant's own database. Search runs on MongoDB Atlas Search when the database is on Atlas and the product-managed index is ready, else on the portable engine; both return the same shape. Prices are integer minor units. Times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). Document writes refuse a repeated `Idempotency-Key` (same route, within 24 h) with 409 `duplicate_request`; the header is optional. `pk_` keys (browsers, domain-locked) search, get suggestions and count clicks, rate limited per website, never seeing or matching private fields; `sk_` keys (servers) do everything. Every search is metered (unit `query`). Events consumed: item.created@1, item.updated@1, item.deleted@1."
 	},
 	"servers": [
 		{
@@ -27,9 +27,6 @@
 		},
 		{
 			"name": "suggestions"
-		},
-		{
-			"name": "overlay"
 		},
 		{
 			"name": "analytics"
@@ -408,6 +405,66 @@
 					}
 				},
 				"responses": {
+					"200": {
+						"description": "Replaced",
+						"content": {
+							"application/json": {
+								"schema": {
+									"type": "object",
+									"required": ["id", "type", "title", "description", "url", "image", "price", "currency", "fields"],
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"type": {
+											"type": "string",
+											"description": "document type key (index.document_types)"
+										},
+										"title": {
+											"type": "string"
+										},
+										"description": {
+											"type": "string"
+										},
+										"url": {
+											"type": ["string", "null"]
+										},
+										"image": {
+											"type": ["string", "null"]
+										},
+										"price": {
+											"type": ["integer", "null"],
+											"description": "integer minor units"
+										},
+										"currency": {
+											"type": ["string", "null"],
+											"description": "ISO 4217"
+										},
+										"fields": {
+											"type": "object",
+											"description": "pk_: display fields that are not private; sk_: every field"
+										},
+										"boost": {
+											"type": "number",
+											"description": "sk_ only"
+										},
+										"source": {
+											"type": ["string", "null"],
+											"description": "sk_ only: api | catalog | crawl:<key>"
+										},
+										"updatedAt": {
+											"type": ["string", "null"],
+											"description": "sk_ only"
+										},
+										"score": {
+											"type": "number",
+											"description": "explain only"
+										}
+									}
+								}
+							}
+						}
+					},
 					"201": {
 						"description": "Created",
 						"content": {
@@ -487,72 +544,11 @@
 							}
 						}
 					},
-					"200": {
-						"description": "Replaced",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object",
-									"required": ["id", "type", "title", "description", "url", "image", "price", "currency", "fields"],
-									"properties": {
-										"id": {
-											"type": "string"
-										},
-										"type": {
-											"type": "string",
-											"description": "document type key (index.document_types)"
-										},
-										"title": {
-											"type": "string"
-										},
-										"description": {
-											"type": "string"
-										},
-										"url": {
-											"type": ["string", "null"]
-										},
-										"image": {
-											"type": ["string", "null"]
-										},
-										"price": {
-											"type": ["integer", "null"],
-											"description": "integer minor units"
-										},
-										"currency": {
-											"type": ["string", "null"],
-											"description": "ISO 4217"
-										},
-										"fields": {
-											"type": "object",
-											"description": "pk_: display fields that are not private; sk_: every field"
-										},
-										"boost": {
-											"type": "number",
-											"description": "sk_ only"
-										},
-										"source": {
-											"type": ["string", "null"],
-											"description": "sk_ only: api | catalog | crawl:<key>"
-										},
-										"updatedAt": {
-											"type": ["string", "null"],
-											"description": "sk_ only"
-										},
-										"score": {
-											"type": "number",
-											"description": "explain only"
-										}
-									}
-								}
-							}
-						}
-					},
 					"default": {
 						"$ref": "#/components/responses/Problem"
 					}
 				},
-				"x-ss-key-kind": "sk",
-				"x-ss-certify": true
+				"x-ss-key-kind": "sk"
 			}
 		},
 		"/v1/documents:batch": {
@@ -1410,7 +1406,7 @@
 			"post": {
 				"operationId": "searchClick",
 				"tags": ["analytics"],
-				"summary": "Count a click on a result of a query (pk_ from the overlay; idempotency optional). Personal-looking queries are not counted.",
+				"summary": "Count a click on a result of a query (pk_ from the overlay). Personal-looking queries are not counted.",
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -1459,147 +1455,6 @@
 				}
 			}
 		},
-		"/v1/elements/overlay/view": {
-			"get": {
-				"operationId": "overlayView",
-				"tags": ["overlay"],
-				"summary": "Element stub view of the overlay (ss-element-stub@2): a query field and a search action.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object",
-									"properties": {
-										"title": {
-											"type": "string"
-										},
-										"body": {
-											"type": "string"
-										},
-										"fields": {
-											"type": "array"
-										},
-										"actions": {
-											"type": "array"
-										},
-										"items": {
-											"type": "array"
-										}
-									}
-								},
-								"example": {
-									"title": "Search",
-									"fields": [
-										{
-											"name": "q",
-											"type": "text",
-											"label": "Search this website",
-											"required": true
-										}
-									],
-									"actions": [
-										{
-											"action": "search",
-											"label": "Search"
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/overlay/actions/search": {
-			"post": {
-				"operationId": "overlaySearch",
-				"tags": ["overlay"],
-				"summary": "Element stub action: search and return the results as links.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"properties": {
-									"fields": {
-										"type": "object",
-										"properties": {
-											"q": {
-												"type": "string"
-											}
-										}
-									}
-								}
-							},
-							"example": {
-								"fields": {
-									"q": "linen"
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object",
-									"properties": {
-										"title": {
-											"type": "string"
-										},
-										"body": {
-											"type": "string"
-										},
-										"fields": {
-											"type": "array"
-										},
-										"actions": {
-											"type": "array"
-										},
-										"items": {
-											"type": "array"
-										}
-									}
-								},
-								"example": {
-									"title": "Search",
-									"fields": [],
-									"actions": [],
-									"items": [
-										{
-											"text": "Linen shirt",
-											"href": "/items/itm_1"
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/session": {
 			"get": {
 				"operationId": "getSession",
@@ -1617,8 +1472,7 @@
 									"kind": "merchant",
 									"role": "merchant",
 									"scope": {},
-									"user": "usr_1",
-									"actor": null
+									"user": "usr_1"
 								}
 							}
 						}
@@ -1896,88 +1750,6 @@
 					}
 				}
 			}
-		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "dataExport",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export (this product stores none).",
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object"
-							},
-							"example": {
-								"websiteId": "web_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				},
-				"security": [
-					{
-						"portalSignature": []
-					}
-				]
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "dataAnonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed anonymisation (this product stores no personal data).",
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object"
-							},
-							"example": {
-								"websiteId": "web_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				},
-				"security": [
-					{
-						"portalSignature": []
-					}
-				]
-			}
 		}
 	},
 	"components": {
@@ -2004,12 +1776,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
+				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
 				},
-				"description": "Required on POSTs that create or move state; a replay returns the original response."
+				"description": "Optional. On routes that create records, a key already used for the same route within 24 h answers 409 duplicate_request."
 			},
 			"Q": {
 				"name": "q",
@@ -2115,16 +1887,6 @@
 					"maximum": 400
 				},
 				"description": "Window in days (1 to analytics.retention_days; default 30)."
-			},
-			"Ctx": {
-				"name": "ctx",
-				"in": "query",
-				"required": false,
-				"schema": {
-					"type": "string",
-					"maxLength": 2048
-				},
-				"description": "Element stub page context (JSON)."
 			}
 		},
 		"responses": {

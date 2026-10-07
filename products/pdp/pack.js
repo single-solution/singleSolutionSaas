@@ -2,8 +2,8 @@
  * The pack as the Portal receives it, built by `ss pack build` (`@ss/cli`, F.18): the manifest with its feature
  * schemas inline, and the browser assets — the manifest's headless and renderer modules bundled as minified ES modules
  * with shared `chunks/*.js`, and the product string catalogs `strings/<lang>.json` — with their SHA-256 and size for
- * the signed `ss-pack-bundle@1` descriptor. `ss pack publish` signs and uploads it; the system test against the real
- * Portal uses this module. Development only (Node).
+ * the `ss-pack-bundle@1` descriptor. Staff upload the written folder in the Portal (Admin → Apps → Upload pack
+ * version); the e2e suite against the real Portal uses this module. Development only (Node).
  * @module
  */
 import path from 'node:path';

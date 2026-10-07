@@ -77,8 +77,6 @@ export const PROBLEM_CODES = Object.freeze({
  * @property {() => number} now
  * @property {any} log structured logger (never receives secrets)
  * @property {Record<string, Record<string, string>>} strings
- * @property {{ export?: (input: any) => Promise<unknown>, anonymize?: (input: any) => Promise<unknown> }} privacy late-bound
- *   handlers of the Portal-signed `POST /v1/data:export|anonymize`
  * @property {() => Promise<void>} close pooled merchant connections and the control database client
  */
 
@@ -110,24 +108,17 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	}
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
 	const logger = overrides.logger ?? createLogger({ level: config.logLevel });
-	/** @type {SignupsApp['privacy']} */
-	const privacy = {};
 	const product = createProduct(
 		/** @type {any} */ ({
 			manifest,
 			strings,
 			logger,
 			problems: config.problems,
-			privacy: {
-				export: (/** @type {any} */ input) => /** @type {any} */ (privacy.export)?.(input),
-				anonymize: (/** @type {any} */ input) => /** @type {any} */ (privacy.anonymize)?.(input),
-			},
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
 			// messaging: app-kit's built-in adapters for the Portal providers `generic-http` and `smtp` (no registration)
-			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
-			// SSRF policy for merchant databases and connectors: in development the `ss dev` client database and local mocks
-			// live on loopback; app-kit ignores the allowlist when NODE_ENV=production
+			// SSRF policy for merchant databases and connectors: in development the local client database and mocks live on
+			// loopback; app-kit ignores the allowlist when NODE_ENV=production
 			outbound: {
 				allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],
 			},
@@ -149,7 +140,6 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		now,
 		log: logger,
 		strings,
-		privacy,
 		close: async () => {
 			await product.close?.();
 			await controlClient?.close();

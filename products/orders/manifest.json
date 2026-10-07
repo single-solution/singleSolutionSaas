@@ -11,25 +11,10 @@
 	"endpoints": {
 		"base": "https://orders.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:lifecycle.max_lines",
-			"limit:lifecycle.max_timeline_entries",
-			"limit:print.max_orders_per_print",
-			"limit:bulk.max_orders",
-			"limit:bulk.max_import_rows",
-			"limit:bulk.max_export_rows",
-			"limit:ledger.max_entries_per_order",
-			"limit:risk.max_blocklist",
-			"rate:invoices.renders_per_minute",
-			"rate:inbound_api.orders_per_minute"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": [
 		"events.subscribe:order.placed@1",
@@ -54,9 +39,6 @@
 			"orders.customer_update@1"
 		]
 	},
-	"budget": {
-		"shared": 1
-	},
 	"elements": [
 		{
 			"key": "lifecycle",
@@ -67,9 +49,6 @@
 			"price": {
 				"hourly": 200
 			},
-			"budget": {
-				"js": 3
-			},
 			"dependsOn": [],
 			"features": {
 				"$ref": "schemas/lifecycle.features.json"
@@ -77,7 +56,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"customFields": ["order"],
-			"experiments": false,
 			"api": {
 				"resources": ["orders", "order-statuses", "my-orders"]
 			},
@@ -100,9 +78,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 2
 			},
 			"dependsOn": ["lifecycle"],
 			"features": {
@@ -132,9 +107,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 50
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["lifecycle"],
 			"features": {
@@ -168,9 +140,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["lifecycle"],
 			"features": {
 				"$ref": "schemas/invoices.features.json"
@@ -200,9 +169,6 @@
 			"price": {
 				"hourly": 50
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["lifecycle"],
 			"features": {
 				"$ref": "schemas/print.features.json"
@@ -223,9 +189,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 50
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["lifecycle"],
 			"features": {
@@ -248,9 +211,6 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["lifecycle"],
 			"features": {
 				"$ref": "schemas/risk.features.json"
@@ -271,9 +231,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 0
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["lifecycle"],
 			"requires": {
@@ -298,9 +255,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["lifecycle"],
 			"features": {
@@ -332,9 +286,6 @@
 						}
 					}
 				]
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["lifecycle"],
 			"features": {

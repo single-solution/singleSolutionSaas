@@ -4,7 +4,8 @@
  * dashboard call it; it never reads the environment and never talks HTTP.
  *
  * Exactly-once rules:
- * - a quote is stored once per Idempotency-Key (app-kit replays the response) and metered as `quote:<id>`;
+ * - a quote is stored once (app-kit refuses a repeated Idempotency-Key with 409 duplicate_request) and metered as
+ *   `quote:<id>`;
  * - committing claims the quote for one order, counts each deal once per quote (`counted` on the quote survives a
  *   crash between counters) and inserts one application per quote and per order (unique indexes);
  * - releasing flips the application `committed → released` once before giving uses and stock back;

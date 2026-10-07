@@ -15,7 +15,6 @@ export const EDITABLE_FIELDS = Object.freeze([
 	'limits',
 	'stacking',
 	'validity',
-	'listed',
 	'custom',
 ]);
 
@@ -75,7 +74,6 @@ export const couponView = (coupon) => ({
 	},
 	stacking: coupon.stacking ?? {},
 	validity: coupon.validity ?? {},
-	listed: coupon.listed === true,
 	custom: coupon.custom ?? {},
 	codes: coupon.codeCount ?? 0,
 	usage: { taken: coupon.counters?.taken ?? 0, redeemed: coupon.counters?.redeemed ?? 0 },

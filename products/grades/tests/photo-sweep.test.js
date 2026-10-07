@@ -75,7 +75,7 @@ describe('stale photo slots (no timer)', () => {
 		expect(UPLOAD_SWEEP_LIMIT).toBe(25);
 	});
 
-	it('are deleted from the dashboard button (merchants only), and a bucket failure leaves them for later', async () => {
+	it('are deleted from the dashboard button and a bucket failure leaves them for later', async () => {
 		const { slot } = await draftOf('itm_button');
 		const stale = await slot(400);
 		const doc = await photo(stale.id);
@@ -85,7 +85,6 @@ describe('stale photo slots (no timer)', () => {
 		const session = await h.session('merchant');
 		/** @param {string | null} key */
 		const press = (key) => h.call('POST', '/v1/dashboard/photos:sweep', { key, idempotencyKey: null });
-		expect((await press(await h.session('demo'))).status).toBe(403);
 		h.bucket.fail(true);
 		const failed = (await press(session)).json;
 		expect(failed.scanned).toBeGreaterThanOrEqual(1);

@@ -1,7 +1,7 @@
 /**
  * Renderer of the embed elements. While the other product's element is mounted, its Loader container
  * (`[data-ss-id="<product>:<target>"]`, else `[data-ss-element="<target>"]`) moves into this block — inside the item's scope — and is asked to `refresh()`;
- * otherwise the block stays hidden and empty. Self-contained (smallest budget); only `SS.elements` / `SS.on` used.
+ * otherwise the block stays hidden and empty. Self-contained (smallest module); only `SS.elements` / `SS.on` used.
  */
 
 /** @typedef {ReturnType<import('../headless/embed.js').createReviewsBlock>} Embed */

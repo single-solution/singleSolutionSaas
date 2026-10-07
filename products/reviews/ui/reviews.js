@@ -168,7 +168,7 @@ export const render = ({ state, actions, strings, theme = {}, slots = {}, dom })
 							starText(review.rating, review.scale),
 						]),
 						review.title ? el(dom, 'h3', {}, [review.title]) : null,
-						el(dom, 'p', {}, [review.removed ? t('reviews.removed') : (review.body ?? '')]),
+						el(dom, 'p', {}, [review.body ?? '']),
 						el(dom, 'p', { class: 'ss-reviews__meta' }, [
 							review.authorText,
 							' · ',

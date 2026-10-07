@@ -11,23 +11,10 @@
 	"endpoints": {
 		"base": "https://deals.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"rate:quote_api.rate_per_minute",
-			"limit:quote_api.max_lines",
-			"limit:item_deals.max_active",
-			"limit:item_deals.max_percent",
-			"limit:cart_deals.max_active",
-			"limit:flash_sales.max_active",
-			"limit:bundles.max_active",
-			"limit:price_locks.ttl_minutes"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": [
 		"events.subscribe:price.changed",
@@ -41,9 +28,6 @@
 	"events": {
 		"consumes": ["order.cancelled@1", "price.changed@1", "inventory.changed@1", "item.*"],
 		"publishes": ["deals.applied@1", "deals.exhausted@1"]
-	},
-	"budget": {
-		"shared": 2
 	},
 	"elements": [
 		{
@@ -65,9 +49,6 @@
 						}
 					}
 				]
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": [],
 			"requires": {
@@ -95,9 +76,6 @@
 			"price": {
 				"hourly": 300
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["quote_api"],
 			"requires": {
 				"resources": ["database"]
@@ -118,9 +96,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["quote_api"],
 			"requires": {
@@ -143,9 +118,6 @@
 			"price": {
 				"hourly": 200
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["quote_api"],
 			"requires": {
 				"resources": ["database"]
@@ -165,9 +137,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["quote_api"],
 			"requires": {
@@ -189,15 +158,11 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["quote_api"],
 			"features": {
 				"$ref": "schemas/stacking.features.json"
 			},
 			"strings": "strings/en.json",
-			"experiments": true,
 			"headless": null,
 			"renderer": null
 		},
@@ -209,9 +174,6 @@
 			"stateful": false,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["quote_api"],
 			"features": {
@@ -233,16 +195,12 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 3
-			},
 			"dependsOn": ["quote_api"],
 			"features": {
 				"$ref": "schemas/badges.features.json"
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": true,
 			"api": {
 				"resources": ["offers"]
 			},
@@ -266,16 +224,12 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 4
-			},
 			"dependsOn": ["quote_api"],
 			"features": {
 				"$ref": "schemas/deals_page.features.json"
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": true,
 			"api": {
 				"resources": ["deals-page"]
 			},
@@ -298,9 +252,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["quote_api"],
 			"requires": {

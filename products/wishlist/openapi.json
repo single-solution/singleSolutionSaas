@@ -5,26 +5,41 @@
 		"version": "1.0.0",
 		"description": "Mode C API of Wishlist (SSPS v1). Browser (pk_) calls act for the customer of the website's own login (SS-Identity) or for a guest (`guest` token in the body); server (sk_) calls act merchant-wide or for the customer they name (`customerId`). Every list lives in the merchant's own database."
 	},
-	"servers": [{ "url": "https://wishlist.example.com" }],
-	"security": [{ "websiteKey": [] }],
+	"servers": [
+		{
+			"url": "https://wishlist.example.com"
+		}
+	],
+	"security": [
+		{
+			"websiteKey": []
+		}
+	],
 	"paths": {
 		"/v1/lists": {
 			"get": {
 				"operationId": "listLists",
 				"summary": "Lists, newest first (cursor pagination)",
 				"description": "pk_ + SS-Identity: the customer's own lists. sk_: every list of the website, or `customerId`'s. Guests read their lists with POST /v1/wishlist.",
-				"x-ss-certify": true,
 				"parameters": [
-					{ "$ref": "#/components/parameters/customerId" },
-					{ "$ref": "#/components/parameters/cursor" },
-					{ "$ref": "#/components/parameters/limit" }
+					{
+						"$ref": "#/components/parameters/customerId"
+					},
+					{
+						"$ref": "#/components/parameters/cursor"
+					},
+					{
+						"$ref": "#/components/parameters/limit"
+					}
 				],
 				"responses": {
 					"200": {
 						"description": "A page of lists (without items)",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/ListPage" },
+								"schema": {
+									"$ref": "#/components/schemas/ListPage"
+								},
 								"example": {
 									"items": [
 										{
@@ -34,7 +49,10 @@
 											"itemCount": 2,
 											"notify": false,
 											"shared": false,
-											"owner": { "kind": "customer", "id": "cus_42" },
+											"owner": {
+												"kind": "customer",
+												"id": "cus_42"
+											},
 											"createdAt": "2026-10-01T10:00:00.000Z",
 											"updatedAt": "2026-10-01T10:05:00.000Z"
 										}
@@ -45,13 +63,19 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			},
 			"post": {
 				"operationId": "createList",
 				"summary": "Create a named list (the owner's first list becomes their default list)",
-				"parameters": [{ "$ref": "#/components/parameters/idempotencyKey" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/idempotencyKey"
+					}
+				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -60,12 +84,24 @@
 								"type": "object",
 								"required": ["name"],
 								"properties": {
-									"name": { "type": "string", "maxLength": 120 },
-									"customerId": { "type": "string", "description": "sk_ only: the customer the list is for" },
-									"guest": { "type": "string", "description": "pk_ guests: the guest token" }
+									"name": {
+										"type": "string",
+										"maxLength": 120
+									},
+									"customerId": {
+										"type": "string",
+										"description": "sk_ only: the customer the list is for"
+									},
+									"guest": {
+										"type": "string",
+										"description": "pk_ guests: the guest token"
+									}
 								}
 							},
-							"example": { "customerId": "cus_certify", "name": "Gift ideas" }
+							"example": {
+								"customerId": "cus_example",
+								"name": "Gift ideas"
+							}
 						}
 					}
 				},
@@ -74,7 +110,9 @@
 						"description": "Created",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/ListWithItems" },
+								"schema": {
+									"$ref": "#/components/schemas/ListWithItems"
+								},
 								"example": {
 									"id": "wl_1123456789abcdefghjkmnpq",
 									"name": "Gift ideas",
@@ -82,7 +120,9 @@
 									"itemCount": 0,
 									"notify": false,
 									"shared": false,
-									"owner": { "kind": "customer" },
+									"owner": {
+										"kind": "customer"
+									},
 									"createdAt": "2026-10-01T10:00:00.000Z",
 									"updatedAt": "2026-10-01T10:00:00.000Z",
 									"items": []
@@ -90,22 +130,34 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
 		"/v1/lists/{id}": {
-			"parameters": [{ "$ref": "#/components/parameters/listId" }],
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/listId"
+				}
+			],
 			"get": {
 				"operationId": "getList",
 				"summary": "One list with its items (`default` = the owner's default list)",
-				"parameters": [{ "$ref": "#/components/parameters/customerId" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/customerId"
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/ListWithItems" },
+								"schema": {
+									"$ref": "#/components/schemas/ListWithItems"
+								},
 								"example": {
 									"id": "wl_0123456789abcdefghjkmnpq",
 									"name": "Wishlist",
@@ -113,7 +165,9 @@
 									"itemCount": 1,
 									"notify": true,
 									"shared": false,
-									"owner": { "kind": "customer" },
+									"owner": {
+										"kind": "customer"
+									},
 									"createdAt": "2026-10-01T10:00:00.000Z",
 									"updatedAt": "2026-10-01T10:05:00.000Z",
 									"items": [
@@ -124,8 +178,14 @@
 											"title": "Linen shirt",
 											"image": "https://cdn.example.com/linen.jpg",
 											"url": "https://shop.example.com/p/linen-shirt",
-											"price": { "amount": 4900, "currency": "EUR" },
-											"savedPrice": { "amount": 4900, "currency": "EUR" },
+											"price": {
+												"amount": 4900,
+												"currency": "EUR"
+											},
+											"savedPrice": {
+												"amount": 4900,
+												"currency": "EUR"
+											},
 											"inStock": true,
 											"addedAt": "2026-10-01T10:05:00.000Z"
 										}
@@ -134,7 +194,9 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			},
 			"patch": {
@@ -147,13 +209,24 @@
 							"schema": {
 								"type": "object",
 								"properties": {
-									"name": { "type": "string", "maxLength": 120 },
-									"notify": { "type": "boolean" },
-									"customerId": { "type": "string" },
-									"guest": { "type": "string" }
+									"name": {
+										"type": "string",
+										"maxLength": 120
+									},
+									"notify": {
+										"type": "boolean"
+									},
+									"customerId": {
+										"type": "string"
+									},
+									"guest": {
+										"type": "string"
+									}
 								}
 							},
-							"example": { "notify": true }
+							"example": {
+								"notify": true
+							}
 						}
 					}
 				},
@@ -162,7 +235,9 @@
 						"description": "Updated",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/ListWithItems" },
+								"schema": {
+									"$ref": "#/components/schemas/ListWithItems"
+								},
 								"example": {
 									"id": "wl_0123456789abcdefghjkmnpq",
 									"name": "Wishlist",
@@ -170,7 +245,9 @@
 									"itemCount": 0,
 									"notify": true,
 									"shared": false,
-									"owner": { "kind": "customer" },
+									"owner": {
+										"kind": "customer"
+									},
 									"createdAt": "2026-10-01T10:00:00.000Z",
 									"updatedAt": "2026-10-01T10:06:00.000Z",
 									"items": []
@@ -178,7 +255,9 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			},
 			"delete": {
@@ -188,8 +267,12 @@
 					"required": false,
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/Actor" },
-							"example": { "guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln" }
+							"schema": {
+								"$ref": "#/components/schemas/Actor"
+							},
+							"example": {
+								"guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln"
+							}
 						}
 					}
 				},
@@ -201,49 +284,89 @@
 								"schema": {
 									"type": "object",
 									"required": ["id", "deleted"],
-									"properties": { "id": { "type": "string" }, "deleted": { "type": "boolean" } }
+									"properties": {
+										"id": {
+											"type": "string"
+										},
+										"deleted": {
+											"type": "boolean"
+										}
+									}
 								},
-								"example": { "id": "wl_0123456789abcdefghjkmnpq", "deleted": true }
+								"example": {
+									"id": "wl_0123456789abcdefghjkmnpq",
+									"deleted": true
+								}
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
 		"/v1/lists/{id}/items": {
-			"parameters": [{ "$ref": "#/components/parameters/listId" }],
+			"parameters": [
+				{
+					"$ref": "#/components/parameters/listId"
+				}
+			],
 			"post": {
 				"operationId": "addItem",
 				"summary": "Save an item (`default` creates the owner's default list on first use)",
 				"description": "Any kind of item: the merchant's id plus a snapshot. An item already on the list keeps its place and saved price (200); a new one answers 201. A full list evicts its oldest item or refuses (lists.when_full).",
-				"parameters": [{ "$ref": "#/components/parameters/idempotencyKey" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/idempotencyKey"
+					}
+				],
 				"requestBody": {
 					"required": true,
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/ItemInput" },
+							"schema": {
+								"$ref": "#/components/schemas/ItemInput"
+							},
 							"example": {
 								"itemId": "itm_42",
 								"title": "Linen shirt",
 								"image": "https://cdn.example.com/linen.jpg",
 								"url": "https://shop.example.com/p/linen-shirt",
-								"price": { "amount": 4900, "currency": "EUR" }
+								"price": {
+									"amount": 4900,
+									"currency": "EUR"
+								}
 							}
 						}
 					}
 				},
 				"responses": {
-					"200": { "$ref": "#/components/responses/EntryChange" },
-					"201": { "$ref": "#/components/responses/EntryChange" },
-					"default": { "$ref": "#/components/responses/Problem" }
+					"200": {
+						"$ref": "#/components/responses/EntryChange"
+					},
+					"201": {
+						"$ref": "#/components/responses/EntryChange"
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
 		"/v1/lists/{id}/items/{entryId}": {
 			"parameters": [
-				{ "$ref": "#/components/parameters/listId" },
-				{ "name": "entryId", "in": "path", "required": true, "schema": { "type": "string" } }
+				{
+					"$ref": "#/components/parameters/listId"
+				},
+				{
+					"name": "entryId",
+					"in": "path",
+					"required": true,
+					"schema": {
+						"type": "string"
+					}
+				}
 			],
 			"delete": {
 				"operationId": "removeItem",
@@ -252,14 +375,22 @@
 					"required": false,
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/Actor" },
-							"example": { "guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln" }
+							"schema": {
+								"$ref": "#/components/schemas/Actor"
+							},
+							"example": {
+								"guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln"
+							}
 						}
 					}
 				},
 				"responses": {
-					"200": { "$ref": "#/components/responses/EntryChange" },
-					"default": { "$ref": "#/components/responses/Problem" }
+					"200": {
+						"$ref": "#/components/responses/EntryChange"
+					},
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -267,22 +398,40 @@
 			"post": {
 				"operationId": "createGuest",
 				"summary": "A signed guest token for a visitor who is not signed in (no personal data)",
-				"parameters": [{ "$ref": "#/components/parameters/idempotencyKey" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/idempotencyKey"
+					}
+				],
 				"requestBody": {
 					"required": false,
-					"content": { "application/json": { "schema": { "type": "object" }, "example": {} } }
+					"content": {
+						"application/json": {
+							"schema": {
+								"type": "object"
+							},
+							"example": {}
+						}
+					}
 				},
 				"responses": {
 					"201": {
 						"description": "Issued",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/GuestToken" },
-								"example": { "token": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln", "expiresAt": "2026-10-31T10:00:00.000Z" }
+								"schema": {
+									"$ref": "#/components/schemas/GuestToken"
+								},
+								"example": {
+									"token": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln",
+									"expiresAt": "2026-10-31T10:00:00.000Z"
+								}
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -290,7 +439,11 @@
 			"post": {
 				"operationId": "mergeGuest",
 				"summary": "Merge a guest's lists into the signed-in customer's lists (SS-Identity, or sk_ with customerId)",
-				"parameters": [{ "$ref": "#/components/parameters/idempotencyKey" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/idempotencyKey"
+					}
+				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -298,9 +451,18 @@
 							"schema": {
 								"type": "object",
 								"required": ["guest"],
-								"properties": { "guest": { "type": "string" }, "customerId": { "type": "string" } }
+								"properties": {
+									"guest": {
+										"type": "string"
+									},
+									"customerId": {
+										"type": "string"
+									}
+								}
 							},
-							"example": { "guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln" }
+							"example": {
+								"guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln"
+							}
 						}
 					}
 				},
@@ -312,13 +474,25 @@
 								"schema": {
 									"type": "object",
 									"required": ["merged", "lists"],
-									"properties": { "merged": { "type": "integer" }, "lists": { "type": "integer" } }
+									"properties": {
+										"merged": {
+											"type": "integer"
+										},
+										"lists": {
+											"type": "integer"
+										}
+									}
 								},
-								"example": { "merged": 3, "lists": 0 }
+								"example": {
+									"merged": 3,
+									"lists": 0
+								}
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -326,7 +500,11 @@
 			"post": {
 				"operationId": "createShare",
 				"summary": "Create (or rotate) the read-only share link of a list",
-				"parameters": [{ "$ref": "#/components/parameters/idempotencyKey" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/idempotencyKey"
+					}
+				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -335,12 +513,20 @@
 								"type": "object",
 								"required": ["listId"],
 								"properties": {
-									"listId": { "type": "string" },
-									"customerId": { "type": "string" },
-									"guest": { "type": "string" }
+									"listId": {
+										"type": "string"
+									},
+									"customerId": {
+										"type": "string"
+									},
+									"guest": {
+										"type": "string"
+									}
 								}
 							},
-							"example": { "listId": "wl_0123456789abcdefghjkmnpq" }
+							"example": {
+								"listId": "wl_0123456789abcdefghjkmnpq"
+							}
 						}
 					}
 				},
@@ -349,7 +535,9 @@
 						"description": "Created; earlier links of the list stop working",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/Share" },
+								"schema": {
+									"$ref": "#/components/schemas/Share"
+								},
 								"example": {
 									"listId": "wl_0123456789abcdefghjkmnpq",
 									"token": "0123456789abcdefghjkmnpqrs",
@@ -360,7 +548,9 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -368,7 +558,11 @@
 			"post": {
 				"operationId": "revokeShare",
 				"summary": "Revoke the share link of a list (safe to repeat)",
-				"parameters": [{ "$ref": "#/components/parameters/idempotencyKey" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/idempotencyKey"
+					}
+				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -377,12 +571,20 @@
 								"type": "object",
 								"required": ["listId"],
 								"properties": {
-									"listId": { "type": "string" },
-									"customerId": { "type": "string" },
-									"guest": { "type": "string" }
+									"listId": {
+										"type": "string"
+									},
+									"customerId": {
+										"type": "string"
+									},
+									"guest": {
+										"type": "string"
+									}
 								}
 							},
-							"example": { "listId": "wl_0123456789abcdefghjkmnpq" }
+							"example": {
+								"listId": "wl_0123456789abcdefghjkmnpq"
+							}
 						}
 					}
 				},
@@ -394,13 +596,25 @@
 								"schema": {
 									"type": "object",
 									"required": ["listId", "shared"],
-									"properties": { "listId": { "type": "string" }, "shared": { "type": "boolean" } }
+									"properties": {
+										"listId": {
+											"type": "string"
+										},
+										"shared": {
+											"type": "boolean"
+										}
+									}
 								},
-								"example": { "listId": "wl_0123456789abcdefghjkmnpq", "shared": false }
+								"example": {
+									"listId": "wl_0123456789abcdefghjkmnpq",
+									"shared": false
+								}
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -408,13 +622,24 @@
 			"get": {
 				"operationId": "getShared",
 				"summary": "The read-only view behind a share link (no owner, no ids of the list)",
-				"parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }],
+				"parameters": [
+					{
+						"name": "token",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/SharedList" },
+								"schema": {
+									"$ref": "#/components/schemas/SharedList"
+								},
 								"example": {
 									"name": "Birthday",
 									"itemCount": 1,
@@ -425,7 +650,10 @@
 											"title": "Linen shirt",
 											"image": null,
 											"url": "https://shop.example.com/p/linen-shirt",
-											"price": { "amount": 4900, "currency": "EUR" },
+											"price": {
+												"amount": 4900,
+												"currency": "EUR"
+											},
 											"inStock": null
 										}
 									]
@@ -433,7 +661,9 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -442,7 +672,14 @@
 				"operationId": "listNotifications",
 				"summary": "Signals published for opted-in customers, newest first (server keys)",
 				"x-ss-key-kind": "sk",
-				"parameters": [{ "$ref": "#/components/parameters/cursor" }, { "$ref": "#/components/parameters/limit" }],
+				"parameters": [
+					{
+						"$ref": "#/components/parameters/cursor"
+					},
+					{
+						"$ref": "#/components/parameters/limit"
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "A page of signals",
@@ -452,9 +689,18 @@
 									"type": "object",
 									"required": ["items", "hasMore"],
 									"properties": {
-										"items": { "type": "array", "items": { "$ref": "#/components/schemas/Notification" } },
-										"nextCursor": { "type": ["string", "null"] },
-										"hasMore": { "type": "boolean" }
+										"items": {
+											"type": "array",
+											"items": {
+												"$ref": "#/components/schemas/Notification"
+											}
+										},
+										"nextCursor": {
+											"type": ["string", "null"]
+										},
+										"hasMore": {
+											"type": "boolean"
+										}
 									}
 								},
 								"example": {
@@ -464,7 +710,9 @@
 											"kind": "price_dropped",
 											"itemId": "itm_42",
 											"variantId": null,
-											"customer": { "subject": "cus_42" },
+											"customer": {
+												"subject": "cus_42"
+											},
 											"listIds": ["wl_0123456789abcdefghjkmnpq"],
 											"eventId": "evt_0123456789abcdefghjkmnpq",
 											"at": "2026-10-01T10:00:00.000Z"
@@ -476,7 +724,9 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -489,8 +739,12 @@
 					"required": false,
 					"content": {
 						"application/json": {
-							"schema": { "$ref": "#/components/schemas/Actor" },
-							"example": { "guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln" }
+							"schema": {
+								"$ref": "#/components/schemas/Actor"
+							},
+							"example": {
+								"guest": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln"
+							}
 						}
 					}
 				},
@@ -499,10 +753,17 @@
 						"description": "OK",
 						"content": {
 							"application/json": {
-								"schema": { "$ref": "#/components/schemas/WishlistState" },
+								"schema": {
+									"$ref": "#/components/schemas/WishlistState"
+								},
 								"example": {
-									"owner": { "kind": "guest" },
-									"guest": { "token": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln", "expiresAt": "2026-10-31T10:00:00.000Z" },
+									"owner": {
+										"kind": "guest"
+									},
+									"guest": {
+										"token": "wg1.eyJ3Ijoid2ViXzAxIn0.c2ln",
+										"expiresAt": "2026-10-31T10:00:00.000Z"
+									},
 									"dropGuest": false,
 									"merged": 0,
 									"lists": [],
@@ -522,7 +783,9 @@
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -530,21 +793,42 @@
 			"get": {
 				"operationId": "dashboardOverview",
 				"summary": "Dashboard counts and the most saved items (SSO session)",
-				"security": [{ "session": [] }],
+				"security": [
+					{
+						"session": []
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
 						"content": {
 							"application/json": {
-								"schema": { "type": "object" },
+								"schema": {
+									"type": "object"
+								},
 								"example": {
-									"stats": { "lists": 3, "customerLists": 2, "guestLists": 1, "items": 7, "optedIn": 1, "shared": 1 },
-									"topItems": [{ "itemId": "itm_42", "title": "Linen shirt", "saves": 2 }]
+									"stats": {
+										"lists": 3,
+										"customerLists": 2,
+										"guestLists": 1,
+										"items": 7,
+										"optedIn": 1,
+										"shared": 1
+									},
+									"topItems": [
+										{
+											"itemId": "itm_42",
+											"title": "Linen shirt",
+											"saves": 2
+										}
+									]
 								}
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		},
@@ -552,18 +836,32 @@
 			"get": {
 				"operationId": "getSession",
 				"summary": "The dashboard session (SSO launch)",
-				"security": [{ "session": [] }],
+				"security": [
+					{
+						"session": []
+					}
+				],
 				"responses": {
 					"200": {
 						"description": "OK",
 						"content": {
 							"application/json": {
-								"schema": { "type": "object" },
-								"example": { "kind": "merchant", "role": "owner", "scope": {}, "user": "usr_1", "actor": null }
+								"schema": {
+									"type": "object"
+								},
+								"example": {
+									"kind": "merchant",
+									"role": "owner",
+									"scope": {},
+									"user": "usr_1",
+									"actor": null
+								}
 							}
 						}
 					},
-					"default": { "$ref": "#/components/responses/Problem" }
+					"default": {
+						"$ref": "#/components/responses/Problem"
+					}
 				}
 			}
 		}
@@ -575,7 +873,11 @@
 				"scheme": "bearer",
 				"description": "pk_ (browser, domain-locked) or sk_ (server) website key; browsers add the customer's login token as SS-Identity"
 			},
-			"session": { "type": "apiKey", "in": "cookie", "name": "ss_session" }
+			"session": {
+				"type": "apiKey",
+				"in": "cookie",
+				"name": "ss_session"
+			}
 		},
 		"parameters": {
 			"listId": {
@@ -583,95 +885,221 @@
 				"in": "path",
 				"required": true,
 				"description": "A list id, or `default` for the owner's default list",
-				"schema": { "type": "string" }
+				"schema": {
+					"type": "string"
+				}
 			},
 			"customerId": {
 				"name": "customerId",
 				"in": "query",
 				"required": false,
 				"description": "sk_ only: the customer to act for",
-				"schema": { "type": "string" }
+				"schema": {
+					"type": "string"
+				}
 			},
-			"cursor": { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } },
+			"cursor": {
+				"name": "cursor",
+				"in": "query",
+				"required": false,
+				"schema": {
+					"type": "string"
+				}
+			},
 			"limit": {
 				"name": "limit",
 				"in": "query",
 				"required": false,
-				"schema": { "type": "integer", "minimum": 1, "maximum": 100 }
+				"schema": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 100
+				}
 			},
-			"idempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string" } }
+			"idempotencyKey": {
+				"name": "Idempotency-Key",
+				"in": "header",
+				"required": false,
+				"schema": {
+					"type": "string"
+				},
+				"description": "Optional. On routes that create records, a key already used for the same route within 24 h answers 409 duplicate_request."
+			}
 		},
 		"schemas": {
 			"Money": {
 				"type": "object",
 				"required": ["amount", "currency"],
 				"properties": {
-					"amount": { "type": "integer", "minimum": 0 },
-					"currency": { "type": "string", "pattern": "^[A-Z]{3}$" }
+					"amount": {
+						"type": "integer",
+						"minimum": 0
+					},
+					"currency": {
+						"type": "string",
+						"pattern": "^[A-Z]{3}$"
+					}
 				}
 			},
 			"Actor": {
 				"type": "object",
 				"properties": {
-					"guest": { "type": "string", "description": "pk_ guests: the guest token" },
-					"customerId": { "type": "string", "description": "sk_ only" }
+					"guest": {
+						"type": "string",
+						"description": "pk_ guests: the guest token"
+					},
+					"customerId": {
+						"type": "string",
+						"description": "sk_ only"
+					}
 				}
 			},
 			"ItemInput": {
 				"type": "object",
 				"required": ["itemId"],
 				"properties": {
-					"itemId": { "type": "string", "maxLength": 128 },
-					"variantId": { "type": ["string", "null"], "maxLength": 128 },
-					"title": { "type": "string", "maxLength": 200 },
-					"image": { "type": "string", "format": "uri" },
-					"url": { "type": "string", "format": "uri" },
-					"price": { "$ref": "#/components/schemas/Money" },
-					"customerId": { "type": "string" },
-					"guest": { "type": "string" }
+					"itemId": {
+						"type": "string",
+						"maxLength": 128
+					},
+					"variantId": {
+						"type": ["string", "null"],
+						"maxLength": 128
+					},
+					"title": {
+						"type": "string",
+						"maxLength": 200
+					},
+					"image": {
+						"type": "string",
+						"format": "uri"
+					},
+					"url": {
+						"type": "string",
+						"format": "uri"
+					},
+					"price": {
+						"$ref": "#/components/schemas/Money"
+					},
+					"customerId": {
+						"type": "string"
+					},
+					"guest": {
+						"type": "string"
+					}
 				}
 			},
 			"Entry": {
 				"type": "object",
 				"required": ["id", "itemId", "addedAt"],
 				"properties": {
-					"id": { "type": "string" },
-					"itemId": { "type": "string" },
-					"variantId": { "type": ["string", "null"] },
-					"title": { "type": ["string", "null"] },
-					"image": { "type": ["string", "null"] },
-					"url": { "type": ["string", "null"] },
-					"price": { "oneOf": [{ "$ref": "#/components/schemas/Money" }, { "type": "null" }] },
-					"savedPrice": { "oneOf": [{ "$ref": "#/components/schemas/Money" }, { "type": "null" }] },
-					"inStock": { "type": ["boolean", "null"] },
-					"addedAt": { "type": "string", "format": "date-time" }
+					"id": {
+						"type": "string"
+					},
+					"itemId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": ["string", "null"]
+					},
+					"title": {
+						"type": ["string", "null"]
+					},
+					"image": {
+						"type": ["string", "null"]
+					},
+					"url": {
+						"type": ["string", "null"]
+					},
+					"price": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Money"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"savedPrice": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/Money"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"inStock": {
+						"type": ["boolean", "null"]
+					},
+					"addedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
 				}
 			},
 			"List": {
 				"type": "object",
 				"required": ["id", "name", "isDefault", "itemCount", "notify", "shared", "owner", "createdAt", "updatedAt"],
 				"properties": {
-					"id": { "type": "string" },
-					"name": { "type": "string" },
-					"isDefault": { "type": "boolean" },
-					"itemCount": { "type": "integer" },
-					"notify": { "type": "boolean" },
-					"shared": { "type": "boolean" },
+					"id": {
+						"type": "string"
+					},
+					"name": {
+						"type": "string"
+					},
+					"isDefault": {
+						"type": "boolean"
+					},
+					"itemCount": {
+						"type": "integer"
+					},
+					"notify": {
+						"type": "boolean"
+					},
+					"shared": {
+						"type": "boolean"
+					},
 					"owner": {
 						"type": "object",
 						"required": ["kind"],
-						"properties": { "kind": { "type": "string", "enum": ["customer", "guest"] }, "id": { "type": "string" } }
+						"properties": {
+							"kind": {
+								"type": "string",
+								"enum": ["customer", "guest"]
+							},
+							"id": {
+								"type": "string"
+							}
+						}
 					},
-					"createdAt": { "type": "string", "format": "date-time" },
-					"updatedAt": { "type": "string", "format": "date-time" }
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"updatedAt": {
+						"type": "string",
+						"format": "date-time"
+					}
 				}
 			},
 			"ListWithItems": {
 				"allOf": [
-					{ "$ref": "#/components/schemas/List" },
+					{
+						"$ref": "#/components/schemas/List"
+					},
 					{
 						"type": "object",
-						"properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Entry" } } }
+						"properties": {
+							"items": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/Entry"
+								}
+							}
+						}
 					}
 				]
 			},
@@ -679,73 +1107,176 @@
 				"type": "object",
 				"required": ["items", "hasMore"],
 				"properties": {
-					"items": { "type": "array", "items": { "$ref": "#/components/schemas/List" } },
-					"nextCursor": { "type": ["string", "null"] },
-					"hasMore": { "type": "boolean" }
+					"items": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/List"
+						}
+					},
+					"nextCursor": {
+						"type": ["string", "null"]
+					},
+					"hasMore": {
+						"type": "boolean"
+					}
 				}
 			},
 			"GuestToken": {
 				"type": "object",
 				"required": ["token", "expiresAt"],
-				"properties": { "token": { "type": "string" }, "expiresAt": { "type": "string", "format": "date-time" } }
+				"properties": {
+					"token": {
+						"type": "string"
+					},
+					"expiresAt": {
+						"type": "string",
+						"format": "date-time"
+					}
+				}
 			},
 			"Share": {
 				"type": "object",
 				"required": ["listId", "token", "url", "createdAt", "expiresAt"],
 				"properties": {
-					"listId": { "type": "string" },
-					"token": { "type": "string" },
-					"url": { "type": ["string", "null"] },
-					"createdAt": { "type": "string", "format": "date-time" },
-					"expiresAt": { "type": ["string", "null"], "format": "date-time" }
+					"listId": {
+						"type": "string"
+					},
+					"token": {
+						"type": "string"
+					},
+					"url": {
+						"type": ["string", "null"]
+					},
+					"createdAt": {
+						"type": "string",
+						"format": "date-time"
+					},
+					"expiresAt": {
+						"type": ["string", "null"],
+						"format": "date-time"
+					}
 				}
 			},
 			"SharedList": {
 				"type": "object",
 				"required": ["name", "itemCount", "items"],
 				"properties": {
-					"name": { "type": "string" },
-					"itemCount": { "type": "integer" },
-					"items": { "type": "array", "items": { "type": "object" } }
+					"name": {
+						"type": "string"
+					},
+					"itemCount": {
+						"type": "integer"
+					},
+					"items": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
 				}
 			},
 			"Notification": {
 				"type": "object",
 				"required": ["id", "kind", "itemId", "customer", "listIds", "eventId", "at"],
 				"properties": {
-					"id": { "type": "string" },
-					"kind": { "type": "string", "enum": ["price_dropped", "back_in_stock"] },
-					"itemId": { "type": "string" },
-					"variantId": { "type": ["string", "null"] },
-					"customer": { "type": "object", "properties": { "subject": { "type": "string" } } },
-					"listIds": { "type": "array", "items": { "type": "string" } },
-					"eventId": { "type": "string" },
-					"at": { "type": "string", "format": "date-time" }
+					"id": {
+						"type": "string"
+					},
+					"kind": {
+						"type": "string",
+						"enum": ["price_dropped", "back_in_stock"]
+					},
+					"itemId": {
+						"type": "string"
+					},
+					"variantId": {
+						"type": ["string", "null"]
+					},
+					"customer": {
+						"type": "object",
+						"properties": {
+							"subject": {
+								"type": "string"
+							}
+						}
+					},
+					"listIds": {
+						"type": "array",
+						"items": {
+							"type": "string"
+						}
+					},
+					"eventId": {
+						"type": "string"
+					},
+					"at": {
+						"type": "string",
+						"format": "date-time"
+					}
 				}
 			},
 			"WishlistState": {
 				"type": "object",
 				"required": ["owner", "guest", "dropGuest", "merged", "lists", "settings"],
 				"properties": {
-					"owner": { "type": ["object", "null"] },
-					"guest": { "oneOf": [{ "$ref": "#/components/schemas/GuestToken" }, { "type": "null" }] },
-					"dropGuest": { "type": "boolean" },
-					"merged": { "type": "integer" },
-					"lists": { "type": "array", "items": { "$ref": "#/components/schemas/ListWithItems" } },
-					"settings": { "type": "object" }
+					"owner": {
+						"type": ["object", "null"]
+					},
+					"guest": {
+						"oneOf": [
+							{
+								"$ref": "#/components/schemas/GuestToken"
+							},
+							{
+								"type": "null"
+							}
+						]
+					},
+					"dropGuest": {
+						"type": "boolean"
+					},
+					"merged": {
+						"type": "integer"
+					},
+					"lists": {
+						"type": "array",
+						"items": {
+							"$ref": "#/components/schemas/ListWithItems"
+						}
+					},
+					"settings": {
+						"type": "object"
+					}
 				}
 			},
 			"Problem": {
 				"type": "object",
 				"required": ["type", "title", "status"],
 				"properties": {
-					"type": { "type": "string" },
-					"title": { "type": "string" },
-					"status": { "type": "integer" },
-					"detail": { "type": "string" },
-					"instance": { "type": "string" },
-					"requestId": { "type": "string" },
-					"errors": { "type": "array", "items": { "type": "object" } }
+					"type": {
+						"type": "string"
+					},
+					"title": {
+						"type": "string"
+					},
+					"status": {
+						"type": "integer"
+					},
+					"detail": {
+						"type": "string"
+					},
+					"instance": {
+						"type": "string"
+					},
+					"requestId": {
+						"type": "string"
+					},
+					"errors": {
+						"type": "array",
+						"items": {
+							"type": "object"
+						}
+					}
 				}
 			}
 		},
@@ -758,11 +1289,24 @@
 							"type": "object",
 							"required": ["entryId", "list"],
 							"properties": {
-								"entryId": { "type": "string" },
-								"added": { "type": "boolean" },
-								"removed": { "type": "boolean" },
-								"evicted": { "type": "array", "items": { "type": "string" } },
-								"list": { "$ref": "#/components/schemas/ListWithItems" }
+								"entryId": {
+									"type": "string"
+								},
+								"added": {
+									"type": "boolean"
+								},
+								"removed": {
+									"type": "boolean"
+								},
+								"evicted": {
+									"type": "array",
+									"items": {
+										"type": "string"
+									}
+								},
+								"list": {
+									"$ref": "#/components/schemas/ListWithItems"
+								}
 							}
 						},
 						"example": {
@@ -776,7 +1320,9 @@
 								"itemCount": 1,
 								"notify": false,
 								"shared": false,
-								"owner": { "kind": "guest" },
+								"owner": {
+									"kind": "guest"
+								},
 								"createdAt": "2026-10-01T10:00:00.000Z",
 								"updatedAt": "2026-10-01T10:05:00.000Z",
 								"items": []
@@ -787,7 +1333,13 @@
 			},
 			"Problem": {
 				"description": "RFC 9457 problem details",
-				"content": { "application/problem+json": { "schema": { "$ref": "#/components/schemas/Problem" } } }
+				"content": {
+					"application/problem+json": {
+						"schema": {
+							"$ref": "#/components/schemas/Problem"
+						}
+					}
+				}
 			}
 		}
 	}

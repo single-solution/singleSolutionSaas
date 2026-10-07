@@ -1,5 +1,5 @@
 /**
- * Sample configurators for the dashboard demo and the docs — deliberately unrelated to each other (apparel, a
+ * Sample configurators for the dashboard editor ("Start from") and the docs — deliberately unrelated to each other (apparel, a
  * computer, a SaaS plan) to show that the schema is generic. Amounts are integer minor units; the samples carry no
  * currency, so the website's (or none) applies.
  */

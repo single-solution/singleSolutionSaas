@@ -1,6 +1,6 @@
 /** Mode C media, uploads, import/export, feeds, element views, stats, dashboard routes and outbox leftovers republished on read. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { WEBSITE, createHarness } from './harness.js';
+import { MERCHANT, WEBSITE, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -276,26 +276,8 @@ describe('feeds', () => {
 	});
 });
 
-describe('element views, stats, dashboard and outbox leftovers republished on read', () => {
-	it('serves text-only element views for the Loader stub', async () => {
-		const ctx = encodeURIComponent(JSON.stringify({ path: '/p', itemId: shirt.id }));
-		const items = await h.call('GET', '/v1/elements/items/view', { key: h.pk });
-		expect(items.json.items[0].href).toMatch(/^https:\/\/shop\.example\.com\/items\//);
-		const variants = await h.call('GET', `/v1/elements/variants/view?ctx=${ctx}`, { key: h.pk });
-		expect(variants.json.title).toBe('Phone X');
-		expect(variants.json.items[0].text).toContain('€');
-		const media = await h.call('GET', `/v1/elements/media/view?ctx=${ctx}`, { key: h.pk });
-		expect(media.json.items[0].href).toContain('cdn.example.com');
-		const noItem = await h.call('GET', '/v1/elements/media/view?ctx=not-json', { key: h.pk });
-		expect(noItem.json.body).toBe('Open this on an item page.');
-		for (const element of ['collections', 'brands', 'attributes']) {
-			const view = await h.call('GET', `/v1/elements/${element}/view`, { key: h.pk });
-			expect(view.status).toBe(200);
-			expect(view.json.items.length).toBeGreaterThan(0);
-		}
-	});
-
-	it('reports stats and runs the dashboard routes with the session (audited; demo read-only)', async () => {
+describe('stats, dashboard and outbox leftovers republished on read', () => {
+	it('reports stats and runs the dashboard routes with the session (audited)', async () => {
 		const stats = await h.call('GET', '/v1/catalog-stats');
 		expect(stats.json.items).toMatchObject({
 			total: expect.any(Number),
@@ -376,17 +358,8 @@ describe('element views, stats, dashboard and outbox leftovers republished on re
 		expect(expired.json.detail).toBe('This download link has expired.');
 		const audit = await h.db.collection('ss_catalog_audit').findOne({ websiteId: WEBSITE, action: 'stock.adjusted' });
 		expect(audit?.actor).toMatchObject({ type: 'merchant', id: 'usr_merchant' });
-		const demo = await h.session('demo');
-		expect(
-			(
-				await h.call('POST', `/v1/dashboard/items/${shirt.id}/status`, {
-					key: demo,
-					body: { status: 'active' },
-					idempotencyKey: null,
-				})
-			).status,
-		).toBe(403);
-		expect((await h.call('GET', '/v1/dashboard/overview', { key: demo })).status).toBe(400);
+		const unscoped = await h.session('merchant', { scope: { merchantId: MERCHANT } });
+		expect((await h.call('GET', '/v1/dashboard/overview', { key: unscoped })).status).toBe(400);
 		expect((await h.call('GET', '/v1/session', { key: session })).json).toMatchObject({ kind: 'merchant' });
 	});
 

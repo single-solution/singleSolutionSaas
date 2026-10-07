@@ -92,9 +92,10 @@ nothing runs on a timer.
   within `sessions.reuse_grace_seconds` (two tabs racing → `refresh_conflict`).
 - **Redirects** of magic links: https on the website's domain only (subdomains when the website allows them), no
   credentials or ports, allowed path prefixes; the token is in the fragment (never sent to servers or in `Referer`).
-- **Replay cache.** Token-issuing POSTs (verify, consume, refresh) are single use by construction and not replayable;
-  POST answers that are replayable carry no personal data (`POST /v1/customers` → `{ id, status, createdAt }`; exports
-  are downloaded with GET).
+- **Idempotency.** POSTs that send a message or create a record (`/v1/otp`, `/v1/magic-links`, `/v1/customers`,
+  `/v1/data-requests`) refuse a repeated `Idempotency-Key` within 24 h (409 `duplicate_request`); without the header
+  they run normally. Token-issuing POSTs (verify, consume, refresh, logout) are single use by construction. POST
+  answers carry no personal data (`POST /v1/customers` → `{ id, status, createdAt }`; exports are downloaded with GET).
 
 ## API (Mode C)
 
@@ -113,7 +114,7 @@ the access token in `SS-Identity`, server keys may name `?customerId=` instead).
 | Consent        | `GET /v1/consents` · `POST /v1/consents`                                                                                |
 | Data rights    | `POST /v1/data-requests` `{ type }` · `GET /v1/data-requests` · `GET /v1/data-requests/{id}/export` · `DELETE …/{id}`   |
 | Risk (sk)      | `GET /v1/risk-events`                                                                                                   |
-| Standard       | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                   |
+| Standard       | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`                                                            |
 
 Errors are RFC 9457 problems with stable codes (`code_invalid` — RFC 9457 extension member `attemptsRemaining` (also `errors[0]` `attempts_remaining`, kept for v1 clients) —,
 `code_expired`, `attempts_exhausted`, `too_soon`, `send_limit`, `velocity_limit`, `identifier_invalid`,
@@ -137,25 +138,24 @@ and routes it to its e-mail / SMS / WhatsApp provider. A non-2xx answer, or a 2x
 
 Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs, customers with verification badges, and the
 Identity page (issuer, JWKS URL, audience, claim map, published keys, registered or not, the last Portal request and a
-"Request in the Portal" button for merchant / admin / impersonation launches). Demo launches show sandbox
-data; impersonation shows the audit banner.
+"Request in the Portal" button and "Run due deletions" for merchant and staff admin launches).
 
-## Develop and certify
+## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator (ss.dev.json)
-pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000
-pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB, certify
+cp .env.example .env.local     # MONGODB_URI (empty = in-memory control store) + a random CONNECT_SECRET (≥ 32 chars)
+pnpm dev                       # Next.js on :3000
+# local Portal → Admin → Apps → Add product → http://localhost:3000 + the CONNECT_SECRET
+pnpm validate                  # ss app validate: manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB
+ss pack build .                # the sign-in and account widgets (Mode A) → upload dist/pack in the Portal (app page → Upload widgets)
 ```
 
-`tests/certify.test.js` runs the full `ss certify` suite (every check must pass). The system test `e2e/tests/signups-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
-real Portal in process with Signups **and** Loyalty: staff bootstrap → both products registered and activated →
-merchant, website, credits, two subscriptions → database and messaging connectors (a fake gateway on loopback) →
-browser asks for a code → the gateway receives it → verify → JWT → issuer registered through the Portal API → Loyalty
-accepts the Signups token → `customer.created@1` routed by the Event Hub → usage reported → hourly settlement.
+The system test `e2e/tests/signups-portal.test.js` (monorepo workspace `@ss/e2e`) composes Signups **and** Loyalty from
+their `./platform` and `./routes` exports and runs the real Portal in process: staff bootstrap → both products added and
+activated → merchant, website, credits, two subscriptions → database and messaging connectors (a fake gateway on
+loopback) → browser asks for a code → the gateway receives it → verify → JWT → issuer registered through the Portal API
+→ Loyalty accepts the Signups token → `customer.created@1` routed by the Event Hub → usage reported → hourly settlement.
 
 ## Deploy
 
@@ -164,8 +164,9 @@ accepts the Signups token → `customer.created@1` routed by the Event Hub → u
 2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
-   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
+4. `ss pack build .` and upload `dist/pack` on the app page (**Upload widgets**) so the drop-in sign-in and account
+   widgets are delivered.
 5. Per merchant website: connect a database and a messaging connector; Signups then requests to be the issuer and the
    merchant approves it in the Portal (above). The address recorded at connect prefixes every website's issuer: keep it
    stable.

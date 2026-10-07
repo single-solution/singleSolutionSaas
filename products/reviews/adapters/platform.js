@@ -53,21 +53,6 @@ export const retentionDays = (duration, fallback) => {
 	return match ? Number(match[1]) : fallback;
 };
 
-/**
- * Personal data this product stores (drives POST /v1/data:export and /v1/data:anonymize). The subject is the customer
- * key (`customerId`: the website's identity subject or the Graph customer id); anonymising keeps ratings (they feed the
- * aggregates) and removes the author, the text and the photo references.
- */
-export const PRIVACY = Object.freeze({
-	collections: [
-		{ name: 'reviews', subjectField: 'customerId', fields: ['author', 'title', 'body', 'photos', 'customerKeys'] },
-		{ name: 'requests', subjectField: 'customerId', fields: ['contact', 'customerKeys'] },
-		{ name: 'orders', subjectField: 'customerId', fields: ['contact', 'customerKeys'] },
-		{ name: 'photos', subjectField: 'customerId', fields: ['key', 'objectKey'] },
-		{ name: 'questions', subjectField: 'customerId', fields: ['author', 'body'] },
-	],
-});
-
 /** Product-specific problem codes (RFC 9457 `type` = `<base>/problems/<code>`). */
 export const PROBLEM_CODES = Object.freeze({
 	not_verified: { status: 403, title: 'Only verified buyers can review this item' },
@@ -129,11 +114,9 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			strings,
 			logger: createLogger({ level: config.logLevel }),
 			problems: config.problems,
-			privacy: PRIVACY,
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
-			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
-			// SSRF policy for merchant databases and connectors: in development the `ss dev` client database and local mocks
+			// SSRF policy for merchant databases and connectors: in development the client database and local mocks
 			// live on loopback; app-kit ignores the allowlist when NODE_ENV=production
 			outbound: {
 				allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],

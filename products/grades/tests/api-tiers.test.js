@@ -1,4 +1,4 @@
-/** Mode C: tiers, items, assignments, units, catalog events, filters, warranty, showcase, mapping and the stub views. */
+/** Mode C: tiers, items, assignments, units, catalog events, filters, warranty, showcase and mapping. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WEBSITE, WEBSITE_2, createHarness } from './harness.js';
 
@@ -167,7 +167,21 @@ describe('tiers', () => {
 			idempotencyKey: 'unit-1',
 		});
 		expect(replay.json.id).toBe(unit.json.id);
-		const taken = await h.call('POST', '/v1/units', { body: { itemId: 'itm_unit', serial: 'SN-1' } });
+		// another caller reusing the key never sees or changes the first unit; the same caller naming another item is refused
+		const other = await h.call('POST', '/v1/units', {
+			body: { itemId: 'itm_unit_other', note: 'mine' },
+			key: await h.key('sk'),
+			idempotencyKey: 'unit-1',
+		});
+		expect(other.status).toBe(201);
+		expect(other.json.id).not.toBe(unit.json.id);
+		expect(other.json).toMatchObject({ itemId: 'itm_unit_other', note: 'mine' });
+		const misused = await h.call('POST', '/v1/units', { body: { itemId: 'itm_unit_other' }, idempotencyKey: 'unit-1' });
+		expect(misused.status).toBe(409);
+		expect(misused.json.type).toMatch(/duplicate_request$/);
+		expect((await h.call('GET', `/v1/units/${unit.json.id}`)).json).toMatchObject({ itemId: 'itm_unit', note: 'boxed' });
+		await h.call('DELETE', `/v1/units/${other.json.id}`);
+		const taken = await h.call('POST', '/v1/units', { body: { itemId: 'itm_unit', serial: 'SN-1' }, idempotencyKey: null });
 		expect(taken.status).toBe(409);
 		expect(taken.json.errors[0].code).toBe('serial_taken');
 		expect((await h.call('POST', '/v1/units', { body: { itemId: 'itm_unit', tier: 'zzz' } })).status).toBe(422);
@@ -388,14 +402,6 @@ describe('filters', () => {
 		expect(ruled.json.options.map((/** @type {any} */ o) => [o.key, o.count])).toEqual([['new', null]]);
 		const single = await h.call('GET', '/v1/tier-filters/items?tier=fair,new', { key: h.pk });
 		expect(single.status).toBe(200);
-		const stub = await h.call('GET', '/v1/elements/filters/view', { key: h.pk });
-		expect(stub.json).toEqual({ title: 'Grade', body: '', items: [{ text: 'New' }] });
-		await h.entitle({ config: { filters: { hide_empty: true, visible_when: 'tier.count > 100000' } } });
-		expect((await h.call('GET', '/v1/elements/filters/view', { key: h.pk })).json.body).toBe('No grades to filter by.');
-		await h.entitle();
-		expect((await h.call('GET', '/v1/elements/filters/view?collection=phones', { key: h.pk })).json.items[0].text).toMatch(
-			/\(\d+\)$/,
-		);
 	});
 });
 
@@ -432,8 +438,6 @@ describe('warranty, showcase, mapping', () => {
 		expect((await h.call('GET', '/v1/warranty?format=xml', { key: h.pk })).status).toBe(422);
 		expect((await h.call('GET', '/v1/warranty/excellent', { key: h.pk })).json.days).toBe(45);
 		expect((await h.call('GET', '/v1/warranty/zzz', { key: h.pk })).status).toBe(404);
-		const stub = await h.call('GET', '/v1/elements/warranty/view?tier=good', { key: h.pk });
-		expect(stub.json.items).toEqual([{ text: 'Good: 1 day — 1 day warranty on items graded Good.' }]);
 		await h.entitle({
 			config: { warranty: { default_days: 60, hide_without_cover: true, default_text: 'Covered: {period}.' } },
 		});
@@ -481,8 +485,6 @@ describe('warranty, showcase, mapping', () => {
 		expect(forItem.json.entries.map((/** @type {any} */ e) => e.tier.key)).toEqual(['new', 'fair']);
 		expect((await h.call('GET', '/v1/showcase?tier=BAD', { key: h.pk })).status).toBe(422);
 		expect((await h.call('GET', '/v1/showcase?itemId=a%20b', { key: h.pk })).status).toBe(422);
-		const stub = await h.call('GET', '/v1/elements/showcase/view?tier=excellent', { key: h.pk });
-		expect(stub.json.items[0].text).toBe('Like new · Inspected in 40 steps. · Warranty: 3 months');
 		await h.entitle({
 			config: { showcase: { show_warranty: false, include_tiers_without_entry: false } },
 			elements: { warranty: false },
@@ -491,7 +493,7 @@ describe('warranty, showcase, mapping', () => {
 		await h.entitle();
 	});
 
-	it('maps tiers to vocabularies with fallbacks and problems; per item, as feed rows and as a statement', async () => {
+	it('maps tiers to vocabularies with fallbacks and problems; per item and as feed rows', async () => {
 		const table = await h.call('GET', '/v1/condition-mappings', { key: h.pk });
 		expect(table.json.items.map((/** @type {any} */ v) => v.key)).toEqual(['schema_org', 'shopping_feed']);
 		expect(table.json.items[1].values).toEqual([
@@ -528,16 +530,6 @@ describe('warranty, showcase, mapping', () => {
 		expect(feedNext.status).toBe(200);
 		expect((await h.call('GET', '/v1/condition-mappings/feed?vocabulary=nope')).status).toBe(422);
 		expect((await h.call('GET', '/v1/condition-mappings/feed?vocabulary=shopping_feed', { key: h.pk })).status).toBe(403);
-		const statement = await h.call('GET', '/v1/elements/mapping/view?itemId=ext:1001', { key: h.pk });
-		expect(statement.json).toEqual({
-			title: 'Condition',
-			body: 'Graded Fair',
-			items: [{ text: 'Shopping feed condition: used' }],
-		});
-		expect((await h.call('GET', '/v1/elements/mapping/view', { key: h.pk })).json.body).toBe('This item has no grade.');
-		expect((await h.call('GET', '/v1/elements/mapping/view?itemId=nothing', { key: h.pk })).json.body).toBe(
-			'This item has no grade.',
-		);
 		await h.entitle({
 			config: {
 				mapping: {
@@ -564,79 +556,6 @@ describe('warranty, showcase, mapping', () => {
 			{ vocabulary: 'market', tier: 'good', problem: 'not_allowed' },
 			{ vocabulary: 'market', tier: 'fair', problem: 'unmapped' },
 		]);
-		await h.entitle();
-	});
-
-	it('serves the tiers stub view for an item and for the whole ladder', async () => {
-		const ladder = await h.call('GET', '/v1/elements/tiers/view', { key: h.pk });
-		expect(ladder.json.items[0].text).toBe('New — Unused and complete, in its original state.');
-		const ctx = encodeURIComponent(JSON.stringify({ path: '/p/1', itemId: 'ext:1001' }));
-		const forItem = await h.call('GET', `/v1/elements/tiers/view?ctx=${ctx}`, { key: h.pk });
-		expect(forItem.json.items.map((/** @type {any} */ i) => i.text.split(' — ')[0])).toEqual(['New', 'Fair']);
-		const empty = await h.call('GET', '/v1/elements/tiers/view?ctx=not-json&itemId=nothing', { key: h.pk });
-		expect(empty.json.body).toBe('No grades are defined yet.');
-	});
-
-	it('answers element stub actions with the next view model (pk_, gated, idempotent)', async () => {
-		const ctx = encodeURIComponent(JSON.stringify({ path: '/p/1', itemId: 'ext:1001' }));
-		const view = await h.call('GET', '/v1/elements/showcase/view', { key: h.pk });
-		expect(view.json.fields[0]).toMatchObject({ name: 'tier', type: 'select', label: 'Grade' });
-		expect(view.json.fields[0].options.map((/** @type {any} */ o) => o.value)).toEqual(['new', 'excellent', 'good', 'fair']);
-		expect(view.json.actions).toEqual([{ action: 'select', label: 'Show' }]);
-
-		const selected = await h.call('POST', `/v1/elements/showcase/actions/select?ctx=${ctx}`, {
-			key: h.pk,
-			body: { fields: { tier: 'excellent' } },
-			idempotencyKey: 'stub-select-1',
-		});
-		expect(selected.status).toBe(200);
-		expect(selected.headers.get('cache-control')).toBe('private, no-store');
-		expect(selected.json.items).toHaveLength(1);
-		expect(selected.json.items[0].text).toMatch(/^Excellent/);
-		const replay = await h.call('POST', `/v1/elements/showcase/actions/select?ctx=${ctx}`, {
-			key: h.pk,
-			body: { fields: { tier: 'excellent' } },
-			idempotencyKey: 'stub-select-1',
-		});
-		expect(replay.json).toEqual(selected.json);
-		// v1 body (no fields), cleared selection → the item's tiers from the page context
-		const v1 = await h.call('POST', '/v1/elements/warranty/actions/select', { key: h.pk, body: { tier: 'good' } });
-		expect(v1.json.items).toHaveLength(1);
-		expect(v1.json.items[0].text).toMatch(/^Good: /);
-		const cleared = await h.call('POST', `/v1/elements/showcase/actions/select?ctx=${ctx}`, {
-			key: h.pk,
-			body: { fields: { tier: '' } },
-		});
-		expect(cleared.json.items.length).toBe(2);
-		const refreshed = await h.call('POST', `/v1/elements/tiers/actions/refresh?ctx=${ctx}`, { key: h.pk, body: {} });
-		expect(refreshed.json.items.map((/** @type {any} */ i) => i.text.split(' — ')[0])).toEqual(['New', 'Fair']);
-		for (const element of ['filters', 'mapping']) {
-			const response = await h.call('POST', `/v1/elements/${element}/actions/refresh?ctx=${ctx}`, { key: h.pk, body: {} });
-			expect(response.status).toBe(200);
-			expect(typeof response.json.title).toBe('string');
-		}
-
-		const bad = await h.call('POST', '/v1/elements/showcase/actions/select', { key: h.pk, body: { fields: { tier: 'BAD' } } });
-		expect(bad.status).toBe(422);
-		expect(bad.json.errors[0]).toMatchObject({ path: '/fields/tier', code: 'tier_invalid' });
-		expect((await h.call('POST', '/v1/elements/showcase/actions/select', { key: h.pk, body: { tier: 'nope' } })).status).toBe(
-			422,
-		);
-		expect((await h.call('POST', '/v1/elements/tiers/actions/select', { key: h.pk, body: {} })).status).toBe(404);
-		expect((await h.call('POST', '/v1/elements/tiers/actions/refresh', { key: h.pk, body: [] })).status).toBe(200);
-		expect(
-			(
-				await h.call('POST', '/v1/elements/tiers/actions/refresh', {
-					key: h.pk,
-					body: {},
-					headers: { origin: 'https://evil.example.net' },
-				})
-			).status,
-		).toBe(403);
-		await h.entitle({ elements: { showcase: false } });
-		const off = await h.call('POST', '/v1/elements/showcase/actions/refresh', { key: h.pk, body: {} });
-		expect(off.status).toBe(403);
-		expect(off.json.type).toContain('element_disabled');
 		await h.entitle();
 	});
 

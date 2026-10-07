@@ -406,11 +406,6 @@
 				"operationId": "assignTier",
 				"tags": ["tiers"],
 				"summary": "Set the tier of an item (no variantId) or of one variant — an upsert: 201 when new, 200 when changed or unchanged. Publishes grades.tier_assigned@1 on a change. sk_ only.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/IdempotencyKey"
-					}
-				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -476,11 +471,6 @@
 				"operationId": "assignTiers",
 				"tags": ["tiers"],
 				"summary": "Up to 100 assignments with per-item results. sk_ only.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/IdempotencyKey"
-					}
-				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -720,7 +710,6 @@
 				}
 			},
 			"post": {
-				"x-ss-certify": true,
 				"operationId": "createUnit",
 				"tags": ["tiers"],
 				"summary": "Register a graded unit of an item (a catalog item or your own external id), optionally with its tier and a unique serial. Retries with the same Idempotency-Key return the first result. sk_ only.",
@@ -737,7 +726,7 @@
 								"$ref": "#/components/schemas/UnitInput"
 							},
 							"example": {
-								"itemId": "itm_certify",
+								"itemId": "itm_4711",
 								"tier": "good"
 							}
 						}
@@ -919,9 +908,6 @@
 						"schema": {
 							"type": "string"
 						}
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -983,120 +969,6 @@
 				"responses": {
 					"204": {
 						"description": "Revoked"
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/tiers/view": {
-			"get": {
-				"operationId": "tiersStubView",
-				"tags": ["tiers"],
-				"summary": "Loader element-stub view (text only) of the tiers element; `ctx` = page context JSON with itemId.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"name": "itemId",
-						"in": "query",
-						"required": false,
-						"description": "Item id",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "View model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "Grades",
-									"body": "",
-									"items": [
-										{
-											"text": "Excellent — Hardly any signs of use."
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/tiers/actions/{action}": {
-			"post": {
-				"operationId": "tiersStubAction",
-				"tags": ["tiers"],
-				"summary": "Loader element-stub action of tiers (pk_ or sk_; answers the next view model, `private, no-store`). Re-read the tiers view.",
-				"parameters": [
-					{
-						"name": "action",
-						"in": "path",
-						"required": true,
-						"description": "Stub action",
-						"schema": {
-							"type": "string",
-							"enum": ["refresh"]
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"description": "Optional: a repeated key replays the stored answer",
-						"schema": {
-							"type": "string",
-							"maxLength": 255
-						}
-					}
-				],
-				"requestBody": {
-					"required": false,
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/StubActionInput"
-							},
-							"example": {}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "The next view model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "…",
-									"body": "",
-									"items": []
-								}
-							}
-						}
 					},
 					"default": {
 						"$ref": "#/components/responses/Problem"
@@ -1168,151 +1040,6 @@
 												"days": 180,
 												"periodText": "6 months"
 											}
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/showcase/view": {
-			"get": {
-				"operationId": "showcaseStubView",
-				"tags": ["showcase"],
-				"summary": "Loader element-stub view of the showcase.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"name": "tier",
-						"in": "query",
-						"required": false,
-						"description": "Tier key",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "View model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "Grades",
-									"body": "",
-									"items": [
-										{
-											"text": "Excellent — Hardly any signs of use."
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/showcase/actions/{action}": {
-			"post": {
-				"operationId": "showcaseStubAction",
-				"tags": ["showcase"],
-				"summary": "Loader element-stub action of showcase (pk_ or sk_; answers the next view model, `private, no-store`). `select` shows one tier ({ fields: { tier } }); `refresh` re-reads the view.",
-				"parameters": [
-					{
-						"name": "action",
-						"in": "path",
-						"required": true,
-						"description": "Stub action",
-						"schema": {
-							"type": "string",
-							"enum": ["refresh", "select"]
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"description": "Optional: a repeated key replays the stored answer",
-						"schema": {
-							"type": "string",
-							"maxLength": 255
-						}
-					}
-				],
-				"requestBody": {
-					"required": false,
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/StubActionInput"
-							},
-							"example": {
-								"fields": {
-									"tier": "excellent"
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "The next view model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "What our grades mean",
-									"body": "",
-									"items": [
-										{
-											"text": "Excellent · Hardly any signs of use. · Warranty: 3 months"
-										}
-									],
-									"fields": [
-										{
-											"name": "tier",
-											"type": "select",
-											"label": "Grade",
-											"options": [
-												{
-													"value": "new",
-													"label": "New"
-												},
-												{
-													"value": "excellent",
-													"label": "Excellent"
-												}
-											]
-										}
-									],
-									"actions": [
-										{
-											"action": "select",
-											"label": "Show"
 										}
 									]
 								}
@@ -1471,7 +1198,7 @@
 			"post": {
 				"operationId": "sortByTier",
 				"tags": ["filters"],
-				"summary": "Order item ids by tier (best first, worst first or as given); not idempotency-keyed (a pure computation).",
+				"summary": "Order item ids by tier (best first, worst first or as given) (a pure computation).",
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -1523,120 +1250,6 @@
 								"example": {
 									"itemIds": ["itm_1", "itm_2"],
 									"direction": "tier_order"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/filters/view": {
-			"get": {
-				"operationId": "filtersStubView",
-				"tags": ["filters"],
-				"summary": "Loader element-stub view of the tier filter.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"name": "collection",
-						"in": "query",
-						"required": false,
-						"description": "Collection id",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "View model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "Grades",
-									"body": "",
-									"items": [
-										{
-											"text": "Excellent — Hardly any signs of use."
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/filters/actions/{action}": {
-			"post": {
-				"operationId": "filtersStubAction",
-				"tags": ["filters"],
-				"summary": "Loader element-stub action of filters (pk_ or sk_; answers the next view model, `private, no-store`). Re-read the filters view.",
-				"parameters": [
-					{
-						"name": "action",
-						"in": "path",
-						"required": true,
-						"description": "Stub action",
-						"schema": {
-							"type": "string",
-							"enum": ["refresh"]
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"description": "Optional: a repeated key replays the stored answer",
-						"schema": {
-							"type": "string",
-							"maxLength": 255
-						}
-					}
-				],
-				"requestBody": {
-					"required": false,
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/StubActionInput"
-							},
-							"example": {}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "The next view model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "…",
-									"body": "",
-									"items": []
 								}
 							}
 						}
@@ -1752,120 +1365,6 @@
 									"periodText": "3 months",
 									"text": "3 months warranty on items graded Good.",
 									"exclusions": ["Accidental damage"]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/warranty/view": {
-			"get": {
-				"operationId": "warrantyStubView",
-				"tags": ["warranty"],
-				"summary": "Loader element-stub view of the warranty.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"name": "tier",
-						"in": "query",
-						"required": false,
-						"description": "Tier key",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "View model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "Grades",
-									"body": "",
-									"items": [
-										{
-											"text": "Excellent — Hardly any signs of use."
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/warranty/actions/{action}": {
-			"post": {
-				"operationId": "warrantyStubAction",
-				"tags": ["warranty"],
-				"summary": "Loader element-stub action of warranty (pk_ or sk_; answers the next view model, `private, no-store`). `select` shows the terms of one tier ({ fields: { tier } }); `refresh` re-reads the view.",
-				"parameters": [
-					{
-						"name": "action",
-						"in": "path",
-						"required": true,
-						"description": "Stub action",
-						"schema": {
-							"type": "string",
-							"enum": ["refresh", "select"]
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"description": "Optional: a repeated key replays the stored answer",
-						"schema": {
-							"type": "string",
-							"maxLength": 255
-						}
-					}
-				],
-				"requestBody": {
-					"required": false,
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/StubActionInput"
-							},
-							"example": {}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "The next view model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "…",
-									"body": "",
-									"items": []
 								}
 							}
 						}
@@ -2089,120 +1588,6 @@
 									],
 									"nextCursor": null,
 									"hasMore": false
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/mapping/view": {
-			"get": {
-				"operationId": "mappingStubView",
-				"tags": ["mapping"],
-				"summary": "Loader element-stub view of the condition statement.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"name": "itemId",
-						"in": "query",
-						"required": false,
-						"description": "Item id",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "View model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "Grades",
-									"body": "",
-									"items": [
-										{
-											"text": "Excellent — Hardly any signs of use."
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/mapping/actions/{action}": {
-			"post": {
-				"operationId": "mappingStubAction",
-				"tags": ["mapping"],
-				"summary": "Loader element-stub action of mapping (pk_ or sk_; answers the next view model, `private, no-store`). Re-read the condition statement of the page item.",
-				"parameters": [
-					{
-						"name": "action",
-						"in": "path",
-						"required": true,
-						"description": "Stub action",
-						"schema": {
-							"type": "string",
-							"enum": ["refresh"]
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"description": "Optional: a repeated key replays the stored answer",
-						"schema": {
-							"type": "string",
-							"maxLength": 255
-						}
-					}
-				],
-				"requestBody": {
-					"required": false,
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/StubActionInput"
-							},
-							"example": {}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "The next view model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "…",
-									"body": "",
-									"items": []
 								}
 							}
 						}
@@ -2768,142 +2153,6 @@
 				}
 			}
 		},
-		"/v1/elements/inspection/view": {
-			"get": {
-				"operationId": "inspectionStubView",
-				"tags": ["inspection"],
-				"summary": "Loader element-stub view of a report (`token` query).",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"name": "token",
-						"in": "query",
-						"required": false,
-						"description": "Report token",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "View model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "Grades",
-									"body": "",
-									"items": [
-										{
-											"text": "Excellent — Hardly any signs of use."
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/inspection/actions/{action}": {
-			"post": {
-				"operationId": "inspectionStubAction",
-				"tags": ["inspection"],
-				"summary": "Loader element-stub action of inspection (pk_ or sk_; answers the next view model, `private, no-store`). `open` shows the report of a report code ({ fields: { token } }; unknown, revoked or expired codes answer the view with a message; rate limited); `refresh` re-reads the view.",
-				"parameters": [
-					{
-						"name": "action",
-						"in": "path",
-						"required": true,
-						"description": "Stub action",
-						"schema": {
-							"type": "string",
-							"enum": ["refresh", "open"]
-						}
-					},
-					{
-						"$ref": "#/components/parameters/Ctx"
-					},
-					{
-						"$ref": "#/components/parameters/Lang"
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"description": "Optional: a repeated key replays the stored answer",
-						"schema": {
-							"type": "string",
-							"maxLength": 255
-						}
-					}
-				],
-				"requestBody": {
-					"required": false,
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/StubActionInput"
-							},
-							"example": {
-								"fields": {
-									"token": "grr_…"
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "The next view model",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "Inspection report · New",
-									"body": "Score 100 / 100",
-									"items": [
-										{
-											"text": "Works as intended: Pass"
-										}
-									],
-									"fields": [
-										{
-											"name": "token",
-											"type": "text",
-											"label": "Report code",
-											"required": true
-										}
-									],
-									"actions": [
-										{
-											"action": "open",
-											"label": "Open report"
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/dashboard/overview": {
 			"get": {
 				"operationId": "dashboardOverview",
@@ -3171,7 +2420,8 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
+				"required": false,
+				"description": "Optional. Units, inspections and photo slots: a retry with the same key returns the record made first.",
 				"schema": {
 					"type": "string",
 					"maxLength": 255
@@ -3202,16 +2452,6 @@
 				"description": "BCP 47 language of texts (default: the website’s)",
 				"schema": {
 					"type": "string"
-				}
-			},
-			"Ctx": {
-				"name": "ctx",
-				"in": "query",
-				"required": false,
-				"description": "Loader page context JSON { path, itemId?, pageType? }",
-				"schema": {
-					"type": "string",
-					"maxLength": 2048
 				}
 			}
 		},
@@ -3959,93 +3199,6 @@
 					}
 				}
 			},
-			"StubView": {
-				"type": "object",
-				"required": ["title", "body", "items"],
-				"properties": {
-					"title": {
-						"type": "string",
-						"maxLength": 200
-					},
-					"body": {
-						"type": "string",
-						"maxLength": 2000
-					},
-					"items": {
-						"type": "array",
-						"maxItems": 50,
-						"items": {
-							"type": "object",
-							"properties": {
-								"text": {
-									"type": "string"
-								}
-							}
-						}
-					},
-					"fields": {
-						"type": "array",
-						"maxItems": 20,
-						"description": "Inputs the stub renders (ss-element-stub@2): a tier select (showcase, warranty) or the report code (inspection).",
-						"items": {
-							"type": "object",
-							"required": ["name", "type", "label"],
-							"properties": {
-								"name": {
-									"type": "string",
-									"pattern": "^[a-z][a-z0-9_]{0,39}$"
-								},
-								"type": {
-									"type": "string",
-									"enum": ["text", "select"]
-								},
-								"label": {
-									"type": "string",
-									"maxLength": 200
-								},
-								"required": {
-									"type": "boolean"
-								},
-								"options": {
-									"type": "array",
-									"maxItems": 50,
-									"items": {
-										"type": "object",
-										"properties": {
-											"value": {
-												"type": "string"
-											},
-											"label": {
-												"type": "string",
-												"maxLength": 200
-											}
-										}
-									}
-								}
-							}
-						}
-					},
-					"actions": {
-						"type": "array",
-						"maxItems": 10,
-						"description": "Actions the stub offers; each posts to /v1/elements/{key}/actions/{action}.",
-						"items": {
-							"type": "object",
-							"required": ["action", "label"],
-							"properties": {
-								"action": {
-									"type": "string",
-									"pattern": "^[a-z][a-z0-9_]{0,39}$"
-								},
-								"label": {
-									"type": "string",
-									"maxLength": 80
-								}
-							}
-						}
-					}
-				}
-			},
 			"Problem": {
 				"type": "object",
 				"required": ["type", "title", "status"],
@@ -4073,33 +3226,6 @@
 						"items": {
 							"type": "object"
 						}
-					}
-				}
-			},
-			"StubActionInput": {
-				"type": "object",
-				"description": "Stub v2 posts { fields: { ... } }; a v1 body carries the same members at the top level.",
-				"properties": {
-					"fields": {
-						"type": "object",
-						"properties": {
-							"tier": {
-								"type": ["string", "null"],
-								"description": "select: a tier key; empty or null shows every tier"
-							},
-							"token": {
-								"type": "string",
-								"maxLength": 100,
-								"description": "open: the report code (grr_…)"
-							}
-						}
-					},
-					"tier": {
-						"type": ["string", "null"]
-					},
-					"token": {
-						"type": "string",
-						"maxLength": 100
 					}
 				}
 			}

@@ -68,19 +68,15 @@ the merchant's own page that renders the drop-in report. `GET /v1/inspection-rep
 
 `sk_` (servers, inspection apps, feed builders) reads and changes everything. `pk_` (browsers of the bound domain) reads
 public data only: tier definitions, item tiers, showcase, filters, warranty, conditions and token-gated reports. The
-sk_-only collection GETs are marked `x-ss-key-kind: "sk"` in `openapi.json`. The Loader element stub
-(`ss-element-stub@2`) reads `GET /v1/elements/{key}/view` and posts `POST /v1/elements/{key}/actions/{action}` (pk_,
-gated by the element, optional `Idempotency-Key`, answers the next view model with `no-store`): every element takes
-`refresh`; `showcase` and `warranty` take `select` (`{ fields: { tier } }`, the views offer a tier select);
-`inspection` takes `open` (`{ fields: { token } }`, the report code; rate limited). All actions are reads. The certification target is
-`POST /v1/units` (`x-ss-certify`).
+sk_-only collection GETs are marked `x-ss-key-kind: "sk"` in `openapi.json`. `POST /v1/units`, `POST /v1/inspections`
+and `POST /v1/inspections/{id}/photos` honour an optional `Idempotency-Key`: a retry with the same key returns the record
+made first.
 
 ## Run
 
 ```bash
-pnpm exec ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-pnpm portal                          # the local Portal emulator (port 4400)
-pnpm dev                             # the product (port 3000)
+cp .env.example .env.local   # MONGODB_URI (empty = in-memory control store) + a random CONNECT_SECRET (32+ characters)
+pnpm dev                     # the product (port 3000); connect it from Portal Admin → Apps → Add product
 ```
 
 ```bash
@@ -92,14 +88,14 @@ pnpm --filter @ss/product-grades validate
 ```
 
 Environment: `MONGODB_URI` and `CONNECT_SECRET` (`.env.example`); the Portal connection, the key and the secrets live in that
-database. There are no crons and no
-background work (see [jobs/README.md](jobs/README.md)).
+database. There are no crons and no background work: work runs on the request or event that causes it, and anything a
+merchant must start sits behind a dashboard button.
 
 ## Dashboard
 
 SSO from the Portal (`/sso?launch=` → `/dashboard`): overview (graded items, units, inspections, per-tier counts),
 tiers & mapping (the ladder with colours and warranty, the vocabulary table with its problems), units & inspections
 (re-grade a unit, create a report link; audited; clean up stale photo slots) and settings (a link to the Portal, where settings are edited with
-locks, versions and rollback). Demo launches show sample data scored by the real core; nothing is stored.
+locks, versions and rollback). Merchant and admin (staff) launches are supported.
 
 See `docs/guide.md` for the developer guide.

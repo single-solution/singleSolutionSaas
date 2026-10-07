@@ -10,7 +10,11 @@
 			"minimum": 1,
 			"maximum": 50,
 			"x-kind": "limit",
-			"x-ui": { "widget": "number", "group": "List", "order": 1 }
+			"x-ui": {
+				"widget": "number",
+				"group": "List",
+				"order": 1
+			}
 		},
 		"default_sort": {
 			"type": "string",
@@ -18,8 +22,11 @@
 			"default": "newest",
 			"enum": ["newest", "oldest", "rating_high", "rating_low"],
 			"x-kind": "config",
-			"x-experiment": true,
-			"x-ui": { "widget": "select", "group": "List", "order": 2 }
+			"x-ui": {
+				"widget": "select",
+				"group": "List",
+				"order": 2
+			}
 		},
 		"sorts": {
 			"type": "array",
@@ -28,9 +35,16 @@
 			"minItems": 1,
 			"maxItems": 4,
 			"uniqueItems": true,
-			"items": { "type": "string", "enum": ["newest", "oldest", "rating_high", "rating_low"] },
+			"items": {
+				"type": "string",
+				"enum": ["newest", "oldest", "rating_high", "rating_low"]
+			},
 			"x-kind": "config",
-			"x-ui": { "widget": "tags", "group": "List", "order": 3 }
+			"x-ui": {
+				"widget": "tags",
+				"group": "List",
+				"order": 3
+			}
 		},
 		"filters": {
 			"type": "array",
@@ -39,44 +53,71 @@
 			"minItems": 0,
 			"maxItems": 3,
 			"uniqueItems": true,
-			"items": { "type": "string", "enum": ["rating", "verified", "photos"] },
+			"items": {
+				"type": "string",
+				"enum": ["rating", "verified", "photos"]
+			},
 			"x-kind": "config",
-			"x-ui": { "widget": "tags", "group": "List", "order": 4 }
+			"x-ui": {
+				"widget": "tags",
+				"group": "List",
+				"order": 4
+			}
 		},
 		"show_distribution": {
 			"type": "boolean",
 			"title": "Show the rating distribution",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "Summary", "order": 5 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "Summary",
+				"order": 5
+			}
 		},
 		"show_attributes": {
 			"type": "boolean",
 			"title": "Show attribute ratings",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "Summary", "order": 6 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "Summary",
+				"order": 6
+			}
 		},
 		"show_replies": {
 			"type": "boolean",
 			"title": "Show merchant replies",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "List", "order": 7 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "List",
+				"order": 7
+			}
 		},
 		"show_verified_badge": {
 			"type": "boolean",
 			"title": "Show the verified buyer badge",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "List", "order": 8 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "List",
+				"order": 8
+			}
 		},
 		"allow_submit": {
 			"type": "boolean",
 			"title": "Offer the write-a-review form",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "Form", "order": 9 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "Form",
+				"order": 9
+			}
 		},
 		"min_reviews_for_summary": {
 			"type": "integer",
@@ -85,7 +126,11 @@
 			"minimum": 0,
 			"maximum": 100,
 			"x-kind": "config",
-			"x-ui": { "widget": "number", "group": "Summary", "order": 10 }
+			"x-ui": {
+				"widget": "number",
+				"group": "Summary",
+				"order": 10
+			}
 		},
 		"cache_seconds": {
 			"type": "integer",
@@ -95,7 +140,11 @@
 			"minimum": 0,
 			"maximum": 3600,
 			"x-kind": "config",
-			"x-ui": { "widget": "number", "group": "Performance", "order": 11 }
+			"x-ui": {
+				"widget": "number",
+				"group": "Performance",
+				"order": 11
+			}
 		}
 	}
 }

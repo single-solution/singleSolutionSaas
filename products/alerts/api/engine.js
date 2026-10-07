@@ -1,7 +1,7 @@
 /**
  * The trigger engine (element `triggers`): one run per change, whatever its source (Event Hub event, API, CSV).
  *
- * 1. `begin` the run under a unique key (`evt:<event id>`, `api:<Idempotency-Key | id>`) — a redelivered event or a
+ * 1. `begin` the run under a unique key (`evt:<event id>`, `api:<caller-scoped Idempotency-Key | id>`) — a redelivered event or a
  *    replayed request finds the existing run and does nothing (idempotent consumer, PLAN Part E §9).
  * 2. Fold the change into the target's known state (versioned `items` document) → before / after.
  * 3. Find pending subscriptions of the target in waitlist order (rank, then time), decide with the type rules

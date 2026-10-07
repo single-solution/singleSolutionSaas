@@ -30,7 +30,7 @@ not report it.
   delivery methods). `POST /v1/checkout-form:validate` checks values with the placement rules.
 - `POST /v1/quotes` `{ cartId, deliveryMethod, paymentMethod, codes, loyaltyPoints, country }` — the server's totals and
   the availability of every payment method.
-- `POST /v1/orders` with an `Idempotency-Key` header: `{ cartId | lines, country?, contact, address?, custom?,
+- `POST /v1/orders` with an `Idempotency-Key` header (one per submission; a repeat answers 409 `duplicate_request`): `{ cartId | lines, country?, contact, address?, custom?,
 deliveryMethod, pickupLocation?, paymentMethod, codes?, loyaltyPoints?, consents?, saveAddress?, note?,
 expectedTotal? }`. Server keys may add `customer: { subject, email, phone }`. The response carries `accessToken` for
   guests — keep it with the order on the success page; never put it in a URL.

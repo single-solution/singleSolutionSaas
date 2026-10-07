@@ -84,7 +84,12 @@ describe('quotes in the website zone', () => {
 		const invalid = await h.call('POST', '/v1/quotes', { body: { currency: 'eur', lines: [] } });
 		expect(invalid.status).toBe(422);
 		expect(invalid.json.errors.map((/** @type {any} */ e) => e.path)).toEqual(['/currency', '/lines']);
-		expect((await h.call('POST', '/v1/quotes', { body: cart(), idempotencyKey: null })).status).toBe(428);
+		// no Idempotency-Key needed; a repeated one is refused without storing or metering a second quote
+		expect((await h.call('POST', '/v1/quotes', { body: cart(), idempotencyKey: null })).status).toBe(201);
+		expect((await h.call('POST', '/v1/quotes', { body: cart(), idempotencyKey: 'idk_quote_once' })).status).toBe(201);
+		const repeated = await h.call('POST', '/v1/quotes', { body: cart(), idempotencyKey: 'idk_quote_once' });
+		expect(repeated.status).toBe(409);
+		expect(repeated.json.type).toMatch(/\/duplicate_request$/);
 	});
 
 	it('stacks a cart deal (free shipping over a threshold) with the item deal and hints at the next threshold', async () => {

@@ -11,20 +11,10 @@
 	"endpoints": {
 		"base": "https://checkout.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:cart.max_lines",
-			"limit:cart.max_quantity_per_line",
-			"limit:payment_manual.max_open_orders",
-			"rate:place_order.orders_per_hour",
-			"limit:offer_apply.max_codes"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": [
 		"events.subscribe:order.*",
@@ -56,9 +46,6 @@
 			"checkout.order_confirmed@1"
 		]
 	},
-	"budget": {
-		"shared": 2
-	},
 	"elements": [
 		{
 			"key": "cart",
@@ -68,9 +55,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200
-			},
-			"budget": {
-				"js": 3
 			},
 			"dependsOn": [],
 			"requires": {
@@ -82,7 +66,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"customFields": ["cart"],
-			"experiments": false,
 			"api": {
 				"resources": ["carts", "items"]
 			},
@@ -106,9 +89,6 @@
 			"price": {
 				"hourly": 150
 			},
-			"budget": {
-				"js": 3
-			},
 			"dependsOn": ["cart"],
 			"requires": {
 				"resources": ["database"]
@@ -119,7 +99,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"customFields": ["order"],
-			"experiments": true,
 			"api": {
 				"resources": ["checkout-form", "addresses"]
 			},
@@ -154,9 +133,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["cart", "checkout_form"],
 			"requires": {
 				"resources": ["database"]
@@ -167,7 +143,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"customFields": ["order"],
-			"experiments": false,
 			"api": {
 				"resources": ["orders", "quotes", "blocks", "integrations"]
 			},
@@ -191,9 +166,6 @@
 			"price": {
 				"hourly": 150
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["place_order"],
 			"requires": {
 				"resources": ["database"]
@@ -204,7 +176,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"rules": ["bank_available_when", "cod_available_when"],
-			"experiments": false,
 			"api": {
 				"resources": ["payment-methods"]
 			},
@@ -228,9 +199,6 @@
 			"price": {
 				"hourly": 50
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["payment_manual"],
 			"requires": {
 				"resources": ["database", "storage"]
@@ -240,7 +208,6 @@
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": false,
 			"api": {
 				"resources": ["payment-proofs"]
 			},
@@ -274,9 +241,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["place_order"],
 			"requires": {
 				"resources": ["database", "payments"]
@@ -286,7 +250,6 @@
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": false,
 			"api": {
 				"resources": ["payments"]
 			},
@@ -310,9 +273,6 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["cart"],
 			"requires": {
 				"resources": ["database"]
@@ -322,7 +282,6 @@
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": true,
 			"api": {
 				"resources": ["offers"]
 			},
@@ -346,9 +305,6 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["cart"],
 			"requires": {
 				"resources": ["database"]
@@ -358,7 +314,6 @@
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": false,
 			"api": {
 				"resources": ["loyalty"]
 			},
@@ -382,9 +337,6 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["place_order"],
 			"requires": {
 				"resources": ["database"]
@@ -394,7 +346,6 @@
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": true,
 			"api": {
 				"resources": ["success-views"]
 			},
@@ -418,16 +369,12 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": [],
 			"features": {
 				"$ref": "schemas/policies_notice.features.json"
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": false,
 			"api": {
 				"resources": ["policies"]
 			},
@@ -451,16 +398,12 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": [],
 			"features": {
 				"$ref": "schemas/signin_gate.features.json"
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": false,
 			"api": {
 				"resources": ["signin-gate"]
 			},

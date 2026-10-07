@@ -1,7 +1,6 @@
 /**
  * Dashboard overview (SSO). The Portal sends the browser to app-kit's `GET /sso?launch=<jwt>`, which verifies the launch
- * and sets the HttpOnly `ss_session` cookie, then redirects here. Supports merchant, demo (sample data), admin(scope),
- * impersonate (audit banner), partner and developer launches.
+ * and sets the HttpOnly `ss_session` cookie, then redirects here. Supports merchant and admin (staff) launches.
  */
 import { createElement as h } from 'react';
 import { redirect } from 'next/navigation.js';

@@ -55,7 +55,7 @@ export default async function Overview({ searchParams }) {
 				title: t('dashboard.engine.title'),
 				subtitle: t('dashboard.engine.configured', { engine: status.engine.configured }),
 				actions:
-					context.data.canWrite && context.data.websiteId && status.engine.configured !== 'portable'
+					context.data.canWrite && status.engine.configured !== 'portable'
 						? h(ActionButton, {
 								path: '/v1/dashboard/engine/check',
 								label: t('dashboard.engine.check'),

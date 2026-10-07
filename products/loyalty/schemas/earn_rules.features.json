@@ -13,8 +13,18 @@
 					"name": "Points on completed orders",
 					"trigger": "order.completed@1",
 					"when": "",
-					"formula": { "kind": "percent", "points": 0, "percent": 1, "per": 1, "field": "" },
-					"caps": { "per_event": 0, "per_period": 0, "period": "month" },
+					"formula": {
+						"kind": "percent",
+						"points": 0,
+						"percent": 1,
+						"per": 1,
+						"field": ""
+					},
+					"caps": {
+						"per_event": 0,
+						"per_period": 0,
+						"period": "month"
+					},
 					"exclusions": {
 						"item_ids": [],
 						"skus": [],
@@ -29,8 +39,14 @@
 			"minItems": 0,
 			"maxItems": 50,
 			"x-kind": "config",
-			"x-plan": { "starter": { "max": 3 }, "pro": { "max": 25 } },
-			"x-experiment": true,
+			"x-plan": {
+				"starter": {
+					"max": 3
+				},
+				"pro": {
+					"max": 25
+				}
+			},
 			"x-ui": {
 				"widget": "list",
 				"group": "Rules",
@@ -42,8 +58,18 @@
 				"additionalProperties": false,
 				"required": ["id", "trigger", "formula"],
 				"properties": {
-					"id": { "type": "string", "title": "Rule id", "minLength": 1, "maxLength": 40, "pattern": "^[a-z][a-z0-9_]*$" },
-					"name": { "type": "string", "title": "Name", "maxLength": 120 },
+					"id": {
+						"type": "string",
+						"title": "Rule id",
+						"minLength": 1,
+						"maxLength": 40,
+						"pattern": "^[a-z][a-z0-9_]*$"
+					},
+					"name": {
+						"type": "string",
+						"title": "Name",
+						"maxLength": 120
+					},
 					"trigger": {
 						"type": "string",
 						"title": "Trigger event",
@@ -63,7 +89,11 @@
 						"additionalProperties": false,
 						"required": ["kind"],
 						"properties": {
-							"kind": { "type": "string", "title": "Kind", "enum": ["fixed", "percent", "per_unit"] },
+							"kind": {
+								"type": "string",
+								"title": "Kind",
+								"enum": ["fixed", "percent", "per_unit"]
+							},
 							"points": {
 								"type": "integer",
 								"title": "Points",
@@ -78,7 +108,12 @@
 								"minimum": 0,
 								"maximum": 100
 							},
-							"per": { "type": "integer", "title": "Units per points", "minimum": 1, "maximum": 1000000 },
+							"per": {
+								"type": "integer",
+								"title": "Units per points",
+								"minimum": 1,
+								"maximum": 1000000
+							},
 							"field": {
 								"type": "string",
 								"title": "Amount or unit field",
@@ -105,7 +140,11 @@
 								"minimum": 0,
 								"maximum": 100000000
 							},
-							"period": { "type": "string", "title": "Cap period", "enum": ["day", "week", "month", "year"] }
+							"period": {
+								"type": "string",
+								"title": "Cap period",
+								"enum": ["day", "week", "month", "year"]
+							}
 						}
 					},
 					"exclusions": {
@@ -118,22 +157,43 @@
 								"title": "Excluded item ids",
 								"maxItems": 500,
 								"uniqueItems": true,
-								"items": { "type": "string", "maxLength": 128 }
+								"items": {
+									"type": "string",
+									"maxLength": 128
+								}
 							},
 							"skus": {
 								"type": "array",
 								"title": "Excluded SKUs",
 								"maxItems": 500,
 								"uniqueItems": true,
-								"items": { "type": "string", "maxLength": 100 }
+								"items": {
+									"type": "string",
+									"maxLength": 100
+								}
 							},
-							"include_shipping": { "type": "boolean", "title": "Count shipping" },
-							"include_tax": { "type": "boolean", "title": "Count tax" },
-							"subtract_discounts": { "type": "boolean", "title": "Subtract discounts" }
+							"include_shipping": {
+								"type": "boolean",
+								"title": "Count shipping"
+							},
+							"include_tax": {
+								"type": "boolean",
+								"title": "Count tax"
+							},
+							"subtract_discounts": {
+								"type": "boolean",
+								"title": "Subtract discounts"
+							}
 						}
 					},
-					"apply_tier_multiplier": { "type": "boolean", "title": "Apply the member's tier multiplier" },
-					"enabled": { "type": "boolean", "title": "Enabled" }
+					"apply_tier_multiplier": {
+						"type": "boolean",
+						"title": "Apply the member's tier multiplier"
+					},
+					"enabled": {
+						"type": "boolean",
+						"title": "Enabled"
+					}
 				}
 			}
 		},
@@ -144,7 +204,11 @@
 			"default": "floor",
 			"enum": ["floor", "round", "ceil"],
 			"x-kind": "config",
-			"x-ui": { "widget": "select", "group": "Rules", "order": 2 }
+			"x-ui": {
+				"widget": "select",
+				"group": "Rules",
+				"order": 2
+			}
 		},
 		"time_zone": {
 			"type": "string",
@@ -155,7 +219,11 @@
 			"maxLength": 64,
 			"pattern": "^[A-Za-z_]+(?:/[A-Za-z0-9_+-]+)*$",
 			"x-kind": "config",
-			"x-ui": { "widget": "text", "group": "General", "order": 3 }
+			"x-ui": {
+				"widget": "text",
+				"group": "General",
+				"order": 3
+			}
 		},
 		"max_points_per_transaction": {
 			"type": "integer",
@@ -165,8 +233,21 @@
 			"minimum": 1,
 			"maximum": 100000000,
 			"x-kind": "limit",
-			"x-plan": { "starter": { "default": 10000, "max": 50000 }, "pro": { "default": 100000, "max": 10000000 } },
-			"x-ui": { "widget": "number", "group": "Limits", "order": 4 }
+			"x-plan": {
+				"starter": {
+					"default": 10000,
+					"max": 50000
+				},
+				"pro": {
+					"default": 100000,
+					"max": 10000000
+				}
+			},
+			"x-ui": {
+				"widget": "number",
+				"group": "Limits",
+				"order": 4
+			}
 		}
 	}
 }

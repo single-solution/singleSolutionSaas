@@ -43,15 +43,6 @@ export const loadStrings = async (root) => {
 	);
 };
 
-/** Personal data this product stores (drives POST /v1/data:export and /v1/data:anonymize). */
-export const PRIVACY = Object.freeze({
-	collections: [
-		{ name: 'quotes', subjectField: 'customerId', fields: ['customerId', 'cartId'] },
-		{ name: 'applications', subjectField: 'customerId', fields: ['customerId'] },
-		{ name: 'customer_usage', subjectField: 'customerId', fields: ['customerId'] },
-	],
-});
-
 /** Product-specific problem codes (RFC 9457 `type` = `<base>/problems/<code>`). */
 export const PROBLEM_CODES = Object.freeze({
 	kind_disabled: { status: 403, title: 'This deal kind is not enabled' },
@@ -106,11 +97,9 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			strings,
 			logger: createLogger({ level: config.logLevel }),
 			problems: config.problems,
-			privacy: PRIVACY,
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
-			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
-			// SSRF policy for merchant databases and connectors: in development the `ss dev` client database and local mocks
+			// SSRF policy for merchant databases and connectors: in development the client database and local mocks
 			// live on loopback; app-kit ignores the allowlist when NODE_ENV=production
 			outbound: {
 				allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],

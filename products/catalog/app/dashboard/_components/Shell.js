@@ -1,6 +1,6 @@
 /**
- * Dashboard frame (server component): title, navigation, the signed-in line and the standard banners — impersonation
- * (audit) and demo. Pages render inside it; states without data (sign in, pick a website) render a callout instead.
+ * Dashboard frame (server component): title, navigation and the signed-in line. Pages render inside it; states without
+ * data (sign in, pick a website) render a callout instead.
  */
 import { createElement as h } from 'react';
 import { Callout, ThemeToggle } from '@ss/ui';
@@ -23,7 +23,7 @@ const NAV = Object.freeze([
  * @param {string} href
  */
 export const withWebsite = (context, href) =>
-	context.state === 'ready' && context.data.websiteId
+	context.state === 'ready'
 		? `${href}${href.includes('?') ? '&' : '?'}website=${encodeURIComponent(context.data.websiteId)}`
 		: href;
 
@@ -38,12 +38,6 @@ export function Shell({ context, active, children }) {
 			h(Callout, { tone: 'warning', title: t('dashboard.title') }, t('dashboard.launch_required')),
 		);
 	const view = sessionView(/** @type {any} */ (context.session));
-	const banners = [
-		view.actor ? h(Callout, { key: 'audit', tone: 'warning' }, t('dashboard.audit_banner', { actor: view.actor })) : null,
-		context.state === 'ready' && context.data.demo
-			? h(Callout, { key: 'demo', tone: 'info' }, t('dashboard.demo_banner'))
-			: null,
-	];
 	const body =
 		context.state === 'pick_website'
 			? h(Callout, { tone: 'info' }, t('dashboard.pick_website'))
@@ -80,7 +74,6 @@ export function Shell({ context, active, children }) {
 				),
 			),
 		),
-		...banners,
 		h('main', { className: 'space-y-6' }, body),
 	);
 }

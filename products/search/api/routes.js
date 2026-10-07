@@ -1,13 +1,13 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Site Search Mode C API,
- * the overlay's element-stub views and the dashboard API (SSO sessions).
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Site Search Mode C API and the dashboard API (SSO sessions).
  *
  * Keys: `pk_` keys (browsers, domain-locked) search, get suggestions and count clicks — rate limited per website
  * (`index.search_rate_per_minute`), with public cache headers, and private fields are never matched or returned.
  * `sk_` keys (the merchant's server) also read and write documents, run crawls and read analytics
- * (`index.api_rate_per_minute`). Every route is gated by its element (403 element_disabled in every mode); POSTs that
- * create or move state require an Idempotency-Key. Every search is metered (unit `query`).
+ * (`index.api_rate_per_minute`). Every route is gated by its element (403 element_disabled in every mode). Document
+ * writes declare `idempotent: true` (app-kit refuses a repeated Idempotency-Key with 409 duplicate_request; requests
+ * without the header run normally). Every search is metered (unit `query`).
  */
 import { defineRoute, ok, created, noContent, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { ID } from '../core/schema.js';
@@ -22,6 +22,12 @@ import { createSourcesService } from './sources.js';
 
 /** @typedef {import('../adapters/platform.js').SearchApp} SearchApp */
 /** @typedef {import('./documents.js').Site} Site */
+
+/**
+ * Options of the request handler (`createRequestHandler(product, routes, HANDLER_OPTIONS)`): document batches up to
+ * 3.9 MB, under the 4.5 MB request body limit of serverless hosts.
+ */
+export const HANDLER_OPTIONS = Object.freeze({ maxBodyBytes: 3_900_000 });
 
 /**
  * Field problems → RFC 9457 `validation_failed`.
@@ -119,7 +125,7 @@ export const buildRoutes = (searchApp) => {
 	/**
 	 * A website-key route gated by its element.
 	 * @param {{ method: 'GET' | 'POST' | 'DELETE', path: string, element: string, skOnly?: boolean,
-	 *   idempotent?: boolean | 'optional', maxBodyBytes?: number, handler: (ctx: any, site: Site) => Promise<any> }} spec
+	 *   idempotent?: boolean, maxBodyBytes?: number, handler: (ctx: any, site: Site) => Promise<any> }} spec
 	 */
 	const route = ({ method, path, element, skOnly = false, idempotent, maxBodyBytes, handler }) =>
 		defineRoute({
@@ -128,7 +134,7 @@ export const buildRoutes = (searchApp) => {
 			auth: 'website',
 			element,
 			...(skOnly ? { keyKind: /** @type {const} */ ('sk') } : {}),
-			...(idempotent === undefined ? {} : { idempotent }),
+			...(idempotent ? { idempotent } : {}),
 			...(maxBodyBytes ? { maxBodyBytes } : {}),
 			rateLimit,
 			handler: async (ctx) => handler(ctx, await siteOf(ctx.websiteId, ctx.entitlement.doc)),
@@ -189,6 +195,7 @@ export const buildRoutes = (searchApp) => {
 			path: '/v1/documents',
 			element: 'index',
 			skOnly: true,
+			idempotent: true,
 			handler: async (ctx, s) => {
 				const refused = writesRefused(s);
 				if (refused) return refused;
@@ -205,7 +212,8 @@ export const buildRoutes = (searchApp) => {
 			path: '/v1/documents:batch',
 			element: 'index',
 			skOnly: true,
-			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
+			idempotent: true,
+			maxBodyBytes: HANDLER_OPTIONS.maxBodyBytes,
 			handler: async (ctx, s) => {
 				const refused = writesRefused(s);
 				if (refused) return refused;
@@ -327,38 +335,9 @@ export const buildRoutes = (searchApp) => {
 			method: 'POST',
 			path: '/v1/search-clicks',
 			element: 'analytics',
-			idempotent: 'optional',
 			handler: async (ctx, s) => {
 				const result = await search.click(s, ctx.body);
 				return result.ok ? ok(result.value) : failure(result);
-			},
-		}),
-
-		// ── overlay (the Loader's element stub, Mode A without a UI bundle) ──────────────────────────────────────
-		route({
-			method: 'GET',
-			path: '/v1/elements/overlay/view',
-			element: 'overlay',
-			handler: async (_ctx, s) => ok(dashboard.overlayView(s, null), { headers: { 'cache-control': 'no-store' } }),
-		}),
-		route({
-			method: 'POST',
-			path: '/v1/elements/overlay/actions/search',
-			element: 'overlay',
-			idempotent: 'optional',
-			handler: async (ctx, s) => {
-				const q = ctx.body?.fields?.q ?? ctx.body?.q;
-				const result = await search.search(
-					s,
-					{
-						q: typeof q === 'string' ? q : '',
-						limit: String(Math.min(s.settings.overlay.max_results, s.settings.index.max_page_size)),
-					},
-					{ owner: false },
-				);
-				if (!result.ok) return failure(result);
-				void result.counted.catch(() => undefined);
-				return ok(dashboard.overlayView(s, result.value), { headers: { 'cache-control': 'no-store' } });
 			},
 		}),
 

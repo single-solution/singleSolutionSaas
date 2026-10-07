@@ -79,8 +79,6 @@
 	"page.item.fallback": "this item",
 	"dashboard.title": "Alerts & Waitlists",
 	"dashboard.signed_in_as": "Signed in as {user} ({role})",
-	"dashboard.audit_banner": "You are acting on behalf of this merchant as {actor}. Every action is audited.",
-	"dashboard.demo_banner": "Demo: sample data computed with the real engine. Nothing is stored or sent.",
 	"dashboard.launch_required": "Open this dashboard from the Portal to sign in.",
 	"dashboard.pick_website": "Open the dashboard for one website from the Portal.",
 	"dashboard.not_subscribed": "This website has no active Alerts & Waitlists subscription.",

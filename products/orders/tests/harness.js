@@ -11,7 +11,7 @@ import { createFakePortal, createTestIdentityIssuer } from '@ss/app-kit/testing'
 import { createId } from '@ss/contracts';
 import { generateSigningKey } from '@ss/protocol';
 import { createPlatform } from '../adapters/platform.js';
-import { buildRoutes, createOrders, wireEvents } from '../api/routes.js';
+import { HANDLER_OPTIONS, buildRoutes, createOrders, wireEvents } from '../api/routes.js';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const PORTAL_URL = 'https://portal.test';
@@ -122,9 +122,7 @@ export const createHarness = async ({
 		},
 	});
 	const orders = wireEvents(createOrders(app));
-	const handle = createRequestHandler(orders.product, buildRoutes(orders), {
-		maxBodyBytes: 3_900_000,
-	});
+	const handle = createRequestHandler(orders.product, buildRoutes(orders), HANDLER_OPTIONS);
 
 	let version = 0;
 	/**
@@ -264,7 +262,7 @@ export const createHarness = async ({
 
 	/**
 	 * A dashboard session (`ses_…`, usable as a bearer) of a launch kind.
-	 * @param {'merchant' | 'demo' | 'admin'} [kind]
+	 * @param {'merchant' | 'admin'} [kind]
 	 */
 	const session = async (kind = 'merchant') => {
 		const { token } = await portal.issueLaunch(
@@ -272,7 +270,7 @@ export const createHarness = async ({
 				kind,
 				subject: 'usr_merchant',
 				user: { id: 'usr_merchant' },
-				scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+				scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 			}),
 		);
 		const sso = await handle(new Request(`https://orders.example.com/sso?launch=${encodeURIComponent(token)}`));

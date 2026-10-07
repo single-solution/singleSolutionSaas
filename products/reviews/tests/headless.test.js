@@ -24,7 +24,7 @@ const routes = (overrides = {}) => ({
 					hasMore: false,
 				}
 			: {
-					items: [reviewView(), reviewView({ id: 'rev_2', rating: 4, removed: true, body: null })],
+					items: [reviewView(), reviewView({ id: 'rev_2', rating: 4, body: null })],
 					nextCursor: 'c1',
 					hasMore: true,
 				},
@@ -77,7 +77,7 @@ describe('headless/reviews', () => {
 			verified: true,
 		});
 		expect(state.reviews[0]?.attributes).toEqual([{ key: 'quality', label: 'Quality', value: 5 }]);
-		expect(state.reviews[1]?.removed).toBe(true);
+		expect(state.reviews[1]?.body).toBeNull();
 		expect(Object.isFrozen(state)).toBe(true);
 		expect(events).toEqual([{ name: 'viewed', data: { itemId: 'itm_1', count: 2 } }]);
 		expect(client.calls.find((call) => call.path === '/v1/reviews')?.query).toMatchObject({

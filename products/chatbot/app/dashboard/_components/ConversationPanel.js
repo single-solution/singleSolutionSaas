@@ -15,7 +15,7 @@ const t = createTranslator(en);
 const STATUSES = ['open', 'pending', 'resolved', 'closed'];
 
 /**
- * @param {{ initial: { conversation: Record<string, any>, messages: any[], notes: any[] }, websiteId: string | null, canWrite: boolean,
+ * @param {{ initial: { conversation: Record<string, any>, messages: any[], notes: any[] }, websiteId: string, canWrite: boolean,
  *   inbox: boolean, canned: Array<{ key: string, title: string, body: string }>, pollMs: number }} props
  */
 export function ConversationPanel({ initial, websiteId, canWrite, inbox, canned, pollMs }) {
@@ -30,12 +30,11 @@ export function ConversationPanel({ initial, websiteId, canWrite, inbox, canned,
 	const last = useRef(initial.messages.at(-1)?.at ?? null);
 	const base = `/v1/dashboard/conversations/${encodeURIComponent(initial.conversation.id)}`;
 	const headers = (/** @type {Record<string, string>} */ extra = {}) => ({
-		...(websiteId ? { 'x-ss-website': websiteId } : {}),
+		'x-ss-website': websiteId,
 		...extra,
 	});
 
 	useEffect(() => {
-		if (!websiteId) return undefined;
 		const doc = globalThis.document;
 		const transport = createTransport({
 			intervalMs: pollMs,

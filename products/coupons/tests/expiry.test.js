@@ -66,7 +66,7 @@ describe('without timers', () => {
 			kind,
 			subject: 'usr_merchant',
 			user: { id: 'usr_merchant' },
-			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 		});
 		const sso = await h.handle(new Request(`https://coupons.example.com/sso?launch=${encodeURIComponent(token)}`));
 		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
@@ -114,8 +114,6 @@ describe('without timers', () => {
 			more: false,
 		});
 		expect(EXPIRE_RUN_LIMIT).toBe(100);
-		const demo = await launch('demo');
-		expect((await h.call('POST', '/v1/dashboard/reservations:expire', { key: demo, body: {} })).status).toBe(403);
 		h.clock.set(T0);
 	});
 });

@@ -95,7 +95,7 @@ describe('guest conversation with an AI answer', () => {
 		expect(since.json.items.map((/** @type {any} */ m) => m.author)).toEqual(['customer', 'bot']);
 	});
 
-	it('replays a POST with the same Idempotency-Key without a second answer or charge', async () => {
+	it('refuses a repeated Idempotency-Key without a second answer or charge', async () => {
 		const before = h.network.aiCalls().length;
 		const one = await h.browser('POST', `/v1/conversations/${conversationId}/messages`, {
 			identity: marker,
@@ -107,8 +107,9 @@ describe('guest conversation with an AI answer', () => {
 			idempotencyKey: 'idk_same_message_1',
 			body: { text: 'Thanks!' },
 		});
-		expect(two.status).toBe(one.status);
-		expect(two.json).toEqual(one.json);
+		expect(one.status).toBe(201);
+		expect(two.status).toBe(409);
+		expect(two.json.type).toMatch(/duplicate_request$/);
 		expect(h.network.aiCalls().length).toBe(before + 1);
 	});
 

@@ -1,11 +1,12 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Alerts Mode C API, the
- * hosted link pages and the dashboard API (SSO sessions). Every product route is gated by its element: a disabled
- * element answers 403 element_disabled in every mode. POSTs that move state require an Idempotency-Key (app-kit stores
- * and replays the response); handlers are thin — validation and rules live in core/. Nothing runs on a timer: the
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints
+ * and /sso) plus the Alerts Mode C API, the hosted link pages and the dashboard API (SSO sessions). Every product route
+ * is gated by its element: a disabled element answers 403 element_disabled in every mode. POSTs that create records
+ * declare `idempotent: true`: app-kit refuses a repeated Idempotency-Key with 409 duplicate_request. Handlers are
+ * thin — validation and rules live in core/. Nothing runs on a timer: the
  * outbox is run by triggers (inline dispatch), `POST /v1/messages:dispatch` and the dashboard's "Send due now" button.
  */
+import { createHash } from 'node:crypto';
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { addressFor, contactIdOf } from '../core/contact.js';
 import { sanitizeItem } from '../core/subscription.js';
@@ -90,6 +91,18 @@ export const changeOf = (body, at, site) => {
 };
 
 /**
+ * An Idempotency-Key scoped to its caller: sha256 of the website, the caller (dashboard session, else key kind + id),
+ * the route and the key.
+ * @param {any} ctx
+ */
+export const scopedKey = (ctx) => {
+	const caller = ctx.session ? `session:${ctx.session.subject}` : `key:${ctx.website?.kind}:${ctx.website?.keyId}`;
+	return createHash('sha256')
+		.update([ctx.websiteId, caller, `${ctx.method} ${ctx.path}`, ctx.idempotencyKey].join('\n'))
+		.digest('hex');
+};
+
+/**
  * @param {Alerts} alerts
  */
 export const buildRoutes = (alerts) => {
@@ -97,6 +110,12 @@ export const buildRoutes = (alerts) => {
 	const pages = createPages({ alerts });
 	/** @param {any} ctx */
 	const site = (ctx) => siteOf(ctx.websiteId, ctx.entitlement.doc);
+	/**
+	 * Run key material of a request: its Idempotency-Key hashed with the website, the calling key and the route (the
+	 * same key from the same caller names the same runs; another caller's identical key never does), else a fresh id.
+	 * @param {any} ctx
+	 */
+	const requestKey = (ctx) => (ctx.idempotencyKey ? scopedKey(ctx) : deps.newId('req'));
 	/**
 	 * @param {string} element
 	 * @param {'sk' | null} [keyKind] null = browser keys too (customer identity optional)
@@ -152,12 +171,13 @@ export const buildRoutes = (alerts) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/triggers',
+			idempotent: true,
 			...website('triggers'),
 			handler: async (ctx) => {
 				const problems = validateTrigger(ctx.body);
 				if (problems.length > 0) return invalid(problems);
 				const s = await site(ctx);
-				const run = await runTrigger(ctx, s, ctx.body, `api:${ctx.body.id ?? ctx.idempotencyKey}`, 'api');
+				const run = await runTrigger(ctx, s, ctx.body, `api:${ctx.body.id ?? requestKey(ctx)}`, 'api');
 				if (!run) return invalid([{ path: '', code: 'invalid' }]);
 				return created(triggerView(run), { location: `/v1/triggers/${run.id}` });
 			},
@@ -165,12 +185,14 @@ export const buildRoutes = (alerts) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/triggers:batch',
+			idempotent: true,
 			...website('triggers'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const changes = ctx.body?.changes;
 				if (!Array.isArray(changes) || changes.length === 0) return invalid([{ path: '/changes', code: 'required' }]);
 				if (changes.length > s.settings.triggers.maxBatch) return invalid([{ path: '/changes', code: 'too_many' }]);
+				const batchKey = requestKey(ctx);
 				const results = [];
 				let queued = 0;
 				for (const [index, body] of changes.entries()) {
@@ -179,7 +201,7 @@ export const buildRoutes = (alerts) => {
 						results.push({ index, ok: false, errors: problems });
 						continue;
 					}
-					const run = await runTrigger(ctx, s, body, `api:${body.id ?? `${ctx.idempotencyKey}:${index}`}`, 'import');
+					const run = await runTrigger(ctx, s, body, `api:${body.id ?? `${batchKey}:${index}`}`, 'import');
 					queued += Number(run?.queued ?? 0);
 					results.push(
 						run
@@ -194,6 +216,7 @@ export const buildRoutes = (alerts) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/triggers:import',
+			idempotent: true,
 			...website('triggers'),
 			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
 			handler: async (ctx) => {
@@ -206,6 +229,7 @@ export const buildRoutes = (alerts) => {
 					});
 				if (!parsed.header.includes('item_id'))
 					return problem('csv_invalid', `the header needs item_id (columns: ${CSV_COLUMNS.join(', ')})`);
+				const batchKey = requestKey(ctx);
 				const errors = [];
 				let processed = 0;
 				let queued = 0;
@@ -216,7 +240,7 @@ export const buildRoutes = (alerts) => {
 						errors.push({ row: index + 2, errors: problems });
 						continue;
 					}
-					const run = await runTrigger(ctx, s, body, `csv:${ctx.idempotencyKey}:${index}`, 'import');
+					const run = await runTrigger(ctx, s, body, `csv:${batchKey}:${index}`, 'import');
 					processed += 1;
 					queued += Number(run?.queued ?? 0);
 				}
@@ -260,6 +284,7 @@ export const buildRoutes = (alerts) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/subscriptions',
+			idempotent: true,
 			...website('capture', null),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -373,7 +398,6 @@ export const buildRoutes = (alerts) => {
 			method: 'POST',
 			path: '/v1/messages:dispatch',
 			...website('dispatch'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				return ok(await engine.sendDue(await site(ctx), { limit: SEND_NOW_LIMIT }));
 			},
@@ -477,7 +501,6 @@ export const buildRoutes = (alerts) => {
 				path,
 				auth: 'none',
 				rawBody: true,
-				idempotent: false,
 				maxBodyBytes: 4096,
 				handler: (ctx) => (purpose === 'unsubscribe' ? pages.unsubscribe(ctx.params.token) : pages.confirm(ctx.params.token)),
 			}),
@@ -504,7 +527,6 @@ export const buildRoutes = (alerts) => {
 			auth: 'launch',
 			element: 'dispatch',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				if (!ctx.websiteId || !ctx.entitlement) return problem('bad_request', 'Open the dashboard for a website.');
 				return ok(await engine.sendDue(await site(ctx), { limit: SEND_NOW_LIMIT }));

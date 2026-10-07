@@ -25,7 +25,6 @@ every element but analytics (add-on); Pro has all, with higher bounds.
 - `adapters/` — repositories over `data.forWebsite` (`db.js`), Atlas Search driver access (`atlas.js`), platform.
 - `api/` — services (documents, engines, search, sources, dashboard) and the route table.
 - `headless/` — `createOverlay`, `createSuggestions`. `ui/` — the overlay renderer.
-- `jobs/` — none (see `jobs/README.md`).
 
 ## No periodic work
 
@@ -39,9 +38,29 @@ There are no crons, timers or background loops; everything happens inside the re
   the dashboard's **Re-check** button.
 - **Vocabulary**: a term no document uses any more is removed in the same write that removed its last use.
 
-## Environment
+## Develop
 
-See `.env.example`: the app-kit variables.
+```sh
+cp .env.example .env.local     # MONGODB_URI (empty = in-memory control store) + a random CONNECT_SECRET (≥ 32 chars)
+pnpm dev                       # Next.js on :3000
+# local Portal → Admin → Apps → Add product → http://localhost:3000 + the CONNECT_SECRET
+pnpm validate                  # ss app validate: manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB
+ss pack build .                # the overlay widget (Mode A) → upload dist/pack in the Portal (app page → Upload widgets)
+```
+
+The e2e suite (monorepo workspace `@ss/e2e`) composes this product from its `./platform` and `./routes` exports and runs
+it against the real Portal in process.
+
+## Deploy
+
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set two environment variables (see `.env.example`): `MONGODB_URI`, the product's own small MongoDB (sessions,
+   caches, usage queue, its signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters).
+3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
+4. `ss pack build .` and upload `dist/pack` on the app page (**Upload widgets**) so the drop-in overlay is delivered.
 
 ## Notes
 

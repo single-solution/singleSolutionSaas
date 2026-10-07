@@ -48,7 +48,10 @@ base URLs from the settings and the merchant's own `sk_` key (Dashboard → Sett
 ## Security
 
 - Prices and totals are always recomputed on the server; `expectedTotal` only detects stale clients (409 `total_changed`).
-- Placement needs an `Idempotency-Key`; the order id derives from it and a unique index closes parallel submissions.
+- Placement needs an `Idempotency-Key`; a repeat within 24 h is refused (409 `duplicate_request`) and a unique index
+  closes parallel submissions. The order id derives from (website, caller, route, key) — the caller is the customer
+  subject, dashboard session or website key — and a stored order is answered again only to the caller that placed it
+  (never to an anonymous guest; otherwise 409 `duplicate_request`). Payments routes refuse a repeated key the same way.
 - Stock: conditional `$inc` (`available >= quantity`) and the order insert in one transaction of the merchant's database;
   on a standalone server the steps run in sequence and exactly the completed ones are given back.
 - Browser keys take the shopper only from `SS-Identity`; guests reach their order with its access token (stored hashed).
@@ -58,9 +61,8 @@ base URLs from the settings and the merchant's own `sk_` key (Dashboard → Sett
 ## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-pnpm portal               # Portal emulator on :4400 (ss.dev.json)
-pnpm dev                  # product on :3000 (or node serve.js 3000)
+# .env.local: MONGODB_URI (empty = in-memory control store) and CONNECT_SECRET (≥ 32 random characters)
+pnpm dev                  # product on :3000
 ```
 
 ```sh

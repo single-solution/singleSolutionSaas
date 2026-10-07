@@ -45,7 +45,6 @@
 				}
 			},
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "list", "group": "Form", "order": 2 }
 		},
 		"consent_required": {

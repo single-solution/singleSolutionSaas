@@ -25,7 +25,7 @@ a default and plan bounds (`x-plan`) in `schemas/<element>.features.json` — no
 | `limits`       | C       |      100 | Uses per customer (bring-your-own identity) and per device, velocity limits (checks, failed codes, reservations per window), blocklist (customer, e-mail, device, code)                                                                                 |
 | `stacking`     | C       |       50 | Classes that combine (item / order / shipping or your own), exclusive coupons, priorities, `best_discount` or `in_order`, max per cart, `loyaltyAllowed` / `dealsAllowed` on every quote                                                                |
 | `api`          | C       |      150 | validate / quote / reserve / redeem / release / attach — idempotent; reservations with a TTL on atomic counters. Metered: `redemption` (1 mc each; starter 500 / pro 5 000 included)                                                                    |
-| `apply_box`    | A, B, C |       50 | Drop-in renderer (≤ 8 KB, tokens only, `inline` / `collapsible`, slots `before` / `after` / `success`), headless core, element-stub view                                                                                                                |
+| `apply_box`    | A, B, C |       50 | Drop-in renderer (≤ 8 KB, tokens only, `inline` / `collapsible`, slots `before` / `after` / `success`), headless core                                                                                                                                   |
 | `distribution` | C       |      100 | Share links (auto-apply parameter, UTM), QR codes as SVG generated in `core/qr.js`, CSV exports (formula injection neutralised)                                                                                                                         |
 | `reporting`    | C       |      100 | Redemptions, discount, revenue and average order per currency, discount rate, undone redemptions, top codes, per coupon                                                                                                                                 |
 
@@ -49,14 +49,15 @@ the customer in the cart.
 - **Lifecycle.** `pending → reserved → redeemed | released | expired` by compare-and-set; a lapsed reservation is
   treated as expired as soon as it is read or touched (its uses go back then, also when its code, customer or device
   needs the use, or its code is read), and the dashboard's "Release expired reservations" releases them all at once.
-  Nothing runs on a timer (no crons, no background loops, no periodic heartbeat); app-kit sends usage and events right
-  after the request that queued them. See `jobs/README.md`.
+  Nothing runs on a timer (no crons, no background loops); app-kit sends usage and events right after the request that
+  queued them.
   A late `order.completed@1` re-claims an expired reservation when `api.confirm_expired` allows and the use is free.
-- **Exactly once.** Reservation ids derive from `reference` or the Idempotency-Key; redemption counters count once per
-  code (`counted`); usage records and events carry deterministic idempotency keys.
+- **Exactly once.** Reservation ids derive from (website, calling key, route, `reference` or the Idempotency-Key); a
+  repeat from the same key answers the original reservation, another key never sees it (409 `duplicate_request` if
+  ever found); coupon creation refuses a repeated Idempotency-Key (409 `duplicate_request`); redemption counters count
+  once per code (`counted`); usage records and events carry deterministic idempotency keys.
 - **Data.** Collections `ss_coupons_{coupons,codes,reservations,usage,velocity,blocks,audit}` in the merchant database,
-  `websiteId` first in every index, TTL on velocity windows, versioned migrations, export/anonymise via the
-  Portal-signed standard routes (reservations: customer id, e-mail, device id; usage: customer id; usage keys are hashes).
+  `websiteId` first in every index, TTL on velocity windows, versioned migrations; usage keys are hashes.
 
 ## API (Mode C)
 
@@ -72,8 +73,7 @@ the customer in the cart.
 | Limits       | `GET/POST /v1/blocks` · `DELETE /v1/blocks/{id}`                                                                                           |
 | Distribution | `POST /v1/share-links` · `GET /v1/share-links/{code}` · `GET …/{code}/qr` (SVG) · `GET /v1/exports/{couponId}` (CSV)                       |
 | Reporting    | `GET /v1/reports?from=&to=`                                                                                                                |
-| Apply box    | `GET /v1/elements/apply_box/view` · `POST /v1/elements/apply_box/actions/apply` (element stub, pk)                                         |
-| Standard     | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                                      |
+| Standard     | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`                                                                               |
 
 Errors are RFC 9457 problems with stable codes (`code_not_found`, `exhausted`, `not_eligible`, `outside_schedule`,
 `currency_mismatch`, `identity_required`, `customer_limit_reached`, `not_combinable`, `velocity_limited`,
@@ -83,22 +83,19 @@ Errors are RFC 9457 problems with stable codes (`code_not_found`, `exhausted`, `
 
 Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs and top codes, coupon list with a create form
 (audited), coupon detail with codes, share link, QR code and CSV export, a live rules@1 checker, settings (link to the
-Portal — the product never stores merchant configuration). Demo launches show sandbox data computed with the real
-core; impersonation shows the audit banner.
+Portal — the product never stores merchant configuration). Merchant and staff (admin) launches.
 
-## Develop and certify
+## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator (ss.dev.json)
-pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss app validate
-ss certify . --url http://localhost:3000
-pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
+# .env.local: MONGODB_URI (empty = in-memory control store) and CONNECT_SECRET (≥ 32 random characters)
+pnpm dev                       # Next.js on :3000
+# then the local Portal: Admin → Apps → Add product (http://localhost:3000 + CONNECT_SECRET) → Active
+pnpm validate                  # ss app validate .
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB
 ```
 
-`tests/certify.test.js` runs the full `ss certify` suite (every check must pass); the system test `e2e/tests/coupons-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
+The system test `e2e/tests/coupons-portal.test.js` (monorepo workspace `@ss/e2e`) runs the
 real Portal in process: staff bootstrap → Add product (URL + connect secret) → activation → merchant signup → website → credits →
 subscription → database connector → single-use code created through the API → two concurrent reservations (exactly
 one wins) → `order.completed@1` through the Event Hub → redeemed in the merchant DB → usage → hourly settlement
@@ -111,8 +108,7 @@ one wins) → `order.completed@1` through the Event Hub → redeemed in the merc
 2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
-   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
 
 ## Changelog
 

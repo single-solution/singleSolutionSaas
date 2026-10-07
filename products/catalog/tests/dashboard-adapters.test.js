@@ -1,8 +1,8 @@
-/** Dashboard resolution (sign-in, demo, pick website, not subscribed, live data) and the adapters (tokens, platform). */
+/** Dashboard resolution (sign-in, pick website, not subscribed, live data) and the adapters (tokens, platform). */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateSigningKey } from '@ss/protocol';
 import { createHmac } from 'node:crypto';
-import { demoDashboard, dashboardActor, exportParamsOf, resolveDashboard, statusLabel, stubContext } from '../api/dashboard.js';
+import { dashboardActor, exportParamsOf, resolveDashboard, statusLabel } from '../api/dashboard.js';
 import { sessionView } from '../api/session.js';
 import { createPlatform } from '../adapters/platform.js';
 import {
@@ -15,7 +15,7 @@ import {
 	newId,
 	stableId,
 } from '../adapters/tokens.js';
-import { MERCHANT, ROOT, T0, WEBSITE, WEBSITE_2, createHarness, mongoUri } from './harness.js';
+import { MERCHANT, ROOT, WEBSITE, WEBSITE_2, createHarness, mongoUri } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -39,7 +39,8 @@ describe('dashboard', () => {
 		expect(ready.state).toBe('ready');
 		if (ready.state !== 'ready') throw new Error('not ready');
 		expect(ready.portalLink).toContain(`/websites/${WEBSITE}/subscriptions/`);
-		expect(ready.data).toMatchObject({ demo: false, canWrite: true, websiteId: WEBSITE });
+		expect(ready.data).toMatchObject({ canWrite: true, websiteId: WEBSITE });
+		expect(statusLabel(ready.data.settings, 'active')).toBe('Active');
 		const stats = await ready.data.stats();
 		expect(stats.items.total).toBe(1);
 		const page = await ready.data.items({ status: 'active' });
@@ -52,49 +53,21 @@ describe('dashboard', () => {
 		expect((await resolveDashboard({ catalog, sessionId: unscoped })).state).toBe('pick_website');
 		const other = await h.session('merchant', { scope: { merchantId: MERCHANT, websiteIds: [WEBSITE_2] } });
 		expect((await resolveDashboard({ catalog, sessionId: other })).state).toBe('not_subscribed');
-		const demo = await h.session('demo');
-		const sandbox = await resolveDashboard({ catalog, sessionId: demo, now: T0 });
-		expect(sandbox.state === 'ready' && sandbox.data.demo).toBe(true);
 	});
 
-	it('builds sandbox data with the real core (read-only)', async () => {
-		const data = demoDashboard({ now: T0 });
-		expect(data).toMatchObject({ demo: true, canWrite: false, websiteId: null });
-		const stats = await data.stats();
-		expect(stats.items).toMatchObject({ total: 4, outOfStock: 2, lowStock: 1 });
-		expect((await data.items({ status: 'draft' })).items).toHaveLength(1);
-		expect((await data.items({})).items).toHaveLength(4);
-		expect(await data.item('itm_demo0')).toMatchObject({ title: 'Linen shirt', currency: 'EUR' });
-		expect(await data.item('nope')).toBeNull();
-		expect(await data.feeds()).toEqual([]);
-		expect(statusLabel(data.settings, 'active')).toBe('Active');
-	});
-
-	it('names actors and parses the element stub context', () => {
+	it('names actors', () => {
 		expect(dashboardActor({ kind: 'merchant', role: 'merchant', user: { id: 'usr_1' } })).toEqual({
 			type: 'merchant',
 			id: 'usr_1',
 		});
 		expect(dashboardActor({ kind: 'admin', role: 'platform_admin', subject: 'stf_1' })).toEqual({ type: 'staff', id: 'stf_1' });
-		expect(dashboardActor({ kind: 'impersonate', role: 'impersonate', scope: { actor: 'stf_2' } })).toEqual({
-			type: 'staff',
-			id: 'stf_2',
-		});
 		expect(dashboardActor({ kind: 'merchant', role: 'merchant' })).toEqual({ type: 'merchant', id: 'unknown' });
-		expect(sessionView({ kind: 'demo', role: 'demo' })).toEqual({
-			kind: 'demo',
-			role: 'demo',
+		expect(sessionView({ kind: 'admin', role: 'platform_admin' })).toEqual({
+			kind: 'admin',
+			role: 'platform_admin',
 			scope: {},
 			user: null,
-			actor: null,
 		});
-		expect(stubContext(JSON.stringify({ itemId: 'itm_1', pageType: 'product' }))).toEqual({
-			itemId: 'itm_1',
-			pageType: 'product',
-		});
-		expect(stubContext('[1]')).toEqual({ itemId: null, pageType: null });
-		expect(stubContext(undefined)).toEqual({ itemId: null, pageType: null });
-		expect(stubContext('x'.repeat(3000))).toEqual({ itemId: null, pageType: null });
 	});
 });
 

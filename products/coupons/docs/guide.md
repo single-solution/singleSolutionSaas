@@ -4,12 +4,15 @@
 
 ```text
 POST /v1/quotes        { codes, cart }                         → applied / rejected codes, totals (browser-safe too)
-POST /v1/reservations  { codes, cart, reference?, orderId? }   (Idempotency-Key) → reservation, held for the TTL
+POST /v1/reservations  { codes, cart, reference?, orderId? }   → reservation, held for the TTL
 POST /v1/reservations/{id}/attach  { orderId }   once the order exists (order events then find the reservation)
 POST /v1/reservations/{id}/redeem  { orderId? }  when the order is paid — or send order.completed@1 to the Event Hub
 POST /v1/reservations/{id}/release               when the checkout is abandoned (uses go back)
 POST /v1/redemptions   { codes, cart, orderId }  reserve + redeem in one step
 ```
+
+Retries: send the same `reference` (or `Idempotency-Key`) with the same server key and the original reservation comes back;
+ids are scoped by the calling key, so another key never sees or changes it.
 
 A cart is generic: `{ currency, lines: [{ lineId?, itemId, variantId?, quantity, unitAmount, attributes?, collections? }],
 shipping?, customer?: { id, orderCount, segments, email, country }, paymentMethod?, deliveryMethod?,
@@ -28,8 +31,7 @@ releases per `api.release_on_refund` (`never`, `full` — refunds summed until t
 ## Apply box
 
 - **Mode A (drop-in):** `ui/applyBox.js#render({ state, actions, strings, theme: { variant: 'inline' | 'collapsible' },
-slots: { before, after, success }, dom })`, design tokens only. Through the Loader's element stub the product serves
-  `GET /v1/elements/apply_box/view` and `POST /v1/elements/apply_box/actions/apply` (`{ code, cart }`).
+slots: { before, after, success }, dom })`, design tokens only; it runs on the headless core below.
 - **Mode B (headless):** `headless/applyBox.js#createApplyBox({ config, strings, client, cart, emit })` →
   `{ state, actions: { setCode, setCart, apply, remove, clear, toggle, applyFromUrl }, subscribe, validate, strings, t,
 formatMoney, destroy }`; `client.quote({ codes, cart })` calls `POST /v1/quotes` with the `pk_` key and

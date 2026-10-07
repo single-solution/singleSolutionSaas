@@ -1,9 +1,10 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes), the Mode C API of every element,
- * the payment webhook and the dashboard API (SSO sessions). Every product route is gated by its element: a disabled
- * element answers 403 element_disabled in every mode. POSTs that create or move state require an Idempotency-Key
- * (app-kit stores and replays the response); handlers are thin — rules live in core/, orchestration in the services.
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso), the Mode C API of every element, the payment webhook and the dashboard API (SSO sessions). Every product
+ * route is gated by its element: a disabled element answers 403 element_disabled in every mode. Routes that place
+ * orders or move money declare `idempotent: true` (app-kit refuses a repeated Idempotency-Key with 409
+ * duplicate_request); placement also requires the key. Handlers are thin — rules live in core/, orchestration in the
+ * services.
  */
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { cartView } from '../core/cart.js';
@@ -74,6 +75,18 @@ export const requesterOf = (ctx) => {
 		phone: ctx.identity?.phone ?? null,
 	};
 };
+
+/**
+ * Who sends the request, for scoping client-chosen keys: the customer subject, the dashboard session subject, else the
+ * website key (kind + id).
+ * @param {any} ctx
+ */
+export const callerOf = (ctx) =>
+	ctx.identity?.subject
+		? `customer:${ctx.identity.subject}`
+		: ctx.session
+			? `session:${ctx.session.subject}`
+			: `${ctx.website?.kind ?? 'none'}:${ctx.website?.keyId ?? 'none'}`;
 
 /**
  * @param {Application} application
@@ -156,7 +169,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/carts/:id/lines',
 			...website('cart'),
-			idempotent: 'optional',
 			handler: async (ctx) => cartReply(await carts.add(await site(ctx), ctx.params.id, ctx.body, requesterOf(ctx))),
 		}),
 		defineRoute({
@@ -177,14 +189,12 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/carts/:id/reconcile',
 			...website('cart'),
-			idempotent: false,
 			handler: async (ctx) => cartReply(await carts.reconcile(await site(ctx), ctx.params.id, requesterOf(ctx))),
 		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/carts/:id/merge',
 			...website('cart', { identity: 'required' }),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				if (!s.settings.cart.guest_merge) return problem('forbidden', 'Guest carts are not merged on this website.');
@@ -261,7 +271,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/checkout-form:validate',
 			...website('checkout_form'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const result = validateForm(s.settings.form, ctx.body, {
@@ -304,7 +313,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/quotes',
 			...website('place_order'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				if (!s.settings.currency) return fail({ code: 'currency_not_configured' });
@@ -340,10 +348,14 @@ export const buildRoutes = (application) => {
 				windowMs: 3_600_000,
 				key: shopperKey,
 			},
+			idempotent: true,
 			handler: async (ctx) => {
+				if (!ctx.idempotencyKey)
+					return problem('idempotency_key_required', 'Send an Idempotency-Key header (one per order submission).');
 				const result = await placement.place(await site(ctx), ctx.body, {
 					who: requesterOf(ctx),
-					idempotencyKey: /** @type {string} */ (ctx.idempotencyKey),
+					caller: callerOf(ctx),
+					idempotencyKey: ctx.idempotencyKey,
 				});
 				if (!result.ok) return fail(result);
 				return created(placedView(result), { location: `/v1/orders/${result.order.id}` });
@@ -385,7 +397,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/orders/:id/view',
 			...website('place_order'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const who = requesterOf(ctx);
@@ -438,6 +449,7 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/orders/:id/payments',
 			...website('place_order', { sk: true }),
+			idempotent: true,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const body = isObject(ctx.body) ? ctx.body : {};
@@ -583,6 +595,7 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/payments',
 			...website('payment_gateway'),
+			idempotent: true,
 			handler: async (ctx) => {
 				const result = await payments.startPayment(await site(ctx), isObject(ctx.body) ? ctx.body : {}, requesterOf(ctx), {
 					domain: String(ctx.website.domain ?? '').toLowerCase(),
@@ -595,7 +608,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/payments/:id/refresh',
 			...website('payment_gateway'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const result = await payments.refreshPayment(
 					await site(ctx),
@@ -611,7 +623,6 @@ export const buildRoutes = (application) => {
 			path: '/webhooks/payments/:websiteId',
 			auth: 'none',
 			rawBody: true,
-			idempotent: false,
 			maxBodyBytes: 65_536,
 			handler: async (ctx) => {
 				const s = await application.siteFor(ctx.params.websiteId, 'payment_gateway');
@@ -640,7 +651,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/offers:check',
 			...website('offer_apply'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				if (!s.settings.currency) return fail({ code: 'currency_not_configured' });
@@ -679,7 +689,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/loyalty:quote',
 			...website('loyalty_redeem'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const who = requesterOf(ctx);
@@ -726,7 +735,6 @@ export const buildRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/success-views',
 			...website('success_page'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const who = requesterOf(ctx);
@@ -783,7 +791,7 @@ export const buildRoutes = (application) => {
 export const EXPIRY_RUN_LIMIT = 100;
 
 /**
- * Dashboard actions (launch sessions; demo sessions are read-only).
+ * Dashboard actions (launch sessions; merchant and staff roles may write).
  * @param {Application} application
  */
 const dashboardRoutes = (application) => {
@@ -793,7 +801,7 @@ const dashboardRoutes = (application) => {
 	/** @param {any} ctx */
 	const actorOf = (ctx) => {
 		const view = sessionView(ctx.session);
-		return view.actor ? { type: 'staff', id: view.actor } : { type: 'merchant', id: view.user ?? null };
+		return { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' };
 	};
 	const write = { auth: /** @type {const} */ ('launch'), element: 'place_order', roles: [...DASHBOARD_WRITE_ROLES] };
 	/**
@@ -834,6 +842,7 @@ const dashboardRoutes = (application) => {
 			method: 'POST',
 			path: '/v1/dashboard/orders/:id/payments',
 			...write,
+			idempotent: true,
 			handler: (ctx) =>
 				onOrder(ctx, (s, order) =>
 					Number.isSafeInteger(ctx.body?.amount) && ctx.body.amount > 0

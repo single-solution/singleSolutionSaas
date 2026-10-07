@@ -47,7 +47,6 @@ export const INDEXES = /** @type {any} */ ([
 	{ collection: 'stock', keys: { websiteId: 1, itemKey: 1 }, name: 'website_item', unique: true },
 	{ collection: 'notifications', keys: { websiteId: 1, key: 1 }, name: 'website_key', unique: true },
 	{ collection: 'notifications', keys: { websiteId: 1, at: -1, id: -1 }, name: 'website_time' },
-	{ collection: 'notifications', keys: { websiteId: 1, ownerId: 1 }, name: 'website_owner' },
 	{ collection: 'notifications', keys: { expiresAt: 1 }, name: 'ttl', expireAfterSeconds: 0 },
 ]);
 
@@ -298,10 +297,6 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 					await notifications.find({ websiteId, ...range }, { sort: { at: -1, id: -1 }, limit: fetchLimit }).toArray()
 				).map(strip);
 			},
-			/** @param {string} ownerId */
-			ofOwner: async (ownerId) => (await notifications.find({ websiteId, ownerId }, { limit: 10_000 }).toArray()).map(strip),
-			/** @param {string} ownerId */
-			removeOwner: async (ownerId) => (await notifications.deleteMany({ websiteId, ownerId })).deletedCount ?? 0,
 		}),
 	});
 };

@@ -151,7 +151,6 @@
 			},
 			"x-kind": "config",
 			"x-plan": { "pro": { "max": 50 } },
-			"x-experiment": true,
 			"x-ui": { "widget": "flow-builder", "group": "Flows", "order": 1 }
 		},
 		"max_steps_per_turn": {

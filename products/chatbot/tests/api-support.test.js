@@ -308,13 +308,13 @@ describe('handoff and the inbox', () => {
 });
 
 describe('dashboard (SSO)', () => {
-	/** @param {any} kind @param {Record<string, any>} [extra] */
+	/** @param {'merchant' | 'admin'} kind @param {Record<string, any>} [extra] */
 	const launch = async (kind, extra = {}) => {
 		const { token } = await h.portal.issueLaunch({
 			kind,
 			subject: 'usr_merchant',
 			user: { id: 'usr_merchant', email: 'owner@shop.example.com' },
-			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 			...extra,
 		});
 		const sso = await h.handle(new Request(`https://chatbot.example.com/sso?launch=${encodeURIComponent(token)}`));
@@ -359,16 +359,17 @@ describe('dashboard (SSO)', () => {
 		for (const path of [`/v1/dashboard/conversations/cnv_x/messages`, `/v1/dashboard/conversations/cnv_x/notes`])
 			expect((await h.call('POST', path, { ...bearer, body: { text: 'x' } })).status).toBe(404);
 		expect((await h.call('PATCH', '/v1/dashboard/conversations/cnv_x', { ...bearer, body: {} })).status).toBe(404);
-		const demo = await launch('demo');
+		// staff (admin launch) reply as staff; without a website the dashboard routes answer 400
+		const staff = await launch('admin', { subject: 'stf_1', user: { id: 'stf_1' } });
+		const staffReply = await h.call('POST', `/v1/dashboard/conversations/${id}/notes`, { key: staff, body: { text: 'staff' } });
+		expect(staffReply.status).toBe(201);
+		const unscoped = await launch('merchant', { scope: { merchantId: MERCHANT } });
+		expect((await h.call('GET', '/v1/dashboard/overview', { key: unscoped })).status).toBe(400);
 		expect(
-			(await h.call('POST', `/v1/dashboard/conversations/${id}/messages`, { key: demo, body: { text: 'x' } })).status,
-		).toBe(403);
-		expect((await h.call('GET', '/v1/dashboard/overview', { key: demo })).status).toBe(400);
-		expect((await h.call('POST', '/v1/dashboard/knowledge-sources:refresh', { key: demo, idempotencyKey: null })).status).toBe(
-			403,
-		);
+			(await h.call('POST', '/v1/dashboard/knowledge-sources:refresh', { key: unscoped, idempotencyKey: null })).status,
+		).toBe(400);
 	});
-	it('resolves dashboard contexts (live, demo, pick website, not subscribed)', async () => {
+	it('resolves dashboard contexts (live, pick website, not subscribed)', async () => {
 		const { resolveDashboard } = await import('../api/dashboard.js');
 		expect((await resolveDashboard({ chatbot: h.chatbot, sessionId: null })).state).toBe('signin');
 		const live = await resolveDashboard({ chatbot: h.chatbot, sessionId: await launch('merchant') });
@@ -382,15 +383,6 @@ describe('dashboard (SSO)', () => {
 		expect((await live.data.entries()).length).toBeGreaterThan(0);
 		expect(await live.data.sources()).toEqual([]);
 		expect(await live.data.overview()).toHaveProperty('open');
-		const demo = await resolveDashboard({ chatbot: h.chatbot, sessionId: await launch('demo') });
-		if (demo.state !== 'ready') throw new Error('demo');
-		expect(demo.data.demo).toBe(true);
-		expect((await demo.data.overview()).csat.count).toBe(3);
-		expect(await demo.data.conversations({ status: 'resolved' })).toHaveLength(1);
-		expect((await demo.data.conversation('cnv_demo_human'))?.conversation.handoff).toBeTruthy();
-		expect(await demo.data.conversation('nope')).toBeNull();
-		expect(await demo.data.entries()).toHaveLength(2);
-		expect(await demo.data.sources()).toEqual([]);
 		const admin = await launch('admin', { scope: { merchantId: MERCHANT, websiteIds: [] } });
 		expect((await resolveDashboard({ chatbot: h.chatbot, sessionId: admin })).state).toBe('pick_website');
 		const other = await launch('merchant', { scope: { merchantId: MERCHANT, websiteId: 'web_9123456789abcdefghjkmnpq' } });

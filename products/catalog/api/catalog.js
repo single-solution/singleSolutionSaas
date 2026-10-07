@@ -8,6 +8,7 @@
  * republished with the same idempotency keys when the item is next read (`due.js`) or from the dashboard, which the Portal deduplicates (event ids derive from
  * them). Item snapshots (`item.created@1` / `item.updated@1`) are built at publish time from the stored item.
  */
+import { createHash } from 'node:crypto';
 import { EVENT_TYPES, itemSnapshot } from '../core/events.js';
 import { nextTransition, rollupOf } from '../core/items.js';
 import { skuKey, skuKeysOf } from '../core/variants.js';
@@ -29,6 +30,21 @@ import { duplicateSkuOf } from '../adapters/db.js';
  * @property {() => number} now
  * @property {{ warn?: (message: string, meta?: Record<string, unknown>) => void, error?: (message: string, meta?: Record<string, unknown>) => void }} [log]
  */
+
+/**
+ * The key a create/move request derives its ids and event keys from: the client's `Idempotency-Key` hashed with the
+ * website, the caller (dashboard session, else key kind + id) and the route — a retried call converges on the same
+ * record, while another caller's identical key never reaches it — otherwise a fresh random one.
+ * @param {{ app: { newId: (prefix: string) => string } }} catalog
+ * @param {any} ctx
+ */
+export const requestKey = (catalog, ctx) => {
+	if (!ctx.idempotencyKey) return catalog.app.newId('req');
+	const caller = ctx.session ? `session:${ctx.session.subject}` : `key:${ctx.website?.kind}:${ctx.website?.keyId}`;
+	return createHash('sha256')
+		.update([ctx.websiteId, caller, `${ctx.method} ${ctx.path}`, ctx.idempotencyKey].join('\n'))
+		.digest('hex');
+};
 
 /** Write attempts before a compare-and-set loop gives up (409 conflict). */
 export const MAX_ATTEMPTS = 5;

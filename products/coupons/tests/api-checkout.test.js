@@ -149,20 +149,44 @@ describe('reservations', () => {
 		expect(code).toMatchObject({ taken: 1, redeemed: 0 });
 	});
 
+	it('scopes reference / key derived reservations by caller: another key never sees or changes them', async () => {
+		await h.coupon({ code: 'SCOPED', action: { type: 'fixed', amount: 100 }, currency: 'EUR', limits: { total: 5 } });
+		const body = { codes: ['SCOPED'], cart: cart(), reference: 'cart_scoped' };
+		const mine = await h.call('POST', '/v1/reservations', { body, idempotencyKey: 'k_scoped' });
+		expect(mine.status).toBe(201);
+		const otherKey = await h.key('sk');
+		const theirs = await h.call('POST', '/v1/reservations', { key: otherKey, body, idempotencyKey: null });
+		expect(theirs.status).toBe(201);
+		expect(theirs.json.id).not.toBe(mine.json.id);
+		expect((await h.call('GET', `/v1/reservations/${mine.json.id}`)).json.status).toBe('reserved');
+		// an existing record whose owner differs is never answered (defence in depth on top of the scoped id)
+		await h.collection('reservations').updateOne({ id: mine.json.id }, { $set: { requestedBy: 'sk:key_someone_else' } });
+		const refused = await h.call('POST', '/v1/reservations', { body, idempotencyKey: null });
+		expect(refused.status).toBe(409);
+		expect(refused.json.type).toMatch(/duplicate_request$/);
+	});
+
 	it('is idempotent on the reference and on the Idempotency-Key', async () => {
 		await h.coupon({ code: 'IDEM', action: { type: 'fixed', amount: 300 }, currency: 'EUR', limits: { total: 5 } });
 		const body = { codes: ['IDEM'], cart: cart(), reference: 'cart_idem' };
 		const first = await h.call('POST', '/v1/reservations', { body, idempotencyKey: 'k1' });
-		const replay = await h.call('POST', '/v1/reservations', { body, idempotencyKey: 'k1' });
+		const again = await h.call('POST', '/v1/reservations', { body, idempotencyKey: 'k1' });
 		const sameReference = await h.call('POST', '/v1/reservations', { body, idempotencyKey: 'k2' });
 		expect(first.status).toBe(201);
-		expect(replay.json).toEqual(first.json);
+		expect(again.json).toEqual(first.json);
 		expect(sameReference.json.id).toBe(first.json.id);
 		expect(first.json).toMatchObject({ status: 'reserved', codes: ['IDEM'], totals: { discount: 300, total: 10_200 } });
 		const coupon = await h.collection('coupons').findOne({ id: (await h.call('GET', '/v1/codes/IDEM')).json.couponId });
 		expect(coupon?.counters).toEqual({ taken: 1, redeemed: 0 });
 		const noKey = await h.call('POST', '/v1/reservations', { body, idempotencyKey: null });
-		expect(noKey.status).toBe(428);
+		expect(noKey.json.id).toBe(first.json.id);
+		// neither a reference nor a key: every call is a new reservation
+		const loose = { codes: ['IDEM'], cart: cart() };
+		const one = await h.call('POST', '/v1/reservations', { body: loose, idempotencyKey: null });
+		const two = await h.call('POST', '/v1/reservations', { body: loose, idempotencyKey: null });
+		expect(one.status).toBe(201);
+		expect(two.status).toBe(201);
+		expect(two.json.id).not.toBe(one.json.id);
 		expect((await h.call('GET', `/v1/reservations/${first.json.id}`)).json.id).toBe(first.json.id);
 		expect((await h.call('GET', '/v1/reservations/rsv_missing')).status).toBe(404);
 	});

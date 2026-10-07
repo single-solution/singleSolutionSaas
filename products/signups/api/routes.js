@@ -1,14 +1,13 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise, the
- * .well-known endpoints, /sso and — in development — the certification probes), the Signups Mode C API, the issuer's
- * public endpoints (JWKS, discovery) and the dashboard API (SSO sessions). Every product route is gated by its element:
- * a disabled element answers 403 element_disabled in every mode. Handlers are thin — validation and rules live in
- * core/, orchestration in service.js.
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso), the Signups Mode C API, the issuer's public endpoints (JWKS, discovery) and the dashboard API (SSO sessions).
+ * Every product route is gated by its element: a disabled element answers 403 element_disabled in every mode. Handlers
+ * are thin — validation and rules live in core/, orchestration in service.js.
  *
- * Idempotency: POSTs that send a message or create a record require `Idempotency-Key` (app-kit stores and replays the
- * response). The token-issuing POSTs (code verification, link consumption, refresh) are **single-use by construction**
- * (atomic attempt reservation and compare-and-set) and deliberately not replayable: storing their responses in a replay
- * cache would keep live credentials outside the merchant's database.
+ * Idempotency: POSTs that send a message or create a record declare `idempotent: true` — a repeated `Idempotency-Key`
+ * for the same website and route within 24 h is refused with 409 duplicate_request (requests without the header run
+ * normally). The token-issuing POSTs (code verification, link consumption, refresh, logout) are **single-use by
+ * construction** (atomic attempt reservation and compare-and-set) and need no key.
  */
 import { created, defineRoute, noContent, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { parseIdentifier } from '../core/identifier.js';
@@ -122,19 +121,6 @@ export const createSignups = (app) => {
 		if (!result.ok || !product.entitlements.can(result.doc, element)) return null;
 		return siteOf(websiteId, result.doc);
 	};
-	/**
-	 * Site for a Portal privacy request (any subscription state: data rights outlive a switched-off element).
-	 * @param {string} websiteId
-	 */
-	const privacySite = async (websiteId) => {
-		const result = await product.entitlements.forWebsite(websiteId);
-		if (!result.ok) throw problem('not_found', 'This website has no subscription to this product.');
-		return siteOf(websiteId, result.doc);
-	};
-	// the Portal-signed privacy routes were wired at product creation; their handlers are bound here
-	const { privacy } = app;
-	privacy.export = async (input) => service.privacyExport(await privacySite(input.websiteId), input);
-	privacy.anonymize = async (input) => service.privacyAnonymize(await privacySite(input.websiteId), input);
 	return { app, product, service, siteOf, siteFor };
 };
 
@@ -274,6 +260,7 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/customers',
 			...website('profile', 'sk'),
+			idempotent: true,
 			handler: async (ctx) => {
 				const problems = validateCustomerCreate(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -343,6 +330,7 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/otp',
 			...website('otp'),
+			idempotent: true,
 			handler: async (ctx) => {
 				const problems = validateOtpRequest(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -370,7 +358,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/otp/:id/verify',
 			...website('otp'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateOtpVerify(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -383,6 +370,7 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/magic-links',
 			...website('magic_link'),
+			idempotent: true,
 			handler: async (ctx) => {
 				const problems = validateMagicRequest(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -417,7 +405,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/magic-links:consume',
 			...website('magic_link'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateMagicConsume(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -430,7 +417,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/sessions:refresh',
 			...website('sessions'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateRefresh(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -441,7 +427,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/sessions:logout',
 			...website('sessions'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateRefresh(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -474,7 +459,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/sessions:revoke-all',
 			...website('sessions'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const who = await customerOf(ctx, s);
@@ -493,7 +477,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/issuer:register',
 			...website('sessions', 'sk'),
-			idempotent: 'optional',
 			rateLimit: { limit: 10, windowMs: 60 * 60_000 },
 			handler: async (ctx) => respond(await service.registerIssuer(await site(ctx), { actor: actor(ctx) })),
 		}),
@@ -501,7 +484,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/issuer:rotate',
 			...website('sessions', 'sk'),
-			idempotent: 'optional',
 			handler: async (ctx) => ok(await service.rotateKeys(await site(ctx), { actor: actor(ctx) })),
 		}),
 
@@ -551,7 +533,6 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/consents',
 			...website('consent'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const problems = validateConsentAccept(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -577,6 +558,7 @@ export const buildRoutes = (signups) => {
 			method: 'POST',
 			path: '/v1/data-requests',
 			...website('data_rights'),
+			idempotent: true,
 			handler: async (ctx) => {
 				const problems = validateDataRequest(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -619,7 +601,7 @@ export const buildRoutes = (signups) => {
 					website: ctx.websiteId,
 				});
 				if (context.state !== 'ready') return problem('bad_request', 'Open the dashboard for a website.');
-				return ok({ demo: context.data.demo, overview: await context.data.overview(), issuer: await context.data.issuer() });
+				return ok({ overview: await context.data.overview(), issuer: await context.data.issuer() });
 			},
 		}),
 		defineRoute({
@@ -628,18 +610,17 @@ export const buildRoutes = (signups) => {
 			path: '/v1/dashboard/issuer:register',
 			auth: 'launch',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: 'optional',
 			rateLimit: { limit: 10, windowMs: 60 * 60_000 },
 			handler: async (ctx) => {
 				const context = await resolveDashboard({ signups, sessionId: ctx.session.id, website: ctx.websiteId });
 				if (context.state !== 'ready') return problem('bad_request', 'Open the dashboard for a website.');
 				const view = sessionView(ctx.session);
-				const outcome = await context.data.registerIssuer(
-					view.actor
-						? { type: 'staff', id: view.actor }
-						: { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' },
+				return respond(
+					await context.data.registerIssuer({
+						type: view.kind === 'admin' ? 'staff' : 'merchant',
+						id: view.user ?? 'unknown',
+					}),
 				);
-				return outcome ? respond(outcome) : problem('forbidden', 'The demo cannot change anything.');
 			},
 		}),
 		defineRoute({
@@ -648,12 +629,10 @@ export const buildRoutes = (signups) => {
 			path: '/v1/dashboard/deletions:run',
 			auth: 'launch',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: false,
 			handler: async (ctx) => {
 				const context = await resolveDashboard({ signups, sessionId: ctx.session.id, website: ctx.websiteId });
 				if (context.state !== 'ready') return problem('bad_request', 'Open the dashboard for a website.');
-				const deleted = await context.data.runDueDeletions();
-				return deleted === null ? problem('forbidden', 'The demo cannot change anything.') : ok({ deleted });
+				return ok({ deleted: await context.data.runDueDeletions() });
 			},
 		}),
 	];

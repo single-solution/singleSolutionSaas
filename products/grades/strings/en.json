@@ -5,7 +5,6 @@
 	"grades.error.tier_invalid": "This tier is not valid.",
 
 	"tiers.title": "Grades",
-	"tiers.empty": "No grades are defined yet.",
 	"tiers.offered": "Available grades",
 	"tiers.badge.label": "Grade: {tier}",
 	"tiers.error.not_found": "This item has no grade.",
@@ -23,7 +22,6 @@
 
 	"filters.title": "Grade",
 	"filters.empty": "No grades to filter by.",
-	"filters.option": "{label} ({count})",
 	"filters.clear": "Clear grade filter",
 	"filters.error.validation_failed": "This grade filter is not valid.",
 
@@ -45,13 +43,9 @@
 
 	"mapping.title": "Condition",
 	"mapping.statement": "Condition: {tier}",
-	"mapping.tier": "Graded {tier}",
-	"mapping.none": "This item has no grade.",
 	"mapping.error.not_found": "This item has no grade.",
 
 	"inspection.title": "Inspection report",
-	"inspection.title_tier": "Inspection report · {tier}",
-	"inspection.missing": "Open the report from the link you received.",
 	"inspection.score": "Score {score} / 100",
 	"inspection.date": "Inspected {date}",
 	"inspection.serial": "Unit {serial}",
@@ -64,15 +58,8 @@
 	"inspection.error.not_found": "This report link is unknown, revoked or expired.",
 	"inspection.error.rate_limited": "Too many requests. Please try again in a minute.",
 
-	"stub.field.tier": "Grade",
-	"stub.action.select": "Show",
-	"stub.field.token": "Report code",
-	"stub.action.open": "Open report",
-
 	"dashboard.title": "Grade & Condition System",
 	"dashboard.signed_in_as": "Signed in as {user} ({role})",
-	"dashboard.audit_banner": "You are acting on behalf of this merchant as {actor}. Every action is audited.",
-	"dashboard.demo_banner": "Demo: sample data computed with the default settings. Nothing is stored and nothing can be changed.",
 	"dashboard.launch_required": "Open this dashboard from the Portal to sign in.",
 	"dashboard.launch_invalid": "This launch link is invalid, expired or already used. Open the dashboard again from the Portal.",
 	"dashboard.pick_website": "Open the dashboard from one of your websites in the Portal.",

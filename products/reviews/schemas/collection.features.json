@@ -10,7 +10,11 @@
 			"default": "verified_buyers",
 			"enum": ["verified_buyers", "identified", "anyone"],
 			"x-kind": "config",
-			"x-ui": { "widget": "select", "group": "Eligibility", "order": 1 }
+			"x-ui": {
+				"widget": "select",
+				"group": "Eligibility",
+				"order": 1
+			}
 		},
 		"one_review_per": {
 			"type": "string",
@@ -19,7 +23,11 @@
 			"default": "order_item",
 			"enum": ["order_item", "item"],
 			"x-kind": "config",
-			"x-ui": { "widget": "select", "group": "Eligibility", "order": 2 }
+			"x-ui": {
+				"widget": "select",
+				"group": "Eligibility",
+				"order": 2
+			}
 		},
 		"send_on_completion": {
 			"type": "boolean",
@@ -27,8 +35,11 @@
 			"description": "On (with the request flow on): the request goes out as soon as order.completed@1 arrives, together with the website's other due requests and reminders. Off: requests wait until you run the flow (dashboard or POST /v1/request-flow:run). There is no delayed send: it would need a scheduled job, which this product does not run.",
 			"default": true,
 			"x-kind": "flag",
-			"x-experiment": true,
-			"x-ui": { "widget": "switch", "group": "Timing", "order": 3 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "Timing",
+				"order": 3
+			}
 		},
 		"review_window_days": {
 			"type": "integer",
@@ -38,7 +49,11 @@
 			"minimum": 1,
 			"maximum": 3650,
 			"x-kind": "config",
-			"x-ui": { "widget": "number", "group": "Timing", "order": 4 }
+			"x-ui": {
+				"widget": "number",
+				"group": "Timing",
+				"order": 4
+			}
 		},
 		"link_ttl_days": {
 			"type": "integer",
@@ -48,7 +63,11 @@
 			"minimum": 1,
 			"maximum": 365,
 			"x-kind": "limit",
-			"x-ui": { "widget": "number", "group": "Timing", "order": 5 }
+			"x-ui": {
+				"widget": "number",
+				"group": "Timing",
+				"order": 5
+			}
 		},
 		"reviewer_name": {
 			"type": "string",
@@ -57,7 +76,11 @@
 			"default": "first_name_initial",
 			"enum": ["first_name_initial", "first_name", "full_name", "initials"],
 			"x-kind": "config",
-			"x-ui": { "widget": "select", "group": "Display", "order": 6 }
+			"x-ui": {
+				"widget": "select",
+				"group": "Display",
+				"order": 6
+			}
 		},
 		"max_reviews_per_customer_per_day": {
 			"type": "integer",
@@ -67,8 +90,21 @@
 			"minimum": 1,
 			"maximum": 1000,
 			"x-kind": "limit",
-			"x-plan": { "starter": { "default": 10, "max": 50 }, "pro": { "default": 20, "max": 1000 } },
-			"x-ui": { "widget": "number", "group": "Limits", "order": 7 }
+			"x-plan": {
+				"starter": {
+					"default": 10,
+					"max": 50
+				},
+				"pro": {
+					"default": 20,
+					"max": 1000
+				}
+			},
+			"x-ui": {
+				"widget": "number",
+				"group": "Limits",
+				"order": 7
+			}
 		},
 		"time_zone": {
 			"type": "string",
@@ -79,7 +115,11 @@
 			"maxLength": 64,
 			"pattern": "^[A-Za-z_]+(?:/[A-Za-z0-9_+-]+)*$",
 			"x-kind": "config",
-			"x-ui": { "widget": "text", "group": "General", "order": 8 }
+			"x-ui": {
+				"widget": "text",
+				"group": "General",
+				"order": 8
+			}
 		}
 	}
 }

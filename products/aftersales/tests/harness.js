@@ -288,13 +288,13 @@ export const createHarness = async ({ config = {}, elements = {}, env = {}, webs
 		return { orderId, purchaseId: /** @type {string} */ (purchase?.id), number: /** @type {string} */ (purchase?.number) };
 	};
 
-	/** A dashboard session (`ses_…`) from a launch exchanged at /sso. @param {'merchant' | 'demo'} [kind] */
+	/** A dashboard session (`ses_…`) from a launch exchanged at /sso. @param {'merchant' | 'admin'} [kind] */
 	const session = async (kind = 'merchant') => {
 		const { token } = await portal.issueLaunch({
 			kind,
 			subject: 'usr_merchant',
 			user: { id: 'usr_merchant' },
-			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 		});
 		const sso = await handle(new Request(`https://aftersales.example.com/sso?launch=${encodeURIComponent(token)}`));
 		const id = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];

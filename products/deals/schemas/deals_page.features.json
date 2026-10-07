@@ -9,7 +9,6 @@
 			"default": "priority",
 			"enum": ["priority", "ending_soon", "newest"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": {
 				"widget": "select",
 				"group": "Listing",

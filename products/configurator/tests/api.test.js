@@ -294,7 +294,7 @@ describe('evaluations, quotes, URL parameters and widgets', () => {
 		await h.entitle();
 	});
 
-	it('bootstraps the widget and serves the element stub view', async () => {
+	it('bootstraps the widget', async () => {
 		const widget = await h.call('GET', `/v1/widgets/phone-live?search=${encodeURIComponent('?color=pink')}`, { key: h.pk });
 		expect(widget.status, JSON.stringify(widget.json)).toBe(200);
 		expect(widget.json).toMatchObject({
@@ -313,16 +313,6 @@ describe('evaluations, quotes, URL parameters and widgets', () => {
 			problem: null,
 		});
 		expect((await h.call('GET', '/v1/widgets/nope', { key: h.pk })).status).toBe(404);
-		const stub = await h.call('GET', '/v1/elements/widget/view?configurator=phone-live', { key: h.pk });
-		expect(stub.json).toEqual({
-			title: 'Phone X',
-			body: '3 groups of options to choose from.',
-			items: [{ text: 'Storage: 128, 256, 512' }, { text: 'Colour: Black, Pink, Gold' }, { text: 'Add-ons: Case, Charger' }],
-			actions: [],
-		});
-		const missing = await h.call('GET', '/v1/elements/widget/view?ctx=%7Bbad', { key: h.pk });
-		expect(missing.json).toMatchObject({ title: 'Configure', body: 'This configurator is not available.' });
-		expect((await h.call('GET', '/v1/elements/widget/view?lang=xx', { key: h.pk })).json.items).toEqual([]);
 		await h.entitle({ elements: { widget: false } });
 		expect((await h.call('GET', '/v1/widgets/phone-live', { key: h.pk })).status).toBe(403);
 		await h.entitle();
@@ -397,12 +387,6 @@ describe('catalog link (item.* and inventory.changed@1 events)', () => {
 			body: { configurator: 'tee', selection: { size: 'M' }, changed: 'size' },
 		});
 		expect(sold.json).toMatchObject({ inStock: false, notify: { itemId: 'itm_tee', variantId: 'tee-m', sku: 'TEE-M' } });
-		const stub = await h.call(
-			'GET',
-			`/v1/elements/widget/view?ctx=${encodeURIComponent(JSON.stringify({ itemId: 'itm_tee' }))}`,
-			{ key: h.pk },
-		);
-		expect(stub.json.title).toBe('Tee');
 		await h.deliver('item.updated@1', { itemId: 'itm_tee', title: 'Tee 2', changed: ['title'] });
 		expect((await h.call('GET', '/v1/catalog-items/itm_tee')).json.title).toBe('Tee 2');
 		await h.deliver('item.deleted@1', { itemId: 'itm_tee', reason: 'discontinued' });

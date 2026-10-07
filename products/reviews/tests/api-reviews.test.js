@@ -337,13 +337,6 @@ describe('reads, display and structured data', () => {
 		expect(rated.json.items).toHaveLength(1);
 		expect(rated.json.hasMore).toBe(true);
 		expect((await h.call('GET', '/v1/ratings/bad%20id', { as: '' })).status).toBe(422);
-		const view = await h.call('GET', '/v1/elements/display/view?itemId=itm_list', { as: '' });
-		expect(view.json.title).toBe('3 / 5 · 5 reviews');
-		expect(view.json.items[0].text).toMatch(/^★★☆☆☆/);
-		expect((await h.call('GET', '/v1/elements/display/view?itemId=itm_none', { as: '' })).json).toMatchObject({
-			title: 'Reviews',
-			body: 'No reviews yet.',
-		});
 		await h.entitle({ elements: { display: false } });
 		expect((await h.call('GET', '/v1/reviews', { as: '' })).status).toBe(403);
 		expect((await h.call('GET', '/v1/reviews')).status).toBe(200);
@@ -428,12 +421,76 @@ describe('reads, display and structured data', () => {
 		expect((await h.call('GET', '/v1/ratings/itm_f', { as: '' })).json.average).toBe(4.5);
 	});
 
-	it('replays a submission with the same Idempotency-Key', async () => {
+	it('refuses a repeated Idempotency-Key and accepts submissions without one', async () => {
 		const body = { itemId: 'itm_idem', rating: 4, body: text, author: { name: 'Same Key' } };
 		const first = await h.call('POST', '/v1/reviews', { body, idempotencyKey: 'idem-review-1' });
+		expect(first.status).toBe(201);
 		const second = await h.call('POST', '/v1/reviews', { body, idempotencyKey: 'idem-review-1' });
-		expect(second.status).toBe(first.status);
-		expect(second.json.id).toBe(first.json.id);
+		expect(second.status).toBe(409);
+		expect(second.json.type).toMatch(/duplicate_request$/);
 		expect(await h.collection('reviews').countDocuments({ websiteId: WEBSITE, itemId: 'itm_idem' })).toBe(1);
+		const unkeyed = await h.call('POST', '/v1/reviews', {
+			body: { ...body, author: { name: 'No Key' } },
+			idempotencyKey: null,
+		});
+		expect(unkeyed.status).toBe(201);
+		expect(unkeyed.json.id).not.toBe(first.json.id);
+	});
+	it("never lets caller B reuse caller A's Idempotency-Key to see or change A's records", async () => {
+		const identified = { config: { collection: { who: 'identified' } } };
+		await h.entitle(identified);
+		const body = { itemId: 'itm_owner', rating: 5, body: text };
+		const first = await h.call('POST', '/v1/reviews', { as: 'cus_key_a', body, idempotencyKey: 'shared-key' });
+		expect(first.status).toBe(201);
+		const asked = await h.call('POST', '/v1/questions', {
+			as: 'cus_key_a',
+			body: { itemId: 'itm_owner', body: 'Does it run large?' },
+			idempotencyKey: 'shared-question',
+		});
+		expect(asked.status).toBe(201);
+		// within 24 h app-kit refuses the repeated key on the website outright
+		const refused = await h.call('POST', '/v1/reviews', { as: 'cus_key_b', body, idempotencyKey: 'shared-key' });
+		expect(refused.json.type).toMatch(/duplicate_request$/);
+		h.clock.advance(25 * 3_600_000);
+		await h.entitle(identified);
+		// later, another customer's same key derives another id: a fresh record, A's stays as it was
+		const second = await h.call('POST', '/v1/reviews', { as: 'cus_key_b', body, idempotencyKey: 'shared-key' });
+		expect(second.status).toBe(201);
+		expect(second.json.id).not.toBe(first.json.id);
+		const other = await h.call('POST', '/v1/questions', {
+			as: 'cus_key_b',
+			body: { itemId: 'itm_owner', body: 'Is it warm?' },
+			idempotencyKey: 'shared-question',
+		});
+		expect(other.status).toBe(201);
+		expect(other.json.id).not.toBe(asked.json.id);
+		const reviewA = await h.collection('reviews').findOne({ websiteId: WEBSITE, id: first.json.id });
+		expect(reviewA?.customerId).toBe('cus_key_a');
+		const questionA = await h.collection('questions').findOne({ websiteId: WEBSITE, id: asked.json.id });
+		expect(questionA).toMatchObject({ customerId: 'cus_key_a', body: 'Does it run large?' });
+		await h.entitle();
+	});
+
+	it('refuses a server retry that names another customer than the record made first', async () => {
+		const body = { itemId: 'itm_owner_sk', rating: 4, body: text, author: { name: 'Server' } };
+		const first = await h.call('POST', '/v1/reviews', { body: { ...body, customerId: 'cus_sk_a' }, idempotencyKey: 'sk-key' });
+		expect(first.status).toBe(201);
+		h.clock.advance(25 * 3_600_000);
+		await h.entitle();
+		const reused = await h.call('POST', '/v1/reviews', { body: { ...body, customerId: 'cus_sk_b' }, idempotencyKey: 'sk-key' });
+		expect(reused.status).toBe(409);
+		expect(reused.json.type).toMatch(/duplicate_request$/);
+		const retried = await h.call('POST', '/v1/reviews', {
+			body: { ...body, customerId: 'cus_sk_a' },
+			idempotencyKey: 'sk-key',
+		});
+		expect(retried.json.type).toMatch(/duplicate_request$/); // seen again within 24 h
+		h.clock.advance(25 * 3_600_000);
+		await h.entitle();
+		const replayed = await h.call('POST', '/v1/reviews', {
+			body: { ...body, customerId: 'cus_sk_a' },
+			idempotencyKey: 'sk-key',
+		});
+		expect(replayed.json.id).toBe(first.json.id);
 	});
 });

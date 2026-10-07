@@ -24,7 +24,7 @@ import { displayName } from './text.js';
  * @property {string | null} orderId
  * @property {string | null} requestId
  * @property {string | null} customerId
- * @property {{ name: string | null, email: string | null } | null} author null once anonymised
+ * @property {{ name: string | null, email: string | null } | null} author
  * @property {number} rating
  * @property {number} scale
  * @property {string | null} title
@@ -44,7 +44,6 @@ import { displayName } from './text.js';
  * @property {string | null} publishedAt
  * @property {string | null} deletedAt
  * @property {Record<string, unknown> | null} custom
- * @property {unknown} [anonymizedAt]
  */
 
 /** @typedef {(photo: StoredPhoto) => string | null} PhotoUrl */
@@ -74,7 +73,6 @@ export const publicReview = (review, { nameFormat, showReply, showVerified, phot
 	scale: review.scale,
 	title: review.title,
 	body: review.body,
-	removed: review.anonymizedAt !== undefined && review.anonymizedAt !== null,
 	author: displayName(review.author?.name, nameFormat),
 	verifiedPurchase: showVerified ? review.verifiedPurchase : null,
 	attributes: review.attributes ?? {},

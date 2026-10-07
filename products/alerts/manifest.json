@@ -11,19 +11,10 @@
 	"endpoints": {
 		"base": "https://alerts.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:capture.max_active_subscriptions",
-			"limit:capture.max_active_per_contact",
-			"rate:capture.max_per_ip_per_hour",
-			"limit:dispatch.max_per_contact_per_day"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": ["events.subscribe:inventory.changed@1", "events.subscribe:price.changed@1", "events.subscribe:custom.*"],
 	"requires": {
@@ -32,9 +23,6 @@
 	"events": {
 		"consumes": ["custom.*", "inventory.changed@1", "price.changed@1"],
 		"publishes": ["alerts.subscribed@1", "alerts.sent@1"]
-	},
-	"budget": {
-		"shared": 1
 	},
 	"elements": [
 		{
@@ -45,9 +33,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["types"],
 			"requires": {
@@ -72,9 +57,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": [],
 			"requires": {
@@ -102,9 +84,6 @@
 			"price": {
 				"hourly": 200
 			},
-			"budget": {
-				"js": 5
-			},
 			"dependsOn": ["types"],
 			"requires": {
 				"resources": ["database"]
@@ -114,7 +93,6 @@
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": true,
 			"api": {
 				"resources": ["subscriptions"]
 			},
@@ -148,9 +126,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["types", "unsubscribe"],
 			"requires": {
 				"resources": ["database", "messaging"]
@@ -175,9 +150,6 @@
 			"price": {
 				"hourly": 150
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["capture"],
 			"features": {
 				"$ref": "schemas/waitlist_priority.features.json"
@@ -198,9 +170,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 50
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["types"],
 			"requires": {
@@ -225,9 +194,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["types"],
 			"features": {

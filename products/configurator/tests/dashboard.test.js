@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { actorOf, demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { actorOf, resolveDashboard } from '../api/dashboard.js';
 import { sessionView } from '../api/session.js';
 import { settingsFrom } from '../api/settings.js';
 import { createTranslator } from '../headless/strings.js';
 import { PHONE } from './helpers.js';
-import { MERCHANT, T0, WEBSITE, WEBSITE_2, createHarness } from './harness.js';
+import { MERCHANT, WEBSITE, WEBSITE_2, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -82,7 +82,7 @@ describe('dashboard API (SSO sessions)', () => {
 		expect((await dashboard('POST', '/v1/dashboard/rules:check', session, {})).status).toBe(422);
 	});
 
-	it('answers "open the dashboard for a website" without a website and refuses demo writes', async () => {
+	it('answers "open the dashboard for a website" without a website; staff write as staff', async () => {
 		const unscoped = await h.session({ scope: { merchantId: MERCHANT } });
 		/** @param {string} method @param {string} path @param {unknown} [body] */
 		const bare = async (method, path, body) => {
@@ -104,15 +104,13 @@ describe('dashboard API (SSO sessions)', () => {
 		expect(await bare('PATCH', '/v1/dashboard/configurators/x', { version: 1 })).toBe(400);
 		expect(await bare('POST', '/v1/dashboard/configurators:check', PHONE)).toBe(400);
 		expect(await bare('POST', '/v1/dashboard/evaluations', { configurator: 'x' })).toBe(400);
-		const demo = await h.session({ kind: 'demo' });
-		const refused = await h.handle(
-			new Request('https://configurator.example.com/v1/dashboard/configurators', {
-				method: 'POST',
-				headers: { cookie: `ss_session=${demo}`, 'content-type': 'application/json', 'idempotency-key': 'idk-demo' },
-				body: JSON.stringify(PHONE),
-			}),
-		);
-		expect(refused.status).toBe(403);
+		const staff = await h.session({ kind: 'admin' });
+		const made = await dashboard('POST', '/v1/dashboard/configurators', staff, { ...PHONE, key: 'by-staff' });
+		expect(made.status, JSON.stringify(made.json)).toBe(201);
+		const audit = await h.db
+			.collection('ss_configurator_audit')
+			.findOne({ websiteId: WEBSITE, action: 'configurator.created', 'actor.type': 'staff' });
+		expect(audit?.actor).toEqual({ type: 'staff', id: 'usr_merchant' });
 	});
 });
 
@@ -121,8 +119,6 @@ describe('dashboard pages data (resolveDashboard)', () => {
 		const { configurator } = h;
 		expect(await resolveDashboard({ configurator, sessionId: null })).toEqual({ state: 'signin' });
 		expect(await resolveDashboard({ configurator, sessionId: 'ses_unknown' })).toEqual({ state: 'signin' });
-		const demo = await resolveDashboard({ configurator, sessionId: await h.session({ kind: 'demo' }), now: T0 });
-		expect(demo.state === 'ready' && demo.data.demo).toBe(true);
 		const unscoped = await resolveDashboard({ configurator, sessionId: await h.session({ scope: { merchantId: MERCHANT } }) });
 		expect(unscoped.state).toBe('pick_website');
 		const other = await resolveDashboard({
@@ -132,7 +128,7 @@ describe('dashboard pages data (resolveDashboard)', () => {
 		expect(other.state).toBe('not_subscribed');
 		const live = await resolveDashboard({ configurator, sessionId: await h.session(), website: WEBSITE });
 		if (live.state !== 'ready') throw new Error(live.state);
-		expect(live).toMatchObject({ data: { demo: false, canWrite: true, websiteId: WEBSITE } });
+		expect(live).toMatchObject({ data: { canWrite: true, websiteId: WEBSITE } });
 		expect(live.portalLink).toBe(`https://portal.test/websites/${WEBSITE}/subscriptions/sub_0123456789abcdefghjkmnpq`);
 		const list = await live.data.list();
 		expect(list.length).toBeGreaterThan(0);
@@ -150,36 +146,19 @@ describe('dashboard pages data (resolveDashboard)', () => {
 		await h.call('DELETE', `/v1/configurators/${linked.json.id}`);
 		expect(await live.data.get(linked.json.id)).toMatchObject({ preview: null, problem: null });
 	});
-
-	it('builds the demo from the samples, read-only', async () => {
-		const demo = demoDashboard({ now: T0 });
-		expect(demo).toMatchObject({ demo: true, canWrite: false, websiteId: null });
-		expect((await demo.list()).map((row) => row.key)).toEqual(['classic-tee', 'workstation', 'team-plan']);
-		expect(await demo.overview()).toEqual({ configurators: { published: 3 }, catalogItems: 0 });
-		expect((await demo.get('team-plan'))?.preview?.schema.groups.map((group) => group.key)).toEqual([
-			'plan',
-			'seats',
-			'addons',
-		]);
-		expect(await demo.get('nope')).toBeNull();
-		expect(await demo.items()).toEqual([]);
-		expect(demo.settings.enabled('widget')).toBe(true);
-	});
 });
 
 describe('helpers', () => {
 	it('describe sessions, actors, settings, problems and strings', () => {
-		expect(sessionView({ kind: 'admin', role: 'platform_admin', subject: 'stf_1', scope: { actor: 'stf_1' } })).toEqual({
+		expect(sessionView({ kind: 'admin', role: 'platform_admin', subject: 'stf_1' })).toEqual({
 			kind: 'admin',
 			role: 'platform_admin',
-			scope: { actor: 'stf_1' },
+			scope: {},
 			user: 'stf_1',
-			actor: 'stf_1',
 		});
-		expect(sessionView({ kind: 'demo', role: 'demo' })).toMatchObject({ user: null, actor: null, scope: {} });
-		expect(actorOf({ actor: 'stf_1', kind: 'impersonate', user: 'usr_1' })).toEqual({ type: 'staff', id: 'stf_1' });
-		expect(actorOf({ actor: null, kind: 'admin', user: null })).toEqual({ type: 'staff', id: 'unknown' });
-		expect(actorOf({ actor: null, kind: 'merchant', user: 'usr_1' })).toEqual({ type: 'merchant', id: 'usr_1' });
+		expect(sessionView({ kind: 'merchant', role: 'merchant' })).toMatchObject({ user: null, scope: {} });
+		expect(actorOf({ kind: 'admin', user: null })).toEqual({ type: 'staff', id: 'unknown' });
+		expect(actorOf({ kind: 'merchant', user: 'usr_1' })).toEqual({ type: 'merchant', id: 'usr_1' });
 		const settings = settingsFrom({
 			can: () => false,
 			config: () => null,

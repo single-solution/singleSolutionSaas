@@ -11,18 +11,10 @@
 	"endpoints": {
 		"base": "https://loyalty.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:earn_rules.max_points_per_transaction",
-			"limit:redeem.max_share_percent",
-			"limit:adjustments.max_points"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": ["events.subscribe:order.*", "events.subscribe:customer.created", "events.subscribe:custom.*"],
 	"requires": {
@@ -38,9 +30,6 @@
 			"custom.*"
 		],
 		"publishes": ["loyalty.earned@1", "loyalty.redeemed@1", "loyalty.tier_changed@1", "loyalty.expiring@1"]
-	},
-	"budget": {
-		"shared": 1
 	},
 	"elements": [
 		{
@@ -63,9 +52,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": [],
 			"requires": {
 				"resources": ["database"]
@@ -77,7 +63,6 @@
 			"placement": false,
 			"rules": ["when"],
 			"customFields": ["member"],
-			"experiments": true,
 			"api": {
 				"resources": ["earnings", "members", "rules", "activities"]
 			},
@@ -92,9 +77,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 300
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["earn_rules"],
 			"requires": {
@@ -119,9 +101,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200
-			},
-			"budget": {
-				"js": 3
 			},
 			"dependsOn": ["earn_rules"],
 			"requires": {
@@ -155,9 +134,6 @@
 			"price": {
 				"hourly": 300
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["earn_rules"],
 			"features": {
 				"$ref": "schemas/tiers.features.json"
@@ -177,9 +153,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["earn_rules"],
 			"features": {
@@ -201,9 +174,6 @@
 			"price": {
 				"hourly": 300
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["earn_rules"],
 			"features": {
 				"$ref": "schemas/referrals.features.json"
@@ -224,9 +194,6 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["earn_rules"],
 			"features": {
 				"$ref": "schemas/adjustments.features.json"
@@ -246,9 +213,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["earn_rules"],
 			"features": {

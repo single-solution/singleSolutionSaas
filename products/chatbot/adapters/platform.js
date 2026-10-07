@@ -50,18 +50,6 @@ export const loadStrings = async (root) => {
 	);
 };
 
-/** Personal data this product stores (drives POST /v1/data:export and /v1/data:anonymize). */
-export const PRIVACY = Object.freeze({
-	collections: [
-		{ name: 'conversations', subjectField: 'customerId', fields: ['contact', 'context', 'last', 'subject', 'custom'] },
-		{ name: 'messages', subjectField: 'customerId', fields: ['body', 'payload', 'authorName'] },
-		{ name: 'leads', subjectField: 'customerId', fields: ['fields', 'contact'] },
-		{ name: 'ratings', subjectField: 'customerId', fields: ['comment'] },
-		{ name: 'orders', subjectField: 'customerId', fields: ['customer', 'lines', 'number'] },
-		{ name: 'customers', subjectField: 'customerId', fields: ['emails'] },
-	],
-});
-
 /** Product-specific problem codes (RFC 9457 `type` = `<base>/problems/<code>`). */
 export const PROBLEM_CODES = Object.freeze({
 	guest_limit_reached: { status: 403, title: 'Sign in to continue the conversation' },
@@ -118,7 +106,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		stores = mongoStores;
 	}
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
-	// SSRF policy for merchant databases, connectors, knowledge pages and webhook tools: in development the `ss dev`
+	// SSRF policy for merchant databases, connectors, knowledge pages and webhook tools: in development the
 	// client database and local mocks live on loopback; the allowlist is ignored when NODE_ENV=production
 	const outbound = {
 		allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],
@@ -129,11 +117,9 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			strings,
 			logger: createLogger({ level: config.logLevel }),
 			problems: config.problems,
-			privacy: PRIVACY,
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
 			connectors: { ai: AI_ADAPTERS },
-			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
 			outbound,
 			...(config.connectSecret ? { connectSecret: config.connectSecret } : {}),
 			...(stores === undefined ? {} : { stores }),

@@ -40,6 +40,16 @@ describe('intake', () => {
 		expect(order.money).toMatchObject({ balanceDue: 5500, paymentState: 'unpaid' });
 		const again = await h.order({ externalId: 'ext-1' });
 		expect(again).toMatchObject({ id: order.id, duplicate: true });
+		// a repeated Idempotency-Key is refused; without one the request runs normally
+		const body = { currency: 'EUR', externalId: 'ext-idk', lines: [{ title: 'Pen', quantity: 1, unitAmount: 100 }] };
+		const first = await h.call('POST', '/v1/inbound-orders', { body, idempotencyKey: 'idk_inbound_1' });
+		expect(first.status, first.text).toBe(201);
+		const repeated = await h.call('POST', '/v1/inbound-orders', { body, idempotencyKey: 'idk_inbound_1' });
+		expect(repeated.status).toBe(409);
+		expect(repeated.json.type).toMatch(/duplicate_request$/);
+		const keyless = await h.call('POST', '/v1/inbound-orders', { body, idempotencyKey: null });
+		expect(keyless.status, keyless.text).toBe(200);
+		expect(keyless.json.duplicate).toBe(true);
 		const placed = h.published('order.placed@1').filter((e) => e.data.orderId === order.id);
 		expect(placed).toHaveLength(1);
 		expect(placed[0].data).toMatchObject({ number: '000001', currency: 'EUR', customer: { customerId: 'cus_1' } });
@@ -291,11 +301,6 @@ describe('lifecycle', () => {
 		await h.order();
 		h.clock.advance(49 * HOUR);
 		expect((await h.orders.processDue(await h.site(), { limit: 1 })).more).toBe(true);
-		const demo = await h.session('demo');
-		expect(
-			(await h.call('POST', '/v1/dashboard/due:run', { key: null, headers: { authorization: `Bearer ${demo}` }, body: {} }))
-				.status,
-		).toBe(403);
 	});
 
 	it('lists with filters and cursor pages; statuses and carriers are public', async () => {

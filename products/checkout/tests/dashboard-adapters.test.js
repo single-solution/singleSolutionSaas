@@ -4,7 +4,7 @@ import { createIntegrations } from '../adapters/integrations.js';
 import { createTestGateway } from '../adapters/payments.js';
 import { isTransactionUnsupported, strip } from '../adapters/db.js';
 import { maskKey, seal, sealingKey, unseal } from '../adapters/secrets.js';
-import { demoDashboard, kpisOf, resolveDashboard } from '../api/dashboard.js';
+import { kpisOf, resolveDashboard } from '../api/dashboard.js';
 import { EXPIRY_RUN_LIMIT, fail, requesterOf } from '../api/routes.js';
 import { sessionView } from '../api/session.js';
 import { CONNECTED, HOUR, MERCHANT, WEBSITE, checkoutBody, createHarness } from './harness.js';
@@ -18,13 +18,13 @@ beforeAll(async () => {
 }, 60_000);
 afterAll(async () => h?.close());
 
-/** @param {any} kind */
+/** @param {'merchant' | 'admin'} kind */
 const launch = async (kind) => {
 	const { token } = await h.portal.issueLaunch({
 		kind,
 		subject: 'usr_merchant',
 		user: { id: 'usr_merchant' },
-		scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+		scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 	});
 	const sso = await h.handle(new Request(`https://checkout.example.com/sso?launch=${encodeURIComponent(token)}`));
 	const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
@@ -41,15 +41,6 @@ describe('dashboard', () => {
 			...application,
 			product: { ...application.product, launch: { session: async () => value } },
 		});
-		const demo = await resolveDashboard({ application: withSession({ role: 'demo', kind: 'demo' }), sessionId: 's' });
-		expect(demo.state === 'ready' && demo.data.demo).toBe(true);
-		if (demo.state === 'ready') {
-			expect((await demo.data.orders({ status: 'confirmed' })).length).toBe(1);
-			expect(await demo.data.order('ord_demo_000002')).toMatchObject({ status: 'pending_payment' });
-			expect(await demo.data.order('nope')).toBeNull();
-			expect((await demo.data.overview()).open).toBe(2);
-			expect((await demo.data.integrations()).key).toBeNull();
-		}
 		expect((await resolveDashboard({ application: withSession({ role: 'merchant', scope: {} }), sessionId: 's' })).state).toBe(
 			'pick_website',
 		);
@@ -92,10 +83,9 @@ describe('dashboard', () => {
 				{ currency: 'USD', orders: 0, revenue: 0 },
 			],
 		});
-		expect(demoDashboard({ now: 0 }).canWrite).toBe(false);
 	});
 
-	it('confirms, cancels, records payments and sets the integration key with a launch session; demo is read-only', async () => {
+	it('confirms, cancels, records payments and sets the integration key with a launch session; staff act as staff', async () => {
 		const merchant = await launch('merchant');
 		expect((await h.call('GET', '/v1/session', { key: merchant })).json).toMatchObject({
 			kind: 'merchant',
@@ -133,9 +123,14 @@ describe('dashboard', () => {
 			.collection('ss_checkout_audit')
 			.findOne({ websiteId: WEBSITE, action: 'checkout.integration_key_removed' });
 		expect(audit?.actor).toMatchObject({ type: 'merchant', id: 'usr_merchant' });
-		const demo = await launch('demo');
-		expect((await h.call('POST', `/v1/dashboard/orders/${cod.json.id}/confirm`, { key: demo, body: {} })).status).toBe(403);
-		expect((await h.call('GET', `/v1/dashboard/orders/${cod.json.id}/proofs/p`, { key: demo })).status).toBe(400);
+		const admin = await launch('admin');
+		expect((await h.call('PUT', '/v1/dashboard/integration-key', { key: admin, body: { key: '' } })).status).toBe(200);
+		const byStaff = await h.db
+			.collection('ss_checkout_audit')
+			.find({ websiteId: WEBSITE, action: 'checkout.integration_key_removed' })
+			.toArray();
+		expect(byStaff.at(-1)?.actor).toMatchObject({ type: 'staff', id: 'usr_merchant' });
+		expect((await h.call('GET', `/v1/dashboard/orders/${cod.json.id}/proofs/p`, { key: admin })).status).toBe(404);
 	});
 
 	it('"Process expired now" cancels the website\'s expired holds and reports its abandoned carts (no timer)', async () => {
@@ -164,8 +159,6 @@ describe('dashboard', () => {
 			more: false,
 		});
 		expect(EXPIRY_RUN_LIMIT).toBe(100);
-		const demo = await launch('demo');
-		expect((await h.call('POST', '/v1/dashboard/expiry:run', { key: demo, body: {} })).status).toBe(403);
 	});
 
 	it('maps requesters and failures', () => {
@@ -179,7 +172,12 @@ describe('dashboard', () => {
 		});
 		expect(requesterOf({ website: { kind: 'pk' } }).subject).toBeNull();
 		expect(fail({ code: 'blocked', detail: 'x' })).toBeTruthy();
-		expect(sessionView({ kind: 'impersonate', role: 'impersonate', scope: { actor: 'stf_1' } }).actor).toBe('stf_1');
+		expect(sessionView({ kind: 'admin', role: 'platform_admin', subject: 'stf_1' })).toEqual({
+			kind: 'admin',
+			role: 'platform_admin',
+			scope: {},
+			user: 'stf_1',
+		});
 	});
 });
 

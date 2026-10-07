@@ -43,11 +43,34 @@ Plans: `starter` (everything but `bulk` and `risk`, which are add-ons) and `pro`
 `/v1/carriers`), look up tracking by number + contact, and — with a verified `SS-Identity` — the customer's own orders,
 cancellation and receipts. Printable views send `Content-Security-Policy: default-src 'none'`.
 
-## Layout, develop, check
+## Background work
 
-Standard product layout (see the root README). `pnpm check`, `pnpm validate`, `pnpm build`; `tests/certify.test.js`
-runs `ss certify` against `serve.js`. Environment: the app-kit variables (`.env.example`). Nothing runs on a timer (no
-crons, no background loops): an order whose status expired is moved as soon as it is read (and no longer counts as
-open), outbox entries a crashed request left behind and due customer message retries are sent when the order is next
-read, and the dashboard's "Process due now" (`POST /v1/dashboard/due:run`) handles all of it for the website at once.
-See `jobs/README.md`.
+Nothing runs on a timer (no crons, no background loops): an order whose status expired is moved as soon as it is read
+(and no longer counts as open), outbox entries a crashed request left behind and due customer message retries are sent
+when the order is next read, and the dashboard's "Process due now" (`POST /v1/dashboard/due:run`) handles all of it for
+the website at once.
+
+## Develop
+
+```sh
+cp .env.example .env.local     # MONGODB_URI (empty = in-memory control store) + a random CONNECT_SECRET (≥ 32 chars)
+pnpm dev                       # Next.js on :3000
+# local Portal → Admin → Apps → Add product → http://localhost:3000 + the CONNECT_SECRET
+pnpm validate                  # ss app validate: manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB
+ss pack build .                # the order tracker, tracking and receipt widgets (Mode A) → upload dist/pack in the
+                               # Portal (app page → Upload widgets)
+```
+
+The e2e suite (monorepo workspace `@ss/e2e`) composes this product from its `./platform` and `./routes` exports and runs
+it against the real Portal in process.
+
+## Deploy
+
+1. Deploy this directory on any Node 22 host that runs Next.js (on Vercel: Root Directory = this folder). In the
+   monorepo, `next.config.js` sets the workspace root automatically.
+2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
+   signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
+3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
+   its key and pins the Portal; then activate it in the Portal.
+4. `ss pack build .` and upload `dist/pack` on the app page (**Upload widgets**) so the Mode A widgets are delivered.

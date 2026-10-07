@@ -1,7 +1,7 @@
 # Storefront Blocks (`storefront`)
 
 An SSPS v1 **element pack** (PLAN Part D §10, Appendix A.5, Part E): listing and layout blocks for any website — a
-shop, an app's marketing site, a services or a content site. There is no backend: the Portal stores the pack's signed
+shop, an app's marketing site, a services or a content site. There is no backend: the Portal stores the pack's
 browser modules and the Loader mounts them on the merchant's pages (Mode A); developers can build their own UI on the
 same headless cores (Mode B). No data is stored anywhere by the pack.
 
@@ -18,31 +18,26 @@ Every element is switchable and priced (millicredits per hour); every setting is
 bounds in `schemas/<element>.features.json`, including a `placement` feature (the shared placement v1: paths,
 selectors, devices, schedule, frequency and dismiss memory, audience).
 
-| Element          | Price /h | Budget (KB) | What it does                                                                                                                                                         |
-| ---------------- | -------: | ----------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `grid`           |      200 |           4 | Item listing driven by the URL query; real `<a href="?page=N">` links (rel prev/next), enhanced to infinite scroll or "load more"; sort; live result count           |
-| `cards`          |      100 |           1 | A section of item cards (collection, order, count) with rotating attribute chips, badges, sold-out and compare-at prices; grid or rail                               |
-| `filters`        |      150 |           4 | Facets (values, range, toggle; single or multi) with disjunctive counts, price range in the currency's own digits, active chips; sidebar, sheet (modal) or top bar   |
-| `search_overlay` |        0 |           4 | Search dialog: `/` hotkey, combobox + listbox, arrow keys, Enter to the active result or the website's results page; Site Search, Catalog or local data              |
-| `hero`           |      100 |           3 | Headline and calls to action (strings, per language), LCP image (mobile source, high priority), background video only when allowed, pause button; reserved height    |
-| `trending_band`  |      100 |           1 | Trending or featured items (rank, featured flag, newest, manual ids): a card strip or a slow marquee of names (static with reduced motion)                           |
-| `category_cards` |        0 |           1 | Navigation cards to categories (configured, JSON file or page data)                                                                                                  |
-| `brand_cards`    |        0 |           1 | Navigation cards to brands with logos                                                                                                                                |
-| `deals_page`     |        0 |           3 | Live deals with badge, time left and item previews from the Deals product's public `GET /v1/deals-page` (or a JSON file / page data); "load more" over its cursor    |
-| `notice_bar`     |        0 |           1 | Dismissible announcement; schedule, audience and dismiss memory through the placement (`frequency.dismissMemory`, default 7 days)                                    |
-| `mobile_tab_bar` |        0 |           1 | Bottom navigation below 768 px: icons, translatable labels, `aria-current`, safe-area aware, keeps room at the end of the page                                       |
-| `contact_footer` |        0 |           1 | Contacts (phone and WhatsApp links for any numbering plan, e-mail, address), opening hours, social and policy links                                                  |
-| `theme`          |        0 |           2 | Design tokens, fonts and motion as `--ss-*` CSS custom properties (CSSOM, CSP-safe) plus a web font; `themeCss()` gives the same `:root{…}` rule for server inlining |
+| Element          | Price /h | What it does                                                                                                                                                         |
+| ---------------- | -------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `grid`           |      200 | Item listing driven by the URL query; real `<a href="?page=N">` links (rel prev/next), enhanced to infinite scroll or "load more"; sort; live result count           |
+| `cards`          |      100 | A section of item cards (collection, order, count) with rotating attribute chips, badges, sold-out and compare-at prices; grid or rail                               |
+| `filters`        |      150 | Facets (values, range, toggle; single or multi) with disjunctive counts, price range in the currency's own digits, active chips; sidebar, sheet (modal) or top bar   |
+| `search_overlay` |        0 | Search dialog: `/` hotkey, combobox + listbox, arrow keys, Enter to the active result or the website's results page; Site Search, Catalog or local data              |
+| `hero`           |      100 | Headline and calls to action (strings, per language), LCP image (mobile source, high priority), background video only when allowed, pause button; reserved height    |
+| `trending_band`  |      100 | Trending or featured items (rank, featured flag, newest, manual ids): a card strip or a slow marquee of names (static with reduced motion)                           |
+| `category_cards` |        0 | Navigation cards to categories (configured, JSON file or page data)                                                                                                  |
+| `brand_cards`    |        0 | Navigation cards to brands with logos                                                                                                                                |
+| `deals_page`     |        0 | Live deals with badge, time left and item previews from the Deals product's public `GET /v1/deals-page` (or a JSON file / page data); "load more" over its cursor    |
+| `notice_bar`     |        0 | Dismissible announcement; schedule, audience and dismiss memory through the placement (`frequency.dismissMemory`, default 7 days)                                    |
+| `mobile_tab_bar` |        0 | Bottom navigation below 768 px: icons, translatable labels, `aria-current`, safe-area aware, keeps room at the end of the page                                       |
+| `contact_footer` |        0 | Contacts (phone and WhatsApp links for any numbering plan, e-mail, address), opening hours, social and policy links                                                  |
+| `theme`          |        0 | Design tokens, fonts and motion as `--ss-*` CSS custom properties (CSSOM, CSP-safe) plus a web font; `themeCss()` gives the same `:root{…}` rule for server inlining |
 
-Budgets are honest (F.18): `ss pack build` bundles the modules as minified ES modules with shared chunks, and each
-`budget.js` is the gzip size of the element's own entry modules, measured exactly as the Portal measures it
-(`@ss/contracts/budget`); the code the elements share (cards, listing, sources, the DOM helpers) is declared once as
-`budget.shared` (21 KB) and counted once per website. `ss app validate` warns when an element outgrows or pads its
-budget, and `tests/pack.test.js` checks the build. Plans: **starter** switches on theme, grid, cards, notice bar and contact footer (300 mc/h), with filters,
+`ss pack build` bundles the modules as minified ES modules with shared chunks (cards, listing, sources, the DOM
+helpers), and `tests/pack.test.js` checks the build. Plans: **starter** switches on theme, grid, cards, notice bar and contact footer (300 mc/h), with filters,
 search, category/brand cards, tab bar and deals page as add-ons; **pro** switches on theme, grid, filters, hero and
-notice bar (450 mc/h) with every other block as an add-on. The default sets, with the shared chunks, fit the Portal's 60 KB website
-budget next to the Loader (≈ 15 KB); enabling more is up to the merchant, and the Portal refuses a compile that would exceed
-the budget (the live bundle stays).
+notice bar (450 mc/h) with every other block as an add-on. Enabling more is up to the merchant.
 
 ## Data sources
 
@@ -76,26 +71,24 @@ cookies, time out after 8 s and refuse bodies over 2 MB; at most 2 000 items per
 ## Layout
 
 ```
-manifest.json, schemas/      elements, prices, budgets, plans; feature schemas (generated forms in the Portal)
+manifest.json, schemas/      elements, prices, plans; feature schemas (generated forms in the Portal)
 strings/<lang>.json          the catalogs (en first); the Portal slices each element's keys (`stringKeys`) per language
 core/                        pure: items + field map, query/URL + facets, cards + chips, media policy, theme, nav, deals
 headless/                    Mode B cores: createGrid, createFilters, … → state, actions, subscribe, validate, strings, destroy
 ui/                          Mode A renderers: render({ state, actions, strings, dom, slots, reducedMotion }) + styles (tokens only)
 ui/entries/                  renderer entries that rename an element's stylesheet export to `styles`
 pack.js                      `ss pack build` of this folder: inline manifest, built assets (sha256, size), descriptor
-tests/                       Vitest: core, headless, renderers in jsdom, the built modules, ss certify
+tests/                       Vitest: core, headless, renderers in jsdom, the built modules
 ```
 
 ```sh
 pnpm build        # ss pack build: minified modules + shared chunks + catalogs + descriptor.json in dist/pack
 pnpm check        # format, lint, typecheck, tests with coverage (90/90/85)
 pnpm validate     # ss app validate (0 problems)
-pnpm certify      # static certification for packs
 ```
 
-Publishing: `pnpm publish:pack -- --portal <url> --token <sst_…> --key @dev-key.json` (`ss pack publish`) builds,
-signs the `ss-pack-bundle@1` descriptor with the developer key and uploads it and every asset to the Portal admin pack
-API with a staff API token; the system test `e2e/tests/storefront-portal.test.js` does the same against the real
+Uploading: staff upload `dist/pack` in the Portal (Admin → Apps → **Upload pack version**); the admin posts
+`descriptor.json` (`POST /v1/admin/packs`) and `PUT`s every missing asset. The e2e suite does the same against the real
 Portal.
 
 ## Events

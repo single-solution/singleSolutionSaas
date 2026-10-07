@@ -80,7 +80,7 @@ The Portal connection (made from Portal → Admin → Apps → Add product), the
 pnpm check      # format, lint, typecheck, tests with coverage (90/90/85)
 pnpm validate   # ss app validate (0 warnings)
 pnpm build      # next build
-pnpm portal     # ss dev (Portal emulator) and, in another terminal, pnpm dev
+pnpm dev        # next dev on port 3000
 ```
 
 ## Notes and limits

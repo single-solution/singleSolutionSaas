@@ -27,7 +27,6 @@ Colours: set `token` to one of your design tokens (`--ss-color-success`) or `col
 
 ```http
 POST /v1/tier-assignments
-Idempotency-Key: 6a1f…
 Authorization: Bearer sk_live_…
 
 { "itemId": "erp:4711", "variantId": "blue-128", "tier": "excellent" }
@@ -59,11 +58,6 @@ badges.subscribe((state) => paint(state.current)); // { label, color: 'var(--ss-
 | `warranty`   | `createWarranty`         | `inline`, `terms`, `table`   | `GET /v1/warranty`, `GET /v1/warranty/{tier}`, `?format=text`             |
 | `mapping`    | `createConditions`       | `statement`, `table`         | `GET /v1/condition-mappings/items/{itemId}`                               |
 | `inspection` | `createInspectionReport` | `report`, `summary`          | `GET /v1/inspection-reports/{token}`                                      |
-
-Without this product's UI bundle the Loader's element stub renders the text views
-`GET /v1/elements/{key}/view?ctx=` and posts its actions to `POST /v1/elements/{key}/actions/{action}?ctx=` with your
-pk_ key: `refresh` everywhere, `select` with `{ fields: { tier } }` on `showcase` and `warranty`, and `open` with
-`{ fields: { token } }` (the buyer's report code) on `inspection`. Each answers the next view model.
 
 The filter writes its selection to `state.queryValue` (`new,good`) under `state.param` and emits
 `filters.changed`; your listing reacts to it or uses `actions.apply()` / `state.itemIds`. `POST /v1/tier-filters:sort`

@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Reviews & Ratings API",
 		"version": "1.0.0",
-		"description": "Mode C API of Reviews & Ratings (SSPS v1). All data lives in the merchant's own database and photos in the merchant's own bucket. Times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`; replays return the original response. `pk_` keys (browsers, domain-locked) read public data and identify the customer with SS-Identity (the website's own login token) or a review link token; `sk_` keys are for the merchant's server."
+		"description": "Mode C API of Reviews & Ratings (SSPS v1). All data lives in the merchant's own database and photos in the merchant's own bucket. Times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create records accept an optional `Idempotency-Key`: a key already used for the same route within 24 h answers 409 `duplicate_request`. `pk_` keys (browsers, domain-locked) read public data and identify the customer with SS-Identity (the website's own login token) or a review link token; `sk_` keys are for the merchant's server."
 	},
 	"servers": [
 		{
@@ -130,7 +130,6 @@
 											"scale": 5,
 											"title": "Exactly as described",
 											"body": "Arrived quickly and works perfectly. Would buy again.",
-											"removed": false,
 											"author": "Ayesha K.",
 											"verifiedPurchase": true,
 											"attributes": {
@@ -169,10 +168,10 @@
 				"summary": "Submit a review. pk_: the customer from SS-Identity, a review link token, or a guest (collection.who = anyone); sk_: the merchant's server (may name customerId and orderId). Verified when an open review request covers the item; moderated; metered (unit review).",
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/IdempotencyKey"
+						"$ref": "#/components/parameters/Identity"
 					},
 					{
-						"$ref": "#/components/parameters/Identity"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -643,9 +642,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -679,9 +675,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -774,11 +767,6 @@
 				"operationId": "runRequestFlow",
 				"tags": ["request_flow"],
 				"summary": "Send due requests and reminders now through your messaging connector (also done when an order completes while collection.send_on_completion is on; nothing runs on a timer). sk_ only.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
-					}
-				],
 				"responses": {
 					"200": {
 						"description": "OK",
@@ -937,9 +925,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"requestBody": {
@@ -1020,9 +1005,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"requestBody": {
@@ -1104,9 +1086,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"requestBody": {
@@ -1367,10 +1346,10 @@
 				"summary": "A presigned upload to the merchant's own bucket: PUT exactly `size` bytes with the returned headers (content-type and content-length are signed, so the bucket refuses another type or size; browsers set content-length from the body), then pass the id in photoIds. Type and size are checked again (HEAD) when the review is submitted. pk_ (SS-Identity or token) or sk_.",
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/IdempotencyKey"
+						"$ref": "#/components/parameters/Identity"
 					},
 					{
-						"$ref": "#/components/parameters/Identity"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -1604,46 +1583,6 @@
 				}
 			}
 		},
-		"/v1/elements/display/view": {
-			"get": {
-				"operationId": "displayStubView",
-				"tags": ["display"],
-				"summary": "View model for the Loader element stub (ss-element-stub@1), text only. Optional ?itemId= (the stub sends none: store-wide).",
-				"parameters": [
-					{
-						"name": "itemId",
-						"in": "query",
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/StubView"
-								},
-								"example": {
-									"title": "4.6 / 5 · 12 reviews",
-									"body": "",
-									"items": [
-										{
-											"text": "★★★★★ Exactly as described Arrived quickly and works perfectly. — Ayesha K."
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/structured-data/{itemId}": {
 			"get": {
 				"operationId": "itemJsonLd",
@@ -1817,10 +1756,10 @@
 				"summary": "Ask a question about an item (pk_: SS-Identity unless qna.who_can_ask = anyone; sk_ for the merchant).",
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/IdempotencyKey"
+						"$ref": "#/components/parameters/Identity"
 					},
 					{
-						"$ref": "#/components/parameters/Identity"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -1927,10 +1866,10 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKey"
+						"$ref": "#/components/parameters/Identity"
 					},
 					{
-						"$ref": "#/components/parameters/Identity"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -1990,9 +1929,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -2040,9 +1976,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -2093,9 +2026,6 @@
 					},
 					{
 						"$ref": "#/components/parameters/AnswerId"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -2145,9 +2075,6 @@
 					},
 					{
 						"$ref": "#/components/parameters/AnswerId"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -2421,9 +2348,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"requestBody": {
@@ -2507,9 +2431,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"requestBody": {
@@ -2595,9 +2516,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"requestBody": {
@@ -2750,9 +2668,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -2804,9 +2719,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/Id"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -2850,11 +2762,6 @@
 				"operationId": "dashboardRunRequestFlow",
 				"tags": ["dashboard"],
 				"summary": "Dashboard \"Send due requests now\" (SSO session, merchant roles): the same run as POST /v1/request-flow:run.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
-					}
-				],
 				"responses": {
 					"200": {
 						"description": "OK",
@@ -2894,11 +2801,6 @@
 				"security": [
 					{
 						"session": []
-					}
-				],
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -3139,124 +3041,6 @@
 					}
 				}
 			}
-		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "data_export",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "data_anonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data anonymize.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
 		}
 	},
 	"components": {
@@ -3283,20 +3067,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
-				"schema": {
-					"type": "string",
-					"maxLength": 255
-				}
-			},
-			"IdempotencyKeyOptional": {
-				"name": "Idempotency-Key",
-				"in": "header",
 				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
+				},
+				"description": "Optional. On routes that create records, a key already used for the same route within 24 h answers 409 duplicate_request."
 			},
 			"Cursor": {
 				"name": "cursor",
@@ -3502,9 +3278,6 @@
 					},
 					"body": {
 						"type": ["string", "null"]
-					},
-					"removed": {
-						"type": "boolean"
 					},
 					"author": {
 						"type": ["string", "null"],
@@ -4412,28 +4185,6 @@
 					"display": {
 						"type": "object",
 						"properties": {}
-					}
-				}
-			},
-			"StubView": {
-				"type": "object",
-				"properties": {
-					"title": {
-						"type": "string"
-					},
-					"body": {
-						"type": "string"
-					},
-					"items": {
-						"type": "array",
-						"items": {
-							"type": "object",
-							"properties": {
-								"text": {
-									"type": "string"
-								}
-							}
-						}
 					}
 				}
 			},

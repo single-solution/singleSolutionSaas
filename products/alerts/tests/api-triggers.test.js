@@ -246,8 +246,9 @@ describe('API triggers', () => {
 			before: { quantity: 0 },
 			after: { quantity: 5, available: true },
 		});
-		const replay = await t.call('POST', '/v1/triggers', { body, idempotencyKey: 'stock-sync-1' });
-		expect(replay.headers.get('idempotent-replayed')).toBe('true');
+		const repeated = await t.call('POST', '/v1/triggers', { body, idempotencyKey: 'stock-sync-1' });
+		expect(repeated.status).toBe(409);
+		expect(repeated.json.type).toMatch(/duplicate_request$/);
 		const sameId = await t.call('POST', '/v1/triggers', { body: { ...body, id: 'chg_1' } });
 		const sameIdAgain = await t.call('POST', '/v1/triggers', { body: { ...body, id: 'chg_1' } });
 		expect(sameIdAgain.json.id).toBe(sameId.json.id);
@@ -346,5 +347,24 @@ describe('API triggers', () => {
 		await t.call('POST', '/v1/messages:dispatch', { idempotencyKey: null });
 		await t.call('POST', '/v1/messages:dispatch', { idempotencyKey: null });
 		expect(t.provider.sent).toHaveLength(2);
+	});
+});
+
+describe('caller-scoped Idempotency-Keys', () => {
+	it('never lets another key reuse a run created under the same Idempotency-Key', async () => {
+		const t = await harness();
+		const other = await t.key('sk');
+		const body = { kind: 'custom', type: 'custom.drop@2', data: { seats: 3 } };
+		const first = await t.call('POST', '/v1/triggers', { body, idempotencyKey: 'shared-run' });
+		expect(first.status).toBe(201);
+		t.clock.advance(25 * 3_600_000); // past app-kit's 24 h duplicate refusal
+		await t.entitle();
+		const theirs = await t.call('POST', '/v1/triggers', { body, key: other, idempotencyKey: 'shared-run' });
+		expect(theirs.status).toBe(201);
+		expect(theirs.json.id).not.toBe(first.json.id);
+		t.clock.advance(25 * 3_600_000);
+		await t.entitle();
+		const mine = await t.call('POST', '/v1/triggers', { body, idempotencyKey: 'shared-run' });
+		expect(mine.json.id).toBe(first.json.id);
 	});
 });

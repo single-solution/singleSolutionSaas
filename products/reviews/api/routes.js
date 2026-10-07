@@ -1,17 +1,18 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Reviews Mode C API and the
- * dashboard API (SSO sessions). Nothing runs on a timer: review requests are sent when an order completes (and on
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Reviews Mode C API and the dashboard API (SSO sessions). Nothing runs on a timer: review requests are sent when an order completes (and on
  * demand), stale photo slots are swept on the website's next upload (and on demand).
- * Every product route is gated by its element: a disabled element answers 403 element_disabled in every mode. POSTs
- * that create or move state require an Idempotency-Key (app-kit stores and replays the response); handlers are thin —
- * validation and rules live in core/.
+ * Every product route is gated by its element: a disabled element answers 403 element_disabled in every mode. Routes
+ * that create records declare `idempotent: true` (app-kit refuses a repeated Idempotency-Key with 409); the service
+ * also derives record ids from the key, so a retry never stores twice. Handlers are thin — validation and rules live
+ * in core/.
  *
  * Keys: `sk_` (the merchant's server) sees and changes everything; `pk_` (browsers, domain-locked) reads public data
  * only and identifies the customer with the website's own login token (`SS-Identity`, verified by app-kit) or a signed
  * review link token.
  */
 import { defineRoute, ok, created, paginate, problem, standardRoutes } from '@ss/app-kit';
+import { createId } from '@ss/contracts';
 import { decide, moderationContext } from '../core/moderation.js';
 import { orderFacts } from '../core/orders.js';
 import { checkCondition } from '../core/rules.js';
@@ -46,8 +47,6 @@ import { settingsForDoc } from './settings.js';
 const IMPORT_MAX_BYTES = 3_900_000; // under the 4.5 MB request body limit of serverless hosts
 /** Items per `GET /v1/ratings?itemIds=` batch. */
 const MAX_BATCH_ITEMS = 100;
-/** Reviews shown by the Loader element stub view. */
-const STUB_REVIEWS = 5;
 
 /**
  * Field problems → RFC 9457 `validation_failed`.
@@ -68,6 +67,19 @@ export const failure = (result) => {
 	if (result.reason === 'identity_required')
 		return problem('identity_required', "Send the customer's login token in the SS-Identity header (or a review link token).");
 	return problem(result.reason, result.detail ?? result.reason.replace(/_/g, ' '));
+};
+
+/**
+ * Who sent a request: the verified customer, the dashboard session's subject or a server key (kind + id); null for
+ * an anonymous browser (a `pk_` key alone is shared by every visitor of the website).
+ * @param {any} ctx
+ * @returns {string | null}
+ */
+const callerOf = (ctx) => {
+	if (ctx.identity?.subject) return `customer:${ctx.identity.subject}`;
+	if (ctx.session) return `session:${ctx.session.subject}`;
+	if (ctx.website?.kind === 'sk') return `sk:${ctx.website.keyId}`;
+	return null;
 };
 
 /**
@@ -151,6 +163,18 @@ export const buildRoutes = (reviews) => {
 	/** @param {any} ctx */
 	const isServer = (ctx) => ctx.website?.kind === 'sk';
 	/**
+	 * Key a record id derives from: the request's Idempotency-Key scoped by website, caller and route (two callers
+	 * reusing one key never land on the same record), else — no key, or an anonymous browser — a fresh one.
+	 * @param {any} ctx
+	 * @param {string} route
+	 */
+	const keyOf = (ctx, route) => {
+		const caller = callerOf(ctx);
+		return ctx.idempotencyKey && caller
+			? `idk_${reviews.app.hash(`${ctx.websiteId}|${caller}|${route}|${ctx.idempotencyKey}`)}`
+			: createId('req');
+	};
+	/**
 	 * Route options: website key auth gated by an element; `null` key kind = browser-capable (identity optional).
 	 * @param {string} element
 	 * @param {'sk' | null} [keyKind]
@@ -169,7 +193,7 @@ export const buildRoutes = (reviews) => {
 	 */
 	const cacheFor = (ctx, seconds) =>
 		isServer(ctx) ? { 'cache-control': 'no-store' } : { 'cache-control': `public, max-age=${seconds}` };
-	/** Dashboard session → website and settings (null = pick a website / demo). @param {any} ctx */
+	/** Dashboard session → website and settings (null = pick a website). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? site(ctx) : null);
 	const noWebsite = () => problem('bad_request', 'Open the dashboard for a website.');
 
@@ -308,7 +332,7 @@ export const buildRoutes = (reviews) => {
 			author: ctx.body.author ?? null,
 			customerId: who.customerId,
 			merchant: who.merchant,
-			key: ctx.idempotencyKey,
+			key: keyOf(ctx, 'answers'),
 		});
 		return result.ok ? created((await service.viewsFor(s)).question(result.question, who.merchant)) : failure(result);
 	};
@@ -337,6 +361,7 @@ export const buildRoutes = (reviews) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/reviews',
+			idempotent: true,
 			...website('collection', null),
 			rateLimit: { limit: 60, windowMs: 60_000 },
 			handler: async (ctx) => {
@@ -348,7 +373,7 @@ export const buildRoutes = (reviews) => {
 					server,
 				});
 				if (!value) return invalid(problems);
-				const result = await service.submit(s, { value, submitter: submitterOf(ctx), key: ctx.idempotencyKey });
+				const result = await service.submit(s, { value, submitter: submitterOf(ctx), key: keyOf(ctx, 'reviews') });
 				if (!result.ok) return failure(result);
 				const views = await service.viewsFor(s);
 				const body = server ? views.owner(result.review) : { ...views.public(result.review), status: result.review.status };
@@ -411,6 +436,7 @@ export const buildRoutes = (reviews) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/review-requests',
+			idempotent: true,
 			...website('collection'),
 			handler: async (ctx) => {
 				const problems = validateRequestInput(ctx.body);
@@ -431,7 +457,6 @@ export const buildRoutes = (reviews) => {
 			method: 'POST',
 			path: '/v1/review-requests:open',
 			...website('collection', null),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateToken(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -454,7 +479,6 @@ export const buildRoutes = (reviews) => {
 			method: 'POST',
 			path: '/v1/review-requests/:id/link',
 			...website('collection'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const request = await s.repos.requests.get(ctx.params.id);
@@ -465,7 +489,6 @@ export const buildRoutes = (reviews) => {
 			method: 'POST',
 			path: '/v1/review-requests/:id/cancel',
 			...website('collection'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const changed = await s.repos.requests.update(
@@ -491,7 +514,6 @@ export const buildRoutes = (reviews) => {
 			method: 'POST',
 			path: '/v1/request-flow:run',
 			...website('request_flow'),
-			idempotent: 'optional',
 			handler: async (ctx) => ok(await service.runRequests(await site(ctx))),
 		}),
 
@@ -516,7 +538,6 @@ export const buildRoutes = (reviews) => {
 				method: 'POST',
 				path: `/v1/moderation/:id/${action}`,
 				...website('moderation'),
-				idempotent: 'optional',
 				handler: async (ctx) => moderate(await site(ctx), ctx.params.id, action, ctx.body, apiActor(ctx)),
 			}),
 		),
@@ -530,7 +551,6 @@ export const buildRoutes = (reviews) => {
 			method: 'POST',
 			path: '/v1/moderation:check',
 			...website('moderation'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateModerationCheck(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -580,6 +600,7 @@ export const buildRoutes = (reviews) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/review-photos',
+			idempotent: true,
 			...website('photos', null),
 			rateLimit: { limit: 60, windowMs: 60_000 },
 			handler: async (ctx) => {
@@ -605,7 +626,7 @@ export const buildRoutes = (reviews) => {
 					contentType: ctx.body.contentType,
 					size: ctx.body.size,
 					customerId: server ? null : customerId,
-					key: ctx.idempotencyKey,
+					key: keyOf(ctx, 'uploads'),
 				});
 				return result.ok ? created(result.photo) : failure(result);
 			},
@@ -684,42 +705,6 @@ export const buildRoutes = (reviews) => {
 				);
 			},
 		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/elements/display/view',
-			...website('display', null),
-			handler: async (ctx) => {
-				const s = await site(ctx);
-				const t = { ...(reviews.app.strings.en ?? {}) };
-				const itemId = queryId(ctx.query.itemId);
-				const list = await s.repos.reviews.list({
-					filter: { ...(itemId ? { itemId } : {}), statuses: ['approved'] },
-					sort: { submittedAt: -1, id: -1 },
-					after: null,
-					fetchLimit: STUB_REVIEWS,
-				});
-				const views = await service.viewsFor(s);
-				const summary = itemId ? await service.summary(s, itemId) : null;
-				const stars = (/** @type {number} */ n, /** @type {number} */ of) => '★'.repeat(n) + '☆'.repeat(Math.max(0, of - n));
-				return ok(
-					{
-						title:
-							summary && summary.count > 0
-								? `${summary.average} / ${summary.scale} · ${(t['reviews.count.other'] ?? '{count} reviews').replace('{count}', String(summary.count))}`
-								: (t['reviews.title'] ?? 'Reviews'),
-						body: list.length === 0 ? (t['reviews.empty'] ?? '') : '',
-						items: list.map((/** @type {any} */ review) => {
-							const view = views.public(review);
-							const text = [stars(view.rating, view.scale), view.title, view.body, view.author ? `— ${view.author}` : null]
-								.filter(Boolean)
-								.join(' ');
-							return { text: text.slice(0, 500) };
-						}),
-					},
-					{ headers: cacheFor(ctx, s.settings.display.cache_seconds) },
-				);
-			},
-		}),
 
 		// ── structured_data ─────────────────────────────────────────────────────────────────────────────────────
 		defineRoute({
@@ -793,6 +778,7 @@ export const buildRoutes = (reviews) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/questions',
+			idempotent: true,
 			...website('qna', null),
 			rateLimit: { limit: 30, windowMs: 60_000 },
 			handler: async (ctx) => {
@@ -810,7 +796,7 @@ export const buildRoutes = (reviews) => {
 					author: ctx.body.author ?? null,
 					customerId,
 					locale: ctx.body.locale ?? null,
-					key: ctx.idempotencyKey,
+					key: keyOf(ctx, 'questions'),
 					server,
 				});
 				if (!result.ok) return failure(result);
@@ -833,6 +819,7 @@ export const buildRoutes = (reviews) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/questions/:id/answers',
+			idempotent: true,
 			...website('qna', null),
 			rateLimit: { limit: 30, windowMs: 60_000 },
 			handler: async (ctx) => {
@@ -848,14 +835,12 @@ export const buildRoutes = (reviews) => {
 					method: 'POST',
 					path: `/v1/questions/:id/${verb}`,
 					...website('qna'),
-					idempotent: 'optional',
 					handler: async (ctx) => decideQuestion(await site(ctx), ctx.params, decision, apiActor(ctx)),
 				}),
 				defineRoute({
 					method: 'POST',
 					path: `/v1/questions/:id/answers/:answerId/${verb}`,
 					...website('qna'),
-					idempotent: 'optional',
 					handler: async (ctx) => decideQuestion(await site(ctx), ctx.params, decision, apiActor(ctx)),
 				}),
 			];
@@ -865,6 +850,7 @@ export const buildRoutes = (reviews) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/imports',
+			idempotent: true,
 			...website('import'),
 			maxBodyBytes: IMPORT_MAX_BYTES,
 			handler: async (ctx) => {
@@ -873,7 +859,7 @@ export const buildRoutes = (reviews) => {
 				const result = await service.importCsv(await site(ctx), {
 					csv: ctx.body.csv,
 					dryRun: ctx.body.dryRun === true,
-					key: ctx.idempotencyKey,
+					key: keyOf(ctx, 'import'),
 					actor: apiActor(ctx),
 				});
 				return result.ok ? ok(result.report) : failure(result);
@@ -909,7 +895,6 @@ export const buildRoutes = (reviews) => {
 				auth: 'launch',
 				element: 'moderation',
 				roles: [...DASHBOARD_WRITE_ROLES],
-				idempotent: 'optional',
 				handler: async (ctx) => {
 					const s = await dashboardSite(ctx);
 					return s ? moderate(s, ctx.params.id, action, ctx.body, dashboardActor(ctx.session)) : noWebsite();
@@ -919,6 +904,7 @@ export const buildRoutes = (reviews) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/questions/:id/answers',
+			idempotent: true,
 			auth: 'launch',
 			element: 'qna',
 			roles: [...DASHBOARD_WRITE_ROLES],
@@ -934,7 +920,6 @@ export const buildRoutes = (reviews) => {
 				auth: 'launch',
 				element: 'qna',
 				roles: [...DASHBOARD_WRITE_ROLES],
-				idempotent: 'optional',
 				handler: async (ctx) => {
 					const s = await dashboardSite(ctx);
 					return s
@@ -949,7 +934,6 @@ export const buildRoutes = (reviews) => {
 			auth: 'launch',
 			element: 'request_flow',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				return s ? ok(await service.runRequests(s)) : noWebsite();
@@ -961,7 +945,6 @@ export const buildRoutes = (reviews) => {
 			auth: 'launch',
 			element: 'photos',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				return s ? ok(await service.sweepPhotos(s)) : noWebsite();
@@ -971,7 +954,6 @@ export const buildRoutes = (reviews) => {
 			method: 'POST',
 			path: '/v1/dashboard/moderation:check',
 			auth: 'launch',
-			idempotent: false,
 			handler: (ctx) => {
 				const source = ctx.body?.source;
 				return typeof source === 'string' ? ok(checkCondition(source)) : invalid([{ path: '/source', code: 'required' }]);

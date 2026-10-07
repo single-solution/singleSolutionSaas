@@ -1,9 +1,9 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Wishlist Mode C API and
- * the dashboard API (SSO sessions). Every product route is gated by its element: a disabled element answers 403
- * element_disabled in every mode. POSTs that move state require an Idempotency-Key (app-kit stores and replays the
- * response); handlers are thin — validation and rules live in core/, operations in api/lists.js and friends.
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Wishlist Mode C API and the dashboard API (SSO sessions). Every product route is gated by its element:
+ * a disabled element answers 403 element_disabled in every mode. Routes that create lists or guests declare
+ * `idempotent: true` (app-kit refuses a repeated Idempotency-Key with 409); handlers are thin — validation and rules
+ * live in core/, operations in api/lists.js and friends.
  */
 import { createHash } from 'node:crypto';
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
@@ -126,6 +126,7 @@ export const buildRoutes = (wishlist) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/lists',
+			idempotent: true,
 			...website('lists'),
 			rateLimit: writes,
 			handler: async (ctx) => {
@@ -190,6 +191,7 @@ export const buildRoutes = (wishlist) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/guests',
+			idempotent: true,
 			...website('guest_merge'),
 			rateLimit: {
 				limit: (/** @type {any} */ ctx) => (ctx.website?.kind === 'sk' ? Infinity : settingsOf(ctx).guests.perIpPerHour),
@@ -261,7 +263,6 @@ export const buildRoutes = (wishlist) => {
 			method: 'POST',
 			path: '/v1/wishlist',
 			...website('widgets'),
-			idempotent: false,
 			rateLimit: {
 				limit: (/** @type {any} */ ctx) => (ctx.website?.kind === 'sk' ? Infinity : settingsOf(ctx).widgets.loadsPerMinute),
 				windowMs: 60_000,

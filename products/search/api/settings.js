@@ -40,7 +40,7 @@ export const ELEMENTS = /** @type {ElementKey[]} */ (Object.keys(SCHEMAS));
  *   domain: string, website?: { timeZone?: string, language?: string } | null }} source
  * @returns {Settings}
  */
-export const settingsFrom = ({ can, config, domain, website = null }) => {
+const settingsFrom = ({ can, config, domain, website = null }) => {
 	const of = (/** @type {ElementKey} */ key) => effectiveConfig(SCHEMAS[key], config(key));
 	const indexSettings = of('index');
 	const rankingSettings = of('ranking');

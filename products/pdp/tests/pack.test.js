@@ -1,8 +1,6 @@
 /**
- * The publishable pack (`ss pack build`, F.18): manifest validity, the product string catalog sliced per element, the
- * esbuild bundle (entries + shared chunks) and the budgets the Portal enforces, measured as it measures them (each
- * element's own entry modules ≤ its `budget.js`, the shared chunks ≤ `budget.shared`; the default plan fits the default
- * website budget next to the Loader).
+ * The uploadable pack (`ss pack build`, F.18): manifest validity, the product string catalog sliced per element, the
+ * esbuild bundle (entries + shared chunks) and a page weight sanity check.
  */
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,14 +9,8 @@ import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { validateManifest } from '@ss/contracts';
-import { measurePack } from '@ss/cli/pack';
 import { BUNDLE_FORMAT, buildPack, descriptorOf, loadManifest, writePack } from '../pack.js';
 import { flush, page, strings } from './helpers.js';
-
-/** Loader + events client gzip (F.7) — the website budget's fixed part. */
-const LOADER_KB = 13;
-/** Default website budget (`DELIVERY_BUDGET_KB`). */
-const WEBSITE_KB = 60;
 
 /** @type {Awaited<ReturnType<typeof buildPack>>} */
 let pack;
@@ -115,22 +107,7 @@ describe('pack build', () => {
 		expect(again.assets.map((asset) => asset.sha256)).toEqual(pack.assets.map((asset) => asset.sha256));
 	});
 
-	it('keeps every element within its budget and the default plan within the website budget', () => {
-		/** @type {Record<string, number>} */
-		const budgets = {};
-		const measured = measurePack(pack);
-		for (const element of pack.manifest.elements) {
-			const own = measured.elements.find((e) => e.key === element.key);
-			expect(own?.gzipBytes, `${element.key} ships ${own?.gzipBytes} B gzip`).toBeLessThanOrEqual(element.budget.js * 1024);
-			budgets[element.key] = element.budget.js;
-		}
-		expect(measured.shared.gzipBytes).toBeLessThanOrEqual(pack.manifest.budget.shared * 1024);
-		const plan = pack.manifest.plans[0];
-		const declared = plan.elements.reduce(
-			(/** @type {number} */ sum, /** @type {string} */ key) => sum + (budgets[key] ?? 0),
-			0,
-		);
-		expect(LOADER_KB + declared + pack.manifest.budget.shared).toBeLessThanOrEqual(WEBSITE_KB);
+	it('stays light: every module of every element together is far below 40 KB gzip', () => {
 		// what a page with every element really downloads (entries + shared chunks), far below the declarations
 		const everything = pack.assets
 			.filter((asset) => asset.path.endsWith('.js'))
@@ -138,7 +115,7 @@ describe('pack build', () => {
 		expect(everything).toBeLessThan(40 * 1024);
 	});
 
-	it('writes a publishable folder whose modules run in a browser page', async () => {
+	it('writes an uploadable folder whose modules run in a browser page', async () => {
 		await writePack(out);
 		const descriptor = JSON.parse(await readFile(path.join(out, 'descriptor.json'), 'utf8'));
 		expect(descriptor.assets).toHaveLength(pack.assets.length);

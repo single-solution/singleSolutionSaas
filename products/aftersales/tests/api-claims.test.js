@@ -252,12 +252,14 @@ describe('customer claims (SS-Identity)', () => {
 		h.clock.advance(-20 * DAY);
 	});
 
-	it('replays a claim for the same Idempotency-Key and validates submissions', async () => {
+	it('refuses a repeated Idempotency-Key and validates submissions', async () => {
 		const { purchaseId } = await h.order({ subject: 'cus_cy' });
 		const body = { purchaseId, type: 'exchange', reason: 'wrong_item', lines: [{ lineId: 'itm_1:var_1', quantity: 1 }] };
 		const a = await h.call('POST', '/v1/claims', { as: 'cus_cy', body, idempotencyKey: 'same-claim' });
 		const b = await h.call('POST', '/v1/claims', { as: 'cus_cy', body, idempotencyKey: 'same-claim' });
-		expect(b.json.id).toBe(a.json.id);
+		expect(a.status).toBe(201);
+		expect(b.status).toBe(409);
+		expect(b.json.type).toMatch(/duplicate_request$/);
 		/** @param {Record<string, unknown>} patch */
 		const attempt = (patch) => h.call('POST', '/v1/claims', { as: 'cus_cy', body: { ...body, ...patch } });
 		expect((await attempt({ type: 'nope' })).json.errors[0].code).toBe('type_invalid');
@@ -424,7 +426,7 @@ describe('evidence photos', () => {
 			body: { contentType: 'image/jpeg', size: 1234 },
 			idempotencyKey: 'photo-1',
 		});
-		expect(again.json.id).toBe(slot.json.id);
+		expect(again.status).toBe(409);
 		const stored = await h.collection('photos').findOne({ websiteId: WEBSITE, id: slot.json.id });
 		const body = {
 			purchaseId,

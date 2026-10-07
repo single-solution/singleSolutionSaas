@@ -10,7 +10,6 @@
 			"default": "prefer",
 			"enum": ["prefer", "require", "ignore"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Strategy", "order": 1 }
 		},
 		"tie_break": {
@@ -20,7 +19,6 @@
 			"default": "schema",
 			"enum": ["schema", "price_low", "price_high", "popularity"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Strategy", "order": 2 }
 		},
 		"partial": {

@@ -21,10 +21,10 @@ const EXAMPLE = JSON.stringify(
 	2,
 );
 
-/** @param {{ websiteId: string | null, sample?: unknown }} props */
-export function Simulator({ websiteId, sample = null }) {
+/** @param {{ websiteId: string | null }} props */
+export function Simulator({ websiteId }) {
 	const [source, setSource] = useState(EXAMPLE);
-	const [result, setResult] = useState(/** @type {unknown} */ (sample));
+	const [result, setResult] = useState(/** @type {unknown} */ (null));
 	const [error, setError] = useState(/** @type {string | null} */ (null));
 	const [busy, setBusy] = useState(false);
 	/** @param {{ preventDefault: () => void }} event */

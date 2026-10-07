@@ -28,7 +28,6 @@ export const INDEXES = /** @type {any} */ ([
 		partialFilterExpression: { key: { $type: 'string' } },
 	},
 	{ collection: 'configurators', keys: { websiteId: 1, status: 1, id: 1 }, name: 'website_status_id' },
-	{ collection: 'configurators', keys: { websiteId: 1, 'schema.source.itemId': 1 }, name: 'website_item' },
 	{ collection: 'items', keys: { websiteId: 1, itemId: 1 }, name: 'website_item', unique: true },
 ]);
 
@@ -125,15 +124,6 @@ export const createRepositories = (scope, { stamp = {} } = {}) => {
 			byId: async (id) => toRecord(await configurators.findOne({ websiteId, id })),
 			/** @param {string} key */
 			byKey: async (key) => toRecord(await configurators.findOne({ websiteId, key })),
-			/**
-			 * Published configurators linked to a catalog item.
-			 * @param {string} itemId
-			 * @returns {Promise<ConfiguratorRecord[]>}
-			 */
-			byItem: async (itemId) =>
-				(
-					await configurators.find({ websiteId, 'schema.source.itemId': itemId }, { sort: { id: 1 }, limit: 50 }).toArray()
-				).map((/** @type {any} */ doc) => /** @type {ConfiguratorRecord} */ (toRecord(doc))),
 			/**
 			 * Configurators by id (ascending), optionally by status.
 			 * @param {{ after?: string | null, fetchLimit: number, status?: string | null }} page

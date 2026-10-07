@@ -11,22 +11,10 @@
 	"endpoints": {
 		"base": "https://chatbot.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:window.max_message_length",
-			"limit:window.guest_message_limit",
-			"limit:ai_replies.tokens_per_conversation",
-			"limit:ai_replies.monthly_token_budget",
-			"limit:ai_replies.max_tool_rounds",
-			"limit:knowledge.max_entries",
-			"limit:inbox.max_agents"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": ["events.subscribe:order.*@1", "events.subscribe:customer.*@1"],
 	"requires": {
@@ -42,9 +30,6 @@
 			"chatbot.lead_captured@1",
 			"chatbot.note_created@1"
 		]
-	},
-	"budget": {
-		"shared": 4
 	},
 	"elements": [
 		{
@@ -67,9 +52,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 7
-			},
 			"dependsOn": [],
 			"requires": {
 				"resources": ["database"]
@@ -80,7 +62,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"customFields": ["conversation"],
-			"experiments": true,
 			"api": {
 				"resources": ["conversations"]
 			},
@@ -103,16 +84,12 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 3
-			},
 			"dependsOn": ["window"],
 			"features": {
 				"$ref": "schemas/launcher.features.json"
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/launcher.js#createLauncher",
 			"renderer": "ui/launcher.js#render",
 			"variants": ["round", "pill"],
@@ -144,9 +121,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["window"],
 			"requires": {
 				"resources": ["database", "ai"]
@@ -157,7 +131,6 @@
 			"strings": "strings/en.json",
 			"placement": false,
 			"rules": ["forbidden_topics"],
-			"experiments": true,
 			"api": {
 				"resources": ["assistant"]
 			},
@@ -172,9 +145,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 200
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["ai_replies"],
 			"requires": {
@@ -199,16 +169,12 @@
 			"price": {
 				"hourly": 200
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["window"],
 			"features": {
 				"$ref": "schemas/flows.features.json"
 			},
 			"strings": "strings/en.json",
 			"rules": ["condition"],
-			"experiments": true,
 			"api": {
 				"resources": ["flows"]
 			},
@@ -235,9 +201,6 @@
 					}
 				]
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["window"],
 			"features": {
 				"$ref": "schemas/tools.features.json"
@@ -258,9 +221,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 400
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["window"],
 			"features": {
@@ -283,9 +243,6 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["window"],
 			"features": {
 				"$ref": "schemas/handoff.features.json"
@@ -307,9 +264,6 @@
 			"price": {
 				"hourly": 150
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["window"],
 			"features": {
 				"$ref": "schemas/proactive.features.json"
@@ -317,7 +271,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"rules": ["when"],
-			"experiments": true,
 			"api": {
 				"resources": ["proactive"]
 			},
@@ -341,16 +294,12 @@
 			"price": {
 				"hourly": 150
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["window"],
 			"features": {
 				"$ref": "schemas/lead_capture.features.json"
 			},
 			"strings": "strings/en.json",
 			"customFields": ["lead"],
-			"experiments": true,
 			"api": {
 				"resources": ["leads"]
 			},
@@ -366,14 +315,10 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["window"],
 			"features": {
 				"$ref": "schemas/csat.features.json"
 			},
-			"experiments": true,
 			"strings": "strings/en.json",
 			"api": {
 				"resources": ["ratings"]
@@ -389,9 +334,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["window"],
 			"features": {
@@ -412,9 +354,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["window"],
 			"features": {

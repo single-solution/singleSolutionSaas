@@ -190,7 +190,7 @@ describe('reversal', () => {
 });
 
 describe('manual earns, activities and rules', () => {
-	it('POST /v1/earnings is idempotent (Idempotency-Key replay, and on reference) and validated', async () => {
+	it('POST /v1/earnings refuses a repeated Idempotency-Key, dedupes on reference and is validated', async () => {
 		const first = await h.call('POST', '/v1/earnings', {
 			body: { customerId: 'cus_api', points: 25, reason: 'welcome' },
 			idempotencyKey: 'k-1',
@@ -201,7 +201,8 @@ describe('manual earns, activities and rules', () => {
 			body: { customerId: 'cus_api', points: 25, reason: 'welcome' },
 			idempotencyKey: 'k-1',
 		});
-		expect(replay.json).toEqual(first.json);
+		expect(replay.status).toBe(409);
+		expect(replay.json.type).toMatch(/duplicate_request$/);
 		await h.call('POST', '/v1/earnings', { body: { customerId: 'cus_api', points: 10, reference: 'import-7' } });
 		const again = await h.call('POST', '/v1/earnings', { body: { customerId: 'cus_api', points: 10, reference: 'import-7' } });
 		expect(again.status).toBe(201);
@@ -211,7 +212,7 @@ describe('manual earns, activities and rules', () => {
 		expect(invalid.json.errors.map((/** @type {any} */ e) => e.path)).toEqual(['/customerId', '/points']);
 		expect(
 			(await h.call('POST', '/v1/earnings', { body: { customerId: 'cus_api', points: 1 }, idempotencyKey: null })).status,
-		).toBe(428);
+		).toBe(201);
 		expect(
 			(
 				await h.call('POST', '/v1/earnings', {

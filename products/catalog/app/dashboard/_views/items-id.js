@@ -82,7 +82,7 @@ export default async function ItemDetail({ params, searchParams }) {
 											? h(StockForm, {
 													variantId: v.id,
 													quantity: v.quantity,
-													websiteId: /** @type {string} */ (context.data.websiteId),
+													websiteId: context.data.websiteId,
 												})
 											: String(v.quantity),
 									),

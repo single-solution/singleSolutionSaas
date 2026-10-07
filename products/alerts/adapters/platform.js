@@ -7,8 +7,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { configFromEnv, createLogger, createMongoStores, createProduct } from '@ss/app-kit';
-import { addressFor, contactIdOf } from '../core/contact.js';
-import { INDEXES, MIGRATIONS, repositoriesFor } from './db.js';
+import { INDEXES, MIGRATIONS } from './db.js';
 import { createTokens, randomId, stableId, tokenSecret } from './tokens.js';
 
 /**
@@ -73,63 +72,6 @@ export const PROBLEM_CODES = Object.freeze({
  */
 
 /**
- * Personal data export / anonymisation (Portal-signed standard routes). A subject is a customer id (`customerId`) or a
- * contact (`email` / `phone`, matched through the keyed contact hash).
- * @param {{ repoFor: ReturnType<typeof repositoriesFor>, tokens: import('./tokens.js').Tokens, now: () => number }} deps
- */
-export const createPrivacyHandlers = ({ repoFor, tokens, now }) => {
-	/** @param {{ websiteId: string, subject?: Record<string, string> }} input */
-	const subjectsOf = ({ websiteId, subject }) => {
-		if (!subject) return null;
-		/** @type {Array<{ customerId?: string, contactKey?: string }>} */
-		const out = [];
-		if (typeof subject.customerId === 'string') out.push({ customerId: subject.customerId });
-		for (const [field, channel] of /** @type {const} */ ([
-			['email', 'email'],
-			['phone', 'sms'],
-		])) {
-			const address = addressFor(channel, subject[field]);
-			if (address) out.push({ contactKey: tokens.contactKey(websiteId, contactIdOf(address)) });
-		}
-		return out;
-	};
-	return Object.freeze({
-		/** @param {{ websiteId: string, subject?: Record<string, string>, requestId?: string }} input */
-		export: async (input) => {
-			const repos = await repoFor(input.websiteId);
-			const subjects = subjectsOf(input);
-			const subscriptions = subjects
-				? (await Promise.all(subjects.map((subject) => repos.subscriptions.ofSubject(subject)))).flat()
-				: await repos.subscriptions.list({ fetchLimit: 10_000 });
-			const contactKeys = [...new Set(subscriptions.map((/** @type {any} */ sub) => sub.contactKey))];
-			const messages = (await Promise.all(contactKeys.map((key) => repos.messages.ofContact(key)))).flat();
-			return {
-				websiteId: input.websiteId,
-				...(input.subject ? { subject: input.subject } : {}),
-				exportedAt: new Date(now()).toISOString(),
-				collections: { subscriptions, messages },
-			};
-		},
-		/** @param {{ websiteId: string, subject?: Record<string, string>, requestId?: string }} input */
-		anonymize: async (input) => {
-			const repos = await repoFor(input.websiteId);
-			const subjects = subjectsOf(input) ?? [];
-			let subscriptions = 0;
-			let messages = 0;
-			for (const subject of subjects) {
-				const found = await repos.subscriptions.ofSubject(subject);
-				for (const key of new Set(
-					[...found.map((/** @type {any} */ sub) => sub.contactKey), subject.contactKey].filter(Boolean),
-				))
-					messages += await repos.messages.anonymize(/** @type {string} */ (key));
-				subscriptions += await repos.subscriptions.anonymize(subject);
-			}
-			return { websiteId: input.websiteId, anonymized: { subscriptions, messages } };
-		},
-	});
-};
-
-/**
  * Build the product.
  * @param {{ env?: Record<string, string | undefined>, root?: string, assets?: { manifest: any, strings: Record<string, Record<string, string>> },
  *   overrides?: Record<string, any> }} [options]
@@ -155,26 +97,15 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 		stores = mongoStores;
 	}
 	const now = typeof overrides.now === 'function' ? overrides.now : Date.now;
-	/** @type {import('./tokens.js').Tokens | null} */
-	let tokens = null;
-	/** the privacy hooks run on requests, after the tokens exist */
-	const lazyTokens = /** @type {import('./tokens.js').Tokens} */ (
-		new Proxy({}, { get: (_, key) => /** @type {any} */ (tokens)?.[key] })
-	);
-	/** @type {any} */
-	let product = null;
-	const repoFor = repositoriesFor({ data: { forWebsite: (id, stamp) => product.data.forWebsite(id, stamp) } }, { now });
-	product = createProduct(
+	const product = createProduct(
 		/** @type {any} */ ({
 			manifest,
 			strings,
 			logger: createLogger({ level: config.logLevel }),
 			problems: config.problems,
-			privacy: createPrivacyHandlers({ repoFor, tokens: lazyTokens, now }),
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
-			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
-			// SSRF policy for merchant databases and providers: in development the `ss dev` client database and local
+			// SSRF policy for merchant databases and providers: in development a local client database and
 			// mock providers live on loopback; app-kit ignores the allowlist when NODE_ENV=production
 			outbound: {
 				allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],
@@ -186,7 +117,7 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 	);
 	// generated secrets and the Portal connection live in the control database (made at /.well-known/ss-connect)
 	await product.ready();
-	tokens = createTokens({ secret: tokenSecret({ secret: product.secret('link-tokens').toString('base64url') }), now });
+	const tokens = createTokens({ secret: tokenSecret({ secret: product.secret('link-tokens').toString('base64url') }), now });
 	return {
 		product,
 		tokens,

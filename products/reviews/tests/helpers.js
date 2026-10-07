@@ -84,7 +84,6 @@ export const reviewView = (overrides = {}) => ({
 	scale: 5,
 	title: 'Great',
 	body: 'Works perfectly.',
-	removed: false,
 	author: 'Ava M.',
 	verifiedPurchase: true,
 	attributes: { quality: 5 },

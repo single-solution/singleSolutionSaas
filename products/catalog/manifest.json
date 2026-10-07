@@ -11,27 +11,10 @@
 	"endpoints": {
 		"base": "https://catalog.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:items.max_items",
-			"limit:variants.max_variants_per_item",
-			"limit:attributes.max_attributes",
-			"limit:collections.max_collections",
-			"limit:collections.max_depth",
-			"limit:brands.max_brands",
-			"limit:media.max_media_per_item",
-			"limit:media.max_upload_bytes",
-			"limit:import_export.max_rows",
-			"limit:feeds.max_items_per_feed",
-			"rate:api.read_rate_per_minute",
-			"rate:api.write_rate_per_minute"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": ["events.subscribe:order.*", "events.publish:item.*", "events.publish:inventory.*", "events.publish:price.*"],
 	"requires": {
@@ -40,9 +23,6 @@
 	"events": {
 		"consumes": ["order.placed@1", "order.cancelled@1", "order.refunded@1"],
 		"publishes": ["item.created@1", "item.updated@1", "item.deleted@1", "inventory.changed@1", "price.changed@1"]
-	},
-	"budget": {
-		"shared": 2
 	},
 	"elements": [
 		{
@@ -54,9 +34,6 @@
 			"price": {
 				"hourly": 300
 			},
-			"budget": {
-				"js": 3
-			},
 			"dependsOn": [],
 			"features": {
 				"$ref": "schemas/items.features.json"
@@ -64,7 +41,6 @@
 			"strings": "strings/en.json",
 			"placement": true,
 			"customFields": ["item"],
-			"experiments": true,
 			"api": {
 				"resources": ["items", "item-schema"]
 			},
@@ -87,9 +63,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 150
-			},
-			"budget": {
-				"js": 3
 			},
 			"dependsOn": ["items"],
 			"features": {
@@ -120,9 +93,6 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["items"],
 			"features": {
 				"$ref": "schemas/attributes.features.json"
@@ -151,9 +121,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 2
 			},
 			"dependsOn": ["items"],
 			"features": {
@@ -184,9 +151,6 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 2
-			},
 			"dependsOn": ["items"],
 			"features": {
 				"$ref": "schemas/brands.features.json"
@@ -215,9 +179,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 0
-			},
-			"budget": {
-				"js": 3
 			},
 			"dependsOn": ["items"],
 			"requires": {
@@ -251,9 +212,6 @@
 			"price": {
 				"hourly": 150
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["items"],
 			"features": {
 				"$ref": "schemas/import_export.features.json"
@@ -274,9 +232,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 150
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["items"],
 			"features": {
@@ -309,9 +264,6 @@
 						}
 					}
 				]
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["items"],
 			"features": {

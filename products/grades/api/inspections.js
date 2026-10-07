@@ -139,6 +139,8 @@ export const createInspectionService = ({
 	) => {
 		const id = idFor(site.websiteId, 'unt', key);
 		const replay = await site.repos.units.get(id);
+		// a retry names the same item; anything else reusing the key is refused
+		if (replay && replay.itemId !== itemId) return { ok: false, reason: 'duplicate_request' };
 		if (replay) return { ok: true, unit: unitView(replay), created: false };
 		if (tier) {
 			const problem = await tierProblem(site, tier, itemId, '/tier');
@@ -359,6 +361,7 @@ export const createInspectionService = ({
 	const startInspection = async (site, input) => {
 		const id = idFor(site.websiteId, 'ins', input.key);
 		const existing = await site.repos.inspections.get(id);
+		if (existing && existing.unitId !== input.unitId) return { ok: false, reason: 'duplicate_request' };
 		if (existing)
 			return { ok: true, inspection: inspectionView(existing, await site.repos.photos.forInspection(id)), created: false };
 		const unit = await site.repos.units.get(input.unitId);

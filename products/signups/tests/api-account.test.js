@@ -1,6 +1,5 @@
 /**
- * Profiles, magic links, account pages, consent, data rights, order events, Portal-signed privacy operations, the
- * daily job and the dashboard API — through the real routes on MongoDB.
+ * Profiles, magic links, account pages, consent, data rights, order events, the daily job and the dashboard API — through the real routes on MongoDB.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createHarness, WEBSITE } from './harness.js';
@@ -30,7 +29,7 @@ describe('customers (server API)', () => {
 			},
 		});
 		expect(created.status).toBe(201);
-		expect(Object.keys(created.json).sort()).toEqual(['createdAt', 'id', 'status']); // no personal data in a replayable answer
+		expect(Object.keys(created.json).sort()).toEqual(['createdAt', 'id', 'status']); // no personal data in the answer
 		const id = created.json.id;
 		expect((await h.call('GET', `/v1/customers/${id}`, { key: h.sk })).json).toMatchObject({
 			email: 'import@example.com',
@@ -40,6 +39,26 @@ describe('customers (server API)', () => {
 		});
 		const duplicate = await h.call('POST', '/v1/customers', { key: h.sk, body: { email: 'import@example.com' } });
 		expect(duplicate.status).toBe(409);
+		// a repeated Idempotency-Key is refused; a request without one runs normally
+		const once = await h.call('POST', '/v1/customers', {
+			key: h.sk,
+			idempotencyKey: 'idk-once',
+			body: { email: 'once@example.com' },
+		});
+		expect(once.status).toBe(201);
+		const again = await h.call('POST', '/v1/customers', {
+			key: h.sk,
+			idempotencyKey: 'idk-once',
+			body: { email: 'twice@example.com' },
+		});
+		expect(again.status).toBe(409);
+		expect(again.json.type).toMatch(/duplicate_request$/);
+		const keyless = await h.call('POST', '/v1/customers', {
+			key: h.sk,
+			idempotencyKey: null,
+			body: { email: 'keyless@example.com' },
+		});
+		expect(keyless.status).toBe(201);
 		const invalid = await h.call('POST', '/v1/customers', { key: h.sk, body: { email: 'nope', profile: { unknown: 1 } } });
 		expect(invalid.json.errors.map((/** @type {any} */ e) => e.path)).toEqual(['/email', '/profile/unknown']);
 		expect(
@@ -383,7 +402,6 @@ describe('account pages, orders, consent and data rights', () => {
 			return h.call('POST', '/v1/dashboard/deletions:run', { key: null, headers: { authorization: `Bearer ${session}` } });
 		};
 		const merchant = { merchantId: 'mer_0123456789abcdefghjkmnpq', websiteId: WEBSITE };
-		expect((await press('demo', {})).status).toBe(403);
 		expect((await press('merchant', merchant)).json).toEqual({ deleted: 1 });
 		expect(await stored(background.id)).toMatchObject({ status: 'deleted', email: null });
 		expect((await press('merchant', merchant)).json).toEqual({ deleted: 0 });
@@ -408,41 +426,8 @@ describe('account pages, orders, consent and data rights', () => {
 	});
 });
 
-describe('Portal-signed privacy operations', () => {
-	it('exports and anonymises a subject by customer id, e-mail or phone', async () => {
-		const signedIn = await h.signIn('privacy@example.com');
-		const id = signedIn.json.customer.id;
-		let counter = 0;
-		/** @param {string} path @param {unknown} body */
-		const signed = async (path, body) => {
-			const request = await h.portal.signRequest({ method: 'POST', path, body });
-			const response = await h.handle(
-				new Request(`https://signups.example.com${path}`, {
-					method: 'POST',
-					headers: { ...request.headers, 'idempotency-key': `idk-${path.slice(9)}-${(counter += 1)}` },
-					body: request.body,
-				}),
-			);
-			return { status: response.status, json: await response.json() };
-		};
-		const exported = await signed('/v1/data:export', { websiteId: WEBSITE, subject: { email: 'PRIVACY@example.com' } });
-		expect(exported.status).toBe(200);
-		expect(exported.json.data.customer.id).toBe(id);
-		const all = await signed('/v1/data:export', { websiteId: WEBSITE });
-		expect(all.json.customers.length).toBeGreaterThan(1);
-		const missing = await signed('/v1/data:export', { websiteId: WEBSITE, subject: { phone: '+15550000000' } });
-		expect(missing.json.data).toBeNull();
-		const anonymized = await signed('/v1/data:anonymize', { websiteId: WEBSITE, subject: { customerId: id } });
-		expect(anonymized.json.anonymized).toEqual({ customers: 1 });
-		expect(
-			(await signed('/v1/data:anonymize', { websiteId: WEBSITE, subject: { customerId: 'cus_none' } })).json.anonymized,
-		).toEqual({ customers: 0 });
-		expect((await signed('/v1/data:export', { websiteId: 'web_9123456789abcdefghjkmnpq' })).status).toBe(404);
-	});
-});
-
 describe('dashboard API', () => {
-	it('answers the overview for merchant and demo launches', async () => {
+	it('answers the overview for merchant and staff admin launches', async () => {
 		const { token: launch } = await h.portal.issueLaunch({
 			kind: 'merchant',
 			subject: 'usr_1',
@@ -457,25 +442,24 @@ describe('dashboard API', () => {
 			headers: { authorization: `Bearer ${session}` },
 		});
 		expect(overview.status).toBe(200);
-		expect(overview.json.demo).toBe(false);
 		expect(overview.json.overview.customers).toBeGreaterThan(0);
 		expect(overview.json.issuer.issuer).toBe(`https://signups.example.com/i/${WEBSITE}`);
-		const { token: demoLaunch } = await h.portal.issueLaunch({
-			kind: 'demo',
-			subject: 'usr_2',
-			user: { id: 'usr_2' },
-			scope: {},
+		const { token: adminLaunch } = await h.portal.issueLaunch({
+			kind: 'admin',
+			subject: 'stf_1',
+			user: { id: 'stf_1' },
+			scope: { merchantId: 'mer_0123456789abcdefghjkmnpq', websiteId: WEBSITE },
 			subscriptions: [],
 		});
-		const demoSso = await h.handle(new Request(`https://signups.example.com/sso?launch=${demoLaunch}`));
-		const demoSession = /ss_session=(ses_[^;]+)/.exec(demoSso.headers.get('set-cookie') ?? '')?.[1];
-		const demo = await h.call('GET', '/v1/dashboard/overview', {
+		const adminSso = await h.handle(new Request(`https://signups.example.com/sso?launch=${adminLaunch}`));
+		const adminSession = /ss_session=(ses_[^;]+)/.exec(adminSso.headers.get('set-cookie') ?? '')?.[1];
+		const admin = await h.call('GET', '/v1/dashboard/overview', {
 			key: null,
-			headers: { authorization: `Bearer ${demoSession}` },
+			headers: { authorization: `Bearer ${adminSession}` },
 		});
-		expect(demo.json).toMatchObject({ demo: true, overview: { customers: 4 } });
-		const view = await h.call('GET', '/v1/session', { key: null, headers: { authorization: `Bearer ${demoSession}` } });
-		expect(view.json).toMatchObject({ kind: 'demo', role: 'demo' });
+		expect(admin.json.overview.customers).toBe(overview.json.overview.customers);
+		const view = await h.call('GET', '/v1/session', { key: null, headers: { authorization: `Bearer ${adminSession}` } });
+		expect(view.json).toMatchObject({ kind: 'admin', role: 'platform_admin', user: 'stf_1' });
 	});
 
 	it('lists customers for a live dashboard (due deletions of the listed customers run first)', async () => {
@@ -493,7 +477,7 @@ describe('dashboard API', () => {
 		});
 		const sso = await h.handle(new Request(`https://signups.example.com/sso?launch=${token}`));
 		const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
-		const live = await resolveDashboard({ signups: h.signups, sessionId: session, website: WEBSITE, now: h.clock.now() });
+		const live = await resolveDashboard({ signups: h.signups, sessionId: session, website: WEBSITE });
 		if (live.state !== 'ready') throw new Error(live.state);
 		const listed = await live.data.customers({ email: 'listed-due@example.com' });
 		expect(listed).toEqual([expect.objectContaining({ id: signedIn.json.customer.id, status: 'deleted' })]);

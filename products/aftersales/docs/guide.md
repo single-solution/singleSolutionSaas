@@ -7,7 +7,7 @@ customer, the first of `claims.window_start_events` — by default `order.delive
 windows) or from your server:
 
 ```http
-POST /v1/purchases            (sk_, Idempotency-Key)
+POST /v1/purchases            (sk_, optional Idempotency-Key)
 { "orderId": "ord_1", "number": "1001", "customer": { "customerId": "cus_1", "email": "a@example.com" },
   "currency": "USD", "lines": [{ "itemId": "itm_1", "quantity": 1, "unitAmount": 2500, "itemType": "rental",
   "grade": "excellent", "warrantyDays": 365, "serials": ["SN-1"] }], "deliveredAt": "2026-10-01T10:00:00Z" }

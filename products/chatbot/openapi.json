@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Chatbot & Support API",
 		"version": "1.0.0",
-		"description": "Mode C API of Chatbot & Support (SSPS v1). All conversations, messages, knowledge, leads and caches live in the merchant's own database; AI answers use the merchant's own AI connector. Times are ISO-8601 UTC; money is integer minor units + ISO-4217 currency. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`; replays return the original response. Browser keys (pk_) identify the customer with `SS-Identity`: the website's own login token, or the guest marker returned by POST /v1/conversations."
+		"description": "Mode C API of Chatbot & Support (SSPS v1). All conversations, messages, knowledge, leads and caches live in the merchant's own database; AI answers use the merchant's own AI connector. Times are ISO-8601 UTC; money is integer minor units + ISO-4217 currency. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create records or meter usage accept `Idempotency-Key`: ids derive from it and a repeated key within 24 h is refused with 409 `duplicate_request`. Browser keys (pk_) identify the customer with `SS-Identity`: the website's own login token, or the guest marker returned by POST /v1/conversations."
 	},
 	"servers": [
 		{
@@ -149,7 +149,7 @@
 			"post": {
 				"operationId": "startConversation",
 				"tags": ["window"],
-				"summary": "Start a conversation (idempotent on Idempotency-Key), optionally with the first message — the answer (flows, AI, handoff) comes back in `replies`. Guests get a `marker` token to send as SS-Identity.",
+				"summary": "Start a conversation, optionally with the first message — the answer (flows, AI, handoff) comes back in `replies`. Guests get a `marker` token to send as SS-Identity.",
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/IdempotencyKey"
@@ -166,7 +166,7 @@
 								"$ref": "#/components/schemas/StartInput"
 							},
 							"example": {
-								"customerId": "cus_certify",
+								"customerId": "cus_0abc",
 								"subject": "Order question",
 								"context": {
 									"page": {
@@ -3262,124 +3262,6 @@
 					}
 				}
 			}
-		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "data_export",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "data_anonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data anonymize.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
 		}
 	},
 	"components": {
@@ -3388,12 +3270,6 @@
 				"type": "http",
 				"scheme": "bearer",
 				"description": "pk_ (browser, domain-locked; the customer comes from SS-Identity) or sk_ (server) website key"
-			},
-			"portalSignature": {
-				"type": "apiKey",
-				"in": "header",
-				"name": "SS-Signature",
-				"description": "Portal-signed request (ss-request.v1)"
 			},
 			"dashboardSession": {
 				"type": "apiKey",
@@ -3406,11 +3282,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
+				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
+				},
+				"description": "Optional on POSTs that create records or meter usage: ids derive from it, and a repeated key within 24 h is refused with 409 duplicate_request."
 			},
 			"Cursor": {
 				"name": "cursor",

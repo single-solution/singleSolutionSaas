@@ -2,7 +2,7 @@
  * Mode B headless core of the `inspection` element: the buyer-facing inspection report behind a report token
  * (tier, score, every checklist answer with its photos), and an open photo for a viewer.
  */
-import { answerText } from '../core/views.js';
+import { answerText } from '../core/inspection.js';
 import { badgeOf, createStore, errorMessage } from './store.js';
 import { createTranslator } from './strings.js';
 

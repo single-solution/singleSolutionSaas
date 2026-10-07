@@ -139,8 +139,10 @@ describe('crawled sources', () => {
 		expect(list.find((/** @type {any} */ s) => s.key === 'help').crawl).toMatchObject({ status: 'ok', total: 0 });
 		expect(list.find((/** @type {any} */ s) => s.key === 'feed').crawl).toMatchObject({ status: 'ok', indexed: 1 });
 		expect((await h.call('POST', '/v1/dashboard/sources/feed/crawl', { key: merchant })).status).toBe(200);
-		// no website in a demo session; a spent time budget starts nothing
-		expect((await h.call('POST', '/v1/dashboard/crawl-due', { key: await h.session('demo') })).status).toBe(403);
+		// no website in the session; a spent time budget starts nothing
+		const nowhere = await h.session('merchant', { scope: { merchantId: 'mer_x' } });
+		expect((await h.call('POST', '/v1/dashboard/crawl-due', { key: nowhere })).status).toBe(400);
+		expect((await h.call('POST', '/v1/dashboard/sources/feed/crawl', { key: nowhere })).status).toBe(400);
 		h.clock.advance(DAY + HOUR);
 		const site = /** @type {any} */ (await h.search.siteFor(WEBSITE));
 		expect(await h.search.sources.runDue(site, { deadline: h.clock.now() })).toEqual({ crawled: 0 });

@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Alerts & Waitlists API",
 		"version": "1.0.0",
-		"description": "Mode C API of Alerts & Waitlists (SSPS v1). All data lives in the merchant's own database; messages go through the merchant's own messaging connector. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC; phones are E.164. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that move state require `Idempotency-Key`; replays return the original response. Operations marked `x-ss-key-kind: sk` refuse browser (pk_) keys."
+		"description": "Mode C API of Alerts & Waitlists (SSPS v1). All data lives in the merchant's own database; messages go through the merchant's own messaging connector. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC; phones are E.164. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create records accept an optional `Idempotency-Key`; a repeated key within 24 h answers 409 `duplicate_request`. Operations marked `x-ss-key-kind: sk` refuse browser (pk_) keys."
 	},
 	"servers": [
 		{
@@ -69,19 +69,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
+				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
-			},
-			"IdempotencyKeyOptional": {
-				"name": "Idempotency-Key",
-				"in": "header",
-				"schema": {
-					"type": "string",
-					"maxLength": 255
-				}
+				},
+				"description": "Optional. On routes that create records or move money the key names the record, and a repeated key (same website, same route, within 24 h) answers 409 duplicate_request."
 			},
 			"Cursor": {
 				"name": "cursor",
@@ -718,7 +711,6 @@
 				"x-ss-key-kind": "sk"
 			},
 			"post": {
-				"x-ss-certify": true,
 				"operationId": "createTrigger",
 				"tags": ["triggers"],
 				"summary": "Report one stock, price or custom change from your server (idempotent on `id` or the Idempotency-Key). Pending waiters whose condition now holds are claimed and alerted once. sk_ only.",
@@ -736,7 +728,7 @@
 							},
 							"example": {
 								"kind": "inventory",
-								"itemId": "itm_certify",
+								"itemId": "itm_1",
 								"quantity": 5,
 								"previousQuantity": 0
 							}
@@ -1246,46 +1238,6 @@
 					}
 				},
 				"responses": {
-					"201": {
-						"description": "Subscribed",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/Subscription"
-								},
-								"example": {
-									"id": "als_0abcdefghjkmnpqrstvwxyz1",
-									"type": "back_in_stock",
-									"itemId": "itm_42",
-									"variantId": "var_blue",
-									"channel": "email",
-									"contact": null,
-									"contactMasked": "j•••@example.com",
-									"customerId": "cus_123",
-									"lang": "en",
-									"tier": null,
-									"status": "pending",
-									"threshold": null,
-									"priceAtSubscribe": null,
-									"item": {
-										"name": "Phone X (blue)",
-										"url": "https://shop.example.com/p/phone-x"
-									},
-									"consent": {
-										"given": true,
-										"at": "2026-10-01T09:00:00.000Z"
-									},
-									"source": "widget",
-									"subscribedAt": "2026-10-01T09:00:00.000Z",
-									"confirmedAt": "2026-10-01T09:00:00.000Z",
-									"notifiedAt": null,
-									"endedAt": null,
-									"position": 3,
-									"created": true
-								}
-							}
-						}
-					},
 					"200": {
 						"description": "Updated the active subscription",
 						"content": {
@@ -1322,6 +1274,46 @@
 									"endedAt": null,
 									"position": 3,
 									"created": false
+								}
+							}
+						}
+					},
+					"201": {
+						"description": "Subscribed",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/Subscription"
+								},
+								"example": {
+									"id": "als_0abcdefghjkmnpqrstvwxyz1",
+									"type": "back_in_stock",
+									"itemId": "itm_42",
+									"variantId": "var_blue",
+									"channel": "email",
+									"contact": null,
+									"contactMasked": "j•••@example.com",
+									"customerId": "cus_123",
+									"lang": "en",
+									"tier": null,
+									"status": "pending",
+									"threshold": null,
+									"priceAtSubscribe": null,
+									"item": {
+										"name": "Phone X (blue)",
+										"url": "https://shop.example.com/p/phone-x"
+									},
+									"consent": {
+										"given": true,
+										"at": "2026-10-01T09:00:00.000Z"
+									},
+									"source": "widget",
+									"subscribedAt": "2026-10-01T09:00:00.000Z",
+									"confirmedAt": "2026-10-01T09:00:00.000Z",
+									"notifiedAt": null,
+									"endedAt": null,
+									"position": 3,
+									"created": true
 								}
 							}
 						}
@@ -1647,7 +1639,7 @@
 				"summary": "Run the outbox now (also done right after each trigger while inline dispatch is on): repair stale claims, continue open trigger runs, send due messages (claim before send). sk_ only.",
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"responses": {
@@ -1691,7 +1683,7 @@
 				"summary": "Dashboard \"Send due now\" (SSO session, merchant roles): the same outbox run as POST /v1/messages:dispatch for the session's website.",
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"responses": {
@@ -2349,124 +2341,6 @@
 								"example": {
 									"accepted": 1,
 									"duplicates": 0
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "data_export",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "data_anonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data anonymize.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
 								}
 							}
 						}

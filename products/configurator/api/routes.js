@@ -1,7 +1,6 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Configurator Builder
- * Mode C API and the dashboard API (SSO sessions). Every product route is gated by its element: a disabled element
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Configurator Builder Mode C API and the dashboard API (SSO sessions). Every product route is gated by its element: a disabled element
  * answers 403 element_disabled in every mode. Handlers are thin — validation and logic live in core/ and the service.
  *
  * Keys: `sk_` (servers) manage configurators and read drafts; `pk_` (browsers, domain-locked) read published
@@ -13,7 +12,6 @@ import { validateEvaluation, validateLifecycle, validateQuote, validateUrlParams
 import { configuratorView, summaryView } from '../core/views.js';
 import { itemView } from '../core/catalog.js';
 import { repositoriesFor } from '../adapters/db.js';
-import { createTranslator } from '../core/strings.js';
 import { DASHBOARD_WRITE_ROLES, actorOf } from './dashboard.js';
 import { createEventHandlers } from './events.js';
 import { createConfiguratorService } from './service.js';
@@ -94,7 +92,7 @@ export const createConfiguratorApp = (app) => {
  * @param {Configurator} configurator
  */
 export const buildRoutes = (configurator) => {
-	const { app, product, service, siteOf } = configurator;
+	const { product, service, siteOf } = configurator;
 	/** @param {any} ctx */
 	const site = (ctx) => siteOf(ctx.websiteId, ctx.entitlement.doc);
 	/** Browser keys only see published configurators. @param {any} ctx */
@@ -114,11 +112,9 @@ export const buildRoutes = (configurator) => {
 		key: (/** @type {any} */ ctx) => ctx.websiteId,
 		bucket: 'evaluations',
 	};
-	/** @param {string} lang */
-	const translator = (lang) => createTranslator(app.strings[lang] ?? app.strings.en ?? {});
 	/** @param {any} ctx */
 	const maxQuantity = async (ctx) => (await site(ctx)).settings.api.max_quantity;
-	/** Dashboard session → website (null = pick a website / demo). @param {any} ctx */
+	/** Dashboard session → website (null = pick a website). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? site(ctx) : null);
 	const pickWebsite = () => problem('bad_request', 'Open the dashboard for a website.');
 
@@ -148,6 +144,7 @@ export const buildRoutes = (configurator) => {
 			method: 'POST',
 			path: '/v1/configurators',
 			...website('schema'),
+			idempotent: true,
 			handler: async (ctx) => {
 				const problems = validateLifecycle(ctx.body, { update: false });
 				if (problems.length > 0) return invalid(problems);
@@ -161,7 +158,6 @@ export const buildRoutes = (configurator) => {
 			method: 'POST',
 			path: '/v1/configurators:check',
 			...website('schema'),
-			idempotent: false,
 			handler: async (ctx) => {
 				if (ctx.body === null || typeof ctx.body !== 'object') return invalid([{ path: '', code: 'type' }]);
 				return ok(service.check(await site(ctx), ctx.body));
@@ -233,7 +229,6 @@ export const buildRoutes = (configurator) => {
 			method: 'POST',
 			path: '/v1/evaluations',
 			...website('api', null),
-			idempotent: false,
 			rateLimit: evaluationLimit,
 			handler: async (ctx) => {
 				const problems = validateEvaluation(ctx.body, { maxQuantity: await maxQuantity(ctx) });
@@ -248,7 +243,6 @@ export const buildRoutes = (configurator) => {
 			method: 'POST',
 			path: '/v1/quotes',
 			...website('price_deltas', null),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateQuote(ctx.body, { maxQuantity: await maxQuantity(ctx) });
 				if (problems.length > 0) return invalid(problems);
@@ -263,7 +257,6 @@ export const buildRoutes = (configurator) => {
 				method: 'POST',
 				path: `/v1/url-params:${mode}`,
 				...website('url_sync', null),
-				idempotent: false,
 				handler: async (ctx) => {
 					const problems = validateUrlParams(ctx.body, mode);
 					if (problems.length > 0) return invalid(problems);
@@ -273,7 +266,7 @@ export const buildRoutes = (configurator) => {
 			}),
 		),
 
-		// ── widget: bootstrap (Mode B/C) and the element stub view (Mode A without a UI bundle) ──────────
+		// ── widget: bootstrap ──────────────────────────────────────────────────────────────────────────────
 		defineRoute({
 			method: 'GET',
 			path: '/v1/widgets/:configurator',
@@ -283,44 +276,6 @@ export const buildRoutes = (configurator) => {
 				const search = typeof ctx.query.search === 'string' ? ctx.query.search.slice(0, 4096) : '';
 				const result = await service.widget(await site(ctx), ctx.params.configurator, { search, ...scope(ctx) });
 				return result.ok ? ok(result.widget) : failure(result);
-			},
-		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/elements/widget/view',
-			...website('widget', null),
-			handler: async (ctx) => {
-				const t = translator(typeof ctx.query.lang === 'string' ? ctx.query.lang : 'en');
-				const s = await site(ctx);
-				/** @type {string | null} */
-				let ref = typeof ctx.query.configurator === 'string' ? ctx.query.configurator : null;
-				if (!ref && typeof ctx.query.ctx === 'string') {
-					try {
-						const page = JSON.parse(ctx.query.ctx.slice(0, 2048));
-						const linked = typeof page?.itemId === 'string' ? await s.repos.configurators.byItem(page.itemId) : [];
-						ref = linked.find((record) => record.status === 'published')?.id ?? null;
-					} catch {
-						ref = null;
-					}
-				}
-				const result = ref ? await service.publicView(s, ref, { publishedOnly: true }) : null;
-				if (!result?.ok) return ok({ title: t('widget.title'), body: t('widget.error.not_found'), items: [], actions: [] });
-				const { view } = result;
-				const groups = view.schema.groups.slice(0, 50);
-				return ok({
-					title: view.name.slice(0, 200),
-					body: t('widget.stub.body', { count: groups.length }).slice(0, 2000),
-					items: groups.map((group) => ({
-						text: t('widget.stub.group', {
-							group: group.label,
-							options: group.options
-								.filter((option) => !option.hidden)
-								.map((option) => option.label)
-								.join(t('widget.list.separator')),
-						}).slice(0, 500),
-					})),
-					actions: [],
-				});
 			},
 		}),
 
@@ -341,6 +296,7 @@ export const buildRoutes = (configurator) => {
 			auth: 'launch',
 			element: 'schema',
 			roles: [...DASHBOARD_WRITE_ROLES],
+			idempotent: true,
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				if (!s) return pickWebsite();
@@ -370,7 +326,6 @@ export const buildRoutes = (configurator) => {
 			path: '/v1/dashboard/configurators:check',
 			auth: 'launch',
 			element: 'schema',
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				if (!s) return pickWebsite();
@@ -384,7 +339,6 @@ export const buildRoutes = (configurator) => {
 			path: '/v1/dashboard/evaluations',
 			auth: 'launch',
 			element: 'resolver',
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				if (!s) return pickWebsite();
@@ -399,7 +353,6 @@ export const buildRoutes = (configurator) => {
 			method: 'POST',
 			path: '/v1/dashboard/rules:check',
 			auth: 'launch',
-			idempotent: false,
 			handler: (ctx) => {
 				const source = ctx.body?.source;
 				return typeof source === 'string' && source.length <= 2000

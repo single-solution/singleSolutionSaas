@@ -10,7 +10,6 @@
 			"description": "bottom_end follows the reading direction (right in LTR, left in RTL).",
 			"enum": ["bottom_end", "bottom_start"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Appearance", "order": 1 }
 		},
 		"offset_x": {
@@ -60,7 +59,6 @@
 			"title": "Show the text label next to the icon",
 			"default": false,
 			"x-kind": "flag",
-			"x-experiment": true,
 			"x-ui": { "widget": "switch", "group": "Appearance", "order": 7 }
 		},
 		"pulse": {
@@ -109,7 +107,6 @@
 			"default": "none",
 			"enum": ["none", "delay", "scroll", "exit_intent", "idle"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Triggers", "order": 13 }
 		},
 		"auto_open_delay_seconds": {

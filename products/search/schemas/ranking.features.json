@@ -8,14 +8,38 @@
 			"title": "Field boosts",
 			"description": "How much a match in each field counts (fields not listed count 1).",
 			"default": [
-				{ "field": "title", "weight": 5 },
-				{ "field": "brand", "weight": 3 },
-				{ "field": "skus", "weight": 3 },
-				{ "field": "tags", "weight": 2 },
-				{ "field": "headings", "weight": 2 },
-				{ "field": "description", "weight": 1 },
-				{ "field": "attributes", "weight": 1 },
-				{ "field": "body", "weight": 0.5 }
+				{
+					"field": "title",
+					"weight": 5
+				},
+				{
+					"field": "brand",
+					"weight": 3
+				},
+				{
+					"field": "skus",
+					"weight": 3
+				},
+				{
+					"field": "tags",
+					"weight": 2
+				},
+				{
+					"field": "headings",
+					"weight": 2
+				},
+				{
+					"field": "description",
+					"weight": 1
+				},
+				{
+					"field": "attributes",
+					"weight": 1
+				},
+				{
+					"field": "body",
+					"weight": 0.5
+				}
 			],
 			"maxItems": 40,
 			"items": {
@@ -30,12 +54,20 @@
 						"maxLength": 40,
 						"pattern": "^[a-z][a-z0-9_]{0,39}$"
 					},
-					"weight": { "type": "number", "title": "Weight", "minimum": 0, "maximum": 100 }
+					"weight": {
+						"type": "number",
+						"title": "Weight",
+						"minimum": 0,
+						"maximum": 100
+					}
 				}
 			},
 			"x-kind": "config",
-			"x-experiment": true,
-			"x-ui": { "group": "Relevance", "order": 1, "widget": "list" }
+			"x-ui": {
+				"group": "Relevance",
+				"order": 1,
+				"widget": "list"
+			}
 		},
 		"synonyms": {
 			"type": "array",
@@ -53,20 +85,31 @@
 						"title": "Terms",
 						"minItems": 2,
 						"maxItems": 20,
-						"items": { "type": "string", "minLength": 1, "maxLength": 60 }
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 60
+						}
 					}
 				}
 			},
 			"x-kind": "config",
-			"x-ui": { "group": "Relevance", "order": 2, "widget": "list" }
+			"x-ui": {
+				"group": "Relevance",
+				"order": 2,
+				"widget": "list"
+			}
 		},
 		"typo_tolerance": {
 			"type": "boolean",
 			"title": "Typo tolerance",
 			"default": true,
 			"x-kind": "flag",
-			"x-experiment": true,
-			"x-ui": { "group": "Matching", "order": 3, "widget": "switch" }
+			"x-ui": {
+				"group": "Matching",
+				"order": 3,
+				"widget": "switch"
+			}
 		},
 		"typo_min_length": {
 			"type": "integer",
@@ -75,7 +118,11 @@
 			"minimum": 2,
 			"maximum": 20,
 			"x-kind": "config",
-			"x-ui": { "group": "Matching", "order": 4, "widget": "number" }
+			"x-ui": {
+				"group": "Matching",
+				"order": 4,
+				"widget": "number"
+			}
 		},
 		"typo_two_edits_length": {
 			"type": "integer",
@@ -84,7 +131,11 @@
 			"minimum": 3,
 			"maximum": 30,
 			"x-kind": "config",
-			"x-ui": { "group": "Matching", "order": 5, "widget": "number" }
+			"x-ui": {
+				"group": "Matching",
+				"order": 5,
+				"widget": "number"
+			}
 		},
 		"max_edits": {
 			"type": "integer",
@@ -93,7 +144,11 @@
 			"minimum": 0,
 			"maximum": 2,
 			"x-kind": "limit",
-			"x-ui": { "group": "Matching", "order": 6, "widget": "number" }
+			"x-ui": {
+				"group": "Matching",
+				"order": 6,
+				"widget": "number"
+			}
 		},
 		"prefix_matching": {
 			"type": "boolean",
@@ -101,7 +156,11 @@
 			"description": "The last word of a query also matches longer words in prefix fields.",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "group": "Matching", "order": 7, "widget": "switch" }
+			"x-ui": {
+				"group": "Matching",
+				"order": 7,
+				"widget": "switch"
+			}
 		},
 		"match_mode": {
 			"type": "string",
@@ -110,8 +169,11 @@
 			"default": "all_then_any",
 			"enum": ["all", "any", "all_then_any"],
 			"x-kind": "config",
-			"x-experiment": true,
-			"x-ui": { "group": "Matching", "order": 8, "widget": "select" }
+			"x-ui": {
+				"group": "Matching",
+				"order": 8,
+				"widget": "select"
+			}
 		},
 		"stopwords": {
 			"type": "array",
@@ -120,9 +182,16 @@
 			"default": [],
 			"maxItems": 300,
 			"uniqueItems": true,
-			"items": { "type": "string", "minLength": 1, "maxLength": 40 },
+			"items": {
+				"type": "string",
+				"minLength": 1,
+				"maxLength": 40
+			},
 			"x-kind": "config",
-			"x-ui": { "group": "Matching", "order": 9 }
+			"x-ui": {
+				"group": "Matching",
+				"order": 9
+			}
 		},
 		"document_boost_weight": {
 			"type": "number",
@@ -132,8 +201,11 @@
 			"minimum": 0,
 			"maximum": 10,
 			"x-kind": "config",
-			"x-experiment": true,
-			"x-ui": { "group": "Relevance", "order": 10, "widget": "number" }
+			"x-ui": {
+				"group": "Relevance",
+				"order": 10,
+				"widget": "number"
+			}
 		},
 		"pinned": {
 			"type": "array",
@@ -146,18 +218,31 @@
 				"additionalProperties": false,
 				"required": ["query", "ids"],
 				"properties": {
-					"query": { "type": "string", "title": "Query", "minLength": 1, "maxLength": 100 },
+					"query": {
+						"type": "string",
+						"title": "Query",
+						"minLength": 1,
+						"maxLength": 100
+					},
 					"ids": {
 						"type": "array",
 						"title": "Document ids",
 						"minItems": 1,
 						"maxItems": 10,
-						"items": { "type": "string", "minLength": 1, "maxLength": 128 }
+						"items": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 128
+						}
 					}
 				}
 			},
 			"x-kind": "config",
-			"x-ui": { "group": "Relevance", "order": 11, "widget": "list" }
+			"x-ui": {
+				"group": "Relevance",
+				"order": 11,
+				"widget": "list"
+			}
 		}
 	}
 }

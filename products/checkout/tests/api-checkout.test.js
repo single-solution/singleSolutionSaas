@@ -210,8 +210,35 @@ describe('placement', () => {
 		});
 		expect(placed.json.accessToken).toMatch(/^oat_/);
 		expect(placed.json.offers).toMatchObject({ codes: ['SAVE10'], loyaltyPoints: 200 });
-		const replay = await h.call('POST', '/v1/orders', { ...who, body, idempotencyKey: 'idk_place_1' });
-		expect(replay.json.id).toBe(placed.json.id);
+		// a repeated Idempotency-Key is refused by app-kit; past its window the stored order answers instead of a new one
+		const again = await h.call('POST', '/v1/orders', { ...who, body, idempotencyKey: 'idk_place_1' });
+		expect(again.status).toBe(409);
+		expect(again.json.type).toMatch(/duplicate_request$/);
+		const entitlement = await h.application.product.entitlements.forWebsite(WEBSITE);
+		const siteNow = await h.application.siteOf(WEBSITE, entitlement.doc);
+		const replay = await h.application.placement.place(siteNow, body, {
+			who: { kind: 'pk', subject: 'user_ada', email: null, phone: null },
+			caller: 'customer:user_ada',
+			idempotencyKey: 'idk_place_1',
+		});
+		expect(replay).toMatchObject({ ok: true, replayed: true, order: { id: placed.json.id } });
+		// another caller reusing Ada's key never sees or changes her order: the derived id is scoped by caller
+		const other = await h.application.placement.place(siteNow, body, {
+			who: { kind: 'pk', subject: 'user_bob', email: null, phone: null },
+			caller: 'customer:user_bob',
+			idempotencyKey: 'idk_place_1',
+		});
+		expect(other).toEqual({ ok: false, code: 'cart_not_found' });
+		// a caller that cannot prove ownership (anonymous guest, or a mismatched owner) gets duplicate_request
+		const guest = await h.application.placement.place(siteNow, body, {
+			who: { kind: 'pk', subject: null, email: null, phone: null },
+			caller: 'customer:user_ada',
+			idempotencyKey: 'idk_place_1',
+		});
+		expect(guest).toEqual({ ok: false, code: 'duplicate_request' });
+		const ordersRepo = siteNow.repos.orders;
+		const stored = await ordersRepo.byIdempotency(replay.ok ? replay.order.idempotencyKey : '');
+		expect(stored?.placedBy).toBe('customer:user_ada');
 		const stock = (await h.call('GET', '/v1/items/itm_a')).json.variants[0].available;
 		expect(stock).toBe(8);
 		expect((await h.call('GET', `/v1/carts/${cartId}`)).json.status).toBe('converted');

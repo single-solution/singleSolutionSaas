@@ -60,11 +60,11 @@ describe('queue', () => {
 			idempotencyKey: 'note-1',
 		});
 		expect(note.status).toBe(201);
-		const replay = await h.call('POST', `/v1/queue/${claimId}/notes`, {
+		const repeated = await h.call('POST', `/v1/queue/${claimId}/notes`, {
 			body: { body: 'Called them.' },
 			idempotencyKey: 'note-1',
 		});
-		expect(replay.json.notes).toHaveLength(1);
+		expect(repeated.status).toBe(409);
 		expect((await h.call('POST', `/v1/queue/${claimId}/notes`, { body: { body: '' } })).status).toBe(422);
 		expect((await h.call('POST', '/v1/queue/clm_none/notes', { body: { body: 'x' } })).status).toBe(404);
 		const assigned = await h.call('POST', `/v1/queue/${claimId}/assign`, { body: { assignee: 'stf_7' } });
@@ -114,7 +114,7 @@ describe('refunds', () => {
 		expect(first.json.refund).toMatchObject({ amount: 2000, currency: 'USD', method: 'bank_transfer', reference: 'TX-1' });
 		expect(first.json.claim).toMatchObject({ refundedAmount: 2000, status: 'received' });
 		const again = await h.call('POST', '/v1/refunds', { body, idempotencyKey: 'refund-1' });
-		expect(again.json.refund.id).toBe(first.json.refund.id);
+		expect(again.status).toBe(409);
 		const ledger = (await h.published('order.refunded@1')).at(-1);
 		expect(ledger.data).toMatchObject({ orderId, amount: { amount: 2000, currency: 'USD' }, customerId: 'cus_r1' });
 		expect(ledger.data.reason).toContain('TX-1');
@@ -283,32 +283,8 @@ describe('serial registry', () => {
 		expect(loose.json).toMatchObject({ title: 'Loose unit' });
 		expect((await h.call('GET', '/v1/serials/NOPE-404')).status).toBe(404);
 		expect((await h.call('GET', '/v1/serials/x')).status).toBe(404);
-		const view = await h.call('GET', '/v1/elements/serial_registry/view', { browser: true });
-		expect(view.json.actions[0].action).toBe('lookup');
-		const action = await h.call('POST', '/v1/elements/serial_registry/actions/lookup', {
-			browser: true,
-			body: { fields: { serial: 'imei3567' } },
-		});
-		expect(action.json.items.length).toBeGreaterThan(0);
-		expect(action.json.body).toContain('2026-09-01');
-		const missing = await h.call('POST', '/v1/elements/serial_registry/actions/lookup', {
-			browser: true,
-			body: { fields: { serial: 'NOPE-404' } },
-		});
-		expect(missing.json.body).toBe('We could not find this serial number.');
-		expect(
-			(await h.call('POST', '/v1/elements/serial_registry/actions/lookup', { browser: true, body: { fields: {} } })).status,
-		).toBe(422);
 		await h.entitle({ config: { serial_registry: { public_lookup: false, show_sale_date: false } } });
 		expect((await h.call('GET', '/v1/serials/IMEI3567', { browser: true })).status).toBe(403);
-		expect(
-			(
-				await h.call('POST', '/v1/elements/serial_registry/actions/lookup', {
-					browser: true,
-					body: { fields: { serial: 'IMEI3567' } },
-				})
-			).status,
-		).toBe(403);
 		await h.entitle({
 			config: { serial_registry: { show_sale_date: false }, messages: { staff_recipients: ['staff@example.com'] } },
 		});
@@ -332,8 +308,8 @@ describe('messages', () => {
 		expect(h.providers.messages.length).toBe(sent + 1);
 		expect(
 			(await h.call('POST', '/v1/messages', { as: 'cus_m1', body: { claimId, body: 'Any news?' }, idempotencyKey: 'msg-1' }))
-				.json.id,
-		).toBe(fromCustomer.json.id);
+				.status,
+		).toBe(409);
 		h.clock.advance(1000);
 		const fromStaff = await h.call('POST', '/v1/messages', { body: { claimId, body: 'Picked up tomorrow.' } });
 		expect(fromStaff.json).toMatchObject({ author: 'staff', notified: true });
@@ -379,20 +355,15 @@ describe('messages', () => {
 	});
 });
 
-describe('gating, stub views and the dashboard API', () => {
-	it('answers 403 for disabled elements and serves the claims stub view', async () => {
+describe('gating and the dashboard API', () => {
+	it('answers 403 for disabled elements', async () => {
 		await h.entitle({ elements: { refunds: false, queue: false } });
 		expect((await h.call('GET', '/v1/refunds')).status).toBe(403);
 		expect((await h.call('GET', '/v1/queue')).status).toBe(403);
 		await h.entitle({ config: { messages: { staff_recipients: ['staff@example.com'] } } });
-		await claimFor('cus_v1');
-		const signedIn = await h.call('GET', '/v1/elements/claims/view', { as: 'cus_v1' });
-		expect(signedIn.json.items[0].text).toContain('Return for a refund');
-		expect((await h.call('GET', '/v1/elements/claims/view', { as: 'cus_nobody' })).json.body).toBe('You have no claims yet.');
-		expect((await h.call('GET', '/v1/elements/claims/view', { browser: true })).json.body).toContain('Sign in');
 	});
 
-	it('runs staff actions from a dashboard session (audited actor) and refuses demo sessions', async () => {
+	it('runs staff actions from a dashboard session (audited actor)', async () => {
 		const { claimId } = await claimFor('cus_d1');
 		const session = await h.session('merchant');
 		/** @param {string} action @param {unknown} body @param {string} [ses] */
@@ -410,9 +381,10 @@ describe('gating, stub views and the dashboard API', () => {
 		expect((await dash('restocks', { lines: [{ lineId: 'itm_1:var_1', restock: false }] })).status).toBe(200);
 		expect((await dash('refunds', { amount: 1000, method: 'cash' })).status).toBe(201);
 		expect((await dash('messages', { body: 'Refunded in part.' })).json.author).toBe('staff');
-		const demo = await h.session('demo');
-		expect((await dash('notes', { body: 'x' }, demo)).status).toBe(403);
-		const demoOverview = await h.call('GET', '/v1/dashboard/overview', { key: demo });
-		expect(demoOverview.status).toBe(400);
+		const admin = await h.session('admin');
+		expect((await dash('notes', { body: 'From staff' }, admin)).json.notes.at(-1).actor).toMatchObject({
+			type: 'staff',
+			id: 'usr_merchant',
+		});
 	});
 });

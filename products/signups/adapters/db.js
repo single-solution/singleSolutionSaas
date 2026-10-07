@@ -333,9 +333,9 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 			},
 			/**
 			 * Newest first; `after` = last id of the previous page.
-			 * @param {{ after?: string | null, fetchLimit: number, email?: string, phone?: string, includeDeleted?: boolean }} query
+			 * @param {{ after?: string | null, fetchLimit: number, email?: string, phone?: string }} query
 			 */
-			list: async ({ after = null, fetchLimit, email, phone, includeDeleted = false }) =>
+			list: async ({ after = null, fetchLimit, email, phone }) =>
 				(
 					await customers
 						.find(
@@ -344,7 +344,7 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 								...(after ? { id: { $lt: after } } : {}),
 								...(email ? { email } : {}),
 								...(phone ? { phone } : {}),
-								...(includeDeleted ? {} : { status: { $ne: 'deleted' } }),
+								status: { $ne: 'deleted' },
 							},
 							{ sort: { id: -1 }, limit: fetchLimit },
 						)

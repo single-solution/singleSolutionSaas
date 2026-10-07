@@ -1,8 +1,7 @@
 /**
  * Dashboard overview (SSO). The Portal sends the browser to app-kit's `GET /sso?launch=<jwt>`, which verifies the launch
  * (signature, issuer, audience, kind/scope, single use), stores a session and sets the HttpOnly `ss_session` cookie,
- * then redirects here. Supports merchant, demo (sandbox data), admin(scope), impersonate (audit banner), partner and
- * developer launches.
+ * then redirects here. Supports merchant and admin (staff) launches.
  */
 import { createElement as h } from 'react';
 import { redirect } from 'next/navigation.js';
@@ -51,7 +50,7 @@ export default async function Overview({ searchParams }) {
 					h(Stat, { key: String(label), label: t(String(label)), value: format.format(Number(value)) }),
 				),
 			),
-			(kpis.pendingDeletions ?? 0) > 0 && !context.data.demo && context.data.websiteId
+			(kpis.pendingDeletions ?? 0) > 0 && context.data.websiteId
 				? h(RunDeletions, { websiteId: context.data.websiteId })
 				: null,
 		),

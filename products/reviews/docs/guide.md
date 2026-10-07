@@ -3,8 +3,8 @@
 ## Three ways to use the widgets
 
 - **Mode A (drop-in):** the Loader mounts `ui/reviews.js#render` with the website's design tokens (`stars`, `summary` or
-  `list` variant; slots `before`, `after`, `empty`). Service-product elements also work through the Loader's element
-  stub: `GET /v1/elements/display/view` returns a text-only view model (store-wide, or `?itemId=`).
+  `list` variant; slots `before`, `after`, `empty`) once the widget bundle is uploaded (`ss pack build .` → app page →
+  **Upload widgets**).
 - **Mode B (headless):** `headless/reviews.js#createReviews({ config, strings, client, emit })` with
   `createElementApi({ baseUrl, key: 'pk_…', identity })` from `@ss/web/element`. `actions.load(itemId)` loads the summary
   and the first page; `setSort`, `setFilter('rating' | 'verified' | 'photos', value)`, `loadMore`, `loadStars(itemIds)`

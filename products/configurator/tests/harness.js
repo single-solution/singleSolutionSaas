@@ -182,7 +182,7 @@ export const createHarness = async ({ config = {}, elements = {}, website } = {}
 
 	/**
 	 * A dashboard session cookie of a launch.
-	 * @param {{ kind?: string, scope?: Record<string, unknown> }} [input]
+	 * @param {{ kind?: 'merchant' | 'admin', scope?: Record<string, unknown> }} [input]
 	 */
 	const session = async ({ kind = 'merchant', scope = { merchantId: MERCHANT, websiteId: WEBSITE } } = {}) => {
 		const { token } = await portal.issueLaunch(
@@ -190,7 +190,7 @@ export const createHarness = async ({ config = {}, elements = {}, website } = {}
 				kind,
 				subject: 'usr_merchant',
 				user: { id: 'usr_merchant' },
-				scope: kind === 'demo' ? {} : scope,
+				scope,
 			}),
 		);
 		const response = await handle(new Request(`https://configurator.example.com/sso?launch=${encodeURIComponent(token)}`));

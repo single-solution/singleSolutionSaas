@@ -4,8 +4,7 @@
  * data export / anonymisation — through app-kit's request handler with a real MongoDB.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createId } from '@ss/contracts';
-import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { resolveDashboard } from '../api/dashboard.js';
 import { createHarness, MERCHANT, WEBSITE } from './harness.js';
 
 const DAY = 24 * 3_600_000;
@@ -54,7 +53,7 @@ describe('redemption at checkout', () => {
 			balanceAfter: 150,
 			reference: 'cart_1',
 		});
-		expect((await h.call('POST', '/v1/redemptions', { body, idempotencyKey: 'redeem-1' })).json).toEqual(redeemed.json);
+		expect((await h.call('POST', '/v1/redemptions', { body, idempotencyKey: 'redeem-1' })).status).toBe(409);
 		expect((await h.call('POST', '/v1/redemptions', { body, idempotencyKey: 'redeem-2' })).json.id).toBe(redeemed.json.id); // same reference
 		expect(await balance('cus_red')).toBe(150);
 		expect(h.published('loyalty.redeemed@1').find((e) => e.data.redemptionId === redeemed.json.id)?.data).toMatchObject({
@@ -74,6 +73,41 @@ describe('redemption at checkout', () => {
 		expect((await h.call('GET', '/v1/redemptions/red_missing')).status).toBe(404);
 		expect((await h.call('POST', '/v1/redemptions/red_missing/release')).status).toBe(404);
 		expect((await h.call('POST', '/v1/redemptions/red_missing/confirm', { body: { orderId: 'o' } })).status).toBe(404);
+	});
+
+	it("never lets caller B reuse caller A's Idempotency-Key to see or change A's records", async () => {
+		await earn('cus_owner_a', 300);
+		await earn('cus_owner_b', 300);
+		const other = await h.key('sk');
+		const body = { points: 20, amount: 400, currency: 'USD' };
+		/** @param {string} customerId @param {string | undefined} key */
+		const redeem = (customerId, key) =>
+			h.call('POST', '/v1/redemptions', { body: { ...body, customerId }, key, idempotencyKey: 'shared-key' });
+		/** @param {string} customerId @param {number} points @param {string | undefined} key */
+		const credit = (customerId, points, key) =>
+			h.call('POST', '/v1/earnings', { body: { customerId, points }, key, idempotencyKey: 'shared-earn' });
+		const first = await redeem('cus_owner_a', undefined);
+		const earnedA = await credit('cus_owner_a', 5, undefined);
+		expect(first.status).toBe(201);
+		// within 24 h app-kit refuses the repeated key on the website outright
+		expect((await redeem('cus_owner_b', other)).json.type).toMatch(/duplicate_request$/);
+		// later, the same caller reusing its key for another customer never reaches the first customer's records
+		h.clock.advance(25 * 3_600_000);
+		await h.entitle();
+		expect((await redeem('cus_owner_b', undefined)).json.type).toMatch(/duplicate_request$/);
+		expect((await credit('cus_owner_b', 9, undefined)).json.type).toMatch(/duplicate_request$/);
+		// another caller's key derives other ids: a fresh record, A's stays untouched
+		h.clock.advance(25 * 3_600_000);
+		await h.entitle();
+		const second = await redeem('cus_owner_b', other);
+		expect(second.status).toBe(201);
+		expect(second.json.id).not.toBe(first.json.id);
+		const earnedB = await credit('cus_owner_b', 7, other);
+		expect(earnedB.status).toBe(201);
+		expect(earnedB.json.id).not.toBe(earnedA.json.id);
+		expect(await balance('cus_owner_a')).toBe(285);
+		expect(await balance('cus_owner_b')).toBe(287);
+		expect((await h.call('GET', `/v1/redemptions/${first.json.id}`)).json).toMatchObject({ status: 'applied', points: 20 });
 	});
 
 	it('refuses redemptions outside the bounds with stable problem codes', async () => {
@@ -285,7 +319,7 @@ describe('dashboard (SSO)', () => {
 			kind,
 			subject: 'usr_merchant',
 			user: { id: 'usr_merchant' },
-			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 			...extra,
 		});
 		const sso = await h.handle(new Request(`https://loyalty.example.com/sso?launch=${encodeURIComponent(token)}`));
@@ -294,7 +328,7 @@ describe('dashboard (SSO)', () => {
 		return session;
 	};
 
-	it('serves overview KPIs and audited adjustments to merchant sessions, read-only to demo', async () => {
+	it('serves overview KPIs and audited adjustments to merchant sessions', async () => {
 		const session = await launch('merchant');
 		const bearer = { key: session };
 		const overview = await h.call('GET', '/v1/dashboard/overview', bearer);
@@ -320,15 +354,6 @@ describe('dashboard (SSO)', () => {
 			).json.ok,
 		).toBe(false);
 		expect((await h.call('POST', '/v1/dashboard/rules:check', { ...bearer, body: {}, idempotencyKey: null })).status).toBe(422);
-		const demo = await launch('demo');
-		expect(
-			(
-				await h.call('POST', '/v1/dashboard/adjustments', {
-					key: demo,
-					body: { customerId: 'cus_dash', points: 1, reason: 'goodwill', note: 'n' },
-				})
-			).status,
-		).toBe(403);
 		expect((await h.call('GET', '/v1/session', { key: session })).json).toMatchObject({ kind: 'merchant', role: 'merchant' });
 	});
 
@@ -340,33 +365,19 @@ describe('dashboard (SSO)', () => {
 		expect(live.state).toBe('ready');
 		if (live.state !== 'ready') throw new Error('not ready');
 		expect(live.portalLink).toBe(`https://portal.test/websites/${WEBSITE}/subscriptions/sub_0123456789abcdefghjkmnpq`);
-		expect(live.data).toMatchObject({ demo: false, canWrite: true, websiteId: WEBSITE });
+		expect(live.data).toMatchObject({ canWrite: true, websiteId: WEBSITE });
 		expect((await live.data.overview()).members).toBeGreaterThan(0);
 		expect((await live.data.members({ q: 'cus_dash' })).map((m) => m.customerId)).toEqual(['cus_dash']);
 		expect((await live.data.member('cus_dash'))?.history[0]).toMatchObject({ kind: 'adjust', points: 15 });
 		expect(await live.data.member('cus_none')).toBeNull();
-		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_1' });
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT } });
 		expect((await resolveDashboard({ loyalty, sessionId: admin })).state).toBe('pick_website');
 		await h.entitle({ elements: { earn_rules: false } });
 		expect((await resolveDashboard({ loyalty, sessionId: await launch('merchant') })).state).toBe('not_subscribed');
 		await h.entitle();
-		const demo = await resolveDashboard({ loyalty, sessionId: await launch('demo') });
-		expect(demo.state === 'ready' && demo.data.demo).toBe(true);
 	});
 
-	it('builds sandbox data with the real core for demo launches', async () => {
-		const demo = demoDashboard({ now: h.clock.now() });
-		expect(demo).toMatchObject({ demo: true, canWrite: false, websiteId: null });
-		const overview = await demo.overview();
-		expect(overview.members).toBe(4);
-		expect(overview.outstandingPoints).toBeGreaterThan(0);
-		expect((await demo.members({ q: 'cus_demo_a' })).map((m) => m.customerId)).toEqual(['cus_demo_ava']);
-		expect((await demo.members({})).length).toBe(4);
-		expect((await demo.member('cus_demo_chloe'))?.member.tier?.key).toBe('gold');
-		expect(await demo.member('nobody')).toBeNull();
-	});
-
-	it('runs the website expiry from the dashboard button (merchant only)', async () => {
+	it('runs the website expiry from the dashboard button', async () => {
 		await earn('cus_btn_exp', 70);
 		h.clock.advance(200 * DAY);
 		await h.entitle();
@@ -375,29 +386,7 @@ describe('dashboard (SSO)', () => {
 		expect(run.status).toBe(200);
 		expect(run.json.expired).toBeGreaterThanOrEqual(70);
 		expect((await h.collection('members').findOne({ customerId: 'cus_btn_exp' }))?.balance).toBe(0);
-		expect((await h.call('POST', '/v1/dashboard/expiry:run', { key: await launch('demo'), idempotencyKey: null })).status).toBe(
-			403,
-		);
-		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_2' });
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT } });
 		expect((await h.call('POST', '/v1/dashboard/expiry:run', { key: admin, idempotencyKey: null })).status).toBe(400);
-	});
-});
-
-describe('data export and anonymisation (Portal-signed)', () => {
-	it('exports a subject and anonymises their personal fields', async () => {
-		const rawBody = JSON.stringify({ websiteId: WEBSITE, subject: { customerId: 'cus_adj' }, requestId: createId('req') });
-		for (const operation of ['export', 'anonymize']) {
-			const signed = await h.portal.signRequest({ method: 'POST', path: `/v1/data:${operation}`, body: rawBody });
-			const response = await h.handle(
-				new Request(`https://loyalty.example.com/v1/data:${operation}`, {
-					method: 'POST',
-					headers: { ...signed.headers, 'idempotency-key': createId('idk') },
-					body: rawBody,
-				}),
-			);
-			expect(response.status).toBe(200);
-		}
-		const tx = await h.collection('transactions').findOne({ websiteId: WEBSITE, customerId: 'cus_adj', kind: 'adjust' });
-		expect(tx?.note).toBeNull();
 	});
 });

@@ -1,8 +1,10 @@
 /**
  * Mode B headless core of the `place_order` element: the server's quote of the checkout (`POST /v1/quotes`) and the
- * placement (`POST /v1/orders`). One Idempotency-Key is kept for a submission and reused on retries (a double click or
- * a flaky network never places two orders); it changes only when the checkout changes. The totals shown are always
- * the server's; `expectedTotal` lets the server answer `total_changed` when they moved.
+ * placement (`POST /v1/orders`). One Idempotency-Key is kept for a submission and reused on retries after a network
+ * failure (a double click or a flaky network never places two orders; the server refuses the repeat with
+ * `duplicate_request`); it changes when the checkout changes or when the server refused the order (a 4xx answer: nothing
+ * was placed, so the next attempt is a new submission). The totals shown are always the server's; `expectedTotal` lets
+ * the server answer `total_changed` when they moved.
  */
 import { formatMoney } from '../core/money.js';
 import { createTranslator } from './strings.js';
@@ -93,6 +95,8 @@ export const createPlaceOrder = ({ strings = {}, client, emit = () => {}, newKey
 			const result = await client.post('/v1/orders', payload, { idempotencyKey: key });
 			if (!result.ok) {
 				const code = result.error.code ?? 'request_failed';
+				const status = result.error.status;
+				if (typeof status === 'number' && status < 500 && code !== 'duplicate_request') key = makeKey();
 				const totals = /** @type {any} */ (result.error).totals;
 				if (code === 'total_changed' && totals && quote) showQuote({ ...quote, totals });
 				store.set({ status: 'error', error: errorText(t, code), errorCode: code });

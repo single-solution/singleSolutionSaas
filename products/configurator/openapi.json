@@ -17,7 +17,6 @@
 	],
 	"paths": {
 		"/v1/configurators": {
-			"x-ss-certify": true,
 			"get": {
 				"operationId": "listConfigurators",
 				"summary": "List configurators (server key)",
@@ -1216,60 +1215,6 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/Widget"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/widget/view": {
-			"get": {
-				"operationId": "widgetStubView",
-				"summary": "Text view for the Loader element stub (ss-element-stub@2)",
-				"parameters": [
-					{
-						"name": "configurator",
-						"in": "query",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "ctx",
-						"in": "query",
-						"schema": {
-							"type": "string"
-						}
-					},
-					{
-						"name": "lang",
-						"in": "query",
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"title": "Classic tee",
-									"body": "2 groups of options to choose from.",
-									"items": [
-										{
-											"text": "Colour: Navy, Sand"
-										}
-									],
-									"actions": []
 								}
 							}
 						}

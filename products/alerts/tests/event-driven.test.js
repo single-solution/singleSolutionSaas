@@ -94,14 +94,13 @@ describe('dashboard "Send due now"', () => {
 		const merchant = await merchantSession(t);
 		const ready = await resolveDashboard({ alerts: t.alerts, sessionId: merchant });
 		expect(ready.state === 'ready' && ready.data.canWrite).toBe(true);
-		const partner = await sessionFor(t, {
-			kind: 'partner',
-			subject: 'usr_p',
-			scope: { merchantId: MERCHANT, websiteId: WEBSITE, partnerId: 'ptn_1' },
+		const staff = await sessionFor(t, {
+			kind: 'admin',
+			subject: 'stf_1',
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 		});
-		const viewer = await resolveDashboard({ alerts: t.alerts, sessionId: partner });
-		expect(viewer.state === 'ready' && viewer.data.canWrite).toBe(false);
-		expect((await t.call('POST', '/v1/dashboard/messages:dispatch', { key: partner, body: {} })).status).toBe(403);
+		const admin = await resolveDashboard({ alerts: t.alerts, sessionId: staff });
+		expect(admin.state === 'ready' && admin.data.canWrite).toBe(true);
 		const noWebsite = await sessionFor(t, { kind: 'merchant', subject: 'usr_2', scope: { merchantId: MERCHANT } });
 		expect((await t.call('POST', '/v1/dashboard/messages:dispatch', { key: noWebsite, body: {} })).status).toBe(400);
 		expect((await t.call('POST', '/v1/dashboard/messages:dispatch', { key: t.sk, body: {} })).status).toBe(401);

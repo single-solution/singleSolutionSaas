@@ -88,17 +88,9 @@ describe('repositories and helpers', () => {
 			role: 'merchant',
 			scope: {},
 			user: 'u',
-			actor: null,
 		});
-		expect(sessionView({ kind: 'admin', role: 'platform_admin', subject: 's', scope: { actor: 'stf' } })).toMatchObject({
-			user: 's',
-			actor: 'stf',
-		});
-		expect(sessionView({ kind: 'demo', role: 'demo' }).user).toBeNull();
-		expect(dashboardActor({ kind: 'impersonate', role: 'impersonate', scope: { actor: 'stf_1' } })).toEqual({
-			type: 'staff',
-			id: 'stf_1',
-		});
+		expect(sessionView({ kind: 'admin', role: 'platform_admin', subject: 's' }).user).toBe('s');
+		expect(sessionView({ kind: 'admin', role: 'platform_admin' }).user).toBeNull();
 		expect(dashboardActor({ kind: 'admin', role: 'platform_admin', subject: 'adm' })).toEqual({ type: 'staff', id: 'adm' });
 		expect(dashboardActor({ kind: 'merchant', role: 'merchant' })).toEqual({ type: 'merchant', id: 'unknown' });
 		const off = settingsFrom({

@@ -1,7 +1,7 @@
-/** Dashboard data: session states, live data from the merchant database and the in-memory demo. */
+/** Dashboard data: session states and live data from the merchant database. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { dashboardActor, demoDashboard, resolveDashboard } from '../api/dashboard.js';
-import { T0, WEBSITE, createHarness } from './harness.js';
+import { dashboardActor, resolveDashboard } from '../api/dashboard.js';
+import { WEBSITE, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -15,19 +15,9 @@ afterAll(async () => {
 });
 
 describe('dashboard context', () => {
-	it('asks to sign in without a session and shows the demo for demo launches', async () => {
+	it('asks to sign in without a session', async () => {
 		expect(await resolveDashboard({ aftersales: h.aftersales, sessionId: null })).toEqual({ state: 'signin' });
 		expect(await resolveDashboard({ aftersales: h.aftersales, sessionId: 'ses_unknown' })).toEqual({ state: 'signin' });
-		const demo = await resolveDashboard({ aftersales: h.aftersales, sessionId: await h.session('demo'), now: T0 });
-		expect(demo.state).toBe('ready');
-		if (demo.state !== 'ready') return;
-		expect(demo.data).toMatchObject({ demo: true, canWrite: false, websiteId: null });
-		const overview = await demo.data.overview();
-		expect(overview.byKind.open).toBeGreaterThan(0);
-		expect(overview.byKind.rejected).toBe(1);
-		expect(await demo.data.claims(['requested'])).toHaveLength(1);
-		expect(await demo.data.claims(null)).toHaveLength(4);
-		expect(await demo.data.serial('x')).toBeNull();
 	});
 
 	it('resolves the website of a merchant session with live data and the Portal link', async () => {
@@ -40,7 +30,7 @@ describe('dashboard context', () => {
 		});
 		expect(context.state).toBe('ready');
 		if (context.state !== 'ready') return;
-		expect(context.data).toMatchObject({ demo: false, canWrite: true, websiteId: WEBSITE });
+		expect(context.data).toMatchObject({ canWrite: true, websiteId: WEBSITE });
 		expect(context.portalLink).toMatch(/^https:\/\/portal\.test\/websites\/web_/);
 		expect(await context.data.claims(null)).toEqual([]);
 		expect((await context.data.serial('DASH1'))?.orderId).toBe(orderId);
@@ -63,12 +53,7 @@ describe('dashboard context', () => {
 		const sso = await h.handle(new Request(`https://aftersales.example.com/sso?launch=${encodeURIComponent(token)}`));
 		const id = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
 		expect((await resolveDashboard({ aftersales: h.aftersales, sessionId: id })).state).toBe('pick_website');
-		expect(dashboardActor({ kind: 'impersonate', role: 'impersonate', scope: { actor: 'stf_1' } })).toEqual({
-			type: 'staff',
-			id: 'stf_1',
-		});
 		expect(dashboardActor({ kind: 'admin', role: 'platform_admin', subject: 'adm_1' })).toEqual({ type: 'staff', id: 'adm_1' });
 		expect(dashboardActor({ kind: 'merchant', role: 'merchant' })).toEqual({ type: 'merchant', id: 'unknown' });
-		expect(demoDashboard({ now: T0 }).settings.initialStatus).toBe('requested');
 	});
 });

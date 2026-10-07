@@ -1,6 +1,6 @@
 /** Mode C: checklists, inspections, photos in the merchant's bucket, report links and reports; the dashboard API. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DAY, WEBSITE, createHarness } from './harness.js';
+import { DAY, MERCHANT, WEBSITE, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -73,6 +73,16 @@ describe('inspections', () => {
 			idempotencyKey: 'insp-1',
 		});
 		expect(replay.json.id).toBe(started.json.id);
+		const otherUnit = await unit({ serial: 'INSP-1-OTHER' });
+		const misused = await h.call('POST', '/v1/inspections', { body: { unitId: otherUnit.id }, idempotencyKey: 'insp-1' });
+		expect(misused.json.type).toMatch(/duplicate_request$/);
+		const other = await h.call('POST', '/v1/inspections', {
+			body: { unitId: otherUnit.id },
+			key: await h.key('sk'),
+			idempotencyKey: 'insp-1',
+		});
+		expect(other.status).toBe(201);
+		expect(other.json.id).not.toBe(started.json.id);
 		const id = started.json.id;
 		const early = await h.call('PATCH', `/v1/inspections/${id}`, { body: { complete: true } });
 		expect(early.status).toBe(422);
@@ -371,31 +381,6 @@ describe('report links', () => {
 		expect(appearance).toMatchObject({ label: 'Appearance', kind: 'score', max: 5, value: 5 });
 		expect(appearance.photos[0].url).toContain('X-Amz-Signature=');
 		expect(report.json.results.find((/** @type {any} */ r) => r.item === 'completeness').note).toBe('All accessories');
-		const stub = await h.call('GET', `/v1/elements/inspection/view?token=${link.json.token}`, { key: h.pk });
-		expect(stub.json.title).toBe('Inspection report · New');
-		expect(stub.json.body).toBe('Score 100 / 100');
-		expect(stub.json.items.map((/** @type {any} */ i) => i.text)).toContain('Works as intended: Pass');
-		const blank = await h.call('GET', '/v1/elements/inspection/view', { key: h.pk });
-		expect(blank.json.body).toBe('Open the report from the link you received.');
-		expect(blank.json.fields).toEqual([{ name: 'token', type: 'text', label: 'Report code', required: true }]);
-		expect(blank.json.actions).toEqual([{ action: 'open', label: 'Open report' }]);
-		const opened = await h.call('POST', '/v1/elements/inspection/actions/open', {
-			key: h.pk,
-			body: { fields: { token: ` ${link.json.token} ` } },
-		});
-		expect(opened.status).toBe(200);
-		expect(opened.json.title).toBe('Inspection report · New');
-		const unknown = await h.call('POST', '/v1/elements/inspection/actions/open', {
-			key: h.pk,
-			body: { fields: { token: 'grr_unknown' } },
-		});
-		expect(unknown.json.body).toBe('This report link is unknown, revoked or expired.');
-		const missing = await h.call('POST', '/v1/elements/inspection/actions/open', { key: h.pk, body: { fields: {} } });
-		expect(missing.status).toBe(422);
-		expect(missing.json.errors[0]).toMatchObject({ path: '/fields/token', code: 'token_invalid' });
-		expect((await h.call('POST', '/v1/elements/inspection/actions/refresh', { key: h.pk, body: {} })).json.body).toBe(
-			'Open the report from the link you received.',
-		);
 		await h.entitle({
 			config: { inspection: { public_base_url: 'https://cdn.example.com/media', report_shows_photos: true } },
 		});
@@ -427,7 +412,7 @@ describe('report links', () => {
 });
 
 describe('dashboard', () => {
-	it('shows the overview, re-grades units and creates report links for merchants; demo is read-only', async () => {
+	it('shows the overview, re-grades units and creates report links for merchants', async () => {
 		const session = await h.session('merchant');
 		const overview = await h.call('GET', '/v1/dashboard/overview', { key: session });
 		expect(overview.status).toBe(200);
@@ -479,12 +464,8 @@ describe('dashboard', () => {
 		expect(
 			(await h.call('POST', '/v1/dashboard/conditions:check', { key: session, idempotencyKey: null, body: {} })).status,
 		).toBe(422);
-		const demo = await h.session('demo');
-		expect((await h.call('GET', '/v1/dashboard/overview', { key: demo })).status).toBe(400);
-		expect(
-			(await h.call('POST', `/v1/dashboard/units/${u.id}/tier`, { key: demo, idempotencyKey: null, body: { tier: 'good' } }))
-				.status,
-		).toBe(403);
+		const noWebsite = await h.session('merchant', { scope: { merchantId: MERCHANT } });
+		expect((await h.call('GET', '/v1/dashboard/overview', { key: noWebsite })).status).toBe(400);
 		expect((await h.call('GET', '/v1/session', { key: session })).json).toMatchObject({ kind: 'merchant', role: 'merchant' });
 	});
 });

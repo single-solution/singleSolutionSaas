@@ -3,7 +3,7 @@
 	"info": {
 		"title": "After-sales API",
 		"version": "1.0.0",
-		"description": "Mode C API of After-sales (SSPS v1). All data lives in the merchant's own database and photos in the merchant's own bucket. Times are ISO-8601 UTC; money is integer minor units with a currency. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`; replays return the original response. `pk_` keys (browsers, domain-locked) act only for the customer identified by SS-Identity (the website's own login token) or a claim token; `sk_` keys are for the merchant's server."
+		"description": "Mode C API of After-sales (SSPS v1). All data lives in the merchant's own database and photos in the merchant's own bucket. Times are ISO-8601 UTC; money is integer minor units with a currency. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create records or move money accept an optional `Idempotency-Key`; a repeated key within 24 h answers 409 `duplicate_request`. `pk_` keys (browsers, domain-locked) act only for the customer identified by SS-Identity (the website's own login token) or a claim token; `sk_` keys are for the merchant's server."
 	},
 	"servers": [
 		{
@@ -307,8 +307,7 @@
 					"default": {
 						"$ref": "#/components/responses/Problem"
 					}
-				},
-				"x-ss-certify": true
+				}
 			}
 		},
 		"/v1/purchases/{id}": {
@@ -795,42 +794,6 @@
 				}
 			}
 		},
-		"/v1/elements/claims/view": {
-			"get": {
-				"operationId": "claimsStubView",
-				"tags": ["claims"],
-				"summary": "Loader element stub view: the signed-in customer's latest claims as text.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Identity"
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"title": "Returns and warranty",
-									"body": "",
-									"items": [
-										{
-											"text": "CL-GHJKMN · Return for a refund · Requested"
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/claim-photos": {
 			"post": {
 				"operationId": "createPhotoUpload",
@@ -1030,7 +993,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -1209,7 +1172,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -1510,7 +1473,7 @@
 				"summary": "Decide restock per claim line once the item is back (each line once); restocked units are published as inventory.changed@1 or recorded.",
 				"parameters": [
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -1767,85 +1730,6 @@
 				}
 			}
 		},
-		"/v1/elements/serial_registry/view": {
-			"get": {
-				"operationId": "serialsStubView",
-				"tags": ["serial_registry"],
-				"summary": "Loader element stub view of the warranty lookup.",
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"title": "Warranty check",
-									"body": "Enter a serial number to see its cover.",
-									"items": [],
-									"actions": [
-										{
-											"action": "lookup",
-											"label": "Check"
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/serial_registry/actions/lookup": {
-			"post": {
-				"operationId": "serialsStubLookup",
-				"tags": ["serial_registry"],
-				"summary": "Loader element stub action: look up fields.serial.",
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object"
-							},
-							"example": {
-								"fields": {
-									"serial": "SN-1234-5678"
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"title": "Phone case",
-									"body": "Sold on 2026-10-01",
-									"items": [
-										{
-											"text": "Warranty claim: covered until 2027-10-03"
-										}
-									]
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/messages": {
 			"get": {
 				"operationId": "listMessages",
@@ -1997,7 +1881,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -2046,7 +1930,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -2095,7 +1979,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -2144,7 +2028,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -2194,7 +2078,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -2248,7 +2132,7 @@
 						"$ref": "#/components/parameters/Id"
 					},
 					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
+						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -2471,124 +2355,6 @@
 					}
 				}
 			}
-		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "data_export",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "data_anonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data anonymize.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
 		}
 	},
 	"components": {
@@ -2615,20 +2381,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
-				"schema": {
-					"type": "string",
-					"maxLength": 255
-				}
-			},
-			"IdempotencyKeyOptional": {
-				"name": "Idempotency-Key",
-				"in": "header",
 				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
+				},
+				"description": "Optional. On routes that create records or move money the key names the record, and a repeated key (same website, same route, within 24 h) answers 409 duplicate_request."
 			},
 			"Cursor": {
 				"name": "cursor",

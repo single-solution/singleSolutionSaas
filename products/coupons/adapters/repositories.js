@@ -157,9 +157,6 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 				).map(strip),
 			/** Coupons that are not archived. */
 			countActive: () => coupons.countDocuments({ websiteId, status: { $ne: 'archived' } }),
-			/** Active coupons marked `listed`. @param {number} limit */
-			listed: async (limit) =>
-				(await coupons.find({ websiteId, status: 'active', listed: true }, { sort: { id: 1 }, limit }).toArray()).map(strip),
 			/**
 			 * Optimistic update of editable fields.
 			 * @param {string} id

@@ -1,22 +1,20 @@
 /**
- * distribution (share links, QR SVG, CSV export), reporting, the eligibility checker, the apply box element-stub view,
- * the dashboard API and resolver (live and demo), data export / anonymisation and the scheduled job's edge cases —
- * through app-kit's request handler with a real MongoDB.
+ * distribution (share links, QR SVG, CSV export), reporting, the eligibility checker, the dashboard API and resolver,
+ * and the event consumers' edge cases — through app-kit's request handler with a real MongoDB.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { resolveDashboard } from '../api/dashboard.js';
 import { createEventHandlers } from '../api/consumers.js';
-import { cart, createHarness, MERCHANT, ORIGIN, T0, WEBSITE } from './harness.js';
+import { cart, createHarness, MERCHANT, WEBSITE } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
 /** @type {any} */
 let shared;
 beforeAll(async () => {
-	h = await createHarness({ config: { distribution: { utm_source: 'coupons' }, apply_box: { show_listed: true } } });
+	h = await createHarness({ config: { distribution: { utm_source: 'coupons' } } });
 	shared = await h.coupon({
 		code: 'SHARE10',
-		listed: true,
 		name: 'Share 10 %',
 		action: { type: 'percent', percent: 10, target: 'order' },
 	});
@@ -126,39 +124,8 @@ describe('eligibility checker', () => {
 	});
 });
 
-describe('apply box element stub', () => {
-	it('serves the view model with listed coupons and applies a code', async () => {
-		const view = await h.call('GET', '/v1/elements/apply_box/view', { key: h.pk, headers: ORIGIN });
-		expect(view.status).toBe(200);
-		expect(view.json).toEqual({
-			title: 'Coupon code',
-			body: 'Enter your code at checkout to see your savings.',
-			items: [{ text: 'Share 10 %: SHARE10', href: 'https://shop.example.com/?coupon=SHARE10' }],
-			actions: [],
-		});
-		const applied = await h.call('POST', '/v1/elements/apply_box/actions/apply?lang=en', {
-			key: h.pk,
-			headers: ORIGIN,
-			body: { code: 'share10', cart: cart() },
-		});
-		expect(applied.json.body).toBe('SHARE10 applied — you save €10.00.');
-		const refused = await h.call('POST', '/v1/elements/apply_box/actions/apply', {
-			key: h.pk,
-			headers: ORIGIN,
-			body: { code: 'NOPE', cart: cart() },
-		});
-		expect(refused.json.body).toBe('This code does not exist.');
-		expect(
-			(await h.call('POST', '/v1/elements/apply_box/actions/other', { key: h.pk, headers: ORIGIN, body: {} })).status,
-		).toBe(404);
-		expect(
-			(await h.call('POST', '/v1/elements/apply_box/actions/apply', { key: h.pk, headers: ORIGIN, body: {} })).status,
-		).toBe(422);
-	});
-});
-
 describe('dashboard', () => {
-	it('resolves sessions: sign in, demo, pick a website, not subscribed, live data', async () => {
+	it('resolves sessions: sign in, pick a website, not subscribed, live data', async () => {
 		const { coupons } = h;
 		expect((await resolveDashboard({ coupons, sessionId: null })).state).toBe('signin');
 		expect((await resolveDashboard({ coupons, sessionId: 'ses_missing' })).state).toBe('signin');
@@ -166,8 +133,6 @@ describe('dashboard', () => {
 			...coupons,
 			product: { ...coupons.product, launch: { session: async () => value } },
 		});
-		const demo = await resolveDashboard({ coupons: session({ role: 'demo', kind: 'demo' }), sessionId: 'ses_1', now: T0 });
-		expect(demo.state).toBe('ready');
 		const pick = await resolveDashboard({
 			coupons: session({ role: 'merchant', kind: 'merchant', scope: {} }),
 			sessionId: 'ses_1',
@@ -184,7 +149,7 @@ describe('dashboard', () => {
 			website: WEBSITE,
 		});
 		if (live.state !== 'ready') throw new Error('expected a ready dashboard');
-		expect(live.data).toMatchObject({ demo: false, canWrite: true, websiteId: WEBSITE });
+		expect(live.data).toMatchObject({ canWrite: true, websiteId: WEBSITE });
 		expect(live.portalLink).toMatch(/\/websites\/web_0123456789abcdefghjkmnpq\/subscriptions\//);
 		const overview = await live.data.overview();
 		expect(overview.activeCoupons).toBeGreaterThanOrEqual(1);
@@ -197,28 +162,13 @@ describe('dashboard', () => {
 		expect(await live.data.coupon('cpn_missing')).toBeNull();
 	});
 
-	it('shows sandbox data computed with the real core for demo launches', async () => {
-		const demo = demoDashboard({ now: T0 });
-		expect(demo).toMatchObject({ demo: true, canWrite: false, websiteId: null });
-		const overview = await demo.overview();
-		expect(overview.activeCoupons).toBe(3);
-		expect(overview.sample.codes.length).toBeGreaterThan(0);
-		expect(overview.currencies[0]).toMatchObject({ currency: 'EUR', orders: 359 });
-		expect((await demo.coupons({ status: 'active' })).length).toBe(3);
-		expect((await demo.coupons({ status: 'paused' })).length).toBe(0);
-		const detail = await demo.coupon('cpn_demo_welcome');
-		expect(detail?.link).toBe('https://shop.example.com/?coupon=WELCOME10');
-		expect(detail?.qr).toMatch(/^<svg/);
-		expect(await demo.coupon('cpn_nope')).toBeNull();
-	});
-
-	it('creates coupons (audited), exports codes and checks rules with a launch session; demo sessions are read-only', async () => {
+	it('creates coupons (audited), exports codes and checks rules with merchant and staff (admin) launch sessions', async () => {
 		const launch = async (/** @type {any} */ kind) => {
 			const { token } = await h.portal.issueLaunch({
 				kind,
 				subject: 'usr_merchant',
 				user: { id: 'usr_merchant' },
-				scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+				scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 			});
 			const sso = await h.handle(new Request(`https://coupons.example.com/sso?launch=${encodeURIComponent(token)}`));
 			const session = /ss_session=(ses_[^;]+)/.exec(sso.headers.get('set-cookie') ?? '')?.[1];
@@ -249,56 +199,16 @@ describe('dashboard', () => {
 		expect(check.json.ok).toBe(true);
 		expect((await h.call('POST', '/v1/dashboard/eligibility:check', { key: merchant, body: {} })).status).toBe(422);
 		expect((await h.call('GET', '/v1/dashboard/overview', { key: merchant })).json.activeCoupons).toBeGreaterThan(0);
-		const demo = await launch('demo');
-		expect(
-			(
-				await h.call('POST', '/v1/dashboard/coupons', {
-					key: demo,
-					body: { name: 'x', action: { type: 'percent', percent: 1 } },
-				})
-			).status,
-		).toBe(403);
-		expect((await h.call('GET', '/v1/dashboard/overview', { key: demo })).status).toBe(400);
-	});
-});
-
-describe('privacy', () => {
-	it('exports and anonymises a customer’s reservations and usage (Portal-signed)', async () => {
-		await h.coupon({ code: 'PRIVATE', action: { type: 'percent', percent: 10 }, limits: { per_customer: 2 } });
-		await h.call('POST', '/v1/redemptions', {
-			body: {
-				codes: ['PRIVATE'],
-				cart: cart({ customer: { id: 'cus_private', email: 'p@example.com' }, context: { deviceId: 'dev_p' } }),
-			},
+		const staff = await launch('admin');
+		const byStaff = await h.call('POST', '/v1/dashboard/coupons', {
+			key: staff,
+			body: { name: 'By staff', action: { type: 'percent', percent: 5 } },
 		});
-		const signed = async (/** @type {string} */ path, /** @type {Record<string, unknown>} */ payload) => {
-			const rawBody = JSON.stringify(payload);
-			const request = await h.portal.signRequest({ method: 'POST', path, body: rawBody });
-			const response = await h.handle(
-				new Request(`https://coupons.example.com${path}`, {
-					method: 'POST',
-					headers: { ...request.headers, 'idempotency-key': `idk_${payload.requestId}` },
-					body: rawBody,
-				}),
-			);
-			return { status: response.status, json: await response.json() };
-		};
-		const exported = await signed('/v1/data:export', {
-			websiteId: WEBSITE,
-			subject: { customerId: 'cus_private' },
-			requestId: 'req_x1',
-		});
-		expect(exported.status).toBe(200);
-		expect(exported.json.collections.reservations[0]).toMatchObject({ customerId: 'cus_private', email: 'p@example.com' });
-		expect(exported.json.collections.usage[0]).toMatchObject({ customerId: 'cus_private', taken: 1 });
-		const anonymised = await signed('/v1/data:anonymize', {
-			websiteId: WEBSITE,
-			subject: { customerId: 'cus_private' },
-			requestId: 'req_x2',
-		});
-		expect(anonymised.status).toBe(200);
-		const stored = await h.collection('reservations').findOne({ codes: 'PRIVATE' });
-		expect(stored).toMatchObject({ customerId: null, email: null, deviceId: null });
+		expect(byStaff.status).toBe(201);
+		const staffAudit = await h.db
+			.collection('ss_coupons_audit')
+			.findOne({ websiteId: WEBSITE, 'target.couponId': byStaff.json.id });
+		expect(staffAudit?.actor).toMatchObject({ type: 'staff', id: 'usr_merchant' });
 	});
 });
 

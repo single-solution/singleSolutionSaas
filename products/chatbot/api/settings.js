@@ -96,6 +96,3 @@ export const settingsForDoc = (product, doc) =>
 		can: (key) => product.entitlements.can(doc, key),
 		config: (key) => product.entitlements.config(doc, key) ?? {},
 	});
-
-/** Every element on, product defaults (demo dashboards, previews). */
-export const defaultSettings = () => settingsFrom({ can: () => true, config: () => ({}) });

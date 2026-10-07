@@ -1,18 +1,18 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise, the
- * .well-known endpoints, /sso and — in development — the certification probes) plus the After-sales Mode C API and the
- * dashboard API (SSO sessions). Every product route is gated by its element: a disabled element answers 403
- * element_disabled in every mode. POSTs that create or move state require an Idempotency-Key (app-kit stores and
- * replays the response); handlers are thin — validation and rules live in core/.
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints
+ * and /sso) plus the After-sales Mode C API and the dashboard API (SSO sessions). Every product route is gated by its
+ * element: a disabled element answers 403 element_disabled in every mode. POSTs that create records or move money
+ * declare `idempotent: true`: an optional Idempotency-Key names the record (scoped to the caller, see `requestKey`), and app-kit refuses a repeated key with 409
+ * duplicate_request. Handlers are thin — validation and rules live in core/.
  *
  * Keys: `sk_` (the merchant's server) sees and changes everything; `pk_` (browsers, domain-locked) reads public data
  * and acts only for the customer it identifies — the website's own login token (`SS-Identity`, verified by app-kit) or
  * a signed claim token (guests, bound to one purchase, sent in the JSON body). A customer only ever sees their own
  * purchases, claims and messages.
  */
+import { createHash, randomUUID } from 'node:crypto';
 import { defineRoute, ok, created, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { checkCondition } from '../core/rules.js';
-import { serialKey } from '../core/serials.js';
 import { isId, isKey } from '../core/text.js';
 import {
 	validateAccess,
@@ -49,8 +49,32 @@ import { settingsForDoc } from './settings.js';
 
 /** Seconds browsers may cache the claim form. */
 const FORM_CACHE_SECONDS = 60;
-/** Claims shown by the Loader element stub view. */
-const STUB_CLAIMS = 5;
+
+/**
+ * Who sent a write, for scoping its Idempotency-Key: the customer it acts for (login subject or claim-token purchase),
+ * else the dashboard session, else the website key.
+ * @param {any} ctx
+ * @param {Who} [who]
+ */
+export const callerOf = (ctx, who) => {
+	if (who?.via === 'identity') return `customer:${who.subject}`;
+	if (who?.via === 'token') return `purchase:${who.purchaseId}`;
+	if (ctx.session) return `session:${ctx.session.subject}`;
+	return ctx.website ? `key:${ctx.website.kind}:${ctx.website.keyId}` : 'anonymous';
+};
+
+/**
+ * Id material of a write: the request's Idempotency-Key scoped to the website, the caller and the route (the same key
+ * from the same caller names the same record; another caller's identical key never collides), else a random one.
+ * @param {any} ctx
+ * @param {Who} [who]
+ */
+export const requestKey = (ctx, who) =>
+	ctx.idempotencyKey
+		? createHash('sha256')
+				.update([ctx.websiteId, callerOf(ctx, who), `${ctx.method} ${ctx.path}`, ctx.idempotencyKey].join('\n'))
+				.digest('hex')
+		: randomUUID();
 
 /**
  * Field problems → RFC 9457 `validation_failed`.
@@ -312,7 +336,6 @@ export const buildRoutes = (aftersales) => {
 			auth: 'launch',
 			element,
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				return s ? run(s, ctx, dashboardActor(ctx.session)) : noWebsite();
@@ -342,7 +365,6 @@ export const buildRoutes = (aftersales) => {
 			method: 'POST',
 			path: '/v1/claim-form:check',
 			...website('claims'),
-			idempotent: false,
 			handler: async (ctx) =>
 				typeof ctx.body?.when === 'string'
 					? ok(checkCondition(ctx.body.when))
@@ -351,12 +373,13 @@ export const buildRoutes = (aftersales) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/purchases',
+			idempotent: true,
 			...website('claims'),
 			handler: async (ctx) => {
 				const { problems, value } = validatePurchase(ctx.body);
 				if (!value) return invalid(problems);
 				const s = await site(ctx);
-				const result = await service.createPurchase(s, value, ctx.idempotencyKey);
+				const result = await service.createPurchase(s, value, requestKey(ctx));
 				const view = ownerPurchaseView(result.purchase, await service.eligibilityOf(s, result.purchase));
 				return result.created ? created(view, { location: `/v1/purchases/${result.purchase.id}` }) : ok(view);
 			},
@@ -417,7 +440,6 @@ export const buildRoutes = (aftersales) => {
 			method: 'POST',
 			path: '/v1/claim-access',
 			...website('claims', null),
-			idempotent: false,
 			rateLimit: { limit: 10, windowMs: 60_000 },
 			handler: async (ctx) => {
 				const { problems, value } = validateAccess(ctx.body);
@@ -434,6 +456,7 @@ export const buildRoutes = (aftersales) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/claims',
+			idempotent: true,
 			...website('claims', null),
 			rateLimit: { limit: (ctx) => rateOf(ctx, 'claims', 'create_rate_per_minute', 30), windowMs: 60_000 },
 			handler: async (ctx) => {
@@ -446,7 +469,7 @@ export const buildRoutes = (aftersales) => {
 				const who = whoOf(ctx, value.token ?? undefined);
 				if (!who) return refusal(ctx, value.token ?? undefined);
 				if (who.via === 'none') return failure({ reason: 'identity_required' });
-				const result = await service.submit(s, { value, who, key: ctx.idempotencyKey });
+				const result = await service.submit(s, { value, who, key: requestKey(ctx, who) });
 				if (!result.ok) return failure(result);
 				const views = await service.viewsFor(s);
 				const body = who.via === 'server' ? views.owner(result.claim) : views.customer(result.claim);
@@ -470,7 +493,6 @@ export const buildRoutes = (aftersales) => {
 			method: 'POST',
 			path: '/v1/claims:view',
 			...website('claims', null),
-			idempotent: false,
 			handler: async (ctx) => {
 				const { problems, value } = validateView(ctx.body);
 				if (!value) return invalid(problems);
@@ -496,36 +518,12 @@ export const buildRoutes = (aftersales) => {
 				});
 			},
 		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/elements/claims/view',
-			...website('claims', null),
-			handler: async (ctx) => {
-				const s = await site(ctx);
-				const t = { ...(app.strings.en ?? {}) };
-				const who = whoOf(ctx);
-				const rows =
-					who?.via === 'identity' ? await s.repos.claims.list({ customerKey: who.subject, fetchLimit: STUB_CLAIMS }) : [];
-				const views = await service.viewsFor(s);
-				return ok(
-					{
-						title: t['claims.title'] ?? '',
-						body:
-							who?.via === 'identity' ? (rows.length === 0 ? (t['claims.empty'] ?? '') : '') : (t['claims.sign_in'] ?? ''),
-						items: rows.map((/** @type {any} */ row) => {
-							const view = views.customer(row);
-							return { text: `${view.reference} · ${view.typeLabel} · ${view.statusLabel}`.slice(0, 500) };
-						}),
-					},
-					{ headers: { 'cache-control': 'no-store' } },
-				);
-			},
-		}),
 
 		// ── photos ──────────────────────────────────────────────────────────────────────────────────────────────
 		defineRoute({
 			method: 'POST',
 			path: '/v1/claim-photos',
+			idempotent: true,
 			...website('photos', null),
 			rateLimit: { limit: 60, windowMs: 60_000 },
 			handler: async (ctx) => {
@@ -549,7 +547,7 @@ export const buildRoutes = (aftersales) => {
 					contentType: value.contentType,
 					size: value.size,
 					owner,
-					key: ctx.idempotencyKey,
+					key: requestKey(ctx, who),
 				});
 				return result.ok ? created(result.photo) : failure(result);
 			},
@@ -586,20 +584,19 @@ export const buildRoutes = (aftersales) => {
 			method: 'POST',
 			path: '/v1/queue/:id/transition',
 			...website('queue'),
-			idempotent: 'optional',
 			handler: async (ctx) => transitionAction(await site(ctx), ctx.params.id, ctx.body, apiActor(ctx)),
 		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/queue/:id/notes',
+			idempotent: true,
 			...website('queue'),
-			handler: async (ctx) => noteAction(await site(ctx), ctx.params.id, ctx.body, apiActor(ctx), ctx.idempotencyKey),
+			handler: async (ctx) => noteAction(await site(ctx), ctx.params.id, ctx.body, apiActor(ctx), requestKey(ctx)),
 		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/queue/:id/assign',
 			...website('queue'),
-			idempotent: 'optional',
 			handler: async (ctx) => assignAction(await site(ctx), ctx.params.id, ctx.body, apiActor(ctx)),
 		}),
 
@@ -622,8 +619,9 @@ export const buildRoutes = (aftersales) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/refunds',
+			idempotent: true,
 			...website('refunds'),
-			handler: async (ctx) => refundAction(await site(ctx), ctx.body, apiActor(ctx), ctx.idempotencyKey),
+			handler: async (ctx) => refundAction(await site(ctx), ctx.body, apiActor(ctx), requestKey(ctx)),
 		}),
 
 		// ── restock ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -646,7 +644,6 @@ export const buildRoutes = (aftersales) => {
 			method: 'POST',
 			path: '/v1/restocks',
 			...website('restock'),
-			idempotent: 'optional',
 			handler: async (ctx) => restockAction(await site(ctx), ctx.body, apiActor(ctx)),
 		}),
 
@@ -670,6 +667,7 @@ export const buildRoutes = (aftersales) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/serials',
+			idempotent: true,
 			...website('serial_registry'),
 			handler: async (ctx) => {
 				const { problems, value } = validateSerial(ctx.body);
@@ -706,59 +704,6 @@ export const buildRoutes = (aftersales) => {
 				);
 			},
 		}),
-		defineRoute({
-			method: 'GET',
-			path: '/v1/elements/serial_registry/view',
-			...website('serial_registry', null),
-			handler: async () => {
-				const t = { ...(app.strings.en ?? {}) };
-				return ok(
-					{
-						title: t['serials.title'] ?? '',
-						body: t['serials.intro'] ?? '',
-						items: [],
-						actions: [{ action: 'lookup', label: t['serials.lookup'] ?? '' }],
-					},
-					{ headers: { 'cache-control': 'public, max-age=300' } },
-				);
-			},
-		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/elements/serial_registry/actions/lookup',
-			...website('serial_registry', null),
-			idempotent: false,
-			rateLimit: {
-				limit: (ctx) => rateOf(ctx, 'serial_registry', 'lookup_rate_per_minute', 60),
-				windowMs: 60_000,
-				bucket: 'serial-lookup',
-			},
-			handler: async (ctx) => {
-				const s = await site(ctx);
-				const t = { ...(app.strings.en ?? {}) };
-				if (!s.settings.serials.public_lookup) return problem('lookup_disabled', 'The public lookup is off.');
-				const raw = ctx.body?.fields?.serial;
-				if (typeof raw !== 'string' || serialKey(raw, /** @type {any} */ (s.settings.serials)) === null)
-					return invalid([{ path: '/fields/serial', code: 'serial_invalid' }]);
-				const result = await service.lookupSerial(s, raw);
-				if (!result.ok) return ok({ title: t['serials.title'] ?? '', body: t['serials.not_found'] ?? '', items: [] });
-				const view = publicSerialView({
-					serial: result.serial,
-					entry: result.entry,
-					types: s.settings.vocabulary.types,
-					showSaleDate: s.settings.serials.show_sale_date,
-				});
-				return ok({
-					title: view.title ?? view.serial,
-					body: view.soldAt ? (t['serials.sold_on'] ?? '').replace('{date}', view.soldAt.slice(0, 10)) : '',
-					items: view.cover.map((cover) => ({
-						text: (cover.active ? (t['serials.cover.active'] ?? '') : (t['serials.cover.ended'] ?? ''))
-							.replace('{type}', cover.label)
-							.replace('{date}', (cover.endsAt ?? '').slice(0, 10)),
-					})),
-				});
-			},
-		}),
 
 		// ── messages ────────────────────────────────────────────────────────────────────────────────────────────
 		defineRoute({
@@ -790,6 +735,7 @@ export const buildRoutes = (aftersales) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/messages',
+			idempotent: true,
 			...website('messages', null),
 			rateLimit: { limit: 30, windowMs: 60_000 },
 			handler: async (ctx) => {
@@ -799,7 +745,7 @@ export const buildRoutes = (aftersales) => {
 				if (!who) return refusal(ctx, token);
 				if (who.via === 'none') return failure({ reason: 'identity_required' });
 				const actor = who.via === 'server' ? apiActor(ctx) : { type: 'customer' };
-				return messageAction(s, ctx.body, who, actor, ctx.idempotencyKey);
+				return messageAction(s, ctx.body, who, actor, requestKey(ctx, who));
 			},
 		}),
 
@@ -815,28 +761,14 @@ export const buildRoutes = (aftersales) => {
 			},
 		}),
 		dashboardRoute('transition', 'queue', (s, ctx, actor) => transitionAction(s, ctx.params.id, ctx.body, actor)),
-		dashboardRoute('notes', 'queue', (s, ctx, actor) =>
-			noteAction(
-				s,
-				ctx.params.id,
-				ctx.body,
-				actor,
-				ctx.idempotencyKey ?? service.idFor(s.websiteId, 'dsh', `${ctx.requestId}`),
-			),
-		),
+		dashboardRoute('notes', 'queue', (s, ctx, actor) => noteAction(s, ctx.params.id, ctx.body, actor, requestKey(ctx))),
 		dashboardRoute('assign', 'queue', (s, ctx, actor) => assignAction(s, ctx.params.id, ctx.body, actor)),
 		dashboardRoute('refunds', 'refunds', (s, ctx, actor) =>
-			refundAction(s, { ...ctx.body, claimId: ctx.params.id }, actor, ctx.idempotencyKey ?? `${ctx.requestId}`),
+			refundAction(s, { ...ctx.body, claimId: ctx.params.id }, actor, requestKey(ctx)),
 		),
 		dashboardRoute('restocks', 'restock', (s, ctx, actor) => restockAction(s, { ...ctx.body, claimId: ctx.params.id }, actor)),
 		dashboardRoute('messages', 'messages', (s, ctx, actor) =>
-			messageAction(
-				s,
-				{ ...ctx.body, claimId: ctx.params.id },
-				{ via: 'server' },
-				actor,
-				ctx.idempotencyKey ?? `${ctx.requestId}`,
-			),
+			messageAction(s, { ...ctx.body, claimId: ctx.params.id }, { via: 'server' }, actor, requestKey(ctx)),
 		),
 	];
 };

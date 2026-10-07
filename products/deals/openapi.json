@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Deals & Promotions API",
 		"version": "1.0.0",
-		"description": "Mode C API of Deals & Promotions (SSPS v1): automatic offers without codes for any catalog. All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC; deal windows are local time in the deal's or website's zone. Errors are RFC 9457 problems (`type` ends with a stable code). POSTs that create or move state require `Idempotency-Key`; replays return the original response. Browser (`pk_`) calls identify the shopper with `SS-Identity` (the website's own login token)."
+		"description": "Mode C API of Deals & Promotions (SSPS v1): automatic offers without codes for any catalog. All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC; deal windows are local time in the deal's or website's zone. Errors are RFC 9457 problems (`type` ends with a stable code). `Idempotency-Key` is optional; creating deals, quotes and price locks refuses a repeated key (409 duplicate_request), and committing a quote again for the same order answers the original application. Browser (`pk_`) calls identify the shopper with `SS-Identity` (the website's own login token)."
 	},
 	"servers": [
 		{
@@ -590,9 +590,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/DealId"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -679,9 +676,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/DealId"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -1055,9 +1049,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/QuoteId"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKey"
 					}
 				],
 				"requestBody": {
@@ -1126,9 +1117,6 @@
 				"parameters": [
 					{
 						"$ref": "#/components/parameters/QuoteId"
-					},
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
 					}
 				],
 				"responses": {
@@ -1378,11 +1366,6 @@
 				"tags": ["quote_api"],
 				"summary": "Upsert up to quote_api.max_batch_items items; per-item results.",
 				"x-ss-key-kind": "sk",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/IdempotencyKeyOptional"
-					}
-				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -2377,124 +2360,6 @@
 					}
 				}
 			}
-		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "data_export",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export (quotes, applications, customer usage).",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "data_anonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed anonymisation of a customer.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_2"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
 		}
 	},
 	"components": {
@@ -2503,32 +2368,18 @@
 				"type": "http",
 				"scheme": "bearer",
 				"description": "pk_ (browser, domain-locked) or sk_ (server) website key"
-			},
-			"portalSignature": {
-				"type": "apiKey",
-				"in": "header",
-				"name": "SS-Signature",
-				"description": "Portal-signed request (ss-request.v1)"
 			}
 		},
 		"parameters": {
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
-				"schema": {
-					"type": "string",
-					"maxLength": 255
-				}
-			},
-			"IdempotencyKeyOptional": {
-				"name": "Idempotency-Key",
-				"in": "header",
 				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
+				},
+				"description": "Optional. A repeated key on the same route within 24 h is refused with 409 duplicate_request."
 			},
 			"Cursor": {
 				"name": "cursor",

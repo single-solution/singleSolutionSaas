@@ -2,8 +2,9 @@
  * The after-sales application service: orchestrates `core/` decisions over the `adapters/` repositories for one website
  * at a time. Handlers (REST, events, dashboard) stay thin and call these functions; every rule lives in `core/`.
  *
- * Exactly-once: a claim's id derives from the request's Idempotency-Key, a purchase's from its order (or the key), a
- * refund's from its key (and the claim refuses a second refund with the same id or on a stale amount), a restock is
+ * Exactly-once: a claim's id derives from the request key (its Idempotency-Key hashed with the website, caller and
+ * route, else random; a stored record found under it is only returned to its owner), a purchase's from its order (or the
+ * key), a refund's from its key (and the claim refuses a second refund with the same id or on a stale amount), a restock is
  * claimed per line before anything is published, and the usage record (`photo`) and published events carry ids
  * derived from those — so retries converge.
  */
@@ -421,6 +422,7 @@ export const createAftersalesService = ({
 		}
 		const id = idFor(site.websiteId, 'cph', key);
 		const existing = await site.repos.photos.get(id);
+		if (existing && existing.owner !== owner) return { ok: false, reason: 'duplicate_request' };
 		const declared = { contentType: existing?.contentType ?? contentType, size: existing?.size ?? size };
 		const slot = bucket.presignPut({
 			key: `claims/${id}`,
@@ -622,7 +624,11 @@ export const createAftersalesService = ({
 	const submit = async (site, { value, who, key }) => {
 		const id = idFor(site.websiteId, 'clm', key);
 		const replay = await site.repos.claims.get(id);
-		if (replay) return { ok: true, claim: replay, created: false };
+		if (replay) {
+			// ids are caller-scoped; still never hand a claim to anyone who does not own its purchase
+			const owner = replay.purchaseId === value.purchaseId ? await site.repos.purchases.get(replay.purchaseId) : null;
+			return owns(owner, who) ? { ok: true, claim: replay, created: false } : { ok: false, reason: 'duplicate_request' };
+		}
 		const purchase = await site.repos.purchases.get(value.purchaseId);
 		if (!owns(purchase, who)) return { ok: false, reason: 'not_found', detail: 'No such purchase.' };
 		const owned = /** @type {Record<string, any>} */ (purchase);
@@ -1063,6 +1069,7 @@ export const createAftersalesService = ({
 		if (!staff && !config.customer_can_message) return { ok: false, reason: 'messages_closed' };
 		const id = idFor(site.websiteId, 'msg', key);
 		const existing = await site.repos.messages.get(id);
+		if (existing && existing.claimId !== claim.id) return { ok: false, reason: 'duplicate_request' };
 		if (existing) return { ok: true, message: existing };
 		if ((await site.repos.messages.count(claim.id)) >= config.max_messages_per_claim)
 			return { ok: false, reason: 'messages_full' };

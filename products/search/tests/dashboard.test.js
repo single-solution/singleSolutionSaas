@@ -1,6 +1,6 @@
-/** Dashboard resolution (sign-in, demo, pick website, not subscribed, live) and the data the pages render. */
+/** Dashboard resolution (sign-in, pick website, not subscribed, live) and the data the pages render. */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { dashboardActor, demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { dashboardActor, resolveDashboard } from '../api/dashboard.js';
 import { sessionView } from '../api/session.js';
 import { createTranslator } from '../headless/strings.js';
 import { WEBSITE, createHarness } from './harness.js';
@@ -22,8 +22,6 @@ describe('dashboard', () => {
 	it('resolves every session state', async () => {
 		expect(await resolveDashboard({ searchApp: h.search, sessionId: undefined })).toEqual({ state: 'signin' });
 		expect(await resolveDashboard({ searchApp: h.search, sessionId: 'ses_unknown' })).toEqual({ state: 'signin' });
-		const demo = await resolveDashboard({ searchApp: h.search, sessionId: await h.session('demo') });
-		expect(demo.state === 'ready' && demo.data.demo).toBe(true);
 		const nobody = await resolveDashboard({
 			searchApp: h.search,
 			sessionId: await h.session('merchant', { scope: { merchantId: 'mer_x' } }),
@@ -53,33 +51,18 @@ describe('dashboard', () => {
 		await h.entitle();
 	});
 
-	it('builds the demo from sample documents with the real core', async () => {
-		const demo = demoDashboard({ now: Date.parse('2026-10-01T00:00:00Z') });
-		expect((await demo.status()).documents.total).toBe(5);
-		const found = await demo.search('linnen');
-		expect((found?.items ?? []).map((i) => i.id)).toContain('demo-1');
-		expect((await demo.documents({})).items).toHaveLength(5);
-		expect((await demo.sources()).items).toHaveLength(1);
-		expect((await demo.analytics(30)).zeroResults[0].q).toBe('gift card');
-	});
-
 	it('names the audited actor and translates', () => {
 		expect(dashboardActor({ kind: 'merchant', role: 'merchant', user: { id: 'usr_1' } })).toEqual({
 			type: 'merchant',
 			id: 'usr_1',
 		});
 		expect(dashboardActor({ kind: 'admin', role: 'platform_admin', subject: 'stf_1' })).toEqual({ type: 'staff', id: 'stf_1' });
-		expect(dashboardActor({ kind: 'impersonate', role: 'impersonate', scope: { actor: 'stf_2' } })).toEqual({
-			type: 'staff',
-			id: 'stf_2',
-		});
 		expect(dashboardActor({ kind: 'x', role: 'y' })).toEqual({ type: 'merchant', id: 'unknown' });
-		expect(sessionView({ kind: 'demo', role: 'demo' })).toEqual({
-			kind: 'demo',
-			role: 'demo',
+		expect(sessionView({ kind: 'admin', role: 'platform_admin' })).toEqual({
+			kind: 'admin',
+			role: 'platform_admin',
 			scope: {},
 			user: null,
-			actor: null,
 		});
 		expect(createTranslator({ a: 'Hi {name} {x}' })('a', { name: 'Ada' })).toBe('Hi Ada {x}');
 		expect(createTranslator({})('missing')).toBe('missing');

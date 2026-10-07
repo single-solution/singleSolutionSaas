@@ -34,7 +34,7 @@ is assumed.
 | `guest_merge`     | C       |       50 | Signed guest tokens (`wg1.…`, website-bound, expiring, no personal data). The token is stored in `local`, `session` or `memory` storage, only when the shopper granted `consent_category`. On sign-in the guest list merges, either `into_default` or with `keep_lists`. New tokens are rate-limited per IP        |
 | `share`           | C       |       50 | Read-only share links with an opaque 130-bit token. Only its SHA-256 is stored. Links can be rotated or revoked, and can expire. The view hides the owner and list ids. Prices can be hidden. Guests may share only if the merchant allows it                                                                      |
 | `price_drop_hook` | C       |      100 | Consumes `price.changed@1` and `inventory.changed@1` and keeps each entry's latest price and stock current. For opted-in customer lists it publishes `wishlist.price_dropped@1` and `wishlist.back_in_stock@1`, with a minimum drop, a cool-down and location filters. It sends no messages itself                 |
-| `widgets`         | A, B, C |      100 | Mode A renderer (`heart`, `page`, `share`; 10 KB budget, tokens only) and headless core, on one state call (`POST /v1/wishlist`)                                                                                                                                                                                   |
+| `widgets`         | A, B, C |      100 | Mode A renderer (`heart`, `page`, `share`; tokens only) and headless core, on one state call (`POST /v1/wishlist`)                                                                                                                                                                                                 |
 
 Plans:
 
@@ -61,36 +61,37 @@ Plans:
 
 ## Data
 
-The collections are `ss_wishlist_{lists,stock,notifications,audit,idempotency}`:
+The collections are `ss_wishlist_{lists,stock,notifications,audit}`:
 
 - entries are embedded in their list and changed by compare-and-set on `rev`;
-- guest lists and notifications expire by TTL;
-- export and anonymise work per customer through the Portal-signed standard routes.
+- guest lists and notifications expire by TTL.
 
 ## API (Mode C)
 
 `openapi.json` documents every operation (`x-ss-key-kind: "sk"` marks server-only routes).
 
-| Operation | Route                                                                                                     |
-| --------- | --------------------------------------------------------------------------------------------------------- |
-| Lists     | `GET`/`POST /v1/lists` · `GET`/`PATCH`/`DELETE /v1/lists/{id}` (`default` alias)                          |
-| Items     | `POST /v1/lists/{id}/items` · `DELETE /v1/lists/{id}/items/{entryId}`                                     |
-| Guests    | `POST /v1/guests` · `POST /v1/guests:merge`                                                               |
-| Shares    | `POST /v1/shares` · `POST /v1/shares:revoke` · `GET /v1/shares/{token}`                                   |
-| Signals   | `GET /v1/notifications` (sk)                                                                              |
-| Widgets   | `POST /v1/wishlist` (state: owner, lists, settings; issues, renews or merges guest tokens)                |
-| Standard  | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export\|anonymize`, `/v1/session` |
+| Operation | Route                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------ |
+| Lists     | `GET`/`POST /v1/lists` · `GET`/`PATCH`/`DELETE /v1/lists/{id}` (`default` alias)           |
+| Items     | `POST /v1/lists/{id}/items` · `DELETE /v1/lists/{id}/items/{entryId}`                      |
+| Guests    | `POST /v1/guests` · `POST /v1/guests:merge`                                                |
+| Shares    | `POST /v1/shares` · `POST /v1/shares:revoke` · `GET /v1/shares/{token}`                    |
+| Signals   | `GET /v1/notifications` (sk)                                                               |
+| Widgets   | `POST /v1/wishlist` (state: owner, lists, settings; issues, renews or merges guest tokens) |
+| Standard  | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/session`                |
 
-## Run
+## Develop
 
 ```bash
-pnpm exec ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-pnpm portal                         # fake Portal on :4400
-pnpm dev                            # product on :3000
+cp .env.example .env.local     # MONGODB_URI (empty = in-memory control store) + a random CONNECT_SECRET (≥ 32 chars)
+pnpm dev                       # product on :3000
+# local Portal → Admin → Apps → Add product → http://localhost:3000 + the CONNECT_SECRET
+pnpm validate                  # ss app validate
+pnpm check                     # format, lint, typecheck, tests with coverage
+ss pack build .                # the widgets (Mode A) → upload dist/pack in the Portal (app page → Upload widgets)
 ```
 
 `MONGODB_URI` and `CONNECT_SECRET` (see `.env.example`): the product's own control database and the connect secret.
-The Portal connection (made from Portal → Admin → Apps → Add product), the product's signing key and its generated secrets live there. The guest-token secret is one of them.
-
-`pnpm check` runs format, lint, typecheck and tests with coverage. `pnpm validate` runs `ss app validate`.
-`tests/certify.test.js` runs `ss certify`. The Portal system test is `e2e/tests/wishlist-portal.test.js`.
+The Portal connection, the product's signing key and its generated secrets live there. The guest-token secret is one of
+them. The e2e suite (`@ss/e2e`) composes this product from its `./platform` and `./routes` exports and runs it against
+the real Portal.

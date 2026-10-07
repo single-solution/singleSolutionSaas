@@ -28,7 +28,7 @@ afterAll(async () => {
 });
 
 describe('items', () => {
-	it('creates an item with the single-variant shorthand, publishes item.created@1 without cost, and replays', async () => {
+	it('creates an item with the single-variant shorthand, publishes item.created@1 without cost, and refuses a repeated key', async () => {
 		const create = await h.call('POST', '/v1/items', {
 			idempotencyKey: 'create-shirt',
 			body: {
@@ -65,8 +65,27 @@ describe('items', () => {
 				custom: { care: 'Cold wash', supplier: 'Mill A' },
 			},
 		});
-		expect(replay.status).toBe(201);
-		expect(replay.json.id).toBe(create.json.id);
+		expect(replay.status).toBe(409);
+		expect(replay.json.type).toMatch(/duplicate_request$/);
+		// the id derives from the caller-scoped key: the same caller retrying after the kit's 24 h window converges on
+		// the same item, while another key reusing the Idempotency-Key gets a fresh one
+		h.clock.advance(25 * HOUR);
+		const other = await h.call('POST', '/v1/items', {
+			key: await h.key('sk'),
+			idempotencyKey: 'create-shirt',
+			body: { title: 'Linen shirt (other caller)', price: 100 },
+		});
+		expect(other.status).toBe(201);
+		expect(other.json.id).not.toBe(create.json.id);
+		expect(other.json.title).toBe('Linen shirt (other caller)');
+		h.clock.advance(25 * HOUR);
+		const again = await h.call('POST', '/v1/items', {
+			idempotencyKey: 'create-shirt',
+			body: { title: 'Linen shirt', price: 4900 },
+		});
+		expect(again.status).toBe(200);
+		expect(again.json).toMatchObject({ id: create.json.id, title: 'Linen shirt' });
+		h.clock.advance(-50 * HOUR);
 		const [event] = h.published('item.created@1');
 		expect(event.data).toMatchObject({ itemId: create.json.id, title: 'Linen shirt', status: 'active', currency: 'EUR' });
 		expect(event.data.variants[0]).toMatchObject({ sku: 'LS-1', price: 4900, inventory: 12 });

@@ -1,17 +1,16 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Coupons Mode C API, the
- * element-stub view of the apply box and the dashboard API (SSO sessions). The scheduled job's route lives in jobs/ and
- * is added by the composition root. Every product route is gated by its element: a disabled element answers
- * 403 element_disabled in every mode. POSTs that move state require an Idempotency-Key (app-kit stores and replays the
- * response); handlers are thin — validation and rules live in core/.
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Coupons Mode C API and the dashboard API (SSO sessions). Every product route is gated by its element:
+ * a disabled element answers 403 element_disabled in every mode. Routes that create coupons declare `idempotent: true`
+ * (a repeated Idempotency-Key answers 409 duplicate_request); reservations and redemptions are idempotent on
+ * `reference` or the Idempotency-Key and answer the original reservation again. Handlers are thin — validation and
+ * rules live in core/.
  */
 import { createHash } from 'node:crypto';
 import { created, defineRoute, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { normaliseCart } from '../core/cart.js';
 import { normaliseCode } from '../core/codes.js';
 import { matchedLines } from '../core/conditions.js';
-import { formatMoney } from '../core/money.js';
 import { checkCondition, conditionMatches, ruleContext } from '../core/rules.js';
 import {
 	validateBlock,
@@ -147,14 +146,17 @@ export const buildRoutes = (coupons) => {
 	 * @param {any} ctx
 	 * @returns {import('./service.js').Requester}
 	 */
-	const requesterOf = (ctx) =>
-		ctx.website?.kind === 'pk'
+	const requesterOf = (ctx) => {
+		const caller = `${ctx.website?.kind ?? 'none'}:${ctx.website?.keyId ?? 'none'}`;
+		return ctx.website?.kind === 'pk'
 			? {
 					customerId: ctx.identity?.subject ?? null,
 					identified: Boolean(ctx.identity?.subject),
 					address: sha(ctx.headers.get('x-forwarded-for')?.split(',')[0]?.trim()),
+					caller: ctx.identity?.subject ? `customer:${ctx.identity.subject}` : caller,
 				}
-			: { identified: true, address: null };
+			: { identified: true, address: null, caller };
+	};
 	/** @param {Site} s */
 	const cartRules = (s) => ({ maxLines: s.settings.api.max_lines_per_cart, maxCodes: s.settings.maxCodes });
 	/** A code from a path segment, normalised like codes typed by customers. @param {Site} s @param {string} raw */
@@ -165,17 +167,6 @@ export const buildRoutes = (coupons) => {
 	const redemptionCursor = (r) => `${r.redeemedAt}|${r.id}`;
 	/** @param {any} ctx */
 	const actorOf = (ctx) => ({ type: 'api', id: ctx.website?.keyId });
-	/** @param {string} lang */
-	const strings = (lang) => app.strings[lang] ?? app.strings.en ?? {};
-	/**
-	 * @param {Record<string, string>} catalog
-	 * @param {string} key
-	 * @param {Record<string, string>} [params]
-	 */
-	const t = (catalog, key, params = {}) =>
-		(catalog[key] ?? key).replace(/\{([A-Za-z_]\w*)\}/g, (match, name) =>
-			Object.hasOwn(params, name) ? String(params[name]) : match,
-		);
 
 	return [
 		...standardRoutes(product),
@@ -204,6 +195,7 @@ export const buildRoutes = (coupons) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/coupons',
+			idempotent: true,
 			...website('codes'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -270,6 +262,7 @@ export const buildRoutes = (coupons) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/coupons/:id/codes:generate',
+			idempotent: true,
 			...website('codes'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -320,7 +313,6 @@ export const buildRoutes = (coupons) => {
 			method: 'POST',
 			path: '/v1/eligibility:check',
 			...website('eligibility'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateEligibilityCheck(ctx.body, {
@@ -411,7 +403,6 @@ export const buildRoutes = (coupons) => {
 			method: 'POST',
 			path: '/v1/validations',
 			...website('api', null),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateValidation(ctx.body, cartRules(s));
@@ -424,7 +415,6 @@ export const buildRoutes = (coupons) => {
 			method: 'POST',
 			path: '/v1/quotes',
 			...website('api', null),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateQuote(ctx.body, cartRules(s));
@@ -441,7 +431,11 @@ export const buildRoutes = (coupons) => {
 				const s = await site(ctx);
 				const problems = validateReservation(ctx.body, cartRules(s));
 				if (problems.length > 0) return invalid(problems);
-				const result = await service.reserve(s, { ...ctx.body, key: ctx.idempotencyKey }, requesterOf(ctx));
+				const result = await service.reserve(
+					s,
+					{ ...ctx.body, key: ctx.idempotencyKey, route: 'reservations' },
+					requesterOf(ctx),
+				);
 				if (!result.ok) return failure(result);
 				return created(reservationView(result.reservation), { location: `/v1/reservations/${result.reservation.id}` });
 			},
@@ -522,7 +516,11 @@ export const buildRoutes = (coupons) => {
 				const s = await site(ctx);
 				const problems = validateReservation(ctx.body, cartRules(s));
 				if (problems.length > 0) return invalid(problems);
-				const result = await service.redeemNow(s, { ...ctx.body, key: ctx.idempotencyKey }, requesterOf(ctx));
+				const result = await service.redeemNow(
+					s,
+					{ ...ctx.body, key: ctx.idempotencyKey, route: 'redemptions' },
+					requesterOf(ctx),
+				);
 				if (!result.ok) return failure(result);
 				return created(reservationView(result.reservation), { location: `/v1/redemptions/${result.reservation.id}` });
 			},
@@ -558,7 +556,6 @@ export const buildRoutes = (coupons) => {
 			method: 'POST',
 			path: '/v1/share-links',
 			...website('distribution'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const problems = validateShareLink(ctx.body);
 				if (problems.length > 0) return invalid(problems);
@@ -623,56 +620,6 @@ export const buildRoutes = (coupons) => {
 			},
 		}),
 
-		// ── apply_box: element stub view (ss-element-stub@1, Loader drop-in) ─────────────────────────────
-		defineRoute({
-			method: 'GET',
-			path: '/v1/elements/apply_box/view',
-			...website('apply_box', null),
-			handler: async (ctx) => {
-				const s = await site(ctx);
-				const catalog = strings(typeof ctx.query.lang === 'string' ? ctx.query.lang : 'en');
-				const listed = s.settings.applyBox.show_listed ? await service.listed(s) : [];
-				return ok({
-					title: t(catalog, 'apply_box.title'),
-					body: t(catalog, 'apply_box.stub_body'),
-					items: listed.slice(0, 50).map((entry) => ({
-						text: t(catalog, 'apply_box.listed', { name: entry.name, code: entry.code }),
-						...(entry.url ? { href: entry.url } : {}),
-					})),
-					actions: [],
-				});
-			},
-		}),
-		defineRoute({
-			method: 'POST',
-			path: '/v1/elements/apply_box/actions/:action',
-			...website('apply_box', null),
-			idempotent: 'optional',
-			handler: async (ctx) => {
-				if (ctx.params.action !== 'apply') return problem('not_found', 'Unknown action.');
-				const s = await site(ctx);
-				const problems = validateValidation(ctx.body, cartRules(s));
-				if (problems.length > 0) return invalid(problems);
-				const result = await service.validate(s, ctx.body, requesterOf(ctx));
-				if (!result.ok) return failure(result);
-				const catalog = strings(typeof ctx.query.lang === 'string' ? ctx.query.lang : 'en');
-				const { valid, reason, quote } = result.result;
-				const saved = formatMoney(
-					quote.discount + quote.shippingDiscount,
-					quote.currency,
-					catalog['apply_box.locale'] ?? 'en',
-				);
-				return ok({
-					title: t(catalog, 'apply_box.title'),
-					body: valid
-						? t(catalog, 'apply_box.applied', { code: result.result.code, amount: saved })
-						: t(catalog, `apply_box.error.${reason}`),
-					items: [],
-					actions: [],
-				});
-			},
-		}),
-
 		// ── dashboard (SSO session) ────────────────────────────────────────────────────────────────────────
 		defineRoute({
 			method: 'GET',
@@ -687,6 +634,7 @@ export const buildRoutes = (coupons) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/coupons',
+			idempotent: true,
 			auth: 'launch',
 			element: 'codes',
 			roles: [...DASHBOARD_WRITE_ROLES],
@@ -696,9 +644,7 @@ export const buildRoutes = (coupons) => {
 				const problems = validateCoupon(ctx.body, s.settings.couponRules);
 				if (problems.length > 0) return invalid(problems);
 				const view = sessionView(ctx.session);
-				const actor = view.actor
-					? { type: 'staff', id: view.actor }
-					: { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' };
+				const actor = { type: view.kind === 'admin' ? 'staff' : 'merchant', id: view.user ?? 'unknown' };
 				const result = await service.createCoupon(s, ctx.body, actor);
 				if (!result.ok) return failure(result);
 				return created({
@@ -742,7 +688,6 @@ export const buildRoutes = (coupons) => {
 			method: 'POST',
 			path: '/v1/dashboard/eligibility:check',
 			auth: 'launch',
-			idempotent: false,
 			handler: (ctx) => {
 				const source = ctx.body?.source;
 				return typeof source === 'string' ? ok(checkCondition(source)) : invalid([{ path: '/source', code: 'required' }]);
@@ -753,7 +698,7 @@ export const buildRoutes = (coupons) => {
 
 /**
  * Register the event consumers (app-kit dedupes deliveries on the event id). Called once per product by the composition
- * roots (app/_lib/product.js, serve.js). Nothing is scheduled: reservations expire when they are touched.
+ * roots (app/_lib/product.js, tests). Nothing is scheduled: reservations expire when they are touched.
  * @param {Coupons} coupons
  */
 export const wireEvents = (coupons) => {

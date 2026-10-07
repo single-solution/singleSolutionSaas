@@ -296,6 +296,19 @@ describe('placement, payments and offers', () => {
 		const quick = createPlaceOrder({ strings, client: fakeClient({ 'POST /v1/orders': { error: {} } }) });
 		await quick.actions.place({});
 		expect(quick.state().errorCode).toBe('request_failed');
+		// a network failure retries with the same key; a refusal (4xx) starts a new submission
+		let answer = /** @type {any} */ ({ error: { code: 'request_failed' } });
+		const retry = fakeClient({ 'POST /v1/orders': () => answer });
+		let m = 0;
+		const r = createPlaceOrder({ strings, client: retry, newKey: () => `r${(m += 1)}` });
+		await r.actions.place({ a: 1 });
+		await r.actions.place({ a: 1 });
+		answer = { error: { code: 'open_orders_limit', status: 409 } };
+		await r.actions.place({ a: 1 });
+		answer = { error: { code: 'duplicate_request', status: 409 } };
+		await r.actions.place({ a: 1 });
+		await r.actions.place({ a: 1 });
+		expect(retry.calls.map((c) => c.options.idempotencyKey)).toEqual(['r1', 'r1', 'r1', 'r2', 'r2']);
 	});
 
 	it('chooses manual payment methods with availability from the quote', async () => {

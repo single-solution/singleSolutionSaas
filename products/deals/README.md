@@ -76,8 +76,10 @@ Missing line details come from the synced catalog (`PUT /v1/items/{itemId}`, `PO
 - **Price locks.** Tokens `pl1.<claims>.<HMAC>` bound to website, item/variant, currency and (optionally) customer;
   stateless, verified on any instance. Usage and stock limits still apply at commit.
 - **Data.** `ss_deals_{deals,items,quotes,applications,counters,customer_usage,audit}` in the merchant DB, `websiteId`
-  first in every index, quotes TTL-purged, versioned migrations; export / anonymise via the Portal-signed routes.
-- **No background work.** Nothing runs on a timer (no crons, no background tasks, no periodic heartbeat). Quotes
+  first in every index, quotes TTL-purged, versioned migrations.
+- **Idempotency.** Creating deals, quotes and price locks refuses a repeated `Idempotency-Key` (409
+  `duplicate_request`); committing a quote again for the same order answers the original application (200).
+- **No background work.** Nothing runs on a timer (no crons, no background tasks). Quotes
   and price locks are judged against their expiry when used; app-kit sends usage and events after the request that
   queued them.
 
@@ -95,7 +97,7 @@ browser key (shopper from `SS-Identity`, the website's own login token).
 | Price locks | `POST /v1/price-locks` · `POST /v1/price-locks:verify` (pk/sk)                                                       |
 | Deals page  | `GET /v1/deals-page` · `GET /v1/deals-page/{dealId}/items` (pk/sk)                                                   |
 | Reports     | `GET /v1/reports?from=&to=` · `GET /v1/reports/deals/{dealId}` (sk)                                                  |
-| Standard    | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export`, `/v1/data:anonymize`                |
+| Standard    | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`                                                         |
 
 Errors are RFC 9457 problems with stable codes (`kind_disabled`, `deal_limit_reached`, `deal_exhausted`,
 `quote_expired`, `quote_committed`, `total_mismatch`, `price_lock_expired`, `rate_limited`, …).
@@ -108,22 +110,20 @@ tick }`. `badgesClient(api)` / `dealsPageClient(api)` adapt an `@ss/web/element`
 ## Dashboard (SSO)
 
 Overview KPIs, deals list with live state, deal detail with pause/resume (audited), create from JSON, a simulator
-(quote a cart against the live deals — nothing stored or metered), settings (link to the Portal). Demo launches show
-sandbox deals evaluated with the real engine; impersonation shows the audit banner.
+(quote a cart against the live deals — nothing stored or metered), settings (link to the Portal). Merchant and staff
+(admin) launches.
 
-## Develop and certify
+## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator (ss.dev.json)
-pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000
-pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB, certify
+# .env.local: MONGODB_URI (empty = in-memory control store) and CONNECT_SECRET (≥ 32 random characters)
+pnpm dev                       # Next.js on :3000
+# then the local Portal: Admin → Apps → Add product (http://localhost:3000 + CONNECT_SECRET) → Active
+pnpm validate                  # ss app validate: manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderers, API on MongoDB
 ```
 
-`tests/certify.test.js` runs the full `ss certify` suite (every check passes); the system test `e2e/tests/deals-portal.test.js` (monorepo workspace `@ss/e2e`) runs the real
+The system test `e2e/tests/deals-portal.test.js` (monorepo workspace `@ss/e2e`) runs the real
 Portal in process: staff bootstrap → Add product (URL + connect secret) → activation → merchant signup → website → credits →
 subscription → database connector → weekday-evening deal in Asia/Karachi → quotes outside / inside the overnight
 window → price lock honoured after the window closed → commit (uses in the merchant DB) → metered usage → settlement.
@@ -135,10 +135,9 @@ window → price lock honoured after the window closed → commit (uses in the m
 2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
-   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
 
 ## Changelog
 
-- **Unreleased** — the quote rate limit is app-kit's dynamic route limit (`rateLimit.limit(ctx)` = `quote_api.rate_per_minute`, one shared bucket for quotes, offers and price locks; counted before validation); no scheduled or periodic work at all (no crons, no background tasks, no periodic heartbeat): app-kit sends usage and events after the request that queued them; price locks and quotes are checked against their expiry when used; a TTL index purges old quotes.
+- **Unreleased** — the quote rate limit is app-kit's dynamic route limit (`rateLimit.limit(ctx)` = `quote_api.rate_per_minute`, one shared bucket for quotes, offers and price locks; counted before validation); no scheduled or periodic work at all (no crons, no background tasks): app-kit sends usage and events after the request that queued them; price locks and quotes are checked against their expiry when used; a TTL index purges old quotes.
 - **1.0.0** — first release: ten elements, badges and deals page renderers and headless cores, REST v1, dashboard.

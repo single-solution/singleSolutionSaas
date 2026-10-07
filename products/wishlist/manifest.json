@@ -11,20 +11,10 @@
 	"endpoints": {
 		"base": "https://wishlist.example.com",
 		"dashboard": "/dashboard",
-		"demo": "/dashboard",
 		"events": "/.well-known/ss-events"
 	},
 	"capabilities": {
-		"adminLaunch": true,
-		"sandbox": true,
-		"localEnforcement": [
-			"limit:lists.max_lists",
-			"limit:lists.max_items_per_list",
-			"rate:lists.max_writes_per_minute",
-			"rate:guest_merge.max_guests_per_ip_per_hour",
-			"rate:widgets.max_loads_per_minute"
-		],
-		"offlineGrace": "PT24H"
+		"adminLaunch": true
 	},
 	"scopes": ["events.subscribe:price.changed@1", "events.subscribe:inventory.changed@1"],
 	"requires": {
@@ -33,9 +23,6 @@
 	"events": {
 		"consumes": ["price.changed@1", "inventory.changed@1"],
 		"publishes": ["wishlist.price_dropped@1", "wishlist.back_in_stock@1"]
-	},
-	"budget": {
-		"shared": 1
 	},
 	"elements": [
 		{
@@ -46,9 +33,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 100
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": [],
 			"features": {
@@ -71,9 +55,6 @@
 			"price": {
 				"hourly": 50
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["lists"],
 			"features": {
 				"$ref": "schemas/guest_merge.features.json"
@@ -94,9 +75,6 @@
 			"stateful": true,
 			"price": {
 				"hourly": 50
-			},
-			"budget": {
-				"js": 0
 			},
 			"dependsOn": ["lists"],
 			"features": {
@@ -119,9 +97,6 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 0
-			},
 			"dependsOn": ["lists"],
 			"features": {
 				"$ref": "schemas/price_drop_hook.features.json"
@@ -143,16 +118,12 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 6
-			},
 			"dependsOn": ["lists"],
 			"features": {
 				"$ref": "schemas/widgets.features.json"
 			},
 			"strings": "strings/en.json",
 			"placement": true,
-			"experiments": true,
 			"api": {
 				"resources": ["wishlist"]
 			},

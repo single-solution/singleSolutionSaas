@@ -1,7 +1,7 @@
-/** Mode A renderers: structure, accessibility, interactions, design tokens only and the gzip budget. */
+/** Mode A renderers: structure, accessibility, interactions, design tokens only and the widget bundle. */
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { buildPack, measurePack } from '@ss/cli/pack';
+import { buildPack } from '@ss/cli/pack';
 import manifest from '../manifest.json' with { type: 'json' };
 import en from '../strings/en.json' with { type: 'json' };
 import { render as renderLauncher, styles as launcherStyles } from '../ui/launcher.js';
@@ -334,15 +334,16 @@ describe('ui/launcher and ui/proactive renderers', () => {
 	});
 });
 
-describe('renderer budgets and tokens', () => {
-	it('stays within the declared gzip budgets, measured as the Portal measures them (F.18)', async () => {
-		const measured = measurePack(await buildPack(fileURLToPath(new URL('..', import.meta.url))));
-		for (const key of ['window', 'launcher', 'proactive']) {
-			const budget = /** @type {any} */ (manifest.elements.find((element) => element.key === key)).budget.js;
-			const own = measured.elements.find((element) => element.key === key);
-			expect(own?.gzipBytes, key).toBeLessThanOrEqual(budget * 1024);
-		}
-		expect(measured.shared.gzipBytes).toBeLessThanOrEqual(/** @type {any} */ (manifest).budget.shared * 1024);
+describe('widget bundle and tokens', () => {
+	it('builds the widget bundle (ss pack build) with every Mode A module', async () => {
+		const pack = await buildPack(fileURLToPath(new URL('..', import.meta.url)));
+		const paths = pack.assets.map((asset) => asset.path);
+		for (const file of ['window', 'launcher', 'proactive'])
+			expect(
+				paths.some((path) => path.includes(file)),
+				file,
+			).toBe(true);
+		expect(pack.manifest.product.slug).toBe(manifest.product.slug);
 	}, 60_000);
 	it('uses design tokens only', () => {
 		for (const css of [windowStyles, launcherStyles, proactiveStyles]) {

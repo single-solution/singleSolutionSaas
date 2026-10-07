@@ -247,6 +247,8 @@ export const createLoyaltyService = ({
 		const { repos, settings } = site;
 		for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
 			const stored = /** @type {Transaction | null} */ (await repos.transactions.bySourceKey(sourceKey));
+			// a source key names one customer's movement: another customer never sees or changes it
+			if (stored && stored.customerId !== customerId) return { ok: false, reason: 'duplicate_request' };
 			if (stored)
 				return {
 					ok: true,
@@ -809,6 +811,7 @@ export const createLoyaltyService = ({
 		redeem: async (site, input) => {
 			const id = `red_${hash(`${site.websiteId}|${input.reference ?? input.key}`)}`;
 			const existing = await site.repos.redemptions.get(id);
+			if (existing && existing.customerId !== input.customerId) return { ok: false, reason: 'duplicate_request' };
 			if (existing) return { ok: true, redemption: existing };
 			const at = now();
 			/** @type {string | null} */

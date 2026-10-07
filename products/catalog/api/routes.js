@@ -1,13 +1,13 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Catalog Mode C API, the
- * element views of the Loader's element stub, the public feed URLs and the dashboard API (SSO sessions).
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints
+ * and /sso) plus the Catalog Mode C API, the public feed URLs and the dashboard API (SSO sessions).
  *
  * Keys: `pk_` keys (browsers, domain-locked) read public data only — public items in their publication window, visible
  * collections and brands, public custom fields, stock as a state — with public cache headers, and never see cost.
  * `sk_` keys (the merchant's server) read and write everything; they need the `api` element (metered per request,
  * separate read and write rate limits, `api.allow_writes`, `api.expose_cost`). Every route is gated by its element
- * (403 element_disabled in every mode); POSTs that create or move state require an Idempotency-Key.
+ * (403 element_disabled in every mode). POSTs that create records or move stock accept an `Idempotency-Key`: ids derive
+ * from it scoped to the caller (`requestKey`), and app-kit refuses a repeated key within 24 h (409 duplicate_request).
  */
 import { defineRoute, ok, created, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { mediaView, orderedMedia } from '../core/media.js';
@@ -25,12 +25,13 @@ import { createTransferService } from './transfer.js';
 import { createVariantsService } from './variants.js';
 import { attributeView } from '../core/views.js';
 import { createDueWork } from './due.js';
+import { requestKey } from './catalog.js';
 
 /** @typedef {import('../adapters/platform.js').CatalogApp} CatalogApp */
 /** @typedef {import('./catalog.js').Site} Site */
 
-/** Items listed by an element view of the Loader's element stub. */
-const VIEW_ITEMS = 12;
+/** Options of the request handler (`createRequestHandler(product, routes, HANDLER_OPTIONS)`): CSV imports up to 3.9 MB. */
+export const HANDLER_OPTIONS = Object.freeze({ maxBodyBytes: 3_900_000 });
 
 /**
  * Field problems → RFC 9457 `validation_failed`.
@@ -133,7 +134,7 @@ export const buildRoutes = (catalog) => {
 	/**
 	 * A website-key route: element gating by app-kit, then (for `sk_`) the `api` element, writes switch and metering.
 	 * @param {{ method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, element: string, write?: boolean, skOnly?: boolean,
-	 *   maxBodyBytes?: number, idempotent?: boolean | 'optional', handler: (ctx: any, site: Site) => Promise<any> }} spec
+	 *   maxBodyBytes?: number, idempotent?: boolean, handler: (ctx: any, site: Site) => Promise<any> }} spec
 	 */
 	const route = ({ method, path, element, write = false, skOnly = write, maxBodyBytes, idempotent, handler }) =>
 		defineRoute({
@@ -143,7 +144,7 @@ export const buildRoutes = (catalog) => {
 			element,
 			...(skOnly ? { keyKind: /** @type {const} */ ('sk') } : {}),
 			...(maxBodyBytes ? { maxBodyBytes } : {}),
-			...(idempotent === undefined ? {} : { idempotent }),
+			...(idempotent ? { idempotent } : {}),
 			rateLimit: rate(write ? 'write' : 'read'),
 			handler: async (ctx) => {
 				const s = await siteOf(ctx.websiteId, ctx.entitlement.doc);
@@ -274,9 +275,14 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/items',
 			element: 'items',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
 				reply(
-					await items.create(s, ctx.body, { key: ctx.idempotencyKey, actor: apiActor(ctx), exposeCost: exposeCost(ctx, s) }),
+					await items.create(s, ctx.body, {
+						key: requestKey(catalog, ctx),
+						actor: apiActor(ctx),
+						exposeCost: exposeCost(ctx, s),
+					}),
 					(r) => (r.created ? created(r.view, { location: `/v1/items/${r.item.id}` }) : ok(r.view)),
 				),
 		}),
@@ -374,8 +380,9 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/variants',
 			element: 'variants',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
-				reply(await variants.create(s, ctx.body, { key: ctx.idempotencyKey }), async (r) => {
+				reply(await variants.create(s, ctx.body, { key: requestKey(catalog, ctx) }), async (r) => {
 					const view = await items.owner(s, r.item, { exposeCost: exposeCost(ctx, s) });
 					return created(view.variants.find((/** @type {any} */ v) => v.id === r.result) ?? view, {
 						location: `/v1/variants/${r.result}`,
@@ -406,8 +413,9 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/variants/:id/stock',
 			element: 'variants',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
-				reply(await variants.adjust(s, ctx.params.id, ctx.body, { key: ctx.idempotencyKey }), async (r) => {
+				reply(await variants.adjust(s, ctx.params.id, ctx.body, { key: requestKey(catalog, ctx) }), async (r) => {
 					const view = await items.owner(s, r.item, { exposeCost: exposeCost(ctx, s) });
 					return ok(view.variants.find((/** @type {any} */ v) => v.id === ctx.params.id));
 				}),
@@ -417,8 +425,9 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/stock-reservations',
 			element: 'variants',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
-				reply(await variants.reserve(s, ctx.body, { key: ctx.idempotencyKey }), (r) =>
+				reply(await variants.reserve(s, ctx.body, { key: requestKey(catalog, ctx) }), (r) =>
 					r.created ? created(r.reservation, { location: `/v1/stock-reservations/${r.reservation.id}` }) : ok(r.reservation),
 				),
 		}),
@@ -475,8 +484,9 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/attributes',
 			element: 'attributes',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
-				reply(await taxonomy.createAttribute(s, ctx.body, { key: ctx.idempotencyKey }), (r) =>
+				reply(await taxonomy.createAttribute(s, ctx.body, { key: requestKey(catalog, ctx) }), (r) =>
 					r.created
 						? created(attributeView(r.value), { location: `/v1/attributes/${r.value.id}` })
 						: ok(attributeView(r.value)),
@@ -530,8 +540,9 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/collections',
 			element: 'collections',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
-				reply(await taxonomy.createCollection(s, ctx.body, { key: ctx.idempotencyKey }), async (r) => {
+				reply(await taxonomy.createCollection(s, ctx.body, { key: requestKey(catalog, ctx) }), async (r) => {
 					const view = await taxonomy.getCollection(s, r.value.id, { owner: true });
 					return r.created ? created(view, { location: `/v1/collections/${r.value.id}` }) : ok(view);
 				}),
@@ -581,8 +592,9 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/brands',
 			element: 'brands',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
-				reply(await taxonomy.createBrand(s, ctx.body, { key: ctx.idempotencyKey }), async (r) => {
+				reply(await taxonomy.createBrand(s, ctx.body, { key: requestKey(catalog, ctx) }), async (r) => {
 					const view = (await taxonomy.listBrands(s, { owner: true })).find((/** @type {any} */ b) => b.id === r.value.id);
 					return r.created ? created(view, { location: `/v1/brands/${r.value.id}` }) : ok(view);
 				}),
@@ -643,8 +655,9 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/media',
 			element: 'media',
 			write: true,
+			idempotent: true,
 			handler: async (ctx, s) =>
-				reply(await media.add(s, ctx.body, { key: ctx.idempotencyKey }), async (r) => {
+				reply(await media.add(s, ctx.body, { key: requestKey(catalog, ctx) }), async (r) => {
 					const view = await items.owner(s, r.item, { exposeCost: false });
 					return created(view.media.find((/** @type {any} */ m) => m.id === r.result) ?? view.media.at(-1), {
 						location: `/v1/media/${r.result}`,
@@ -656,7 +669,6 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/media:reorder',
 			element: 'media',
 			write: true,
-			idempotent: 'optional',
 			handler: async (ctx, s) =>
 				reply(await media.reorder(s, ctx.body), async (r) =>
 					ok({ items: (await items.owner(s, r.item, { exposeCost: false })).media }),
@@ -688,7 +700,6 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/media-uploads',
 			element: 'media',
 			write: true,
-			idempotent: 'optional',
 			handler: async (ctx, s) => reply(await media.presign(s, ctx.body), (r) => created(r.upload)),
 		}),
 
@@ -698,10 +709,15 @@ export const buildRoutes = (catalog) => {
 			path: '/v1/imports',
 			element: 'import_export',
 			write: true,
+			idempotent: true,
 			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
 			handler: async (ctx, s) =>
 				reply(
-					await transfer.run(s, ctx.body, { key: ctx.idempotencyKey, actor: apiActor(ctx), exposeCost: exposeCost(ctx, s) }),
+					await transfer.run(s, ctx.body, {
+						key: requestKey(catalog, ctx),
+						actor: apiActor(ctx),
+						exposeCost: exposeCost(ctx, s),
+					}),
 					(r) => ok(r.report),
 				),
 		}),
@@ -798,17 +814,6 @@ export const buildRoutes = (catalog) => {
 			skOnly: true,
 			handler: async (_ctx, s) => ok(await dashboard.stats(s), { headers: { 'cache-control': 'no-store' } }),
 		}),
-
-		// ── element views (the Loader's element stub, Mode A without a UI bundle) ─────────────────────────────────
-		...['items', 'variants', 'attributes', 'collections', 'brands', 'media'].map((element) =>
-			route({
-				method: 'GET',
-				path: `/v1/elements/${element}/view`,
-				element,
-				handler: async (ctx, s) =>
-					ok(await dashboard.elementView(s, element, ctx.query.ctx, VIEW_ITEMS), { headers: cacheFor(ctx, s) }),
-			}),
-		),
 
 		// ── dashboard (SSO session) ─────────────────────────────────────────────────────────────────────────────
 		...dashboard.routes(),

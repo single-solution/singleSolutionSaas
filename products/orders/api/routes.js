@@ -1,13 +1,13 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Order Manager API, the
- * element views of the Loader's element stub and the dashboard API (SSO sessions).
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints,
+ * /sso) plus the Order Manager API and the dashboard API (SSO sessions).
  *
  * Keys (security): only `sk_` keys (the merchant's servers) and dashboard sessions read or change orders. Browsers
  * (`pk_` keys) read only public metadata (statuses, carriers), look up tracking by order number + contact, and — with a
  * verified `SS-Identity` from the website's own login — read and cancel the customer's own orders and print their
- * receipts. Every route is gated by its element (403 element_disabled in every mode); POSTs that create or move state
- * require an Idempotency-Key.
+ * receipts. Every route is gated by its element (403 element_disabled in every mode). POSTs that record money, create
+ * orders, blocks or batches declare `idempotent: true`: a repeated Idempotency-Key for the same website and route within
+ * 24 h answers 409 duplicate_request (inbound orders also dedupe on their external id).
  */
 import { defineRoute, ok, created, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { summarize } from '../core/ledger.js';
@@ -34,6 +34,11 @@ import { settingsForDoc } from './settings.js';
 /** @typedef {import('../adapters/platform.js').OrdersApp} OrdersApp */
 /** @typedef {import('./context.js').Site} Site */
 
+/**
+ * Options of the request handler (`createRequestHandler(product, routes, HANDLER_OPTIONS)`): imports up to 3.9 MB,
+ * under the 4.5 MB request body limit of serverless hosts.
+ */
+export const HANDLER_OPTIONS = Object.freeze({ maxBodyBytes: 3_900_000 });
 /** Items per step of one "Process due now" press (press again while `more`). */
 export const DUE_BATCH = 100;
 /** Due message retries of one order when it is read. */
@@ -179,7 +184,7 @@ export const buildRoutes = (orders) => {
 	/**
 	 * A website-key route gated by its element.
 	 * @param {{ method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, element: string, sk?: boolean,
-	 *   identity?: 'required', idempotent?: boolean | 'optional', maxBodyBytes?: number, rateLimit?: any,
+	 *   identity?: 'required', idempotent?: boolean, maxBodyBytes?: number, rateLimit?: any,
 	 *   handler: (ctx: any, site: Site) => Promise<any> }} spec
 	 */
 	const route = ({ method, path, element, sk = true, identity, idempotent, maxBodyBytes, rateLimit, handler }) =>
@@ -190,7 +195,7 @@ export const buildRoutes = (orders) => {
 			element,
 			...(sk ? { keyKind: /** @type {const} */ ('sk') } : {}),
 			...(identity ? { identity } : {}),
-			...(idempotent === undefined ? {} : { idempotent }),
+			...(idempotent ? { idempotent } : {}),
 			...(maxBodyBytes ? { maxBodyBytes } : {}),
 			...(rateLimit ? { rateLimit } : {}),
 			handler: async (ctx) => handler(ctx, await siteOf(ctx.websiteId, ctx.entitlement.doc)),
@@ -382,7 +387,6 @@ export const buildRoutes = (orders) => {
 			element: 'lifecycle',
 			sk: false,
 			identity: 'required',
-			idempotent: 'optional',
 			handler: async (ctx, site) => {
 				const order = await customerOrder(ctx, site);
 				if (!order) return notFound();
@@ -427,7 +431,6 @@ export const buildRoutes = (orders) => {
 			path: '/v1/tracking-lookups',
 			element: 'fulfilment',
 			sk: false,
-			idempotent: false,
 			rateLimit: {
 				limit: 60,
 				windowMs: 60_000,
@@ -569,6 +572,7 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/order-batches',
 			element: 'bulk',
+			idempotent: true,
 			handler: async (ctx, site) => {
 				const result = await bulk.batch(site, ctx.body, apiActor(ctx));
 				return result.ok ? ok(result.report) : failure(result);
@@ -596,7 +600,8 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/order-imports',
 			element: 'bulk',
-			maxBodyBytes: 3_900_000, // under the 4.5 MB request body limit of serverless hosts
+			idempotent: true,
+			maxBodyBytes: HANDLER_OPTIONS.maxBodyBytes,
 			handler: async (ctx, site) => {
 				const result = await bulk.importCsv(site, ctx.body, apiActor(ctx));
 				return result.ok ? ok(result.report) : failure(result);
@@ -608,7 +613,6 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/risk-checks',
 			element: 'risk',
-			idempotent: 'optional',
 			handler: async (ctx, site) => {
 				const result = await intake.check(site, ctx.body);
 				return result.ok ? ok(result.result) : failure(result);
@@ -632,6 +636,7 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/blocklist',
 			element: 'risk',
+			idempotent: true,
 			handler: async (ctx, site) => {
 				const result = await blocklist.block(site, ctx.body, apiActor(ctx));
 				return result.ok ? created(result.entry) : failure(result);
@@ -725,6 +730,7 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/orders/:id/payments',
 			element: 'ledger',
+			idempotent: true,
 			handler: async (ctx, site) => {
 				if (!isId(ctx.params.id)) return notFound();
 				const result = await ledger.pay(site, ctx.params.id, ctx.body, apiActor(ctx));
@@ -735,6 +741,7 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/orders/:id/refunds',
 			element: 'ledger',
+			idempotent: true,
 			handler: async (ctx, site) => {
 				if (!isId(ctx.params.id)) return notFound();
 				const result = await ledger.refund(site, ctx.params.id, ctx.body, apiActor(ctx));
@@ -747,6 +754,7 @@ export const buildRoutes = (orders) => {
 			method: 'POST',
 			path: '/v1/inbound-orders',
 			element: 'inbound_api',
+			idempotent: true,
 			rateLimit: rate('inbound_api', 'orders_per_minute', 300),
 			handler: async (ctx, site) => {
 				const mapping = typeof ctx.query.mapping === 'string' && ctx.query.mapping ? ctx.query.mapping : null;
@@ -773,21 +781,6 @@ export const buildRoutes = (orders) => {
 					risk: order.risk?.flags ?? [],
 				})),
 		}),
-
-		// ── element views (the Loader's element stub, Mode A without a UI bundle) ─────────────────────────────────
-		...['lifecycle', 'fulfilment', 'invoices'].map((element) =>
-			defineRoute({
-				method: 'GET',
-				path: `/v1/elements/${element}/view`,
-				auth: 'website',
-				element,
-				identity: 'optional',
-				handler: async (ctx) => {
-					const site = await siteOf(ctx.websiteId, ctx.entitlement.doc);
-					return ok(await dashboard.elementView(site, element, ctx.identity), { headers: { 'cache-control': 'no-store' } });
-				},
-			}),
-		),
 
 		// ── dashboard (SSO session) ─────────────────────────────────────────────────────────────────────────────
 		...dashboard.routes(),

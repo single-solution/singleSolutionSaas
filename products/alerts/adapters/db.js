@@ -400,31 +400,6 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 						])
 						.toArray()
 				).map((/** @type {any} */ row) => ({ day: row._id, count: row.count })),
-			/**
-			 * Personal data of a subject (customer id or contact key).
-			 * @param {{ customerId?: string, contactKey?: string }} subject
-			 */
-			ofSubject: async (subject) =>
-				(await subscriptions.find({ websiteId, ...subject }, { limit: 10_000 }).toArray()).map(strip),
-			/**
-			 * Anonymise a subject: addresses and display data removed, active subscriptions ended.
-			 * @param {{ customerId?: string, contactKey?: string }} subject
-			 */
-			anonymize: async (subject) => {
-				const at = new Date(now()).toISOString();
-				const result = await subscriptions.updateMany(
-					{ websiteId, ...subject },
-					{
-						$set: { address: null, customerId: null, item: null, tier: null, anonymizedAt: at },
-						$unset: { active: '' },
-					},
-				);
-				await subscriptions.updateMany(
-					{ websiteId, anonymizedAt: at, status: active },
-					{ $set: { status: 'unsubscribed', endedAt: at } },
-				);
-				return result.modifiedCount ?? 0;
-			},
 		}),
 		messages: Object.freeze({
 			/** @param {string} id */
@@ -584,24 +559,6 @@ export const createRepositories = (scope, { now = Date.now, stamp = {} } = {}) =
 						])
 						.toArray()
 				).map((/** @type {any} */ row) => ({ day: row._id, count: row.count })),
-			/**
-			 * Addresses of a subject's messages are removed (export reads them first).
-			 * @param {string} contactKey
-			 */
-			ofContact: async (contactKey) =>
-				(await messages.find({ websiteId, contactKey }, { limit: 10_000 }).toArray()).map(strip),
-			/** @param {string} contactKey */
-			anonymize: async (contactKey) => {
-				const result = await messages.updateMany(
-					{ websiteId, contactKey },
-					{ $set: { to: null, anonymizedAt: new Date(now()).toISOString() } },
-				);
-				await messages.updateMany(
-					{ websiteId, contactKey, status: 'queued' },
-					{ $set: { status: 'cancelled', error: 'anonymized' } },
-				);
-				return result.modifiedCount ?? 0;
-			},
 		}),
 		triggers: Object.freeze({
 			/**

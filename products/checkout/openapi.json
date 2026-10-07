@@ -55,21 +55,9 @@
 					}
 				}
 			},
-			"x-ss-certify": true,
 			"post": {
 				"operationId": "postV1Carts",
 				"summary": "Create a cart (a signed-in shopper reuses their open cart). Server keys may name the owner (customerId).",
-				"parameters": [
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": true,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
-						}
-					}
-				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -184,15 +172,6 @@
 						"required": true,
 						"schema": {
 							"type": "string"
-						}
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
 						}
 					}
 				],
@@ -370,15 +349,6 @@
 						"required": true,
 						"schema": {
 							"type": "string"
-						}
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": false,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
 						}
 					}
 				],
@@ -743,7 +713,8 @@
 						"schema": {
 							"type": "string",
 							"maxLength": 200
-						}
+						},
+						"description": "A repeat of the same key within 24 h answers 409 duplicate_request."
 					}
 				],
 				"requestBody": {
@@ -918,15 +889,6 @@
 						"schema": {
 							"type": "string"
 						}
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": true,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
-						}
 					}
 				],
 				"requestBody": {
@@ -972,15 +934,6 @@
 						"required": true,
 						"schema": {
 							"type": "string"
-						}
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": true,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
 						}
 					}
 				],
@@ -1029,11 +982,12 @@
 					{
 						"name": "Idempotency-Key",
 						"in": "header",
-						"required": true,
+						"required": false,
 						"schema": {
 							"type": "string",
 							"maxLength": 200
-						}
+						},
+						"description": "A repeat of the same key within 24 h answers 409 duplicate_request."
 					}
 				],
 				"requestBody": {
@@ -1111,17 +1065,6 @@
 				"operationId": "postV1Blocks",
 				"summary": "Block a shopper by identity subject, e-mail or phone.",
 				"x-ss-key-kind": "sk",
-				"parameters": [
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": true,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
-						}
-					}
-				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -1288,17 +1231,6 @@
 			"post": {
 				"operationId": "postV1PaymentProofs",
 				"summary": "Start a bank-transfer proof upload for an unpaid order: a presigned PUT to your storage with content type and exact length signed.",
-				"parameters": [
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": true,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
-						}
-					}
-				],
 				"requestBody": {
 					"required": true,
 					"content": {
@@ -1344,15 +1276,6 @@
 						"required": true,
 						"schema": {
 							"type": "string"
-						}
-					},
-					{
-						"name": "Idempotency-Key",
-						"in": "header",
-						"required": true,
-						"schema": {
-							"type": "string",
-							"maxLength": 200
 						}
 					}
 				],
@@ -1427,11 +1350,12 @@
 					{
 						"name": "Idempotency-Key",
 						"in": "header",
-						"required": true,
+						"required": false,
 						"schema": {
 							"type": "string",
 							"maxLength": 200
-						}
+						},
+						"description": "A repeat of the same key within 24 h answers 409 duplicate_request."
 					}
 				],
 				"requestBody": {

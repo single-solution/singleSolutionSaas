@@ -9,7 +9,6 @@
 			"default": "inline",
 			"enum": ["inline", "collapsible"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Appearance", "order": 1 }
 		},
 		"max_codes": {
@@ -36,14 +35,6 @@
 			"default": true,
 			"x-kind": "flag",
 			"x-ui": { "widget": "switch", "group": "Behaviour", "order": 4 }
-		},
-		"show_listed": {
-			"type": "boolean",
-			"title": "Suggest listed coupons",
-			"description": "The drop-in view shows coupons marked `listed` with their share links.",
-			"default": false,
-			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "Behaviour", "order": 5 }
 		}
 	}
 }

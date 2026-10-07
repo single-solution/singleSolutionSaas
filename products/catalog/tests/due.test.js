@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createId } from '@ss/contracts';
 import { createDueWork } from '../api/due.js';
-import { HOUR, WEBSITE, createHarness } from './harness.js';
+import { HOUR, MERCHANT, WEBSITE, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
 let h;
@@ -52,7 +52,7 @@ describe('reservation expiry on read and on access', () => {
 		expect(await quantity()).toBe(5);
 	});
 
-	it('releases expired reservations before a new one takes stock, and on an idempotent replay', async () => {
+	it('releases expired reservations before a new one takes stock, and on a retried key', async () => {
 		const first = await reserve(5);
 		expect(first.status).toBe(201);
 		expect(await quantity()).toBe(0);
@@ -61,11 +61,11 @@ describe('reservation expiry on read and on access', () => {
 		expect(second.status, JSON.stringify(second.json)).toBe(201);
 		expect((await stored(first.json.id))?.status).toBe('expired');
 		expect(await quantity()).toBe(1);
-		h.clock.advance(HOUR);
-		// the same Idempotency-Key after the kit's replay record is gone reaches the service: it reports the expiry
-		const site = /** @type {any} */ (await h.catalog.siteFor(WEBSITE));
-		const replay = await h.catalog.variants.reserve(site, { lines: [{ variantId, quantity: 4 }] }, { key: 'due-second' });
-		expect(replay).toMatchObject({ ok: true, created: false, reservation: { id: second.json.id, status: 'expired' } });
+		h.clock.advance(25 * HOUR);
+		// the same key from the same caller again (a retry after the kit's 24 h window) reports the expiry
+		const replay = await reserve(4, 'due-second');
+		expect(replay.status).toBe(200);
+		expect(replay.json).toMatchObject({ id: second.json.id, status: 'expired' });
 		expect(await quantity()).toBe(5);
 	});
 
@@ -122,10 +122,9 @@ describe('dashboard "Process due changes"', () => {
 			expiredReservations: 0,
 			republished: 0,
 		});
-		// demo sessions are read-only; there is no website without a scope
-		expect(
-			(await h.call('POST', '/v1/dashboard/due-work', { key: await h.session('demo'), idempotencyKey: null })).status,
-		).toBe(403);
+		// there is no website without a scope
+		const unscoped = await h.session('merchant', { scope: { merchantId: MERCHANT } });
+		expect((await h.call('POST', '/v1/dashboard/due-work', { key: unscoped, idempotencyKey: null })).status).toBe(400);
 	});
 
 	it('settles items the dashboard reads', async () => {

@@ -1041,7 +1041,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		if (!inserted) return fail('identifier_in_use', { detail: 'Another customer has this e-mail, phone or external id.' });
 		await audit({ websiteId: site.websiteId, actor, action: 'customer.created', target: { type: 'customer', id } });
 		await emit(site, 'customer.created@1', { customerId: id, source: 'signups.import' }, `customer.created:${id}`);
-		// the answer carries no personal data: POST answers are kept in the replay cache (GET the customer for details)
+		// the answer carries no personal data (GET the customer for details)
 		return ok(201, { id, status: 'active', createdAt: viewOf(site, /** @type {Customer} */ (inserted)).createdAt });
 	};
 
@@ -1249,7 +1249,7 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 				completedAt: at,
 			});
 			const request = await site.repos.dataRequests.get(id);
-			// the data itself is fetched with GET (POST answers are kept in the replay cache, which must not hold PII)
+			// the data itself is fetched with GET (the POST answer carries no personal data)
 			return ok(201, { ...requestView(/** @type {any} */ (request)), download: `/v1/data-requests/${id}/export` });
 		}
 		if (!cfg.allow_delete) return fail('not_allowed', { detail: 'Account deletion is not enabled.' });
@@ -1366,57 +1366,6 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		let deleted = 0;
 		for (const request of await site.repos.dataRequests.due(iso(), 100)) if (await runDeletion(site, request)) deleted += 1;
 		return deleted;
-	};
-	// ── Portal-signed privacy operations ──────────────────────────────────────────────────────────────────
-
-	/**
-	 * Customer of a Portal privacy subject (`customerId`, `email` or `phone`).
-	 * @param {Site} site
-	 * @param {Record<string, string> | undefined} subject
-	 * @returns {Promise<Customer | null>}
-	 */
-	const subjectCustomer = async (site, subject) => {
-		if (!subject) return null;
-		if (typeof subject.customerId === 'string') return site.repos.customers.get(subject.customerId);
-		const email = normaliseEmail(subject.email);
-		if (email) return site.repos.customers.findBy('email', email);
-		const phone = normalisePhone(subject.phone);
-		return phone ? site.repos.customers.findBy('phone', phone) : null;
-	};
-
-	/**
-	 * `POST /v1/data:export` (Portal-signed).
-	 * @param {Site} site
-	 * @param {{ subject?: Record<string, string> }} input
-	 */
-	const privacyExport = async (site, { subject }) => {
-		if (subject) {
-			const customer = await subjectCustomer(site, subject);
-			return {
-				websiteId: site.websiteId,
-				subject,
-				exportedAt: iso(),
-				data: customer ? await exportCustomer(site, customer) : null,
-			};
-		}
-		const customers = await site.repos.customers.list({ fetchLimit: 10_000, includeDeleted: true });
-		return {
-			websiteId: site.websiteId,
-			exportedAt: iso(),
-			customers: customers.map((/** @type {Customer} */ c) => viewOf(site, c)),
-		};
-	};
-
-	/**
-	 * `POST /v1/data:anonymize` (Portal-signed).
-	 * @param {Site} site
-	 * @param {{ subject?: Record<string, string> }} input
-	 */
-	const privacyAnonymize = async (site, { subject }) => {
-		const customer = await subjectCustomer(site, subject);
-		if (!customer) return { websiteId: site.websiteId, anonymized: { customers: 0 } };
-		await executeDeletion(site, customer, 'portal');
-		return { websiteId: site.websiteId, anonymized: { customers: 1 } };
 	};
 
 	// ── account pages, orders, risk, dashboard, identity issuer ───────────────────────────────────────────
@@ -1652,8 +1601,6 @@ export const createSignupsService = ({ app, messenger, publish, recordUsage, aud
 		settleDeletion,
 		settleDeletions,
 		autoRegisterIssuer,
-		privacyExport,
-		privacyAnonymize,
 		account,
 		applyOrderEvent,
 		overview,

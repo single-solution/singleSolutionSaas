@@ -207,6 +207,8 @@ export const createReviewsService = ({
 		}
 		const id = idFor(site.websiteId, 'rph', key);
 		const existing = await site.repos.photos.get(id);
+		// an upload slot belongs to the customer who asked for it first
+		if (existing && (existing.customerId ?? null) !== customerId) return { ok: false, reason: 'duplicate_request' };
 		// a retried request re-signs the slot it created first: same key, type and declared size
 		const declared = { contentType: existing?.contentType ?? contentType, size: existing?.size ?? size };
 		// `content-length` is a signed header: the bucket refuses a body of any other size than the declared one
@@ -479,8 +481,11 @@ export const createReviewsService = ({
 		const { settings, repos } = site;
 		const id = idFor(site.websiteId, 'rev', key);
 		const replay = /** @type {StoredReview | null} */ (await repos.reviews.get(id));
-		if (replay) return { ok: true, review: replay, duplicate: true };
 		let customerId = submitter.via === 'server' ? value.customerId : submitter.customerId;
+		// a retry answers with the review made first, only to the same customer
+		if (replay && (replay.customerId ?? null) !== (customerId ?? null) && submitter.via !== 'token')
+			return { ok: false, reason: 'duplicate_request' };
+		if (replay) return { ok: true, review: replay, duplicate: true };
 		/** @type {ReviewRequest | null} */
 		let request = null;
 		if (submitter.via === 'token') {
@@ -930,11 +935,12 @@ export const createReviewsService = ({
 			askedAt: iso(at),
 			answeredAt: null,
 		};
-		await site.repos.questions.insert(question);
-		return {
-			ok: /** @type {const} */ (true),
-			question: /** @type {import('../core/views.js').StoredQuestion} */ (await site.repos.questions.get(question.id)),
-		};
+		const inserted = await site.repos.questions.insert(question);
+		const stored = /** @type {import('../core/views.js').StoredQuestion} */ (await site.repos.questions.get(question.id));
+		// a retry answers with the question asked first, only to the same customer
+		if (!inserted && (stored.customerId ?? null) !== (customerId ?? null))
+			return { ok: /** @type {const} */ (false), reason: 'duplicate_request' };
+		return { ok: /** @type {const} */ (true), question: stored };
 	};
 
 	/**

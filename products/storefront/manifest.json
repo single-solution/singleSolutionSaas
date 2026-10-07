@@ -22,9 +22,6 @@
 			"scopes": ["deals.read"]
 		}
 	],
-	"budget": {
-		"shared": 21
-	},
 	"elements": [
 		{
 			"key": "grid",
@@ -35,14 +32,10 @@
 			"price": {
 				"hourly": 200
 			},
-			"budget": {
-				"js": 4
-			},
 			"features": {
 				"$ref": "schemas/grid.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/grid.js#createGrid",
 			"renderer": "ui/grid.js#render",
 			"stringKeys": ["grid.*", "card.*", "storefront.*"],
@@ -63,14 +56,10 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 1
-			},
 			"features": {
 				"$ref": "schemas/cards.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/cards.js#createCards",
 			"renderer": "ui/cards.js#renderCards",
 			"stringKeys": ["cards.*", "card.*", "storefront.*"],
@@ -92,14 +81,10 @@
 			"price": {
 				"hourly": 150
 			},
-			"budget": {
-				"js": 4
-			},
 			"features": {
 				"$ref": "schemas/filters.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/filters.js#createFilters",
 			"renderer": "ui/filters.js#render",
 			"stringKeys": ["filters.*", "storefront.*"],
@@ -121,14 +106,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 4
-			},
 			"features": {
 				"$ref": "schemas/search_overlay.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/searchOverlay.js#createSearchOverlay",
 			"renderer": "ui/searchOverlay.js#render",
 			"stringKeys": ["search_overlay.*", "storefront.*"],
@@ -148,14 +129,10 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 3
-			},
 			"features": {
 				"$ref": "schemas/hero.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/hero.js#createHero",
 			"renderer": "ui/hero.js#render",
 			"stringKeys": ["hero.*"],
@@ -177,14 +154,10 @@
 			"price": {
 				"hourly": 100
 			},
-			"budget": {
-				"js": 1
-			},
 			"features": {
 				"$ref": "schemas/trending_band.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/cards.js#createTrendingBand",
 			"renderer": "ui/entries/trending_band.js#renderTrendingBand",
 			"stringKeys": ["trending_band.*", "card.*", "storefront.*"],
@@ -206,14 +179,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 1
-			},
 			"features": {
 				"$ref": "schemas/category_cards.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/navCards.js#createCategoryCards",
 			"renderer": "ui/navCards.js#renderCategoryCards",
 			"stringKeys": ["category_cards.*", "nav.*"],
@@ -235,14 +204,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 1
-			},
 			"features": {
 				"$ref": "schemas/brand_cards.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/navCards.js#createBrandCards",
 			"renderer": "ui/navCards.js#renderBrandCards",
 			"stringKeys": ["brand_cards.*", "nav.*"],
@@ -264,14 +229,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 3
-			},
 			"features": {
 				"$ref": "schemas/deals_page.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/dealsPage.js#createDealsPage",
 			"renderer": "ui/dealsPage.js#render",
 			"stringKeys": ["deals_page.*", "card.*", "storefront.*"],
@@ -293,14 +254,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 1
-			},
 			"features": {
 				"$ref": "schemas/notice_bar.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/blocks.js#createNoticeBar",
 			"renderer": "ui/entries/notice_bar.js#renderNoticeBar",
 			"stringKeys": ["notice_bar.*"],
@@ -321,14 +278,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 1
-			},
 			"features": {
 				"$ref": "schemas/mobile_tab_bar.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/blocks.js#createMobileTabBar",
 			"renderer": "ui/entries/mobile_tab_bar.js#renderMobileTabBar",
 			"stringKeys": ["mobile_tab_bar.*"],
@@ -348,14 +301,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 1
-			},
 			"features": {
 				"$ref": "schemas/contact_footer.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/blocks.js#createContactFooter",
 			"renderer": "ui/entries/contact_footer.js#renderContactFooter",
 			"stringKeys": ["contact_footer.*"],
@@ -376,14 +325,10 @@
 			"price": {
 				"hourly": 0
 			},
-			"budget": {
-				"js": 2
-			},
 			"features": {
 				"$ref": "schemas/theme.features.json"
 			},
 			"placement": true,
-			"experiments": true,
 			"headless": "headless/theme.js#createTheme",
 			"renderer": "ui/theme.js#render",
 			"stringKeys": ["theme.*"]

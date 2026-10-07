@@ -8,10 +8,10 @@ import { validateNote } from '../core/notes.js';
 import { invalid } from './reply.js';
 
 /**
- * @param {{ service: import('./service.js').ChatbotService }} deps
+ * @param {{ service: import('./service.js').ChatbotService, keyOf: (ctx: any) => string }} deps
  */
 export const createNoteHandler =
-	({ service }) =>
+	({ service, keyOf }) =>
 	/**
 	 * @param {any} ctx
 	 * @param {import('./service.js').Site} site
@@ -25,7 +25,7 @@ export const createNoteHandler =
 		const note = await service.note(site, conversation, {
 			text: ctx.body.text,
 			mentions: ctx.body.mentions,
-			key: ctx.idempotencyKey,
+			key: keyOf(ctx),
 			actor,
 			agentId,
 		});

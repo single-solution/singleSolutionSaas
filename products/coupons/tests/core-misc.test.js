@@ -270,7 +270,6 @@ describe('reports and views', () => {
 			usage: { taken: 0, redeemed: 0 },
 			createdAt: '1970-01-01T00:00:00.000Z',
 			archivedAt: null,
-			listed: false,
 		});
 		expect(couponView(stored)).not.toHaveProperty('websiteId');
 		expect(codeView({ code: 'A', couponId: 'c', status: 'active', maxUses: 3, taken: 1 })).toMatchObject({
@@ -522,10 +521,7 @@ describe('request validation', () => {
 	it('validates coupons (create and update)', () => {
 		const base = { name: 'N', action: { type: 'percent', percent: 5 } };
 		expect(
-			validateCoupon(
-				{ ...base, code: 'GOOD1', description: '', status: 'paused', currency: null, listed: true, custom: { a: 1 } },
-				rules,
-			),
+			validateCoupon({ ...base, code: 'GOOD1', description: '', status: 'paused', currency: null, custom: { a: 1 } }, rules),
 		).toEqual([]);
 		expect(codes(validateCoupon({ ...base, code: 'x' }, rules))).toEqual(['/code:code_invalid']);
 		expect(codes(validateCoupon({ ...base, code: 5 }, rules))).toEqual(['/code:code_invalid']);

@@ -48,7 +48,7 @@ export const INDEXES = /** @type {any} */ ([
 		keys: { websiteId: 1, dealId: 1, customerId: 1 },
 		name: 'website_deal_customer',
 		unique: true,
-		// anonymised rows (customerId null) leave the uniqueness of identified customers
+		// only rows with a customer id take part in the uniqueness
 		partialFilterExpression: { customerId: { $type: 'string' } },
 	},
 	{ collection: 'customer_usage', keys: { websiteId: 1, customerId: 1 }, name: 'website_customer' },

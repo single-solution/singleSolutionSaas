@@ -32,7 +32,6 @@ import { createTranslator } from './strings.js';
  * @property {{ body: string, at: string } | null} reply
  * @property {Array<{ id: string, url: string, contentType: string }>} photos
  * @property {Array<{ key: string, label: string, value: number }>} attributes
- * @property {boolean} removed
  */
 /**
  * @typedef {object} FormState
@@ -141,7 +140,6 @@ export const createReviews = ({ config = {}, strings = {}, client, emit = () => 
 				label: definitions.find((d) => d.key === key)?.label ?? key,
 				value: Number(value),
 			})),
-			removed: review.removed === true,
 		};
 	};
 

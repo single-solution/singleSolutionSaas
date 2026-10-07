@@ -52,8 +52,7 @@ Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `l
 - **Lots.** Credits open lots; spending consumes the oldest first. Released or refunded redemptions are restored into
   their original lots (original expiry) — a redeem/release cannot extend the life of points.
 - **Data.** Collections `ss_loyalty_{members,transactions,orders,redemptions,referrals,audit}` in the merchant
-  database, `websiteId` first in every index, created lazily; versioned migrations; export/anonymise via the
-  Portal-signed standard routes.
+  database, `websiteId` first in every index, created lazily; versioned migrations.
 - **No background work.** Nothing runs on a timer (no crons, no background tasks). When a request reads or moves a
   member, that member's lapsed lots are expired, a due tier review is applied and a due `loyalty.expiring@1` notice is
   published. The merchant can run the same for the whole website with the dashboard's "Run expiry now" button
@@ -65,7 +64,7 @@ Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `l
 
 | Operation              | Route                                                                                                        |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Earn (manual / server) | `POST /v1/earnings` (sk, Idempotency-Key) · `GET /v1/earnings` (sk; pk only with a wallet token)             |
+| Earn (manual / server) | `POST /v1/earnings` (sk, optional Idempotency-Key) · `GET /v1/earnings` (sk; pk only with a wallet token)    |
 | Members                | `GET /v1/members?q=` · `GET /v1/members/{customerId}` · `…/balance` · `…/history` (cursor)                   |
 | Rules                  | `GET /v1/rules` (with diagnostics) · `POST /v1/rules:check`                                                  |
 | Custom events          | `POST /v1/activities` `{ type: "custom.<name>@1", customerId, data }`                                        |
@@ -74,7 +73,7 @@ Publishes `loyalty.earned@1`, `loyalty.redeemed@1`, `loyalty.tier_changed@1`, `l
 | Tiers, expiry          | `GET /v1/tiers` · `POST /v1/expiry:run`                                                                      |
 | Referrals              | `POST /v1/referral-codes` · `POST /v1/referrals` · `GET /v1/referrals/{customerId}`                          |
 | Adjustments            | `POST /v1/adjustments` · `GET /v1/adjustments`                                                               |
-| Standard               | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`, `/v1/data:export                               | anonymize` |
+| Standard               | `/v1/entitlement`, `/v1/config`, `/v1/events`, `/v1/strings`                                                 |
 
 Errors are RFC 9457 problems with stable codes (`insufficient_points`, `below_minimum`, `above_maximum`,
 `offers_not_allowed`, `self_referral`, `identity_required`, …).
@@ -88,23 +87,21 @@ loadMore }, subscribe, validate, strings, t, formatPoints, destroy }`; `client.w
 
 Opened from the Portal (`/sso?launch=` → `ss_session`): overview KPIs with a "Run expiry now" button, earn rules with live rules@1 validation, member
 search, member detail with history and audited adjustments, settings (link to the subscription's configuration in the
-Portal — the product never stores merchant configuration). Demo launches ("Try demo") show sandbox data computed with
-the real core; impersonation shows the audit banner.
+Portal — the product never stores merchant configuration). Merchant launches and staff admin launches are supported.
 
-## Develop and certify
+## Develop
 
 ```sh
-ss dev env > .env.local        # MONGODB_URI (empty = in-memory control store) + a generated CONNECT_SECRET
-ss dev                         # local Portal emulator (ss.dev.json)
-pnpm dev                       # Next.js on :3000 — or `node serve.js 3000` (plain node:http)
-ss dev connect --url http://localhost:3000 --secret <CONNECT_SECRET>   # from .env.local
-ss app validate                # manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
-ss certify . --url http://localhost:3000   # restart the product first (fresh token)
-pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB, certify
+cp .env.example .env.local     # MONGODB_URI (empty = in-memory control store) + a random CONNECT_SECRET (≥ 32 chars)
+pnpm dev                       # Next.js on :3000
+# local Portal → Admin → Apps → Add product → http://localhost:3000 + the CONNECT_SECRET
+pnpm validate                  # ss app validate: manifest, anatomy, import direction, tokens, strings, OpenAPI coverage
+pnpm check                     # format, lint, typecheck, tests with coverage: core, headless, renderer, API on MongoDB
+ss pack build .                # the wallet widget (Mode A) → upload dist/pack in the Portal (app page → Upload widgets)
 ```
 
-The test suite includes `tests/certify.test.js` (the full `ss certify` suite, every check must pass). The system test
-`e2e/tests/loyalty-portal.test.js` (monorepo workspace `@ss/e2e`) runs the product against the real Portal in process (staff bootstrap → Add product (URL + connect secret) → activation → merchant
+The e2e suite (monorepo workspace `@ss/e2e`) composes this product from its `./platform` and `./routes` exports and runs
+it against the real Portal in process (staff bootstrap → Add product (URL + connect secret) → activation → merchant
 signup → website → credits → subscription → database connector → Event Hub delivery → points in the merchant DB →
 hourly settlement).
 
@@ -115,8 +112,8 @@ hourly settlement).
 2. Set two environment variables: `MONGODB_URI`, the product's own small MongoDB (sessions, caches, usage queue, its
    signing key and generated secrets), and `CONNECT_SECRET` (random, at least 32 characters). Nothing else.
 3. Portal → Admin → Apps → **Add product** → the product URL and `CONNECT_SECRET` → **Connect**. The product generates
-   its key and pins the Portal; then review and activate it in the Portal. Nothing runs on a timer.
-4. Run `ss certify . --url https://<deployment> --secret <CONNECT_SECRET>` against a fresh (unconnected) deployment before listing.
+   its key and pins the Portal; then activate it in the Portal. Nothing runs on a timer.
+4. `ss pack build .` and upload `dist/pack` on the app page (**Upload widgets**) so the drop-in wallet is delivered.
 
 ## Changelog
 

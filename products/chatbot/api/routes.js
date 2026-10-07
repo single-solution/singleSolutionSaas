@@ -1,15 +1,16 @@
 /**
- * Route table: app-kit's standard resources (entitlement, config, events, strings, health, data export/anonymise,
- * the .well-known endpoints, /sso and — in development — the certification probes) plus the Chatbot Mode C API and
- * the dashboard API (SSO sessions). There are no cron or background routes: work that is due (snooze wake-ups, SLA
+ * Route table: app-kit's standard resources (entitlement, config, events, strings, health, the .well-known endpoints
+ * and /sso) plus the Chatbot Mode C API and the dashboard API (SSO sessions). There are no cron or background routes: work that is due (snooze wake-ups, SLA
  * breaches, auto-close) is done when a conversation is read, deleted records are purged by TTL indexes and due web
  * pages are refreshed from the dashboard or the API.
  *
- * Every product route is gated by its element (403 element_disabled in every mode). POSTs that create or move state
- * require an Idempotency-Key (app-kit stores and replays the response). Browser (`pk_`) routes identify the customer
+ * Every product route is gated by its element (403 element_disabled in every mode). POSTs that create records or meter
+ * usage accept an `Idempotency-Key`: ids and usage keys derive from it, and app-kit refuses a repeated key within 24 h
+ * (409 duplicate_request). Browser (`pk_`) routes identify the customer
  * from `SS-Identity`: the website's own login token (app-kit identity, `identity: 'optional'`), else the guest's
  * marker token; `sk_` routes act for the merchant's server. Handlers are thin: rules live in core/.
  */
+import { createHash } from 'node:crypto';
 import { created, defineRoute, noContent, ok, paginate, problem, standardRoutes } from '@ss/app-kit';
 import { conversationView, messageView, validatePatch } from '../core/conversation.js';
 import { matchFlow, stepFlow, validateFlow } from '../core/flows.js';
@@ -196,18 +197,39 @@ export const buildRoutes = (chatbot) => {
 		},
 	});
 
-	/** Dashboard session → site (null = pick a website / demo). @param {any} ctx */
+	/**
+	 * The key a request derives ids and usage keys from: its `Idempotency-Key` hashed with the website, the caller
+	 * (signed-in customer, guest marker, dashboard session or server key) and the route, so another caller's identical
+	 * key never reaches the same records; a fresh random one without a key or for an anonymous browser (no identity
+	 * and no guest marker: nothing to tell two visitors apart).
+	 * @param {any} ctx
+	 * @returns {string}
+	 */
+	const keyOf = (ctx) => {
+		const caller = callerOf(ctx);
+		if (!ctx.idempotencyKey || !caller) return service.newId('req');
+		return createHash('sha256')
+			.update([ctx.websiteId, caller, `${ctx.method} ${ctx.path}`, ctx.idempotencyKey].join('\n'))
+			.digest('hex');
+	};
+	/** @param {any} ctx @returns {string | null} */
+	const callerOf = (ctx) => {
+		if (ctx.session) return `session:${ctx.session.subject}`;
+		if (isServer(ctx)) return `key:sk:${ctx.website.keyId}`;
+		const owner = ownerOf(ctx);
+		if (owner.customerId) return `customer:${owner.customerId}`;
+		return owner.visitorId ? `visitor:${owner.visitorId}` : null;
+	};
+	/** Dashboard session → site (null = pick a website). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? site(ctx) : null);
 	/** Dashboard actor. @param {any} ctx */
 	const dashboardActor = (ctx) => {
 		const view = sessionView(ctx.session);
-		return view.actor
-			? { type: /** @type {const} */ ('staff'), id: view.actor, name: null }
-			: {
-					type: view.kind === 'admin' ? /** @type {const} */ ('staff') : /** @type {const} */ ('merchant'),
-					id: view.user ?? 'unknown',
-					name: ctx.session?.user?.email ?? null,
-				};
+		return {
+			type: view.kind === 'admin' ? /** @type {const} */ ('staff') : /** @type {const} */ ('merchant'),
+			id: view.user ?? 'unknown',
+			name: ctx.session?.user?.email ?? null,
+		};
 	};
 	/** The dashboard user's agent record (created on first reply when the inbox is on). @param {Site} s @param {any} ctx */
 	const dashboardAgent = async (s, ctx) => {
@@ -237,7 +259,7 @@ export const buildRoutes = (chatbot) => {
 	const replyAsAgent = async (ctx, s, conversation, actor, agentId) => {
 		const result = await service.agentMessage(s, conversation, {
 			text: ctx.body?.text,
-			key: ctx.idempotencyKey,
+			key: keyOf(ctx),
 			actor,
 			agentId,
 		});
@@ -259,11 +281,11 @@ export const buildRoutes = (chatbot) => {
 		if (problems.length > 0) return invalid(problems);
 		const result = await service.patch(s, conversation, ctx.body, {
 			actor,
-			key: ctx.idempotencyKey ?? `patch:${ctx.requestId}`,
+			key: keyOf(ctx),
 		});
 		return result.ok ? ok(conversationView(result.conversation, 'team')) : failed(result);
 	};
-	const noteAs = createNoteHandler({ service });
+	const noteAs = createNoteHandler({ service, keyOf });
 
 	return [
 		...standardRoutes(product),
@@ -316,15 +338,17 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/conversations',
+			idempotent: true,
 			...website('window'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
+				const key = keyOf(ctx);
 				const body = ctx.body && typeof ctx.body === 'object' && !Array.isArray(ctx.body) ? ctx.body : {};
 				let owner = ownerOf(ctx);
 				/** @type {{ token: string, expiresAt: string } | null} */
 				let marker = null;
 				if (!isServer(ctx) && !owner.customerId && !owner.visitorId) {
-					const visitorId = `vis_${app.hash(`visitor:${ctx.websiteId}:${ctx.idempotencyKey}`)}`;
+					const visitorId = `vis_${app.hash(`visitor:${ctx.websiteId}:${key}`)}`;
 					owner = { ...owner, visitorId };
 					marker = app.tokens.issueMarker({ websiteId: ctx.websiteId, visitorId, days: s.settings.window.guest_token_days });
 				}
@@ -349,10 +373,13 @@ export const buildRoutes = (chatbot) => {
 					...(isServer(ctx) && body.custom && typeof body.custom === 'object' && !Array.isArray(body.custom)
 						? { custom: body.custom }
 						: {}),
-					key: ctx.idempotencyKey,
+					key,
 					enforceOpenLimit: !isServer(ctx),
 				});
 				if (!started.ok) return failed(started);
+				// ids are caller-scoped; still never hand an existing conversation to a browser that does not own it
+				if (!started.created && !isServer(ctx) && !service.owns(started.conversation, owner))
+					return problem('duplicate_request', 'This Idempotency-Key was already used.');
 				let conversation = started.conversation;
 				/** @type {any[]} */
 				const messages = started.messages.map((/** @type {any} */ m) => messageView(m, audienceOf(ctx)));
@@ -361,7 +388,7 @@ export const buildRoutes = (chatbot) => {
 				if (started.created && started.text) {
 					const sent = await service.customerMessage(s, conversation, {
 						text: started.text,
-						key: `${ctx.idempotencyKey}:first`,
+						key: `${key}:first`,
 						owner,
 					});
 					if (!sent.ok) return failed(sent);
@@ -446,6 +473,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/conversations/:id/messages',
+			idempotent: true,
 			...website('window'),
 			rateLimit: messageRate,
 			handler: async (ctx) => {
@@ -478,7 +506,7 @@ export const buildRoutes = (chatbot) => {
 				const result = await service.customerMessage(s, conversation, {
 					text: body.text,
 					action: body.action,
-					key: ctx.idempotencyKey,
+					key: keyOf(ctx),
 					owner,
 				});
 				if (!result.ok) return failed(result);
@@ -494,7 +522,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/conversations/:id/read',
 			...website('window'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const conversation = await conversationFor(ctx, s, ctx.params.id);
@@ -515,7 +542,7 @@ export const buildRoutes = (chatbot) => {
 						? { type: 'api', id: ctx.website.keyId }
 						: { type: 'customer', id: conversation.customerId ?? conversation.visitorId },
 					reason: isServer(ctx) ? 'api' : 'customer',
-					key: ctx.idempotencyKey,
+					key: keyOf(ctx),
 				});
 				return ok({
 					conversation: viewOf(ctx, s, result.conversation),
@@ -541,6 +568,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/conversations/:id/notes',
+			idempotent: true,
 			...website('inbox', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -572,6 +600,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/agents',
+			idempotent: true,
 			...website('inbox', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -581,7 +610,7 @@ export const buildRoutes = (chatbot) => {
 				if ((await s.repos.agents.count()) >= /** @type {any} */ (s.settings.inbox).max_agents)
 					return problem('limit_reached', 'The agent limit of your plan is reached.');
 				const agent = {
-					id: `agt_${app.hash(`agent:${ctx.websiteId}:${ctx.idempotencyKey}`)}`,
+					id: `agt_${app.hash(`agent:${ctx.websiteId}:${keyOf(ctx)}`)}`,
 					name: ctx.body.name.trim(),
 					email: ctx.body.email ?? null,
 					teams: ctx.body.teams ?? [],
@@ -653,7 +682,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/inbox/canned-replies:render',
 			...website('inbox', 'sk'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				if (typeof ctx.body?.key !== 'string' || typeof ctx.body?.conversationId !== 'string')
@@ -690,6 +718,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/handoffs',
+			idempotent: true,
 			...website('handoff'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -703,7 +732,7 @@ export const buildRoutes = (chatbot) => {
 						: isServer(ctx)
 							? 'api'
 							: 'customer_request';
-				const result = await service.requestHandoff(s, conversation, { reason, team, key: ctx.idempotencyKey });
+				const result = await service.requestHandoff(s, conversation, { reason, team, key: keyOf(ctx) });
 				if (!result.ok) return failed(result);
 				return created({
 					conversation: viewOf(ctx, s, result.conversation),
@@ -752,14 +781,16 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/assistant:preview',
+			idempotent: true,
 			...website('ai_replies', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				if (typeof ctx.body?.text !== 'string' || !ctx.body.text.trim())
 					return invalid([{ path: '/text', code: 'required' }]);
 				const language = typeof ctx.body.language === 'string' ? ctx.body.language : s.settings.window.default_language;
+				const key = keyOf(ctx);
 				const conversation = /** @type {any} */ ({
-					id: `preview_${app.hash(ctx.idempotencyKey)}`,
+					id: `preview_${app.hash(key)}`,
 					tokens: 0,
 					toolCalls: 0,
 					context: null,
@@ -773,7 +804,7 @@ export const buildRoutes = (chatbot) => {
 					identity: null,
 					history: [],
 					t: service.translator(language),
-					meterKey: `preview:${ctx.idempotencyKey}`,
+					meterKey: `preview:${key}`,
 				});
 				return ok({
 					replies: result.bubbles,
@@ -802,23 +833,26 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/knowledge-entries',
+			idempotent: true,
 			...website('knowledge', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const problems = validateEntry(ctx.body);
 				if (problems.length > 0) return invalid(problems);
-				const result = await createEntry(s, ctx.body, `entry:${ctx.idempotencyKey}`);
+				const result = await createEntry(s, ctx.body, `entry:${keyOf(ctx)}`);
 				return result.ok ? created(result.entry, { location: `/v1/knowledge-entries/${result.entry.id}` }) : failed(result);
 			},
 		}),
 		defineRoute({
 			method: 'POST',
 			path: '/v1/knowledge-entries:batch',
+			idempotent: true,
 			...website('knowledge', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const items = Array.isArray(ctx.body?.items) ? ctx.body.items.slice(0, 100) : null;
 				if (!items) return invalid([{ path: '/items', code: 'required' }]);
+				const key = keyOf(ctx);
 				const results = [];
 				for (const [index, item] of items.entries()) {
 					const problems = validateEntry(item);
@@ -826,7 +860,7 @@ export const buildRoutes = (chatbot) => {
 						results.push({ index, status: 'invalid', errors: problems });
 						continue;
 					}
-					const result = await createEntry(s, item, `entry:${ctx.idempotencyKey}:${index}`);
+					const result = await createEntry(s, item, `entry:${key}:${index}`);
 					results.push(
 						result.ok
 							? { index, status: 'created', id: result.entry.id }
@@ -882,7 +916,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/knowledge-sources/:id/refresh',
 			...website('knowledge', 'sk'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const source = (s.settings.knowledge?.sources ?? []).find((/** @type {any} */ src) => src.id === ctx.params.id);
@@ -897,7 +930,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/knowledge:search',
 			...website('knowledge', 'sk'),
-			idempotent: false,
 			handler: async (ctx) => {
 				if (typeof ctx.body?.query !== 'string' || !ctx.body.query.trim())
 					return invalid([{ path: '/query', code: 'required' }]);
@@ -922,7 +954,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/flows:check',
 			...website('flows', 'sk'),
-			idempotent: false,
 			handler: (ctx) => {
 				if (ctx.body?.condition !== undefined)
 					return typeof ctx.body.condition === 'string'
@@ -938,7 +969,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/flows:simulate',
 			...website('flows', 'sk'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const flows = /** @type {Record<string, any>} */ (s.settings.flows);
@@ -1021,6 +1051,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/tools/:name/invoke',
+			idempotent: true,
 			...website('tools', 'sk'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -1035,7 +1066,7 @@ export const buildRoutes = (chatbot) => {
 							tools: { .../** @type {any} */ (s.settings.tools), custom: [{ ...tool, allow_ai: true }] },
 						},
 					},
-					{ conversation: null, identity: null, t: service.translator('en'), meterKey: `invoke:${ctx.idempotencyKey}` },
+					{ conversation: null, identity: null, t: service.translator('en'), meterKey: `invoke:${keyOf(ctx)}` },
 					{ id: 'invoke', name: tool.name, arguments: args },
 				);
 				return ok({ ok: result.ok, output: result.content });
@@ -1045,7 +1076,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/tools:signing-secret',
 			...website('tools', 'sk'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const version = Number(s.settings.tools?.signing_key_version ?? 1);
@@ -1077,7 +1107,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/proactive:evaluate',
 			...website('proactive'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const owner = ownerOf(ctx);
@@ -1107,7 +1136,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/proactive:dismiss',
 			...website('proactive'),
-			idempotent: 'optional',
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				const owner = ownerOf(ctx);
@@ -1153,6 +1181,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/leads',
+			idempotent: true,
 			...website('lead_capture'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -1165,7 +1194,7 @@ export const buildRoutes = (chatbot) => {
 						? { customerId: conversation.customerId, visitorId: conversation.visitorId, identity: null }
 						: ownerOf(ctx);
 				const rest = Object.fromEntries(Object.entries(body).filter(([key]) => key !== 'customerId'));
-				const result = await service.lead(s, { body: rest, owner, key: ctx.idempotencyKey, conversation });
+				const result = await service.lead(s, { body: rest, owner, key: keyOf(ctx), conversation });
 				return result.ok ? created(result.lead, { location: `/v1/leads/${result.lead.id}` }) : failed(result);
 			},
 		}),
@@ -1194,6 +1223,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/ratings',
+			idempotent: true,
 			...website('csat'),
 			handler: async (ctx) => {
 				const s = await site(ctx);
@@ -1264,7 +1294,6 @@ export const buildRoutes = (chatbot) => {
 			method: 'POST',
 			path: '/v1/moderation:check',
 			...website('moderation', 'sk'),
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await site(ctx);
 				if (typeof ctx.body?.text !== 'string') return invalid([{ path: '/text', code: 'required' }]);
@@ -1328,6 +1357,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/conversations/:id/messages',
+			idempotent: true,
 			auth: 'launch',
 			element: 'inbox',
 			roles: [...DASHBOARD_WRITE_ROLES],
@@ -1343,6 +1373,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/conversations/:id/notes',
+			idempotent: true,
 			auth: 'launch',
 			element: 'inbox',
 			roles: [...DASHBOARD_WRITE_ROLES],
@@ -1372,6 +1403,7 @@ export const buildRoutes = (chatbot) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/dashboard/knowledge-entries',
+			idempotent: true,
 			auth: 'launch',
 			element: 'knowledge',
 			roles: [...DASHBOARD_WRITE_ROLES],
@@ -1380,7 +1412,7 @@ export const buildRoutes = (chatbot) => {
 				if (!s) return problem('bad_request', 'Open the dashboard for a website.');
 				const problems = validateEntry(ctx.body);
 				if (problems.length > 0) return invalid(problems);
-				const result = await createEntry(s, ctx.body, `entry:dashboard:${ctx.idempotencyKey}`);
+				const result = await createEntry(s, ctx.body, `entry:dashboard:${keyOf(ctx)}`);
 				return result.ok ? created(result.entry) : failed(result);
 			},
 		}),
@@ -1390,7 +1422,6 @@ export const buildRoutes = (chatbot) => {
 			auth: 'launch',
 			element: 'knowledge',
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: false,
 			handler: async (ctx) => {
 				const s = await dashboardSite(ctx);
 				return s ? ok(await service.refreshDue(s)) : problem('bad_request', 'Open the dashboard for a website.');

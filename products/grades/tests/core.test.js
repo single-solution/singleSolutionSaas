@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultsOf, effectiveConfig } from '../core/config.js';
 import { filterOptions, parseSelection, sortByTier } from '../core/filters.js';
 import {
+	answerText,
 	checklistView,
 	completionProblems,
 	criticalFailed,
@@ -31,16 +32,6 @@ import {
 	validateUnit,
 	validateUnitPatch,
 } from '../core/validate.js';
-import {
-	answerText,
-	filtersStub,
-	inspectionStub,
-	mappingStub,
-	showcaseStub,
-	stubView,
-	tiersStub,
-	warrantyStub,
-} from '../core/views.js';
 import { periodText, printableTerms, warrantyTerms } from '../core/warranty.js';
 import en from '../strings/en.json' with { type: 'json' };
 import tiersSchema from '../schemas/tiers.features.json' with { type: 'json' };
@@ -663,45 +654,12 @@ describe('validate', () => {
 	});
 });
 
-describe('views', () => {
-	it('builds text-only stub views within the limits', () => {
-		const view = stubView('t'.repeat(300), 'b'.repeat(3000), Array(60).fill('x'.repeat(600)));
-		expect(view.title).toHaveLength(200);
-		expect(view.body).toHaveLength(2000);
-		expect(view.items).toHaveLength(50);
-		expect(view.items[0]?.text).toHaveLength(500);
-		expect(tiersStub([{ label: 'A', description: '' }], t).items).toEqual([{ text: 'A' }]);
-		expect(tiersStub([], t).body).toBe('No grades are defined yet.');
-		expect(showcaseStub([{ headline: 'H', body: '', warranty: null }], t).items).toEqual([{ text: 'H' }]);
-		expect(filtersStub([{ label: 'A', count: 2 }], t).items).toEqual([{ text: 'A (2)' }]);
-		expect(warrantyStub([{ label: 'A', periodText: '1 day', text: 'T' }], t).items).toEqual([{ text: 'A: 1 day — T' }]);
-		expect(
-			mappingStub(
-				{
-					tier: null,
-					values: [
-						{ name: 'N', value: 'https://schema.org/UsedCondition' },
-						{ name: 'M', value: null },
-					],
-				},
-				t,
-			),
-		).toEqual({ title: 'Condition', body: 'This item has no grade.', items: [{ text: 'N: Used Condition' }] });
-		expect(inspectionStub(null, t).body).toBe('Open the report from the link you received.');
-		const report = /** @type {any} */ ({
-			tier: null,
-			score: null,
-			results: [
-				{ label: 'A', kind: 'pass_fail', value: false, max: null },
-				{ label: 'B', kind: 'score', value: 3, max: null },
-				{ label: 'C', kind: 'text', value: 'note', max: null },
-			],
-		});
-		expect(inspectionStub(report, t)).toEqual({
-			title: 'Inspection report',
-			body: '',
-			items: [{ text: 'A: Fail' }, { text: 'B: 3 / 3' }, { text: 'C: note' }],
-		});
+describe('answers', () => {
+	it('puts checklist answers in words', () => {
+		expect(answerText({ kind: 'pass_fail', value: false, max: null }, t)).toBe('Fail');
+		expect(answerText({ kind: 'pass_fail', value: true, max: null }, t)).toBe('Pass');
+		expect(answerText({ kind: 'score', value: 3, max: null }, t)).toBe('3 / 3');
 		expect(answerText({ kind: 'score', value: 2, max: 5 }, t)).toBe('2 / 5');
+		expect(answerText({ kind: 'text', value: 'note', max: null }, t)).toBe('note');
 	});
 });

@@ -5,8 +5,8 @@
 - **Mode A (drop-in):** the Loader mounts `ui/items.js` (`grid` / `list`), `ui/variants.js` (`buttons` / `selects`),
   `ui/filters.js` (`sidebar` / `bar`), `ui/collections.js` (`tree` / `cards`), `ui/brands.js` (`logos` / `list`) and
   `ui/gallery.js` (`gallery` / `strip`) with the website's design tokens (slots `before`, `after`, and `empty` for
-  items). Without a UI bundle the Loader's element stub calls `GET /v1/elements/<element>/view?ctx=` (text-only view
-  models; `itemId` from the page context for variants and media).
+  items). Upload them with `ss pack build .` and the Portal's "Upload widgets"; without an uploaded widget bundle the
+  elements are not delivered.
 - **Mode B (headless):** `createItems`, `createVariantPicker`, `createFilters`, `createCollections`, `createBrands`,
   `createGallery` (`headless/*.js`) take `{ config, strings, client, emit }` with
   `createElementApi({ baseUrl, key: 'pk_…' })` from `@ss/web/element`. Connect filters to the listing with

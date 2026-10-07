@@ -6,7 +6,8 @@
 	"private": true,
 	"license": "UNLICENSED",
 	"exports": {
-		"./serve": "./serve.js",
+		"./platform": "./adapters/platform.js",
+		"./routes": "./api/routes.js",
 		"./package.json": "./package.json"
 	},
 	"engines": {
@@ -18,11 +19,8 @@
 		"prebuild": "ss app assets .",
 		"build": "next build",
 		"start": "next start --port 3000",
-		"serve": "node serve.js 3000",
-		"portal": "ss dev",
 		"test": "vitest run --coverage",
 		"validate": "ss app validate .",
-		"certify": "ss certify . --url http://localhost:3000",
 		"check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
 		"test:watch": "vitest",
 		"lint": "eslint .",

@@ -450,7 +450,6 @@ export const validateCoupon = (body, rules, { mode = 'create' } = {}) => {
 				path,
 			),
 		validity: validityCheck,
-		listed: boolCheck,
 		custom: customCheck,
 	};
 	if (create) {

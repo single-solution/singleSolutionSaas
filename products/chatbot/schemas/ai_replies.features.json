@@ -9,7 +9,6 @@
 			"default": "",
 			"maxLength": 128,
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "text", "group": "Model", "order": 1 }
 		},
 		"default_models": {
@@ -40,7 +39,6 @@
 			"default": "friendly",
 			"enum": ["friendly", "professional", "concise", "enthusiastic", "empathetic"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Persona", "order": 4 }
 		},
 		"instructions": {
@@ -50,7 +48,6 @@
 			"default": "",
 			"maxLength": 12000,
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "textarea", "group": "Persona", "order": 5 }
 		},
 		"present_as_human": {
@@ -77,7 +74,6 @@
 			"default": "medium",
 			"enum": ["short", "medium", "long"],
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "select", "group": "Answers", "order": 8 }
 		},
 		"max_output_tokens": {
@@ -96,7 +92,6 @@
 			"minimum": 0,
 			"maximum": 1,
 			"x-kind": "config",
-			"x-experiment": true,
 			"x-ui": { "widget": "number", "group": "Answers", "order": 10, "advanced": true }
 		},
 		"citation_style": {

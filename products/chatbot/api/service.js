@@ -4,8 +4,8 @@
  * closing, guest claims, leads, ratings, proactive messages, agents, transcripts, the order/customer caches fed by
  * events, and the work that is due when a conversation is read (SLA breaches, auto-close). Pure decisions live in core/; this layer only orders effects.
  *
- * Exactly once: ids of conversations, messages, leads and agents derive from the request's Idempotency-Key (app-kit
- * also replays the stored response), stores are upserts keyed by them, and usage records and events carry the same
+ * Exactly once: ids of conversations, messages, leads and agents derive from the request's caller-scoped
+ * Idempotency-Key (see `keyOf` in routes.js; app-kit refuses a repeated key within 24 h), stores are upserts keyed by them, and usage records and events carry the same
  * derived keys, so a retried request never double-stores, double-meters or double-publishes.
  */
 import { createId } from '@ss/contracts';

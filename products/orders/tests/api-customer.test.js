@@ -67,18 +67,6 @@ describe('customers', () => {
 		expect(wrong.status).toBe(404);
 		expect((await h.call('POST', '/v1/tracking-lookups', { key: h.pk, body: {} })).status).toBe(422);
 	});
-
-	it('serves element views for the Loader stub', async () => {
-		const identity = h.login({ sub: 'usr_ada' });
-		const anonymous = await h.call('GET', '/v1/elements/lifecycle/view', { key: h.pk });
-		expect(anonymous.json.body).toBe('Sign in to see your orders.');
-		const orders = await h.call('GET', '/v1/elements/lifecycle/view', { key: h.pk, identity });
-		expect(orders.json.items.length).toBeGreaterThan(0);
-		const tracking = await h.call('GET', '/v1/elements/fulfilment/view', { key: h.pk, identity });
-		expect(tracking.json.items[0].href).toBe('https://track.example.com/PC9');
-		const none = await h.call('GET', '/v1/elements/fulfilment/view', { key: h.pk, identity: h.login({ sub: 'usr_nobody' }) });
-		expect(none.json.body).toBe('You have no orders yet.');
-	});
 });
 
 describe('documents', () => {
@@ -230,7 +218,7 @@ describe('customer updates', () => {
 });
 
 describe('dashboard', () => {
-	it('serves the overview, writes as staff, prints and exports; demo sessions are read-only', async () => {
+	it('serves the overview, writes as staff, prints and exports', async () => {
 		const sid = await h.session('merchant');
 		const auth = { authorization: `Bearer ${sid}`, 'x-ss-website': WEBSITE };
 		const overview = await h.call('GET', '/v1/dashboard/overview', { key: null, headers: auth });
@@ -249,8 +237,17 @@ describe('dashboard', () => {
 			key: null,
 			headers: auth,
 			body: { amount: 100, method: 'cash' },
+			idempotencyKey: 'idk_dash_pay',
 		});
 		expect(pay.status, pay.text).toBe(200);
+		const repeated = await h.call('POST', `/v1/dashboard/orders/${order.id}/payments`, {
+			key: null,
+			headers: auth,
+			body: { amount: 100, method: 'cash' },
+			idempotencyKey: 'idk_dash_pay',
+		});
+		expect(repeated.status).toBe(409);
+		expect(repeated.json.type).toMatch(/duplicate_request$/);
 		const bad = await h.call('POST', `/v1/dashboard/orders/${order.id}/refunds`, {
 			key: null,
 			headers: auth,
@@ -266,13 +263,6 @@ describe('dashboard', () => {
 		expect((await h.call('GET', '/v1/dashboard/packing-slips', { key: null, headers: auth })).status).toBe(404);
 		const csv = await h.call('GET', '/v1/dashboard/order-exports', { key: null, headers: auth });
 		expect(csv.text).toContain('number');
-		const demo = await h.session('demo');
-		const denied = await h.call('POST', `/v1/dashboard/orders/${order.id}/transitions`, {
-			key: null,
-			headers: { authorization: `Bearer ${demo}` },
-			body: { status: 'packed' },
-		});
-		expect(denied.status).toBe(403);
 		const ready = await resolveDashboard({ orders: h.orders, sessionId: sid, website: WEBSITE });
 		expect(ready.state).toBe('ready');
 		if (ready.state === 'ready') {
@@ -284,27 +274,9 @@ describe('dashboard', () => {
 			expect(Array.isArray(await ready.data.reviews())).toBe(true);
 			expect((await ready.data.orders({ cursor: 'garbage' })).items).toEqual([]);
 		}
-		const sandbox = await resolveDashboard({ orders: h.orders, sessionId: demo });
-		expect(sandbox.state).toBe('ready');
-		if (sandbox.state === 'ready') {
-			expect(sandbox.data.demo).toBe(true);
-			expect((await sandbox.data.stats()).orders).toBe(5);
-			expect((await sandbox.data.orders({ status: 'confirmed' })).items).toHaveLength(1);
-			expect(await sandbox.data.order('ord_demo0')).toBeTruthy();
-			expect((await sandbox.data.ledger({})).items).toEqual([]);
-			expect(await sandbox.data.reviews()).toEqual([]);
-		}
 		expect((await resolveDashboard({ orders: h.orders, sessionId: undefined })).state).toBe('signin');
 		expect((await resolveDashboard({ orders: h.orders, sessionId: 'ses_none' })).state).toBe('signin');
 		const session = await h.call('GET', '/v1/session', { key: null, headers: { authorization: `Bearer ${sid}` } });
 		expect(session.json).toMatchObject({ kind: 'merchant' });
-	});
-
-	it('exports and anonymises a customer’s personal data', async () => {
-		const exported = await h.orders.product.context?.privacy?.export?.({
-			websiteId: WEBSITE,
-			subject: { customerId: 'cus_1' },
-		});
-		if (exported) expect(Object.keys(exported.collections)).toContain('orders');
 	});
 });

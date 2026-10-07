@@ -1,6 +1,5 @@
 /**
  * Dashboard session view: who is signed in through the Portal launch (exchanged at app-kit's `GET /sso?launch=`).
- * Used by the dashboard and by the certification suite to check every launch kind.
  */
 
 /**
@@ -11,5 +10,4 @@ export const sessionView = (session) => ({
 	role: session.role,
 	scope: session.scope ?? {},
 	user: session.user?.id ?? session.subject ?? null,
-	actor: typeof session.scope?.actor === 'string' ? session.scope.actor : null,
 });

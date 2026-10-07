@@ -2,7 +2,7 @@
 
 ## 1. Define a configurator
 
-`POST /v1/configurators` (server key, `Idempotency-Key`). Money is integer minor units of the currency.
+`POST /v1/configurators` (server key; an optional `Idempotency-Key` makes a retry answer 409 `duplicate_request` instead of creating twice). Money is integer minor units of the currency.
 
 ```json
 {

@@ -18,8 +18,6 @@
 	"dashboard.title": "Site Search",
 	"dashboard.locale": "en",
 	"dashboard.launch_required": "Open this dashboard from the Portal.",
-	"dashboard.audit_banner": "Staff session as {actor}: every action is audited.",
-	"dashboard.demo_banner": "Demo: sample documents searched in memory. Nothing is stored and nothing can be changed.",
 	"dashboard.pick_website": "Choose a website in the Portal to open its search dashboard.",
 	"dashboard.not_subscribed": "This website has no active Site Search subscription with the index element on.",
 	"dashboard.signed_in_as": "Signed in as {user} ({role})",

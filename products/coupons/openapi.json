@@ -3,7 +3,7 @@
 	"info": {
 		"title": "Coupons API",
 		"version": "1.0.0",
-		"description": "Mode C API of Coupons (SSPS v1). All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code: code_not_found, exhausted, not_eligible, customer_limit_reached, velocity_limited, …). POSTs that move state require `Idempotency-Key`; replays return the original response. Browser keys (pk_) may call validations, quotes and the apply box view; everything else needs a server key (sk_)."
+		"description": "Mode C API of Coupons (SSPS v1). All data lives in the merchant's own database. Money is integer minor units + ISO-4217 currency; times are ISO-8601 UTC. Errors are RFC 9457 problems (`type` ends with a stable code: code_not_found, exhausted, not_eligible, customer_limit_reached, velocity_limited, …). `Idempotency-Key` is optional: coupon creation refuses a repeated key (409 duplicate_request); reservations and redemptions are idempotent on `reference`, else on the key, scoped by the calling key, and answer the original reservation again only to that key. Browser keys (pk_) may call validations and quotes; everything else needs a server key (sk_)."
 	},
 	"servers": [
 		{
@@ -27,9 +27,6 @@
 		},
 		{
 			"name": "api"
-		},
-		{
-			"name": "apply_box"
 		},
 		{
 			"name": "distribution"
@@ -115,7 +112,6 @@
 												"time_zone": "Europe/Berlin",
 												"windows": []
 											},
-											"listed": false,
 											"custom": {},
 											"codes": 1,
 											"usage": {
@@ -238,7 +234,6 @@
 										"time_zone": "Europe/Berlin",
 										"windows": []
 									},
-									"listed": false,
 									"custom": {},
 									"codes": 1,
 									"usage": {
@@ -321,7 +316,6 @@
 										"time_zone": "Europe/Berlin",
 										"windows": []
 									},
-									"listed": false,
 									"custom": {},
 									"codes": 1,
 									"usage": {
@@ -416,7 +410,6 @@
 										"time_zone": "Europe/Berlin",
 										"windows": []
 									},
-									"listed": false,
 									"custom": {},
 									"codes": 1,
 									"usage": {
@@ -488,7 +481,6 @@
 										"time_zone": "Europe/Berlin",
 										"windows": []
 									},
-									"listed": false,
 									"custom": {},
 									"codes": 1,
 									"usage": {
@@ -2348,147 +2340,6 @@
 				}
 			}
 		},
-		"/v1/elements/apply_box/view": {
-			"get": {
-				"operationId": "applyBoxView",
-				"tags": ["apply_box"],
-				"summary": "View model of the apply box for the Loader element stub (ss-element-stub@1).",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Identity"
-					},
-					{
-						"name": "lang",
-						"in": "query",
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ElementView"
-								},
-								"example": {
-									"title": "Coupon code",
-									"body": "Enter your code at checkout to see your savings.",
-									"items": [],
-									"actions": []
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/elements/apply_box/actions/{action}": {
-			"parameters": [
-				{
-					"name": "action",
-					"in": "path",
-					"required": true,
-					"schema": {
-						"type": "string",
-						"enum": ["apply"]
-					}
-				}
-			],
-			"post": {
-				"operationId": "applyBoxAction",
-				"tags": ["apply_box"],
-				"summary": "Element stub action `apply` { code, cart } → the next view model.",
-				"parameters": [
-					{
-						"$ref": "#/components/parameters/Identity"
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["code", "cart"],
-								"properties": {
-									"code": {
-										"type": "string"
-									},
-									"cart": {
-										"$ref": "#/components/schemas/Cart"
-									}
-								}
-							},
-							"example": {
-								"code": "AUTUMN10",
-								"cart": {
-									"currency": "EUR",
-									"lines": [
-										{
-											"lineId": "l1",
-											"itemId": "itm_socks",
-											"quantity": 3,
-											"unitAmount": 1200,
-											"collections": ["socks"],
-											"attributes": {
-												"size": "M"
-											}
-										},
-										{
-											"lineId": "l2",
-											"itemId": "itm_shoes",
-											"variantId": "var_42",
-											"quantity": 1,
-											"unitAmount": 8900
-										}
-									],
-									"shipping": 495,
-									"customer": {
-										"id": "cus_123",
-										"orderCount": 0,
-										"segments": ["newsletter"]
-									},
-									"paymentMethod": "card",
-									"deliveryMethod": "courier",
-									"context": {
-										"country": "DE",
-										"device": "mobile",
-										"deviceId": "dev_9f2"
-									}
-								}
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/ElementView"
-								},
-								"example": {
-									"title": "Coupon code",
-									"body": "AUTUMN10 applied — you save €12.50.",
-									"items": [],
-									"actions": []
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/entitlement": {
 			"get": {
 				"operationId": "getEntitlement",
@@ -2642,124 +2493,6 @@
 				}
 			}
 		},
-		"/v1/data:export": {
-			"post": {
-				"operationId": "data_export",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data export.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
-		"/v1/data:anonymize": {
-			"post": {
-				"operationId": "data_anonymize",
-				"tags": ["standard"],
-				"summary": "Portal-signed personal data anonymize.",
-				"security": [
-					{
-						"portalSignature": []
-					}
-				],
-				"requestBody": {
-					"required": true,
-					"content": {
-						"application/json": {
-							"schema": {
-								"type": "object",
-								"required": ["websiteId"],
-								"properties": {
-									"websiteId": {
-										"type": "string"
-									},
-									"subject": {
-										"type": "object"
-									},
-									"requestId": {
-										"type": "string"
-									}
-								}
-							},
-							"example": {
-								"websiteId": "web_1",
-								"subject": {
-									"customerId": "cus_123"
-								},
-								"requestId": "req_1"
-							}
-						}
-					}
-				},
-				"responses": {
-					"200": {
-						"description": "OK",
-						"content": {
-							"application/json": {
-								"schema": {
-									"type": "object"
-								},
-								"example": {
-									"websiteId": "web_1"
-								}
-							}
-						}
-					},
-					"default": {
-						"$ref": "#/components/responses/Problem"
-					}
-				}
-			}
-		},
 		"/v1/dashboard/reservations:expire": {
 			"post": {
 				"operationId": "postV1DashboardReservationsExpire",
@@ -2807,12 +2540,6 @@
 				"scheme": "bearer",
 				"description": "pk_ (browser, domain-locked; customer from SS-Identity) or sk_ (server) website key"
 			},
-			"portalSignature": {
-				"type": "apiKey",
-				"in": "header",
-				"name": "SS-Signature",
-				"description": "Portal-signed request (ss-request.v1)"
-			},
 			"session": {
 				"type": "apiKey",
 				"in": "cookie",
@@ -2824,11 +2551,12 @@
 			"IdempotencyKey": {
 				"name": "Idempotency-Key",
 				"in": "header",
-				"required": true,
+				"required": false,
 				"schema": {
 					"type": "string",
 					"maxLength": 255
-				}
+				},
+				"description": "Optional. Coupon creation refuses a repeated key (409 duplicate_request); reservations and redemptions without a `reference` are idempotent on it."
 			},
 			"Cursor": {
 				"name": "cursor",
@@ -3280,9 +3008,6 @@
 							}
 						}
 					},
-					"listed": {
-						"type": "boolean"
-					},
 					"custom": {
 						"type": "object"
 					}
@@ -3638,50 +3363,6 @@
 			},
 			"Report": {
 				"type": "object"
-			},
-			"ElementView": {
-				"type": "object",
-				"description": "ss-element-stub@1 view model (text only).",
-				"properties": {
-					"title": {
-						"type": "string",
-						"maxLength": 200
-					},
-					"body": {
-						"type": "string",
-						"maxLength": 2000
-					},
-					"items": {
-						"type": "array",
-						"maxItems": 50,
-						"items": {
-							"type": "object",
-							"properties": {
-								"text": {
-									"type": "string"
-								},
-								"href": {
-									"type": "string"
-								}
-							}
-						}
-					},
-					"actions": {
-						"type": "array",
-						"maxItems": 10,
-						"items": {
-							"type": "object",
-							"properties": {
-								"action": {
-									"type": "string"
-								},
-								"label": {
-									"type": "string"
-								}
-							}
-						}
-					}
-				}
 			}
 		}
 	}

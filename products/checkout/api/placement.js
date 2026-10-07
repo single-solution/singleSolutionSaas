@@ -4,8 +4,11 @@
  *
  * - **Never trust client prices.** Lines are re-priced from the item records, totals recomputed by the same quote as
  *   `POST /v1/quotes`; `expectedTotal` only tells the client its numbers are stale (409 `total_changed`).
- * - **Idempotent.** The order id derives from (website, key), and a unique index on the hashed key closes the race of
- *   two parallel submissions: the loser answers the winner's order. Calls to other products reuse derived keys.
+ * - **Idempotent, per caller.** The order id derives from (website, caller, route, key) — the caller is the customer
+ *   subject, the dashboard session or the website key — so two callers never share an id, and a unique index on the
+ *   hashed key closes the race of two parallel submissions: the loser answers the winner's order. A stored order is
+ *   answered again only to the caller that placed it (`placedBy`), never to an anonymous guest (409
+ *   `duplicate_request`). Calls to other products reuse derived keys.
  * - **Atomic and race-free stock.** Conditional decrements and the order insert run in one transaction of the
  *   merchant's database. A database without transactions (no replica set) runs the same steps in sequence and gives
  *   back exactly the steps that completed when a later one fails.
@@ -111,10 +114,11 @@ export const createPlacement = (checkout, { items, carts, pricing, releaseExpire
 	 * Place an order.
 	 * @param {Site} site
 	 * @param {unknown} body
-	 * @param {{ who: Requester, idempotencyKey: string, identityToken?: string | null }} request
+	 * @param {{ who: Requester, caller: string, idempotencyKey: string, identityToken?: string | null }} request
+	 *   `caller` identifies who sends the request (customer subject, session subject or website key id)
 	 * @returns {Promise<PlaceResult>}
 	 */
-	const place = async (site, body, { who, idempotencyKey }) => {
+	const place = async (site, body, { who, caller, idempotencyKey }) => {
 		const { settings, repos } = site;
 		if (!settings.currency) return { ok: false, code: 'currency_not_configured' };
 		const checked = validatePlacement(body, {
@@ -125,10 +129,17 @@ export const createPlacement = (checkout, { items, carts, pricing, releaseExpire
 		});
 		if (!checked.input) return { ok: false, code: 'validation_failed', errors: checked.problems };
 		const input = checked.input;
-		const keyHash = app.hash(`${site.websiteId}|${idempotencyKey}`);
+		const keyHash = app.hash(`${site.websiteId}|${caller}|orders.place|${idempotencyKey}`);
 		const orderId = `ord_${encodeBase32(createHash('sha256').update(keyHash).digest().subarray(0, 16))}`;
+		/** An existing order under this key goes back only to the caller that placed it, and never to a guest. */
+		const answer = (/** @type {Record<string, any>} */ existing) =>
+			who.kind === 'pk' && !who.subject
+				? /** @type {const} */ ({ ok: false, code: 'duplicate_request' })
+				: existing.placedBy === caller
+					? /** @type {const} */ ({ ok: true, order: existing, token: null, replayed: true })
+					: /** @type {const} */ ({ ok: false, code: 'duplicate_request' });
 		const replay = await repos.orders.byIdempotency(keyHash);
-		if (replay) return { ok: true, order: replay, token: null, replayed: true };
+		if (replay) return answer(replay);
 
 		// ── lines: from the cart or the request, re-priced from the item records ────────────────────────────
 		/** @type {Record<string, any> | null} */
@@ -277,6 +288,7 @@ export const createPlacement = (checkout, { items, carts, pricing, releaseExpire
 			number: '',
 			status: start.status,
 			idempotencyKey: keyHash,
+			placedBy: caller,
 			accessTokenHash: app.hash(token),
 			placedAt,
 			expiresAt: start.expiresAt === null ? null : new Date(start.expiresAt),
@@ -441,9 +453,7 @@ export const createPlacement = (checkout, { items, carts, pricing, releaseExpire
 			if (isDuplicateKey(error)) {
 				// a parallel submission with the same key won: its reservations are the same (derived keys), keep them
 				const winner = await repos.orders.byIdempotency(keyHash);
-				return winner
-					? { ok: true, order: winner, token: null, replayed: true }
-					: { ok: false, code: 'placement_in_progress' };
+				return winner ? answer(winner) : { ok: false, code: 'placement_in_progress' };
 			}
 			await rollback();
 			const code = /** @type {any} */ (error)?.refusal;

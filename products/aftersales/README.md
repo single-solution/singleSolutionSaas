@@ -37,7 +37,7 @@ Every integration is optional: without Orders, register purchases with `POST /v1
 | Path            | Purpose                                                                                     |
 | --------------- | ------------------------------------------------------------------------------------------- |
 | `manifest.json` | elements, prices, plans, events, scopes, resources                                          |
-| `openapi.json`  | Mode C API (`/v1/purchases` is the `x-ss-certify` resource)                                 |
+| `openapi.json`  | Mode C API                                                                                  |
 | `schemas/`      | one `*.features.json` per element and the product event schemas                             |
 | `core/`         | pure rules: windows, eligibility, claims, refunds cap, restock plan, validation, views      |
 | `headless/`     | Mode B cores: `createClaims` (claim form, guest access, conversation), `createSerialLookup` |
@@ -58,7 +58,7 @@ The Portal connection (made from Portal → Admin → Apps → Add product), the
 pnpm check      # format, lint, typecheck, tests with coverage
 pnpm validate   # ss app validate
 pnpm build      # Next.js build
-pnpm dev        # product on :3000 (pnpm portal runs the ss dev Portal emulator)
+pnpm dev        # product on :3000
 ```
 
 The system test against the real Portal is `e2e/tests/aftersales-portal.test.js`.

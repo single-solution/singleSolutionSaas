@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { repositoriesFor } from '../adapters/db.js';
-import { createPrivacyHandlers } from '../adapters/privacy.js';
-import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { resolveDashboard } from '../api/dashboard.js';
 import { respond, writerOf } from '../api/routes.js';
 import { catalogFor } from '../api/service.js';
 import { createHarness, item, MERCHANT, WEBSITE } from './harness.js';
@@ -82,7 +80,7 @@ describe('widget state (POST /v1/wishlist)', () => {
 });
 
 describe('dashboard', () => {
-	it('shows counts, lists and signals for a merchant launch and sample data for a demo', async () => {
+	it('shows counts, lists and signals for a merchant launch', async () => {
 		h = await createHarness();
 		const jane = await h.login('cus_jane');
 		const saved = await h.call('POST', '/v1/lists/default/items', { identity: jane, body: item() });
@@ -113,15 +111,6 @@ describe('dashboard', () => {
 		const viaApi = await h.call('GET', '/v1/dashboard/overview', { key: sessionId });
 		expect(viaApi.json.stats.lists, viaApi.text).toBe(2);
 		expect((await h.call('GET', '/v1/session', { key: sessionId })).json).toMatchObject({ kind: 'merchant' });
-		const { token: demoLaunch } = await h.portal.issueLaunch(
-			/** @type {any} */ ({ kind: 'demo', subject: 'usr_demo', user: { id: 'usr_demo' }, scope: {} }),
-		);
-		const demoSession = await h.wishlist.product.launch.exchange(demoLaunch);
-		const demoContext = await resolveDashboard({
-			wishlist: h.wishlist,
-			sessionId: demoSession.ok ? demoSession.session.id : '',
-		});
-		expect(demoContext.state === 'ready' && demoContext.data.demo).toBe(true);
 
 		expect(await resolveDashboard({ wishlist: h.wishlist, sessionId: null })).toEqual({ state: 'signin' });
 		expect(await resolveDashboard({ wishlist: h.wishlist, sessionId: 'ses_missing' })).toEqual({ state: 'signin' });
@@ -131,42 +120,10 @@ describe('dashboard', () => {
 		expect((await resolveDashboard({ wishlist: h.wishlist, sessionId: noSite })).state).toBe('pick_website');
 		await h.entitle({ elements: { lists: false } });
 		expect((await resolveDashboard({ wishlist: h.wishlist, sessionId })).state).toBe('not_subscribed');
-
-		const demo = demoDashboard({ now: h.clock.now() });
-		expect(demo.demo).toBe(true);
-		expect((await demo.overview()).stats).toMatchObject({ lists: 3, guestLists: 1, optedIn: 1 });
-		expect((await demo.overview()).topItems[0]).toMatchObject({ itemId: 'itm_demo_lamp', saves: 2 });
-		expect(await demo.notifications()).toHaveLength(1);
-		expect(await demo.lists()).toHaveLength(3);
 	});
 });
 
-describe('privacy and helpers', () => {
-	it('exports and deletes a customer’s lists and signals', async () => {
-		h = await createHarness();
-		const jane = await h.login('cus_jane');
-		const saved = await h.call('POST', '/v1/lists/default/items', { identity: jane, body: item() });
-		await h.call('PATCH', `/v1/lists/${saved.json.list.id}`, { identity: jane, body: { notify: true } });
-		await h.deliver('price.changed@1', { itemId: 'itm_1', price: { amount: 100, currency: 'EUR' } });
-		const privacy = createPrivacyHandlers({
-			repoFor: repositoriesFor(h.wishlist.product, { now: h.clock.now }),
-			now: h.clock.now,
-		});
-		const exported = await privacy.export({ websiteId: WEBSITE, subject: { customerId: 'cus_jane' } });
-		expect(exported.collections.lists).toHaveLength(1);
-		expect(exported.collections.notifications).toHaveLength(1);
-		expect((await privacy.export({ websiteId: WEBSITE })).collections).toEqual({ lists: [], notifications: [] });
-		expect(await privacy.anonymize({ websiteId: WEBSITE, subject: { subject: 'cus_jane' } })).toEqual({
-			websiteId: WEBSITE,
-			anonymized: { lists: 1, notifications: 1 },
-		});
-		expect(await privacy.anonymize({ websiteId: WEBSITE })).toEqual({
-			websiteId: WEBSITE,
-			anonymized: { lists: 0, notifications: 0 },
-		});
-		expect((await h.call('GET', '/v1/lists', { identity: jane })).json.items).toEqual([]);
-	});
-
+describe('helpers', () => {
 	it('maps outcomes to results and hashes rate-limit subjects', () => {
 		expect(respond({ ok: true, body: { a: 1 } })).toMatchObject({ status: 200 });
 		expect(respond({ ok: true, status: 201, body: {} }, () => null)).toMatchObject({ status: 201 });

@@ -1,29 +1,23 @@
 /**
- * Dashboard data and routes (SSO sessions), order stats and the element views of the Loader's element stub.
+ * Dashboard data and routes (SSO sessions) and order stats.
  *
- * Dashboards show the same views for a live website (service + merchant database) and for demo launches (sandbox
- * orders built in memory with the real core — nothing is stored, nothing can be changed). Writes from the dashboard
- * (status moves, payments, refunds, fulfilment, serials, reviews, bulk) go through the same services as the API, with
- * the session's actor as `staff` (audited, impersonation included).
+ * Writes from the dashboard (status moves, payments, refunds, fulfilment, serials, reviews, bulk) go through the same
+ * services as the API, with the signed-in user as the `staff` actor (audited).
  */
 import { defineRoute, ok, paginate, problem } from '@ss/app-kit';
-import { formatMoney } from '../core/money.js';
 import { isRevenue, revenueStatuses } from '../core/lifecycle.js';
 import { netRevenue, summarize } from '../core/ledger.js';
-import { validateOrder } from '../core/orders.js';
-import { emptyFulfilment } from '../core/fulfilment.js';
 import { idList, isId } from '../core/text.js';
 import { filterOf } from './bulk.js';
 import { labelsFor } from './context.js';
 import { sessionView } from './session.js';
-import { settingsFrom } from './settings.js';
 
 /** @typedef {import('./context.js').Site} Site */
 
 /** Rows per dashboard page. */
 export const DASHBOARD_PAGE = 50;
-/** Dashboard roles that may change data (demo sessions are read-only). */
-export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin', 'impersonate']);
+/** Dashboard roles that may change data. */
+export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin']);
 
 /**
  * The audited actor of a dashboard session (always `staff` in lifecycle terms).
@@ -32,7 +26,7 @@ export const DASHBOARD_WRITE_ROLES = Object.freeze(['merchant', 'platform_admin'
  */
 export const dashboardActor = (session) => {
 	const view = sessionView(session);
-	return { type: 'staff', id: view.actor ?? view.user ?? 'unknown' };
+	return { type: 'staff', id: view.user ?? 'unknown' };
 };
 
 /**
@@ -64,59 +58,16 @@ export const statsOf = (matrix, groups) => {
 };
 
 /**
- * Page context of the element stub is not needed: the views are per customer.
  * @param {import('./routes.js').Orders} orders
  */
 export const createDashboardApi = (orders) => {
-	const { product, lifecycle, ledger, bulk, documents, blocklist, siteOf, processDue, deps } = orders;
+	const { product, lifecycle, ledger, bulk, documents, blocklist, siteOf, processDue } = orders;
 
 	/** @param {Site} site */
 	const stats = async (site) => ({
 		...statsOf(site.settings.matrix, await site.repos.orders.totals({})),
 		review: await site.repos.orders.count({ 'risk.review': 'pending' }),
 	});
-
-	/**
-	 * A text-only view model for the element stub (title, body, items ≤ 50).
-	 * @param {Site} site
-	 * @param {string} element
-	 * @param {{ subject: string, email?: string | null, phone?: string | null } | null} identity
-	 */
-	const elementView = async (site, element, identity) => {
-		const labels = labelsFor(deps, site);
-		const { t } = labels;
-		const title = t(`view.${element}`);
-		if (!identity) return { title, body: t('view.sign_in') };
-		const recent = await site.repos.orders.page(lifecycle.customerFilter(site, identity), { after: null, limit: 10 });
-		if (recent.length === 0) return { title, body: t('view.no_orders') };
-		if (element === 'fulfilment') {
-			const shipped = recent.filter(
-				(/** @type {any} */ o) => o.fulfilment?.trackingNumber && site.settings.fulfilment.show_tracking_to_customer,
-			);
-			if (shipped.length === 0) return { title, body: t('view.no_tracking') };
-			return {
-				title,
-				items: shipped.map((/** @type {any} */ o) => ({
-					text: t('view.tracking_item', {
-						number: o.number,
-						carrier: o.fulfilment.carrierName ?? '',
-						tracking: o.fulfilment.trackingNumber,
-					}),
-					...(o.fulfilment.trackingUrl ? { href: o.fulfilment.trackingUrl } : {}),
-				})),
-			};
-		}
-		return {
-			title,
-			items: recent.map((/** @type {any} */ o) => ({
-				text: t('view.order_item', {
-					number: o.number,
-					status: labels.statusLabel(o.status),
-					total: formatMoney(o.amounts.total, o.currency, labels.lang),
-				}),
-			})),
-		};
-	};
 
 	/** Dashboard session → site (null = pick a website). @param {any} ctx */
 	const dashboardSite = async (ctx) => (ctx.websiteId && ctx.entitlement ? siteOf(ctx.websiteId, ctx.entitlement.doc) : null);
@@ -133,19 +84,21 @@ export const createDashboardApi = (orders) => {
 		});
 
 	/**
-	 * A dashboard write: the session's site, the staff actor, the service call.
+	 * A dashboard write: the session's site, the staff actor, the service call. Writes that record money or blocks
+	 * declare `idempotent: true` (a repeated Idempotency-Key answers 409 duplicate_request).
 	 * @param {string} path
 	 * @param {string} element
 	 * @param {(site: Site, ctx: any, actor: import('./context.js').Actor) => Promise<any>} run
+	 * @param {{ idempotent?: boolean }} [options]
 	 */
-	const write = (path, element, run) =>
+	const write = (path, element, run, { idempotent = false } = {}) =>
 		defineRoute({
 			method: 'POST',
 			path,
 			auth: 'launch',
 			element,
 			roles: [...DASHBOARD_WRITE_ROLES],
-			idempotent: 'optional',
+			...(idempotent ? { idempotent } : {}),
 			handler: async (ctx) => {
 				const site = await dashboardSite(ctx);
 				if (!site) return noWebsite();
@@ -200,19 +153,29 @@ export const createDashboardApi = (orders) => {
 		write('/v1/dashboard/orders/:id/serials', 'serials', (site, ctx, actor) =>
 			lifecycle.setSerials(site, String(ctx.params.id), ctx.body, actor),
 		),
-		write('/v1/dashboard/orders/:id/payments', 'ledger', (site, ctx, actor) =>
-			ledger.pay(site, String(ctx.params.id), ctx.body, actor),
+		write(
+			'/v1/dashboard/orders/:id/payments',
+			'ledger',
+			(site, ctx, actor) => ledger.pay(site, String(ctx.params.id), ctx.body, actor),
+			{ idempotent: true },
 		),
-		write('/v1/dashboard/orders/:id/refunds', 'ledger', (site, ctx, actor) =>
-			ledger.refund(site, String(ctx.params.id), ctx.body, actor),
+		write(
+			'/v1/dashboard/orders/:id/refunds',
+			'ledger',
+			(site, ctx, actor) => ledger.refund(site, String(ctx.params.id), ctx.body, actor),
+			{ idempotent: true },
 		),
 		write('/v1/dashboard/orders/:id/review', 'risk', (site, ctx, actor) =>
 			lifecycle.review(site, String(ctx.params.id), ctx.body, actor),
 		),
 		// "Process due now": the website's expired statuses, left-behind outbox entries and due message retries (no timer)
 		write('/v1/dashboard/due:run', 'lifecycle', async (site) => ({ ok: true, report: await processDue(site) })),
-		write('/v1/dashboard/order-batches', 'bulk', (site, ctx, actor) => bulk.batch(site, ctx.body, actor)),
-		write('/v1/dashboard/blocklist', 'risk', (site, ctx, actor) => blocklist.block(site, ctx.body, actor)),
+		write('/v1/dashboard/order-batches', 'bulk', (site, ctx, actor) => bulk.batch(site, ctx.body, actor), {
+			idempotent: true,
+		}),
+		write('/v1/dashboard/blocklist', 'risk', (site, ctx, actor) => blocklist.block(site, ctx.body, actor), {
+			idempotent: true,
+		}),
 		print('/v1/dashboard/orders/:id/invoice', 'invoices', async (site, ctx) => {
 			const order = isId(ctx.params.id) ? await site.repos.orders.get(ctx.params.id) : null;
 			return order
@@ -249,7 +212,7 @@ export const createDashboardApi = (orders) => {
 		}),
 	];
 
-	return Object.freeze({ stats, elementView, routes, product });
+	return Object.freeze({ stats, routes, product });
 };
 
 /** Headers of the printable views (same policy as the API's). */
@@ -264,7 +227,6 @@ export const HTML_VIEW_HEADERS = Object.freeze({
 
 /**
  * @typedef {object} DashboardData
- * @property {boolean} demo
  * @property {boolean} canWrite
  * @property {string | null} websiteId
  * @property {import('./settings.js').Settings} settings
@@ -296,7 +258,6 @@ const ownerRow = (site, order) => ({
 export const liveDashboard = ({ orders, site, canWrite }) => {
 	const api = createDashboardApi(orders);
 	return {
-		demo: false,
 		canWrite,
 		websiteId: site.websiteId,
 		settings: site.settings,
@@ -334,98 +295,19 @@ export const liveDashboard = ({ orders, site, canWrite }) => {
 };
 
 /**
- * Sandbox data: a few orders in different statuses built with the real core and the default settings.
- * @param {{ now: number, strings: Record<string, Record<string, string>> }} input
- * @returns {DashboardData}
- */
-export const demoDashboard = ({ now, strings }) => {
-	const settings = settingsFrom({
-		can: () => true,
-		config: () => ({}),
-		domain: 'shop.example.com',
-		website: { currency: 'EUR', language: 'en' },
-	});
-	/** @type {Array<[string, string, number, number, string]>} number, status, unit amount, quantity, title */
-	const script = [
-		['000101', 'awaiting_confirmation', 4900, 1, 'Linen shirt'],
-		['000102', 'confirmed', 1500, 2, 'Yoga class (60 min)'],
-		['000103', 'dispatched', 12900, 1, 'Camping tent'],
-		['000104', 'delivered', 990, 3, 'Photo presets pack'],
-		['000105', 'cancelled', 3500, 1, 'Desk lamp'],
-	];
-	const site = /** @type {Site} */ ({ websiteId: 'web_demo', settings, repos: /** @type {any} */ ({}) });
-	const rows = script.map(([number, status, unit, quantity, title], index) => {
-		const checked = validateOrder(
-			{
-				number,
-				currency: 'EUR',
-				customer: { name: `Customer ${index + 1}` },
-				payment: { method: index === 0 ? 'cod' : 'card', status: index === 0 ? 'unpaid' : 'paid' },
-				lines: [{ title, sku: `DEMO-${index + 1}`, quantity, unitAmount: unit }],
-			},
-			{ maxLines: 10, defaultCurrency: 'EUR' },
-		);
-		const draft = /** @type {any} */ (checked).draft;
-		const at = new Date(now - index * 86_400_000);
-		return ownerRow(site, {
-			...draft,
-			id: `ord_demo${index}`,
-			source: 'dashboard',
-			status,
-			placedAt: at,
-			paid: draft.payment.paidAmount,
-			refunded: 0,
-			payments: [],
-			refunds: [],
-			timeline: [{ status, at, actor: { type: 'system', id: 'demo' } }],
-			fulfilment: emptyFulfilment(),
-			risk: { flags: [], review: 'none', advance: 0 },
-			version: 1,
-		});
-	});
-	const deps = /** @type {any} */ ({ strings });
-	return {
-		demo: true,
-		canWrite: false,
-		websiteId: null,
-		settings,
-		labels: labelsFor(deps, site),
-		stats: async () => ({
-			...statsOf(
-				settings.matrix,
-				rows.map((r) => ({
-					_id: { status: r.status, currency: r.currency },
-					orders: 1,
-					total: r.amounts.total,
-					paid: r.paid,
-					refunded: 0,
-				})),
-			),
-			review: 0,
-		}),
-		orders: async ({ status }) => ({ items: rows.filter((r) => !status || r.status === status), nextCursor: null }),
-		order: async (id) => rows.find((r) => r.id === id) ?? null,
-		ledger: async () => ({ items: [], totals: {} }),
-		reviews: async () => [],
-	};
-};
-
-/**
  * @typedef {{ state: 'signin' } | { state: 'pick_website' | 'not_subscribed', session: any }
  *   | { state: 'ready', session: any, data: DashboardData, portalLink: string | null }} DashboardContext
  */
 
 /**
  * Resolve a dashboard request: session → website → data.
- * @param {{ orders: import('./routes.js').Orders, sessionId: string | undefined, website?: string | null, now?: number }} input
+ * @param {{ orders: import('./routes.js').Orders, sessionId: string | undefined, website?: string | null }} input
  * @returns {Promise<DashboardContext>}
  */
-export const resolveDashboard = async ({ orders, sessionId, website = null, now = Date.now() }) => {
+export const resolveDashboard = async ({ orders, sessionId, website = null }) => {
 	const { product, siteOf, app } = orders;
 	const session = sessionId ? await product.launch.session(sessionId) : null;
 	if (!session) return { state: 'signin' };
-	if (session.role === 'demo')
-		return { state: 'ready', session, data: demoDashboard({ now, strings: app.strings }), portalLink: null };
 	const scope = session.scope ?? {};
 	const allowed = [scope.websiteId, ...(Array.isArray(scope.websiteIds) ? scope.websiteIds : [])].filter(
 		(/** @type {unknown} */ id) => typeof id === 'string' && id.length > 0,

@@ -1,7 +1,5 @@
 /**
- * The pack as the Portal serves it, built by `ss pack build` (F.18): minified ES modules with shared chunks, measured
- * the way the Portal measures them (`@ss/contracts/budget`) — every element within its declared `budget.js`, the shared
- * chunks within `budget.shared`, the plans' default elements within the website budget next to the Loader, and the
+ * The pack as the Portal serves it, built by `ss pack build` (F.18): minified ES modules with shared chunks, and the
  * built modules really work: each is imported from the build output and mounted the way the Loader does.
  */
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -10,13 +8,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
-import { measurePack } from '@ss/cli/pack';
 import { BUNDLE_FORMAT, descriptorOf, loadManifest, writePack } from '../pack.js';
 import { ITEMS, ROOT, flush, mount, pageScript, strings } from './helpers.js';
-
-/** Portal default website budget (KB gzip, `DELIVERY_BUDGET_KB`) and what the Loader itself takes of it. */
-const WEBSITE_BUDGET_KB = 60;
-const LOADER_KB = 15;
 
 /** @type {string} */
 let out;
@@ -31,25 +24,6 @@ afterAll(async () => {
 });
 
 describe('the built pack', () => {
-	it('ships every element within its budget and the shared chunks within budget.shared', () => {
-		const measured = measurePack(pack);
-		for (const element of pack.manifest.elements) {
-			const own = measured.elements.find((e) => e.key === element.key);
-			expect(own?.gzipBytes, element.key).toBeLessThanOrEqual(element.budget.js * 1024);
-		}
-		expect(measured.shared.gzipBytes).toBeGreaterThan(0);
-		expect(measured.shared.gzipBytes).toBeLessThanOrEqual(pack.manifest.budget.shared * 1024);
-		expect(measured.missing).toEqual([]);
-	});
-
-	it('switches on, per plan, only what fits the website budget next to the Loader', () => {
-		const budget = Object.fromEntries(pack.manifest.elements.map((/** @type {any} */ e) => [e.key, e.budget.js]));
-		for (const plan of pack.manifest.plans) {
-			const total = plan.elements.reduce((/** @type {number} */ sum, /** @type {string} */ key) => sum + budget[key], 0);
-			expect(total + pack.manifest.budget.shared + LOADER_KB, plan.code).toBeLessThanOrEqual(WEBSITE_BUDGET_KB);
-		}
-	});
-
 	it('writes minified modules, the product catalog and the descriptor', async () => {
 		const descriptor = JSON.parse(await readFile(path.join(out, 'descriptor.json'), 'utf8'));
 		expect(descriptor).toEqual(JSON.parse(JSON.stringify(descriptorOf(pack))));

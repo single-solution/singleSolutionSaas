@@ -44,24 +44,6 @@ export const loadStrings = async (root) => {
 	);
 };
 
-/**
- * Personal data: none. Documents are the merchant's content, analytics rows hold aggregated counts per query (no
- * visitor, session or address; personal-looking queries are never stored) and visitors' own recent searches stay in
- * their browser — so export and anonymise answer with empty results.
- */
-export const PRIVACY = Object.freeze({
-	collections: [],
-	/** @param {{ websiteId: string, subject?: Record<string, string> }} input */
-	export: async ({ websiteId, subject }) => ({
-		websiteId,
-		...(subject ? { subject } : {}),
-		exportedAt: new Date().toISOString(),
-		collections: {},
-	}),
-	/** @param {{ websiteId: string }} input */
-	anonymize: async ({ websiteId }) => ({ websiteId, anonymized: {} }),
-});
-
 /** Product-specific problem codes (RFC 9457 `type` = `<base>/problems/<code>`). */
 export const PROBLEM_CODES = Object.freeze({
 	limit_reached: { status: 409, title: 'An index limit is reached' },
@@ -117,12 +99,10 @@ export const createPlatform = async ({ env = process.env, root = process.cwd(), 
 			strings,
 			logger: createLogger({ level: config.logLevel }),
 			problems: config.problems,
-			privacy: PRIVACY,
 			problemCodes: PROBLEM_CODES,
 			data: { indexes: [...INDEXES], migrations: MIGRATIONS },
-			devProbes: true, // /v1/ss-probe/* for `ss certify`; app-kit never mounts them when NODE_ENV=production
-			// SSRF policy for merchant databases, crawls and connectors: in development the `ss dev` client database and
-			// local mocks live on loopback; app-kit ignores the allowlist when NODE_ENV=production
+			// SSRF policy for merchant databases, crawls and connectors: in development the local client database and
+			// mocks live on loopback; app-kit ignores the allowlist when NODE_ENV=production
 			outbound: {
 				allowHosts: config.outboundAllowHosts.length > 0 ? config.outboundAllowHosts : ['127.0.0.1', 'localhost', '::1'],
 			},

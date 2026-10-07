@@ -9,7 +9,11 @@
 			"description": "The heart button announces \"saved\" / \"removed\" politely to screen readers and shows it as a short status line.",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "Heart button", "order": 1 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "Heart button",
+				"order": 1
+			}
 		},
 		"page_layout": {
 			"type": "string",
@@ -17,15 +21,22 @@
 			"default": "grid",
 			"enum": ["grid", "rows"],
 			"x-kind": "config",
-			"x-experiment": true,
-			"x-ui": { "widget": "select", "group": "List page", "order": 2 }
+			"x-ui": {
+				"widget": "select",
+				"group": "List page",
+				"order": 2
+			}
 		},
 		"page_manage_lists": {
 			"type": "boolean",
 			"title": "Shoppers can create and delete lists on the page",
 			"default": true,
 			"x-kind": "flag",
-			"x-ui": { "widget": "switch", "group": "List page", "order": 3 }
+			"x-ui": {
+				"widget": "switch",
+				"group": "List page",
+				"order": 3
+			}
 		},
 		"max_loads_per_minute": {
 			"type": "integer",
@@ -36,7 +47,11 @@
 			"x-kind": "rate",
 			"x-per": "minute",
 			"x-unit": "load",
-			"x-ui": { "widget": "number", "group": "Abuse protection", "order": 4 }
+			"x-ui": {
+				"widget": "number",
+				"group": "Abuse protection",
+				"order": 4
+			}
 		}
 	}
 }

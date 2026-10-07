@@ -1,11 +1,10 @@
 /**
  * Request flow (messaging connector), photos (storage connector), Q&A, CSV import, analytics, order lifecycle events,
- * sending on order completion (no timers), the dashboard API and Portal-signed privacy operations.
+ * sending on order completion (no timers) and the dashboard API.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createId } from '@ss/contracts';
 import { MIGRATIONS, STALE_BACKSTOP_MS } from '../adapters/db.js';
-import { demoDashboard, resolveDashboard } from '../api/dashboard.js';
+import { resolveDashboard } from '../api/dashboard.js';
 import { DAY, HOUR, MERCHANT, T0, WEBSITE, WEBSITE_2, createHarness } from './harness.js';
 
 /** @type {Awaited<ReturnType<typeof createHarness>>} */
@@ -676,13 +675,13 @@ describe('import and analytics', () => {
 });
 
 describe('dashboard', () => {
-	/** @param {'merchant' | 'demo' | 'admin'} kind @param {Record<string, unknown>} [extra] */
+	/** @param {'merchant' | 'admin'} kind @param {Record<string, unknown>} [extra] */
 	const launch = async (kind, extra = {}) => {
 		const { token } = await h.portal.issueLaunch({
 			kind,
 			subject: 'usr_merchant',
 			user: { id: 'usr_merchant' },
-			scope: kind === 'demo' ? {} : { merchantId: MERCHANT, websiteId: WEBSITE },
+			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
 			...extra,
 		});
 		const sso = await h.handle(new Request(`https://reviews.example.com/sso?launch=${encodeURIComponent(token)}`));
@@ -691,7 +690,7 @@ describe('dashboard', () => {
 		return session;
 	};
 
-	it('moderates and answers from merchant sessions (audited), read-only for demo', async () => {
+	it('moderates and answers from merchant sessions (audited)', async () => {
 		const session = await launch('merchant');
 		const bearer = { key: session };
 		const overview = await h.call('GET', '/v1/dashboard/overview', bearer);
@@ -746,18 +745,8 @@ describe('dashboard', () => {
 		expect((await h.call('POST', '/v1/dashboard/moderation:check', { ...bearer, body: {}, idempotencyKey: null })).status).toBe(
 			422,
 		);
-		const demo = await launch('demo');
-		expect(
-			(
-				await h.call('POST', `/v1/dashboard/moderation/${pending.json.id}/approve`, {
-					key: demo,
-					idempotencyKey: null,
-					body: {},
-				})
-			).status,
-		).toBe(403);
 		expect((await h.call('GET', '/v1/session', bearer)).json).toMatchObject({ kind: 'merchant', role: 'merchant' });
-		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_1' });
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT } });
 		expect((await h.call('GET', '/v1/dashboard/overview', { key: admin })).status).toBe(400);
 	});
 
@@ -768,11 +757,7 @@ describe('dashboard', () => {
 		expect(run.status).toBe(200);
 		expect(run.json.sent).toBeGreaterThanOrEqual(1);
 		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.delivery.sends).toBe(1);
-		const demo = await launch('demo');
-		expect((await h.call('POST', '/v1/dashboard/request-flow:run', { key: demo, idempotencyKey: null, body: {} })).status).toBe(
-			403,
-		);
-		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_1' });
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT } });
 		expect(
 			(await h.call('POST', '/v1/dashboard/request-flow:run', { key: admin, idempotencyKey: null, body: {} })).status,
 		).toBe(400);
@@ -786,57 +771,21 @@ describe('dashboard', () => {
 		await h.entitle();
 	});
 
-	it('resolves what the pages show for every session state, and builds demo data with the real core', async () => {
+	it('resolves what the pages show for every session state', async () => {
 		const reviews = h.reviews;
 		expect(await resolveDashboard({ reviews, sessionId: null })).toEqual({ state: 'signin' });
 		expect(await resolveDashboard({ reviews, sessionId: 'ses_unknown' })).toEqual({ state: 'signin' });
 		const live = await resolveDashboard({ reviews, sessionId: await launch('merchant') });
 		if (live.state !== 'ready') throw new Error('not ready');
 		expect(live.portalLink).toContain(`/websites/${WEBSITE}/subscriptions/`);
-		expect(live.data).toMatchObject({ demo: false, canWrite: true, websiteId: WEBSITE });
+		expect(live.data).toMatchObject({ canWrite: true, websiteId: WEBSITE });
 		expect((await live.data.overview()).reviews.approved).toBeGreaterThan(0);
 		expect((await live.data.reviews('approved')).length).toBeGreaterThan(0);
 		expect(Array.isArray(await live.data.questions('pending'))).toBe(true);
-		const admin = await launch('admin', { scope: { merchantId: MERCHANT }, actor: 'stf_1' });
+		const admin = await launch('admin', { scope: { merchantId: MERCHANT } });
 		expect((await resolveDashboard({ reviews, sessionId: admin })).state).toBe('pick_website');
 		await h.entitle({ elements: { collection: false } });
 		expect((await resolveDashboard({ reviews, sessionId: await launch('merchant') })).state).toBe('not_subscribed');
 		await h.entitle();
-		const demoSession = await resolveDashboard({ reviews, sessionId: await launch('demo') });
-		expect(demoSession.state === 'ready' && demoSession.data.demo).toBe(true);
-		const demo = demoDashboard({ now: T0 });
-		expect(await demo.overview()).toMatchObject({ reviews: { approved: 3, pending: 1, rejected: 0 } });
-		expect((await demo.reviews('pending'))[0]?.moderation.flags).toEqual(['links']);
-		expect(await demo.questions('pending')).toHaveLength(1);
-		expect(await demo.questions('published')).toEqual([]);
-	});
-});
-
-describe('privacy (Portal-signed)', () => {
-	it('exports and anonymises a customer: author, text and contact removed, ratings kept', async () => {
-		const { orderId } = await h.completeOrder({ customerId: 'cus_gdpr', items: ['itm_gdpr'] });
-		const review = await h.call('POST', '/v1/reviews', {
-			as: 'cus_gdpr',
-			body: { itemId: 'itm_gdpr', rating: 4, body: text, author: { name: 'Private Person' } },
-		});
-		expect(review.status).toBe(201);
-		for (const operation of ['export', 'anonymize']) {
-			const rawBody = JSON.stringify({ websiteId: WEBSITE, subject: { customerId: 'cus_gdpr' }, requestId: createId('req') });
-			const signed = await h.portal.signRequest({ method: 'POST', path: `/v1/data:${operation}`, body: rawBody });
-			const response = await h.handle(
-				new Request(`https://reviews.example.com/v1/data:${operation}`, {
-					method: 'POST',
-					headers: { ...signed.headers, 'idempotency-key': createId('idk') },
-					body: rawBody,
-				}),
-			);
-			expect(response.status).toBe(200);
-			if (operation === 'export') expect((await response.json()).collections.reviews).toHaveLength(1);
-		}
-		const stored = await h.collection('reviews').findOne({ websiteId: WEBSITE, id: review.json.id });
-		expect(stored).toMatchObject({ author: null, body: null, rating: 4 });
-		expect((await h.collection('requests').findOne({ websiteId: WEBSITE, orderId }))?.contact).toBeNull();
-		const pub = await h.call('GET', `/v1/reviews/${review.json.id}`, { as: '' });
-		expect(pub.json).toMatchObject({ removed: true, author: null, body: null });
 	});
 });
