@@ -244,6 +244,44 @@ contact details.
 - **Account**: business details (name, phone, address, country), login e-mail (confirmed by e-mail) and password,
   two-step sign-in (on/off, recovery codes), own activity.
 
+### Chat (first product) — decisions
+
+Everything the ibrahimMobiles chat does, plus the kept extras. **Every option below is managed inside the Chat
+product** (settings per website; our admin sets defaults and prices). Features are split very finely (each its own
+switch and hourly price, starting at 0).
+
+**Draft feature list (switches)**: visitor chat widget · headless chat (API for custom UI) · AI replies · backup AI
+provider · AI instructions · knowledge base (FAQ/articles) · website pages as knowledge · shop tools: product search and
+details · shop tools: deals and savings quotes · shop tools: top/new products · shop tools: my orders and account ·
+guest chat · signed-in chat (Accounts) with guest-to-account merge · proactive idle nudge · proactive page rules ·
+proactive exit intent · human handoff · inbox · assignment · internal notes · saved replies · conversation context
+panel · AI conversation summary · attachments · staff alerts · typing indicator and read receipts · lead capture and
+flows · ratings · transcripts by e-mail · moderation · reports · knowledge editor · AI token caps.
+
+- **AI**: providers OpenAI, Anthropic, Google Gemini built in, plus any OpenAI-compatible service (base URL + key);
+  merchant picks or types the model. Answers use merchant instructions, FAQ/knowledge entries, chosen website pages, and
+  live shop data through the merchant's Ecommerce token. Behaviour on AI failure (backup provider, message, handoff) is
+  a setting. AI disclosure label is the merchant's choice. Spending protection: daily/monthly token caps.
+- **Widget look**: launcher style and position (hide on pages), window style (floating, side panel, full screen on
+  mobile), branding (bot name, avatar, header, separate guest and signed-in welcome messages), theme + custom CSS.
+- **Handoff**: visitor asks, AI decides, keyword/rule triggers, office hours (outside hours collect a message).
+- **Guests**: message limit, optional name/contact capture, chat kept on sign-in, remembered for N days on the device.
+- **Signed-in visitors**: **Accounts sign-ins only** (Chat-specific; other products may also accept a merchant's own
+  login).
+- **Proactive**: idle nudge, page rules, exit intent.
+- **Inbox** (admin widget on the merchant's admin, via tickets): statuses and filters, assignment to the merchant's
+  users, internal notes, saved replies; context panel with visitor details, shop info, AI summary, ratings.
+- **Staff alerts**: e-mail / WhatsApp / SMS to a recipient list the merchant sets, sent via Notifications; unread badge.
+- **Attachments**: merchant sets allowed types and max size (capped at a safe maximum); files go straight to the
+  merchant's own storage.
+- **Widgets**: visitor chat (+ headless), inbox, knowledge editor, reports.
+- **Live updates**: based on where Chat is hosted; on our Vercel hosting that means smart back-off checking (no
+  websockets, no realtime key).
+- **Retention**: chats kept forever.
+- **Dashboard**: Overview (what's on, today's cost, setup checklist: database connected, AI key set, widget installed) ·
+  Features (read-only for merchants) · Settings · Connections (database + storage, AI providers primary/backup,
+  Ecommerce / Notifications / Accounts tokens) · Developers (docs per feature, widget snippets, ticket snippet, API).
+
 ### Still open
 
 - Each product dashboard's screens (decided per product before building it).
