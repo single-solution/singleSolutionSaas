@@ -76,6 +76,16 @@ and shoppers never use the Portal or our product dashboards: they only use the m
   token for API calls from the merchant's server/admin (merchant can reveal and regenerate it). Every domain is its
   own website; nothing is free (no test mode).
 - **Removing a product from a website** stops it and its charges; its settings are kept so re-adding restores them.
+- **Who hosts what**: we host the **Portal** (to manage merchants) and the **products** (the actual functionality, each
+  with its own documentation). The merchant hosts their **own website, admin, database and storage**. Merchants use a
+  product only through its **widgets or API**; features that are not active do not work, even if previously used.
+- **The product dashboard is setup only**: Overview, Features, Settings, Connections, Developers (docs per feature,
+  tokens, widget snippets, API reference, examples). It shows no business data. Opens for the website clicked in the
+  Portal, with a website switcher.
+- **Everyday data work happens on the merchant's own site/admin** (e.g. replying in the chat inbox, adding products,
+  handling orders and refunds, approving reviews, managing users and roles) through our **widgets** or the merchant's
+  own screens on our **API**, using the server token. The merchant's admin checks roles from Accounts before calling.
+- **Admins helping a merchant**: decided per product.
 
 ## 0.5 Credits
 
@@ -89,8 +99,19 @@ and shoppers never use the Portal or our product dashboards: they only use the m
 
 ## 0.6 Look and feel
 
-Friendly business style (like Stripe / Shopify admin), left sidebar, full width, spacious, no long scrolls (tabs and
-side panels), plain words, English (texts kept in files for later languages), light and dark.
+- **Brand**: Single Solution, indigo/violet accent, friendly business style (like Stripe / Shopify admin).
+- **Layout**: main left sidebar plus an **inner sidebar** on list sections (a searchable list of items for quick
+  switching; the selected item opens with a **header and tabs**). Full width, spacious, no long scrolls.
+- **Merchant menu**: Overview · Websites · Usage and credits · Account.
+- **Admin menu**: Overview · Merchants · Products · Credits and billing · Admins · Settings · Activity.
+- **Website page**: header, tabs (Products · Install and tokens · Usage); Products tab shows product cards (status,
+  daily cost, Open).
+- **Merchant page (admin)**: header (name, status, balance, actions) and tabs (Websites · Credits · Details · Activity).
+- **Lists**: tables with filters, sorting and bulk actions; search inside each list (no global search).
+- **Forms**: centred dialogs; a full page only when a form would still scroll a lot after a smarter layout.
+- **Home cards**: numbers with small 30-day charts.
+- **Product dashboards** look the same as the Portal.
+- Fully usable on phones and tablets. Light and dark (follows the device, with a switch). English, texts kept in files.
 
 ## 0.7 Flows
 
@@ -165,10 +186,102 @@ flowchart LR
 - Portal screens page by page (admin and merchant), and each product dashboard's screens.
 - Exact feature list and default hourly prices per product.
 - How the merchant's server mints short-lived tokens for our admin widgets on their own admin pages.
+- What triggers the grace period ending, products stopping and credit e-mails without scheduled jobs (check on read, or
+  one daily job).
+- How merchants test locally now that there is no test mode.
+- Keep or drop: website transfer, admin notes on merchants, Chat extras (flows, knowledge base, lead capture, surveys,
+  transcripts, moderation), Accounts extras.
+- Live data: reset `ss_portal`/`ss_chatbot` (if test data only) or migrate.
 
 ## 0.9 Conflicts with the current build and deployment
 
-_To be filled from a code audit (in progress)._
+From a read-only audit of the whole repo (2026-10-07, every conflict checked against the code). **Part 0 changes almost
+every part of today's build.** The Portal keeps its sign-in, credit ledger, product connection and dashboard sign-on;
+plans, per-use billing, settings, merchants' keys, the event hub and the widget loader leave the Portal (moved into
+products or dropped). The 17 products become 6 (Notifications, Payments, Growth are new).
+
+### Portal
+
+| Area                                             | Today                                                                        | Change                                                                     |
+| ------------------------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Merchant sign-up                                 | Public sign-up page (live)                                                   | Remove; admin creates every merchant (setup link exists)                   |
+| Team members                                     | Invites, roles, per-website grants, ownership transfer                       | Remove; one login per merchant                                             |
+| One login, many merchants                        | One e-mail can own several merchants (switcher)                              | One login = one merchant; split shared logins                              |
+| Suspend                                          | Only pauses billing/products; merchant can still sign in and open dashboards | Block sign-in and launches, revoke sessions                                |
+| Merchant details                                 | Business name only                                                           | Add owner name, e-mail, phone, address/country; merchant can edit          |
+| Websites and products                            | Merchants add websites and subscribe themselves                              | Admin only                                                                 |
+| Test websites                                    | Every website has a test twin; test keys work on localhost                   | Remove (decide how merchants test locally)                                 |
+| Website settings (time zone, language, currency) | Stored in the Portal, sent to products                                       | Remove (business.json + Ecommerce)                                         |
+| Tokens                                           | Per website, scoped by hand, subdomains allowed, secret shown once           | Per website × product; exact domain; revealable secret                     |
+| Install code                                     | Portal stores widget files in a bucket and builds one script per website     | Each product serves its own script; remove the loader, bucket, `STORAGE_*` |
+| Feature switches and settings                    | In the Portal (layers, overrides, policy)                                    | Move into product dashboards                                               |
+| Signed document to products                      | Big document (settings, prices, key status, limits)                          | Small status per website × product (active, grace, stopped, removed)       |
+| Merchant's own keys                              | Portal vault; products fetch at runtime                                      | Move into each product dashboard (encrypted there)                         |
+| Sign-in provider approval                        | Products ask, merchant approves in Portal                                    | Remove; products trust Accounts                                            |
+| Plans, trials, per-use charges, spend cap        | All present                                                                  | Remove; per-feature hourly prices reported by products                     |
+| Running out of credits                           | Stops at zero, no grace, no warnings                                         | Grace period (admin setting) + banner + e-mails                            |
+| Adding credits                                   | Add / adjustment / refund with a note                                        | One receipt-style "Add credits" (amount, method, reference)                |
+| Removing a product                               | Final; settings lost                                                         | Keep settings so re-adding restores                                        |
+| Usage view                                       | Per website, per-use units                                                   | Per product × website × day × feature                                      |
+| Event hub, shopper events                        | Products send events through the Portal                                      | Remove (shopper events → Growth); keep Portal→product notices              |
+| Admin roles                                      | superadmin, admin, support, finance                                          | Owner, Support, Finance (migrate in the same deploy)                       |
+| Two-step sign-in                                 | Cannot be turned off once on                                                 | Optional for everyone, with a turn-off                                     |
+| Opening a product                                | Same tab, from a subscription page                                           | New tab, from website page; admin "Open as admin" + switcher               |
+| Website transfer, merchant notes                 | Exist                                                                        | Not in Part 0 (owner decides)                                              |
+| Menus, wording, texts                            | Old menus, "staff", texts inline                                             | New menus, plain words, "admins", texts in files                           |
+
+### Products
+
+| Area                                         | Today                                                            | Change                                                                                                                               |
+| -------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 15 shop products                             | 13 apps + 2 packs (~94k lines), separate databases               | Merge into one Ecommerce; one catalog, one order record, one API                                                                     |
+| Placing an order                             | Checkout calls Coupons/Deals/Loyalty/Catalog over the internet   | One database step inside Ecommerce                                                                                                   |
+| Duplicates                                   | Item data copied up to 10 times; rules built 2–3 times           | One of each                                                                                                                          |
+| Sending messages                             | Orders, after-sales, reviews, alerts, Signups send directly      | Through Notifications                                                                                                                |
+| Settings and keys                            | Read-only, from the Portal                                       | Editable in each product dashboard; keys stored encrypted                                                                            |
+| Plans, trials, test mode, per-use            | In all 17 product files                                          | Remove; add a price screen (admin) and feature/price reports                                                                         |
+| Chat                                         | Chatbot: no shop tools, text only, polling only, no staff alerts | Add shop tools (Ecommerce token), attachments, realtime option, alerts; decide extras (flows, knowledge, leads, surveys, moderation) |
+| Accounts                                     | Signups: codes and magic links, shoppers only                    | Add password and Google/Apple/Facebook, users' roles and rules, notes, addresses                                                     |
+| Notifications, Payments, Growth              | Do not exist (pieces scattered)                                  | Build new                                                                                                                            |
+| Product dashboards                           | Top tabs, no global defaults or prices, no admin switcher        | Left sidebar, Overview · Features · Settings · Connections · Developers, admin prices and switcher                                   |
+| Admin widgets for merchant admins            | None (all widgets are shopper-facing)                            | Add (needs open item: short-lived tokens)                                                                                            |
+| Renames (Chatbot → Chat, Signups → Accounts) | Names built into IDs and data names                              | Keep old IDs or pin old data names                                                                                                   |
+
+### Shared kit
+
+Remove plans, trials, per-use reporting, test mode, the loader/pack model and the event-hub rules. Add the feature/price
+report, a status document, a local settings store, an encrypted key store, the pasted-token client, a `business.json`
+reader, per website × product tokens, data-rights and log-forwarding routes, admin switcher and roles. Rename "element"
+→ "feature" and "subscription" → "product on website".
+
+### Live deployment and data
+
+- **Portal** env shrinks to `MONGODB_URI` (remove `STORAGE_*`, delete the bucket). **Chat** keeps `MONGODB_URI` +
+  `CONNECT_SECRET`; each new product gets its own. Function counts unchanged (Portal 5, each product 2).
+- **Every existing key stops working**; merchants get new tokens per website × product and re-paste scripts. The old
+  `/w/<website>/loader.js` breaks once the loader is removed.
+- **Live Chatbot** breaks unless Portal and Chat deploy together or the Portal serves the old document for a while;
+  merchants re-enter database and AI keys in the Chat dashboard.
+- **Data**: many `ss_portal` collections become unused; plans and old product IDs sit in subscriptions; the ledger is
+  hash-chained (old entries stay readable). **Cheapest if Atlas holds only test data: reset `ss_portal` and
+  `ss_chatbot`, recreate the first admin, re-add products.**
+- Preview deploys must not share the production database. An old untracked root `.env` holds a `MONGODB_URI`: change
+  that password if it is live, and delete the file.
+- Vercel Hobby is for non-commercial use: move hosting before charging merchants.
+
+### Suggested build order (keeps something working at each step)
+
+1. Protect the live system (production-only database variables, separate preview databases, remove the stray `.env`).
+2. Portal people and access (no sign-up, no teams, admin-only websites/products, new admin roles, suspend blocks sign-in).
+3. Portal credits (receipt-style add, grace period with e-mails, no spend cap/trial, new usage view).
+4. New shared kit beside the old one.
+5. Portal supports old and new (feature/price reports, status document, new tokens).
+6. Move the live Chatbot to Chat on the new kit.
+7. Build products in order: Notifications → Accounts → Payments → Ecommerce → Growth.
+8. Merchants switch to the new scripts and tokens; then remove the loader, packs, bucket.
+9. Remove the remaining old Portal parts (key vault, event hub, per-use billing, settings module).
+10.   Portal and product screens (can run alongside any step). 11. Tests, CI, docs. 12. Before charging: move hosting,
+      set up mail, final domains for Payments and Accounts.
 
 ---
 
