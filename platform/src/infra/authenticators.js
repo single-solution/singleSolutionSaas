@@ -3,13 +3,13 @@
  *
  * | mode         | credential                                   | verified by                                              |
  * | ------------ | -------------------------------------------- | -------------------------------------------------------- |
- * | `staff`      | `__Host-ss_staff` session cookie             | session store; MFA required unless the route says `mfa: false` |
+ * | `admin`      | `__Host-ss_admin` session cookie             | session store; a pending two-step setup only reaches `mfa: false` routes |
  * | `merchant`   | `__Host-ss_merchant` session cookie          | session store                                            |
  * | `websiteKey` | `Authorization: Bearer pk_…/sk_…`            | `verifyWebsiteKey` (website-key JWKS) + revocation port; `originAllowed` for pk_ |
- * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = the request origin) |
+ * | `product`    | `Authorization: Bearer <client assertion>`   | `verifyAssertion` (app keys port, shared replay store, aud = `PORTAL_URL`) |
  *
- * Ports (provided by modules, see `modules/README.md`): `sessionActor(session) → Actor | null` (default: roles stored
- * in the session), `appKeys(appId) → KeyResolver | null` (default: none — every assertion is refused) and
+ * Ports (provided by modules, see `modules/README.md`): `sessionActor(session) → Actor | null` (default: the session
+ * without a role), `appKeys(appId) → KeyResolver | null` (default: none — every assertion is refused) and
  * `websiteKeyRevoked(claims, rawKey) → boolean` (default: none — website keys fail closed with 503). The raw key is
  * passed so the provider can also check the stored HMAC of `sk_` keys. `productCalled(appId)` (optional) runs after
  * every request a product made.
@@ -21,7 +21,6 @@
 import { isProtocolError, originAllowed, verifyAssertion, verifyWebsiteKey } from '@ss/protocol';
 import { actorFromSession, readCookie, sessionCookieName } from './auth.js';
 import { isProblem, problem } from './http.js';
-import { requestOrigin } from './request-scope.js';
 
 /** @typedef {import('./http.js').Authenticator} Authenticator */
 /** @typedef {import('./http.js').AuthMode} AuthMode */
@@ -130,29 +129,37 @@ export const createWebsiteKeyVerifier = ({ keyResolver, revoked, now = Date.now 
  *   verifyWebsiteKey: WebsiteKeyVerifier,
  *   replayStore: ReplayStore,
  *   ports?: AuthPorts,
+ *   portalUrl: string,
+ *   cookieSecure: boolean,
  *   now?: () => number,
- * }} options
+ * }} options `portalUrl` (`PORTAL_URL`) is the audience of client assertions; `cookieSecure` names the cookies
  * @returns {Record<Exclude<AuthMode, 'public'>, Authenticator>}
  */
-export const createAuthenticators = ({ sessions, verifyWebsiteKey: verifyKey, replayStore, ports = {}, now = Date.now }) => {
+export const createAuthenticators = ({
+	sessions,
+	verifyWebsiteKey: verifyKey,
+	replayStore,
+	ports = {},
+	portalUrl,
+	cookieSecure,
+	now = Date.now,
+}) => {
 	const sessionActor = ports.sessionActor ?? actorFromSession;
 
 	/**
-	 * @param {'staff' | 'merchant'} kind
+	 * @param {'admin' | 'merchant'} kind
 	 * @returns {Authenticator}
 	 */
 	const sessionAuth = (kind) => async (request, route) => {
-		const token = readCookie(
-			request.headers.get('cookie'),
-			sessionCookieName(kind, requestOrigin(request).startsWith('https:')),
-		);
+		const token = readCookie(request.headers.get('cookie'), sessionCookieName(kind, cookieSecure));
 		if (token === undefined || token === '') return null;
 		const session = await sessions.get(token);
 		if (!session || session.kind !== kind) return problem('unauthorized', 'The session has expired. Sign in again.');
-		if (kind === 'staff' && !session.mfa && route.mfa !== false)
-			return problem('forbidden', 'Two-factor authentication is required.');
 		const actor = await sessionActor(session);
-		if (!actor) return problem('unauthorized', 'The account is no longer active.');
+		if (!actor) return problem('unauthorized', 'The session has ended. Sign in again.');
+		// Require two-step for admins (PLAN 0.2): until it is set up, only the setup routes open
+		if (actor.twoStepRequired && route.mfa !== false)
+			return problem('two_step_required', 'Set up two-step sign-in before anything else.');
 		return { ok: true, actor, mode: kind, cookie: true, session };
 	};
 
@@ -194,7 +201,7 @@ export const createAuthenticators = ({ sessions, verifyWebsiteKey: verifyKey, re
 			const { appId } = await verifyAssertion({
 				token,
 				keyResolverForApp: appKeys,
-				audience: requestOrigin(request),
+				audience: portalUrl,
 				replayStore,
 				now,
 			});
@@ -204,5 +211,5 @@ export const createAuthenticators = ({ sessions, verifyWebsiteKey: verifyKey, re
 		}
 	};
 
-	return Object.freeze({ staff: sessionAuth('staff'), merchant: sessionAuth('merchant'), websiteKey, product });
+	return Object.freeze({ admin: sessionAuth('admin'), merchant: sessionAuth('merchant'), websiteKey, product });
 };

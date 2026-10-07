@@ -36,7 +36,7 @@ describe('audit', () => {
 		const { repo, docs } = fakeRepo();
 		const audit = createAudit({ repo, now: () => 0 });
 		const id = await audit.record({
-			actor: { type: 'merchant_user', id: 'usr_1', roles: ['owner'] },
+			actor: { type: 'merchant', id: MERCHANT, merchantId: MERCHANT },
 			action: 'connector.updated',
 			target: { type: 'connector', id: 'con_1', merchantId: MERCHANT, websiteId: 'web_1' },
 			before: { uri: 'mongodb://u:p@h/db' },
@@ -48,7 +48,7 @@ describe('audit', () => {
 		expect(docs[0]).toEqual({
 			_id: id,
 			at: new Date(0),
-			actor: { type: 'merchant_user', id: 'usr_1' },
+			actor: { type: 'merchant', id: MERCHANT },
 			action: 'connector.updated',
 			target: { type: 'connector', id: 'con_1', websiteId: 'web_1' },
 			merchantId: MERCHANT,
@@ -72,12 +72,12 @@ describe('audit', () => {
 		await expect(
 			audit.record({ actor: /** @type {any} */ ({ type: 'website', id: 'k' }), action: 'a.b', target }),
 		).rejects.toThrow(/actor type/);
-		await expect(audit.record({ actor: /** @type {any} */ ({ type: 'staff' }), action: 'a.b', target })).rejects.toThrow(
+		await expect(audit.record({ actor: /** @type {any} */ ({ type: 'admin' }), action: 'a.b', target })).rejects.toThrow(
 			/actor/,
 		);
-		await expect(audit.record({ actor: { type: 'staff', id: 's' }, action: 'Created', target })).rejects.toThrow(/action/);
+		await expect(audit.record({ actor: { type: 'admin', id: 's' }, action: 'Created', target })).rejects.toThrow(/action/);
 		await expect(
-			audit.record({ actor: { type: 'staff', id: 's' }, action: 'a.b', target: /** @type {any} */ ({ id: 'x' }) }),
+			audit.record({ actor: { type: 'admin', id: 's' }, action: 'a.b', target: /** @type {any} */ ({ id: 'x' }) }),
 		).rejects.toThrow(/target/);
 	});
 
@@ -96,7 +96,7 @@ describe('audit', () => {
 				merchantId: MERCHANT,
 				'target.id': 'con_1',
 				'actor.id': 'usr_1',
-				$or: [{ at: { $lt: new Date(5) } }, { at: new Date(5), _id: { $lt: 'aud_x' } }],
+				$and: [{ $or: [{ at: { $lt: new Date(5) } }, { at: new Date(5), _id: { $lt: 'aud_x' } }] }],
 			},
 			sort: { at: -1, _id: -1 },
 			limit: 200,
@@ -106,6 +106,27 @@ describe('audit', () => {
 		expect(fake.last.limit).toBe(50);
 		await audit.list({ merchantId: null, limit: 0 });
 		expect(fake.last).toMatchObject({ filter: { merchantId: null }, limit: 1 });
+		await audit.list({ from: new Date(10), to: new Date(20) });
+		expect(fake.last.filter).toEqual({ at: { $gte: new Date(10), $lt: new Date(20) } });
+		await audit.list({ to: new Date(20) });
+		expect(fake.last.filter).toEqual({ at: { $lt: new Date(20) } });
+	});
+
+	it('keeps the name of an admin actor (Activity names removed admins), never of other actors', async () => {
+		const { repo, docs } = fakeRepo();
+		const audit = createAudit({ repo, now: () => 0 });
+		await audit.record({ actor: { type: 'admin', id: 'adm_1', name: 'Ada' }, action: 'a.b', target: { type: 't', id: 'x' } });
+		await audit.record({ actor: { type: 'admin', id: 'adm_2', name: '' }, action: 'a.b', target: { type: 't', id: 'x' } });
+		await audit.record({
+			actor: /** @type {any} */ ({ type: 'merchant', id: MERCHANT, name: 'Shop' }),
+			action: 'a.b',
+			target: { type: 't', id: 'x' },
+		});
+		expect(docs.map((d) => d.actor)).toEqual([
+			{ type: 'admin', id: 'adm_1', name: 'Ada' },
+			{ type: 'admin', id: 'adm_2' },
+			{ type: 'merchant', id: MERCHANT },
+		]);
 	});
 });
 
@@ -129,7 +150,7 @@ describe('audit (MongoDB)', () => {
 		await Promise.all(
 			Array.from({ length: 6 }, (_, i) =>
 				audit.record({
-					actor: { type: 'staff', id: 'stf_1' },
+					actor: { type: 'admin', id: 'stf_1' },
 					action: 'thing.changed',
 					target: { type: 'thing', id: `t_${i}`, merchantId: i % 2 === 0 ? null : MERCHANT },
 					after: { i, nested: { at: new Date(0), skip: undefined } },

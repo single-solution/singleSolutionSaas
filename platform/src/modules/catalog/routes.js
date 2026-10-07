@@ -65,7 +65,7 @@ export const catalogRoutes = (service, deps) => [
 		method: 'POST',
 		path: '/v1/merchants/:merchantId/apps/:appId/launch',
 		auth: 'merchant',
-		permission: 'subscriptions.read',
+		permission: 'dashboards.open',
 		resource: (ctx) => {
 			const body = /** @type {any} */ (ctx.body);
 			return {
@@ -92,7 +92,7 @@ export const catalogRoutes = (service, deps) => [
 				kind: 'merchant',
 				appId,
 				subject: actor.id,
-				user: { id: actor.id, roles: [...(actor.roles ?? [])] },
+				user: { id: actor.id, roles: [] },
 				scope: { merchantId, ...(websiteId ? { websiteId } : {}) },
 				...(subscriptions ? { subscriptions } : {}),
 				requestId: ctx.requestId,
@@ -106,8 +106,8 @@ export const catalogRoutes = (service, deps) => [
 	defineRoute({
 		method: 'POST',
 		path: '/v1/admin/apps/connect',
-		auth: 'staff',
-		permission: 'platform.apps.manage',
+		auth: 'admin',
+		permission: 'products.manage',
 		idempotent: true, // the stored response never carries the connect secret
 		rateLimit: { limit: 20, windowMs: 60_000 },
 		handler: async (ctx) => {
@@ -118,8 +118,8 @@ export const catalogRoutes = (service, deps) => [
 	defineRoute({
 		method: 'POST',
 		path: '/v1/admin/packs',
-		auth: 'staff',
-		permission: 'platform.apps.manage',
+		auth: 'admin',
+		permission: 'products.manage',
 		idempotent: true,
 		maxBodyBytes: 1024 * 1024,
 		rateLimit: { limit: 30, windowMs: 60_000 },
@@ -131,8 +131,8 @@ export const catalogRoutes = (service, deps) => [
 	defineRoute({
 		method: 'GET',
 		path: '/v1/admin/apps',
-		auth: 'staff',
-		permission: 'platform.apps.read',
+		auth: 'admin',
+		permission: 'products.read',
 		handler: async (ctx) => {
 			const page = paginate({ cursor: ctx.query.cursor, limit: ctx.query.limit, url: ctx.request.url });
 			const status = ctx.query.status ? ctx.query.status.split(',') : undefined;
@@ -152,15 +152,15 @@ export const catalogRoutes = (service, deps) => [
 	defineRoute({
 		method: 'GET',
 		path: '/v1/admin/apps/:appId',
-		auth: 'staff',
-		permission: 'platform.apps.read',
+		auth: 'admin',
+		permission: 'products.read',
 		handler: async (ctx) => ok(await service.appDetail(/** @type {string} */ (ctx.params.appId))),
 	}),
 	defineRoute({
 		method: 'GET',
 		path: '/v1/admin/apps/:appId/versions/:version',
-		auth: 'staff',
-		permission: 'platform.apps.read',
+		auth: 'admin',
+		permission: 'products.read',
 		handler: async (ctx) => {
 			const version = Number(ctx.params.version);
 			if (!Number.isSafeInteger(version) || version < 1)
@@ -171,8 +171,8 @@ export const catalogRoutes = (service, deps) => [
 	defineRoute({
 		method: 'POST',
 		path: '/v1/admin/apps/:appId/status',
-		auth: 'staff',
-		permission: 'platform.apps.manage',
+		auth: 'admin',
+		permission: 'products.manage',
 		handler: async (ctx) =>
 			ok(
 				await service.setStatus({
@@ -185,20 +185,19 @@ export const catalogRoutes = (service, deps) => [
 	defineRoute({
 		method: 'POST',
 		path: '/v1/admin/apps/:appId/launch',
-		auth: 'staff',
-		permission: 'platform.launch.admin',
+		auth: 'admin',
+		permission: 'dashboards.open',
 		rateLimit: { limit: 60, windowMs: 60_000 },
 		handler: async (ctx) => {
 			const input = valid(parseStaffLaunch(ctx.body));
 			const actor = /** @type {Actor} */ (ctx.actor);
-			// app-wide admin launches (scope.all) need platform.launch.admin AND the superadmin or admin staff role
-			if (input.all && !(actor.roles ?? []).some((role) => role === 'superadmin' || role === 'admin'))
-				return problem('forbidden', 'App-wide admin launches need the superadmin or admin role.');
+			// Open as admin with no website (scope.all) is Owner only (PLAN 0.2 rights table: Products row)
+			if (input.all) ctx.authorize('products.manage', {});
 			const launch = await service.issueLaunch({
 				kind: 'admin',
 				appId: /** @type {string} */ (ctx.params.appId),
 				subject: actor.id,
-				user: { id: actor.id, roles: [...(actor.roles ?? [])] },
+				user: { id: actor.id, roles: actor.role ? [actor.role] : [] },
 				scope: {
 					...(input.all ? { all: /** @type {const} */ (true) } : {}),
 					...(input.merchantId ? { merchantId: input.merchantId } : {}),

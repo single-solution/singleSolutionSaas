@@ -27,7 +27,7 @@ import {
 import { Link } from '../../link.js';
 import { adminFetch, useAdminResource } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, Crumbs, IdChip, staffCan } from './common.js';
+import { AdminProblem, Crumbs, IdChip, adminCan } from './common.js';
 import { LayerEditor, LayerHistory } from './layer.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -109,7 +109,7 @@ export const effectiveRows = (effective) =>
 		.sort((a, b) => a.key.localeCompare(b.key));
 
 /**
- * @param {any} props loader result of `loadSubscription` plus `staff`
+ * @param {any} props loader result of `loadSubscription` plus `admin`
  */
 export function SubscriptionAdminView(props) {
 	const toast = useToast();
@@ -130,8 +130,8 @@ export function SubscriptionAdminView(props) {
 		return (
 			<AdminProblem problem={props.problem} back={{ href: adminRoutes.subscriptions(), label: 'Back to subscriptions' }} />
 		);
-	const { subscription: sub, app, manifest, staff } = props;
-	const canWrite = staffCan(staff, 'platform.config.write');
+	const { subscription: sub, app, manifest, admin } = props;
+	const canWrite = adminCan(admin, 'defaults.write');
 	const layers = overview.data?.layers ?? { admin: { elements: {}, features: {} } };
 	const refresh = async () => {
 		await Promise.all([overview.reload(), adminHistory.reload(), websiteHistory.reload()]);
@@ -284,7 +284,7 @@ export function SubscriptionAdminView(props) {
 }
 
 /**
- * @param {any} props loader result of `loadPolicies` plus `staff`
+ * @param {any} props loader result of `loadPolicies` plus `admin`
  */
 export function PoliciesView(props) {
 	const toast = useToast();
@@ -294,8 +294,8 @@ export function PoliciesView(props) {
 	const history = useAdminResource(appId ? adminApi.platformHistory(appId) : null, ok ? props.history : null);
 	const [version, setVersion] = useState(0);
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.apps(), label: 'Back to apps' }} />;
-	const { app, manifest, staff } = props;
-	const canWrite = staffCan(staff, 'platform.config.write');
+	const { app, manifest, admin } = props;
+	const canWrite = adminCan(admin, 'defaults.write');
 	const refresh = async () => {
 		await Promise.all([layer.reload(), history.reload()]);
 		setVersion((v) => v + 1);

@@ -1,9 +1,8 @@
 /**
  * End-to-end smoke of the Admin Console: boots the Portal in-process (every module, MongoMemory), creates the first
- * admin and signs in through the staff flow (password → optional TOTP enrolment, codes computed here → MFA verify on
- * the next sign-in), seeds a merchant with a website, an active pack (descriptor + assets uploaded) and a
- * subscription with admin overrides, then server-renders every admin page (renderToString) and checks that each
- * renders without errors or React warnings.
+ * admin (an Owner) on the one sign-in page and signs in again with two-step, seeds a merchant with a website, an
+ * active pack (descriptor + assets uploaded) and a product on the website with admin overrides, then server-renders
+ * every admin page (renderToString) and checks that each renders without errors or React warnings.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
@@ -18,16 +17,12 @@ import * as loaders from '../../src/console/loaders.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi, adminRoutes, query } from '../../src/console/admin/paths.js';
 import { AdminShell, adminSections } from '../../src/console/admin/views/shell.js';
-import {
-	StaffForgotPasswordView,
-	StaffLoginView,
-	StaffMfaEnrol,
-	StaffMfaVerify,
-	StaffResetPasswordView,
-	safeAdminNext,
-} from '../../src/console/admin/views/auth.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
-import { WebsitesView } from '../../src/console/admin/views/websites.js';
+import { OverviewView } from '../../src/console/admin/views/overview.js';
+import { ActivityView } from '../../src/console/admin/views/activity.js';
+import { AdminsView } from '../../src/console/admin/views/admins.js';
+import { MyAccountView } from '../../src/console/admin/views/account.js';
+import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { AppView, AppsView } from '../../src/console/admin/views/apps.js';
 import {
 	PoliciesView,
@@ -36,11 +31,11 @@ import {
 	effectiveRows,
 } from '../../src/console/admin/views/config.js';
 import { FinanceView, LedgerView } from '../../src/console/admin/views/finance.js';
-import { AuditView, ConnectorsAdminView, checkSummary } from '../../src/console/admin/views/operations.js';
-import { StaffView } from '../../src/console/admin/views/staff.js';
+import { ConnectorsAdminView, checkSummary } from '../../src/console/admin/views/operations.js';
 import { layerChange, layerValues } from '../../src/console/admin/views/layer.js';
-import { parseSignedCredits, staffCan } from '../../src/console/admin/views/common.js';
-import { PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../helpers.js';
+import { adminCan, parseSignedCredits } from '../../src/console/admin/views/common.js';
+import { createSystemStore } from '../../src/infra/system.js';
+import { ENCRYPTION_KEY, PORTAL_URL, createClock, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
 vi.setConfig({ testTimeout: 90_000, hookTimeout: 120_000 });
 
@@ -209,8 +204,8 @@ const text = (html) =>
 		.replace(/\s+/g, ' ');
 
 /**
- * Boot a Portal with a capturing mailer, create the first admin and sign in with TOTP (enrolment, then a second
- * sign-in with the MFA challenge); create a merchant with a website through the merchant API.
+ * Boot a Portal with a capturing mailer, create the first admin (an Owner) on the sign-in page, turn two-step on and
+ * sign in again with a code; create a merchant (setup link) with a website.
  * @param {string} name database name
  */
 const setup = async (name) => {
@@ -224,7 +219,15 @@ const setup = async (name) => {
 	// the Portal runs on an injected clock (starting at the wall time, so signed artefacts stay valid): time only moves
 	// when a test advances it, and expiry assertions are exact
 	const clock = createClock(Date.now());
-	const portal = createPortal({ config, db, modules, logger, now: clock.now });
+	const portal = createPortal({
+		config,
+		db,
+		modules,
+		logger,
+		now: clock.now,
+		system: createSystemStore(db, { encryptionKey: ENCRYPTION_KEY, now: clock.now }),
+		background: { mode: 'on', fallback: (task) => void task() },
+	});
 	await portal.ensureIndexes();
 	/** @param {string} to @param {string} template */
 	const tokenOf = (to, template) => {
@@ -232,57 +235,54 @@ const setup = async (name) => {
 		return decodeURIComponent(String(message?.data.link).split('#token=')[1] ?? '');
 	};
 
-	// ------------------------------------------------------------------ staff: first admin, e-mail, TOTP enrolment
+	// ------------------------------------------------------------------ the first admin, two-step, a second sign-in
 	const staff = client(portal);
 	const password = 'root password 123!';
-	const created = await staff.api.post(adminApi.firstAdmin(), { password });
-	expect(created).toMatchObject({ ok: true, status: 201, data: { staff: { login: 'admin', email: null } } });
-	expect((await staff.api.post(adminApi.firstAdmin(), { password })).status).toBe(409);
-	expect((await staff.api.request('PATCH', adminApi.me(), { email: 'root@ss.test' })).ok).toBe(true);
-	const login = await staff.api.post(adminApi.login(), { email: 'admin', password });
-	// no MFA until enrolled: the console works at once (and asks to turn two-factor sign-in on)
-	expect(login).toMatchObject({ ok: true, data: { status: 'ok' } });
-	expect(await admin.loadStaffSession(staff.api)).toMatchObject({ ok: true, staff: { mfa: { enabled: false } } });
-	const enrol = await staff.api.post(adminApi.mfaEnrol());
-	const secret = enrol.ok ? enrol.data.secret : '';
-	const confirmed = await staff.api.post(adminApi.mfaConfirm(), { code: totpCode(secret, clock.now()) });
+	const first = { name: 'Rita Root', email: 'root@ss.test', password };
+	const created = await staff.api.post('/v1/auth/first-admin', first);
+	expect(created).toMatchObject({ ok: true, status: 201, data: { admin: { email: 'root@ss.test', role: 'owner' } } });
+	expect((await staff.api.post('/v1/auth/first-admin', first)).status).toBe(409);
+	const started = await staff.api.post('/v1/me/two-step/start');
+	const secret = started.ok ? started.data.secret : '';
+	const confirmed = await staff.api.post('/v1/me/two-step/confirm', { code: totpCode(secret, clock.now()) });
 	expect(confirmed.ok && confirmed.data.recoveryCodes.length).toBe(10);
-	expect((await admin.loadStaffSession(staff.api)).ok).toBe(true);
-	// a second sign-in asks for the TOTP code (next 30 s step: codes are single use)
-	expect((await staff.api.post(adminApi.logout())).ok).toBe(true);
-	const again = await staff.api.post(adminApi.login(), { email: 'root@ss.test', password });
-	expect(again).toMatchObject({ ok: true, data: { status: 'mfa_required' } });
-	const verified = await staff.api.post(adminApi.mfaVerify(), { code: totpCode(secret, clock.now() + 30_000) });
+	expect((await staff.api.post(adminApi.signOut())).ok).toBe(true);
+	const again = await staff.api.post('/v1/auth/sign-in', { email: 'root@ss.test', password });
+	expect(again).toMatchObject({ ok: true, data: { status: 'two_step_required' } });
+	const verified = await staff.api.post('/v1/auth/sign-in/two-step', {
+		challenge: again.ok ? again.data.challenge : '',
+		code: totpCode(secret, clock.now() + 30_000),
+	});
 	expect(verified.ok).toBe(true);
-	const session = await admin.loadStaffSession(staff.api);
-	if (!session.ok) throw new Error('no staff session');
-	// the staff cookie is separate from merchant sessions
-	expect([...staff.jar.keys()]).toEqual([sessionCookieName('staff', true)]);
+	const session = await admin.loadAdminSession(staff.api);
+	if (!session.ok) throw new Error('no admin session');
+	// the admin cookie is separate from merchant sessions
+	expect([...staff.jar.keys()]).toEqual([sessionCookieName('admin', true)]);
 
-	// ------------------------------------------------------------------ merchant with a website
+	// ------------------------------------------------------------------ a merchant with a website
 	const merchant = client(portal);
 	expect(
-		(
-			await merchant.api.post('/v1/auth/merchant/signup', {
-				email: 'owner@shop.test',
-				password: 'correct horse battery',
-				merchantName: 'Shop & Co',
-			})
-		).ok,
+		(await staff.api.post(adminApi.createMerchant(), { name: 'Shop & Co', ownerName: 'Sam Seller', email: 'owner@shop.test' }))
+			.ok,
 	).toBe(true);
 	expect(
-		(await merchant.api.post('/v1/auth/merchant/verify-email', { token: tokenOf('owner@shop.test', 'verify_email') })).ok,
+		(
+			await merchant.api.post('/v1/auth/set-password', {
+				token: tokenOf('owner@shop.test', 'merchant_setup'),
+				password: 'correct horse battery',
+			})
+		).ok,
 	).toBe(true);
 	const me = await loaders.loadSession(merchant.api);
 	if (!me.ok) throw new Error('no merchant session');
 	const merchantId = /** @type {string} */ (me.merchantId);
-	const added = await merchant.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
+	const added = await staff.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
 	const websiteId = added.ok ? added.data.website.websiteId : '';
-	return { portal, clock, config, db, mail, tokenOf, staff, staffMember: session.staff, merchant, me, merchantId, websiteId };
+	return { portal, clock, config, db, mail, tokenOf, staff, staffMember: session.admin, merchant, me, merchantId, websiteId };
 };
 
 describe('admin console smoke', () => {
-	it('signs staff in with TOTP and server-renders every admin page', async () => {
+	it('signs the Owner in with two-step and server-renders every admin page', async () => {
 		const { portal, staff, staffMember, merchant, merchantId, websiteId } = await setup('admin_smoke');
 
 		// ------------------------------------------------------------------ catalog: a pack, uploaded and activated
@@ -303,7 +303,7 @@ describe('admin console smoke', () => {
 				})
 			).ok,
 		).toBe(true);
-		const subscribed = await merchant.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
+		const subscribed = await staff.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
 			appId,
 			planCode: 'basic',
 		});
@@ -319,59 +319,85 @@ describe('admin console smoke', () => {
 			reason: 'default copy',
 		});
 		expect(policy.ok).toBe(true);
-		expect(
-			(await staff.api.post(adminApi.staffList(), { email: 'help@ss.test', roles: ['support'], name: 'Help desk' })).ok,
-		).toBe(true);
+		expect((await staff.api.post(adminApi.admins(), { email: 'help@ss.test', role: 'support' })).ok).toBe(true);
 
 		// ------------------------------------------------------------------ frame
 		const shell = text(
 			ssr(
-				<AdminShell staff={staffMember}>
+				<AdminShell admin={staffMember} branding={{ name: 'Single Solution', accent: '#4f46e5' }}>
 					<p>child</p>
 				</AdminShell>,
 			),
 		);
-		expect(shell).toContain('Admin console');
-		expect(shell).toContain('root@ss.test');
-		expect(shell).toContain('Staff');
+		expect(shell).toContain('Rita Root');
+		expect(shell).toContain('Owner');
+		for (const item of [
+			'Overview',
+			'Merchants',
+			'Products',
+			'Credits and billing',
+			'Admins',
+			'Settings',
+			'Activity',
+			'My account',
+		])
+			expect(shell).toContain(item);
 		expect(shell).toContain('child');
+		// Require two-step for admins: the frame shows only the setup
+		const pending = text(
+			ssr(
+				<AdminShell admin={staffMember} twoStepRequired>
+					<p>hidden</p>
+				</AdminShell>,
+			),
+		);
+		expect(pending).toContain('Set up two-step sign-in');
+		expect(pending).not.toContain('hidden');
+
+		const overview = await admin.loadOverview(staff.api);
+		const overviewHtml = text(ssr(<OverviewView {...overview} admin={staffMember} />));
+		expect(overviewHtml).toContain('E-mail sending is not set up');
+		expect(overviewHtml).toContain('Recent activity');
 
 		// ------------------------------------------------------------------ every page
 		const merchants = await admin.loadMerchants(staff.api, {});
-		expect(text(ssr(<MerchantsView {...merchants} />))).toContain('Shop & Co');
-		for (const q of [merchantId, 'shop.example.com', 'shop', 'nobody.example.com'])
-			ssr(<MerchantsView {...await admin.loadMerchants(staff.api, { q, status: 'active' })} />);
-		expect(await admin.loadMerchants(staff.api, { q: 'shop.example.com' })).toMatchObject({
-			mode: 'domain',
-			matches: [{ merchantId }],
-		});
-		const byName = await admin.loadMerchants(staff.api, { q: 'Shop' });
-		expect(byName).toMatchObject({ mode: 'search' });
-		expect(byName.ok && byName.page.items).toHaveLength(1);
+		expect(text(ssr(<MerchantsView {...merchants} admin={staffMember} />))).toContain('Shop & Co');
+		for (const q of ['shop.example.com', 'shop', 'owner@shop', 'nobody.example.com'])
+			ssr(<MerchantsView {...await admin.loadMerchants(staff.api, { q, status: 'active' })} admin={staffMember} />);
+		const byDomain = await admin.loadMerchants(staff.api, { q: 'shop.example.com' });
+		expect(byDomain.ok && byDomain.page.items.map((m) => m.merchantId)).toEqual([merchantId]);
 		const byEmail = await admin.loadMerchants(staff.api, { q: 'owner@shop' });
 		expect(byEmail.ok && byEmail.page.items.map((m) => m.merchantId)).toEqual([merchantId]);
-		expect((await staff.api.post(adminApi.notes(merchantId), { body: 'VIP customer, call before suspending.' })).ok).toBe(true);
 
 		const detail = await admin.loadMerchant(staff.api, merchantId);
-		const detailHtml = text(ssr(<MerchantView {...detail} staff={staffMember} />));
+		const detailHtml = text(ssr(<MerchantView {...detail} admin={staffMember} />));
 		expect(detailHtml).toContain('shop.example.com');
-		expect(detailHtml).toContain('owner@shop.test');
 		expect(detailHtml).toContain('250 credits');
 		expect(detailHtml).toContain('notice-bar');
-		expect(detailHtml).toContain('VIP customer, call before suspending.');
-		expect(detailHtml).toContain('root@ss.test');
+		for (const tab of ['details', 'activity', 'credits'])
+			expect(text(ssr(<MerchantView {...detail} admin={staffMember} tab={tab} />))).toMatch(
+				/Owner name|Merchant created|250 credits/,
+			);
 
-		expect(text(ssr(<WebsitesView {...await admin.loadWebsites(staff.api, {})} staff={staffMember} />))).toContain(
-			'Enter a domain',
-		);
-		const sites = await admin.loadWebsites(staff.api, { domain: 'SHOP.example.com' });
-		expect(text(ssr(<WebsitesView {...sites} staff={staffMember} />))).toContain('Shop & Co');
-		ssr(
-			<WebsitesView
-				{...await admin.loadWebsites(staff.api, { domain: 'other.example.com', env: 'test' })}
-				staff={staffMember}
-			/>,
-		);
+		const activity = await admin.loadActivity(staff.api, { merchantId, adminId: '<bad>', from: 'x' });
+		expect(activity.ok && activity.filter).toEqual({ merchantId, adminId: null, from: null, to: null });
+		expect(text(ssr(<ActivityView {...activity} />))).toContain('Merchant created');
+
+		const admins = await admin.loadAdmins(staff.api, staffMember);
+		const adminsHtml = text(ssr(<AdminsView {...admins} />));
+		expect(adminsHtml).toContain('help@ss.test');
+		expect(adminsHtml).toContain('Invited');
+		expect(adminsHtml).toContain('you');
+
+		const settings = await admin.loadSettings(staff.api);
+		const settingsHtml = text(ssr(<SettingsView {...settings} />));
+		expect(settingsHtml).toContain('E-mail sending');
+		expect(settingsHtml).toContain('SMTP host');
+
+		const account = await admin.loadMyAccount(staff.api);
+		const accountHtml = text(ssr(<MyAccountView {...account} />));
+		expect(accountHtml).toContain('My account');
+		expect(accountHtml).toContain('10 recovery codes left');
 
 		ssr(<SubscriptionLookupView {...await admin.loadSubscriptionLookup(staff.api, {})} />);
 		expect(
@@ -382,7 +408,7 @@ describe('admin console smoke', () => {
 		);
 		const sub = await admin.loadSubscription(staff.api, subscriptionId);
 		expect(sub.ok).toBe(true);
-		const subHtml = text(ssr(<SubscriptionAdminView {...sub} staff={staffMember} />));
+		const subHtml = text(ssr(<SubscriptionAdminView {...sub} admin={staffMember} />));
 		expect(subHtml).toContain('Admin overrides and locks');
 		expect(subHtml).toContain('Lock Max per day');
 		expect(subHtml).toContain('not lockable');
@@ -393,22 +419,22 @@ describe('admin console smoke', () => {
 		expect(sub.ok && sub.effective.features['bar.maxPerDay']).toMatchObject({ value: 50, locked: true });
 
 		const apps = await admin.loadApps(staff.api, { kind: 'pack', status: 'active' });
-		expect(text(ssr(<AppsView {...apps} staff={staffMember} />))).toContain('notice-bar');
+		expect(text(ssr(<AppsView {...apps} admin={staffMember} />))).toContain('notice-bar');
 		const app = await admin.loadApp(staff.api, appId);
 		expect(app.ok && app.manifest?.product.slug).toBe('notice-bar');
-		const appHtml = text(ssr(<AppView {...app} staff={staffMember} />));
+		const appHtml = text(ssr(<AppView {...app} admin={staffMember} />));
 		expect(appHtml).toContain('Upload pack version');
 		expect(appHtml).toContain('Active');
 		expect(appHtml).toContain('v1 (0.1.0)');
 		const policies = await admin.loadPolicies(staff.api, appId);
-		const policiesHtml = text(ssr(<PoliciesView {...policies} staff={staffMember} />));
+		const policiesHtml = text(ssr(<PoliciesView {...policies} admin={staffMember} />));
 		expect(policiesHtml).toContain('Platform hello');
 		expect(policiesHtml).toContain('default copy');
 
 		const finance = await admin.loadFinance(staff.api);
-		expect(text(ssr(<FinanceView {...finance} staff={staffMember} />))).toContain('Finance alerts');
+		expect(text(ssr(<FinanceView {...finance} admin={staffMember} />))).toContain('Finance alerts');
 		const ledger = await admin.loadLedger(staff.api, merchantId);
-		const ledgerHtml = text(ssr(<LedgerView {...ledger} staff={staffMember} />));
+		const ledgerHtml = text(ssr(<LedgerView {...ledger} admin={staffMember} />));
 		expect(ledgerHtml).toContain('bank-1');
 		expect(ledgerHtml).toContain('Credit operation');
 		const chain = await staff.api.get(adminApi.ledgerVerification(merchantId));
@@ -417,34 +443,13 @@ describe('admin console smoke', () => {
 		expect(text(ssr(<ConnectorsAdminView {...await admin.loadConnectors(staff.api, { kind: 'database' })} />))).toContain(
 			'No connectors match',
 		);
-		const audit = await admin.loadAudit(staff.api, { action: 'credits.added', actorId: '<bad>' });
-		expect(audit.ok && audit.filter).toEqual({ actorId: null, targetId: null, action: 'credits.added' });
-		expect(audit.ok && audit.page.items.map((e) => e.action)).toEqual(['credits.added']);
-		expect(text(ssr(<AuditView {...audit} />))).toContain('credits.added');
-
-		const staffPage = await admin.loadStaff(staff.api, staffMember);
-		const staffHtml = text(ssr(<StaffView {...staffPage} />));
-		expect(staffHtml).toContain('help@ss.test');
-		expect(staffHtml).toContain('Invite pending');
-		expect(staffHtml).toContain('You');
-
-		// public staff pages
-		for (const view of [
-			<StaffLoginView key="l" next="/admin/finance" expired reset />,
-			<StaffForgotPasswordView key="f" />,
-			<StaffResetPasswordView key="r" />,
-			<StaffMfaVerify key="v" onDone={() => undefined} onRestart={() => undefined} />,
-			<StaffMfaEnrol key="e" onDone={() => undefined} onRestart={() => undefined} />,
-		])
-			ssr(view);
-
 		// ------------------------------------------------------------------ failures render friendly states
 		const missing = await admin.loadMerchant(staff.api, 'mer_0000000000000000000000000z');
 		expect(missing).toMatchObject({ ok: false, status: 404 });
-		expect(text(ssr(<MerchantView {...missing} staff={staffMember} />))).toContain('Not found');
+		expect(text(ssr(<MerchantView {...missing} admin={staffMember} />))).toContain('Not found');
 		const gone = await admin.loadSubscription(staff.api, 'sub_0000000000000000000000000z');
 		expect(gone.ok).toBe(false);
-		ssr(<SubscriptionAdminView {...gone} staff={staffMember} />);
+		ssr(<SubscriptionAdminView {...gone} admin={staffMember} />);
 		for (const [View, result] of /** @type {const} */ ([
 			[MerchantsView, gone],
 			[AppsView, gone],
@@ -453,53 +458,49 @@ describe('admin console smoke', () => {
 			[FinanceView, gone],
 			[LedgerView, gone],
 			[ConnectorsAdminView, gone],
-			[AuditView, gone],
-			[StaffView, gone],
-			[WebsitesView, gone],
+			[ActivityView, gone],
+			[AdminsView, gone],
+			[SettingsView, gone],
+			[MyAccountView, gone],
+			[OverviewView, gone],
 			[SubscriptionLookupView, gone],
 		]))
-			expect(text(ssr(<View {...result} staff={staffMember} />))).toMatch(/not|could not|found/i);
-		// a merchant session is not a staff session
-		expect(await admin.loadStaffSession(merchant.api)).toMatchObject({ ok: false, status: 401 });
+			expect(text(ssr(<View {...result} admin={staffMember} />))).toMatch(/not|could not|found/i);
+		// a merchant session is not an admin session
+		expect(await admin.loadAdminSession(merchant.api)).toMatchObject({ ok: false, status: 403, merchant: true });
 	});
 
-	it('limits navigation and pages to the staff role', async () => {
-		const { portal, clock, staff, tokenOf } = await setup('admin_roles');
-		await staff.api.post(adminApi.staffList(), { email: 'help@ss.test', roles: ['support'] });
+	it('limits navigation and pages to the admin role', async () => {
+		const { portal, staff, tokenOf } = await setup('admin_roles');
+		await staff.api.post(adminApi.admins(), { email: 'help@ss.test', role: 'support' });
 		const support = client(portal);
-		const password = 'support password 123!';
 		expect(
-			(await support.api.post(adminApi.passwordResetConfirm(), { token: tokenOf('help@ss.test', 'staff_welcome'), password }))
-				.ok,
+			(
+				await support.api.post('/v1/auth/set-password', {
+					token: tokenOf('help@ss.test', 'admin_invite'),
+					password: 'support password 123!',
+					name: 'Help desk',
+				})
+			).ok,
 		).toBe(true);
-		await support.api.post(adminApi.login(), { email: 'help@ss.test', password });
-		const enrol = await support.api.post(adminApi.mfaEnrol());
-		await support.api.post(adminApi.mfaConfirm(), { code: totpCode(enrol.ok ? enrol.data.secret : '', clock.now()) });
-		const session = await admin.loadStaffSession(support.api);
+		const session = await admin.loadAdminSession(support.api);
 		if (!session.ok) throw new Error('no support session');
-		const labels = adminSections(session.staff, '/admin/merchants').flatMap((s) => s.items.map((i) => i.label));
-		expect(labels).toContain('Merchants');
-		expect(labels).not.toContain('Staff');
-		expect(labels).not.toContain('Finance');
+		const labels = adminSections(session.admin, '/admin/merchants').flatMap((s) => s.items.map((i) => i.label));
+		expect(labels).toEqual(['Overview', 'Merchants', 'Credits and billing', 'Activity']);
 		expect(
-			adminSections(session.staff, '/admin/merchants')
+			adminSections(session.admin, '/admin/merchants')
 				.flatMap((s) => s.items)
 				.find((i) => i.current)?.label,
 		).toBe('Merchants');
-		const forbidden = await admin.loadStaff(support.api, session.staff);
+		const forbidden = await admin.loadAdmins(support.api, session.admin);
 		expect(forbidden).toMatchObject({ ok: false, status: 403 });
-		expect(text(ssr(<StaffView {...forbidden} />))).toContain('Not permitted');
-		expect(staffCan(session.staff, 'platform.launch.admin')).toBe(true);
-		expect(staffCan(null, 'platform.merchants.read')).toBe(false);
+		expect(text(ssr(<AdminsView {...forbidden} />))).toContain('Not permitted');
+		expect(adminCan(session.admin, 'dashboards.open')).toBe(true);
+		expect(adminCan(session.admin, 'admins.manage')).toBe(false);
+		expect(adminCan(null, 'merchants.read')).toBe(false);
 	});
 
 	it('pure helpers of the admin views', () => {
-		expect(safeAdminNext('/admin/finance')).toBe('/admin/finance');
-		expect(safeAdminNext('/admin')).toBe('/admin');
-		expect(safeAdminNext('/websites')).toBe('/admin/merchants');
-		expect(safeAdminNext('//evil.example/admin')).toBe('/admin/merchants');
-		expect(safeAdminNext('/administrator')).toBe('/admin/merchants');
-		expect(safeAdminNext(null)).toBe('/admin/merchants');
 		expect(parseSignedCredits('12.5')).toEqual({ ok: true, value: 12_500 });
 		expect(parseSignedCredits('-1', { allowNegative: true })).toEqual({ ok: true, value: -1000 });
 		expect(parseSignedCredits('-1').ok).toBe(false);
@@ -507,8 +508,9 @@ describe('admin console smoke', () => {
 		expect(parseSignedCredits('abc').ok).toBe(false);
 		expect(query({ a: 'x', b: null, c: '', d: 2 })).toBe('?a=x&d=2');
 		expect(query({})).toBe('');
-		expect(adminRoutes.audit({ action: 'credits.*' })).toBe('/admin/audit?action=credits.*');
-		expect(adminRoutes.login('/admin/x')).toBe('/admin/login?next=%2Fadmin%2Fx');
+		expect(adminRoutes.activity({ merchantId: 'mer_1' })).toBe('/admin/activity?merchantId=mer_1');
+		expect(adminRoutes.login('/admin/x')).toBe('/login?next=%2Fadmin%2Fx');
+		expect(adminRoutes.merchant('mer_1', 'details')).toBe('/admin/merchants/mer_1?tab=details');
 		expect(adminApi.status('app_1')).toBe('/v1/admin/apps/app_1/status');
 		expect(checkSummary(null)).toBeNull();
 		expect(

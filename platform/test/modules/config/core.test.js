@@ -52,16 +52,16 @@ describe('targets', () => {
 	});
 
 	it('knows who may write and lock', () => {
-		expect(actorMayWrite('merchant_user', 'website')).toBe(true);
-		expect(actorMayWrite('merchant_user', 'admin')).toBe(false);
-		expect(actorMayWrite('merchant_user', 'platform')).toBe(false);
-		expect(actorMayWrite('staff', 'platform')).toBe(true);
+		expect(actorMayWrite('merchant', 'website')).toBe(true);
+		expect(actorMayWrite('merchant', 'admin')).toBe(false);
+		expect(actorMayWrite('merchant', 'platform')).toBe(false);
+		expect(actorMayWrite('admin', 'platform')).toBe(true);
 		expect(actorMayWrite('system', 'admin')).toBe(true);
 		expect(actorMayWrite('product', 'website')).toBe(false);
 		expect(actorMayWrite(undefined, 'website')).toBe(false);
-		expect(actorMayLock('staff')).toBe(true);
+		expect(actorMayLock('admin')).toBe(true);
 		expect(actorMayLock('system')).toBe(true);
-		expect(actorMayLock('merchant_user')).toBe(false);
+		expect(actorMayLock('merchant')).toBe(false);
 	});
 });
 

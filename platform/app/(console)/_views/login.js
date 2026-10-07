@@ -1,5 +1,5 @@
-import { LoginView } from '../../../src/console/views/auth.js';
-import { one, redirectIfSignedIn } from '../_lib/server.js';
+import { SignInView } from '../../../src/console/views/sign-in.js';
+import { consoleBranding, firstAdminAvailable, one, redirectIfSignedIn } from '../_lib/server.js';
 
 export const metadata = { title: 'Sign in' };
 
@@ -7,5 +7,13 @@ export const metadata = { title: 'Sign in' };
 export default async function LoginPage({ searchParams }) {
 	await redirectIfSignedIn();
 	const q = await searchParams;
-	return <LoginView next={one(q.next) ?? null} expired={one(q.expired) === '1'} reset={one(q.reset) === '1'} />;
+	const notice = one(q.expired) === '1' ? 'expired' : one(q.notice);
+	return (
+		<SignInView
+			branding={await consoleBranding()}
+			firstAdmin={await firstAdminAvailable()}
+			next={one(q.next) ?? null}
+			notice={notice === 'expired' || notice === 'reset' || notice === 'email' ? notice : null}
+		/>
+	);
 }

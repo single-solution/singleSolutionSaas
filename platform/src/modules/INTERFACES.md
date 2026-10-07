@@ -6,7 +6,8 @@ expose (extra functions allowed). All functions are async, take plain objects, r
 
 ## identity (`modules/identity`)
 
-Merchants, merchant users, staff users, sessions, websites, website keys.
+Admins, merchants (one login each, e-mails unique across both through `identity_logins`), sessions, websites,
+website keys (PLAN 0.8).
 
 - `getMerchant(merchantId)` → `{ merchantId, name, status: active|suspended, createdAt }`
 - `getWebsite(websiteId)` → `{ websiteId, merchantId, domain, env: 'live'|'test', twinId, status, timeZone, language,
@@ -14,7 +15,7 @@ currency, createdAt }` — the **website settings** (F.16) are `null` when unset
   canonical spelling), `language` (BCP 47, `Intl.getCanonicalLocales`), `currency` (ISO 4217, upper case).
   `updateWebsiteSettings({ merchantId, websiteId, settings, actor })` sets them on the live/test pair (`null` clears),
   audits `website.settings_updated` and calls `commerce.invalidateWebsite` for both ids. Route:
-  `PATCH /v1/merchants/:merchantId/websites/:websiteId` (`websites.write`; staff via the Admin Console).
+  `PATCH /v1/merchants/:merchantId/websites/:websiteId` (`websites.write`; admins via the Admin Console).
 - `listWebsites(merchantId)`
 - `websiteByDomain(domain)` (normalised via `@ss/contracts` `normaliseDomain`)
 - `suspendMerchant / resumeMerchant` (emit audit; commerce reacts via `onMerchantStatus` hook below)
@@ -31,10 +32,9 @@ currency, createdAt }` — the **website settings** (F.16) are `null` when unset
 - Implements ports `sessionActor(session)` and `websiteKeyRevoked(claims, rawKey)` → `true` when the key is revoked,
   unknown, or (for `sk_`) its HMAC does not match `rawKey`; infra calls it after the offline signature check.
 - Calls `integration.emitControl('key.revoked@1', …)` on revoke.
-- Staff building blocks (`service.admin`): `admin.listMerchants({ after, limit, status?, q? })` — `q` is a
-  case/accent-insensitive prefix of the merchant name (`nameKey`), or of a member e-mail when it contains `@`;
-  `admin.listNotes({ merchantId, before?, limit })` / `admin.addNote({ merchantId, body ≤ 2000, actor })` (append-only,
-  audited without the body).
+- Admin building blocks: `getMerchantRecord(merchantId)`, `merchantNames(ids)` (Activity), `counts()` (Overview),
+  `getAdmin(adminId)`; the parts `accounts`, `admins`, `merchants` and `websites` back the `/v1/auth/*`, `/v1/me/*`,
+  `/v1/admin/merchants*` and `/v1/admin/admins*` routes.
 - **Bring-your-own customer identity** (PLAN §5.3, F.14), one issuer per website (`identity_issuers`, `_id` =
   websiteId): `setIdentityIssuer({ merchantId, websiteId, input: { issuer, jwksUrl | publicJwks[], audience?,
 claimMap: { subject = 'sub', email?, phone? } }, actor })` (public signature keys only — Ed25519, P-256, RSA ≥ 2048,
@@ -42,8 +42,8 @@ claimMap: { subject = 'sub', email?, phone? } }, actor })` (public signature key
   `getIdentityIssuer`, `removeIdentityIssuer`, `refreshIdentityIssuer` (fetch now). Every change is audited
   (`website.identity_*`) and calls `commerce.invalidateWebsite(websiteId)`. `identityFor(websiteId)` → the
   entitlement-document `identity` section `{ issuer, jwks, audience?, claimMap }` or null; a JWKS URL is refetched at
-  most hourly when documents are rebuilt (failures keep the last good keys, retry after 5 min). Deleting or
-  transferring a website drops its issuer. Routes: `GET|PUT|DELETE /v1/merchants/:merchantId/websites/:websiteId/identity`
+  most hourly when documents are rebuilt (failures keep the last good keys, retry after 5 min). Removing a
+  website drops its issuer. Routes: `GET|PUT|DELETE /v1/merchants/:merchantId/websites/:websiteId/identity`
   (`websites.read` / `websites.write`), `POST …/identity/refresh`. The GET also returns the pending product `request`.
 - **Product issuer requests** (F.16, `identity_issuer_requests`, `_id` = websiteId): `PUT
 /v1/product/websites/:websiteId/identity` (product auth, same body as the merchant PUT) is accepted only for a product
@@ -56,7 +56,7 @@ domain, request }] }`, Website → Identity card). A request identical to the ac
 'active', issuer }` (safe to repeat on every product boot). The merchant decides with `POST …/identity/request/approve`
   or `…/reject` (`websites.write`, optional `{ reason }`): approve re-checks eligibility and calls `setIssuer` with
   `managedBy: { appId, slug, name }` (shown on the issuer); both are audited (`website.identity_request_approved |
-_rejected`). A merchant's own PUT clears `managedBy`. Deleting/transferring a website drops its requests.
+_rejected`). A merchant's own PUT clears `managedBy`. Removing a website drops its requests.
 
 ## catalog (`modules/catalog`)
 
@@ -66,10 +66,10 @@ widget uploads, manifest versions, status, app keys, launches.
 - `getApp(appId)` → `{ appId, slug, kind: service|pack, status: active|inactive, name, productVersion, endpoints,
 baseUrl, currentVersion, createdAt }` — `baseUrl` is the connected address (service only); `currentVersion` is `null`
   for a pack whose first version is still uploading. `appBySlug(slug)`.
-- **Status**: new apps are `inactive`; staff switch with `setStatus({ appId, status, actor })`
-  (`POST /v1/admin/apps/:appId/status`, `platform.apps.manage`; activating needs a current version). Inactive apps are
+- **Status**: new apps are `inactive`; admins switch with `setStatus({ appId, status, actor })`
+  (`POST /v1/admin/apps/:appId/status`, `products.manage`; activating needs a current version). Inactive apps are
   not listed, not newly subscribable and cannot be opened by merchants; existing subscriptions keep working.
-- Onboarding: `connectProduct({ url, secret })` (staff `POST /v1/admin/apps/connect`, idempotent) → `{ appId, slug,
+- Onboarding: `connectProduct({ url, secret })` (admin `POST /v1/admin/apps/connect`, idempotent) → `{ appId, slug,
 baseUrl, kid, reconnected, version, priceChanges? }`: `@ss/protocol` `createConnectRequest` to
   `<url>/.well-known/ss-connect` (HMAC with the deployer's `CONNECT_SECRET`, never sent nor stored),
   `verifyConnectResponse`, manifest and base-URL checks, app (inactive) + version + key created — or, for a known slug,
@@ -88,9 +88,9 @@ uploadPath, changed }`. A pack slug creates the pack (inactive, version 1) or a 
 - `issueLaunch({ kind: 'merchant'|'admin', appId, subject, user, scope, subscriptions?, actor? })` → `{ url, token }`
   (`url` = `<baseUrl>/sso?launch=<token>`). Merchant launches need an active app. Admin launches carry
   `scope.merchantId` or the app-wide `scope: { all: true }` (exclusive: only `permissions` may sit next to it). The
-  staff route `POST /v1/admin/apps/:appId/launch` with `{ all: true }` needs `platform.launch.admin` **and** the
-  `superadmin` or `admin` staff role (support staff may launch per merchant only).
-- Staff reads: `GET /v1/admin/apps`, `GET /v1/admin/apps/:appId` (versions summary, keys),
+  admin route `POST /v1/admin/apps/:appId/launch` needs `dashboards.open`; with `{ all: true }` it also needs
+  `products.manage` (Owner only).
+- Admin reads: `GET /v1/admin/apps`, `GET /v1/admin/apps/:appId` (versions summary, keys),
   `GET /v1/admin/apps/:appId/versions/:version`.
 - Implements port `appKeys(appId)` → KeyResolver of the app's registered keys.
 - A new current version emits `manifest.accepted@1` (platform-scoped, `appIds: [appId]`) via integration and calls
@@ -172,7 +172,7 @@ idempotencyKey)`; payloads are NOT persisted in Portal — only routing metadata
   `order.*@1`, each covered by an `events.subscribe:` scope) × active subscriptions; deliveries are jobs
   `integration.deliver` signed with `@ss/protocol` `signEvent`, attempted right after the ingesting request; a failed
   one is retried (backoff, then due) on the next delivery to that product and when the product next calls the Portal
-  (port `productCalled`), or by staff (`POST /v1/admin/apps/:appId/deliveries/retry`, `retryNow`). A delivery that
+  (port `productCalled`), or by admins (`POST /v1/admin/apps/:appId/deliveries/retry`, `retryNow`). A delivery that
   meets a permanent error, uses its last attempt or is older than 24 h is marked `failed` (`failedAt`,
   `lastErrorCode`; metadata only). Inactive service apps still receive events.
 - **Delivery target:** `catalog.getApp().baseUrl` + the manifest's `endpoints.events` path; no base → `failed`
@@ -254,7 +254,7 @@ sub.manifestVersion)` / `versionDetail` (pack descriptor assets), `identity.getW
   `delivery_widgets`) → `{ version, status: uploading|ready, missing, uploadPath, changed }` (same descriptor = same
   version).
 - `uploadAsset({ appId, version, path, bytes, contentType, actor })` — one route for both kinds,
-  `PUT /v1/admin/packs/:appId/versions/:version/assets/<path>` (`platform.apps.manage`): bytes must equal the
+  `PUT /v1/admin/packs/:appId/versions/:version/assets/<path>` (`products.manage`): bytes must equal the
   descriptor's sha256 and size (`delivery_asset_mismatch`), types js/mjs/css/json/svg/png/woff2 with per-type caps
   (415 / 413). The last asset of a pack version calls `catalog.versionReady`; the last of a widget bundle makes it
   `ready`. Either way every website subscribed to the app recompiles.

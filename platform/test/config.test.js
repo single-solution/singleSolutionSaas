@@ -1,9 +1,17 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { ENV_VARS, buildConfig, deriveSecret, loadConfig, loadEnv } from '../src/infra/config.js';
+import {
+	DEFAULT_SETTINGS,
+	ENV_VARS,
+	buildConfig,
+	deriveSecret,
+	loadConfig,
+	loadEnv,
+	parsePortalUrl,
+	sessionPolicies,
+} from '../src/infra/config.js';
 import { isPlatformError } from '../src/infra/errors.js';
-import { originFromHeaders, requestOrigin, withOrigin } from '../src/infra/request-scope.js';
 import { createSystemStore, generateSecrets, secretsOf, testSystemState } from '../src/infra/system.js';
-import { startMongo, testEnv, testSystem } from './helpers.js';
+import { ENCRYPTION_KEY, PORTAL_URL, startMongo, testEnv, testSystem } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
 let mongo;
@@ -27,25 +35,27 @@ const problemsOf = (fn) => {
 
 const PROD_STORAGE = {
 	NODE_ENV: 'production',
+	PORTAL_URL: 'https://portal.example.com',
+	ENCRYPTION_KEY,
 	STORAGE_ENDPOINT: 'https://r2.example.net',
 	STORAGE_BUCKET: 'ss-assets',
 	STORAGE_ACCESS_KEY_ID: 'AK',
 	STORAGE_SECRET_ACCESS_KEY: 'SK',
 };
 
-describe('loadEnv: only the database and the storage; everything else is fixed', () => {
+describe('loadEnv: the database, the Portal address and the encryption key (PLAN 0.11)', () => {
 	it('loads a minimal environment with the fixed values', async () => {
 		const env = loadEnv(await testEnv());
 		expect(env).toMatchObject({
 			env: 'test',
 			isProduction: false,
+			portalUrl: PORTAL_URL,
+			encryptionKey: ENCRYPTION_KEY,
 			mongo: { uri: 'mongodb://127.0.0.1:27017/ss_portal_test', dbName: 'ss_portal_test', maxPoolSize: 5 },
 			logLevel: 'info',
 			maxBodyBytes: 1024 * 1024,
 			delivery: { storage: null },
 		});
-		expect(env.sessions.staff).toEqual({ idleMs: 30 * 60_000, absoluteMs: 12 * 3_600_000 });
-		expect(env.sessions.merchant).toEqual({ idleMs: 1440 * 60_000, absoluteMs: 336 * 3_600_000 });
 		expect(Object.isFrozen(env)).toBe(true);
 		// former tuning variables are ignored
 		const tuned = loadEnv(
@@ -61,19 +71,33 @@ describe('loadEnv: only the database and the storage; everything else is fixed',
 		expect(loadEnv({ ...(await testEnv()), ...PROD_STORAGE, NODE_ENV: 'staging' }).env).toBe('production');
 	});
 
-	it('requires only the database (storage is optional); reports every problem without values', () => {
-		expect(problemsOf(() => loadEnv({ NODE_ENV: 'production' }))).toEqual(['MONGODB_URI is required']);
+	it('requires the database, PORTAL_URL and ENCRYPTION_KEY (storage is optional); reports every problem without values', () => {
+		expect(problemsOf(() => loadEnv({ NODE_ENV: 'production' }))).toEqual([
+			'MONGODB_URI is required',
+			'PORTAL_URL is required',
+			'ENCRYPTION_KEY is required',
+		]);
 		expect(
-			loadEnv({ NODE_ENV: 'production', MONGODB_URI: 'mongodb+srv://u:p@cluster.example.net/ss_portal' }).delivery.storage,
+			loadEnv({
+				NODE_ENV: 'production',
+				MONGODB_URI: 'mongodb+srv://u:p@cluster.example.net/ss_portal',
+				PORTAL_URL: 'https://portal.example.com',
+				ENCRYPTION_KEY,
+			}).delivery.storage,
 		).toBeNull();
+		const short = problemsOf(() => loadEnv({ ...PROD_STORAGE, MONGODB_URI: 'mongodb://h/x', ENCRYPTION_KEY: 'short' }));
+		expect(short).toEqual(['ENCRYPTION_KEY must be at least 32 characters']);
+		expect(short.join(' ')).not.toContain('short');
 		const problems = problemsOf(() =>
 			loadEnv({ NODE_ENV: 'test', MONGODB_URI: 'postgres://x', LOG_LEVEL: 'loud', OUTBOUND_DEV_ALLOW_HOSTS: 'http://x/y' }),
 		);
 		for (const name of ['MONGODB_URI', 'LOG_LEVEL', 'OUTBOUND_DEV_ALLOW_HOSTS'])
 			expect(problems).toEqual(expect.arrayContaining([expect.stringContaining(name)]));
-		expect(problemsOf(() => loadEnv({ NODE_ENV: 'test', MONGODB_URI: 'mongodb://h/bad%20name!' }))).toEqual([
-			expect.stringContaining('invalid database'),
-		]);
+		expect(
+			problemsOf(() =>
+				loadEnv({ NODE_ENV: 'test', MONGODB_URI: 'mongodb://h/bad%20name!', PORTAL_URL: 'https://p.test', ENCRYPTION_KEY }),
+			),
+		).toEqual([expect.stringContaining('invalid database')]);
 	});
 
 	it('derives the database name; the dev allowlist is ignored in production', async () => {
@@ -90,13 +114,16 @@ describe('loadEnv: only the database and the storage; everything else is fixed',
 		).toEqual([]);
 	});
 
-	it('documents every variable, and only the database is required', () => {
+	it('documents every variable; the three of PLAN 0.11 are required', () => {
 		const names = ENV_VARS.map(([name]) => name);
 		expect(new Set(names).size).toBe(names.length);
-		expect(ENV_VARS.filter(([, required]) => required).map(([name]) => name)).toEqual(['MONGODB_URI']);
+		expect(ENV_VARS.filter(([, required]) => required).map(([name]) => name)).toEqual([
+			'MONGODB_URI',
+			'PORTAL_URL',
+			'ENCRYPTION_KEY',
+		]);
 		for (const gone of [
 			'PUBLIC_URL',
-			'PORTAL_URL',
 			'ADMIN_SECRET',
 			'SIGNING_KEYS',
 			'ENCRYPTION_KEYS',
@@ -118,7 +145,7 @@ describe('loadEnv: only the database and the storage; everything else is fixed',
 
 describe('buildConfig: environment + system state', () => {
 	it('joins the generated secrets and the recorded settings', async () => {
-		const config = loadConfig(await testEnv(), await testSystem(), { baseUrl: 'https://portal.test' });
+		const config = loadConfig(await testEnv(), await testSystem());
 		expect(config.portalUrl).toBe('https://portal.test');
 		expect(config.portalOrigin).toBe('https://portal.test');
 		expect(config.cookieSecure).toBe(true);
@@ -127,27 +154,46 @@ describe('buildConfig: environment + system state', () => {
 		expect(config.websiteKeySigningKeys.map((k) => k.kid)).toEqual(['website-2026-10']);
 		expect(config.keks.map((k) => k.id)).toEqual(['kek-2', 'kek-1']);
 		expect(config.mail).toEqual({ smtp: null, from: null });
+		expect(config.settings).toEqual(DEFAULT_SETTINGS);
+		expect(config.sessions).toEqual(sessionPolicies(12));
 	});
 
-	it('the Portal URL is the current request origin (no stored setting)', async () => {
-		const config = loadConfig(await testEnv(), await testSystem());
-		expect(config.portalUrl).toBe('http://localhost');
-		expect(config.cookieSecure).toBe(false);
-		withOrigin('https://portal.example.com', () => {
-			expect(config.portalUrl).toBe('https://portal.example.com');
-			expect(config.portalOrigin).toBe('https://portal.example.com');
-			expect(config.cookieSecure).toBe(true);
+	it('the Portal address is PORTAL_URL only: https, an origin with nothing after it (PLAN 0.8.1, 0.11)', async () => {
+		const local = loadConfig(await testEnv({ PORTAL_URL: 'http://localhost:4000' }), await testSystem());
+		expect(local.portalUrl).toBe('http://localhost:4000');
+		expect(local.cookieSecure).toBe(false);
+		expect(parsePortalUrl('https://Portal.Example.com', true)).toEqual({ ok: true, value: 'https://portal.example.com' });
+		expect(parsePortalUrl('https://portal.example.com:8443', true)).toEqual({
+			ok: true,
+			value: 'https://portal.example.com:8443',
 		});
-		/** @param {Record<string, string>} headers */
-		const at = (headers, url = 'http://internal:3000/v1/x') => requestOrigin(new Request(url, { headers }));
-		expect(at({ host: 'Portal.Example.com', 'x-forwarded-proto': 'https' })).toBe('https://portal.example.com');
-		expect(at({ host: 'portal.example.com:443', 'x-forwarded-proto': 'http,https' })).toBe('https://portal.example.com');
-		expect(at({ host: 'localhost:4000' })).toBe('http://localhost:4000');
-		expect(at({ host: 'bad host/x' })).toBe('http://internal:3000');
-		expect(at({}, 'https://portal.test/v1/x')).toBe('https://portal.test');
-		expect(originFromHeaders(new Headers({ host: 'a.test', 'x-forwarded-proto': 'gopher' }), 'https://b.test')).toBe(
-			'https://a.test',
+		for (const local of ['http://127.0.0.1:3000', 'http://[::1]', 'http://app.localhost', 'http://localhost'])
+			expect(parsePortalUrl(local, false).ok).toBe(true);
+		for (const bad of [
+			'https://portal.example.com/',
+			'https://portal.example.com/admin',
+			'https://portal.example.com?x=1',
+			'https://portal.example.com#a',
+			'https://user:pass@portal.example.com',
+			'ftp://portal.example.com',
+			'portal.example.com',
+			'http://portal.example.com',
+		])
+			expect(parsePortalUrl(bad, false).ok).toBe(false);
+		// production: https always, even for localhost
+		expect(parsePortalUrl('http://localhost', true).ok).toBe(false);
+		expect(parsePortalUrl(undefined, true)).toEqual({ ok: false, message: 'PORTAL_URL is required' });
+	});
+
+	it('takes the recorded settings over the defaults; Session length sets both session lifetimes', async () => {
+		const config = loadConfig(
+			await testEnv(),
+			await testSystem({ settings: { security: { sessionHours: 2 }, branding: { name: 'Acme' } } }),
 		);
+		expect(config.settings.security).toEqual({ sessionHours: 2, requireTwoStepForAdmins: false });
+		expect(config.settings.branding.name).toBe('Acme');
+		expect(config.sessions.admin).toEqual({ idleMs: 2 * 3_600_000, absoluteMs: 2 * 3_600_000 });
+		expect(config.sessions.merchant).toEqual(config.sessions.admin);
 	});
 
 	it('validates the mail sender; tests may replace fixed values', async () => {
@@ -172,7 +218,11 @@ describe('buildConfig: environment + system state', () => {
 describe('system store (secrets generated on first start, settings recorded later)', () => {
 	it('generates the secrets once, even when instances start concurrently', async () => {
 		const db = mongo.db('system_first_start');
-		const stores = [createSystemStore(db), createSystemStore(db), createSystemStore(db)];
+		const stores = [
+			createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }),
+			createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }),
+			createSystemStore(db, { encryptionKey: ENCRYPTION_KEY }),
+		];
 		const loaded = await Promise.all(stores.map((store) => store.load()));
 		const kids = loaded.map(({ state }) => state.signingKeys[0]?.kid);
 		expect(new Set(kids).size).toBe(1);
@@ -186,7 +236,7 @@ describe('system store (secrets generated on first start, settings recorded late
 
 	it('records settings (mail password sealed) and bumps the version', async () => {
 		const db = mongo.db('system_settings');
-		const store = createSystemStore(db);
+		const store = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
 		await store.update({ mail: null });
 		expect(await store.version()).toBe(1);
 		await store.update({
@@ -211,6 +261,37 @@ describe('system store (secrets generated on first start, settings recorded late
 		expect(await store.version()).toBeGreaterThan(version);
 	});
 
+	it('seals the SMTP password with ENCRYPTION_KEY: another key cannot read it back (PLAN 0.4.8)', async () => {
+		const db = mongo.db('system_settings_key');
+		const store = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
+		await store.update({
+			mail: { host: 'smtp.example.com', port: 587, secure: false, user: 'u', pass: 'pw-1', from: 'a@b.co' },
+		});
+		const sealed = /** @type {any} */ (await store.settings())?.mail?.passSealed;
+		expect(store.passwordReadable(sealed)).toBe(true);
+		const other = createSystemStore(db, { encryptionKey: 'another-encryption-key-0123456789abcdef' });
+		expect((await other.load()).state.mail?.pass).toBeNull();
+		expect(other.passwordReadable(sealed)).toBe(false);
+		expect(store.passwordReadable(null)).toBe(false);
+	});
+
+	it('records the security, branding, support and billing settings and the logo', async () => {
+		const db = mongo.db('system_settings_groups');
+		const store = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
+		await store.update({ security: { sessionHours: 24 }, support: { email: 'help@example.com', phone: undefined } });
+		await store.update({ security: { requireTwoStepForAdmins: true } });
+		const { state } = await store.load();
+		expect(state.settings?.security).toEqual({ sessionHours: 24, requireTwoStepForAdmins: true });
+		expect(state.settings?.support).toEqual({ email: 'help@example.com' });
+		expect(await store.logo()).toBeNull();
+		await store.setLogo({ type: 'image/png', data: Buffer.from([1, 2, 3]) });
+		expect(await store.logo()).toEqual({ type: 'image/png', data: Buffer.from([1, 2, 3]) });
+		expect((await store.load()).state.settings?.branding).toEqual({ hasLogo: true, logoVersion: 1 });
+		await store.setLogo(null);
+		expect(await store.logo()).toBeNull();
+		expect((await store.load()).state.settings?.branding).toEqual({ hasLogo: false, logoVersion: 2 });
+	});
+
 	it('builds complete states for tests and tools', () => {
 		const state = testSystemState();
 		expect(state.mail).toBeNull();
@@ -218,7 +299,7 @@ describe('system store (secrets generated on first start, settings recorded late
 	});
 
 	it('records the applied schema fingerprint', async () => {
-		const store = createSystemStore(mongo.db('system_schema'));
+		const store = createSystemStore(mongo.db('system_schema'), { encryptionKey: ENCRYPTION_KEY });
 		expect(await store.appliedSchema()).toBeNull();
 		await store.recordSchema('abc');
 		expect(await store.appliedSchema()).toBe('abc');

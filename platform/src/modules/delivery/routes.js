@@ -22,7 +22,7 @@ import { MAX_PATH_SEGMENTS, MAX_UPLOAD_BYTES } from './core/assets.js';
 /** @typedef {import('./service.js').DeliveryService} DeliveryService */
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
 
-const CONSOLE = /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'staff']);
+const CONSOLE = /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'admin']);
 const SITE = '/v1/merchants/:merchantId/websites/:websiteId';
 
 /**
@@ -45,8 +45,8 @@ export const deliveryRoutes = (delivery) => [
 		defineRoute({
 			method: 'PUT',
 			path: `/v1/admin/packs/:appId/versions/:version/assets/${segments(i + 1)}`,
-			auth: 'staff',
-			permission: 'platform.apps.manage',
+			auth: 'admin',
+			permission: 'products.manage',
 			rawBody: true,
 			maxBodyBytes: MAX_UPLOAD_BYTES,
 			handler: (ctx) =>
@@ -80,7 +80,7 @@ export const deliveryRoutes = (delivery) => [
 		method: 'POST',
 		path: `${SITE}/delivery/compile`,
 		auth: CONSOLE,
-		permission: 'websites.write',
+		permission: 'settings.write',
 		rateLimit: { limit: 30, windowMs: 10 * 60_000, key: (ctx) => `merchant:${ctx.params.merchantId}` },
 		handler: (ctx) =>
 			delivery.compile({
@@ -94,7 +94,7 @@ export const deliveryRoutes = (delivery) => [
 		method: 'GET',
 		path: `${SITE}/delivery/strings`,
 		auth: CONSOLE,
-		permission: 'websites.read',
+		permission: 'settings.read',
 		handler: (ctx) =>
 			delivery.listStringOverrides({ websiteId: ctx.params.websiteId ?? '', merchantId: ctx.params.merchantId ?? '' }),
 	}),
@@ -102,7 +102,7 @@ export const deliveryRoutes = (delivery) => [
 		method: 'PUT',
 		path: `${SITE}/delivery/strings/:appId/:element/:language`,
 		auth: CONSOLE,
-		permission: 'websites.write',
+		permission: 'settings.write',
 		rateLimit: { limit: 60, windowMs: 10 * 60_000, key: (ctx) => `merchant:${ctx.params.merchantId}` },
 		handler: (ctx) =>
 			delivery.setStringOverride({

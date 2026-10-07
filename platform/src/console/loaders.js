@@ -34,20 +34,25 @@ const firstFailure = (...results) => {
 const isoDay = (value) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
 
 /**
- * Session and merchant context of the signed-in user (the console frame).
+ * Session of the signed-in merchant (the console frame). A signed-in admin gets `{ ok: false, status: 403, admin: true }`
+ * (the page sends them to the admin console).
  * @param {ConsoleApi} api
  */
 export const loadSession = async (api) => {
 	const me = await api.get(paths.me());
-	if (!me.ok) return /** @type {LoadFailure} */ ({ ok: false, status: me.status, problem: me.problem });
+	if (!me.ok) return /** @type {LoadFailure & { admin?: boolean }} */ ({ ok: false, status: me.status, problem: me.problem });
 	if (me.data?.kind !== 'merchant')
-		return /** @type {LoadFailure} */ ({
+		return /** @type {LoadFailure & { admin?: boolean }} */ ({
 			ok: false,
 			status: 403,
-			problem: { status: 403, title: 'Forbidden', detail: 'The merchant console needs a merchant account.' },
+			admin: me.data?.kind === 'admin',
+			problem: { status: 403, title: 'Forbidden', detail: 'The merchant console needs a merchant login.' },
 		});
-	const merchantId = /** @type {string | null} */ (me.data.merchantId ?? null);
-	return { ok: /** @type {const} */ (true), me: me.data, merchantId };
+	return {
+		ok: /** @type {const} */ (true),
+		me: me.data,
+		merchantId: /** @type {string} */ (me.data.merchant?.merchantId),
+	};
 };
 
 /**
@@ -362,64 +367,18 @@ export const loadSpendCap = async (api, merchantId) => {
 };
 
 /**
+ * Account: business details, sign-in e-mail, two-step and own activity.
  * @param {ConsoleApi} api
  * @param {string} merchantId
- * @param {any} me
- */
-export const loadTeam = async (api, merchantId, me) => {
-	const [team, websites] = await Promise.all([api.get(paths.team(merchantId)), api.get(paths.websites(merchantId))]);
-	const failed = firstFailure(team);
-	if (failed) return failed;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		me,
-		members: /** @type {any[]} */ (team.ok ? (team.data.members ?? []) : []),
-		invites: /** @type {any[]} */ (team.ok ? (team.data.invites ?? []) : []),
-		websites: /** @type {any[]} */ (orElse(websites, { items: [] }).items ?? []),
-	};
-};
-
-/**
- * @param {ConsoleApi} api
- * @param {string | null} merchantId
  */
 export const loadAccount = async (api, merchantId) => {
-	const [me, sessions, merchant] = await Promise.all([
-		api.get(paths.me()),
-		api.get('/v1/me/sessions'),
-		merchantId
-			? api.get(paths.merchant(merchantId))
-			: Promise.resolve(/** @type {import('./api.js').ApiResult} */ ({ ok: true, status: 200, data: null })),
-	]);
+	const [me, activity] = await Promise.all([api.get(paths.me()), api.get(paths.activity(merchantId))]);
 	const failed = firstFailure(me);
 	if (failed) return failed;
 	return {
 		ok: /** @type {const} */ (true),
 		merchantId,
 		me: me.ok ? me.data : null,
-		sessions: /** @type {any[]} */ (orElse(sessions, { items: [] }).items ?? []),
-		merchant: orElse(merchant, null),
-	};
-};
-
-/**
- * @param {ConsoleApi} api
- * @param {string} merchantId
- * @param {string | undefined} websiteId website added in the first step (resumes at "connect resources")
- */
-export const loadOnboarding = async (api, merchantId, websiteId) => {
-	const websites = await api.get(paths.websites(merchantId));
-	const failed = firstFailure(websites);
-	if (failed) return failed;
-	const items = /** @type {any[]} */ (websites.ok ? websites.data.items : []);
-	const website = websiteId ? (items.find((w) => w.websiteId === websiteId) ?? null) : null;
-	const resources = website ? await api.get(paths.resources(merchantId, website.websiteId)) : null;
-	return {
-		ok: /** @type {const} */ (true),
-		merchantId,
-		websites: items,
-		website,
-		resources: /** @type {any[]} */ (resources ? (orElse(resources, { resources: [] }).resources ?? []) : []),
+		activity: orElse(activity, { items: [], nextCursor: null }),
 	};
 };

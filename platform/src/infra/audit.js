@@ -15,11 +15,12 @@ import { defaultRandomBytes, isObject } from './util.js';
 /** @typedef {import('./db.js').ReadOps} ReadOps */
 /** @typedef {import('./rbac.js').Actor} Actor */
 
-export const AUDIT_ACTOR_TYPES = Object.freeze(['staff', 'merchant_user', 'product', 'system']);
+export const AUDIT_ACTOR_TYPES = Object.freeze(['admin', 'merchant', 'product', 'system']);
 
 /**
  * @typedef {object} AuditInput
- * @property {{ type: 'staff' | 'merchant_user' | 'product' | 'system', id: string } | Actor} actor
+ * @property {{ type: 'admin' | 'merchant' | 'product' | 'system', id: string, name?: string | null } | Actor} actor
+ *   an admin's name is kept with the entry, so Activity still names a removed admin (PLAN 0.8.2)
  * @property {string} action dotted verb, e.g. `website.created`, `credits.adjusted`
  * @property {{ type: string, id: string, merchantId?: string | null, websiteId?: string | null }} target
  * @property {unknown} [before]
@@ -33,7 +34,7 @@ const ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
 /**
  * @param {unknown} actor
- * @returns {{ type: string, id: string }}
+ * @returns {{ type: string, id: string, name?: string }}
  */
 const normaliseActor = (actor) => {
 	if (!isObject(actor) || typeof actor.id !== 'string' || actor.id.length === 0)
@@ -41,7 +42,8 @@ const normaliseActor = (actor) => {
 	// website-key actors are recorded as the product/system boundary they crossed: callers map them first
 	if (!AUDIT_ACTOR_TYPES.includes(String(actor.type)))
 		throw platformError('invalid_argument', `audit actor type must be one of ${AUDIT_ACTOR_TYPES.join(', ')}`);
-	return { type: String(actor.type), id: actor.id };
+	const name = actor.type === 'admin' && typeof actor.name === 'string' && actor.name.length > 0 ? actor.name : null;
+	return { type: String(actor.type), id: actor.id, ...(name ? { name } : {}) };
 };
 
 /**
@@ -87,14 +89,16 @@ export const createAudit = ({ repo, now = Date.now, randomBytes = defaultRandomB
 	/**
 	 * Newest-first entries. `before` is the `{ at, id }` of the last entry of the previous page (keyset pagination
 	 * over the `{ at: -1, _id: -1 }` order).
-	 * `action` is an exact action or a dotted prefix ending in `.*` (`credits.*`).
+	 * `action` is an exact action or a dotted prefix ending in `.*` (`credits.*`). `from` and `to` bound the time
+	 * ([from, to)).
 	 * @param {{ merchantId?: string | null, action?: string, targetId?: string, actorId?: string,
-	 *   before?: { at: Date | number, id: string } | null, limit?: number }} [query]
+	 *   from?: Date | null, to?: Date | null, before?: { at: Date | number, id: string } | null, limit?: number }} [query]
 	 */
-	const list = async ({ merchantId, action, targetId, actorId, before = null, limit = 50 } = {}) => {
+	const list = async ({ merchantId, action, targetId, actorId, from = null, to = null, before = null, limit = 50 } = {}) => {
 		/** @type {Record<string, unknown>} */
 		const filter = {};
 		if (merchantId !== undefined) filter.merchantId = merchantId;
+		if (from || to) filter.at = { ...(from ? { $gte: from } : {}), ...(to ? { $lt: to } : {}) };
 		if (action)
 			filter.action = action.endsWith('.*')
 				? { $regex: `^${action.slice(0, -2).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\.` }
@@ -103,7 +107,7 @@ export const createAudit = ({ repo, now = Date.now, randomBytes = defaultRandomB
 		if (actorId) filter['actor.id'] = actorId;
 		if (before) {
 			const at = new Date(before.at);
-			filter.$or = [{ at: { $lt: at } }, { at, _id: { $lt: before.id } }];
+			filter.$and = [{ $or: [{ at: { $lt: at } }, { at, _id: { $lt: before.id } }] }];
 		}
 		const n = Math.min(Math.max(1, Math.floor(limit)), 200);
 		return repo.find(filter).sort({ at: -1, _id: -1 }).limit(n).toArray();

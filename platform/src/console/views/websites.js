@@ -1,7 +1,7 @@
 'use client';
 /**
- * Websites list, website overview (with the install code) and onboarding (add the first website → connect
- * resources).
+ * Websites list (read only for merchants) and the website overview (with the install code). The add-website form is
+ * used by the admin console.
  * @module
  */
 import { useState } from 'react';
@@ -24,18 +24,18 @@ import {
 	StatusBadge,
 	Stepper,
 	Table,
-	describeProblem,
 	fieldErrors,
 	formatCreditsPerHour,
 	formatDate,
-	formatDateTime,
 	humanize,
 	useToast,
 } from '@ss/ui';
-import { apiFetch, useResource } from '../client.js';
+import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
+import { AUTH, MERCHANT } from '../../texts/console.js';
 import { PageProblem, WebsiteHeader, productName } from './common.js';
+import { contactLine } from './sign-in.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -95,70 +95,35 @@ export function AddWebsiteForm({ merchantId, onAdded, autoFocus = false, fetcher
 }
 
 /**
- * @param {{ ok: boolean, problem?: Problem, merchantId?: string, websites?: any[], subscriptions?: any[] }} props
+ * The merchant's websites (read only: Owner and Support admins add and remove them, PLAN 0.2). With none yet, the
+ * welcome with the support contact (PLAN 0.8.2 Sign-in).
+ * @param {{ ok: boolean, problem?: Problem, merchantId?: string, websites?: any[], subscriptions?: any[],
+ *   branding?: { support: { email: string | null, phone: string | null, whatsapp: string | null } } }} props
  */
 export function WebsitesView(props) {
-	const toast = useToast();
-	const { data, reload } = useResource(props.merchantId ? api.websites(props.merchantId) : null, {
-		items: props.websites ?? [],
-	});
-	const [adding, setAdding] = useState(false);
-	const [deleting, setDeleting] = useState(/** @type {any} */ (null));
-	const [confirmText, setConfirmText] = useState('');
-	const [busy, setBusy] = useState(false);
-	const [deleteProblem, setDeleteProblem] = useState(/** @type {Problem | null} */ (null));
 	if (!props.ok || !props.merchantId) return <PageProblem problem={props.problem} />;
-	const merchantId = props.merchantId;
-	const all = /** @type {any[]} */ (data.items ?? []);
+	const all = /** @type {any[]} */ (props.websites ?? []);
 	const live = all.filter((w) => w.env === 'live');
 	const subs = props.subscriptions ?? [];
 	/** @param {any} w */
 	const subCount = (w) =>
 		subs.filter((s) => (s.websiteId === w.websiteId || s.websiteId === w.twinId) && s.status !== 'cancelled').length;
-	const remove = async () => {
-		if (!deleting) return;
-		setBusy(true);
-		const result = await apiFetch(api.website(merchantId, deleting.websiteId), { method: 'DELETE' });
-		setBusy(false);
-		if (!result.ok) {
-			setDeleteProblem(result.problem);
-			return;
-		}
-		toast.show({
-			title: `${deleting.domain} deleted`,
-			description: result.data?.domainReleaseAt
-				? `The domain can be added again after ${formatDateTime(result.data.domainReleaseAt)}.`
-				: undefined,
-		});
-		setDeleting(null);
-		setConfirmText('');
-		await reload();
-	};
 	return (
 		<div className="space-y-6">
-			<PageHeader
-				title="Websites"
-				subtitle="Each website has its own elements, keys, resources and a test twin."
-				actions={
-					<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
-						Add website
-					</Button>
-				}
-			/>
+			<PageHeader title={MERCHANT.menu.websites} />
 			{live.length === 0 ? (
 				<EmptyState
 					icon="globe"
-					title="Add your first website"
-					description="Type its domain; you can preview and switch on elements without touching its code."
-					action={
-						<ButtonLink as={Link} href={routes.onboarding()} variant="primary">
-							Get started
-						</ButtonLink>
+					title={AUTH.welcomeTitle}
+					description={
+						<>
+							{AUTH.welcome} {AUTH.contactUs} {contactLine(props.branding?.support)}.
+						</>
 					}
 				/>
 			) : (
 				<Table
-					caption="Websites"
+					caption={MERCHANT.menu.websites}
 					rowKey={(w) => w.websiteId}
 					rows={live}
 					defaultSort={{ key: 'domain', direction: 'asc' }}
@@ -175,18 +140,6 @@ export function WebsitesView(props) {
 							),
 						},
 						{
-							key: 'twin',
-							header: 'Test twin',
-							render: (w) =>
-								w.twinId ? (
-									<Link href={routes.website(w.twinId)} className="text-sm text-fg hover:underline">
-										Open test
-									</Link>
-								) : (
-									'—'
-								),
-						},
-						{
 							key: 'subs',
 							header: 'Products',
 							align: 'right',
@@ -194,72 +147,10 @@ export function WebsitesView(props) {
 							sortValue: subCount,
 							render: (w) => subCount(w),
 						},
-						{ key: 'status', header: 'Status', render: (w) => <StatusBadge status={w.status} /> },
 						{ key: 'createdAt', header: 'Added', sortable: true, render: (w) => formatDate(w.createdAt) },
-						{
-							key: 'actions',
-							header: <span className="sr-only">Actions</span>,
-							align: 'right',
-							render: (w) => (
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => {
-										setDeleteProblem(null);
-										setConfirmText('');
-										setDeleting(w);
-									}}
-									aria-label={`Delete ${w.domain}`}>
-									<Icon name="trash" size={14} />
-									<span className="hidden sm:inline">Delete</span>
-								</Button>
-							),
-						},
 					]}
 				/>
 			)}
-			<Dialog
-				open={adding}
-				onClose={() => setAdding(false)}
-				title="Add a website"
-				description="We verify nothing on your site yet.">
-				<AddWebsiteForm
-					merchantId={merchantId}
-					autoFocus
-					onAdded={(w) => {
-						setAdding(false);
-						window.location.assign(routes.onboarding(w.websiteId));
-					}}
-				/>
-			</Dialog>
-			<ConfirmDialog
-				open={Boolean(deleting)}
-				onClose={() => setDeleting(null)}
-				onConfirm={() => {
-					if (confirmText.trim() === deleting?.domain) void remove();
-					else
-						setDeleteProblem({
-							title: 'Type the domain to confirm',
-							detail: `Type ${deleting?.domain} to confirm.`,
-							code: 'validation',
-						});
-				}}
-				danger
-				busy={busy}
-				confirmLabel="Delete website"
-				title={`Delete ${deleting?.domain ?? 'website'}?`}
-				error={deleteProblem ? describeProblem(deleteProblem) : null}>
-				<p className="text-sm text-muted">
-					The website, its test twin, keys and subscriptions stop working immediately. Data in your own resources is not
-					touched.
-				</p>
-				<Input
-					label={`Type ${deleting?.domain ?? ''} to confirm`}
-					value={confirmText}
-					onChange={(e) => setConfirmText(e.currentTarget.value)}
-					autoComplete="off"
-				/>
-			</ConfirmDialog>
 		</div>
 	);
 }
@@ -490,74 +381,6 @@ export function WebsiteOverviewView(props) {
 				)}
 			</Card>
 			<WebsiteSettingsCard merchantId={props.merchantId} website={website} />
-		</div>
-	);
-}
-
-/**
- * @param {any} props loader result of `loadOnboarding`
- */
-export function OnboardingView(props) {
-	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const { merchantId, website, resources, websites } = props;
-	const step = website ? 'resources' : 'website';
-	const steps = [
-		{ id: 'website', label: 'Add your website', description: 'By domain' },
-		{ id: 'resources', label: 'Connect resources', description: 'Your database, storage, keys' },
-		{ id: 'products', label: 'Choose products', description: 'Switch elements on' },
-	];
-	const byKind = new Map(/** @type {any[]} */ (resources).map((r) => [r.kind, r]));
-	return (
-		<div className="mx-auto max-w-3xl space-y-6">
-			<PageHeader title="Welcome" subtitle="Three steps to your first element on your site." />
-			<Card>
-				<Stepper steps={steps} current={step} />
-			</Card>
-			{step === 'website' ? (
-				<Card title="Add your website" subtitle="The site can be built with anything — we integrate by script, edge or API.">
-					{(websites ?? []).length > 0 ? (
-						<p className="mb-4 text-sm text-muted">
-							You already have websites.{' '}
-							<Link href={routes.websites()} className="font-semibold text-primary hover:underline">
-								Go to your websites
-							</Link>{' '}
-							or add another one below.
-						</p>
-					) : null}
-					<AddWebsiteForm
-						merchantId={merchantId}
-						autoFocus
-						onAdded={(w) => window.location.assign(routes.onboarding(w.websiteId))}
-					/>
-				</Card>
-			) : (
-				<Card
-					title={`Connect resources for ${website.domain}`}
-					subtitle="Single Solution never hosts your data: products use your own resources with your own credentials.">
-					<ul className="divide-y divide-line">
-						{RESOURCE_KINDS.map((k) => {
-							const r = byKind.get(k.kind);
-							return (
-								<li key={k.kind} className="flex flex-wrap items-center justify-between gap-3 py-3">
-									<div className="min-w-0">
-										<p className="text-sm font-semibold text-fg">{k.label}</p>
-										<p className="text-xs text-muted">{k.help}</p>
-									</div>
-									{r ? <StatusBadge status={r.status} /> : <Badge>Not connected</Badge>}
-								</li>
-							);
-						})}
-					</ul>
-					<div className="mt-5 flex flex-wrap gap-2">
-						<ButtonLink as={Link} href={routes.resources(website.websiteId)} variant="primary">
-							Connect resources
-						</ButtonLink>
-						<ButtonLink as={Link} href={routes.products(website.websiteId)} variant="secondary">
-							Skip for now — browse products
-						</ButtonLink>
-					</div>
-				</Card>
-			)}
 		</div>
 	);
 }

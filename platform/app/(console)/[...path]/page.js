@@ -1,5 +1,5 @@
 /**
- * The console (and the sign-in pages, including the staff password page): one page (one server function) renders the view of every path — signed-in views inside `ConsoleFrame`
+ * The merchant console and the public account pages (the one sign-in page for admins and merchants): one page (one server function) renders the view of every path — signed-in views inside `ConsoleFrame`
  * (the shell; it sends signed-out visitors to sign in), sign-in views on their own; any other path is a 404.
  * Views keep the `params` / `searchParams` / `metadata` they had as pages.
  */
@@ -11,15 +11,11 @@ import Account, { metadata as AccountMeta } from '../_views/account.js';
 import Credits, { metadata as CreditsMeta } from '../_views/credits.js';
 import ForgotPassword, { metadata as ForgotPasswordMeta } from '../_views/forgot-password.js';
 import Login, { metadata as LoginMeta } from '../_views/login.js';
-import Onboarding, { metadata as OnboardingMeta } from '../_views/onboarding.js';
 import ResetPassword, { metadata as ResetPasswordMeta } from '../_views/reset-password.js';
-import Signup, { metadata as SignupMeta } from '../_views/signup.js';
+import SetPassword, { metadata as SetPasswordMeta } from '../_views/set-password.js';
+import ConfirmEmail, { metadata as ConfirmEmailMeta } from '../_views/confirm-email.js';
 import SpendCap, { metadata as SpendCapMeta } from '../_views/spend-policies.js';
-import Team, { metadata as TeamMeta } from '../_views/team.js';
 import Websites, { metadata as WebsitesMeta } from '../_views/websites.js';
-import InvitesAccept, { metadata as InvitesAcceptMeta } from '../_views/invites-accept.js';
-import SignupVerify, { metadata as SignupVerifyMeta } from '../_views/signup-verify.js';
-import StaffResetPassword, { metadata as StaffResetPasswordMeta } from '../_views/staff-reset-password.js';
 import WebsitesWebsiteId, { metadata as WebsitesWebsiteIdMeta } from '../_views/websites-websiteId.js';
 import WebsitesWebsiteIdIdentity, { metadata as WebsitesWebsiteIdIdentityMeta } from '../_views/websites-websiteId-identity.js';
 import WebsitesWebsiteIdKeys, { metadata as WebsitesWebsiteIdKeysMeta } from '../_views/websites-websiteId-keys.js';
@@ -40,15 +36,11 @@ const VIEWS = /** @type {Array<[string[], (props: any) => any, import('next').Me
 	[['credits'], Credits, CreditsMeta, true],
 	[['forgot-password'], ForgotPassword, ForgotPasswordMeta, false],
 	[['login'], Login, LoginMeta, false],
-	[['onboarding'], Onboarding, OnboardingMeta, true],
 	[['reset-password'], ResetPassword, ResetPasswordMeta, false],
-	[['signup'], Signup, SignupMeta, false],
+	[['set-password'], SetPassword, SetPasswordMeta, false],
+	[['confirm-email'], ConfirmEmail, ConfirmEmailMeta, false],
 	[['spend-policies'], SpendCap, SpendCapMeta, true],
-	[['team'], Team, TeamMeta, true],
 	[['websites'], Websites, WebsitesMeta, true],
-	[['invites', 'accept'], InvitesAccept, InvitesAcceptMeta, false],
-	[['signup', 'verify'], SignupVerify, SignupVerifyMeta, false],
-	[['staff', 'reset-password'], StaffResetPassword, StaffResetPasswordMeta, false],
 	[['websites', ':websiteId'], WebsitesWebsiteId, WebsitesWebsiteIdMeta, true],
 	[['websites', ':websiteId', 'identity'], WebsitesWebsiteIdIdentity, WebsitesWebsiteIdIdentityMeta, true],
 	[['websites', ':websiteId', 'keys'], WebsitesWebsiteIdKeys, WebsitesWebsiteIdKeysMeta, true],

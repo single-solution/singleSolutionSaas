@@ -1,14 +1,16 @@
 'use client';
 /**
- * The signed-in console frame: navigation, merchant and website switchers, balance pill, sign out and the
- * low-balance banner.
+ * The signed-in merchant console frame (PLAN 0.6): navigation, the website switcher, balance pill, sign out and the
+ * banners, with the Branding.
  * @module
  */
 import { usePathname } from 'next/navigation.js';
 import { AppShell, Button, Callout, Icon, ToastProvider, formatCredits, formatHours } from '@ss/ui';
+import { MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { WEBSITE_TABS, routes } from '../paths.js';
+import { accentStyle } from './brand.js';
 
 /** Hours of credits left under which the banner warns. */
 export const LOW_BALANCE_HOURS = 24;
@@ -28,17 +30,16 @@ export const balanceState = (meter) => {
 
 /**
  * @param {{ me: any, merchantId: string | null, websites: any[], meter: any, children: import('react').ReactNode,
- *   notifications?: any[] }} props
+ *   notifications?: any[], branding?: { name: string, accent: string } }} props
  */
-export function ConsoleShell({ me, merchantId, websites, meter, children, notifications = [] }) {
+export function ConsoleShell({ me, merchantId, websites, meter, children, notifications = [], branding }) {
 	const pathname = usePathname() ?? '';
 	const match = /^\/websites\/(web_[0-9a-z]+)(?:\/([a-z-]+))?/.exec(pathname);
 	const currentWebsiteId = match?.[1] ?? null;
 	const currentTab = match ? (match[2] ?? 'overview') : null;
 	const current = websites.find((w) => w.websiteId === currentWebsiteId) ?? null;
 	const live = websites.filter((w) => w.env === 'live');
-	const memberships = /** @type {any[]} */ (me?.memberships ?? []);
-	const merchant = memberships.find((m) => m.merchantId === merchantId) ?? null;
+	const merchant = me?.merchant ?? null;
 	/** @param {string} href */
 	const is = (href) => pathname === href || pathname.startsWith(`${href}/`);
 
@@ -47,11 +48,10 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 		{
 			label: 'Workspace',
 			items: [
-				{ href: routes.websites(), label: 'Websites', icon: 'globe', current: is('/websites') && !current },
+				{ href: routes.websites(), label: MERCHANT.menu.websites, icon: 'globe', current: is('/websites') && !current },
 				{ href: routes.credits(), label: 'Credits', icon: 'wallet', current: is('/credits') },
 				{ href: routes.spendCap(), label: 'Spend cap', icon: 'sliders', current: is('/spend-policies') },
-				{ href: routes.team(), label: 'Team', icon: 'users', current: is('/team') },
-				{ href: routes.account(), label: 'Account', icon: 'user', current: is('/account') },
+				{ href: routes.account(), label: MERCHANT.menu.account, icon: 'user', current: is('/account') },
 			],
 		},
 	];
@@ -69,10 +69,6 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 		});
 	}
 
-	const switchMerchant = async (/** @type {string} */ id) => {
-		const result = await apiFetch('/v1/me/merchant', { method: 'POST', body: { merchantId: id } });
-		if (result.ok) window.location.assign(routes.websites());
-	};
 	/** @param {string} id */
 	const switchWebsite = (id) => {
 		if (!id) return;
@@ -80,7 +76,7 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 		window.location.assign((tab?.href ?? routes.website)(id));
 	};
 	const signOut = async () => {
-		await apiFetch('/v1/auth/merchant/logout', { method: 'POST', redirectOn401: false });
+		await apiFetch('/v1/auth/sign-out', { method: 'POST', redirectOn401: false });
 		window.location.assign(routes.login());
 	};
 
@@ -142,77 +138,61 @@ export function ConsoleShell({ me, merchantId, websites, meter, children, notifi
 
 	return (
 		<ToastProvider>
-			<AppShell
-				linkAs={Link}
-				sections={sections}
-				banner={banner}
-				topbar={
-					<>
-						{memberships.length > 1 ? (
-							<label className="flex items-center gap-2">
-								<span className="sr-only">Organisation</span>
-								<select
-									className={selectClass}
-									value={merchantId ?? ''}
-									onChange={(e) => void switchMerchant(e.currentTarget.value)}>
-									{memberships.map((m) => (
-										<option key={m.merchantId} value={m.merchantId}>
-											{m.name ?? m.merchantId}
-										</option>
-									))}
-								</select>
-							</label>
-						) : (
-							<span className="truncate px-1 text-sm font-bold text-fg">{merchant?.name ?? 'Your organisation'}</span>
-						)}
-						{live.length > 0 ? (
-							<>
-								<Icon name="chevronRight" size={14} className="text-muted" />
-								<label className="flex items-center gap-2">
-									<span className="sr-only">Website</span>
-									<select
-										className={selectClass}
-										value={current ? (current.env === 'live' ? current.websiteId : current.twinId) : ''}
-										onChange={(e) => switchWebsite(e.currentTarget.value)}>
-										<option value="">All websites</option>
-										{live.map((w) => (
-											<option key={w.websiteId} value={w.websiteId}>
-												{w.domain}
-											</option>
-										))}
-									</select>
-								</label>
-							</>
-						) : null}
-					</>
-				}
-				actions={
-					<>
-						{meter && typeof meter.balanceMillicredits === 'number' ? (
-							<Link
-								href={routes.credits()}
-								className="hidden items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong sm:inline-flex"
-								title="Credit balance">
-								<Icon name="wallet" size={14} />
-								<span className="tabular-nums">{formatCredits(meter.balanceMillicredits)}</span>
-							</Link>
-						) : null}
-						<Button variant="ghost" size="sm" onClick={signOut} icon={<Icon name="logout" size={14} />}>
-							<span className="hidden sm:inline">Sign out</span>
-							<span className="sr-only sm:hidden">Sign out</span>
-						</Button>
-					</>
-				}
-				sidebarFooter={
-					<div className="rounded-xl border border-line bg-surface-2 p-3 text-xs">
-						<p className="truncate font-semibold text-fg">{me?.user?.email}</p>
-						<p className="text-muted">
-							{(memberships.find((m) => m.merchantId === merchantId)?.roles ?? []).join(', ') || 'member'}
-						</p>
-					</div>
-				}>
-				{children}
-			</AppShell>
+			<div style={accentStyle(branding?.accent)}>
+				<AppShell
+					brand={{ name: branding?.name ?? 'Single Solution' }}
+					linkAs={Link}
+					sections={sections}
+					banner={banner}
+					topbar={
+						<>
+							<span className="truncate px-1 text-sm font-bold text-fg">{merchant?.name ?? merchantId}</span>
+							{live.length > 0 ? (
+								<>
+									<Icon name="chevronRight" size={14} className="text-muted" />
+									<label className="flex items-center gap-2">
+										<span className="sr-only">Website</span>
+										<select
+											className={selectClass}
+											value={current ? (current.env === 'live' ? current.websiteId : current.twinId) : ''}
+											onChange={(e) => switchWebsite(e.currentTarget.value)}>
+											<option value="">All websites</option>
+											{live.map((w) => (
+												<option key={w.websiteId} value={w.websiteId}>
+													{w.domain}
+												</option>
+											))}
+										</select>
+									</label>
+								</>
+							) : null}
+						</>
+					}
+					actions={
+						<>
+							{meter && typeof meter.balanceMillicredits === 'number' ? (
+								<Link
+									href={routes.credits()}
+									className="hidden items-center gap-1.5 rounded-xl border border-line px-3 py-1.5 text-sm font-semibold text-fg hover:border-line-strong sm:inline-flex"
+									title="Credit balance">
+									<Icon name="wallet" size={14} />
+									<span className="tabular-nums">{formatCredits(meter.balanceMillicredits)}</span>
+								</Link>
+							) : null}
+							<Button variant="ghost" size="sm" onClick={signOut} icon={<Icon name="logout" size={14} />}>
+								<span className="hidden sm:inline">{MERCHANT.signOut}</span>
+								<span className="sr-only sm:hidden">{MERCHANT.signOut}</span>
+							</Button>
+						</>
+					}
+					sidebarFooter={
+						<div className="rounded-xl border border-line bg-surface-2 p-3 text-xs">
+							<p className="truncate font-semibold text-fg">{merchant?.email}</p>
+						</div>
+					}>
+					{children}
+				</AppShell>
+			</div>
 		</ToastProvider>
 	);
 }

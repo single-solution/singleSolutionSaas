@@ -13,6 +13,7 @@ import { getPortal, resetPortal } from '../src/runtime.js';
 import { closeMongoClients } from '../src/infra/db.js';
 import { createSystemStore } from '../src/infra/system.js';
 import {
+	ENCRYPTION_KEY,
 	MERCHANT,
 	MERCHANT_2,
 	PORTAL_URL,
@@ -22,6 +23,7 @@ import {
 	startMongo,
 	testConfig,
 	testEnv,
+	testSessionActor,
 } from './helpers.js';
 
 /** @type {Awaited<ReturnType<typeof startMongo>>} */
@@ -57,6 +59,7 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 			};
 		},
 		ports: () => ({
+			sessionActor: testSessionActor,
 			appKeys: (/** @type {string} */ appId) =>
 				appJwks && appId === 'app_probe' ? createKeyResolver({ jwks: appJwks }) : null,
 			...(withWebsitePort
@@ -73,8 +76,8 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 			defineRoute({
 				method: 'POST',
 				path: '/v1/probe/merchants/:merchantId/items',
-				auth: ['staff', 'merchant'],
-				permission: 'config.write',
+				auth: ['admin', 'merchant'],
+				permission: 'settings.write',
 				idempotent: true,
 				rateLimit: { limit: 5, windowMs: 60_000 },
 				handler: async (c) => {
@@ -94,7 +97,7 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 			defineRoute({
 				method: 'GET',
 				path: '/v1/probe/whoami',
-				auth: ['staff', 'merchant', 'product', 'websiteKey'],
+				auth: ['admin', 'merchant', 'product', 'websiteKey'],
 				handler: (c) =>
 					ok({
 						authMode: c.authMode,
@@ -115,8 +118,8 @@ const probeModule = ({ revoked = new Set(), appJwks = /** @type {any} */ (null),
 			defineRoute({
 				method: 'PUT',
 				path: '/v1/probe/setting',
-				auth: 'staff',
-				permission: 'platform.settings.write',
+				auth: 'admin',
+				permission: 'portal_settings.write',
 				handler: async (c) => {
 					const text = /** @type {any} */ (c.body)?.text;
 					if (typeof text !== 'string' || text === '') return problem('validation_failed', 'text is required');
@@ -212,23 +215,25 @@ describe('Portal end to end', () => {
 		expect((await call('GET', '/v1/probe/foreign')).status).toBe(500); // modules cannot reach other modules' collections
 	});
 
-	it('staff sessions: MFA, RBAC, CSRF, audit', async () => {
+	it('admin sessions: Require two-step, RBAC, CSRF against PORTAL_URL, audit', async () => {
 		const { portal, call } = await boot({ dbName: 'it_staff' });
-		const admin = await login(portal, { kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
-		const support = await login(portal, { kind: 'staff', subject: 'stf_support', roles: ['support'], mfa: true });
-		const halfway = await login(portal, { kind: 'staff', subject: 'stf_new', roles: ['admin'], mfa: false });
+		const admin = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
+		const support = await login(portal, { kind: 'admin', subject: 'adm_support', mfa: true });
+		const halfway = await login(portal, { kind: 'admin', subject: 'adm_owner_pending', mfa: true });
 
 		const who = await call('GET', '/v1/probe/whoami', { headers: { cookie: admin.cookie } });
 		expect(who.json).toMatchObject({
-			authMode: 'staff',
-			actor: { type: 'staff', id: 'stf_admin', roles: ['admin'] },
-			session: { kind: 'staff', mfa: true },
+			authMode: 'admin',
+			actor: { type: 'admin', id: 'adm_owner', role: 'owner' },
+			session: { kind: 'admin', mfa: true },
 		});
-		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: halfway.cookie } })).status).toBe(403);
+		// Require two-step for admins: only the setup routes open (`mfa: false`)
+		const pending = await call('GET', '/v1/probe/whoami', { headers: { cookie: halfway.cookie } });
+		expect([pending.status, pending.json.type]).toEqual([403, `${PORTAL_URL}/problems/two_step_required`]);
 		expect(
 			(
 				await call('GET', '/v1/probe/whoami', {
-					headers: { cookie: `${portal.shared.cookies.name('staff')}=${'x'.repeat(43)}` },
+					headers: { cookie: `${portal.shared.cookies.name('admin')}=${'x'.repeat(43)}` },
 				})
 			).status,
 		).toBe(401);
@@ -258,7 +263,7 @@ describe('Portal end to end', () => {
 		expect(entries).toHaveLength(1);
 		expect(entries[0]).toMatchObject({
 			action: 'probe.setting_set',
-			actor: { type: 'staff', id: 'stf_admin' },
+			actor: { type: 'admin', id: 'adm_owner', name: 'Admin adm_owner' },
 			after: body,
 			requestId: 'req-setting',
 			merchantId: null,
@@ -267,14 +272,8 @@ describe('Portal end to end', () => {
 
 	it('merchant sessions are confined to their merchant; idempotency and rate limits use the shared stores', async () => {
 		const { portal, call } = await boot({ dbName: 'it_merchant' });
-		const owner = await login(portal, { kind: 'merchant', subject: 'usr_owner', merchantId: MERCHANT, roles: ['owner'] });
-		const editor = await login(portal, {
-			kind: 'merchant',
-			subject: 'usr_editor',
-			merchantId: MERCHANT,
-			roles: [],
-			grants: [{ websiteId: WEBSITE, roles: ['editor'] }],
-		});
+		const owner = await login(portal, { kind: 'merchant', subject: MERCHANT });
+		const finance = await login(portal, { kind: 'admin', subject: 'adm_finance' });
 		const path = `/v1/probe/merchants/${MERCHANT}/items`;
 		const headers = { cookie: owner.cookie, ...SAME_ORIGIN };
 
@@ -301,23 +300,18 @@ describe('Portal end to end', () => {
 				})
 			).status,
 		).toBe(403);
+		// Finance never edits settings (PLAN 0.2)
 		expect(
 			(
 				await call('POST', path, {
-					headers: { cookie: editor.cookie, ...SAME_ORIGIN, 'idempotency-key': 'e1' },
+					headers: { cookie: finance.cookie, ...SAME_ORIGIN, 'idempotency-key': 'e1' },
 					body: { name: 'e' },
 				})
 			).status,
 		).toBe(403);
 		expect(await /** @type {any} */ (portal.modules.service('probe')).count(MERCHANT_2)).toBe(0);
-		const who = await call('GET', '/v1/probe/whoami', { headers: { cookie: editor.cookie } });
-		expect(who.json.actor).toEqual({
-			type: 'merchant_user',
-			id: 'usr_editor',
-			roles: [],
-			grants: [{ websiteId: WEBSITE, roles: ['editor'] }],
-			merchantId: MERCHANT,
-		});
+		const who = await call('GET', '/v1/probe/whoami', { headers: { cookie: owner.cookie } });
+		expect(who.json.actor).toEqual({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT });
 	});
 
 	it('product client assertions: app keys port, audience and replay protection', async () => {
@@ -418,8 +412,8 @@ describe('Portal end to end', () => {
 	it('no admin operations: jobs run after the request that enqueued them, the operations routes are gone', async () => {
 		const { portal, call } = await boot({ dbName: 'it_operations' });
 		await portal.ensureIndexes();
-		const staff = await login(portal, { kind: 'staff', subject: 'stf_1', roles: ['superadmin'], mfa: true });
-		const headers = { cookie: staff.cookie, ...SAME_ORIGIN };
+		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
+		const headers = { cookie: owner.cookie, ...SAME_ORIGIN };
 		expect((await call('POST', '/v1/admin/operations/drain', { headers })).status).toBe(404);
 		expect((await call('GET', '/v1/admin/operations', { headers })).status).toBe(404);
 	});
@@ -559,13 +553,13 @@ describe('background (unit)', () => {
 });
 
 describe('sessions (Mongo)', () => {
-	it('create, touch, idle and absolute expiry, rotation, revocation', async () => {
+	it('create, touch, one lifetime from sign-in (Session length), rotation, revocation', async () => {
 		const { portal, clock, config } = await boot({ dbName: 'it_sessions', modules: [] });
 		const sessions = portal.shared.sessions;
+		expect(config.sessions.admin).toEqual({ idleMs: 12 * 3_600_000, absoluteMs: 12 * 3_600_000 });
 		const { token, session } = await sessions.create({
-			kind: 'staff',
-			subject: 'stf_1',
-			roles: ['admin'],
+			kind: 'admin',
+			subject: 'adm_1',
 			mfa: false,
 			ip: '192.0.2.1',
 			userAgent: 'x'.repeat(400),
@@ -583,10 +577,9 @@ describe('sessions (Mongo)', () => {
 		clock.advance(10_000);
 		expect((await sessions.get(token))?.lastSeenAt).not.toEqual(new Date(clock.now())); // throttled touch
 
-		const rotated = await sessions.rotate(token, { mfa: true, roles: ['superadmin'] });
+		const rotated = await sessions.rotate(token, { mfa: true });
 		expect(rotated?.session).toMatchObject({
 			mfa: true,
-			roles: ['superadmin'],
 			createdAt: session.createdAt,
 			absoluteExpiresAt: session.absoluteExpiresAt,
 		});
@@ -595,16 +588,17 @@ describe('sessions (Mongo)', () => {
 		const live = /** @type {string} */ (rotated?.token);
 		expect(await sessions.get(live)).not.toBeNull();
 
-		clock.advance(config.sessions.staff.idleMs + 1);
-		expect(await sessions.get(live)).toBeNull(); // idle expiry
+		clock.advance(config.sessions.admin.absoluteMs + 1);
+		expect(await sessions.get(live)).toBeNull(); // the sign-in's lifetime ended
 
-		const a = await sessions.create({ kind: 'merchant', subject: 'usr_1', merchantId: MERCHANT });
+		const a = await sessions.create({ kind: 'merchant', subject: MERCHANT });
+		expect((await sessions.get(a.token))?.merchantId).toBe(MERCHANT);
 		clock.advance(config.sessions.merchant.absoluteMs + 1);
 		expect(await sessions.get(a.token)).toBeNull(); // absolute expiry
 
-		const s1 = await sessions.create({ kind: 'merchant', subject: 'usr_2', merchantId: MERCHANT });
-		const s2 = await sessions.create({ kind: 'merchant', subject: 'usr_2', merchantId: MERCHANT });
-		const s3 = await sessions.create({ kind: 'merchant', subject: 'usr_2', merchantId: MERCHANT });
+		const s1 = await sessions.create({ kind: 'merchant', subject: 'usr_2' });
+		const s2 = await sessions.create({ kind: 'merchant', subject: 'usr_2' });
+		const s3 = await sessions.create({ kind: 'merchant', subject: 'usr_2' });
 		expect((await sessions.list('merchant', 'usr_2')).length).toBe(3);
 		expect(await sessions.revoke(s1.token)).toBe(true);
 		expect(await sessions.revoke(s1.token)).toBe(false);
@@ -615,27 +609,30 @@ describe('sessions (Mongo)', () => {
 		expect(await sessions.revokeById(s3.session.id, { kind: 'merchant', subject: 'usr_2' })).toBe(true);
 		expect(await sessions.get(undefined)).toBeNull();
 		await expect(sessions.create(/** @type {any} */ ({ kind: 'robot', subject: 'x' }))).rejects.toThrow();
-		await expect(sessions.create({ kind: 'staff', subject: '' })).rejects.toThrow();
+		await expect(sessions.create({ kind: 'admin', subject: '' })).rejects.toThrow();
 	});
 
 	it('session actors can be resolved by a module port', async () => {
-		const deactivated = new Set(['usr_gone']);
+		const deactivated = new Set([MERCHANT_2]);
 		const identity = defineModule({
 			name: 'identity',
 			ports: () => ({
 				sessionActor: (/** @type {any} */ session) =>
-					deactivated.has(session.subject)
-						? null
-						: { type: 'merchant_user', id: session.subject, merchantId: session.merchantId, roles: ['billing'] },
+					deactivated.has(session.subject) ? null : { type: 'merchant', id: session.subject, merchantId: session.subject },
 			}),
 		});
-		const { portal, call } = await boot({ dbName: 'it_session_port', modules: [systemModule, identity, probeModule()] });
-		const live = await login(portal, { kind: 'merchant', subject: 'usr_live', merchantId: MERCHANT, roles: ['owner'] });
-		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: live.cookie } })).json.actor.roles).toEqual(['billing']);
-		const gone = await login(portal, { kind: 'merchant', subject: 'usr_gone', merchantId: MERCHANT });
+		const probe = defineModule({ name: 'probeb', routes: (ctx) => probeModule().routes?.(ctx) ?? [] });
+		const { portal, call } = await boot({ dbName: 'it_session_port', modules: [systemModule, identity, probe] });
+		const live = await login(portal, { kind: 'merchant', subject: MERCHANT });
+		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: live.cookie } })).json.actor).toEqual({
+			type: 'merchant',
+			id: MERCHANT,
+			merchantId: MERCHANT,
+		});
+		const gone = await login(portal, { kind: 'merchant', subject: MERCHANT_2 });
 		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: gone.cookie } })).status).toBe(401);
-		// a merchant cookie does not authenticate as staff
-		const staffName = portal.shared.cookies.name('staff');
+		// a merchant cookie does not authenticate as an admin
+		const staffName = portal.shared.cookies.name('admin');
 		expect((await call('GET', '/v1/probe/whoami', { headers: { cookie: `${staffName}=${live.token}` } })).status).toBe(401);
 		expect(portal.shared.cookies.set('merchant', live.token, 60)).toContain('__Host-ss_merchant=');
 		expect(portal.shared.cookies.clear('merchant')).toContain('Max-Age=0');
@@ -684,64 +681,143 @@ describe('login throttle (Mongo)', () => {
 	});
 });
 
-describe('admin settings (stored in the database, never in the environment)', () => {
-	it('shows the request origin as the Portal URL and sets the mailer, audited', async () => {
+describe('Settings (stored in the database, never in the environment; Owner only)', () => {
+	it('sets e-mail sending (password sealed, never returned), branding, support contact and security, written to Activity', async () => {
 		const db = mongo.db('it_settings');
-		const system = createSystemStore(db);
+		const system = createSystemStore(db, { encryptionKey: ENCRYPTION_KEY });
 		const { portal, call } = await boot({ dbName: 'it_settings', db, system });
-		const admin = await login(portal, { kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
-		const superadmin = await login(portal, { kind: 'staff', subject: 'stf_root', roles: ['superadmin'], mfa: true });
+		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
+		const support = await login(portal, { kind: 'admin', subject: 'adm_support', mfa: true });
 		/** @param {{ cookie: string }} who */
 		const as = (who) => ({ cookie: who.cookie, ...SAME_ORIGIN });
 
-		const read = await call('GET', '/v1/admin/system/settings', { headers: as(admin) });
+		expect((await call('GET', '/v1/admin/settings', { headers: as(support) })).status).toBe(403);
+		const read = await call('GET', '/v1/admin/settings', { headers: as(owner) });
 		expect(read.status).toBe(200);
-		expect(read.json).toMatchObject({ portalUrl: PORTAL_URL, mail: null });
+		expect(read.json).toMatchObject({ mail: null, security: { sessionHours: 12, requireTwoStepForAdmins: false } });
 		expect(JSON.stringify(read.json)).not.toMatch(/seed|keys/);
+		// no stored Portal URL (it is PORTAL_URL) and no key rotation
+		expect((await call('PUT', '/v1/admin/settings/portal-url', { headers: as(owner), body: {} })).status).toBe(404);
+		expect((await call('POST', '/v1/admin/system/keys/signing/rotate', { headers: as(owner) })).status).toBe(404);
 
-		// no stored Portal URL: the route to change it is gone
-		expect((await call('PUT', '/v1/admin/system/settings/portal-url', { headers: as(superadmin), body: {} })).status).toBe(404);
-
-		// no preview URL setting and no key rotation; the mailer (the password is sealed, never returned)
-		expect((await call('PUT', '/v1/admin/system/settings/preview-url', { headers: as(admin), body: {} })).status).toBe(404);
-		expect((await call('POST', '/v1/admin/system/keys/signing/rotate', { headers: as(superadmin) })).status).toBe(404);
 		const mail = {
 			host: 'smtp.example.com',
 			port: 587,
-			secure: false,
 			user: 'mailer',
 			password: 's3cret',
-			from: 'Portal <no-reply@example.com>',
+			senderName: 'Portal',
+			senderAddress: 'no-reply@example.com',
 		};
-		expect(
-			(await call('PUT', '/v1/admin/system/settings/mail', { headers: as(admin), body: { mail: { ...mail, from: 'bad' } } }))
-				.status,
-		).toBe(422);
-		const saved = await call('PUT', '/v1/admin/system/settings/mail', { headers: as(admin), body: { mail } });
+		const bad = await call('PUT', '/v1/admin/settings/mail', {
+			headers: as(owner),
+			body: { mail: { ...mail, senderAddress: 'bad' } },
+		});
+		expect(bad.status).toBe(422);
+		const saved = await call('PUT', '/v1/admin/settings/mail', { headers: as(owner), body: { mail } });
 		expect(saved.json.mail).toEqual({
 			host: 'smtp.example.com',
 			port: 587,
 			secure: false,
 			user: 'mailer',
-			from: mail.from,
+			senderName: 'Portal',
+			senderAddress: 'no-reply@example.com',
 			hasPassword: true,
+			passwordUnreadable: false,
 		});
 		expect(JSON.stringify(saved.json)).not.toContain('s3cret');
-		expect((await system.load()).state.mail?.pass).toBe('s3cret');
+		expect((await system.load()).state.mail).toMatchObject({ pass: 's3cret', from: 'Portal <no-reply@example.com>' });
 		expect(
-			(await call('PUT', '/v1/admin/system/settings/mail', { headers: as(admin), body: { mail: null } })).json.mail,
-		).toBeNull();
+			JSON.stringify(await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('settings') })),
+		).not.toContain('s3cret');
+		expect((await call('PUT', '/v1/admin/settings/mail', { headers: as(owner), body: { mail: null } })).json.mail).toBeNull();
+		// Send test e-mail needs e-mail sending first
+		expect((await call('POST', '/v1/admin/settings/mail/test', { headers: as(owner) })).status).toBe(409);
 
-		const actions = (await db.collection('platform_audit').find({}).toArray()).map((a) => a.action);
-		expect(actions).toEqual(expect.arrayContaining(['system.mail_set']));
+		const branding = await call('PUT', '/v1/admin/settings/branding', {
+			headers: as(owner),
+			body: { name: 'Acme Portal', accent: '#112233' },
+		});
+		expect(branding.json.branding).toMatchObject({ name: 'Acme Portal', accent: '#112233' });
+		expect(
+			(
+				await call('PUT', '/v1/admin/settings/branding', { headers: as(owner), body: { name: '', accent: 'red' } })
+			).json.errors.map((/** @type {any} */ e) => e.path),
+		).toEqual(['/name', '/accent']);
+		const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16, 1)]);
+		const logo = await call('PUT', '/v1/admin/settings/branding/logo', {
+			headers: as(owner),
+			body: { type: 'image/png', data: png.toString('base64') },
+		});
+		expect(logo.json.branding).toMatchObject({ hasLogo: true, logoVersion: 1 });
+		// SVG and mismatching bytes are refused
+		expect(
+			(
+				await call('PUT', '/v1/admin/settings/branding/logo', {
+					headers: as(owner),
+					body: { type: 'image/svg+xml', data: 'PHN2Zz4=' },
+				})
+			).status,
+		).toBe(422);
+		expect(
+			(
+				await call('PUT', '/v1/admin/settings/branding/logo', {
+					headers: as(owner),
+					body: { type: 'image/jpeg', data: png.toString('base64') },
+				})
+			).status,
+		).toBe(422);
+		const served = await portal.handle(new Request(`${PORTAL_URL}/branding/logo`));
+		expect([served.status, served.headers.get('content-type')]).toEqual([200, 'image/png']);
+		expect(Buffer.from(await served.arrayBuffer()).equals(png)).toBe(true);
+		expect((await call('DELETE', '/v1/admin/settings/branding/logo', { headers: as(owner) })).json.branding.hasLogo).toBe(
+			false,
+		);
+		expect((await call('GET', '/branding/logo')).status).toBe(404);
+
+		const supportContact = await call('PUT', '/v1/admin/settings/support', {
+			headers: as(owner),
+			body: { email: 'help@acme.test', phone: '+92 300 1234567', whatsapp: '' },
+		});
+		expect(supportContact.json.support).toEqual({ email: 'help@acme.test', phone: '+92 300 1234567', whatsapp: null });
+		expect(
+			(await call('PUT', '/v1/admin/settings/support', { headers: as(owner), body: { email: 'nope', phone: 'x' } })).status,
+		).toBe(422);
+
+		const security = await call('PUT', '/v1/admin/settings/security', {
+			headers: as(owner),
+			body: { sessionHours: 24, requireTwoStepForAdmins: true },
+		});
+		expect(security.json.security).toEqual({ sessionHours: 24, requireTwoStepForAdmins: true });
+		for (const hours of [0, 337, 1.5])
+			expect(
+				(
+					await call('PUT', '/v1/admin/settings/security', {
+						headers: as(owner),
+						body: { sessionHours: hours, requireTwoStepForAdmins: false },
+					})
+				).status,
+			).toBe(422);
+
+		const entries = await db.collection('platform_audit').find({ action: 'settings.changed' }).toArray();
+		expect(new Set(entries.map((e) => e.target.id))).toEqual(
+			new Set(['mail', 'branding', 'branding_logo', 'support', 'security']),
+		);
+		expect(entries.every((e) => e.actor.type === 'admin' && e.actor.id === 'adm_owner')).toBe(true);
+		expect(JSON.stringify(entries)).not.toContain('s3cret');
 	});
 
-	it('without a settings store the settings API answers 503', async () => {
+	it('serves the public branding, and without a settings store the Settings API answers 503', async () => {
 		const { portal, call } = await boot({ dbName: 'it_settings_none' });
-		const admin = await login(portal, { kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
-		expect((await call('GET', '/v1/admin/system/settings', { headers: { cookie: admin.cookie, ...SAME_ORIGIN } })).status).toBe(
-			503,
-		);
+		const owner = await login(portal, { kind: 'admin', subject: 'adm_owner', mfa: true });
+		expect((await call('GET', '/v1/admin/settings', { headers: { cookie: owner.cookie, ...SAME_ORIGIN } })).status).toBe(503);
+		const branding = await call('GET', '/v1/branding');
+		expect(branding.json).toEqual({
+			name: 'Single Solution',
+			accent: '#4f46e5',
+			logoUrl: null,
+			support: { email: null, phone: null, whatsapp: null },
+		});
+		expect((await call('GET', '/branding/logo')).status).toBe(503);
 	});
 });
 
@@ -761,23 +837,38 @@ describe('runtime', () => {
 		expect(await db.collection('platform_system').findOne({ _id: /** @type {any} */ ('schema') })).toMatchObject({
 			fingerprint: expect.any(String),
 		});
-		// no setup step: the API answers at once, and the Portal URL is the request's origin
+		// no setup step: the API answers at once; the Portal's address is PORTAL_URL, never the request's headers
 		const portal = before;
-		const forwarded = { host: 'portal.example.test', 'x-forwarded-proto': 'https' };
+		expect(portal.config.portalUrl).toBe(PORTAL_URL);
+		const forwarded = {
+			host: 'evil.example.test',
+			'x-forwarded-proto': 'https',
+			origin: PORTAL_URL,
+			'sec-fetch-site': 'same-origin',
+		};
 		const first = await portal.handle(
-			new Request('http://internal/v1/auth/staff/first-admin', {
+			new Request('http://internal/v1/auth/first-admin', {
 				method: 'POST',
 				headers: { ...forwarded, 'content-type': 'application/json' },
-				body: JSON.stringify({ password: 'a-long-enough-passphrase' }),
+				body: JSON.stringify({ name: 'Owner', email: 'owner@portal.test', password: 'a-long-enough-passphrase' }),
 			}),
 		);
 		expect(first.status).toBe(201);
 		const [cookie = ''] = String(first.headers.get('set-cookie')).split(';');
-		expect(cookie).toMatch(/^__Host-ss_staff=/);
+		expect(cookie).toMatch(/^__Host-ss_admin=/);
 		const settings = await portal.handle(
-			new Request('http://internal/v1/admin/system/settings', { headers: { ...forwarded, cookie } }),
+			new Request('http://internal/v1/admin/settings', { headers: { ...forwarded, cookie } }),
 		);
-		expect((await settings.json()).portalUrl).toBe('https://portal.example.test');
+		expect(settings.status).toBe(200);
+		// a write whose Origin is the request's host (not PORTAL_URL) is refused
+		const forged = await portal.handle(
+			new Request('http://internal/v1/me', {
+				method: 'PATCH',
+				headers: { cookie, origin: 'https://evil.example.test', 'content-type': 'application/json' },
+				body: JSON.stringify({ name: 'x' }),
+			}),
+		);
+		expect(forged.status).toBe(403);
 		expect((await import('node:fs')).existsSync(new URL('../app/setup/route.js', import.meta.url))).toBe(false);
 
 		const res = await portal.handle(new Request('https://portal.example.test/v1/catalog/products'));
@@ -904,12 +995,9 @@ describe('infra hardening (Mongo)', () => {
 		expect(await items.countDocuments({ merchantId: MERCHANT })).toBe(1);
 
 		const { can } = portal.shared.rbac;
-		expect(can({ type: 'staff', id: 's', roles: ['admin'] }, 'platform.config.write')).toBe(true);
-		expect(can({ type: 'staff', id: 's', roles: ['superadmin'] }, 'platform.config.write')).toBe(true);
-		expect(can({ type: 'staff', id: 's', roles: ['support'] }, 'platform.config.write')).toBe(false);
-		expect(can({ type: 'merchant_user', id: 'u', merchantId: MERCHANT, roles: ['owner'] }, 'platform.config.write')).toBe(
-			false,
-		);
+		expect(can({ type: 'admin', id: 's', role: 'owner' }, 'defaults.write')).toBe(true);
+		expect(can({ type: 'admin', id: 's', role: 'support' }, 'defaults.write')).toBe(false);
+		expect(can({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'defaults.write')).toBe(false);
 
 		const config = await testConfig();
 		const { logger } = createTestLogger();

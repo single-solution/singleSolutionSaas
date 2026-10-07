@@ -27,7 +27,7 @@ src/
                              locks, transactions, migrations
     schema.js                infra collections (platform_*)
     http.js                  routes, auth modes, CSRF, RBAC, rate limits, idempotency, problems, pagination
-    authenticators.js        staff / merchant / websiteKey / product authenticators (+ ports)
+    authenticators.js        admin / merchant / websiteKey / product authenticators (+ ports)
     stores.js                shared replay, idempotency and rate-limit stores
     crypto.js                Portal signer + JWKS, dedicated website-key signer, envelope encryption, website-secret hashing
     auth.js                  scrypt passwords, TOTP + recovery codes, sessions, cookies, login throttle, CSRF
@@ -43,7 +43,7 @@ src/
   modules/
     index.js                 the module list
     README.md                how to write a module
-    system/                  Portal settings (mail) and the staff audit log search
+    system/                  Portal settings (mail, branding, support, security), Overview and Activity
 scripts/                     db.js (indexes | migrate), dev-mongo.js, dev-env.js
 test/                        vitest; integration tests on one shared MongoMemoryReplSet (the @ss/config Mongo setup)
 ```
@@ -56,7 +56,7 @@ CSRF for cookie sessions (403) → RBAC permission (403) → rate limit (429 + `
 **Idempotency.** The request fingerprint is `HMAC-SHA-256(IDEMPOTENCY_SECRET, method ‖ path ‖ query ‖ body)` (the
 key defaults to an generated idempotency secret), so a stored fingerprint of a body holding a password or a
 credential cannot be brute-forced offline. Route option `idempotent` (POST only): `false` (the default), `true` (key
-required, the response is stored and replayed — website create, invites, staff create, merchant notes, app connect,
+required, the response is stored and replayed — website create, admin invites, merchant create, app connect,
 pack upload, connector create, credits/adjustments/refunds, subscribe, product usage), `'optional'`, or
 `'no-store'` — for requests or responses that carry secrets (login, MFA, password routes, website-key create and
 rotate): the key is optional, only the status and
@@ -65,27 +65,29 @@ the original status) instead of executing twice or re-sending a secret. Use a ne
 
 ### Auth modes
 
-| mode         | credential                                 | verification                                                                                                                             |
-| ------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `staff`      | `__Host-ss_staff` cookie                   | session store; **MFA required once enrolled** (routes opt out with `mfa: false` only for the second-factor step)                         |
-| `merchant`   | `__Host-ss_merchant` cookie                | session store                                                                                                                            |
-| `websiteKey` | `Authorization: Bearer pk_…` / `sk_…`      | `@ss/protocol` `verifyWebsiteKey` with the website-key keys, `websiteKeyRevoked(claims, rawKey)` port, `originAllowed` for `pk_`, scopes |
-| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = the request origin, shared replay store                                                      |
-| `public`     | none                                       | —                                                                                                                                        |
+| mode         | credential                                 | verification                                                                                                                                              |
+| ------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin`      | `__Host-ss_admin` cookie                   | session store; a pending two-step step, or **Require two-step for admins** without it set up, only reaches `mfa: false` routes (`two_step_required`, 403) |
+| `merchant`   | `__Host-ss_merchant` cookie                | session store                                                                                                                                             |
+| `websiteKey` | `Authorization: Bearer pk_…` / `sk_…`      | `@ss/protocol` `verifyWebsiteKey` with the website-key keys, `websiteKeyRevoked(claims, rawKey)` port, `originAllowed` for `pk_`, scopes                  |
+| `product`    | `Authorization: Bearer <client assertion>` | `verifyAssertion` — `appKeys` port, `aud` = `PORTAL_URL`, shared replay store                                                                             |
+| `public`     | none                                       | —                                                                                                                                                         |
 
 A route may list several modes; the first credential present decides (an invalid one fails — it never falls through).
 Modules that receive a website key elsewhere (e.g. a `sendBeacon` body) call `ctx.verifyWebsiteKey({ key, origin,
 referer, keyKind?, scopes?, env? })` — the same implementation as the authenticator (claims, or an infra problem).
 
 **CSRF** (cookie sessions only): mutations must carry `Sec-Fetch-Site: same-origin` when the browser sends it, and an
-`Origin` exactly equal to the request's own origin when sent; a mutation with neither is refused. Together with
+`Origin` exactly equal to the origin of `PORTAL_URL` when sent; a mutation with neither is refused. Together with
 `SameSite=Lax` cookies and JSON-only bodies (form posts get 415), no CSRF token is needed. Bearer-authenticated calls
 (products, website keys) are not subject to CSRF.
 
-**Sessions**: 256-bit opaque tokens; only `HMAC(session secret, token)` is stored; idle and absolute expiry (TTL);
-`rotate` on any privilege change (MFA completed, roles changed) keeps the absolute expiry and kills the
-old token; `revokeAll` for password changes and offboarding. Cookies: `HttpOnly; Secure; SameSite=Lax; Path=/` with
-the `__Host-` prefix whenever Secure (plain-http localhost uses `ss_staff` / `ss_merchant`).
+**Sessions**: 256-bit opaque tokens; only `HMAC(session secret, token)` is stored; one absolute lifetime, the
+**Session length** setting (default 12 hours, 1–336; Admin → Settings → Security), no idle timeout. `rotate` on a
+privilege change keeps the expiry and kills the old token; `revokeAll` on password changes, role changes, suspension
+and removal. One login is one admin or one merchant (e-mails unique across both, `identity_logins`). Cookies:
+`HttpOnly; SameSite=Lax; Path=/`, plus `Secure` and the `__Host-` prefix when `PORTAL_URL` is https (plain-http
+localhost uses `ss_admin` / `ss_merchant`).
 
 **Passwords**: scrypt N=2^15, r=8, p=1, 64-byte key, 16-byte salt; constant-time verify; unknown accounts verify a
 dummy hash. **TOTP**: RFC 6238 SHA-1, 6 digits, 30 s, ±1 step, single use (store the returned step).
@@ -127,7 +129,7 @@ payload is a sealed event. Every request runs in a request scope (`infra/request
 - **a failed job waits** with its next-attempt time until there is a natural reason to retry it: the Event Hub retries
   a product's due deliveries (a few) when the next event is delivered to that product and when that product next calls
   the Portal (the `productCalled` port follows every `product`-auth request); a failed website compile is retried when
-  the website's loader is next served; staff can press "Retry deliveries" (app page);
+  the website's loader is next served; admins can press "Retry deliveries" (app page);
 - **settlement is computed when read**: a merchant settles (idempotently per `periodKey`) before its balance, meter or
   statement is read, when a product fetches an entitlement document or reports usage for one of its websites (usage:
   right after the response), and before a subscription change; low-balance and spend-cap holds are evaluated at the
@@ -152,16 +154,17 @@ Portal. All variables are validated together at start (names only are reported, 
 string, and nothing depends on the hosting provider. The environment comes from `NODE_ENV` (production unless
 `development` or `test`); logs are `info` in production and `debug` in development.
 
-| Variable                                                                                                                      | Description                                                                                                                               |
-| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                                                                                                                 | Control-plane MongoDB (never a client database).                                                                                          |
-| `STORAGE_ENDPOINT`, `STORAGE_REGION` (default `auto`), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | Asset storage for pack files and compiled website bundles: Cloudflare R2 or any S3-compatible service (optional; a bucket in production). |
+| Variable                                                                                                                      | Description                                                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`                                                                                                                 | Control-plane MongoDB (never a client database; production and preview never share one).                                                     |
+| `PORTAL_URL`                                                                                                                  | The Portal's own address (https in production, no path): links in e-mails, token issuer and audience, CSRF origin, the address products pin. |
+| `ENCRYPTION_KEY`                                                                                                              | Random, at least 32 characters: seals the stored secrets (mail password, two-step secrets) with AES-256-GCM.                                 |
+| `STORAGE_ENDPOINT`, `STORAGE_REGION` (default `auto`), `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | Asset storage for pack files and compiled website bundles: Cloudflare R2 or any S3-compatible service (optional; a bucket in production).    |
 
 Optional, never needed: `STORAGE_PREFIX`, `STORAGE_PATH_STYLE`, `STORAGE_DIR` (development only, instead of a bucket:
 a directory or `:memory:`) and `OUTBOUND_DEV_ALLOW_HOSTS` (development only, ignored in production). The full list is
 `ENV_VARS` in `src/infra/config.js`. Everything else is a fixed constant there: database = the path of `MONGODB_URI`
-(else `ss_portal`), pool 5, 1 MiB body cap, staff sessions 30 min idle / 12 h, merchant sessions
-24 h idle / 14 days. Proxies: `X-Forwarded-For` and `X-Forwarded-Proto` are read as the first hop (the proxy in front of
+(else `ss_portal`), pool 5, 1 MiB body cap. Proxies: `X-Forwarded-For` and `X-Forwarded-Proto` are read as the first hop (the proxy in front of
 the Portal) set them — their last entry.
 
 ### Kept in the database (`platform_system`, `src/infra/system.js`)
@@ -169,16 +172,16 @@ the Portal) set them — their last entry.
 - **Generated on first start**, inserted only if absent so concurrent cold starts agree: the Ed25519 Portal signing
   key, the website-key signing key, the encryption key (KEK), the session secret, the key pepper and the idempotency
   secret. Loaded once per instance and cached.
-- **No Portal URL setting**: the Portal's address is each request's origin (`Host` plus `X-Forwarded-Proto` behind a
-  proxy) — the issuer and audience of the tokens it signs, the base of e-mail and launch links and the CSRF origin.
-  Products pin it at connect time (sent in the connect call, signed with their `CONNECT_SECRET`).
-- **First admin**: while no staff user exists, the staff login (`/admin/login`) shows **Choose a password** and
-  **Create admin** (`POST /v1/auth/staff/first-admin`): the visitor becomes the superadmin `admin` (no e-mail) and is
-  signed in. Afterwards staff sign in with `admin` or their e-mail. E-mail, name, password and two-factor sign-in are
-  in Account settings (`/admin/account`, two-factor under Security); the code is asked at sign-in once enrolled. **Do it right after deploying**: until then, whoever opens the staff login
-  first becomes the admin.
-- **Admin → Settings** (`/v1/admin/system/settings…`, audited): the mailer (host, port, TLS, user, password sealed
-  with the encryption key, sender). Every instance applies a change within 5 seconds (a cheap read of the settings
+- **Portal address**: `PORTAL_URL`, never the request's host — the issuer and audience of the tokens it signs, the
+  base of e-mail and launch links and the CSRF origin. Products pin it at connect time.
+- **First admin**: while no admin exists, `/login` shows **Create the first admin** (`POST /v1/auth/first-admin`:
+  name, e-mail, password); the visitor becomes an Owner and is signed in. **Do it right after deploying**: until then,
+  whoever opens the login first becomes the Owner. Everyone (admins and merchants) signs in at `/login` with e-mail and
+  password, plus the two-step code once it is on.
+- **Admin → Settings** (`/v1/admin/settings…`, Owner, audited): Mail (host, port, TLS, user, password sealed with
+  `ENCRYPTION_KEY`, sender name and address, send a test e-mail), Branding (name, accent colour, logo ≤ 200 kB PNG,
+  JPEG or WebP served at `/branding/logo`), Support (e-mail, phone, WhatsApp) and Security (Session length, Require
+  two-step for admins). Every instance applies a change within 5 seconds (a cheap read of the settings
   version).
 - **Indexes and migrations** run automatically on the first request after a deploy, once per schema version, under a
   lock (`scripts/db.js` stays for developers: dry runs, applying ahead of time).
@@ -196,58 +199,52 @@ the Portal) set them — their last entry.
 
 ### Mail
 
-`ctx.mailer` sends the Portal's own mail (templates `verify_email`, `account_exists`, `password_reset`, `invite`,
-`staff_welcome`, `issuer_request`: plain text + simple inline-styled HTML, no external assets, escaped variables, http(s)
+`ctx.mailer` sends the Portal's own mail right after the response (texts in `src/texts/mail.js`: `merchant_setup`,
+`admin_invite`, `password_reset`, `email_change_confirm`, `email_change_notice`, `two_step_off`, `test_email`,
+`issuer_request`; each signed with the Branding name and the Support line; plain text + simple inline-styled HTML, no external assets, escaped variables, http(s)
 links only). With a mailer set in Admin → Settings it is a pooled nodemailer transport (10 s timeouts, TLS ≥ 1.2 with
-certificate checks; in production a non-TLS port must upgrade with STARTTLS). Without one: development/test log the
-message (including the link — never in production); production refuses (503, `available: false`).
+certificate checks; in production a non-TLS port must upgrade with STARTTLS). Without one no mail is sent and the
+action still succeeds; admins copy setup links instead.
 
-### RBAC
+### Rights
 
-Staff permission `platform.config.write` (admin, superadmin) guards admin configuration writes: per-subscription
-admin overrides, locks and rollbacks, and platform policies.
+`src/infra/rbac.js` holds PLAN 0.10.2 as data: three admin roles (Owner, Support, Finance) and the merchant column.
+`can(actor, permission)` decides every route; `websitesVisible(actor)` answers `all`, `own` or `none`. Merchants only
+reach their own merchant. `test/rights.test.js` checks every row and column.
 
 ## Admin Console
 
-Staff console at **`/admin`** (`app/(admin)/` adapters over `src/console/admin/`: `paths.js`, `loaders.js`, `client.js`,
-`views/*`). Same rules as the Merchant Console: every read and action is a public API call (server components call
-`portal.handle` in-process with the request's cookies, browsers `fetch` the same `/v1/*` routes), pages have loading,
-empty and error states, and destructive actions sit behind a typed confirmation (`TypedConfirmDialog`). Navigation
-is filtered by the staff member's permissions (`infra/rbac.js`).
+Admin console at **`/admin`** (`app/(admin)/` adapters over `src/console/admin/`: `paths.js`, `loaders.js`, `client.js`,
+`views/*`). Every read and action is a public API call (server components call `portal.handle` in-process with the
+request's cookies, browsers `fetch` the same `/v1/*` routes); destructive actions sit behind a typed confirmation
+(`TypedConfirmDialog`). Navigation is filtered by the admin's role (`infra/rbac.js`).
 
-- **Sign-in:** `/admin/login` ("Create admin" while no staff user exists; then `admin` or e-mail + password, and the
-  TOTP code for staff who enrolled), `/admin/account` (e-mail, name, password, two-factor enrolment with one-time
-  recovery codes), `/admin/forgot-password`, and `/staff/reset-password` (target of the staff setup and reset e-mails).
-  The staff session is the `__Host-ss_staff` cookie, separate from merchant sessions; a session awaiting its second
-  factor only reaches the MFA routes.
-- **Pages** (`/admin` opens merchants): merchants (search, **Create merchant** → owner's one-time set-password link
-  (72 h, also mailed), detail with websites (add, open: subscriptions and install code, remove), subscribe / change
-  plan / cancel, credits, suspend/resume, notes; the Merchant Console's components with the staff client) · websites (lookup,
-  transfer) · apps (list active/inactive; add product with its URL and connect secret, with a note when element prices
-  changed; Add pack (folder → descriptor POST → asset PUTs); app page with the Active/Inactive switch, Upload widgets
-  (service) or Upload pack version, keys, Retry deliveries, admin launch per merchant or app-wide) · subscriptions
-  (admin overrides and locks, history, rollback) · platform policies per app · finance (credits/adjustments/refunds,
-  ledger and chain verification, alerts) · connectors (status only) · audit log (search) · staff (invite, roles, MFA
-  reset, deactivate) · settings (mail) · Account settings (e-mail, name, password, Security: two-factor sign-in).
+- **Sign-in:** the shared `/login` (with Forgot password, `/reset-password`, `/set-password` for setup links,
+  `/confirm-email`). An admin invite link lasts 24 hours, a merchant setup link 72 hours; links carry the token in
+  the fragment. **My account** (`/admin/account`): name, e-mail change (confirmed from the new address), password,
+  two-step sign-in with 10 recovery codes, own Activity.
+- **Pages:** Overview · Merchants (search by name, e-mail or domain; bulk suspend, resume, send setup links; **Add
+  merchant**; merchant page with details, websites, products, credits, activity; suspend, resume, setup link, turn
+  off two-step, delete) · apps · finance · Activity (filters by actor, merchant, action, dates) · Admins (Owner:
+  invite, resend or copy, correct invite e-mail, change role, turn off two-step, remove; always one Owner) · Settings.
 
-| Route (staff)                                     | Permission                 | Notes                                                                                                                                           |
-| ------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /v1/admin/merchants?q=`                      | `platform.merchants.read`  | `q`: name prefix (case/accent-insensitive `nameKey`) or member e-mail prefix                                                                    |
-| `POST /v1/admin/merchants`                        | `platform.merchants.write` | `{ name, ownerEmail, ownerName? }`: merchant + owner without a password (an existing user becomes owner), set-password link, audited            |
-| `GET\|POST /v1/admin/merchants/:merchantId/notes` | `.read` / `.write`         | append-only staff notes, audited (`merchant.note_added`, body not copied)                                                                       |
-| `GET /v1/admin/audit?actorId&targetId&action`     | `platform.audit.read`      | newest first, cursor pagination; `action` may end in `.*`; no IP addresses                                                                      |
-| `POST /v1/admin/apps/connect`                     | `platform.apps.manage`     | add a product `{ url, secret }`: HMAC-signed call to its `/.well-known/ss-connect`; pins base URL and key; again = rebind (secret never stored) |
-| `POST /v1/admin/packs`                            | `platform.apps.manage`     | `ss pack build` descriptor: a pack version, or the widgets of a service product; assets then `PUT …/packs/:appId/versions/:v/assets/<path>`     |
-| `POST /v1/admin/apps/:appId/status`               | `platform.apps.manage`     | `{ status: 'active' \| 'inactive' }`; activating needs a ready version                                                                          |
-| `GET /v1/admin/system/settings` (`PUT …/mail`)    | `platform.settings.write`  | Portal settings (never key material or the mail password)                                                                                       |
+| Route                                            | Rights (PLAN 0.10.2)                     | Notes                                                                        |
+| ------------------------------------------------ | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `GET\|POST /v1/admin/merchants`                  | `merchants.read` / `.write`              | `q` searches name, e-mail or domain; create sends (or copies) the setup link |
+| `PATCH\|DELETE /v1/admin/merchants/:merchantId`  | `merchants.write` / `.delete`            | delete needs the typed name and no websites                                  |
+| `POST /v1/admin/merchants/bulk`                  | per action                               | suspend, resume, setup links                                                 |
+| `GET\|POST /v1/admin/admins…`                    | `admins.manage` (Owner)                  | invite, role, remove, turn off two-step                                      |
+| `GET /v1/admin/activity`, `/v1/admin/overview`   | `activity.read`, `overview.read`         | Activity stores no personal details and is never edited                      |
+| `GET\|PUT /v1/admin/settings…`                   | `settings.read`, `portal_settings.write` | Mail, Branding, Support, Security                                            |
+| `POST /v1/admin/apps/connect`, `/v1/admin/packs` | `products.manage`                        | add a product or a pack version                                              |
 
 ## Local development
 
 ```bash
 pnpm install                                   # from the repo root (or this folder, once split)
 pnpm --filter @ss/platform db:memory           # terminal 1: docker-free MongoDB (in-memory replica set, port 27999)
-cd platform && pnpm env:dev > .env.local       # NODE_ENV, MONGODB_URI, STORAGE_DIR (local files), dev allowlist
-pnpm --filter @ss/platform dev                 # http://localhost:4000 — then open /admin/login, choose a password
+cd platform && pnpm env:dev > .env.local       # NODE_ENV, MONGODB_URI, PORTAL_URL, ENCRYPTION_KEY, STORAGE_DIR
+pnpm --filter @ss/platform dev                 # http://localhost:4000 — then open /login, create the first admin
 ```
 
 The first request generates the keys and secrets in the database and applies indexes and migrations. A local `mongod`
@@ -256,9 +253,9 @@ The first request generates the keys and secrets in the database and applies ind
 ## Deployment
 
 Any Node 22 host that runs Next.js (`pnpm --filter @ss/platform build` then `start`, a container, or a serverless
-platform), one database and database user on the shared Atlas cluster (PLAN §13, F.19). Set `NODE_ENV=production`
-and `MONGODB_URI` (plus `STORAGE_*` for website scripts), deploy, then open `https://<your domain>/admin/login` at once
-and choose the admin password. The `MongoClient`
+platform), one database and database user on the shared Atlas cluster (PLAN §13, F.19). Set `NODE_ENV=production`,
+`MONGODB_URI`, `PORTAL_URL` and `ENCRYPTION_KEY` (plus `STORAGE_*` for website scripts) as production-only variables,
+deploy, then open `<PORTAL_URL>/login` at once and create the first admin. The `MongoClient`
 is created once per instance and cached on `globalThis`. There is nothing to schedule and nothing to run by hand.
 
 ## Checks

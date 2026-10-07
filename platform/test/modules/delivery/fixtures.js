@@ -10,7 +10,7 @@ import { defineModule } from '../../../src/infra/modules.js';
 import { commerceModule } from '../../../src/modules/commerce/index.js';
 import { createDeliveryModule } from '../../../src/modules/delivery/index.js';
 import { createMemoryStorage } from '../../../src/modules/delivery/storage.js';
-import { PORTAL_URL, T0, createClock, createTestLogger, testConfig } from '../../helpers.js';
+import { PORTAL_URL, T0, createClock, createTestLogger, testConfig, testLogin, testSessionActor } from '../../helpers.js';
 
 export const M1 = 'mer_0123456789abcdefghjkmnpq';
 export const M2 = 'mer_1123456789abcdefghjkmnpq';
@@ -20,8 +20,8 @@ export const PACK = 'app_0123456789abcdefghjkmnpq';
 export const SERVICE = 'app_1123456789abcdefghjkmnpq';
 export const BIG = 'app_2123456789abcdefghjkmnpq';
 export const DOMAIN = 'shop.example.com';
-export const MERCHANT_ACTOR = Object.freeze({ type: 'merchant_user', id: 'usr_owner', merchantId: M1, roles: ['owner'] });
-export const STAFF_ACTOR = Object.freeze({ type: 'staff', id: 'stf_alice', roles: ['admin'] });
+export const MERCHANT_ACTOR = Object.freeze({ type: 'merchant', id: M1, merchantId: M1 });
+export const STAFF_ACTOR = Object.freeze({ type: 'admin', id: 'adm_owner_alice', role: 'owner' });
 
 /** Pack module files (ESM without imports, so tests can load them from data: URLs). */
 export const PACK_FILES = Object.freeze({
@@ -215,6 +215,7 @@ export const createWorld = () => {
 export const fakeModules = (world) => [
 	defineModule({
 		name: 'identity',
+		ports: () => ({ sessionActor: testSessionActor }),
 		service: () => ({
 			getMerchant: async (/** @type {string} */ id) =>
 				world.merchants.get(id) ?? Promise.reject(problem('not_found', 'No such merchant.')),
@@ -304,16 +305,11 @@ export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, syst
 	/** @type {import('../../../src/modules/delivery/service.js').DeliveryService} */
 	const service = /** @type {any} */ (portal.modules.service('delivery'));
 
-	/** @param {{ kind?: 'staff' | 'merchant', merchantId?: string, roles?: string[] }} [who] */
-	const cookie = async ({ kind = 'merchant', merchantId = M1, roles = ['owner'] } = {}) => {
-		const { token } = await portal.shared.sessions.create({
-			kind,
-			subject: kind === 'staff' ? 'stf_alice' : 'usr_owner',
-			roles,
-			mfa: true,
-			...(kind === 'merchant' ? { merchantId } : {}),
-		});
-		return `${portal.shared.cookies.name(kind)}=${token}`;
+	/** @param {{ kind?: 'admin' | 'merchant', merchantId?: string, role?: string }} [who] */
+	const cookie = async ({ kind = 'merchant', merchantId = M1, role = 'owner' } = {}) => {
+		const login = testLogin({ kind, role, merchantId });
+		const { token } = await portal.shared.sessions.create({ ...login, mfa: true });
+		return `${portal.shared.cookies.name(login.kind)}=${token}`;
 	};
 
 	/**
@@ -355,7 +351,7 @@ export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, syst
 	 * @param {string} appId @param {number} [version] @param {ReadonlyArray<string>} [paths]
 	 */
 	const uploadAll = async (appId, version = 1, paths = Object.keys(PACK_FILES)) => {
-		const staff = await cookie({ kind: 'staff', roles: ['admin'] });
+		const staff = await cookie({ kind: 'admin', role: 'owner' });
 		for (const asset of packAssets().filter((a) => paths.includes(a.path))) {
 			const res = await request('PUT', `/v1/admin/packs/${appId}/versions/${version}/assets/${asset.path}`, {
 				raw: fileBytes(asset.path),
@@ -374,7 +370,7 @@ export const bootDelivery = async ({ db, clock = createClock(T0), env = {}, syst
 			amountMillicredits: 100_000,
 			reference: `ref-${randomUUID()}`,
 			note: 'test',
-			actor: /** @type {any} */ ({ type: 'staff', id: 'stf_finance', roles: ['finance'] }),
+			actor: /** @type {any} */ ({ type: 'admin', id: 'adm_finance', role: 'finance' }),
 		});
 		return commerce.subscribe({ websiteId, appId, planCode: 'free', actor: /** @type {any} */ (MERCHANT_ACTOR) });
 	};

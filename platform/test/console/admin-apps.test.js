@@ -16,7 +16,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-const STAFF = { staffId: 'stf_1', roles: ['superadmin'] };
+const STAFF = { adminId: 'adm_1', role: 'owner' };
 const APP_ID = 'app_0000000000notice';
 const UPLOAD_PATH = `/v1/admin/packs/${APP_ID}/versions/2/assets/`;
 
@@ -225,7 +225,7 @@ describe('adminUpload', () => {
 const appPage = (app, manifest = null) =>
 	render(
 		<ToastProvider>
-			<AppView ok app={app} manifest={manifest} staff={STAFF} />
+			<AppView ok app={app} manifest={manifest} admin={STAFF} />
 		</ToastProvider>,
 	);
 

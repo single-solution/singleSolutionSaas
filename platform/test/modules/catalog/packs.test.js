@@ -31,8 +31,8 @@ const bundle = ({ manifest = packManifest(), assets = packAssets() } = {}) => ({
 	descriptor: { format: BUNDLE_FORMAT, manifest, assets },
 });
 
-/** @param {Awaited<ReturnType<typeof boot>>} t @param {any} body @param {string[]} [roles] */
-const upload = (t, body, roles) => t.staff('POST', '/v1/admin/packs', { body, ...(roles ? { roles } : {}) });
+/** @param {Awaited<ReturnType<typeof boot>>} t @param {any} body @param {string} [role] */
+const upload = (t, body, role) => t.staff('POST', '/v1/admin/packs', { body, ...(role ? { role } : {}) });
 
 /** @param {Awaited<ReturnType<typeof boot>>} t @param {string} appId @param {string} status */
 const setStatus = (t, appId, status) => t.staff('POST', `/v1/admin/apps/${appId}/status`, { body: { status } });
@@ -149,7 +149,7 @@ describe('element packs', () => {
 		problemOf(await upload(t, bundle({ manifest: broken })), 422, 'invalid_manifest');
 		const missing = problemOf(await upload(t, bundle({ assets: packAssets().slice(1) })), 422, 'catalog_bundle_invalid');
 		expect(missing.errors[0].path).toBe('/descriptor/manifest/elements/0/headless');
-		problemOf(await upload(t, bundle(), ['support']), 403);
+		problemOf(await upload(t, bundle(), 'support'), 403);
 	});
 
 	it('keeps slugs unique across kinds', async () => {
@@ -189,7 +189,7 @@ describe('service widgets', () => {
 			{
 				appId,
 				descriptor: { format: BUNDLE_FORMAT, manifest: serviceManifest(), assets: widgetAssets() },
-				actor: expect.objectContaining({ id: 'stf_alice' }),
+				actor: expect.objectContaining({ id: 'adm_owner_alice' }),
 			},
 		]);
 
@@ -267,7 +267,7 @@ describe('catalog reads', () => {
 		expect(inactive.json.items.map((/** @type {any} */ a) => a.slug)).toEqual(['gamma']);
 		problemOf(await t.staff('GET', '/v1/admin/apps?status=bogus'), 400);
 		problemOf(await t.staff('GET', '/v1/admin/apps?kind=bogus'), 400);
-		problemOf(await t.staff('GET', '/v1/admin/apps', { roles: [] }), 403);
+		problemOf(await t.staff('GET', '/v1/admin/apps', { role: null }), 403);
 		problemOf(await t.staff('GET', '/v1/admin/apps/app_nope'), 404);
 	});
 });

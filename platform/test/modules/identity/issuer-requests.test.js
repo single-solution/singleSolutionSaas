@@ -17,7 +17,7 @@ describe('product identity issuer requests', () => {
 	it('stores a pending request the merchant approves or rejects; identical requests are no-ops', async () => {
 		const h = await boot();
 		const owner = await h.signupOwner('owner@shop.test');
-		const created = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'shop.example.com' });
+		const created = await owner.admin.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'shop.example.com' });
 		const websiteId = created.json.website.websiteId;
 		const product = async (/** @type {unknown} */ body, id = websiteId) =>
 			h.call('PUT', `/v1/product/websites/${id}/identity`, {

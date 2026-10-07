@@ -18,7 +18,7 @@ afterAll(async () => {
 	await mongo?.stop();
 });
 
-const MERCHANT_ACTOR = { type: 'merchant_user', id: 'usr_owner', merchantId: M1, roles: ['owner'] };
+const MERCHANT_ACTOR = { type: 'merchant', id: M1, merchantId: M1 };
 
 /**
  * @param {any} h @param {string} jws
@@ -255,7 +255,7 @@ describe('billing semantics (F.1)', () => {
 		const other = await h.service.subscribe({
 			websiteId: W3,
 			appId: APP2,
-			actor: { type: 'staff', id: 'stf_1', roles: ['admin'] },
+			actor: { type: 'admin', id: 'adm_owner', role: 'owner' },
 		});
 		const auth = await h.productAuth(APP);
 		const record = (/** @type {string} */ key, /** @type {number} */ quantity, extra = {}) => ({
@@ -619,7 +619,7 @@ describe('entitlement documents', () => {
 		await h.credit(M1, 100_000);
 		await h.credit(M2, 100_000);
 		const a = await h.service.subscribe({ websiteId: W1, appId: APP, planCode: 'starter', actor: MERCHANT_ACTOR });
-		await h.service.subscribe({ websiteId: W3, appId: APP, actor: { type: 'staff', id: 'stf_1', roles: ['admin'] } });
+		await h.service.subscribe({ websiteId: W3, appId: APP, actor: { type: 'admin', id: 'adm_owner', role: 'owner' } });
 		expect(h.world.calls.lastHint).toMatchObject({ appId: APP });
 		const events = h.world.events.length;
 		const preview = await h.service.previewDocument({

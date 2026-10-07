@@ -45,10 +45,10 @@ const product = async (t, { manifest = serviceManifest(), kid, secret } = {}) =>
  * Admin → Apps → Add product (URL + connect secret).
  * @param {Awaited<ReturnType<typeof boot>>} t
  * @param {{ url: unknown, secret?: unknown }} body
- * @param {string[]} [roles]
+ * @param {string} [role]
  */
-const connect = (t, { url, secret = PRODUCT_SECRET }, roles) =>
-	t.staff('POST', '/v1/admin/apps/connect', { body: { url, secret }, ...(roles ? { roles } : {}) });
+const connect = (t, { url, secret = PRODUCT_SECRET }, role) =>
+	t.staff('POST', '/v1/admin/apps/connect', { body: { url, secret }, ...(role ? { role } : {}) });
 
 describe('onboarding with the connect secret (Portal side)', () => {
 	it('adds a product: the Portal calls its ss-connect with the HMAC, verifies the answer and pins it', async () => {
@@ -109,7 +109,7 @@ describe('onboarding with the connect secret (Portal side)', () => {
 		p.tamper.connect = 'other_nonce';
 		expect((await connect(t, { url: p.url })).status).toBe(502);
 		delete p.tamper.connect;
-		problemOf(await connect(t, { url: p.url }, ['support']), 403, 'forbidden');
+		problemOf(await connect(t, { url: p.url }, 'support'), 403, 'forbidden');
 		expect((await t.staff('GET', '/v1/admin/apps')).json.items).toEqual([]);
 		expect((await connect(t, { url: p.url })).status).toBe(201);
 	});

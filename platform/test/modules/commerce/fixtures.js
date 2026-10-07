@@ -16,7 +16,7 @@ export const W3 = 'web_2123456789abcdefghjkmnpq';
 export const APP = 'app_0123456789abcdefghjkmnpq';
 export const APP2 = 'app_1123456789abcdefghjkmnpq';
 export const HOUR = 3_600_000;
-export const STAFF = Object.freeze({ type: 'staff', id: 'stf_finance', roles: ['finance'] });
+export const STAFF = Object.freeze({ type: 'admin', id: 'adm_finance', role: 'finance' });
 export const ORIGIN_HEADERS = Object.freeze({ origin: PORTAL_URL, 'sec-fetch-site': 'same-origin' });
 
 /**

@@ -1,21 +1,24 @@
 /**
- * HTTP routes of the `identity` module — thin adapters: parse (core/inputs), authorise, call the service.
+ * HTTP routes of the `identity` module — thin adapters: parse (core/inputs), authorise (PLAN 0.2 rights table, see
+ * `infra/rbac.js`), call the service.
  *
- * - `/v1/auth/*` (public, rate-limited): signup, e-mail verification, login (+ MFA step), password reset, invites;
- *   staff login and the MFA routes a half-signed-in staff session may reach (`mfa: false`).
- * - `/v1/me/*` (staff or merchant session): profile, password, MFA, sessions, merchant switch.
- * - `/v1/merchants/:merchantId/*` (merchant session or staff): merchant, team, websites, keys.
- * - `/v1/admin/*` (staff): merchants (create, search, notes), websites, staff users.
+ * - `/v1/auth/*` (public, rate-limited): the one sign-in page (+ two-step step), Create admin, Forgot password,
+ *   setup links, reset links, e-mail confirmation; sign-out.
+ * - `/v1/me/*` (admin or merchant session): the signed-in person, their details, e-mail, password and two-step.
+ * - `/v1/merchants/:merchantId/*` (merchant session for its own records, or admin): websites, keys, issuers.
+ * - `/v1/admin/*` (admin): merchants (create, search, edit, suspend, resume, setup links, two-step off, delete,
+ *   bulk actions) and admins (invite, resend or copy, correct e-mail, change role, two-step off, remove).
  * - `GET /v1/product/revocations?since=` (client assertion, F.9).
  *
- * Creates require an `Idempotency-Key` (`idempotent: true`). Responses that carry secrets (website keys, MFA secrets
- * and recovery codes, challenges) opt out of idempotent replay (`idempotent: 'no-store'`): the idempotency store
- * persists response bodies.
+ * Responses that carry secrets (setup links, two-step secrets and recovery codes, website keys) opt out of
+ * idempotent replay (`idempotent: 'no-store'`): the idempotency store persists response bodies.
  * @module
  */
 import { readCookie } from '../../infra/auth.js';
 import { created, defineRoute, noContent, ok, paginate, problem } from '../../infra/http.js';
+import { PERMISSIONS as P } from '../../infra/rbac.js';
 import { inputs } from './core/inputs.js';
+import { presentMerchant } from './core/present.js';
 import { parseIssuer } from './core/issuer.js';
 
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
@@ -26,6 +29,7 @@ import { parseIssuer } from './core/issuer.js';
 /** @typedef {import('./core/inputs.js').FieldError} FieldError */
 
 const AUTH_LIMIT = Object.freeze({ limit: 60, windowMs: 60_000 });
+const STATUSES = Object.freeze(['active', 'suspended']);
 
 /**
  * @template T
@@ -54,13 +58,13 @@ const sessionOf = (c) => /** @type {import('../../infra/auth.js').Session} */ (c
 const withCookie = ({ cookie, ...body }, { status = 200 } = {}) => ok(body, { status, cookies: cookie ? [cookie] : [] });
 
 /**
- * Merchant users may only address their own merchant (checked before any lookup, so ids of other merchants are
- * neither confirmed nor denied).
+ * Merchants may only address their own records (checked before any lookup, so ids of other merchants are neither
+ * confirmed nor denied).
  * @param {RequestContext} c
  */
 const ownMerchant = (c) => {
 	const actor = actorOf(c);
-	if (actor.type === 'merchant_user' && actor.merchantId !== c.params.merchantId)
+	if (actor.type === 'merchant' && actor.merchantId !== c.params.merchantId)
 		throw problem('forbidden', 'This merchant is not yours.');
 	return /** @type {string} */ (c.params.merchantId);
 };
@@ -71,18 +75,18 @@ const ownMerchant = (c) => {
  * @returns {RouteDefinition[]}
  */
 export const identityRoutes = (ctx, service) => {
-	const { accounts, teams, websites, keys, issuers, issuerRequests, admin } = service;
+	const { accounts, admins, merchants, websites, keys, issuers, issuerRequests } = service;
 
 	/**
 	 * @param {RequestContext} c
-	 * @param {'staff' | 'merchant'} kind
+	 * @param {'admin' | 'merchant'} kind
 	 */
 	const tokenOf = (c, kind) => readCookie(c.headers.get('cookie'), ctx.cookies.name(kind)) ?? '';
 	/** @param {RequestContext} c */
-	const kindOf = (c) => /** @type {'staff' | 'merchant'} */ (c.authMode === 'staff' ? 'staff' : 'merchant');
+	const kindOf = (c) => /** @type {'admin' | 'merchant'} */ (c.authMode === 'admin' ? 'admin' : 'merchant');
 
 	/**
-	 * Load the website (tenant-scoped), then authorise against its live id (grants cover the test twin).
+	 * Load the website (tenant-scoped), then authorise against it.
 	 * @param {RequestContext} c
 	 * @param {string} permission
 	 */
@@ -96,89 +100,33 @@ export const identityRoutes = (ctx, service) => {
 	/** @type {RouteDefinition[]} */
 	const routes = [
 		// ---------------------------------------------------------------------------------------------------------
-		// Merchant auth (public)
+		// Sign-in (public)
 		{
 			method: 'POST',
-			path: '/v1/auth/merchant/signup',
+			path: '/v1/auth/sign-in',
 			auth: 'public',
 			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
-			handler: async (c) => ok(await accounts.signup(valid(inputs.signup(c.body))), { status: 202 }),
+			handler: async (c) => withCookie(await accounts.signIn(valid(inputs.signIn(c.body)), metaOf(c))),
 		},
 		{
 			method: 'POST',
-			path: '/v1/auth/merchant/verify-email',
+			path: '/v1/auth/sign-in/two-step',
 			auth: 'public',
 			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
-			handler: async (c) =>
-				withCookie(await accounts.verifyEmail(valid(inputs.tokenOnly(c.body)), metaOf(c)), { status: 201 }),
+			handler: async (c) => withCookie(await accounts.signInTwoStep(valid(inputs.twoStepSignIn(c.body)), metaOf(c))),
 		},
 		{
-			method: 'POST',
-			path: '/v1/auth/merchant/login',
+			method: 'GET',
+			path: '/v1/auth/first-admin',
 			auth: 'public',
-			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
-			handler: async (c) => withCookie(await accounts.merchantLogin(valid(inputs.login(c.body)), metaOf(c))),
+			handler: async () => ok({ available: await accounts.firstAdminAvailable() }),
 		},
 		{
 			method: 'POST',
-			path: '/v1/auth/merchant/login/mfa',
-			auth: 'public',
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) => withCookie(await accounts.merchantLoginMfa(valid(inputs.mfaChallenge(c.body)), metaOf(c))),
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/merchant/logout',
-			auth: 'merchant',
-			handler: async (c) => noContent({ cookies: [(await accounts.logout('merchant', tokenOf(c, 'merchant'))).cookie] }),
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/merchant/password-reset',
-			auth: 'public',
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) =>
-				ok(await accounts.requestPasswordReset('merchant', valid(inputs.emailOnly(c.body))), { status: 202 }),
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/merchant/password-reset/confirm',
-			auth: 'public',
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) => {
-				await accounts.confirmPasswordReset('merchant', valid(inputs.resetConfirm(c.body)), metaOf(c));
-				return noContent();
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/invites/accept',
-			auth: 'public',
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) => withCookie(await accounts.acceptInvite(valid(inputs.inviteAccept(c.body)), metaOf(c))),
-		},
-
-		// ---------------------------------------------------------------------------------------------------------
-		// Staff auth
-		{
-			method: 'POST',
-			path: '/v1/auth/staff/login',
-			auth: 'public',
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) => withCookie(await accounts.staffLogin(valid(inputs.staffLogin(c.body)), metaOf(c))),
-		},
-		{
-			// first run: while no staff user exists, the visitor chooses a password and becomes the superadmin `admin`
-			method: 'POST',
-			path: '/v1/auth/staff/first-admin',
+			path: '/v1/auth/first-admin',
 			auth: 'public',
 			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
@@ -187,90 +135,107 @@ export const identityRoutes = (ctx, service) => {
 		},
 		{
 			method: 'POST',
-			path: '/v1/auth/staff/mfa/verify',
-			auth: 'staff',
-			mfa: false,
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) =>
-				withCookie(
-					await accounts.staffVerifyMfa(
-						{ ...valid(inputs.mfaCode(c.body)), session: sessionOf(c), token: tokenOf(c, 'staff') },
-						metaOf(c),
-					),
-				),
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/staff/mfa/enrol',
-			auth: 'staff',
-			mfa: false,
-			idempotent: 'no-store',
-			handler: async (c) => ok(await accounts.mfaEnrol('staff', sessionOf(c).subject)),
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/staff/mfa/confirm',
-			auth: 'staff',
-			mfa: false,
-			idempotent: 'no-store',
-			rateLimit: AUTH_LIMIT,
-			handler: async (c) =>
-				withCookie(
-					await accounts.mfaConfirm(
-						'staff',
-						{ ...valid(inputs.mfaConfirm(c.body)), id: sessionOf(c).subject, token: tokenOf(c, 'staff') },
-						metaOf(c),
-					),
-				),
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/staff/logout',
-			auth: 'staff',
-			mfa: false,
-			handler: async (c) => noContent({ cookies: [(await accounts.logout('staff', tokenOf(c, 'staff'))).cookie] }),
-		},
-		{
-			method: 'POST',
-			path: '/v1/auth/staff/password-reset',
+			path: '/v1/auth/forgot-password',
 			auth: 'public',
 			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
-			handler: async (c) => ok(await accounts.requestPasswordReset('staff', valid(inputs.emailOnly(c.body))), { status: 202 }),
+			handler: async (c) => ok(await accounts.forgotPassword(valid(inputs.emailOnly(c.body))), { status: 202 }),
 		},
 		{
 			method: 'POST',
-			path: '/v1/auth/staff/password-reset/confirm',
+			path: '/v1/auth/reset-password',
 			auth: 'public',
 			idempotent: 'no-store',
 			rateLimit: AUTH_LIMIT,
 			handler: async (c) => {
-				await accounts.confirmPasswordReset('staff', valid(inputs.resetConfirm(c.body)), metaOf(c));
+				await accounts.resetPassword(valid(inputs.resetConfirm(c.body)), metaOf(c));
 				return noContent();
+			},
+		},
+		{
+			method: 'POST',
+			path: '/v1/auth/set-password/check',
+			auth: 'public',
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) => ok(await accounts.checkSetupLink(valid(inputs.tokenOnly(c.body)))),
+		},
+		{
+			method: 'POST',
+			path: '/v1/auth/set-password',
+			auth: 'public',
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) => withCookie(await accounts.setPassword(valid(inputs.setupConfirm(c.body)), metaOf(c))),
+		},
+		{
+			method: 'POST',
+			path: '/v1/auth/confirm-email',
+			auth: 'public',
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) => ok(await accounts.confirmEmail(valid(inputs.tokenOnly(c.body)), metaOf(c))),
+		},
+		{
+			method: 'POST',
+			path: '/v1/auth/sign-out',
+			auth: ['admin', 'merchant'],
+			mfa: false,
+			handler: async (c) => {
+				const kind = kindOf(c);
+				return noContent({ cookies: [(await accounts.signOut(kind, tokenOf(c, kind))).cookie] });
 			},
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Me
+		// The signed-in person
 		{
 			method: 'GET',
 			path: '/v1/me',
-			auth: ['staff', 'merchant'],
-			handler: async (c) => ok(await accounts.me(sessionOf(c))),
+			auth: ['admin', 'merchant'],
+			mfa: false,
+			handler: async (c) => ok(await accounts.me(sessionOf(c), actorOf(c))),
 		},
 		{
 			method: 'PATCH',
 			path: '/v1/me',
-			auth: 'staff',
+			auth: ['admin', 'merchant'],
+			handler: async (c) => {
+				const id = sessionOf(c).subject;
+				if (kindOf(c) === 'admin')
+					return ok(await accounts.updateAdminProfile({ ...valid(inputs.adminProfile(c.body)), id }, metaOf(c)));
+				return ok(
+					await merchants.update({
+						merchantId: id,
+						...valid(inputs.merchantProfile(c.body)),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				);
+			},
+		},
+		{
+			method: 'POST',
+			path: '/v1/me/email',
+			auth: ['admin', 'merchant'],
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
 			handler: async (c) =>
-				ok(await accounts.updateStaffProfile({ ...valid(inputs.staffProfile(c.body)), id: sessionOf(c).subject }, metaOf(c))),
+				ok(
+					await accounts.requestEmailChange(
+						kindOf(c),
+						{ ...valid(inputs.emailChange(c.body)), id: sessionOf(c).subject },
+						metaOf(c),
+					),
+					{ status: 202 },
+				),
 		},
 		{
 			method: 'POST',
 			path: '/v1/me/password',
-			auth: ['staff', 'merchant'],
+			auth: ['admin', 'merchant'],
 			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
 			handler: async (c) => {
 				const kind = kindOf(c);
 				await accounts.changePassword(
@@ -283,205 +248,84 @@ export const identityRoutes = (ctx, service) => {
 		},
 		{
 			method: 'POST',
-			path: '/v1/me/merchant',
-			auth: 'merchant',
+			path: '/v1/me/two-step/start',
+			auth: ['admin', 'merchant'],
+			mfa: false,
 			idempotent: 'no-store',
-			handler: async (c) =>
-				withCookie(
-					await accounts.switchMerchant({
-						...valid(inputs.switchMerchant(c.body)),
-						session: sessionOf(c),
-						token: tokenOf(c, 'merchant'),
-					}),
-				),
+			handler: async (c) => ok(await accounts.twoStepStart(kindOf(c), sessionOf(c).subject)),
 		},
 		{
 			method: 'POST',
-			path: '/v1/me/mfa/enrol',
-			auth: 'merchant',
+			path: '/v1/me/two-step/confirm',
+			auth: ['admin', 'merchant'],
+			mfa: false,
 			idempotent: 'no-store',
-			handler: async (c) => ok(await accounts.mfaEnrol('merchant', sessionOf(c).subject)),
-		},
-		{
-			method: 'POST',
-			path: '/v1/me/mfa/confirm',
-			auth: 'merchant',
-			idempotent: 'no-store',
-			handler: async (c) =>
-				withCookie(
-					await accounts.mfaConfirm(
-						'merchant',
-						{ ...valid(inputs.mfaConfirm(c.body)), id: sessionOf(c).subject, token: tokenOf(c, 'merchant') },
-						metaOf(c),
-					),
-				),
-		},
-		{
-			method: 'POST',
-			path: '/v1/me/mfa/disable',
-			auth: 'merchant',
-			idempotent: 'no-store',
-			handler: async (c) =>
-				ok(await accounts.mfaDisable({ ...valid(inputs.mfaDisable(c.body)), id: sessionOf(c).subject }, metaOf(c))),
-		},
-		{
-			method: 'POST',
-			path: '/v1/me/mfa/recovery-codes',
-			auth: ['staff', 'merchant'],
-			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
 			handler: async (c) =>
 				ok(
-					await accounts.regenerateRecoveryCodes(
+					await accounts.twoStepConfirm(
 						kindOf(c),
-						{ ...valid(inputs.mfaCode(c.body)), id: sessionOf(c).subject },
+						{ ...valid(inputs.twoStepConfirm(c.body)), id: sessionOf(c).subject },
 						metaOf(c),
 					),
 				),
 		},
 		{
-			method: 'GET',
-			path: '/v1/me/sessions',
-			auth: ['staff', 'merchant'],
-			handler: async (c) => ok({ items: await accounts.listSessions(sessionOf(c)) }),
+			method: 'POST',
+			path: '/v1/me/two-step/off',
+			auth: ['admin', 'merchant'],
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) =>
+				ok(
+					await accounts.twoStepOff(
+						kindOf(c),
+						{ ...valid(inputs.twoStepWithPassword(c.body)), id: sessionOf(c).subject },
+						metaOf(c),
+					),
+				),
 		},
 		{
-			method: 'DELETE',
-			path: '/v1/me/sessions/:sessionId',
-			auth: ['staff', 'merchant'],
-			handler: async (c) => {
-				await accounts.revokeSession(sessionOf(c), /** @type {string} */ (c.params.sessionId));
-				return noContent();
-			},
+			method: 'POST',
+			path: '/v1/me/two-step/recovery-codes',
+			auth: ['admin', 'merchant'],
+			idempotent: 'no-store',
+			rateLimit: AUTH_LIMIT,
+			handler: async (c) =>
+				ok(
+					await accounts.newRecoveryCodes(
+						kindOf(c),
+						{ ...valid(inputs.twoStepWithPassword(c.body)), id: sessionOf(c).subject },
+						metaOf(c),
+					),
+				),
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Merchant console
+		// A merchant's records (the merchant itself, or admins)
 		{
 			method: 'GET',
 			path: '/v1/merchants/:merchantId',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.read',
-			handler: async (c) => ok(await teams.getMerchant(ownMerchant(c))),
-		},
-		{
-			method: 'PATCH',
-			path: '/v1/merchants/:merchantId',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.settings.write',
-			handler: async (c) =>
-				ok(
-					await teams.renameMerchant({
-						merchantId: ownMerchant(c),
-						...valid(inputs.merchantUpdate(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'GET',
-			path: '/v1/merchants/:merchantId/team',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.team.read',
-			handler: async (c) => ok(await teams.listTeam(ownMerchant(c))),
-		},
-		{
-			method: 'POST',
-			path: '/v1/merchants/:merchantId/team/invites',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.team.manage',
-			idempotent: true,
-			handler: async (c) =>
-				created(
-					await teams.invite({
-						merchantId: ownMerchant(c),
-						...valid(inputs.invite(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'DELETE',
-			path: '/v1/merchants/:merchantId/team/invites/:inviteId',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.team.manage',
-			handler: async (c) => {
-				await teams.revokeInvite({
-					merchantId: ownMerchant(c),
-					inviteId: /** @type {string} */ (c.params.inviteId),
-					actor: actorOf(c),
-					meta: metaOf(c),
-				});
-				return noContent();
-			},
-		},
-		{
-			method: 'PATCH',
-			path: '/v1/merchants/:merchantId/team/members/:userId',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.team.manage',
-			handler: async (c) =>
-				ok(
-					await teams.updateMember({
-						merchantId: ownMerchant(c),
-						userId: /** @type {string} */ (c.params.userId),
-						...valid(inputs.memberUpdate(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'DELETE',
-			path: '/v1/merchants/:merchantId/team/members/:userId',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.team.manage',
-			handler: async (c) => {
-				await teams.removeMember({
-					merchantId: ownMerchant(c),
-					userId: /** @type {string} */ (c.params.userId),
-					actor: actorOf(c),
-					meta: metaOf(c),
-				});
-				return noContent();
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/merchants/:merchantId/owner/transfer',
-			auth: ['merchant', 'staff'],
-			permission: 'merchant.owner.transfer',
-			idempotent: 'no-store',
-			handler: async (c) =>
-				ok(
-					await teams.transferOwnership({
-						merchantId: ownMerchant(c),
-						...valid(inputs.ownerTransfer(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'GET',
-			path: '/v1/merchants/:merchantId/websites',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
+			permission: P.merchantsRead,
 			handler: async (c) => {
 				const merchantId = ownMerchant(c);
-				const visible = ctx.rbac.websitesVisible(actorOf(c), 'websites.read');
-				if (visible !== 'all' && visible.length === 0) throw problem('forbidden', 'Missing permission websites.read.');
-				const all = await websites.listWebsites(merchantId);
-				const items =
-					visible === 'all' ? all : all.filter((w) => visible.includes(w.env === 'live' ? w.websiteId : String(w.twinId)));
-				return ok({ items });
+				if (actorOf(c).type === 'admin') return ok(await merchants.get(merchantId));
+				return ok(presentMerchant(await merchants.load(merchantId), { forAdmin: false }));
 			},
+		},
+		{
+			method: 'GET',
+			path: '/v1/merchants/:merchantId/websites',
+			auth: ['merchant', 'admin'],
+			permission: P.websitesRead,
+			handler: async (c) => ok({ items: await websites.listWebsites(ownMerchant(c)) }),
 		},
 		{
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites',
-			auth: ['merchant', 'staff'],
-			permission: 'websites.create',
+			auth: ['admin', 'merchant'],
+			permission: P.websitesWrite,
 			idempotent: true,
 			handler: async (c) =>
 				created(
@@ -496,19 +340,19 @@ export const identityRoutes = (ctx, service) => {
 		{
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/websites/:websiteId',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				const { website } = await authorizedWebsite(c, 'websites.read');
+				const { website } = await authorizedWebsite(c, P.websitesRead);
 				return ok(await websites.getWebsite(String(website._id), String(website.merchantId)));
 			},
 		},
 		{
-			// website settings (F.16): merchants and staff (Admin Console) alike
+			// website settings (F.16) until the switch (PLAN 0.12 step 5)
 			method: 'PATCH',
 			path: '/v1/merchants/:merchantId/websites/:websiteId',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
 				const settings = valid(inputs.websiteSettings(c.body));
 				return ok(
 					await websites.updateSettings({
@@ -524,20 +368,26 @@ export const identityRoutes = (ctx, service) => {
 		{
 			method: 'DELETE',
 			path: '/v1/merchants/:merchantId/websites/:websiteId',
-			auth: ['merchant', 'staff'],
+			auth: ['admin', 'merchant'],
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, 'websites.delete');
+				const { merchantId, website } = await authorizedWebsite(c, P.websitesWrite);
 				return ok(
-					await websites.deleteWebsite({ merchantId, websiteId: String(website._id), actor: actorOf(c), meta: metaOf(c) }),
+					await websites.removeWebsite({
+						merchantId,
+						websiteId: String(website._id),
+						...valid(inputs.websiteRemove(c.body)),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
 				);
 			},
 		},
 		{
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, 'keys.read');
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
 				return ok({ items: await keys.listKeys({ merchantId, websiteId: String(website._id) }) });
 			},
 		},
@@ -545,20 +395,20 @@ export const identityRoutes = (ctx, service) => {
 			// the scope vocabulary keys are checked against (F.16): platform scopes + per listed service product
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/scopes',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				await authorizedWebsite(c, 'keys.read');
+				await authorizedWebsite(c, P.tokensManage);
 				return ok({ defaults: ['elements.read', 'events.write'], items: await keys.scopeCatalogue() });
 			},
 		},
 		{
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			idempotent: 'no-store',
 			handler: async (c) => {
 				const body = valid(inputs.keyIssue(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, 'keys.manage');
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
 				return created(
 					await keys.issueKey({
 						merchantId,
@@ -576,11 +426,11 @@ export const identityRoutes = (ctx, service) => {
 		{
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/:keyId/rotate',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			idempotent: 'no-store',
 			handler: async (c) => {
 				const body = valid(inputs.keyRotate(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, 'keys.manage');
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
 				return created(
 					await keys.rotateKey({
 						merchantId,
@@ -596,10 +446,10 @@ export const identityRoutes = (ctx, service) => {
 		{
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/keys/:keyId/revoke',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
 				const body = valid(inputs.keyRevoke(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, 'keys.manage');
+				const { merchantId, website } = await authorizedWebsite(c, P.tokensManage);
 				return ok(
 					await keys.revokeKey({
 						merchantId,
@@ -614,13 +464,13 @@ export const identityRoutes = (ctx, service) => {
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Bring-your-own customer identity (one issuer per website)
+		// Bring-your-own customer identity (one issuer per website) until the switch (PLAN 0.12 step 5)
 		{
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, 'websites.read');
+				const { merchantId, website } = await authorizedWebsite(c, P.settingsRead);
 				const websiteId = String(website._id);
 				return ok({
 					issuer: await issuers.getIssuer({ merchantId, websiteId }),
@@ -631,12 +481,12 @@ export const identityRoutes = (ctx, service) => {
 		.../** @type {const} */ (['approve', 'reject']).map((decision) => ({
 			method: /** @type {const} */ ('POST'),
 			path: `/v1/merchants/:merchantId/websites/:websiteId/identity/request/${decision}`,
-			auth: /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'staff']),
+			auth: /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'admin']),
 			idempotent: /** @type {const} */ ('optional'),
 			/** @param {RequestContext} c */
 			handler: async (c) => {
 				const body = valid(inputs.keyRevoke(c.body));
-				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
 				return ok(
 					await issuerRequests.decide({
 						merchantId,
@@ -653,18 +503,14 @@ export const identityRoutes = (ctx, service) => {
 			// console notifications: pending product requests across the merchant's websites (F.16)
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/notifications',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
+			permission: P.settingsRead,
 			handler: async (c) => {
 				const merchantId = ownMerchant(c);
-				const visible = ctx.rbac.websitesVisible(actorOf(c), 'websites.read');
 				const all = await issuerRequests.pendingForMerchant({ merchantId });
 				const live = new Map((await websites.listWebsites(merchantId)).map((w) => [w.websiteId, w]));
 				const items = all
-					.filter((r) => {
-						const w = live.get(r.websiteId);
-						const id = w ? (w.env === 'live' ? w.websiteId : String(w.twinId)) : null;
-						return id !== null && (visible === 'all' || visible.includes(id));
-					})
+					.filter((r) => live.has(r.websiteId))
 					.map((r) => ({
 						kind: 'identity_issuer_request',
 						websiteId: r.websiteId,
@@ -677,9 +523,9 @@ export const identityRoutes = (ctx, service) => {
 		{
 			method: 'PUT',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
 				const input = valid(parseIssuer(c.body));
 				return ok({
 					issuer: await issuers.setIssuer({
@@ -695,9 +541,9 @@ export const identityRoutes = (ctx, service) => {
 		{
 			method: 'DELETE',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/identity',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
 				return ok(
 					await issuers.removeIssuer({ merchantId, websiteId: String(website._id), actor: actorOf(c), meta: metaOf(c) }),
 				);
@@ -706,11 +552,11 @@ export const identityRoutes = (ctx, service) => {
 		{
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/identity/refresh',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			idempotent: 'optional',
 			rateLimit: { limit: 10, windowMs: 60_000 },
 			handler: async (c) => {
-				const { merchantId, website } = await authorizedWebsite(c, 'websites.write');
+				const { merchantId, website } = await authorizedWebsite(c, P.settingsWrite);
 				return ok({
 					issuer: await issuers.refreshKeys({
 						merchantId,
@@ -723,154 +569,114 @@ export const identityRoutes = (ctx, service) => {
 		},
 
 		// ---------------------------------------------------------------------------------------------------------
-		// Admin (staff)
+		// Admin: merchants
 		{
 			method: 'GET',
 			path: '/v1/admin/merchants',
-			auth: 'staff',
-			permission: 'platform.merchants.read',
+			auth: 'admin',
+			permission: P.merchantsRead,
 			handler: async (c) => {
-				const page = paginate({ cursor: c.query.cursor, limit: c.query.limit, url: c.request.url });
-				const status = c.query.status === 'active' || c.query.status === 'suspended' ? c.query.status : undefined;
-				const q = typeof c.query.q === 'string' ? c.query.q : undefined;
-				if (q !== undefined && q.length > 120) throw problem('bad_request', 'q must be at most 120 characters');
-				const rows = await admin.listMerchants({
-					after: typeof page.after === 'string' ? page.after : null,
+				const status = c.query.status;
+				if (status !== undefined && !STATUSES.includes(status))
+					return problem('validation_failed', 'status must be active or suspended.');
+				const q = c.query.q;
+				if (q !== undefined && q.length > 120) return problem('validation_failed', 'q is at most 120 characters.');
+				const page = paginate({ cursor: c.query.cursor, limit: c.query.limit, url: c.request.url }, { defaultLimit: 50 });
+				const after = typeof page.after === 'string' ? page.after : null;
+				const items = await merchants.list({
+					after,
 					limit: page.fetchLimit,
 					...(status ? { status } : {}),
 					...(q ? { q } : {}),
 				});
-				return page.respond(rows, (m) => String(m._id), admin.presentMerchant);
+				return page.respond(items, (m) => m.merchantId);
 			},
 		},
 		{
-			// the response carries a one-time set-password link: never replayed from the idempotency store
 			method: 'POST',
 			path: '/v1/admin/merchants',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
+			auth: 'admin',
+			permission: P.merchantsWrite,
 			idempotent: 'no-store',
 			handler: async (c) =>
-				created(await admin.createMerchant({ ...valid(inputs.merchantCreate(c.body)), actor: actorOf(c), meta: metaOf(c) })),
+				created(await merchants.create({ ...valid(inputs.merchantCreate(c.body)), actor: actorOf(c), meta: metaOf(c) })),
+		},
+		{
+			method: 'POST',
+			path: '/v1/admin/merchants/bulk',
+			auth: 'admin',
+			permission: P.merchantsSuspend,
+			idempotent: 'optional',
+			handler: async (c) => {
+				const body = valid(inputs.bulk(c.body));
+				if (body.action === 'resend_setup_link') c.authorize(P.merchantsSetupLink, {});
+				return ok(await merchants.bulk({ ...body, actor: actorOf(c), meta: metaOf(c) }));
+			},
 		},
 		{
 			method: 'GET',
 			path: '/v1/admin/merchants/:merchantId',
-			auth: 'staff',
-			permission: 'platform.merchants.read',
-			handler: async (c) => {
-				const merchantId = /** @type {string} */ (c.params.merchantId);
-				return ok({ ...(await teams.getMerchant(merchantId)), websites: await websites.listWebsites(merchantId) });
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/merchants/:merchantId/suspend',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
-			handler: async (c) =>
-				ok(
-					await admin.suspendMerchant({
-						merchantId: /** @type {string} */ (c.params.merchantId),
-						...valid(inputs.reason(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/merchants/:merchantId/resume',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
-			handler: async (c) =>
-				ok(
-					await admin.resumeMerchant({
-						merchantId: /** @type {string} */ (c.params.merchantId),
-						...valid(inputs.reason(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'GET',
-			path: '/v1/admin/merchants/:merchantId/notes',
-			auth: 'staff',
-			permission: 'platform.merchants.read',
-			handler: async (c) => {
-				const limit = /^\d{1,3}$/.test(c.query.limit ?? '') ? Math.min(100, Math.max(1, Number(c.query.limit))) : 100;
-				return ok({ items: await admin.listNotes({ merchantId: /** @type {string} */ (c.params.merchantId), limit }) });
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/merchants/:merchantId/notes',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
-			idempotent: true,
-			handler: async (c) =>
-				created(
-					await admin.addNote({
-						merchantId: /** @type {string} */ (c.params.merchantId),
-						...valid(inputs.note(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'GET',
-			path: '/v1/admin/websites',
-			auth: 'staff',
-			permission: 'platform.merchants.read',
-			handler: async (c) => {
-				const env = c.query.env === 'test' ? 'test' : 'live';
-				const website = await websites.websiteByDomain(String(c.query.domain ?? ''), { env });
-				return ok({ items: website ? [website] : [] });
-			},
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/websites/:websiteId/transfer',
-			auth: 'staff',
-			permission: 'platform.merchants.write',
-			handler: async (c) =>
-				ok(
-					await websites.transferWebsite({
-						websiteId: /** @type {string} */ (c.params.websiteId),
-						...valid(inputs.websiteTransfer(c.body)),
-						actor: actorOf(c),
-						meta: metaOf(c),
-					}),
-				),
-		},
-		{
-			method: 'GET',
-			path: '/v1/admin/staff',
-			auth: 'staff',
-			permission: 'platform.staff.manage',
-			handler: async () => ok({ items: await admin.listStaff() }),
-		},
-		{
-			method: 'POST',
-			path: '/v1/admin/staff',
-			auth: 'staff',
-			permission: 'platform.staff.manage',
-			idempotent: true,
-			handler: async (c) =>
-				created(await admin.createStaff({ ...valid(inputs.staffCreate(c.body)), actor: actorOf(c), meta: metaOf(c) })),
+			auth: 'admin',
+			permission: P.merchantsRead,
+			handler: async (c) => ok(await merchants.get(/** @type {string} */ (c.params.merchantId))),
 		},
 		{
 			method: 'PATCH',
-			path: '/v1/admin/staff/:staffId',
-			auth: 'staff',
-			permission: 'platform.staff.manage',
+			path: '/v1/admin/merchants/:merchantId',
+			auth: 'admin',
+			permission: P.merchantsWrite,
 			handler: async (c) =>
 				ok(
-					await admin.updateStaff({
-						staffId: /** @type {string} */ (c.params.staffId),
-						...valid(inputs.staffUpdate(c.body)),
+					await merchants.update({
+						merchantId: /** @type {string} */ (c.params.merchantId),
+						...valid(inputs.merchantUpdate(c.body)),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				),
+		},
+		{
+			method: 'DELETE',
+			path: '/v1/admin/merchants/:merchantId',
+			auth: 'admin',
+			permission: P.merchantsDelete,
+			handler: async (c) => {
+				await merchants.remove({
+					merchantId: /** @type {string} */ (c.params.merchantId),
+					...valid(inputs.merchantDelete(c.body)),
+					actor: actorOf(c),
+					meta: metaOf(c),
+				});
+				return noContent();
+			},
+		},
+		.../** @type {const} */ (['suspend', 'resume']).map((action) => ({
+			method: /** @type {const} */ ('POST'),
+			path: `/v1/admin/merchants/:merchantId/${action}`,
+			auth: /** @type {const} */ ('admin'),
+			permission: P.merchantsSuspend,
+			idempotent: /** @type {const} */ ('optional'),
+			/** @param {RequestContext} c */
+			handler: async (c) => {
+				const merchantId = /** @type {string} */ (c.params.merchantId);
+				if (action === 'suspend')
+					return ok(
+						await merchants.suspend({ merchantId, ...valid(inputs.reason(c.body)), actor: actorOf(c), meta: metaOf(c) }),
+					);
+				return ok(await merchants.resume({ merchantId, actor: actorOf(c), meta: metaOf(c) }));
+			},
+		})),
+		{
+			method: 'POST',
+			path: '/v1/admin/merchants/:merchantId/setup-link',
+			auth: 'admin',
+			permission: P.merchantsSetupLink,
+			idempotent: 'no-store',
+			handler: async (c) =>
+				ok(
+					await merchants.setupLink({
+						merchantId: /** @type {string} */ (c.params.merchantId),
+						...valid(inputs.linkAction(c.body)),
 						actor: actorOf(c),
 						meta: metaOf(c),
 					}),
@@ -878,16 +684,91 @@ export const identityRoutes = (ctx, service) => {
 		},
 		{
 			method: 'POST',
-			path: '/v1/admin/staff/:staffId/mfa/reset',
-			auth: 'staff',
-			permission: 'platform.staff.manage',
+			path: '/v1/admin/merchants/:merchantId/two-step/off',
+			auth: 'admin',
+			permission: P.twoStepTurnOff,
+			idempotent: 'optional',
+			handler: async (c) =>
+				ok(
+					await accounts.turnOffTwoStepFor('merchant', {
+						id: /** @type {string} */ (c.params.merchantId),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				),
+		},
+
+		// ---------------------------------------------------------------------------------------------------------
+		// Admin: admins (Owner only)
+		{
+			method: 'GET',
+			path: '/v1/admin/admins',
+			auth: 'admin',
+			permission: P.adminsManage,
+			handler: async () => ok({ items: await admins.list() }),
+		},
+		{
+			method: 'POST',
+			path: '/v1/admin/admins',
+			auth: 'admin',
+			permission: P.adminsManage,
+			idempotent: 'no-store',
+			handler: async (c) =>
+				created(await admins.invite({ ...valid(inputs.adminInvite(c.body)), actor: actorOf(c), meta: metaOf(c) })),
+		},
+		{
+			method: 'PATCH',
+			path: '/v1/admin/admins/:adminId',
+			auth: 'admin',
+			permission: P.adminsManage,
+			handler: async (c) =>
+				ok(
+					await admins.update({
+						adminId: /** @type {string} */ (c.params.adminId),
+						...valid(inputs.adminUpdate(c.body)),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				),
+		},
+		{
+			method: 'POST',
+			path: '/v1/admin/admins/:adminId/invite',
+			auth: 'admin',
+			permission: P.adminsManage,
+			idempotent: 'no-store',
+			handler: async (c) =>
+				ok(
+					await admins.resendInvite({
+						adminId: /** @type {string} */ (c.params.adminId),
+						...valid(inputs.linkAction(c.body)),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				),
+		},
+		{
+			method: 'POST',
+			path: '/v1/admin/admins/:adminId/two-step/off',
+			auth: 'admin',
+			permission: P.twoStepTurnOff,
+			idempotent: 'optional',
+			handler: async (c) =>
+				ok(
+					await accounts.turnOffTwoStepFor('admin', {
+						id: /** @type {string} */ (c.params.adminId),
+						actor: actorOf(c),
+						meta: metaOf(c),
+					}),
+				),
+		},
+		{
+			method: 'DELETE',
+			path: '/v1/admin/admins/:adminId',
+			auth: 'admin',
+			permission: P.adminsManage,
 			handler: async (c) => {
-				await admin.resetStaffMfa({
-					staffId: /** @type {string} */ (c.params.staffId),
-					...valid(inputs.reason(c.body)),
-					actor: actorOf(c),
-					meta: metaOf(c),
-				});
+				await admins.remove({ adminId: /** @type {string} */ (c.params.adminId), actor: actorOf(c), meta: metaOf(c) });
 				return noContent();
 			},
 		},

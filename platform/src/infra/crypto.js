@@ -16,7 +16,7 @@
  * Format: `ssenc1.<kekId>.<b64url(wrapIv ‖ wrappedKey ‖ wrapTag)>.<b64url(iv ‖ ciphertext ‖ tag)>`.
  * @module
  */
-import { createCipheriv, createDecipheriv } from 'node:crypto';
+import { createCipheriv, createDecipheriv, hkdfSync } from 'node:crypto';
 import { compareSecretKey, createJwks, createKeyResolver, createSigner, hashSecretKey, toPublicJwk } from '@ss/protocol';
 import { platformError } from './errors.js';
 import { defaultRandomBytes, isObject, stableJson } from './util.js';
@@ -228,6 +228,21 @@ export const createEnvelope = ({ keks, randomBytes = defaultRandomBytes }) => {
 	});
 };
 /** @typedef {ReturnType<typeof createEnvelope>} Envelope */
+
+/**
+ * Encryption of the Portal's stored secrets that must be read back (PLAN 0.4.8: the SMTP password and two-step
+ * secrets; server tokens from step 5) with `ENCRYPTION_KEY`, which is used for nothing else and never stored. The
+ * same AES-256-GCM sealing as the envelope, under one key derived from `ENCRYPTION_KEY` (HKDF-SHA-256). A value
+ * sealed under another `ENCRYPTION_KEY` fails to open (`decrypt_failed`): callers treat it as not set.
+ * @param {{ encryptionKey: string, randomBytes?: (n: number) => Uint8Array }} options
+ * @returns {Envelope}
+ */
+export const createSecretBox = ({ encryptionKey, randomBytes = defaultRandomBytes }) => {
+	if (typeof encryptionKey !== 'string' || encryptionKey.length < 32)
+		throw platformError('config_invalid', 'ENCRYPTION_KEY must be at least 32 characters');
+	const key = Buffer.from(hkdfSync('sha256', Buffer.from(encryptionKey, 'utf8'), Buffer.alloc(0), 'ss-portal-secrets.v1', KEY));
+	return createEnvelope({ keks: [{ id: 'ek1', key }], randomBytes });
+};
 
 /**
  * Website secret keys at rest: HMAC-SHA-256 with the generated key pepper, compared in constant time.

@@ -1,113 +1,98 @@
 'use client';
 /**
- * The signed-in Admin Console frame: navigation filtered by the staff member's permissions, the staff identity,
- * Account settings and sign out. Every staff action is audited; the frame says so.
+ * The signed-in admin console frame (PLAN 0.6): the admin menu (Overview · Merchants · Products · Credits and billing ·
+ * Admins · Settings · Activity) filtered by the admin's role, My account and sign out, with the Branding. While
+ * Settings → Security → Require two-step for admins applies to this admin, the frame shows only the two-step setup.
  * @module
  */
 import { usePathname } from 'next/navigation.js';
-import { AppShell, Badge, Button, Icon, ToastProvider } from '@ss/ui';
+import { AppShell, Button, Callout, Card, Icon, PageHeader, ToastProvider } from '@ss/ui';
+import { ADMIN, TWO_STEP } from '../../../texts/console.js';
 import { Link } from '../../link.js';
+import { accentStyle } from '../../views/brand.js';
+import { TwoStepSetup } from '../../views/login-settings.js';
 import { adminFetch } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { Roles, staffCan } from './common.js';
+import { RoleBadge, adminCan } from './common.js';
 
 /**
- * Navigation entries and the permission each needs.
- * @type {ReadonlyArray<{ label: string, items: ReadonlyArray<{ href: string, label: string, icon: import('@ss/ui').IconName,
- *   permission: string, exact?: boolean }> }>}
+ * The admin menu and the permission each entry needs (PLAN 0.6 Admin menu, 0.2 rights table).
+ * @type {ReadonlyArray<{ href: string, label: string, icon: import('@ss/ui').IconName, permission: string, exact?: boolean }>}
  */
 export const ADMIN_NAV = Object.freeze([
-	{
-		label: 'Customers',
-		items: [
-			{ href: '/admin/merchants', label: 'Merchants', icon: 'users', permission: 'platform.merchants.read' },
-			{ href: '/admin/websites', label: 'Websites', icon: 'globe', permission: 'platform.merchants.read' },
-			{ href: '/admin/subscriptions', label: 'Subscriptions', icon: 'sliders', permission: 'config.read' },
-		],
-	},
-	{
-		label: 'Products',
-		items: [{ href: '/admin/apps', label: 'Apps', icon: 'box', permission: 'platform.apps.read' }],
-	},
-	{
-		label: 'Money',
-		items: [{ href: adminRoutes.finance(), label: 'Finance', icon: 'wallet', permission: 'platform.finance.read' }],
-	},
-	{
-		label: 'Operations',
-		items: [
-			{ href: '/admin/connectors', label: 'Connectors', icon: 'plug', permission: 'platform.merchants.read' },
-			{ href: '/admin/audit', label: 'Audit log', icon: 'shield', permission: 'platform.audit.read' },
-		],
-	},
-	{
-		label: 'Team',
-		items: [
-			{ href: adminRoutes.staff(), label: 'Staff', icon: 'key', permission: 'platform.staff.manage' },
-			{ href: adminRoutes.settings(), label: 'Settings', icon: 'sliders', permission: 'platform.settings.write' },
-		],
-	},
+	{ href: adminRoutes.overview(), label: ADMIN.menu.overview, icon: 'grid', permission: 'overview.read', exact: true },
+	{ href: adminRoutes.merchants(), label: ADMIN.menu.merchants, icon: 'users', permission: 'merchants.read' },
+	{ href: adminRoutes.apps(), label: ADMIN.menu.products, icon: 'box', permission: 'products.manage' },
+	{ href: adminRoutes.finance(), label: ADMIN.menu.billing, icon: 'wallet', permission: 'billing.read' },
+	{ href: adminRoutes.admins(), label: ADMIN.menu.admins, icon: 'key', permission: 'admins.manage' },
+	{ href: adminRoutes.settings(), label: ADMIN.menu.settings, icon: 'sliders', permission: 'portal_settings.write' },
+	{ href: adminRoutes.activity(), label: ADMIN.menu.activity, icon: 'shield', permission: 'activity.read' },
 ]);
 
 /**
- * Navigation sections the staff member may see, with the current entry marked.
- * @param {any} staff
+ * The menu entries the admin may use, with the current entry marked.
+ * @param {any} admin
  * @param {string} pathname
  * @returns {import('@ss/ui').NavSection[]}
  */
-export const adminSections = (staff, pathname) =>
-	ADMIN_NAV.map((section) => ({
-		label: section.label,
-		items: section.items
-			.filter((item) => staffCan(staff, item.permission))
-			.map((item) => ({
-				href: item.href,
-				label: item.label,
-				icon: item.icon,
-				current: item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`),
-			})),
-	})).filter((section) => section.items.length > 0);
+export const adminSections = (admin, pathname) => [
+	{
+		label: '',
+		items: ADMIN_NAV.filter((item) => adminCan(admin, item.permission)).map((item) => ({
+			href: item.href,
+			label: item.label,
+			icon: item.icon,
+			current: item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`),
+		})),
+	},
+];
 
 /**
- * @param {{ staff: any, children: import('react').ReactNode }} props
+ * @param {{ admin: any, twoStepRequired?: boolean, branding?: { name: string, accent: string }, children: import('react').ReactNode }} props
  */
-export function AdminShell({ staff, children }) {
+export function AdminShell({ admin, twoStepRequired = false, branding, children }) {
 	const pathname = usePathname() ?? '';
 	const signOut = async () => {
-		await adminFetch(adminApi.logout(), { method: 'POST', redirectOn401: false });
+		await adminFetch(adminApi.signOut(), { method: 'POST', redirectOn401: false });
 		window.location.assign(adminRoutes.login());
 	};
 	return (
 		<ToastProvider>
-			<AppShell
-				brand={{ name: 'Single Solution', tagline: 'Admin console' }}
-				linkAs={Link}
-				sections={adminSections(staff, pathname)}
-				topbar={
-					<span className="flex min-w-0 items-center gap-2">
-						<Badge tone="warning" dot>
-							Staff
-						</Badge>
-						<span className="hidden truncate text-sm text-muted sm:inline">Every action here is audited.</span>
-					</span>
-				}
-				actions={
-					<Button variant="ghost" size="sm" onClick={signOut} icon={<Icon name="logout" size={14} />}>
-						<span className="hidden sm:inline">Sign out</span>
-						<span className="sr-only sm:hidden">Sign out</span>
-					</Button>
-				}
-				sidebarFooter={
-					<div className="space-y-1.5 rounded-xl border border-line bg-surface-2 p-3 text-xs">
-						<p className="truncate font-semibold text-fg">{staff?.email ?? staff?.login}</p>
-						<Roles roles={staff?.roles ?? []} />
-						<Link href={adminRoutes.account()} className="block font-semibold text-primary hover:underline">
-							Account settings
-						</Link>
-					</div>
-				}>
-				{children}
-			</AppShell>
+			<div style={accentStyle(branding?.accent)}>
+				<AppShell
+					brand={{ name: branding?.name ?? 'Single Solution', tagline: ADMIN.consoleTagline }}
+					linkAs={Link}
+					sections={twoStepRequired ? [] : adminSections(admin, pathname)}
+					actions={
+						<Button variant="ghost" size="sm" onClick={signOut} icon={<Icon name="logout" size={14} />}>
+							<span className="hidden sm:inline">{ADMIN.signOut}</span>
+							<span className="sr-only sm:hidden">{ADMIN.signOut}</span>
+						</Button>
+					}
+					sidebarFooter={
+						<div className="space-y-1.5 rounded-xl border border-line bg-surface-2 p-3 text-xs">
+							<p className="truncate font-semibold text-fg">{admin?.name ?? admin?.email}</p>
+							<RoleBadge role={admin?.role} />
+							{twoStepRequired ? null : (
+								<Link href={adminRoutes.account()} className="block font-semibold text-primary hover:underline">
+									{ADMIN.menu.myAccount}
+								</Link>
+							)}
+						</div>
+					}>
+					{twoStepRequired ? (
+						<div className="mx-auto max-w-2xl space-y-6">
+							<PageHeader title={TWO_STEP.requiredTitle} />
+							<Callout tone="warning">{TWO_STEP.requiredHelp}</Callout>
+							<Card>
+								<TwoStepSetup onDone={() => window.location.assign(adminRoutes.overview())} />
+							</Card>
+						</div>
+					) : (
+						children
+					)}
+				</AppShell>
+			</div>
 		</ToastProvider>
 	);
 }

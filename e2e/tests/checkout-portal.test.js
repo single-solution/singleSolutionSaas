@@ -41,11 +41,19 @@ import {
 	testSystemState,
 	systemModule,
 	totpCode,
-	SESSIONS,
 } from '@ss/platform/testing';
 import { createPlatform, loadManifest } from '@ss/product-checkout/platform';
 import { buildRoutes, createApplication, wireEvents } from '@ss/product-checkout/routes';
-import { CONNECT_SECRET, connectProduct, createClock, mongoUri, productRoot, startProduct } from './helpers.js';
+import {
+	CONNECT_SECRET,
+	connectProduct,
+	createClock,
+	mongoUri,
+	productRoot,
+	startProduct,
+	LONG_SESSIONS,
+	PORTAL_ENCRYPTION_KEY,
+} from './helpers.js';
 
 const ROOT = productRoot('@ss/product-checkout');
 
@@ -141,14 +149,15 @@ beforeAll(async () => {
 		{
 			NODE_ENV: 'test',
 			MONGODB_URI: mongoUri('unused'),
+			PORTAL_URL,
+			ENCRYPTION_KEY: PORTAL_ENCRYPTION_KEY,
 			OUTBOUND_DEV_ALLOW_HOSTS: LOCAL_HOSTS.join(','),
 		},
-		// keys and secrets as the Portal generates them on first start; the Portal URL is each request's origin
+		// keys and secrets as the Portal generates them on first start
 		testSystemState(),
-		// long staff sessions for the scripted clock
+		// long sign-ins for the scripted clock
 		{
-			baseUrl: PORTAL_URL,
-			overrides: { sessions: { ...SESSIONS, staff: { idleMs: 720 * 60_000, absoluteMs: SESSIONS.staff.absoluteMs } } },
+			overrides: { sessions: LONG_SESSIONS },
 		},
 	);
 	const mongo = await new MongoClient(/** @type {string} */ (process.env.TEST_MONGODB_URI)).connect();
@@ -303,20 +312,18 @@ afterAll(async () => {
 describe.skipIf(!hasOpenssl)('Cart & Checkout on the real Portal', () => {
 	it('creates the first admin from the sign-in page, then signs in and turns on TOTP', async () => {
 		const { call, clock, state } = ctx;
-		const created = await call('POST', '/v1/auth/staff/first-admin', { body: { password: STAFF.password } });
+		const created = await call('POST', '/v1/auth/first-admin', {
+			body: { name: 'E2E Owner', email: STAFF.email, password: STAFF.password },
+		});
 		expect(created.status, JSON.stringify(created.json)).toBe(201);
-		expect((await call('PATCH', '/v1/me', { cookie: created.cookie ?? '', body: { email: STAFF.email } })).status).toBe(200);
-		const login = await call('POST', '/v1/auth/staff/login', { body: STAFF });
-		expect(login.json.status).toBe('ok');
-		const enrol = await call('POST', '/v1/auth/staff/mfa/enrol', { cookie: login.cookie });
-		expect(enrol.status).toBe(200);
+		const start = await call('POST', '/v1/me/two-step/start', { cookie: created.cookie ?? '' });
 		clock.advance(30_000);
-		const confirm = await call('POST', '/v1/auth/staff/mfa/confirm', {
-			cookie: login.cookie,
-			body: { code: totpCode(enrol.json.secret, clock.now()) },
+		const confirm = await call('POST', '/v1/me/two-step/confirm', {
+			cookie: created.cookie ?? '',
+			body: { code: totpCode(start.json.secret, clock.now()) },
 		});
 		expect(confirm.status, JSON.stringify(confirm.json)).toBe(200);
-		state.staff = confirm.cookie ?? login.cookie;
+		state.staff = created.cookie;
 	});
 
 	it('connects the product with its connect secret and lists it after activation', async () => {
@@ -353,18 +360,27 @@ describe.skipIf(!hasOpenssl)('Cart & Checkout on the real Portal', () => {
 	});
 
 	it('lets a merchant sign up, add a website, receive credits and subscribe', async () => {
-		const { call, mailer, state } = ctx;
-		expect((await call('POST', '/v1/auth/merchant/signup', { body: { ...MERCHANT_USER, merchantName: 'Shop' } })).status).toBe(
-			202,
-		);
-		const verified = await call('POST', '/v1/auth/merchant/verify-email', {
-			body: { token: mailer.token(MERCHANT_USER.email, 'verify_email') },
+		const { call, state } = ctx;
+		const madeMerchant = await call('POST', '/v1/admin/merchants', {
+			cookie: state.staff,
+			body: { name: 'Shop', ownerName: 'Shop Owner', email: MERCHANT_USER.email },
 		});
-		expect(verified.status, JSON.stringify(verified.json)).toBe(201);
-		state.merchantId = verified.json.merchantId;
+		expect(madeMerchant.status, JSON.stringify(madeMerchant.json)).toBe(201);
+		state.merchantId = madeMerchant.json.merchant.merchantId;
+		const setupLink = await call('POST', `/v1/admin/merchants/${state.merchantId}/setup-link`, {
+			cookie: state.staff,
+			body: { copy: true },
+		});
+		const verified = await call('POST', '/v1/auth/set-password', {
+			body: {
+				token: decodeURIComponent(String(setupLink.json.link).split('#token=')[1] ?? ''),
+				password: MERCHANT_USER.password,
+			},
+		});
+		expect(verified.status, JSON.stringify(verified.json)).toBe(200);
 		state.merchant = verified.cookie;
 		const website = await call('POST', `/v1/merchants/${state.merchantId}/websites`, {
-			cookie: state.merchant,
+			cookie: state.staff,
 			body: { domain: 'shop.example.com' },
 		});
 		expect(website.status, JSON.stringify(website.json)).toBe(201);
@@ -376,7 +392,7 @@ describe.skipIf(!hasOpenssl)('Cart & Checkout on the real Portal', () => {
 		expect(credits.status, JSON.stringify(credits.json)).toBe(201);
 		expect(credits.json.balanceMillicredits).toBe(100_000);
 		const subscribed = await call('POST', `/v1/merchants/${state.merchantId}/websites/${state.websiteId}/subscriptions`, {
-			cookie: state.merchant,
+			cookie: state.staff,
 			body: { appId: state.appId, planCode: 'starter' },
 		});
 		expect(subscribed.status, JSON.stringify(subscribed.json)).toBe(201);

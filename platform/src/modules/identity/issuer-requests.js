@@ -56,7 +56,7 @@ export const presentRequest = (doc) => ({
  * }} hooks
  */
 export const createIssuerRequests = (deps, { loadWebsite, loadMerchant, issuers, collection }) => {
-	const { ctx, repo, audit, mailer } = deps;
+	const { ctx, audit, mailer } = deps;
 	/** @param {string} merchantId */
 	const of = (merchantId) => /** @type {import('../../infra/db.js').MutableOps} */ (collection.forMerchant(merchantId));
 
@@ -88,10 +88,9 @@ export const createIssuerRequests = (deps, { loadWebsite, loadMerchant, issuers,
 		try {
 			if (!mailer?.available) return;
 			const merchant = await loadMerchant(String(website.merchantId));
-			const owner = merchant.ownerUserId ? await repo.users.findOne({ _id: merchant.ownerUserId }) : null;
-			if (!owner?.email) return;
+			if (!merchant.email) return;
 			await mailer.send({
-				to: owner.email,
+				to: merchant.email,
 				template: 'issuer_request',
 				data: {
 					productName: product.name,

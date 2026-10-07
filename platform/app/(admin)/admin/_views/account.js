@@ -1,9 +1,10 @@
-import { AccountView } from '../../../../src/console/admin/views/account.js';
-import { staffContext } from '../../_lib/server.js';
+import { loadMyAccount } from '../../../../src/console/admin/loaders.js';
+import { MyAccountView } from '../../../../src/console/admin/views/account.js';
+import { adminContext } from '../../_lib/server.js';
 
-export const metadata = { title: 'Account settings' };
+export const metadata = { title: 'My account' };
 
-export default async function AccountPage() {
-	const { staff } = await staffContext('/admin/account');
-	return <AccountView staff={staff} />;
+export default async function MyAccountPage() {
+	const { api } = await adminContext('/admin/account');
+	return <MyAccountView {...await loadMyAccount(api)} />;
 }

@@ -1,5 +1,5 @@
 /**
- * One-time tokens (e-mail verification, password reset, invites, MFA challenges): 256-bit random, base64url,
+ * One-time tokens (setup links, password resets, e-mail changes, two-step sign-in steps): 256-bit random, base64url,
  * shown once; only `HMAC-SHA-256(secret, "ss-identity-token.v1|<purpose>|<token>")` is stored, so a database leak
  * reveals no usable token and a token minted for one purpose never matches another. Deterministic given the
  * injected randomness (no I/O).
@@ -7,17 +7,20 @@
  */
 import { createHmac } from 'node:crypto';
 
-export const TOKEN_PURPOSES = Object.freeze(['signup', 'password_reset', 'invite', 'mfa_challenge']);
+export const TOKEN_PURPOSES = Object.freeze(['setup', 'password_reset', 'email_change', 'two_step']);
 
-/** @typedef {'signup' | 'password_reset' | 'invite' | 'mfa_challenge'} TokenPurpose */
+/** @typedef {'setup' | 'password_reset' | 'email_change' | 'two_step'} TokenPurpose */
 
-/** Lifetimes (ms). */
+/** Lifetimes (ms), PLAN 0.2: setup links 72 h for merchants and 24 h for admins (given per link), resets 30 minutes. */
 export const TOKEN_TTL_MS = Object.freeze({
-	signup: 24 * 60 * 60_000,
+	setup: 72 * 60 * 60_000,
 	password_reset: 30 * 60_000,
-	invite: 7 * 24 * 60 * 60_000,
-	mfa_challenge: 5 * 60_000,
+	email_change: 24 * 60 * 60_000,
+	two_step: 5 * 60_000,
 });
+
+/** Setup link lifetimes per kind of login (PLAN 0.0 Setup link). */
+export const SETUP_TTL_MS = Object.freeze({ merchant: 72 * 60 * 60_000, admin: 24 * 60 * 60_000 });
 
 /**
  * @param {(n: number) => Uint8Array} randomBytes

@@ -1,10 +1,11 @@
 /**
- * Websites: added by domain only (normalised with `@ss/contracts` `normaliseDomain`), each with a `test` twin that
- * shares the domain under a distinct id. A domain is claimed globally in `identity_domains` (`_id` = domain, so
- * concurrent claims race on the unique `_id`); deleting a website keeps the claim for a 30-day cooldown during which
- * only the same merchant may re-add it. Staff may transfer a website pair between merchants (keys are revoked —
- * they embed the merchant). Website settings (`timeZone`, `language`, `currency`; F.16) apply to the pair and reach
- * products through the entitlement document's `website` section. Every mutation is audited.
+ * Websites (PLAN 0.2 Websites, 0.5.9): one exact domain each (normalised with `@ss/contracts` `normaliseDomain`:
+ * lowercase, punycode, no scheme, path, port or trailing dot; IP addresses, localhost, single-label names and wildcards
+ * refused), added and removed only by Owner and Support. A domain belongs to at most one website platform-wide: it is
+ * claimed in `identity_domains` (`_id` = domain, so concurrent claims race on the unique `_id`). A website can be
+ * removed only after its products are removed; the domain is then free again at once, for any merchant, and the
+ * website's tokens stop for good. Until the switch (PLAN 0.12 step 5) each website keeps its `test` twin and its
+ * settings (`timeZone`, `language`, `currency`). Every change is written to Activity.
  * @module
  */
 import { normaliseDomain } from '@ss/contracts';
@@ -16,30 +17,19 @@ import { presentWebsite } from './core/present.js';
 /** @typedef {import('./repo.js').Meta} Meta */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
 
-export const DOMAIN_COOLDOWN_MS = 30 * 24 * 60 * 60_000;
 const MAX_WEBSITES_PER_MERCHANT = 500;
-
-/**
- * A website document re-inserted under another merchant (the repository stamps the new merchantId).
- * @param {Record<string, any>} doc
- */
-const movable = (doc) => {
-	const copy = { ...doc };
-	delete copy.merchantId;
-	delete copy.updatedAt;
-	return copy;
-};
 
 /**
  * @param {Deps} deps
  * @param {{
  *   activeMerchant: (merchantId: string) => Promise<Record<string, any>>,
- *   loadMerchant: (merchantId: string) => Promise<Record<string, any>>,
+ *   productsOn: (websiteId: string) => Promise<number>,
  *   revokeWebsiteKeys: (input: { merchantId: string, websiteIds: string[], reason: string, actor: any, meta?: Meta }) => Promise<string[]>,
  *   isPublicSuffix?: (domain: string) => boolean,
  *   forgetIssuers?: (input: { merchantId: string, websiteIds: string[] }) => Promise<unknown>,
  *   resign?: (websiteId: string) => Promise<unknown>,
- * }} hooks `resign`: re-sign the website's entitlement documents (commerce)
+ * }} hooks `productsOn`: products not removed from the website (commerce); `resign`: re-sign the website's
+ *   entitlement documents (commerce)
  */
 export const createWebsites = (deps, hooks) => {
 	const { ctx, repo, audit } = deps;
@@ -64,25 +54,18 @@ export const createWebsites = (deps, hooks) => {
 	const liveIdOf = (website) => (website.env === 'live' ? String(website._id) : String(website.twinId));
 
 	/**
-	 * Claim a domain for a merchant: new claim, an expired cooldown, or the same merchant's own cooldown.
+	 * Claim a domain for a website (a domain belongs to at most one website platform-wide).
 	 * @param {string} domain
 	 * @param {string} merchantId
 	 * @param {string} websiteId
 	 */
 	const claimDomain = async (domain, merchantId, websiteId) => {
-		const claim = { merchantId, websiteId, releaseAt: null, claimedAt: new Date(ctx.now()) };
 		try {
-			await repo.domains.insertOne({ _id: domain, ...claim });
-			return;
+			await repo.domains.insertOne({ _id: domain, merchantId, websiteId, claimedAt: new Date(ctx.now()) });
 		} catch (error) {
-			if (!isDuplicateKey(error)) throw error;
+			if (isDuplicateKey(error)) throw problem('domain_taken', 'This domain already belongs to a website.');
+			throw error;
 		}
-		const now = new Date(ctx.now());
-		const taken = await repo.domains.updateOne(
-			{ _id: domain, $or: [{ releaseAt: { $ne: null, $lte: now } }, { merchantId, releaseAt: { $ne: null } }] },
-			{ $set: claim },
-		);
-		if (taken.modifiedCount !== 1) throw problem('domain_taken', 'This domain is already registered.');
 	};
 
 	return Object.freeze({
@@ -144,15 +127,15 @@ export const createWebsites = (deps, hooks) => {
 			} catch (error) {
 				await sites.deleteMany({ merchantId, _id: { $in: [liveId, testId] } });
 				await repo.domains.deleteOne({ _id: domain, websiteId: liveId });
-				if (isDuplicateKey(error)) throw problem('domain_taken', 'This domain is already registered.');
+				if (isDuplicateKey(error)) throw problem('domain_taken', 'This domain already belongs to a website.');
 				throw error;
 			}
 			await audit(
 				actor,
-				'website.created',
+				'website.added',
 				{ type: 'website', id: liveId, merchantId, websiteId: liveId },
 				{
-					after: { domain, liveId, testId },
+					after: { domain },
 					meta,
 				},
 			);
@@ -203,95 +186,47 @@ export const createWebsites = (deps, hooks) => {
 		},
 
 		/**
-		 * Soft-delete a website pair (either id): keys revoked, grants dropped, domain kept for the cooldown.
-		 * @param {{ merchantId: string, websiteId: string, actor: Actor, meta?: Meta }} input
+		 * Remove a website (either id of the pair; typed confirmation with the domain): only once its products are
+		 * removed. Its tokens stop for good, the domain is free again at once, and past usage and Activity are kept.
+		 * @param {{ merchantId: string, websiteId: string, confirm: string, actor: Actor, meta?: Meta }} input
 		 */
-		deleteWebsite: async ({ merchantId, websiteId, actor, meta = {} }) => {
+		removeWebsite: async ({ merchantId, websiteId, confirm, actor, meta = {} }) => {
 			const website = await loadWebsite(websiteId, merchantId);
 			if (website.status !== 'active') throw problem('not_found', 'No such website.');
+			if (confirm !== website.domain) throw problem('validation_failed', 'Type the domain exactly to confirm.');
 			const liveId = liveIdOf(website);
 			const ids = [String(website._id), String(website.twinId)];
+			for (const id of ids)
+				if ((await hooks.productsOn(id)) > 0) throw problem('products_on_website', 'Remove its products first.');
 			const now = new Date(ctx.now());
 			await repo.websites
 				.of(merchantId)
-				.updateMany({ merchantId, _id: { $in: ids }, status: 'active' }, { $set: { status: 'deleted', deletedAt: now } });
-			const releaseAt = new Date(ctx.now() + DOMAIN_COOLDOWN_MS);
-			await repo.domains.updateOne({ _id: website.domain, websiteId: liveId }, { $set: { releaseAt } });
-			await hooks.revokeWebsiteKeys({ merchantId, websiteIds: ids, reason: 'website_deleted', actor, meta });
+				.updateMany({ merchantId, _id: { $in: ids }, status: 'active' }, { $set: { status: 'removed', deletedAt: now } });
+			await repo.domains.deleteOne({ _id: website.domain, websiteId: liveId });
+			await hooks.revokeWebsiteKeys({ merchantId, websiteIds: ids, reason: 'website_removed', actor, meta });
 			await hooks.forgetIssuers?.({ merchantId, websiteIds: ids });
-			await repo.memberships
-				.of(merchantId)
-				.updateMany({ merchantId, 'grants.websiteId': liveId }, { $pull: { grants: { websiteId: liveId } } });
 			await audit(
 				actor,
-				'website.deleted',
+				'website.removed',
 				{ type: 'website', id: liveId, merchantId, websiteId: liveId },
 				{
-					before: { domain: website.domain, ids },
-					after: { releaseAt: releaseAt.toISOString() },
+					before: { domain: website.domain },
 					meta,
 				},
 			);
-			return { websiteIds: ids, domainReleaseAt: releaseAt.toISOString() };
+			return { websiteIds: ids };
 		},
 
 		/**
-		 * Staff: move a website pair to another merchant (keys revoked, source grants dropped).
-		 * @param {{ websiteId: string, toMerchantId: string, reason: string, actor: Actor, meta?: Meta }} input
+		 * Active websites of a merchant (live only; Delete merchant needs none).
+		 * @param {string} merchantId
 		 */
-		transferWebsite: async ({ websiteId, toMerchantId, reason, actor, meta = {} }) => {
-			const website = await loadWebsite(websiteId);
-			if (website.status !== 'active') throw problem('conflict', 'Only active websites can be transferred.');
-			const fromMerchantId = String(website.merchantId);
-			if (fromMerchantId === toMerchantId) throw problem('conflict', 'The website already belongs to this merchant.');
-			await hooks.activeMerchant(toMerchantId);
-			const liveId = liveIdOf(website);
-			const ids = [liveId, website.env === 'live' ? String(website.twinId) : String(website._id)];
-			const source = repo.websites.of(fromMerchantId);
-			const target = repo.websites.of(toMerchantId);
-			const docs = await source.find({ merchantId: fromMerchantId, _id: { $in: ids } }).toArray();
-			await hooks.revokeWebsiteKeys({
-				merchantId: fromMerchantId,
-				websiteIds: ids,
-				reason: 'website_transferred',
-				actor,
-				meta,
-			});
-			// the identity issuer is the old owner's login: the new owner registers its own
-			await hooks.forgetIssuers?.({ merchantId: fromMerchantId, websiteIds: ids });
-			// tenant records cannot change merchantId: move them (delete + insert) with the domain claim and the
-			// membership grants in one transaction, so a failure leaves the website exactly where it was
-			await ctx.withTransaction(async (session) => {
-				await source.deleteMany({ merchantId: fromMerchantId, _id: { $in: ids } }, { session });
-				await target.insertMany(docs.map(movable), { session });
-				await repo.domains.updateOne(
-					{ _id: website.domain, websiteId: liveId },
-					{ $set: { merchantId: toMerchantId } },
-					{ session },
-				);
-				await repo.memberships
-					.of(fromMerchantId)
-					.updateMany(
-						{ merchantId: fromMerchantId, 'grants.websiteId': liveId },
-						{ $pull: { grants: { websiteId: liveId } } },
-						{ session },
-					);
-			});
-			for (const merchantId of [fromMerchantId, toMerchantId]) {
-				await audit(
-					actor,
-					'website.transferred',
-					{ type: 'website', id: liveId, merchantId, websiteId: liveId },
-					{
-						before: { merchantId: fromMerchantId },
-						after: { merchantId: toMerchantId },
-						reason,
-						meta,
-					},
-				);
-			}
-			return presentWebsite({ ...(await loadWebsite(liveId, toMerchantId)) });
-		},
+		activeWebsitesOf: async (merchantId) =>
+			repo.websites
+				.of(merchantId)
+				.find({ merchantId, status: 'active', env: 'live' })
+				.limit(MAX_WEBSITES_PER_MERCHANT)
+				.toArray(),
 	});
 };
 /** @typedef {ReturnType<typeof createWebsites>} Websites */

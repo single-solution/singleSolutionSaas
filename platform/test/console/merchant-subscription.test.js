@@ -16,7 +16,6 @@ import { UsageView } from '../../src/console/views/usage.js';
 import { byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
 import {
-	button,
 	buttons,
 	clickEl,
 	createWorld,
@@ -52,60 +51,39 @@ const withToasts = (node) => render(<ToastProvider durationMs={600_000}>{node}</
 /** Switch of the element labelled `name`. @param {string} name */
 const switchOf = (name) => byLabel(document, name);
 
-/** Radio whose label starts with `prefix`. @param {string} prefix @param {ParentNode} [root] */
-const radioStarting = (prefix, root = document) => {
-	const label = [...root.querySelectorAll('label')].find((l) => l.textContent?.startsWith(prefix));
-	if (!label) throw new Error(`no radio “${prefix}…”`);
-	return /** @type {HTMLInputElement} */ (document.getElementById(/** @type {HTMLLabelElement} */ (label).htmlFor));
-};
-
 describe('merchant console interactions (jsdom): products and subscriptions', () => {
-	it('subscribes, switches, configures and changes plan against a live Portal', async () => {
+	it('shows products and features read-only, configures settings and rolls back against a live Portal', async () => {
 		const restore = quiet();
 		const world = await createWorld({ db: mongo.db('merchant_ui_2') });
 		const appId = await world.seedPack();
 		const { b, merchantId } = await world.signup('owner@shop.test', 'Shop & Co');
 		b.use();
-		const site = await b.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
-		if (!site.ok) throw new Error('website');
-		const website = site.data.website;
+		const site = await world.addWebsite(merchantId, 'shop.example.com');
+		const website = site.website;
 		const websiteId = /** @type {string} */ (website.websiteId);
 
-		// ---------------------------------------------------------------- catalog: no credits yet → balance check
+		// ---------------------------------------------------------------- catalog: read only (admins add products)
 		withToasts(<ProductsView {...await loaders.loadProducts(b.api, merchantId, websiteId)} />);
 		expect(shows('Notice bar')).toBe(true);
+		expect(shows('Your admin adds products to this website.')).toBe(true);
+		expect(buttons('Subscribe')).toHaveLength(0);
 		await press('Compare plans');
 		expect(dialog().textContent).toContain('Included');
 		await pressDialog('Close');
-		await press('Subscribe');
-		await until(() => shows('Not enough credits'));
-		expect(button('Subscribe', dialog()).disabled).toBe(true);
-		await pressDialog('Cancel');
 		cleanup();
 
 		await world.credit(merchantId, 250_000, 'bank-1');
+		const subscription = await world.subscribe(merchantId, websiteId, { appId, planCode: 'basic' });
+		const subscriptionId = /** @type {string} */ (subscription.subscriptionId);
 		const products = await loaders.loadProducts(b.api, merchantId, websiteId);
 		if (!products.ok) throw new Error('products');
 		withToasts(<ProductsView {...products} />);
-		await press('Subscribe');
-		await clickEl(radioStarting('Plus'));
-		expect(shows('Covers about')).toBe(true);
-		await clickEl(radioStarting('Basic'));
-		await pressDialog('Subscribe');
-		const subscribed = await b.waitCall('POST', `/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, (s) =>
-			[200, 201].includes(s),
-		);
-		const subscriptionId = /** @type {string} */ (subscribed.body.subscription.subscriptionId);
+		expect(shows('Manage')).toBe(true);
 		cleanup();
 
-		// a product with no plans, needing a resource — subscribing again is refused
+		// a product with no plans, needing a resource
 		const entry = /** @type {any} */ (products.catalog[0]);
-		const variant = {
-			...entry,
-			plans: [],
-			requires: ['database'],
-			price: { ...entry.price, metered: true, trialHours: 2 },
-		};
+		const variant = { ...entry, plans: [], requires: ['database'], price: { ...entry.price, metered: true, trialHours: 2 } };
 		withToasts(
 			<ProductsView
 				{...products}
@@ -116,14 +94,6 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		);
 		expect(shows('Needs your database connected')).toBe(true);
 		expect(shows('Free')).toBe(true);
-		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Subscribe')[0]));
-		expect(shows('This product has no plans')).toBe(true);
-		expect(shows('Includes a trial of 2 hours.')).toBe(true);
-		await pressDialog('Subscribe');
-		await until(() =>
-			b.calls.some((c) => c.method === 'POST' && c.path.endsWith(`/websites/${websiteId}/subscriptions`) && c.status >= 400),
-		);
-		await settle(2);
 		cleanup();
 		render(<ProductsView {...products} catalog={[]} />);
 		expect(shows('No products are listed yet')).toBe(true);
@@ -139,20 +109,23 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		});
 		expect(locked.ok).toBe(true);
 
-		// ---------------------------------------------------------------- subscription: element switches
+		// ---------------------------------------------------------------- subscription: features read only
+		// only admins switch features (PLAN 0.2): the admin switches the badge on
+		const switched = await world.staff.api.request(
+			'PUT',
+			`/v1/merchants/${merchantId}/subscriptions/${subscriptionId}/elements/badge`,
+			{ enabled: true },
+		);
+		expect(switched.ok).toBe(true);
 		const load = () => loaders.loadSubscription(b.api, merchantId, websiteId, subscriptionId);
 		const detail = await load();
 		if (!detail.ok) throw new Error('subscription');
 		withToasts(<SubscriptionView {...detail} />);
 		expect(shows('Add-on')).toBe(true);
-		await clickEl(switchOf('Trust badge'));
-		await until(() => shows('Trust badge switched on'));
-		await until(() => !(/** @type {HTMLButtonElement} */ (switchOf('Notice bar')).disabled));
-		await clickEl(switchOf('Notice bar'));
-		await until(() => shows('Notice bar switched off'));
-		await until(() => !(/** @type {HTMLButtonElement} */ (switchOf('Notice bar')).disabled));
-		await clickEl(switchOf('Notice bar'));
-		await until(() => shows('Notice bar switched on'));
+		expect(shows('Only your admin switches features on and off.')).toBe(true);
+		expect(/** @type {HTMLButtonElement} */ (switchOf('Trust badge')).disabled).toBe(true);
+		expect(buttons('Pause')).toHaveLength(0);
+		expect(buttons('Cancel subscription')).toHaveLength(0);
 
 		// ---------------------------------------------------------------- configure: SchemaForm
 		await press('Configure');
@@ -210,25 +183,12 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		);
 		await settle(2);
 
-		// ---------------------------------------------------------------- plan change
+		// ---------------------------------------------------------------- plan: shown, changed only by admins
 		await press('Plan');
-		await clickEl(radioStarting('Plus', document.querySelector('[role="tabpanel"]') ?? document));
-		await press('Change plan');
-		expect(shows('Switch to plus?')).toBe(true);
-		await pressDialog('Change plan');
-		await until(() => shows('Plan changed'));
-
-		// ---------------------------------------------------------------- pause, resume, cancel
-		await press('Pause');
-		await pressDialog('Pause');
-		await until(() => shows('Subscription paused'));
-		await press('Resume');
-		await until(() => shows('Subscription resumed'));
-		await press('Cancel subscription');
-		await pressDialog('Cancel subscription');
-		await until(() => shows('Subscription cancelled'));
-		// a second cancel is refused by the Portal (the action stays visible on a stale view)
+		expect(buttons('Change plan')).toHaveLength(0);
 		cleanup();
+		const cancelled = await world.staff.api.post(`/v1/merchants/${merchantId}/subscriptions/${subscriptionId}/cancel`, {});
+		expect(cancelled.ok).toBe(true);
 
 		// ---------------------------------------------------------------- variants of the page
 		const after = await load();
@@ -256,15 +216,6 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 		await press('History');
 		await press('Load older versions');
 		await settle(3);
-		// actions on a cancelled subscription are refused and surface the problem
-		await press('Elements');
-		await clickEl(switchOf('Trust badge'));
-		await until(() => b.calls.some((c) => c.method === 'PUT' && c.path.includes('/elements/') && c.status >= 400));
-		await press('Pause');
-		await pressDialog('Pause');
-		await until(() => b.calls.some((c) => c.path.endsWith('/pause') && c.status >= 400));
-		await press('Plan');
-		await settle(1);
 		await press('History');
 		await until(() => buttons('Roll back to this').length > 0);
 		await clickEl(/** @type {HTMLButtonElement} */ (buttons('Roll back to this')[0]));
@@ -279,22 +230,14 @@ describe('merchant console interactions (jsdom): products and subscriptions', ()
 			/>,
 		);
 		expect(shows('This product lists no elements')).toBe(true);
-		await press('Plan');
-		await clickEl(radioStarting('Plus', document.querySelector('[role="tabpanel"]') ?? document));
-		await press('Change plan');
-		await pressDialog('Change plan');
-		await until(() => b.calls.some((c) => c.method === 'PUT' && c.path.endsWith('/plan') && c.status >= 400));
 		cleanup();
 		render(<SubscriptionView ok={false} problem={{ status: 404, title: 'Not found', code: 'not_found' }} />);
 		expect(shows('Not found')).toBe(true);
 		cleanup();
 
 		// a looser client schema than the Portal's: the server's validation errors map to the fields
-		const sub2 = await b.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
-			appId,
-			planCode: 'basic',
-		});
-		const sub2Id = sub2.ok ? sub2.data.subscription.subscriptionId : subscriptionId;
+		const sub2 = await world.subscribe(merchantId, websiteId, { appId, planCode: 'basic' });
+		const sub2Id = sub2.subscriptionId;
 		const detail2 = await loaders.loadSubscription(b.api, merchantId, websiteId, sub2Id);
 		if (!detail2.ok) throw new Error('subscription 2');
 		const loose = {

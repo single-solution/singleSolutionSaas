@@ -92,12 +92,12 @@ export const targetKey = (target) => {
  * @param {Level} level
  */
 export const actorMayWrite = (actorType, level) => {
-	if (actorType === 'staff' || actorType === 'system') return true;
-	return actorType === 'merchant_user' && !STAFF_LEVELS.has(level);
+	if (actorType === 'admin' || actorType === 'system') return true;
+	return actorType === 'merchant' && !STAFF_LEVELS.has(level);
 };
 
 /**
  * Only staff (and system jobs acting for staff) set or clear locks (PLAN Part D L8).
  * @param {string | undefined} actorType
  */
-export const actorMayLock = (actorType) => actorType === 'staff' || actorType === 'system';
+export const actorMayLock = (actorType) => actorType === 'admin' || actorType === 'system';

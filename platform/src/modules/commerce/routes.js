@@ -32,8 +32,7 @@ const invalid = (errors, detail) => problem('validation_failed', detail, { error
  */
 const ownMerchant = (c) => {
 	const actor = c.actor;
-	if (actor?.type === 'merchant_user' && actor.merchantId !== c.params.merchantId)
-		throw problem('forbidden', 'Not your merchant.');
+	if (actor?.type === 'merchant' && actor.merchantId !== c.params.merchantId) throw problem('forbidden', 'Not your merchant.');
 };
 
 /**
@@ -58,11 +57,11 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'POST',
 			path: `/v1/merchants/:merchantId/subscriptions/:subscriptionId/${action}`,
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
 				const checked = checkReason(c.body, action === 'cancel' ? 'merchant_cancelled' : 'merchant_request');
 				if (!checked.ok) return invalid(checked.errors, 'The request is invalid.');
-				const sub = await authorisedSubscription(c, 'subscriptions.manage');
+				const sub = await authorisedSubscription(c, 'products_on_websites.write');
 				return ok({
 					subscription: await service[action]({
 						subscriptionId: sub.subscriptionId,
@@ -82,8 +81,8 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'POST',
 			path: `/v1/admin/merchants/:merchantId/${segment}`,
-			auth: 'staff',
-			permission: 'platform.credits.adjust',
+			auth: 'admin',
+			permission: 'credits.add',
 			idempotent: true,
 			handler: async (c) => {
 				const checked = checkCreditOperation(kind, c.body);
@@ -131,8 +130,8 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/subscriptions',
-			auth: ['merchant', 'staff'],
-			permission: 'subscriptions.read',
+			auth: ['merchant', 'admin'],
+			permission: 'products_on_websites.read',
 			resource: (c) => ({ merchantId: c.params.merchantId ?? null, websiteId: c.query.websiteId ?? null }),
 			handler: async (c) => ({
 				items: await service.subscriptionsOfMerchant(c.params.merchantId ?? '', { websiteId: c.query.websiteId ?? null }),
@@ -141,8 +140,8 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'POST',
 			path: '/v1/merchants/:merchantId/websites/:websiteId/subscriptions',
-			auth: ['merchant', 'staff'],
-			permission: 'subscriptions.manage',
+			auth: ['merchant', 'admin'],
+			permission: 'products_on_websites.write',
 			idempotent: true,
 			handler: async (c) => {
 				const checked = checkSubscribe(c.body);
@@ -160,17 +159,17 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/subscriptions/:subscriptionId',
-			auth: ['merchant', 'staff'],
-			handler: async (c) => ({ subscription: await authorisedSubscription(c, 'subscriptions.read') }),
+			auth: ['merchant', 'admin'],
+			handler: async (c) => ({ subscription: await authorisedSubscription(c, 'products_on_websites.read') }),
 		}),
 		defineRoute({
 			method: 'PUT',
 			path: '/v1/merchants/:merchantId/subscriptions/:subscriptionId/elements/:elementKey',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
 				const checked = checkElementSwitch(c.params.elementKey ?? '', c.body);
 				if (!checked.ok) return invalid(checked.errors, 'The element switch is invalid.');
-				const sub = await authorisedSubscription(c, 'subscriptions.manage');
+				const sub = await authorisedSubscription(c, 'features.write');
 				return ok({
 					subscription: await service.setElement({
 						subscriptionId: sub.subscriptionId,
@@ -184,11 +183,11 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'PUT',
 			path: '/v1/merchants/:merchantId/subscriptions/:subscriptionId/plan',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			handler: async (c) => {
 				const checked = checkPlanChange(c.body);
 				if (!checked.ok) return invalid(checked.errors, 'The plan change is invalid.');
-				const sub = await authorisedSubscription(c, 'subscriptions.manage');
+				const sub = await authorisedSubscription(c, 'products_on_websites.write');
 				return ok({
 					subscription: await service.changePlan({
 						subscriptionId: sub.subscriptionId,
@@ -205,21 +204,21 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/balance',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			permission: 'billing.read',
 			handler: async (c) => service.balance(c.params.merchantId ?? ''),
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/meter',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			permission: 'billing.read',
 			handler: async (c) => service.meter(c.params.merchantId ?? ''),
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/statement',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			permission: 'billing.read',
 			resource: (c) => ({ merchantId: c.params.merchantId ?? null, websiteId: c.query.websiteId ?? null }),
 			handler: async (c) => service.statementForQuery(c.params.merchantId ?? '', c.query),
@@ -227,22 +226,22 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/merchants/:merchantId/spend-cap',
-			auth: ['merchant', 'staff'],
+			auth: ['merchant', 'admin'],
 			permission: 'billing.read',
 			handler: async (c) => service.spendCap(c.params.merchantId ?? ''),
 		}),
 		defineRoute({
 			method: 'PUT',
 			path: '/v1/merchants/:merchantId/spend-cap',
-			auth: ['merchant', 'staff'],
-			permission: 'billing.manage',
+			auth: ['merchant', 'admin'],
+			permission: 'settings.write',
 			handler: async (c) => service.setSpendCap(c.params.merchantId ?? '', c.body, callerOf(c)),
 		}),
 		defineRoute({
 			method: 'DELETE',
 			path: '/v1/merchants/:merchantId/spend-cap',
-			auth: ['merchant', 'staff'],
-			permission: 'billing.manage',
+			auth: ['merchant', 'admin'],
+			permission: 'settings.write',
 			handler: async (c) => {
 				await service.removeSpendCap(c.params.merchantId ?? '', callerOf(c));
 				return noContent();
@@ -256,8 +255,8 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/admin/merchants/:merchantId/ledger',
-			auth: 'staff',
-			permission: 'platform.finance.read',
+			auth: 'admin',
+			permission: 'billing.read',
 			handler: async (c) => {
 				const page = paginate(
 					{ cursor: c.query.cursor, limit: c.query.limit, url: c.request.url },
@@ -271,15 +270,15 @@ export const commerceRoutes = (service) => {
 		defineRoute({
 			method: 'GET',
 			path: '/v1/admin/merchants/:merchantId/ledger/verification',
-			auth: 'staff',
-			permission: 'platform.finance.read',
+			auth: 'admin',
+			permission: 'billing.read',
 			handler: async (c) => service.verifyChain(c.params.merchantId ?? ''),
 		}),
 		defineRoute({
 			method: 'GET',
 			path: '/v1/admin/commerce/alerts',
-			auth: 'staff',
-			permission: 'platform.finance.read',
+			auth: 'admin',
+			permission: 'billing.read',
 			handler: async (c) => ({ items: await service.alerts({ merchantId: c.query.merchantId ?? null }) }),
 		}),
 	];

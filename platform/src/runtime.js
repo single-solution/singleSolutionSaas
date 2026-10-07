@@ -2,7 +2,8 @@
  * Process-wide Portal instance for the Next.js adapters and the scripts. Built lazily on first use (never at import or
  * build time) and cached on `globalThis`, so warm serverless invocations reuse it:
  *
- * 1. the environment (`MONGODB_URI`, `STORAGE_*`) is validated — a misconfigured deployment fails fast;
+ * 1. the environment (`MONGODB_URI`, `PORTAL_URL`, `ENCRYPTION_KEY`, `STORAGE_*`) is validated — a misconfigured
+ *    deployment fails fast, naming the variable (never its value);
  * 2. the system state is loaded from the control database: secrets generated on first start, settings recorded by
  *    admins (`infra/system.js`);
  * 3. indexes and migrations are applied once per schema version, under a lock (no manual step for the owner);
@@ -94,7 +95,7 @@ export const getPortal = async (given) => {
 		const envConfig = loadEnv(env);
 		const client = getMongoClient({ uri: envConfig.mongo.uri, maxPoolSize: envConfig.mongo.maxPoolSize });
 		const db = client.db(envConfig.mongo.dbName);
-		const system = createSystemStore(db, { now });
+		const system = createSystemStore(db, { encryptionKey: envConfig.encryptionKey, now });
 		const { state, version } = await system.load();
 		const config = buildConfig(envConfig, state);
 		const logger = createLogger({ level: config.logLevel, ...(write ? { write } : {}) }).child({

@@ -139,19 +139,26 @@ export const createTestLogger = () => {
 /** @param {number} n */
 export const b64 = (n, fill = 7) => Buffer.alloc(n, fill).toString('base64');
 
+/** The `ENCRYPTION_KEY` of test Portals. */
+export const ENCRYPTION_KEY = 'test-encryption-key-0123456789abcdef-portal';
+
 /**
- * A complete, valid environment (only the database and tuning live there).
+ * A complete, valid environment (PLAN 0.11: the database, the Portal address and the encryption key).
  * @param {Record<string, string | undefined>} [overrides]
  */
 export const testEnv = async (overrides = {}) => ({
 	NODE_ENV: 'test',
 	MONGODB_URI: 'mongodb://127.0.0.1:27017/ss_portal_test',
+	PORTAL_URL,
+	ENCRYPTION_KEY,
 	...overrides,
 });
 
 /** The environment of a production Portal (a bucket is required there). */
 export const PRODUCTION_ENV = Object.freeze({
 	NODE_ENV: 'production',
+	PORTAL_URL,
+	ENCRYPTION_KEY,
 	STORAGE_ENDPOINT: 'https://r2.example.net',
 	STORAGE_BUCKET: 'ss-assets',
 	STORAGE_ACCESS_KEY_ID: 'AK',
@@ -186,7 +193,35 @@ export const testSystem = async (overrides = {}) => {
 /**
  * @param {Record<string, string | undefined>} [overrides] environment
  * @param {Partial<import('../src/infra/config.js').SystemState>} [system] system state
- * @param {Partial<import('../src/infra/config.js').EnvConfig>} [fixed] fixed values replaced (e.g. a smaller budget)
+ * @param {Partial<import('../src/infra/config.js').PortalConfig>} [fixed] fixed values replaced (e.g. a smaller budget)
  */
 export const testConfig = async (overrides = {}, system = {}, fixed = {}) =>
-	loadConfig(await testEnv(overrides), await testSystem(system), { baseUrl: PORTAL_URL, overrides: fixed });
+	loadConfig(await testEnv(overrides), await testSystem(system), { overrides: fixed });
+
+/**
+ * The `sessionActor` port of tests that run without the identity module: an admin's role is the second part of its
+ * subject (`adm_owner`, `adm_support_2`, `adm_finance`), and a subject containing `pending` must still set two-step up;
+ * a merchant session's subject is its merchant id.
+ * @param {import('../src/infra/auth.js').Session} session
+ * @returns {import('../src/infra/rbac.js').Actor}
+ */
+export const testSessionActor = (session) => {
+	if (session.kind === 'merchant') return { type: 'merchant', id: session.subject, merchantId: session.subject };
+	const role = session.subject.split('_')[1];
+	return {
+		type: 'admin',
+		id: session.subject,
+		role: role === 'owner' || role === 'support' || role === 'finance' ? role : null,
+		name: `Admin ${session.subject}`,
+		...(session.subject.includes('pending') ? { twoStepRequired: true } : {}),
+	};
+};
+
+/**
+ * Login of a test session from an admin role or a merchant id: `{ kind: 'admin', role }` → subject `adm_<role>_<name>`
+ * (see {@link testSessionActor}); `{ kind: 'merchant', merchantId }` → the merchant id.
+ * @param {{ kind?: 'admin' | 'merchant', role?: string | null, name?: string, merchantId?: string }} who
+ * @returns {{ kind: 'admin' | 'merchant', subject: string }}
+ */
+export const testLogin = ({ kind = 'admin', role = 'owner', name = 'alice', merchantId = MERCHANT }) =>
+	kind === 'merchant' ? { kind, subject: merchantId } : { kind, subject: `adm_${role ?? 'none'}_${name}` };

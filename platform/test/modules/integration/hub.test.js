@@ -186,7 +186,7 @@ const boot = async (dbName, { options = {}, withoutIdentity = false, background 
 			})
 		).key;
 	/**
-	 * @param {{ kind: 'staff' | 'merchant', subject: string, merchantId?: string, roles: string[] }} input
+	 * @param {{ kind: 'admin' | 'merchant', subject: string }} input
 	 */
 	const login = async (input) => {
 		const { token } = await portal.shared.sessions.create({ ...input, mfa: true });
@@ -429,7 +429,7 @@ describe('Event Hub ingest', () => {
 		expect(pagesHits()).toBe(3);
 		receiver.respond(() => 200);
 		clock.advance(1_000); // a fresh signature timestamp (the receiver refuses replays)
-		const admin = await login({ kind: 'staff', subject: 'stf_admin', roles: ['admin'] });
+		const admin = await login({ kind: 'admin', subject: 'adm_owner' });
 		const retried = await call('POST', '/v1/admin/apps/app_pages/deliveries/retry', {
 			headers: { cookie: admin, ...SAME_ORIGIN },
 		});

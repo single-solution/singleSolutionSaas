@@ -1,6 +1,6 @@
 'use client';
 /**
- * Building blocks shared by Admin Console views: page errors, permission checks (the infra RBAC bundles, pure),
+ * Building blocks shared by Admin Console views: page errors, permission checks (the infra rights table, pure),
  * id chips and signed credit parsing.
  * @module
  */
@@ -18,18 +18,19 @@ import {
 	problemCode,
 } from '@ss/ui';
 import { can } from '../../../infra/rbac.js';
+import { ADMIN } from '../../../texts/console.js';
 import { Link } from '../../link.js';
 import { adminRoutes } from '../paths.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
 /**
- * Does the signed-in staff member hold `permission`?
- * @param {any} staff `{ staffId, roles }`
+ * Does the signed-in admin's role hold `permission` (PLAN 0.2 rights table; menus hide what a role cannot use)?
+ * @param {any} admin `{ adminId, role }`
  * @param {string} permission
  */
-export const staffCan = (staff, permission) =>
-	Boolean(staff) && can({ type: 'staff', id: String(staff.staffId ?? 'staff'), roles: staff.roles ?? [] }, permission);
+export const adminCan = (admin, permission) =>
+	Boolean(admin) && can({ type: 'admin', id: String(admin.adminId ?? 'admin'), role: admin.role ?? null }, permission);
 
 /**
  * Page-level error of the Admin Console.
@@ -38,7 +39,7 @@ export const staffCan = (staff, permission) =>
 export function AdminProblem({ problem, title, back }) {
 	const code = problemCode(problem);
 	const action =
-		code === 'unauthorized' || code === 'mfa_pending' ? (
+		code === 'unauthorized' ? (
 			<ButtonLink as={Link} href={adminRoutes.login()} variant="primary">
 				Sign in
 			</ButtonLink>
@@ -55,7 +56,7 @@ export function AdminProblem({ problem, title, back }) {
 			}
 			message={
 				code === 'forbidden'
-					? `${describeProblem(problem)} Your staff role does not include this area; ask a superadmin.`
+					? `${describeProblem(problem)} Your role does not include this area; ask an Owner.`
 					: describeProblem(problem)
 			}
 			action={action}
@@ -107,19 +108,12 @@ export const parseSignedCredits = (input, { allowNegative = false } = {}) => {
 };
 
 /**
- * Staff role badges.
- * @param {{ roles: readonly string[] }} props
+ * An admin's role badge.
+ * @param {{ role: string | null | undefined }} props
  */
-export function Roles({ roles }) {
-	return (
-		<span className="flex flex-wrap gap-1">
-			{roles.map((r) => (
-				<Badge key={r} tone={r === 'superadmin' ? 'danger' : r === 'admin' ? 'warning' : 'neutral'}>
-					{r}
-				</Badge>
-			))}
-		</span>
-	);
+export function RoleBadge({ role }) {
+	if (!role) return null;
+	return <Badge tone={role === 'owner' ? 'primary' : 'neutral'}>{ADMIN.roles[/** @type {'owner'} */ (role)] ?? role}</Badge>;
 }
 
 /**
@@ -130,8 +124,8 @@ export function ActorLabel({ actor }) {
 	if (!actor) return <span className="text-muted">—</span>;
 	return (
 		<span className="inline-flex flex-wrap items-center gap-1">
-			<Badge>{String(actor.type ?? 'unknown').replace('merchant_user', 'merchant')}</Badge>
-			<span className="font-mono text-xs">{actor.id}</span>
+			<Badge>{String(actor.type ?? 'unknown')}</Badge>
+			<span className="text-xs">{actor.name ?? actor.id}</span>
 		</span>
 	);
 }

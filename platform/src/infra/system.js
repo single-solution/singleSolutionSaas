@@ -1,13 +1,15 @@
 /**
- * The Portal's own state in its control database (`platform_system`), so that only the database, the first-admin
- * secret and the asset storage are configured through the environment:
+ * The Portal's own state in its control database (`platform_system`), so that only the database, the Portal address,
+ * the encryption key and (until step 5) the asset storage are configured through the environment:
  *
  * - `secrets` — generated on first start and inserted only if absent (`_id` unique), so concurrent cold starts agree on
  *   one set: the Ed25519 Portal signing key(s), the website-key signing key(s), the encryption keys (KEKs), the session
  *   secret, the key pepper and the idempotency secret. Lists stay lists (first signs or seals; all are published or
  *   able to open), so older data keeps working.
- * - `settings` — recorded by admins: the mailer (its password sealed with the encryption keys). `version` increases with every
- *   change so other instances notice and rebuild.
+ * - `settings` — recorded by Owners (PLAN 0.8.2 Settings): e-mail sending (its password sealed with `ENCRYPTION_KEY`),
+ *   branding, support contact, security and billing rules. `version` increases with every change so other instances
+ *   notice and rebuild.
+ * - `logo` — the Branding logo (PNG, JPEG or WebP, at most 200 kB), served at `/branding/logo`.
  * - `schema` — the fingerprint of the indexes and migrations last applied (applied once per deploy, under a lock).
  *
  * Loaded once per instance and cached by the runtime.
@@ -15,7 +17,7 @@
  */
 import { randomBytes as nodeRandomBytes } from 'node:crypto';
 import { signingKeyFromSeed } from '@ss/protocol';
-import { createEnvelope } from './crypto.js';
+import { createSecretBox } from './crypto.js';
 import { platformError } from './errors.js';
 import { COLLECTIONS } from './schema.js';
 
@@ -48,8 +50,16 @@ export const SYSTEM_COLLECTION = COLLECTIONS.system;
  * @property {'settings'} _id
  * @property {number} version
  * @property {MailSettings | null} mail
+ * @property {Partial<import('./config.js').PortalSettings['security']>} [security]
+ * @property {Partial<import('./config.js').PortalSettings['branding']>} [branding]
+ * @property {Partial<import('./config.js').PortalSettings['support']>} [support]
+ * @property {Partial<import('./config.js').PortalSettings['billing']>} [billing]
  * @property {Date} updatedAt
  */
+
+/** Logo file types (never SVG) and size cap (PLAN 0.8.2 Branding). */
+export const LOGO_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
+export const LOGO_MAX_BYTES = 200 * 1024;
 
 const MAIL_AAD = { purpose: 'platform-mail' };
 
@@ -100,12 +110,13 @@ export const secretsOf = (doc) => ({
 
 /**
  * A complete system state for tests and tools: fresh secrets plus the given settings.
- * @param {{ mail?: SystemState['mail'] }} [settings]
+ * @param {{ mail?: SystemState['mail'], settings?: SystemState['settings'] }} [settings]
  * @returns {SystemState}
  */
-export const testSystemState = ({ mail = null } = {}) => ({
+export const testSystemState = ({ mail = null, settings } = {}) => ({
 	...secretsOf(generateSecrets()),
 	mail,
+	...(settings ? { settings } : {}),
 });
 
 /**
@@ -117,10 +128,26 @@ const isDuplicateKey = (error) => typeof error === 'object' && error !== null &&
 /**
  * Access to the system state in a control database.
  * @param {import('mongodb').Db} db
- * @param {{ now?: () => number, randomBytes?: (n: number) => Uint8Array }} [options]
+ * @param {{ encryptionKey: string, now?: () => number, randomBytes?: (n: number) => Uint8Array }} options
  */
-export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new Uint8Array(nodeRandomBytes(n)) } = {}) => {
+export const createSystemStore = (
+	db,
+	{ encryptionKey, now = Date.now, randomBytes = (n) => new Uint8Array(nodeRandomBytes(n)) },
+) => {
 	const collection = /** @type {import('mongodb').Collection<any>} */ (db.collection(SYSTEM_COLLECTION));
+	const box = createSecretBox({ encryptionKey, randomBytes });
+	/**
+	 * The SMTP password, or null when none is stored or it was sealed under another `ENCRYPTION_KEY` (PLAN 0.4.8).
+	 * @param {string | null | undefined} sealed
+	 */
+	const openPassword = (sealed) => {
+		if (!sealed) return null;
+		try {
+			return box.openText(sealed, { aad: MAIL_AAD });
+		} catch {
+			return null;
+		}
+	};
 
 	/** @returns {Promise<SecretsDoc>} the secrets, generated and inserted if absent (concurrent starts agree) */
 	const secrets = async () => {
@@ -152,7 +179,6 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 	const load = async () => {
 		const [secretsDoc, settingsDoc] = await Promise.all([secrets(), settings()]);
 		const base = secretsOf(secretsDoc);
-		const envelope = createEnvelope({ keks: base.keks, randomBytes });
 		const mail = settingsDoc?.mail ?? null;
 		return {
 			state: {
@@ -163,10 +189,16 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 							port: mail.port,
 							secure: mail.secure,
 							user: mail.user,
-							pass: mail.passSealed ? envelope.openText(mail.passSealed, { aad: MAIL_AAD }) : null,
+							pass: openPassword(mail.passSealed),
 							from: mail.from,
 						}
 					: null,
+				settings: {
+					security: { ...(settingsDoc?.security ?? {}) },
+					branding: { ...(settingsDoc?.branding ?? {}) },
+					support: { ...(settingsDoc?.support ?? {}) },
+					billing: { ...(settingsDoc?.billing ?? {}) },
+				},
 			},
 			version: typeof settingsDoc?.version === 'number' ? settingsDoc.version : 0,
 		};
@@ -174,14 +206,20 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 
 	/**
 	 * Change settings (bumps the version). `mail.pass`: a new password (sealed here), `undefined` keeps the stored one,
-	 * `null` removes it.
+	 * `null` removes it. `security`, `branding`, `support` and `billing` replace the named fields only.
 	 * @param {{
-	 *   mail?: { host: string, port: number, secure: boolean, user: string | null, pass?: string | null, from: string } | null }} patch
+	 *   mail?: { host: string, port: number, secure: boolean, user: string | null, pass?: string | null, from: string } | null,
+	 *   security?: Partial<import('./config.js').PortalSettings['security']>,
+	 *   branding?: Partial<import('./config.js').PortalSettings['branding']>,
+	 *   support?: Partial<import('./config.js').PortalSettings['support']>,
+	 *   billing?: Partial<import('./config.js').PortalSettings['billing']> }} patch
 	 * @returns {Promise<SettingsDoc>}
 	 */
 	const update = async (patch) => {
 		/** @type {Record<string, unknown>} */
 		const set = { updatedAt: new Date(now()) };
+		for (const group of /** @type {const} */ (['security', 'branding', 'support', 'billing']))
+			for (const [key, value] of Object.entries(patch[group] ?? {})) if (value !== undefined) set[`${group}.${key}`] = value;
 		if (patch.mail !== undefined) {
 			if (patch.mail === null) set.mail = null;
 			else {
@@ -189,8 +227,7 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 				let passSealed = current?.passSealed ?? null;
 				if (patch.mail.pass === null) passSealed = null;
 				else if (typeof patch.mail.pass === 'string' && patch.mail.pass.length > 0) {
-					const envelope = createEnvelope({ keks: secretsOf(await secrets()).keks, randomBytes });
-					passSealed = envelope.seal(patch.mail.pass, { aad: MAIL_AAD });
+					passSealed = box.seal(patch.mail.pass, { aad: MAIL_AAD });
 				}
 				set.mail = {
 					host: patch.mail.host,
@@ -216,6 +253,30 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 		return /** @type {SettingsDoc} */ (doc);
 	};
 
+	/**
+	 * Store the Branding logo (type and size checked by the caller) and bump the settings version.
+	 * @param {{ type: string, data: Buffer } | null} logo null removes it
+	 */
+	const setLogo = async (logo) => {
+		if (logo) await collection.updateOne({ _id: 'logo' }, { $set: { type: logo.type, data: logo.data } }, { upsert: true });
+		else await collection.deleteOne({ _id: 'logo' });
+		const current = await settings();
+		return update({
+			branding: { hasLogo: Boolean(logo), logoVersion: Number(current?.branding?.logoVersion ?? 0) + 1 },
+		});
+	};
+
+	/** @returns {Promise<{ type: string, data: Buffer } | null>} the Branding logo */
+	const logo = async () => {
+		const doc = await collection.findOne({ _id: 'logo' });
+		if (!doc || typeof doc.type !== 'string' || !doc.data) return null;
+		const data = Buffer.isBuffer(doc.data) ? doc.data : Buffer.from(doc.data.buffer ?? doc.data);
+		return { type: doc.type, data };
+	};
+
+	/** @param {string | null | undefined} sealed true when the stored SMTP password opens with this `ENCRYPTION_KEY` */
+	const passwordReadable = (sealed) => openPassword(sealed) !== null;
+
 	/** @returns {Promise<string | null>} the schema fingerprint last applied */
 	const appliedSchema = async () => {
 		const doc = await collection.findOne({ _id: 'schema' });
@@ -226,7 +287,18 @@ export const createSystemStore = (db, { now = Date.now, randomBytes = (n) => new
 		await collection.updateOne({ _id: 'schema' }, { $set: { fingerprint, appliedAt: new Date(now()) } }, { upsert: true });
 	};
 
-	return Object.freeze({ secrets, settings, version, load, update, appliedSchema, recordSchema });
+	return Object.freeze({
+		secrets,
+		settings,
+		version,
+		load,
+		update,
+		setLogo,
+		logo,
+		passwordReadable,
+		appliedSchema,
+		recordSchema,
+	});
 };
 
 /** @typedef {ReturnType<typeof createSystemStore>} SystemStore */

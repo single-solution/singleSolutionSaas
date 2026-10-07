@@ -1,10 +1,10 @@
 'use client';
 /**
- * Merchants: search (id, domain, name or member e-mail prefix) and status filter; create a merchant (owner gets a
- * one-time set-password link); merchant detail with websites (add, open: subscriptions and install code, remove),
- * subscriptions (subscribe, change plan, cancel), balance and credit operations, team, notes and alerts; suspend /
- * resume with a reason (typed confirmation). Website, subscribe and credit components are the Merchant Console's and
- * the ledger's, called with the staff client.
+ * Admin Merchants (PLAN 0.8.2, 0.6): the table (search by business name, owner e-mail or domain; status filter; paged
+ * at 50; bulk Suspend / Resume with one reason and Resend setup link) with Add merchant, and the merchant page — an
+ * inner sidebar with the searchable list, a header (name, status, balance, actions: Suspend / Resume, Resend or Copy
+ * setup link, Turn off two-step, Delete) and the tabs Websites · Credits · Details · Activity. Rights follow the role
+ * (PLAN 0.2); the API checks them again.
  * @module
  */
 import { useEffect, useState } from 'react';
@@ -22,853 +22,724 @@ import {
 	FormError,
 	Icon,
 	Input,
-	KeyValueList,
 	PageHeader,
-	RadioGroup,
 	Select,
-	Stat,
 	StatusBadge,
 	Table,
+	Tabs,
 	TextArea,
 	TypedConfirmDialog,
 	describeProblem,
 	fieldErrors,
 	formatCredits,
-	formatCreditsPerHour,
 	formatDate,
 	formatDateTime,
-	formatHours,
-	humanize,
 	useToast,
 } from '@ss/ui';
+import { ADMIN, MERCHANT_FIELDS } from '../../../texts/console.js';
 import { Link } from '../../link.js';
-import { api } from '../../paths.js';
-import { AddWebsiteForm, InstallCodeCard } from '../../views/websites.js';
-import { PlanComparison, SubscribeDialog, hourlyEstimate } from '../../views/products.js';
-import { subscriptionCalls } from '../../views/subscription.js';
-import { adminFetch, useAdminResource, usePagedList } from '../client.js';
+import { MerchantFieldsForm, countryOptions } from '../../views/account.js';
+import { ActivityTable } from '../../views/login-settings.js';
+import { SubscribeDialog } from '../../views/products.js';
+import { AddWebsiteForm } from '../../views/websites.js';
+import { adminFetch, usePagedList } from '../client.js';
 import { adminApi, adminRoutes } from '../paths.js';
-import { AdminProblem, Crumbs, IdChip, staffCan } from './common.js';
-import { CreditOperationCard } from './finance.js';
+import { AdminProblem, adminCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
 /**
- * @param {any} props loader result of `loadMerchants` plus `staff`
+ * Status badge of a merchant, plus Setup pending (a separate grey badge, PLAN 0.6).
+ * @param {{ merchant: any }} props
  */
-export function MerchantsView(props) {
-	const [creating, setCreating] = useState(false);
-	const ok = props.ok === true;
-	const filter = ok ? props.filter : { status: null, q: null };
-	const list = usePagedList(
-		(cursor) =>
-			ok && (props.mode === 'all' || props.mode === 'search')
-				? adminApi.merchants({ status: filter.status, q: props.mode === 'search' ? filter.q : null, cursor, limit: 100 })
-				: null,
-		ok ? props.page : null,
-	);
-	if (!ok) return <AdminProblem problem={props.problem} />;
-	const rows = list.items;
+export function MerchantStatus({ merchant }) {
 	return (
-		<div className="space-y-6">
-			<PageHeader
-				title="Merchants"
-				subtitle="Find an organisation by id, website domain or name."
-				actions={
-					staffCan(props.staff, 'platform.merchants.write') ? (
-						<Button icon={<Icon name="plus" size={14} />} onClick={() => setCreating(true)}>
-							Create merchant
-						</Button>
-					) : null
-				}
+		<span className="inline-flex flex-wrap items-center gap-1">
+			<StatusBadge
+				status={merchant.status}
+				label={ADMIN.status[/** @type {'active'} */ (merchant.status)] ?? merchant.status}
 			/>
-			{creating ? <CreateMerchantDialog onClose={() => setCreating(false)} /> : null}
-			<form method="get" action="/admin/merchants" className="flex flex-wrap items-end gap-3" role="search">
-				<Input
-					label="Search"
-					name="q"
-					defaultValue={filter.q ?? ''}
-					placeholder="mer_… · shop.example.com · name or e-mail prefix"
-					fieldClassName="min-w-0 flex-1 sm:max-w-md"
-				/>
-				<Select
-					label="Status"
-					name="status"
-					defaultValue={filter.status ?? ''}
-					fieldClassName="w-40"
-					options={[
-						{ value: '', label: 'Any' },
-						{ value: 'active', label: 'Active' },
-						{ value: 'suspended', label: 'Suspended' },
-					]}
-				/>
-				<Button type="submit" icon={<Icon name="eye" size={14} />}>
-					Search
-				</Button>
-			</form>
-
-			{props.mode === 'id' || props.mode === 'domain' ? (
-				props.matches.length === 0 ? (
-					<EmptyState
-						icon="users"
-						title="No merchant found"
-						description={props.mode === 'domain' ? `No website ${filter.q} is registered.` : `No merchant ${filter.q}.`}
-					/>
-				) : (
-					<MerchantTable rows={props.matches} caption="Matching merchants" />
-				)
-			) : (
-				<MerchantTable
-					rows={rows}
-					caption="Merchants"
-					hasMore={Boolean(list.cursor)}
-					loadingMore={list.loading}
-					onLoadMore={() => void list.more()}
-					empty={props.mode === 'search' ? `No merchant matches “${filter.q}”.` : 'No merchants yet.'}
-				/>
-			)}
-			{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
-		</div>
+			{merchant.setupPending ? <Badge tone="neutral">{ADMIN.setupPending}</Badge> : null}
+		</span>
 	);
 }
 
 /**
- * Create a merchant and its owner (`POST /v1/admin/merchants`); then show the one-time set-password link to copy.
- * @param {{ onClose: () => void }} props
+ * The setup link shown once to copy (PLAN 0.2: shown once, only to that admin, logged).
+ * @param {{ link: string | null, onClose: () => void }} props
  */
-function CreateMerchantDialog({ onClose }) {
-	const [name, setName] = useState('');
-	const [ownerEmail, setOwnerEmail] = useState('');
-	const [ownerName, setOwnerName] = useState('');
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [created, setCreated] = useState(/** @type {any} */ (null));
-	const submit = async () => {
-		setBusy(true);
-		setProblem(null);
-		const result = await adminFetch(adminApi.createMerchant(), {
-			method: 'POST',
-			body: { name: name.trim(), ownerEmail: ownerEmail.trim(), ...(ownerName.trim() ? { ownerName: ownerName.trim() } : {}) },
-		});
-		setBusy(false);
-		if (result.ok) setCreated(result.data);
-		else setProblem(result.problem);
-	};
-	const errors = fieldErrors(problem);
+function CopyLinkDialog({ link, onClose }) {
 	return (
-		<Dialog
-			open
-			onClose={onClose}
-			title={created ? `${created.merchant.name} created` : 'Create merchant'}
-			description={created ? undefined : 'The owner gets a link to choose a password.'}
-			footer={
-				created ? (
-					<>
-						<Button variant="secondary" onClick={onClose}>
-							Done
-						</Button>
-						<ButtonLink as={Link} href={adminRoutes.merchant(created.merchant.merchantId)} variant="primary">
-							Open merchant
-						</ButtonLink>
-					</>
-				) : (
-					<>
-						<Button variant="secondary" onClick={onClose}>
-							Cancel
-						</Button>
-						<Button onClick={() => void submit()} loading={busy} disabled={!name.trim() || !ownerEmail.trim()}>
-							Create merchant
-						</Button>
-					</>
-				)
-			}>
-			{created ? (
-				<div className="space-y-3">
-					{created.setupLink ? (
-						<>
-							<CodeBlock code={created.setupLink} label="Set-password link" secret />
-							<p className="text-sm text-muted">
-								Send it to {created.owner.email}. It works once and expires {formatDateTime(created.setupLinkExpiresAt)}
-								{created.mailed ? '; it was also e-mailed.' : '; mail is not configured, so it was not e-mailed.'}
-							</p>
-						</>
-					) : (
-						<Callout tone="info">
-							{created.owner.email} already has an account and is now the owner; they sign in with their own password.
-						</Callout>
-					)}
-				</div>
-			) : (
-				<Form onSubmit={submit} busy={busy} aria-label="Create merchant">
-					<Input
-						label="Merchant name"
-						value={name}
-						maxLength={120}
-						onChange={(e) => setName(e.currentTarget.value)}
-						error={errors.name}
-						required
-					/>
-					<Input
-						label="Owner e-mail"
-						type="email"
-						value={ownerEmail}
-						onChange={(e) => setOwnerEmail(e.currentTarget.value)}
-						error={errors.ownerEmail}
-						required
-					/>
-					<Input
-						label="Owner name (optional)"
-						value={ownerName}
-						maxLength={120}
-						onChange={(e) => setOwnerName(e.currentTarget.value)}
-						error={errors.ownerName}
-					/>
-					<FormError problem={problem} fields={['name', 'ownerEmail', 'ownerName']} />
-				</Form>
-			)}
+		<Dialog open={Boolean(link)} onClose={onClose} title={ADMIN.copySetupLink} description={ADMIN.setupLinkCopy}>
+			{link ? <CodeBlock code={link} label={ADMIN.copySetupLink} secret wrap /> : null}
 		</Dialog>
 	);
 }
 
 /**
- * @param {{ rows: any[], caption: string, hasMore?: boolean, loadingMore?: boolean, onLoadMore?: () => void, empty?: string }} props
+ * Add merchant: the merchant fields; saving e-mails the setup link (or offers to copy it).
+ * @param {{ open: boolean, onClose: () => void, onCreated: (merchant: any) => void }} props
  */
-function MerchantTable({ rows, caption, hasMore = false, loadingMore = false, onLoadMore, empty }) {
-	return (
-		<Table
-			caption={caption}
-			rows={rows}
-			rowKey={(m) => m.merchantId}
-			empty={empty ?? 'Nothing to show.'}
-			hasMore={hasMore}
-			loadingMore={loadingMore}
-			{...(onLoadMore ? { onLoadMore } : {})}
-			columns={[
-				{
-					key: 'name',
-					header: 'Merchant',
-					rowHeader: true,
-					sortable: true,
-					render: (m) => (
-						<span className="space-y-0.5">
-							<Link href={adminRoutes.merchant(m.merchantId)} className="block font-semibold text-primary hover:underline">
-								{m.name}
-							</Link>
-							<IdChip id={m.merchantId} label="merchant id" />
-						</span>
-					),
-				},
-				{ key: 'status', header: 'Status', render: (m) => <StatusBadge status={m.status} /> },
-				{
-					key: 'suspension',
-					header: 'Suspension',
-					render: (m) => (m.suspension ? <span className="text-sm">{m.suspension.reason}</span> : '—'),
-				},
-				{ key: 'createdAt', header: 'Created', sortable: true, render: (m) => formatDate(m.createdAt) },
-			]}
-		/>
-	);
-}
-
-/**
- * @param {any} props loader result of `loadMerchant` plus `staff`
- */
-export function MerchantView(props) {
+function AddMerchantDialog({ open, onClose, onCreated }) {
 	const toast = useToast();
-	const ok = props.ok === true;
-	const merchantId = ok ? props.merchant.merchantId : null;
-	const { data: merchant, reload } = useAdminResource(
-		merchantId ? adminApi.merchant(merchantId) : null,
-		ok ? props.merchant : null,
-	);
-	const subs = useAdminResource(merchantId ? adminApi.subscriptions(merchantId) : null, {
-		items: ok ? props.subscriptions : [],
-	});
-	const balanceRes = useAdminResource(merchantId ? adminApi.balance(merchantId) : null, ok ? props.balance : null);
-	const [statusChange, setStatusChange] = useState(/** @type {null | 'suspend' | 'resume'} */ (null));
+	const [form, setForm] = useState({ name: '', ownerName: '', email: '', phone: '', address: '', country: '' });
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [adding, setAdding] = useState(false);
-	const [openId, setOpenId] = useState(/** @type {string | null} */ (null));
-	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.merchants(), label: 'Back to merchants' }} />;
-	const { staff, members, invites, meter, alerts, notes } = props;
-	const subscriptions = /** @type {any[]} */ (subs.data?.items ?? []);
-	const balance = balanceRes.data;
-	const websites = /** @type {any[]} */ (merchant?.websites ?? props.websites);
-	const opened = websites.find((w) => w.websiteId === openId && !w.deletedAt) ?? null;
-	const canWrite = staffCan(staff, 'platform.merchants.write');
-	const domainOf = (/** @type {string} */ id) => websites.find((w) => w.websiteId === id)?.domain ?? id;
-
-	const changeStatus = async (/** @type {{ reason: string }} */ { reason }) => {
-		if (!statusChange) return;
+	/** @param {keyof typeof form} key @param {string} value */
+	const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+	const submit = async () => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(
-			statusChange === 'suspend' ? adminApi.suspend(merchant.merchantId) : adminApi.resume(merchant.merchantId),
-			{
-				method: 'POST',
-				body: { reason },
-			},
-		);
+		/** @type {Record<string, string>} */
+		const body = { name: form.name.trim(), ownerName: form.ownerName.trim(), email: form.email.trim() };
+		for (const key of /** @type {const} */ (['phone', 'address', 'country']))
+			if (form[key].trim()) body[key] = form[key].trim();
+		const result = await adminFetch(adminApi.createMerchant(), { method: 'POST', body });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
 			return;
 		}
 		toast.show({
-			title: statusChange === 'suspend' ? `${merchant.name} suspended` : `${merchant.name} resumed`,
-			description:
-				statusChange === 'suspend' ? 'Billing and products pause for every website.' : 'Billing and products resume.',
+			title: ADMIN.merchantCreated,
+			description: result.data?.setup?.mailed ? ADMIN.setupMailed : ADMIN.setupNotMailed,
 		});
-		setStatusChange(null);
-		await reload();
+		setForm({ name: '', ownerName: '', email: '', phone: '', address: '', country: '' });
+		onCreated(result.data?.merchant);
 	};
-
+	const errors = fieldErrors(problem);
 	return (
-		<div className="space-y-6">
-			<PageHeader
-				breadcrumbs={<Crumbs items={[{ label: 'Merchants', href: adminRoutes.merchants() }, { label: merchant.name }]} />}
-				title={merchant.name}
-				badge={<StatusBadge status={merchant.status} />}
-				subtitle={<IdChip id={merchant.merchantId} label="merchant id" />}
-				actions={
-					<>
-						{staffCan(staff, 'platform.finance.read') ? (
-							<ButtonLink as={Link} href={adminRoutes.ledger(merchant.merchantId)} icon={<Icon name="wallet" size={14} />}>
-								Ledger & credits
-							</ButtonLink>
-						) : null}
-						{canWrite ? (
-							merchant.status === 'suspended' ? (
-								<Button variant="secondary" onClick={() => setStatusChange('resume')}>
-									Resume
-								</Button>
-							) : (
-								<Button variant="danger" onClick={() => setStatusChange('suspend')}>
-									Suspend
-								</Button>
-							)
-						) : null}
-					</>
-				}
-			/>
-			{merchant.status === 'suspended' && merchant.suspension ? (
-				<Callout tone="danger" title={`Suspended ${formatDateTime(merchant.suspension.at)}`}>
-					{merchant.suspension.reason} <span className="text-xs">(by {merchant.suspension.by})</span>
-				</Callout>
-			) : null}
-			<div className="grid gap-4 sm:grid-cols-3">
-				<Stat label="Balance" value={formatCredits(balance?.balanceMillicredits)} icon="wallet" />
-				<Stat label="Spend now" value={formatCreditsPerHour(meter?.burnRatePerHour)} icon="activity" />
-				<Stat
-					label="Runway"
-					value={formatHours(meter?.hoursRemaining)}
-					tone={typeof meter?.hoursRemaining === 'number' && meter.hoursRemaining < 24 ? 'warning' : 'neutral'}
-				/>
-			</div>
-			<Card title="Profile">
-				<KeyValueList
-					columns={3}
-					items={[
-						{ label: 'Created', value: formatDateTime(merchant.createdAt) },
-						{ label: 'Owner user', value: <IdChip id={merchant.ownerUserId} label="user id" /> },
-						{ label: 'Websites', value: websites.filter((w) => w.env === 'live' && !w.deletedAt).length },
-					]}
-				/>
-			</Card>
-
-			<Card
-				title="Websites"
-				subtitle="Live websites and their test twins."
-				actions={
-					staffCan(staff, 'websites.create') ? (
-						<Button size="sm" icon={<Icon name="plus" size={14} />} onClick={() => setAdding(true)}>
-							Add website
-						</Button>
-					) : null
-				}>
-				<Table
-					caption="Websites"
-					dense
-					rows={websites}
-					rowKey={(w) => w.websiteId}
-					empty="No websites."
-					columns={[
-						{
-							key: 'domain',
-							header: 'Domain',
-							rowHeader: true,
-							sortable: true,
-							render: (w) => (
-								<span className="space-y-0.5">
-									<span className="block font-semibold">{w.domain}</span>
-									<IdChip id={w.websiteId} label="website id" />
-								</span>
-							),
-						},
-						{
-							key: 'env',
-							header: 'Env',
-							render: (w) => <Badge tone={w.env === 'test' ? 'warning' : 'success'}>{w.env}</Badge>,
-						},
-						{ key: 'status', header: 'Status', render: (w) => <StatusBadge status={w.deletedAt ? 'deleted' : w.status} /> },
-						{
-							key: 'actions',
-							header: <span className="sr-only">Actions</span>,
-							align: 'right',
-							render: (w) =>
-								w.env === 'live' && !w.deletedAt ? (
-									<span className="flex justify-end gap-1">
-										<Button size="sm" variant="secondary" onClick={() => setOpenId(w.websiteId)}>
-											Open
-										</Button>
-										<ButtonLink as={Link} size="sm" variant="ghost" href={adminRoutes.websites({ domain: w.domain })}>
-											Transfer
-										</ButtonLink>
-									</span>
-								) : null,
-						},
-					]}
-				/>
-			</Card>
-			{opened ? (
-				<WebsitePanel
-					key={opened.websiteId}
-					merchantId={merchant.merchantId}
-					website={opened}
-					catalog={props.catalog ?? []}
-					subscriptions={subscriptions.filter((s) => s.websiteId === opened.websiteId || s.websiteId === opened.twinId)}
-					balanceMillicredits={balance?.balanceMillicredits ?? null}
-					staff={staff}
-					onClose={() => setOpenId(null)}
-					onChanged={async () => {
-						await Promise.all([reload(), subs.reload(), balanceRes.reload()]);
-					}}
-				/>
-			) : null}
-			<Dialog open={adding} onClose={() => setAdding(false)} title="Add website" description={`For ${merchant.name}.`}>
-				<AddWebsiteForm
-					merchantId={merchant.merchantId}
-					fetcher={adminFetch}
-					autoFocus
-					onAdded={(w) => {
-						setAdding(false);
-						toast.show({ title: `${w.domain} added`, description: 'A test twin was created with it.' });
-						setOpenId(w.websiteId);
-						void reload();
-					}}
-				/>
-			</Dialog>
-
-			<Card title="Subscriptions">
-				<Table
-					caption="Subscriptions"
-					dense
-					rows={subscriptions}
-					rowKey={(s) => s.subscriptionId}
-					empty="No subscriptions."
-					columns={[
-						{
-							key: 'productSlug',
-							header: 'Product',
-							rowHeader: true,
-							sortable: true,
-							render: (s) => (
-								<Link
-									href={adminRoutes.subscription(s.subscriptionId)}
-									className="font-semibold text-primary hover:underline">
-									{s.productSlug}
-								</Link>
-							),
-						},
-						{ key: 'websiteId', header: 'Website', render: (s) => domainOf(s.websiteId) },
-						{ key: 'planCode', header: 'Plan', render: (s) => s.planCode ?? '—' },
-						{ key: 'status', header: 'Status', render: (s) => <StatusBadge status={s.status} /> },
-						{ key: 'startedAt', header: 'Since', sortable: true, render: (s) => formatDate(s.startedAt) },
-					]}
-				/>
-			</Card>
-
-			<Card title="Team">
-				<Table
-					caption="Team members"
-					dense
-					rows={members}
-					rowKey={(m) => m.userId}
-					empty="No members."
-					columns={[
-						{
-							key: 'email',
-							header: 'Member',
-							rowHeader: true,
-							render: (m) => (
-								<span className="space-y-0.5">
-									<span className="block font-semibold">{m.email ?? m.userId}</span>
-									{m.name ? <span className="block text-xs text-muted">{m.name}</span> : null}
-								</span>
-							),
-						},
-						{
-							key: 'roles',
-							header: 'Roles',
-							render: (m) => (
-								<span className="flex flex-wrap gap-1">
-									{m.roles.map((/** @type {string} */ r) => (
-										<Badge key={r}>{r}</Badge>
-									))}
-									{m.grants.length > 0 ? <Badge tone="info">{m.grants.length} website grants</Badge> : null}
-								</span>
-							),
-						},
-						{ key: 'status', header: 'Status', render: (m) => <StatusBadge status={m.status} /> },
-					]}
-				/>
-				{invites.length > 0 ? (
-					<p className="mt-3 text-xs text-muted">
-						Pending invites:{' '}
-						{invites
-							.filter((/** @type {any} */ i) => i.status === 'pending')
-							.map((/** @type {any} */ i) => i.email)
-							.join(', ') || 'none'}
-					</p>
-				) : null}
-			</Card>
-
-			{staffCan(staff, 'platform.credits.adjust') ? (
-				<CreditOperationCard
-					merchant={merchant}
-					balanceMillicredits={balance?.balanceMillicredits}
-					onBooked={async () => {
-						await balanceRes.reload();
-					}}
-				/>
-			) : null}
-
-			<NotesCard merchantId={merchant.merchantId} notes={notes} canWrite={canWrite} />
-
-			{alerts.length > 0 ? (
-				<Card title="Finance alerts">
-					<ul className="space-y-1 text-sm">
-						{alerts.map((/** @type {any} */ a) => (
-							<li key={a.alertId} className="flex flex-wrap items-center gap-2">
-								<StatusBadge status="failing" label={humanize(a.kind)} />
-								<span className="text-muted">{formatDateTime(a.at)}</span>
-								{a.subscriptionId ? (
-									<Link
-										href={adminRoutes.subscription(a.subscriptionId)}
-										className="font-mono text-xs text-primary hover:underline">
-										{a.subscriptionId}
-									</Link>
-								) : null}
-							</li>
-						))}
-					</ul>
-				</Card>
-			) : null}
-
-			<TypedConfirmDialog
-				open={statusChange !== null}
-				onClose={() => setStatusChange(null)}
-				onConfirm={(input) => void changeStatus(input)}
-				busy={busy}
-				danger={statusChange === 'suspend'}
-				title={statusChange === 'suspend' ? `Suspend ${merchant.name}?` : `Resume ${merchant.name}?`}
-				expected={merchant.name}
-				confirmLabel={statusChange === 'suspend' ? 'Suspend merchant' : 'Resume merchant'}
-				reason={{ required: true, label: 'Reason (audited, shown to staff)' }}
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">
-					{statusChange === 'suspend'
-						? 'Every subscription pauses (paused time is never billed), products stop serving and the team can no longer change anything.'
-						: 'Subscriptions resume billing and products serve again.'}
-				</p>
-			</TypedConfirmDialog>
-		</div>
+		<Dialog open={open} onClose={onClose} title={ADMIN.addMerchant} size="lg">
+			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.addMerchant}>
+				<div className="grid gap-4 md:grid-cols-2">
+					<Input
+						label={MERCHANT_FIELDS.name}
+						value={form.name}
+						onChange={(e) => set('name', e.currentTarget.value)}
+						error={errors.name}
+						required
+						maxLength={120}
+					/>
+					<Input
+						label={MERCHANT_FIELDS.ownerName}
+						value={form.ownerName}
+						onChange={(e) => set('ownerName', e.currentTarget.value)}
+						error={errors.ownerName}
+						required
+						maxLength={120}
+					/>
+					<Input
+						label={MERCHANT_FIELDS.email}
+						type="email"
+						value={form.email}
+						onChange={(e) => set('email', e.currentTarget.value)}
+						error={errors.email}
+						required
+					/>
+					<Input
+						label={MERCHANT_FIELDS.phone}
+						help={MERCHANT_FIELDS.phoneHelp}
+						value={form.phone}
+						onChange={(e) => set('phone', e.currentTarget.value)}
+						error={errors.phone}
+						maxLength={40}
+					/>
+					<Select
+						label={MERCHANT_FIELDS.country}
+						value={form.country}
+						onChange={(e) => set('country', e.currentTarget.value)}
+						error={errors.country}
+						options={countryOptions(MERCHANT_FIELDS.countryNone)}
+					/>
+					<Input
+						label={MERCHANT_FIELDS.address}
+						value={form.address}
+						onChange={(e) => set('address', e.currentTarget.value)}
+						error={errors.address}
+						maxLength={300}
+					/>
+				</div>
+				<FormError problem={problem} fields={['name', 'ownerName', 'email', 'phone', 'address', 'country']} />
+				<Button type="submit" loading={busy}>
+					{ADMIN.addMerchant}
+				</Button>
+			</Form>
+		</Dialog>
 	);
 }
 
 /**
- * One website of the merchant: its subscriptions (subscribe, change plan, cancel), install code and removal — the
- * merchant APIs (staff may call them), through the Merchant Console's components.
- * @param {{ merchantId: string, website: any, catalog: any[], subscriptions: any[], balanceMillicredits: number | null,
- *   staff: any, onClose: () => void, onChanged: () => Promise<void> }} props
+ * The Merchants table.
+ * @param {any} props loader result of `loadMerchants` plus `admin`
  */
-function WebsitePanel({ merchantId, website, catalog, subscriptions, balanceMillicredits, staff, onClose, onChanged }) {
+export function MerchantsView(props) {
 	const toast = useToast();
-	const snippet = useAdminResource(api.snippet(merchantId, website.websiteId), null);
-	const [subscribing, setSubscribing] = useState(false);
-	const [planOf, setPlanOf] = useState(/** @type {any} */ (null));
-	const [planChoice, setPlanChoice] = useState('');
-	const [cancelling, setCancelling] = useState(/** @type {any} */ (null));
-	const [removing, setRemoving] = useState(false);
-	const [busy, setBusy] = useState(false);
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const { reload: loadSnippet } = snippet;
-	useEffect(() => {
-		void loadSnippet();
-	}, [loadSnippet]);
-	const canManage = staffCan(staff, 'subscriptions.manage');
-	const live = subscriptions.filter((s) => s.status !== 'cancelled');
-	const productOf = (/** @type {string} */ appId) => catalog.find((p) => p.appId === appId) ?? null;
-	const planProduct = planOf ? productOf(planOf.appId) : null;
-
-	/** @param {() => Promise<{ ok: boolean, problem?: any }>} call @param {string} title */
-	const run = async (call, title) => {
-		setBusy(true);
-		setProblem(null);
-		const result = await call();
-		setBusy(false);
-		if (!result.ok) {
-			setProblem(result.problem ?? null);
-			return false;
-		}
-		toast.show({ title });
-		await onChanged();
-		return true;
-	};
-	const changePlan = async () => {
-		if (!planOf) return;
-		const done = await run(
-			() => subscriptionCalls(adminFetch, merchantId, planOf.subscriptionId).changePlan(planChoice),
-			'Plan changed',
-		);
-		if (done) setPlanOf(null);
-	};
-	const cancel = async () => {
-		if (!cancelling) return;
-		const done = await run(
-			() => subscriptionCalls(adminFetch, merchantId, cancelling.subscriptionId).lifecycle('cancel'),
-			'Subscription cancelled',
-		);
-		if (done) setCancelling(null);
-	};
-	const remove = async () => {
-		const done = await run(
-			() => adminFetch(api.website(merchantId, website.websiteId), { method: 'DELETE' }),
-			`${website.domain} removed`,
-		);
-		if (done) {
-			setRemoving(false);
-			onClose();
-		}
-	};
-
-	return (
-		<Card
-			title={website.domain}
-			subtitle="Subscriptions and install code of this website."
-			actions={
-				<span className="flex flex-wrap gap-2">
-					{canManage ? (
-						<Button size="sm" onClick={() => setSubscribing(true)}>
-							Subscribe
-						</Button>
-					) : null}
-					{staffCan(staff, 'websites.delete') ? (
-						<Button size="sm" variant="danger" onClick={() => setRemoving(true)}>
-							Remove website
-						</Button>
-					) : null}
-					<Button size="sm" variant="ghost" onClick={onClose}>
-						Close
-					</Button>
-				</span>
-			}>
-			<div className="space-y-4">
-				{problem && !planOf && !cancelling && !removing ? <Callout tone="danger">{describeProblem(problem)}</Callout> : null}
-				<Table
-					caption={`Subscriptions of ${website.domain}`}
-					dense
-					rows={live}
-					rowKey={(s) => s.subscriptionId}
-					empty="No products yet."
-					columns={[
-						{
-							key: 'product',
-							header: 'Product',
-							rowHeader: true,
-							render: (s) => (
-								<Link
-									href={adminRoutes.subscription(s.subscriptionId)}
-									className="font-semibold text-primary hover:underline">
-									{productOf(s.appId)?.name ?? s.productSlug}
-								</Link>
-							),
-						},
-						{ key: 'planCode', header: 'Plan', render: (s) => s.planCode ?? '—' },
-						{ key: 'status', header: 'Status', render: (s) => <StatusBadge status={s.status} /> },
-						{
-							key: 'actions',
-							header: <span className="sr-only">Actions</span>,
-							align: 'right',
-							render: (s) =>
-								canManage ? (
-									<span className="flex justify-end gap-1">
-										{(productOf(s.appId)?.plans ?? []).length > 0 ? (
-											<Button
-												size="sm"
-												variant="secondary"
-												onClick={() => {
-													setProblem(null);
-													setPlanChoice(s.planCode ?? '');
-													setPlanOf(s);
-												}}>
-												Change plan
-											</Button>
-										) : null}
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={() => {
-												setProblem(null);
-												setCancelling(s);
-											}}>
-											Cancel
-										</Button>
-									</span>
-								) : null,
-						},
-					]}
-				/>
-				<InstallCodeCard snippet={snippet.data} />
-			</div>
-			{subscribing ? (
-				<SubscribeDialog
-					merchantId={merchantId}
-					website={website}
-					products={catalog}
-					balanceMillicredits={balanceMillicredits}
-					fetcher={adminFetch}
-					creditsHref={null}
-					onClose={() => setSubscribing(false)}
-					onSubscribed={(sub) => {
-						setSubscribing(false);
-						toast.show({ title: `Subscribed to ${productOf(sub.appId)?.name ?? sub.productSlug}` });
-						void onChanged();
-					}}
-				/>
-			) : null}
-			<Dialog
-				open={Boolean(planOf)}
-				onClose={() => setPlanOf(null)}
-				size="lg"
-				title={planProduct ? `Change the plan of ${planProduct.name}` : 'Change plan'}
-				description="Applies from the next hour."
-				footer={
-					<>
-						<Button variant="secondary" onClick={() => setPlanOf(null)}>
-							Cancel
-						</Button>
-						<Button
-							onClick={() => void changePlan()}
-							loading={busy}
-							disabled={!planOf || planChoice === (planOf.planCode ?? '')}>
-							Change plan
-						</Button>
-					</>
-				}>
-				{planProduct ? (
-					<div className="space-y-4">
-						<PlanComparison product={planProduct} />
-						<RadioGroup
-							legend="Plan"
-							value={planChoice}
-							onChange={setPlanChoice}
-							options={planProduct.plans.map((/** @type {any} */ p) => ({
-								value: p.code,
-								label: `${p.name ?? p.code} — ${formatCreditsPerHour(hourlyEstimate(planProduct, p.code))}`,
-							}))}
-						/>
-					</div>
-				) : null}
-				<FormError problem={problem} />
-			</Dialog>
-			<ConfirmDialog
-				open={Boolean(cancelling)}
-				onClose={() => setCancelling(null)}
-				onConfirm={() => void cancel()}
-				busy={busy}
-				danger
-				title={`Cancel ${cancelling ? (productOf(cancelling.appId)?.name ?? cancelling.productSlug) : ''} on ${website.domain}?`}
-				confirmLabel="Cancel subscription"
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">All elements stop at once and billing ends with the current hour.</p>
-			</ConfirmDialog>
-			<TypedConfirmDialog
-				open={removing}
-				onClose={() => setRemoving(false)}
-				onConfirm={() => void remove()}
-				busy={busy}
-				danger
-				title={`Remove ${website.domain}?`}
-				expected={website.domain}
-				confirmLabel="Remove website"
-				error={problem ? describeProblem(problem) : null}>
-				<p className="text-sm text-muted">Its test twin, keys and subscriptions go with it.</p>
-			</TypedConfirmDialog>
-		</Card>
+	const ok = props.ok === true;
+	const filter = ok ? props.filter : { status: null, q: null };
+	const [q, setQ] = useState(filter.q ?? '');
+	const [status, setStatus] = useState(filter.status ?? '');
+	const list = usePagedList(
+		(cursor) => (ok ? adminApi.merchants({ status: filter.status, q: filter.q, cursor, limit: 50 }) : null),
+		ok ? props.page : null,
 	);
-}
-
-/**
- * Staff notes on a merchant (append-only; `GET` / `POST /v1/admin/merchants/:merchantId/notes`).
- * @param {{ merchantId: string, notes: { data: any, problem: Problem | null }, canWrite: boolean }} props
- */
-function NotesCard({ merchantId, notes, canWrite }) {
-	const { data, reload } = useAdminResource(adminApi.notes(merchantId), notes.data ?? { items: [] });
-	const [body, setBody] = useState('');
+	const [selected, setSelected] = useState(/** @type {Set<string>} */ (new Set()));
+	const [adding, setAdding] = useState(false);
+	const [bulk, setBulk] = useState(/** @type {null | 'suspend' | 'resume' | 'resend_setup_link'} */ (null));
+	const [reason, setReason] = useState('');
 	const [busy, setBusy] = useState(false);
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const items = /** @type {any[]} */ (data?.items ?? []);
-	const add = async () => {
-		if (!body.trim()) return;
+	if (!ok) return <AdminProblem problem={props.problem} />;
+	const admin = props.admin;
+	const canWrite = adminCan(admin, 'merchants.write');
+	const canSuspend = adminCan(admin, 'merchants.suspend');
+	const canLink = adminCan(admin, 'merchants.setup_link');
+	const canBulk = canSuspend || canLink;
+	const apply = () => window.location.assign(adminRoutes.merchants({ q: q.trim() || null, status: status || null }));
+	/** @param {string} id */
+	const toggle = (id) =>
+		setSelected((s) => {
+			const next = new Set(s);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	const runBulk = async () => {
+		if (!bulk) return;
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.notes(merchantId), { method: 'POST', body: { body: body.trim() } });
+		const result = await adminFetch(adminApi.bulk(), {
+			method: 'POST',
+			body: { action: bulk, merchantIds: [...selected], ...(bulk === 'suspend' ? { reason: reason.trim() } : {}) },
+		});
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
 			return;
 		}
-		setBody('');
-		await reload();
+		const results = /** @type {any[]} */ (result.data?.results ?? []);
+		toast.show({ title: ADMIN.bulk.done(results.filter((r) => r.ok).length, results.filter((r) => !r.ok).length) });
+		setBulk(null);
+		setReason('');
+		setSelected(new Set());
+		await list.reload();
 	};
 	return (
-		<Card title="Staff notes" subtitle="Internal, visible to staff only.">
-			{
-				<div className="space-y-4">
-					{notes.problem ? <p className="text-sm text-danger">{describeProblem(notes.problem)}</p> : null}
-					{items.length === 0 ? (
-						<p className="text-sm text-muted">No notes yet.</p>
-					) : (
-						<ul className="space-y-3">
-							{items.map((n) => (
-								<li key={n.noteId} className="rounded-xl border border-line p-3 text-sm">
-									<p className="whitespace-pre-wrap text-fg">{n.body}</p>
-									<p className="mt-1 text-xs text-muted">
-										{n.by?.name ?? n.by?.email ?? n.by?.staffId} · {formatDateTime(n.at)}
-									</p>
-								</li>
-							))}
-						</ul>
-					)}
-					{canWrite ? (
-						<Form onSubmit={add} busy={busy} aria-label="Add a note">
-							<TextArea
-								label="New note"
-								rows={2}
-								maxLength={2000}
-								value={body}
-								onChange={(e) => setBody(e.currentTarget.value)}
-							/>
-							<FormError problem={problem} fields={['body']} />
-							<Button type="submit" size="sm" loading={busy} disabled={!body.trim()}>
-								Add note
+		<div className="space-y-6">
+			<PageHeader
+				title={ADMIN.merchantsTitle}
+				actions={
+					canWrite ? (
+						<Button onClick={() => setAdding(true)} icon={<Icon name="plus" size={14} />}>
+							{ADMIN.addMerchant}
+						</Button>
+					) : null
+				}
+			/>
+			<Card>
+				<Form onSubmit={apply} aria-label={ADMIN.searchMerchants}>
+					<div className="grid gap-3 sm:grid-cols-[1fr_12rem_auto] sm:items-end">
+						<Input
+							label={ADMIN.searchMerchants}
+							hideLabel
+							placeholder={ADMIN.searchMerchants}
+							value={q}
+							onChange={(e) => setQ(e.currentTarget.value)}
+						/>
+						<Select
+							label={ADMIN.columns.status}
+							hideLabel
+							value={status}
+							onChange={(e) => setStatus(e.currentTarget.value)}
+							options={[
+								{ value: '', label: ADMIN.allStatuses },
+								{ value: 'active', label: ADMIN.status.active },
+								{ value: 'suspended', label: ADMIN.status.suspended },
+							]}
+						/>
+						<Button type="submit" variant="secondary">
+							{ADMIN.filters.apply}
+						</Button>
+					</div>
+				</Form>
+			</Card>
+			{canBulk && selected.size > 0 ? (
+				<div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 p-3 text-sm">
+					<span className="font-semibold">{ADMIN.bulk.selected(selected.size)}</span>
+					{canSuspend ? (
+						<>
+							<Button size="sm" variant="secondary" onClick={() => setBulk('suspend')}>
+								{ADMIN.bulk.suspend}
 							</Button>
-						</Form>
+							<Button size="sm" variant="secondary" onClick={() => setBulk('resume')}>
+								{ADMIN.bulk.resume}
+							</Button>
+						</>
+					) : null}
+					{canLink ? (
+						<Button size="sm" variant="secondary" onClick={() => setBulk('resend_setup_link')}>
+							{ADMIN.bulk.resend}
+						</Button>
 					) : null}
 				</div>
-			}
-		</Card>
+			) : null}
+			{list.problem ? <Callout tone="danger">{describeProblem(list.problem)}</Callout> : null}
+			<Table
+				caption={ADMIN.merchantsTitle}
+				captionHidden
+				rows={list.items}
+				rowKey={(m) => m.merchantId}
+				hasMore={Boolean(list.cursor)}
+				loadingMore={list.loading}
+				onLoadMore={() => void list.more()}
+				empty={<EmptyState icon="users" title={ADMIN.merchantsTitle} description="—" />}
+				columns={[
+					...(canBulk
+						? [
+								{
+									key: 'select',
+									header: <span className="sr-only">Select</span>,
+									render: (/** @type {any} */ m) => (
+										<input
+											type="checkbox"
+											aria-label={`Select ${m.name}`}
+											checked={selected.has(m.merchantId)}
+											onChange={() => toggle(m.merchantId)}
+										/>
+									),
+								},
+							]
+						: []),
+					{
+						key: 'name',
+						header: ADMIN.columns.name,
+						sortable: true,
+						rowHeader: true,
+						render: (m) => (
+							<span className="block min-w-0">
+								<Link href={adminRoutes.merchant(m.merchantId)} className="font-semibold text-primary hover:underline">
+									{m.name}
+								</Link>
+								<span className="block truncate text-xs text-muted">{m.email}</span>
+							</span>
+						),
+					},
+					{ key: 'status', header: ADMIN.columns.status, render: (m) => <MerchantStatus merchant={m} /> },
+					{ key: 'createdAt', header: ADMIN.columns.created, sortable: true, render: (m) => formatDate(m.createdAt) },
+					{ key: 'lastSignInAt', header: ADMIN.columns.lastSignIn, render: (m) => formatDateTime(m.lastSignInAt) },
+				]}
+			/>
+			<AddMerchantDialog
+				open={adding}
+				onClose={() => setAdding(false)}
+				onCreated={(merchant) => {
+					setAdding(false);
+					if (merchant?.merchantId) window.location.assign(adminRoutes.merchant(merchant.merchantId));
+				}}
+			/>
+			<ConfirmDialog
+				open={bulk !== null}
+				onClose={() => setBulk(null)}
+				onConfirm={() => void runBulk()}
+				busy={busy}
+				danger={bulk === 'suspend'}
+				confirmLabel={bulk === 'suspend' ? ADMIN.bulk.suspend : bulk === 'resume' ? ADMIN.bulk.resume : ADMIN.bulk.resend}
+				title={ADMIN.bulk.selected(selected.size)}
+				error={problem ? describeProblem(problem) : null}>
+				{bulk === 'suspend' ? (
+					<div className="space-y-3">
+						<p className="text-sm text-muted">{ADMIN.suspendHelp}</p>
+						<TextArea
+							label={ADMIN.reason}
+							value={reason}
+							onChange={(e) => setReason(e.currentTarget.value)}
+							required
+							maxLength={500}
+						/>
+					</div>
+				) : bulk === 'resume' ? (
+					<p className="text-sm text-muted">{ADMIN.resumeHelp}</p>
+				) : null}
+			</ConfirmDialog>
+		</div>
+	);
+}
+
+/**
+ * The inner sidebar of the merchant page: the searchable list (name + status dot). Below 1024 px the list page is the
+ * Merchants table and the merchant page shows a Back link instead (PLAN 0.6 Phones and tablets).
+ * @param {{ currentId: string }} props
+ */
+function InnerList({ currentId }) {
+	const [q, setQ] = useState('');
+	const list = usePagedList((cursor) => adminApi.merchants({ q: q.trim() || null, cursor, limit: 50 }), null);
+	const { reload } = list;
+	// load once when the page opens (`reload` is a new function every render); later searches reload from the form
+	useEffect(() => {
+		void reload();
+	}, []);
+	return (
+		<aside className="hidden w-64 shrink-0 space-y-3 lg:block" aria-label={ADMIN.merchantsTitle}>
+			<Form onSubmit={() => void list.reload()} aria-label={ADMIN.searchMerchants}>
+				<Input
+					label={ADMIN.searchMerchants}
+					hideLabel
+					placeholder={ADMIN.searchMerchants}
+					value={q}
+					onChange={(e) => setQ(e.currentTarget.value)}
+				/>
+			</Form>
+			<ul className="max-h-[70vh] space-y-0.5 overflow-y-auto">
+				{list.items.map((m) => (
+					<li key={m.merchantId}>
+						<Link
+							href={adminRoutes.merchant(m.merchantId)}
+							className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm ${m.merchantId === currentId ? 'bg-primary-soft font-semibold text-on-primary-soft' : 'text-fg hover:bg-surface-2'}`}>
+							<span
+								aria-hidden="true"
+								className={`size-2 shrink-0 rounded-full ${m.status === 'active' ? 'bg-success' : 'bg-danger'}`}
+							/>
+							<span className="truncate">{m.name}</span>
+						</Link>
+					</li>
+				))}
+			</ul>
+		</aside>
+	);
+}
+
+/**
+ * The merchant page.
+ * @param {any} props loader result of `loadMerchant` plus `admin` and `tab`
+ */
+export function MerchantView(props) {
+	const toast = useToast();
+	const [merchant, setMerchant] = useState(props.ok ? props.merchant : null);
+	const [websites, setWebsites] = useState(/** @type {any[]} */ (props.ok ? props.websites : []));
+	const [tab, setTab] = useState(props.tab ?? 'websites');
+	const [dialog, setDialog] = useState(/** @type {null | 'suspend' | 'resume' | 'twoStep' | 'delete' | 'addWebsite'} */ (null));
+	const [removing, setRemoving] = useState(/** @type {any} */ (null));
+	const [addingTo, setAddingTo] = useState(/** @type {any} */ (null));
+	const [subs, setSubs] = useState(/** @type {any[]} */ (props.ok ? props.subscriptions : []));
+	const [reason, setReason] = useState('');
+	const [link, setLink] = useState(/** @type {string | null} */ (null));
+	const [busy, setBusy] = useState(false);
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	if (!props.ok || !merchant) return <AdminProblem problem={props.problem} />;
+	const admin = props.admin;
+	const merchantId = merchant.merchantId;
+	/** @param {any} w */
+	const productsOn = (w) =>
+		subs.filter((s) => (s.websiteId === w.websiteId || s.websiteId === w.twinId) && s.status !== 'cancelled');
+	const can = (/** @type {string} */ p) => adminCan(admin, p);
+	const balance = props.balance?.balanceMillicredits;
+
+	/**
+	 * @param {string} path
+	 * @param {Record<string, unknown>} [body]
+	 * @param {string} [method]
+	 */
+	const act = async (path, body, method = 'POST') => {
+		setBusy(true);
+		setProblem(null);
+		const result = await adminFetch(path, { method, ...(body ? { body } : {}) });
+		setBusy(false);
+		if (!result.ok) setProblem(result.problem);
+		return result;
+	};
+	const suspendOrResume = async () => {
+		const suspend = dialog === 'suspend';
+		const result = await act(
+			suspend ? adminApi.suspend(merchantId) : adminApi.resume(merchantId),
+			suspend ? { reason: reason.trim() } : {},
+		);
+		if (!result.ok) return;
+		setMerchant(result.data);
+		setDialog(null);
+		setReason('');
+	};
+	const setupLink = async (/** @type {boolean} */ copy) => {
+		const result = await act(adminApi.setupLink(merchantId), { copy });
+		if (!result.ok) {
+			toast.show({ tone: 'danger', title: describeProblem(result.problem) });
+			return;
+		}
+		if (copy) setLink(result.data?.link ?? null);
+		else toast.show({ title: result.data?.mailed ? ADMIN.setupLinkSent : ADMIN.setupNotMailed });
+	};
+	const turnOffTwoStep = async () => {
+		const result = await act(adminApi.merchantTwoStepOff(merchantId), {});
+		if (!result.ok) return;
+		setMerchant(result.data);
+		setDialog(null);
+	};
+	const remove = async () => {
+		const result = await act(adminApi.merchant(merchantId), { confirm: merchant.name }, 'DELETE');
+		if (result.ok) window.location.assign(adminRoutes.merchants());
+	};
+	const removeWebsite = async () => {
+		if (!removing) return;
+		const result = await act(adminApi.website(merchantId, removing.websiteId), { confirm: removing.domain }, 'DELETE');
+		if (!result.ok) return;
+		setWebsites((list) => list.filter((w) => w.websiteId !== removing.websiteId));
+		setRemoving(null);
+	};
+
+	const actions = (
+		<div className="flex flex-wrap gap-2">
+			{can('merchants.suspend') ? (
+				merchant.status === 'suspended' ? (
+					<Button variant="secondary" onClick={() => setDialog('resume')}>
+						{ADMIN.resume}
+					</Button>
+				) : (
+					<Button variant="secondary" onClick={() => setDialog('suspend')}>
+						{ADMIN.suspend}
+					</Button>
+				)
+			) : null}
+			{can('merchants.setup_link') && merchant.setupPending ? (
+				<>
+					<Button variant="secondary" onClick={() => void setupLink(false)} loading={busy}>
+						{ADMIN.resendSetupLink}
+					</Button>
+					<Button variant="secondary" onClick={() => void setupLink(true)} loading={busy}>
+						{ADMIN.copySetupLink}
+					</Button>
+				</>
+			) : null}
+			{can('two_step.turn_off') && merchant.twoStep?.enabled ? (
+				<Button variant="secondary" onClick={() => setDialog('twoStep')}>
+					{ADMIN.turnOffTwoStep}
+				</Button>
+			) : null}
+			{can('merchants.delete') ? (
+				<Button
+					variant="danger"
+					onClick={() => setDialog('delete')}
+					disabled={websites.length > 0}
+					title={websites.length > 0 ? ADMIN.deleteBlocked : undefined}>
+					{ADMIN.deleteMerchant}
+				</Button>
+			) : null}
+		</div>
+	);
+
+	return (
+		<div className="flex gap-6">
+			<InnerList currentId={merchantId} />
+			<div className="min-w-0 flex-1 space-y-6">
+				<Link href={adminRoutes.merchants()} className="text-sm font-semibold text-primary hover:underline lg:hidden">
+					← {ADMIN.merchantsTitle}
+				</Link>
+				<PageHeader
+					title={merchant.name}
+					badge={<MerchantStatus merchant={merchant} />}
+					subtitle={typeof balance === 'number' ? formatCredits(balance) : undefined}
+					actions={actions}
+				/>
+				{merchant.suspension ? <Callout tone="danger">{ADMIN.suspendedBecause(merchant.suspension.reason)}</Callout> : null}
+				<Tabs
+					label={merchant.name}
+					value={tab}
+					onChange={setTab}
+					tabs={[
+						{
+							id: 'websites',
+							label: ADMIN.tabs.websites,
+							content: (
+								<div className="space-y-4">
+									{can('websites.write') ? (
+										<Button onClick={() => setDialog('addWebsite')} icon={<Icon name="plus" size={14} />}>
+											{ADMIN.addWebsite}
+										</Button>
+									) : null}
+									<Table
+										caption={ADMIN.tabs.websites}
+										captionHidden
+										rows={websites}
+										rowKey={(w) => w.websiteId}
+										empty={<EmptyState icon="globe" title={ADMIN.tabs.websites} description="—" />}
+										columns={[
+											{ key: 'domain', header: ADMIN.domain, rowHeader: true, render: (w) => w.domain },
+											{
+												key: 'products',
+												header: 'Products',
+												render: (w) => (
+													<span className="flex flex-wrap gap-1">
+														{productsOn(w).map((s) => (
+															<StatusBadge
+																key={s.subscriptionId}
+																status={s.status}
+																label={s.productSlug ?? s.appId}
+															/>
+														))}
+													</span>
+												),
+											},
+											{ key: 'createdAt', header: ADMIN.columns.created, render: (w) => formatDate(w.createdAt) },
+											...(can('websites.write')
+												? [
+														{
+															key: 'actions',
+															header: <span className="sr-only">Actions</span>,
+															align: /** @type {const} */ ('right'),
+															render: (/** @type {any} */ w) => (
+																<span className="flex flex-wrap justify-end gap-1">
+																	{can('products_on_websites.write') ? (
+																		<Button size="sm" variant="ghost" onClick={() => setAddingTo(w)}>
+																			{ADMIN.addProduct}
+																		</Button>
+																	) : null}
+																	<Button
+																		size="sm"
+																		variant="ghost"
+																		disabled={productsOn(w).length > 0}
+																		title={productsOn(w).length > 0 ? ADMIN.removeProductsFirst : undefined}
+																		onClick={() => setRemoving(w)}>
+																		{ADMIN.removeWebsite}
+																	</Button>
+																</span>
+															),
+														},
+													]
+												: []),
+										]}
+									/>
+								</div>
+							),
+						},
+						{
+							id: 'credits',
+							label: ADMIN.tabs.credits,
+							content: (
+								<Card>
+									<p className="text-sm text-muted">{typeof balance === 'number' ? formatCredits(balance) : '—'}</p>
+									{can('billing.read') ? (
+										<ButtonLink as={Link} href={adminRoutes.ledger(merchantId)} variant="secondary" className="mt-3">
+											{ADMIN.menu.billing}
+										</ButtonLink>
+									) : null}
+								</Card>
+							),
+						},
+						{
+							id: 'details',
+							label: ADMIN.tabs.details,
+							content: (
+								<Card>
+									<MerchantFieldsForm
+										merchant={merchant}
+										path={adminApi.merchant(merchantId)}
+										withEmail
+										emailLocked={!merchant.setupPending}
+										emailLockedHelp={ADMIN.emailLocked}
+										readOnly={!can('merchants.write')}
+										onSaved={(m) => setMerchant(m)}
+										fetcher={adminFetch}
+									/>
+								</Card>
+							),
+						},
+						{
+							id: 'activity',
+							label: ADMIN.tabs.activity,
+							content: <ActivityTable items={props.activity?.items ?? []} empty={ADMIN.noActivity} />,
+						},
+					]}
+				/>
+			</div>
+			<ConfirmDialog
+				open={dialog === 'suspend' || dialog === 'resume'}
+				onClose={() => setDialog(null)}
+				onConfirm={() => void suspendOrResume()}
+				busy={busy}
+				danger={dialog === 'suspend'}
+				confirmLabel={dialog === 'suspend' ? ADMIN.suspend : ADMIN.resume}
+				title={dialog === 'suspend' ? ADMIN.suspendTitle : ADMIN.resume}
+				error={problem ? describeProblem(problem) : null}>
+				{dialog === 'suspend' ? (
+					<div className="space-y-3">
+						<p className="text-sm text-muted">{ADMIN.suspendHelp}</p>
+						<TextArea
+							label={ADMIN.reason}
+							value={reason}
+							onChange={(e) => setReason(e.currentTarget.value)}
+							required
+							maxLength={500}
+						/>
+					</div>
+				) : (
+					<p className="text-sm text-muted">{ADMIN.resumeHelp}</p>
+				)}
+			</ConfirmDialog>
+			<ConfirmDialog
+				open={dialog === 'twoStep'}
+				onClose={() => setDialog(null)}
+				onConfirm={() => void turnOffTwoStep()}
+				busy={busy}
+				danger
+				confirmLabel={ADMIN.turnOffTwoStep}
+				title={ADMIN.turnOffTwoStep}
+				error={problem ? describeProblem(problem) : null}>
+				<p className="text-sm text-muted">{ADMIN.turnOffTwoStepHelp}</p>
+			</ConfirmDialog>
+			<TypedConfirmDialog
+				open={dialog === 'delete'}
+				onClose={() => setDialog(null)}
+				onConfirm={() => void remove()}
+				expected={merchant.name}
+				busy={busy}
+				danger
+				confirmLabel={ADMIN.deleteMerchant}
+				title={`${ADMIN.deleteMerchant} ${merchant.name}`}
+				error={problem ? describeProblem(problem) : null}>
+				<p className="text-sm text-muted">{ADMIN.deleteHelp(typeof balance === 'number' ? formatCredits(balance) : '—')}</p>
+			</TypedConfirmDialog>
+			<TypedConfirmDialog
+				open={Boolean(removing)}
+				onClose={() => setRemoving(null)}
+				onConfirm={() => void removeWebsite()}
+				expected={removing?.domain ?? ''}
+				busy={busy}
+				danger
+				confirmLabel={ADMIN.removeWebsite}
+				title={`${ADMIN.removeWebsite} ${removing?.domain ?? ''}`}
+				error={problem ? describeProblem(problem) : null}>
+				<p className="text-sm text-muted">{ADMIN.removeWebsiteHelp}</p>
+			</TypedConfirmDialog>
+			<Dialog
+				open={dialog === 'addWebsite'}
+				onClose={() => setDialog(null)}
+				title={ADMIN.addWebsite}
+				description={ADMIN.domainHelp}>
+				<AddWebsiteForm
+					merchantId={merchantId}
+					autoFocus
+					fetcher={adminFetch}
+					onAdded={(w) => {
+						setDialog(null);
+						setWebsites((list) => [...list, w]);
+					}}
+				/>
+			</Dialog>
+			<CopyLinkDialog link={link} onClose={() => setLink(null)} />
+			{addingTo ? (
+				<SubscribeDialog
+					merchantId={merchantId}
+					website={addingTo}
+					products={(props.catalog ?? []).filter(
+						(/** @type {any} */ p) => !productsOn(addingTo).some((s) => s.appId === p.appId),
+					)}
+					balanceMillicredits={typeof balance === 'number' ? balance : null}
+					fetcher={adminFetch}
+					creditsHref={null}
+					onClose={() => setAddingTo(null)}
+					onSubscribed={(sub) => {
+						setSubs((list) => [...list, sub]);
+						setAddingTo(null);
+					}}
+				/>
+			) : null}
+		</div>
 	);
 }

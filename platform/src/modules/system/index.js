@@ -1,6 +1,6 @@
 /**
- * The `system` module: the platform mail settings (staff, RBAC + CSRF + audit) and the audit log search. It is
- * the reference for module structure.
+ * The `system` module: Settings (e-mail sending, branding, support contact, security), the public branding and logo,
+ * Activity and the admin Overview. It is the reference for module structure.
  * @module
  */
 import { defineModule } from '../../infra/modules.js';

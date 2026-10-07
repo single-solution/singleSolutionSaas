@@ -116,25 +116,15 @@ const boot = async (dbName, { env = {}, system = {} } = {}) => {
 		if (!path.startsWith('/v1/product/resources/resolve')) bodies.push(text);
 		return { status: response.status, headers: response.headers, json: text ? JSON.parse(text) : null, text };
 	};
-	/**
-	 * @param {string} merchantId
-	 * @param {string[]} [roles]
-	 * @param {Array<{ websiteId: string, roles: string[] }>} [grants]
-	 */
-	const merchant = async (merchantId, roles = ['owner'], grants = []) => {
-		const { token } = await portal.shared.sessions.create({
-			kind: 'merchant',
-			subject: `usr_${roles[0] ?? 'x'}`,
-			merchantId,
-			roles,
-			grants,
-		});
+	/** @param {string} merchantId */
+	const merchant = async (merchantId) => {
+		const { token } = await portal.shared.sessions.create({ kind: 'merchant', subject: merchantId });
 		return { cookie: `${portal.shared.cookies.name('merchant')}=${token}`, ...SAME_ORIGIN };
 	};
-	/** @param {string[]} roles */
-	const staff = async (roles) => {
-		const { token } = await portal.shared.sessions.create({ kind: 'staff', subject: 'stf_1', roles, mfa: true });
-		return { cookie: `${portal.shared.cookies.name('staff')}=${token}`, ...SAME_ORIGIN };
+	/** @param {string | null} role */
+	const staff = async (role) => {
+		const { token } = await portal.shared.sessions.create({ kind: 'admin', subject: `adm_${role ?? 'none'}`, mfa: true });
+		return { cookie: `${portal.shared.cookies.name('admin')}=${token}`, ...SAME_ORIGIN };
 	};
 	/**
 	 * @param {unknown} body
@@ -294,7 +284,7 @@ describe('connectors: create, check, mask', () => {
 		expect(leaks(await dumpDb(db))).toEqual([]);
 		const audit = await db.collection('platform_audit').find({ action: 'connectors.created' }).toArray();
 		expect(audit).toHaveLength(5);
-		expect(audit[0]).toMatchObject({ actor: { type: 'merchant_user' }, merchantId: MERCHANT, target: { type: 'connector' } });
+		expect(audit[0]).toMatchObject({ actor: { type: 'merchant' }, merchantId: MERCHANT, target: { type: 'connector' } });
 	}, 60_000);
 
 	it('validates credentials server-side, including the SSRF guard', async () => {
@@ -364,10 +354,7 @@ describe('connectors: tenant isolation and permissions', () => {
 		for (const [method, path, body] of routes) {
 			expect((await call(method, path, { headers: other, body })).status, `${method} ${path}`).toBe(403);
 			expect((await call(method, path, { body })).status, `${method} ${path} anonymous`).toBe(401);
-			expect(
-				(await call(method, path, { headers: await staff(['superadmin']), body })).status,
-				`${method} ${path} staff`,
-			).toBe(401);
+			expect((await call(method, path, { headers: await staff('owner'), body })).status, `${method} ${path} admin`).toBe(401);
 		}
 		// merchant 2 naming merchant 1's connector under its own path: not found
 		const mine = `/v1/merchants/${MERCHANT_2}/connectors/${id}`;
@@ -385,19 +372,11 @@ describe('connectors: tenant isolation and permissions', () => {
 		// merchant 1's connector is untouched
 		expect((await call('GET', one, { headers: owner })).json.connector).toMatchObject({ status: 'connected', label: 'OpenAI' });
 
-		// roles: editors cannot manage; developers can; website-scoped grants cannot manage merchant connectors
-		const editor = await merchant(MERCHANT, ['editor']);
-		expect((await call('GET', base, { headers: editor })).status).toBe(403);
-		expect((await call('DELETE', one, { headers: editor })).status).toBe(403);
-		const billing = await merchant(MERCHANT, ['billing']);
-		expect((await call('GET', base, { headers: billing })).status).toBe(403);
-		const scoped = await merchant(MERCHANT, ['editor'], [{ websiteId: WEB_A, roles: ['developer'] }]);
-		expect((await call('DELETE', one, { headers: scoped })).status).toBe(403);
-		expect((await call('GET', `/v1/merchants/${MERCHANT}/websites/${WEB_A}/resources`, { headers: scoped })).status).toBe(200);
-		const developer = await merchant(MERCHANT, ['developer']);
-		expect((await call('PATCH', one, { headers: developer, body: { label: 'Main AI' } })).json.connector.label).toBe('Main AI');
-		expect((await call('PATCH', one, { headers: developer, body: { label: '' } })).status).toBe(422);
-		expect((await call('PATCH', one, { headers: developer, body: [] })).status).toBe(400);
+		// the merchant edits its own connections
+		expect((await call('GET', `/v1/merchants/${MERCHANT}/websites/${WEB_A}/resources`, { headers: owner })).status).toBe(200);
+		expect((await call('PATCH', one, { headers: owner, body: { label: 'Main AI' } })).json.connector.label).toBe('Main AI');
+		expect((await call('PATCH', one, { headers: owner, body: { label: '' } })).status).toBe(422);
+		expect((await call('PATCH', one, { headers: owner, body: [] })).status).toBe(400);
 		// CSRF on cookie mutations
 		const noOrigin = { cookie: owner.cookie };
 		expect((await call('DELETE', one, { headers: noOrigin })).status).toBe(403);
@@ -416,7 +395,7 @@ describe('connectors: tenant isolation and permissions', () => {
 				websiteIds: [WEB_C],
 			},
 		});
-		const support = await staff(['support']);
+		const support = await staff('support');
 		const list = await call('GET', '/v1/admin/connectors', { headers: support });
 		expect(list.status).toBe(200);
 		expect(list.json.items).toHaveLength(2);
@@ -439,7 +418,7 @@ describe('connectors: tenant isolation and permissions', () => {
 		expect(single.json.connector).not.toHaveProperty('preview');
 		expect((await call('GET', '/v1/admin/connectors/con_00000000000000000000000000', { headers: support })).status).toBe(404);
 		expect((await call('GET', '/v1/admin/connectors/nope', { headers: support })).status).toBe(404);
-		expect((await call('GET', '/v1/admin/connectors', { headers: await staff([]) })).status).toBe(403);
+		expect((await call('GET', '/v1/admin/connectors', { headers: await staff(null) })).status).toBe(403);
 		expect((await call('GET', '/v1/admin/connectors', { headers: owner })).status).toBe(401);
 	}, 30_000);
 });

@@ -60,16 +60,12 @@ describe('merchant console interactions (jsdom): keys, resources, credits', () =
 		const appId = await world.seedPack();
 		const { b, merchantId } = await world.signup('owner@shop.test', 'Shop & Co');
 		b.use();
-		const site = await b.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
-		if (!site.ok) throw new Error('website');
-		const websiteId = /** @type {string} */ (site.data.website.websiteId);
-		const twinId = /** @type {string} */ (site.data.twin.websiteId);
+		const site = await world.addWebsite(merchantId, 'shop.example.com');
+		const websiteId = /** @type {string} */ (site.website.websiteId);
+		const twinId = /** @type {string} */ (site.twin.websiteId);
 		await world.credit(merchantId, 250_000, 'bank-1');
-		const sub = await b.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
-			appId,
-			planCode: 'basic',
-		});
-		expect(sub.ok).toBe(true);
+		const sub = await world.subscribe(merchantId, websiteId, { appId, planCode: 'basic' });
+		expect(sub.subscriptionId).toBeTruthy();
 
 		// ---------------------------------------------------------------- keys
 		withToasts(<KeysView {...await loaders.loadKeys(b.api, merchantId, websiteId)} />);

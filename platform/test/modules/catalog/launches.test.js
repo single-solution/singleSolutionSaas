@@ -54,7 +54,7 @@ describe('launches', () => {
 		};
 
 		// merchant (merchant console)
-		const merchantCookie = await t.session({ kind: 'merchant', subject: 'usr_owner', roles: ['owner'], merchantId: MERCHANT });
+		const merchantCookie = await t.session({ kind: 'merchant', merchantId: MERCHANT });
 		const merchant = await t.call('POST', `/v1/merchants/${MERCHANT}/apps/${appId}/launch`, {
 			cookie: merchantCookie,
 			body: { websiteId: WEBSITE },
@@ -62,7 +62,7 @@ describe('launches', () => {
 		const m = await t.verify(tokenOf(merchant), appId);
 		expect(m).toMatchObject({
 			kind: 'merchant',
-			sub: 'usr_owner',
+			sub: MERCHANT,
 			iss: PORTAL_URL,
 			aud: appId,
 			scope: { merchantId: MERCHANT, websiteId: WEBSITE },
@@ -76,30 +76,31 @@ describe('launches', () => {
 			403,
 		);
 
-		// staff admin launches
-		const staffLaunch = (/** @type {any} */ body, /** @type {string[]} */ roles = ['admin']) =>
-			t.staff('POST', `/v1/admin/apps/${appId}/launch`, { body, roles });
+		// admin launches (Finance is refused, PLAN 0.2)
+		const staffLaunch = (/** @type {any} */ body, /** @type {string} */ role = 'owner') =>
+			t.staff('POST', `/v1/admin/apps/${appId}/launch`, { body, role });
 		const admin = await t.verify(tokenOf(await staffLaunch({ kind: 'admin', merchantId: MERCHANT })), appId);
 		expect(admin).toMatchObject({
 			kind: 'admin',
-			sub: 'stf_alice',
-			user: { id: 'stf_alice', roles: ['admin'] },
+			sub: 'adm_owner_alice',
+			user: { id: 'adm_owner_alice', roles: ['owner'] },
 			scope: { merchantId: MERCHANT },
 		});
-		// app-wide admin launch: platform.launch.admin plus the superadmin/admin role
+		// Open as admin with no website: Owner only
 		const wide = await t.verify(tokenOf(await staffLaunch({ all: true })), appId);
-		expect(wide).toMatchObject({ kind: 'admin', sub: 'stf_alice', scope: { all: true } });
+		expect(wide).toMatchObject({ kind: 'admin', sub: 'adm_owner_alice', scope: { all: true } });
 		expect(wide.scope).not.toHaveProperty('merchantId');
-		problemOf(await staffLaunch({ all: true }, ['support']), 403, 'forbidden');
+		problemOf(await staffLaunch({ all: true }, 'support'), 403, 'forbidden');
+		problemOf(await staffLaunch({ merchantId: MERCHANT }, 'finance'), 403, 'forbidden');
 		problemOf(await staffLaunch({ all: true, merchantId: MERCHANT }), 422, 'validation_failed');
-		expect((await staffLaunch({ merchantId: MERCHANT, websiteId: WEBSITE }, ['support'])).status).toBe(200);
+		expect((await staffLaunch({ merchantId: MERCHANT, websiteId: WEBSITE }, 'support')).status).toBe(200);
 		problemOf(await staffLaunch({ kind: 'impersonate', merchantId: MERCHANT }), 422, 'validation_failed');
 		problemOf(await staffLaunch({}), 422, 'catalog_launch_refused');
 
-		// staff launches are audited
+		// admin launches are written to Activity
 		const launches = (await t.audit(appId)).filter((a) => a.action === 'catalog.launch_issued');
 		expect(launches.map((a) => a.after.kind)).toEqual(['admin', 'admin', 'admin']);
-		expect(launches[0]).toMatchObject({ actor: { id: 'stf_alice' }, merchantId: MERCHANT });
+		expect(launches[0]).toMatchObject({ actor: { id: 'adm_owner_alice' }, merchantId: MERCHANT });
 		expect(launches[1]).toMatchObject({ merchantId: null, after: { kind: 'admin', scope: 'all' } });
 	});
 
@@ -113,7 +114,7 @@ describe('launches', () => {
 			{ subscriptionId: 'sub_other', websiteId: WEBSITE, merchantId: MERCHANT, appId: 'app_other', status: 'active' },
 		);
 		await activate(t, appId);
-		const cookie = await t.session({ kind: 'merchant', subject: 'usr_owner', roles: ['owner'], merchantId: MERCHANT });
+		const cookie = await t.session({ kind: 'merchant', merchantId: MERCHANT });
 		const res = await t.call('POST', `/v1/merchants/${MERCHANT}/apps/${appId}/launch`, {
 			cookie,
 			body: { websiteId: WEBSITE },
@@ -124,7 +125,7 @@ describe('launches', () => {
 
 	it('refuses merchant launches of inactive apps and launches of unknown apps', async () => {
 		const { t, appId } = await setup();
-		const cookie = await t.session({ kind: 'merchant', subject: 'usr_owner', roles: ['owner'], merchantId: MERCHANT });
+		const cookie = await t.session({ kind: 'merchant', merchantId: MERCHANT });
 		problemOf(
 			await t.call('POST', `/v1/merchants/${MERCHANT}/apps/${appId}/launch`, { cookie, body: {} }),
 			422,

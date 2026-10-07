@@ -3,7 +3,7 @@
  *
  * - Merchant console (`auth: 'merchant'`, permissions `connectors.read` / `connectors.manage`): create, edit (label
  *   and/or replacement credentials), delete, test, assign, website resource status.
- * - Admin console (`auth: 'staff'`, `platform.merchants.read`): list and status only — never previews or secrets.
+ * - Admin console (`auth: 'admin'`, `platform.merchants.read`): list and status only — never previews or secrets.
  * - Product API (`auth: 'product'`): `POST /v1/product/resources/resolve` (F.9), rate limited per app + website.
  *
  * Create is `idempotent: true` (a retried create with the same key does not make a second connector). The resolve
@@ -70,7 +70,7 @@ export const connectorsRoutes = (service) => [
 		method: 'GET',
 		path: BASE,
 		auth: 'merchant',
-		permission: 'connectors.read',
+		permission: 'settings.read',
 		handler: async (ctx) => {
 			const page = paginate({ cursor: ctx.query.cursor ?? null, limit: ctx.query.limit ?? null, url: ctx.request.url });
 			const items = await service.list({
@@ -88,7 +88,7 @@ export const connectorsRoutes = (service) => [
 		method: 'POST',
 		path: BASE,
 		auth: 'merchant',
-		permission: 'connectors.manage',
+		permission: 'settings.write',
 		idempotent: true,
 		maxBodyBytes: 64 * 1024,
 		rateLimit: { limit: 30, windowMs: 60_000 },
@@ -112,7 +112,7 @@ export const connectorsRoutes = (service) => [
 		method: 'GET',
 		path: ONE,
 		auth: 'merchant',
-		permission: 'connectors.read',
+		permission: 'settings.read',
 		handler: async (ctx) =>
 			ok({
 				connector: await service.get({ merchantId: ctx.params.merchantId ?? '', connectorId: ctx.params.connectorId ?? '' }),
@@ -122,7 +122,7 @@ export const connectorsRoutes = (service) => [
 		method: 'PATCH',
 		path: ONE,
 		auth: 'merchant',
-		permission: 'connectors.manage',
+		permission: 'settings.write',
 		maxBodyBytes: 64 * 1024,
 		rateLimit: { limit: 20, windowMs: 60_000 },
 		handler: async (ctx) => {
@@ -142,7 +142,7 @@ export const connectorsRoutes = (service) => [
 		method: 'DELETE',
 		path: ONE,
 		auth: 'merchant',
-		permission: 'connectors.manage',
+		permission: 'settings.write',
 		handler: async (ctx) => {
 			await service.remove({
 				merchantId: ctx.params.merchantId ?? '',
@@ -156,7 +156,7 @@ export const connectorsRoutes = (service) => [
 		method: 'POST',
 		path: `${ONE}/test`,
 		auth: 'merchant',
-		permission: 'connectors.manage',
+		permission: 'settings.write',
 		rateLimit: { limit: 20, windowMs: 60_000 },
 		handler: async (ctx) =>
 			ok(
@@ -171,7 +171,7 @@ export const connectorsRoutes = (service) => [
 		method: 'PUT',
 		path: `${ONE}/websites`,
 		auth: 'merchant',
-		permission: 'connectors.manage',
+		permission: 'settings.write',
 		handler: async (ctx) =>
 			ok(
 				await service.assign({
@@ -186,15 +186,15 @@ export const connectorsRoutes = (service) => [
 		method: 'GET',
 		path: '/v1/merchants/:merchantId/websites/:websiteId/resources',
 		auth: 'merchant',
-		permission: 'connectors.read',
+		permission: 'settings.read',
 		handler: async (ctx) =>
 			ok(await service.websiteResources({ merchantId: ctx.params.merchantId ?? '', websiteId: ctx.params.websiteId ?? '' })),
 	}),
 	defineRoute({
 		method: 'GET',
 		path: '/v1/admin/connectors',
-		auth: 'staff',
-		permission: 'platform.merchants.read',
+		auth: 'admin',
+		permission: 'merchants.read',
 		handler: async (ctx) => {
 			const page = paginate({ cursor: ctx.query.cursor ?? null, limit: ctx.query.limit ?? null, url: ctx.request.url });
 			const items = await service.adminList({
@@ -210,8 +210,8 @@ export const connectorsRoutes = (service) => [
 	defineRoute({
 		method: 'GET',
 		path: '/v1/admin/connectors/:connectorId',
-		auth: 'staff',
-		permission: 'platform.merchants.read',
+		auth: 'admin',
+		permission: 'merchants.read',
 		handler: async (ctx) => ok({ connector: await service.adminGet(ctx.params.connectorId ?? '') }),
 	}),
 	defineRoute({

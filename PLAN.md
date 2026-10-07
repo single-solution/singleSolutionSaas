@@ -1638,6 +1638,30 @@ retry counts) are constants in code, not settings.
    - **Unit `.gitignore` files** (0.12 step 1): besides the root file, the deployables still in use (`platform`,
      `products/chatbot`) and the `ss app init` template also ignore `.env*` except `.env.example`, so each stays safe
      when split into its own repository.
+   - **Step 2, owner items** (0.12 step 2): the Portal now refuses to start without `PORTAL_URL` and `ENCRYPTION_KEY`.
+     The owner sets both on the Portal's Vercel project (Production only) before the next deploy: `PORTAL_URL`
+     exactly the address the live Chatbot pinned when it connected, `ENCRYPTION_KEY` random and at least 32
+     characters. The existing database's staff users, merchant users, memberships and invites are not migrated (no
+     migrations, 0.12 step 2): after deploying, the owner creates the first admin at `/login`.
+   - **Merchant field lengths**: business name and owner name up to 120 characters, phone up to 40, address up to 300.
+   - **Session length** is one absolute lifetime from sign-in (no idle timeout), 1 to 336 hours, default 12.
+   - **Require two-step for admins** is checked on every request: until the admin sets it up, every route except the
+     two-step setup and sign-out answers `two_step_required` (403) and the console shows only the setup.
+   - **Throttling** stays as today (5 failures in 15 minutes lock the e-mail, 50 per address) and also counts wrong
+     two-step and recovery codes.
+   - **E-mail change**: the confirmation link lasts 24 hours, works once, and is refused if the new address was taken
+     meanwhile; the old address gets a notice.
+   - **Admin invites** can be resent or copied and their e-mail corrected until accepted.
+   - **Suspended merchants**: setup and reset links are refused and Forgot password sends nothing.
+   - **Removing an admin** erases the login, so the e-mail can be used again; Activity keeps the name.
+   - **Activity** stores no personal details (names of admins only, ids for everything else), so the append-only log
+     never needs blanking when a merchant is deleted.
+   - **Admin-only routes** answer 401 (not 403) to a merchant session, since the session is not an admin session.
+   - **Rights enforced inside products** (0.10.2 rows marked product) are tested on the current Portal routes until
+     step 5 moves them.
+   - **Kept until later steps**: test twins, website keys, product issuers and website settings (step 5); the spend
+     cap stays merchant-editable until step 3 removes it; the `issuer_request` mail stays until step 5.
+   - **Two-step QR code**: drawn in the browser with `qrcode-generator` (one small dependency, no network call).
 
 Everything else in Part 0 is decided. A point that is not decided in Part 0 or 0.10 is asked, not guessed (0.13).
 

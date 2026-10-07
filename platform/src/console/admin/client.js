@@ -1,7 +1,7 @@
 'use client';
 /**
  * Browser API client of the Admin Console: the console's `apiFetch` (same-origin `/v1/*`, JSON only, CSRF-safe
- * cookie session, fresh `Idempotency-Key` per POST) with the staff sign-in page as the 401 destination, and raw
+ * cookie session, fresh `Idempotency-Key` per POST) with the sign-in page as the 401 destination, and raw
  * uploads of pack assets.
  * @module
  */
@@ -17,10 +17,10 @@ import { adminRoutes } from './paths.js';
  */
 
 /**
- * The staff session expired: back to the staff sign-in page, then here again.
+ * The admin session ended: back to the sign-in page, then here again.
  * @param {string} [next]
  */
-export const staffSignInAgain = (next) => {
+export const adminSignInAgain = (next) => {
 	if (typeof window === 'undefined') return;
 	const back = next ?? `${window.location.pathname}${window.location.search}`;
 	window.location.assign(`${adminRoutes.login(back)}&expired=1`);
@@ -34,7 +34,7 @@ export const staffSignInAgain = (next) => {
  */
 export const adminFetch = async (path, { redirectOn401 = true, ...init } = {}) => {
 	const result = await apiFetch(path, { ...init, redirectOn401: false });
-	if (!result.ok && result.status === 401 && redirectOn401) staffSignInAgain();
+	if (!result.ok && result.status === 401 && redirectOn401) adminSignInAgain();
 	return result;
 };
 
@@ -63,7 +63,7 @@ export const adminUpload = async (path, bytes, contentType) => {
 	/** @type {any} */
 	const data = await response.json().catch(() => null);
 	if (response.ok) return { ok: true, status: response.status, data };
-	if (response.status === 401) staffSignInAgain();
+	if (response.status === 401) adminSignInAgain();
 	return {
 		ok: false,
 		status: response.status,

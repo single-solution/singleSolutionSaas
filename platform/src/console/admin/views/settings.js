@@ -1,157 +1,373 @@
 'use client';
 /**
- * Portal settings, kept in the Portal database (never environment variables): the mailer (the password is sealed and
- * never shown). The Portal URL is shown only: it is the address the Portal was opened at. Keys and secrets are
- * generated on first start and never shown. Changes reach every server instance within seconds.
+ * Settings (PLAN 0.8.2; Owner only): E-mail sending (SMTP host, port, user, password, sender name and address; Send
+ * test e-mail to the signed-in admin), Branding (name, accent, logo), Support contact (e-mail, phone, optional WhatsApp)
+ * and Security (Session length, Require two-step for admins). Billing rules join in step 3. Every change is written to
+ * Activity and reaches every Portal instance within seconds.
  * @module
  */
 import { useState } from 'react';
 import {
 	Button,
+	Callout,
 	Card,
 	Checkbox,
-	ConfirmDialog,
 	Form,
-	FormActions,
 	FormError,
 	Input,
 	PageHeader,
+	Switch,
+	Tabs,
+	describeProblem,
 	fieldErrors,
 	useToast,
 } from '@ss/ui';
-import { adminFetch, useAdminResource } from '../client.js';
+import { ADMIN, LOGIN } from '../../../texts/console.js';
+import { adminFetch } from '../client.js';
 import { adminApi } from '../paths.js';
 import { AdminProblem } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
-/**
- * @param {any} props loader result of `loadSettings`
- */
-export function SettingsView(props) {
-	const toast = useToast();
-	const ok = props.ok === true;
-	const { data: settings, reload } = useAdminResource(ok ? adminApi.settings() : null, ok ? props.settings : null);
-	if (!ok || !settings) return <AdminProblem problem={props.problem} title="Settings are unavailable" />;
-	/** @param {string} title */
-	const saved = async (title) => {
-		toast.show({ title, description: 'Every server applies it within a few seconds.' });
-		await reload();
-	};
-	return (
-		<div className="space-y-6">
-			<PageHeader title="Settings" subtitle="Stored in the Portal database. The Portal URL is the address you opened it at." />
-			<Card title="Portal URL" subtitle="The address you opened the Portal at. Nothing to configure.">
-				<p className="font-mono text-sm">{settings.portalUrl}</p>
-			</Card>
-			<MailCard current={settings.mail} onSaved={() => saved('Mail settings saved')} />
-		</div>
-	);
-}
+const LOGO_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
+const LOGO_MAX_BYTES = 200 * 1024;
 
 /**
- * @param {{ current: any, onSaved: () => unknown }} props
+ * Save a settings group and report the outcome.
+ * @param {(settings: any) => void} onSaved
  */
-function MailCard({ current, onSaved }) {
-	const [host, setHost] = useState(current?.host ?? '');
-	const [port, setPort] = useState(String(current?.port ?? 587));
-	const [secure, setSecure] = useState(Boolean(current?.secure));
-	const [user, setUser] = useState(current?.user ?? '');
-	const [password, setPassword] = useState('');
-	const [from, setFrom] = useState(current?.from ?? '');
-	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+const useSave = (onSaved) => {
+	const toast = useToast();
 	const [busy, setBusy] = useState(false);
-	const [removing, setRemoving] = useState(false);
-	/** @param {unknown} mail */
-	const put = async (mail) => {
+	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
+	/**
+	 * @param {string} path
+	 * @param {string} method
+	 * @param {unknown} [body]
+	 */
+	const save = async (path, method, body) => {
 		setBusy(true);
 		setProblem(null);
-		const result = await adminFetch(adminApi.settingsMail(), { method: 'PUT', body: { mail } });
+		const result = await adminFetch(path, { method, ...(body === undefined ? {} : { body }) });
 		setBusy(false);
 		if (!result.ok) {
 			setProblem(result.problem);
-			return false;
+			return null;
 		}
-		setPassword('');
-		await onSaved();
-		return true;
+		toast.show({ title: LOGIN.saved });
+		onSaved(result.data);
+		return result.data;
 	};
-	const save = () =>
-		put({
-			host: host.trim(),
-			port: Number(port),
-			secure,
-			user: user.trim() || null,
-			...(password ? { password } : {}),
-			from: from.trim(),
+	return { busy, problem, save };
+};
+
+/** @param {{ settings: any, onSaved: (s: any) => void }} props */
+function MailTab({ settings, onSaved }) {
+	const toast = useToast();
+	const mail = settings.mail;
+	const [form, setForm] = useState({
+		host: mail?.host ?? '',
+		port: String(mail?.port ?? 587),
+		secure: mail?.secure ?? false,
+		user: mail?.user ?? '',
+		password: '',
+		senderName: mail?.senderName ?? '',
+		senderAddress: mail?.senderAddress ?? '',
+	});
+	const { busy, problem, save } = useSave(onSaved);
+	const [testing, setTesting] = useState(false);
+	const [testProblem, setTestProblem] = useState(/** @type {Problem | null} */ (null));
+	/** @param {keyof typeof form} key @param {any} value */
+	const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+	const submit = () =>
+		save(adminApi.settingsMail(), 'PUT', {
+			mail: {
+				host: form.host.trim(),
+				port: Number(form.port),
+				secure: form.secure,
+				user: form.user.trim() || null,
+				...(form.password ? { password: form.password } : {}),
+				senderName: form.senderName.trim() || null,
+				senderAddress: form.senderAddress.trim(),
+			},
 		});
+	const test = async () => {
+		setTesting(true);
+		setTestProblem(null);
+		const result = await adminFetch(adminApi.settingsMailTest(), { method: 'POST' });
+		setTesting(false);
+		if (result.ok) toast.show({ title: ADMIN.mail.testSent(result.data?.sentTo ?? '') });
+		else setTestProblem(result.problem);
+	};
 	const errors = fieldErrors(problem);
 	return (
-		<Card
-			title="Mail"
-			subtitle="Sign-up, password and invitation e-mails. Without a mailer, production sends none (development logs them).">
-			<Form onSubmit={save} busy={busy} aria-label="Mail settings">
-				<div className="grid gap-4 sm:grid-cols-2">
+		<Card>
+			<Form onSubmit={submit} busy={busy} aria-label={ADMIN.settingsTabs.mail}>
+				<div className="grid gap-4 md:grid-cols-2">
 					<Input
-						label="SMTP host"
-						value={host}
-						onChange={(e) => setHost(e.currentTarget.value)}
+						label={ADMIN.mail.host}
+						value={form.host}
+						onChange={(e) => set('host', e.currentTarget.value)}
 						error={errors.host}
 						required
 					/>
 					<Input
-						label="Port"
-						type="number"
-						value={port}
-						onChange={(e) => setPort(e.currentTarget.value)}
+						label={ADMIN.mail.port}
+						inputMode="numeric"
+						value={form.port}
+						onChange={(e) => set('port', e.currentTarget.value)}
 						error={errors.port}
-						help="587 with STARTTLS, or 465 with implicit TLS."
 						required
 					/>
-					<Input label="User" value={user} onChange={(e) => setUser(e.currentTarget.value)} autoComplete="off" />
 					<Input
-						label="Password"
-						type="password"
-						value={password}
-						onChange={(e) => setPassword(e.currentTarget.value)}
-						error={errors.password}
-						autoComplete="new-password"
-						help={current?.hasPassword ? 'Stored (sealed). Leave empty to keep it.' : 'Stored sealed; never shown again.'}
+						label={ADMIN.mail.user}
+						value={form.user}
+						onChange={(e) => set('user', e.currentTarget.value)}
+						error={errors.user}
 					/>
 					<Input
-						label="From"
-						value={from}
-						onChange={(e) => setFrom(e.currentTarget.value)}
-						error={errors.from}
-						placeholder="Portal <no-reply@example.com>"
+						label={ADMIN.mail.password}
+						type="password"
+						autoComplete="new-password"
+						value={form.password}
+						onChange={(e) => set('password', e.currentTarget.value)}
+						error={errors.password}
+						help={
+							mail?.passwordUnreadable
+								? ADMIN.mail.passwordUnreadable
+								: mail?.hasPassword
+									? ADMIN.mail.passwordKept
+									: undefined
+						}
+					/>
+					<Input
+						label={ADMIN.mail.senderName}
+						value={form.senderName}
+						onChange={(e) => set('senderName', e.currentTarget.value)}
+						error={errors.senderName}
+					/>
+					<Input
+						label={ADMIN.mail.senderAddress}
+						type="email"
+						value={form.senderAddress}
+						onChange={(e) => set('senderAddress', e.currentTarget.value)}
+						error={errors.senderAddress}
 						required
 					/>
 				</div>
-				<Checkbox label="Implicit TLS (port 465)" checked={secure} onChange={(e) => setSecure(e.currentTarget.checked)} />
-				<FormError problem={problem} fields={['host', 'port', 'password', 'from']} />
-				<FormActions>
-					{current ? (
-						<Button variant="secondary" onClick={() => setRemoving(true)}>
-							Remove mailer
+				<Checkbox label={ADMIN.mail.secure} checked={form.secure} onChange={(e) => set('secure', e.currentTarget.checked)} />
+				<FormError problem={problem} fields={['host', 'port', 'user', 'password', 'senderName', 'senderAddress']} />
+				<div className="flex flex-wrap gap-2">
+					<Button type="submit" loading={busy}>
+						{LOGIN.save}
+					</Button>
+					{mail ? (
+						<Button variant="secondary" onClick={() => void test()} loading={testing}>
+							{ADMIN.mail.test}
 						</Button>
 					) : null}
-					<Button type="submit" variant="secondary" loading={busy}>
-						Save mail settings
-					</Button>
-				</FormActions>
+					{mail ? (
+						<Button variant="ghost" onClick={() => void save(adminApi.settingsMail(), 'PUT', { mail: null })}>
+							{ADMIN.mail.remove}
+						</Button>
+					) : null}
+				</div>
+				{testProblem ? <Callout tone="danger">{describeProblem(testProblem)}</Callout> : null}
 			</Form>
-			<ConfirmDialog
-				open={removing}
-				onClose={() => setRemoving(false)}
-				onConfirm={async () => {
-					if (await put(null)) setRemoving(false);
-				}}
-				title="Remove the mailer?"
-				confirmLabel="Remove"
-				danger
-				busy={busy}>
-				Production then sends no e-mail until a mailer is set again.
-			</ConfirmDialog>
 		</Card>
+	);
+}
+
+/** @param {{ settings: any, onSaved: (s: any) => void }} props */
+function BrandingTab({ settings, onSaved }) {
+	const [name, setName] = useState(settings.branding?.name ?? '');
+	const [accent, setAccent] = useState(settings.branding?.accent ?? '#4f46e5');
+	const [logoError, setLogoError] = useState(/** @type {string | null} */ (null));
+	const { busy, problem, save } = useSave(onSaved);
+	/** @param {File} file */
+	const upload = async (file) => {
+		setLogoError(null);
+		if (!LOGO_TYPES.includes(file.type)) return setLogoError(ADMIN.branding.logoType);
+		if (file.size > LOGO_MAX_BYTES) return setLogoError(ADMIN.branding.logoTooBig);
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		let binary = '';
+		for (const byte of bytes) binary += String.fromCharCode(byte);
+		await save(adminApi.settingsLogo(), 'PUT', { type: file.type, data: btoa(binary) });
+		return undefined;
+	};
+	const errors = fieldErrors(problem);
+	return (
+		<Card>
+			<Form
+				onSubmit={() => save(adminApi.settingsBranding(), 'PUT', { name: name.trim(), accent })}
+				busy={busy}
+				aria-label={ADMIN.settingsTabs.branding}>
+				<div className="grid gap-4 md:grid-cols-2">
+					<Input
+						label={ADMIN.branding.name}
+						value={name}
+						onChange={(e) => setName(e.currentTarget.value)}
+						error={errors.name}
+						required
+						maxLength={60}
+					/>
+					<Input
+						label={ADMIN.branding.accent}
+						type="color"
+						value={accent}
+						onChange={(e) => setAccent(e.currentTarget.value)}
+						error={errors.accent}
+					/>
+				</div>
+				<div className="space-y-2">
+					<p className="text-sm font-semibold text-fg">{ADMIN.branding.logo}</p>
+					<p className="text-sm text-muted">{ADMIN.branding.logoHelp}</p>
+					{settings.branding?.hasLogo ? (
+						<img
+							src={`/branding/logo?v=${settings.branding.logoVersion}`}
+							alt=""
+							className="size-16 rounded-xl border border-line object-contain"
+						/>
+					) : null}
+					<input
+						type="file"
+						accept={LOGO_TYPES.join(',')}
+						aria-label={ADMIN.branding.logo}
+						onChange={(e) => {
+							const file = e.currentTarget.files?.[0];
+							if (file) void upload(file);
+						}}
+						className="block text-sm"
+					/>
+					{logoError ? <Callout tone="danger">{logoError}</Callout> : null}
+					{settings.branding?.hasLogo ? (
+						<Button variant="ghost" size="sm" onClick={() => void save(adminApi.settingsLogo(), 'DELETE')}>
+							{ADMIN.branding.logoRemove}
+						</Button>
+					) : null}
+				</div>
+				<FormError problem={problem} fields={['name', 'accent', 'type', 'data']} />
+				<Button type="submit" loading={busy}>
+					{LOGIN.save}
+				</Button>
+			</Form>
+		</Card>
+	);
+}
+
+/** @param {{ settings: any, onSaved: (s: any) => void }} props */
+function SupportTab({ settings, onSaved }) {
+	const [form, setForm] = useState({
+		email: settings.support?.email ?? '',
+		phone: settings.support?.phone ?? '',
+		whatsapp: settings.support?.whatsapp ?? '',
+	});
+	const { busy, problem, save } = useSave(onSaved);
+	/** @param {keyof typeof form} key @param {string} value */
+	const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
+	const errors = fieldErrors(problem);
+	return (
+		<Card>
+			<Form onSubmit={() => save(adminApi.settingsSupport(), 'PUT', form)} busy={busy} aria-label={ADMIN.settingsTabs.support}>
+				<p className="text-sm text-muted">{ADMIN.support.help}</p>
+				<div className="grid gap-4 md:grid-cols-3">
+					<Input
+						label={ADMIN.support.email}
+						type="email"
+						value={form.email}
+						onChange={(e) => set('email', e.currentTarget.value)}
+						error={errors.email}
+					/>
+					<Input
+						label={ADMIN.support.phone}
+						value={form.phone}
+						onChange={(e) => set('phone', e.currentTarget.value)}
+						error={errors.phone}
+					/>
+					<Input
+						label={ADMIN.support.whatsapp}
+						value={form.whatsapp}
+						onChange={(e) => set('whatsapp', e.currentTarget.value)}
+						error={errors.whatsapp}
+					/>
+				</div>
+				<FormError problem={problem} fields={['email', 'phone', 'whatsapp']} />
+				<Button type="submit" loading={busy}>
+					{LOGIN.save}
+				</Button>
+			</Form>
+		</Card>
+	);
+}
+
+/** @param {{ settings: any, onSaved: (s: any) => void }} props */
+function SecurityTab({ settings, onSaved }) {
+	const bounds = settings.bounds?.sessionHours ?? { min: 1, max: 336 };
+	const [hours, setHours] = useState(String(settings.security?.sessionHours ?? 12));
+	const [required, setRequired] = useState(Boolean(settings.security?.requireTwoStepForAdmins));
+	const { busy, problem, save } = useSave(onSaved);
+	return (
+		<Card>
+			<Form
+				onSubmit={() =>
+					save(adminApi.settingsSecurity(), 'PUT', { sessionHours: Number(hours), requireTwoStepForAdmins: required })
+				}
+				busy={busy}
+				aria-label={ADMIN.settingsTabs.security}>
+				<Input
+					label={ADMIN.security.sessionHours}
+					inputMode="numeric"
+					value={hours}
+					onChange={(e) => setHours(e.currentTarget.value)}
+					help={ADMIN.security.sessionHelp(bounds.min, bounds.max)}
+					error={fieldErrors(problem).sessionHours}
+					required
+				/>
+				<Switch
+					label={ADMIN.security.requireTwoStep}
+					description={ADMIN.security.requireTwoStepHelp}
+					checked={required}
+					onChange={setRequired}
+				/>
+				<FormError problem={problem} fields={['sessionHours', 'requireTwoStepForAdmins']} />
+				<Button type="submit" loading={busy}>
+					{LOGIN.save}
+				</Button>
+			</Form>
+		</Card>
+	);
+}
+
+/**
+ * @param {any} props loader result of `loadSettings`
+ */
+export function SettingsView(props) {
+	const [settings, setSettings] = useState(props.ok ? props.settings : null);
+	if (!props.ok || !settings) return <AdminProblem problem={props.problem} />;
+	return (
+		<div className="space-y-6">
+			<PageHeader title={ADMIN.settingsTitle} />
+			<Tabs
+				label={ADMIN.settingsTitle}
+				tabs={[
+					{ id: 'mail', label: ADMIN.settingsTabs.mail, content: <MailTab settings={settings} onSaved={setSettings} /> },
+					{
+						id: 'branding',
+						label: ADMIN.settingsTabs.branding,
+						content: <BrandingTab settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'support',
+						label: ADMIN.settingsTabs.support,
+						content: <SupportTab settings={settings} onSaved={setSettings} />,
+					},
+					{
+						id: 'security',
+						label: ADMIN.settingsTabs.security,
+						content: <SecurityTab settings={settings} onSaved={setSettings} />,
+					},
+				]}
+			/>
+		</div>
 	);
 }

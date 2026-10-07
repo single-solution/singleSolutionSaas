@@ -708,7 +708,7 @@ export const createCatalogService = (ctx, options = {}) => {
 		});
 		if (input.actor) {
 			await audit({
-				actor: { type: 'staff', id: input.actor },
+				actor: { type: 'admin', id: input.actor },
 				action: 'catalog.launch_issued',
 				app: app._id,
 				merchantId: claims.scope.merchantId ?? null,

@@ -13,7 +13,7 @@ import { createAudit } from './infra/audit.js';
 import { createBackground } from './infra/background.js';
 import { clearCookie, createLoginThrottle, createSessions, serializeCookie, sessionCookieName } from './infra/auth.js';
 import { createAuthenticators, createWebsiteKeyVerifier } from './infra/authenticators.js';
-import { createEnvelope, createPortalKeys, createSecretHasher } from './infra/crypto.js';
+import { createEnvelope, createPortalKeys, createSecretBox, createSecretHasher } from './infra/crypto.js';
 import {
 	createLocks,
 	createRegistry,
@@ -28,7 +28,7 @@ import { createPlatformMailer } from './infra/mailer.js';
 import { createJobs } from './infra/jobs.js';
 import { composeModules, moduleProblems } from './infra/modules.js';
 import { can, websitesVisible } from './infra/rbac.js';
-import { afterResponse, requestOrigin, withOrigin } from './infra/request-scope.js';
+import { afterResponse } from './infra/request-scope.js';
 import { COLLECTIONS, INFRA_COLLECTIONS } from './infra/schema.js';
 import { createIdempotencyStore, createRateLimitStore, createReplayStore } from './infra/stores.js';
 import { defaultRandomBytes } from './infra/util.js';
@@ -117,6 +117,7 @@ export const createPortal = ({
 		problems,
 		keys,
 		envelope: createEnvelope({ keks: config.keks, randomBytes }),
+		secretBox: createSecretBox({ encryptionKey: config.encryptionKey, randomBytes }),
 		secretHasher: createSecretHasher(config.websiteKeyPepper),
 		audit,
 		jobs,
@@ -128,10 +129,10 @@ export const createPortal = ({
 		loginThrottle: createLoginThrottle({ repo: repos.mutable(COLLECTIONS.loginThrottle), secret: config.sessionSecret, now }),
 		replayStore,
 		cookies: Object.freeze({
-			name: (/** @type {'staff' | 'merchant'} */ kind) => sessionCookieName(kind, config.cookieSecure),
-			set: (/** @type {'staff' | 'merchant'} */ kind, /** @type {string} */ token, /** @type {number} */ maxAgeSeconds) =>
+			name: (/** @type {'admin' | 'merchant'} */ kind) => sessionCookieName(kind, config.cookieSecure),
+			set: (/** @type {'admin' | 'merchant'} */ kind, /** @type {string} */ token, /** @type {number} */ maxAgeSeconds) =>
 				serializeCookie(sessionCookieName(kind, config.cookieSecure), token, { maxAgeSeconds, secure: config.cookieSecure }),
-			clear: (/** @type {'staff' | 'merchant'} */ kind) =>
+			clear: (/** @type {'admin' | 'merchant'} */ kind) =>
 				clearCookie(sessionCookieName(kind, config.cookieSecure), { secure: config.cookieSecure }),
 		}),
 		rbac: Object.freeze({ can, websitesVisible }),
@@ -169,8 +170,11 @@ export const createPortal = ({
 			verifyWebsiteKey,
 			replayStore,
 			ports: composed.ports,
+			portalUrl: config.portalUrl,
+			cookieSecure: config.cookieSecure,
 			now,
 		}),
+		allowedOrigin: config.portalUrl,
 		can,
 		idempotency: createIdempotencyStore(repos.mutable(COLLECTIONS.idempotency), { now }),
 		idempotencySecret: config.idempotencySecret,
@@ -181,10 +185,7 @@ export const createPortal = ({
 		afterResponse: background.afterResponse,
 	});
 	/** @param {Request} request */
-	const handle = (request) => {
-		// the Portal's address is this request's origin (issuer, audience, links, CSRF)
-		return withOrigin(requestOrigin(request), () => api(request));
-	};
+	const handle = (request) => api(request);
 
 	return Object.freeze({
 		config,

@@ -63,7 +63,7 @@ const memoryStores = () => {
 /** Header-driven fake authenticators: `x-test-<mode>: <json actor>` (or `bad`). */
 const fakeAuthenticators = () => {
 	/**
-	 * @param {'staff' | 'merchant' | 'websiteKey' | 'product'} mode
+	 * @param {'admin' | 'merchant' | 'websiteKey' | 'product'} mode
 	 * @param {boolean} [cookie]
 	 */
 	const make = (mode, cookie = false) =>
@@ -76,16 +76,16 @@ const fakeAuthenticators = () => {
 			}
 		);
 	return {
-		staff: make('staff', true),
+		admin: make('admin', true),
 		merchant: make('merchant', true),
 		websiteKey: make('websiteKey'),
 		product: make('product'),
 	};
 };
 
-const STAFF = JSON.stringify({ type: 'staff', id: 'stf_1', roles: ['admin'] });
-const SUPPORT = JSON.stringify({ type: 'staff', id: 'stf_2', roles: ['support'] });
-const OWNER = JSON.stringify({ type: 'merchant_user', id: 'usr_1', merchantId: MERCHANT, roles: ['owner'] });
+const STAFF = JSON.stringify({ type: 'admin', id: 'adm_1', role: 'owner' });
+const SUPPORT = JSON.stringify({ type: 'admin', id: 'adm_2', role: 'support' });
+const OWNER = JSON.stringify({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT });
 
 /**
  * @param {import('../src/infra/http.js').RouteDefinition[]} routes
@@ -109,6 +109,7 @@ const build = (routes, overrides = {}) => {
 		rateLimits: stores.rateLimits,
 		now: clock.now,
 		maxBodyBytes: 64,
+		allowedOrigin: ORIGIN,
 		...overrides,
 	});
 	/**
@@ -146,7 +147,7 @@ describe('route definitions', () => {
 		expect(() => defineRoute({ method: 'GET', path: 'x', auth: 'public', handler })).toThrow(/path/);
 		expect(() => defineRoute(/** @type {any} */ ({ method: 'GET', path: '/x', auth: 'nobody', handler }))).toThrow(/auth/);
 		expect(() => defineRoute(/** @type {any} */ ({ method: 'GET', path: '/x', auth: [], handler }))).toThrow(/auth/);
-		expect(() => defineRoute({ method: 'GET', path: '/x', auth: ['public', 'staff'], handler })).toThrow(/public/);
+		expect(() => defineRoute({ method: 'GET', path: '/x', auth: ['public', 'admin'], handler })).toThrow(/public/);
 		expect(() => defineRoute({ method: 'GET', path: '/x', auth: 'public', permission: 'a.b', handler })).toThrow(/permission/);
 		expect(() => defineRoute(/** @type {any} */ ({ method: 'GET', path: '/x', auth: 'public' }))).toThrow(/handler/);
 		expect(() =>
@@ -174,7 +175,7 @@ describe('route definitions', () => {
 	});
 
 	it('refuses modes without authenticators', () => {
-		expect(() => build([{ method: 'GET', path: '/x', auth: 'staff', handler }], { authenticators: {} })).toThrow(
+		expect(() => build([{ method: 'GET', path: '/x', auth: 'admin', handler }], { authenticators: {} })).toThrow(
 			/authenticator/,
 		);
 	});
@@ -289,7 +290,7 @@ describe('request pipeline', () => {
 			{
 				method: 'GET',
 				path: '/v1/who',
-				auth: ['staff', 'product'],
+				auth: ['admin', 'product'],
 				handler: (ctx) => ({ mode: ctx.authMode, actor: ctx.actor }),
 			},
 		]);
@@ -298,26 +299,26 @@ describe('request pipeline', () => {
 			headers: { 'x-test-product': JSON.stringify({ type: 'product', id: 'app_1' }) },
 		});
 		expect(viaProduct.json).toEqual({ mode: 'product', actor: { type: 'product', id: 'app_1' } });
-		const both = await call('GET', '/v1/who', { headers: { 'x-test-staff': STAFF, 'x-test-product': 'bad' } });
-		expect(both.json.mode).toBe('staff');
-		const bad = await call('GET', '/v1/who', { headers: { 'x-test-staff': 'bad' } });
+		const both = await call('GET', '/v1/who', { headers: { 'x-test-admin': STAFF, 'x-test-product': 'bad' } });
+		expect(both.json.mode).toBe('admin');
+		const bad = await call('GET', '/v1/who', { headers: { 'x-test-admin': 'bad' } });
 		expect(bad.status).toBe(401);
 		expect(bad.headers.get('x-auth')).toBe('failed');
 	});
 
 	it('enforces CSRF on cookie-authenticated mutations only', async () => {
 		const { call } = build([
-			{ method: 'PATCH', path: '/v1/thing', auth: ['staff', 'product'], handler: () => ({ done: true }) },
-			{ method: 'GET', path: '/v1/thing', auth: 'staff', handler: () => ({ read: true }) },
+			{ method: 'PATCH', path: '/v1/thing', auth: ['admin', 'product'], handler: () => ({ done: true }) },
+			{ method: 'GET', path: '/v1/thing', auth: 'admin', handler: () => ({ read: true }) },
 		]);
-		expect((await call('PATCH', '/v1/thing', { headers: { 'x-test-staff': STAFF }, body: {} })).status).toBe(403);
+		expect((await call('PATCH', '/v1/thing', { headers: { 'x-test-admin': STAFF }, body: {} })).status).toBe(403);
 		expect(
-			(await call('PATCH', '/v1/thing', { headers: { 'x-test-staff': STAFF, origin: 'https://evil.test' }, body: {} })).status,
+			(await call('PATCH', '/v1/thing', { headers: { 'x-test-admin': STAFF, origin: 'https://evil.test' }, body: {} })).status,
 		).toBe(403);
 		expect(
 			(
 				await call('PATCH', '/v1/thing', {
-					headers: { 'x-test-staff': STAFF, origin: ORIGIN, 'sec-fetch-site': 'same-origin' },
+					headers: { 'x-test-admin': STAFF, origin: ORIGIN, 'sec-fetch-site': 'same-origin' },
 					body: {},
 				})
 			).status,
@@ -330,7 +331,7 @@ describe('request pipeline', () => {
 				})
 			).status,
 		).toBe(200);
-		expect((await call('GET', '/v1/thing', { headers: { 'x-test-staff': STAFF } })).status).toBe(200);
+		expect((await call('GET', '/v1/thing', { headers: { 'x-test-admin': STAFF } })).status).toBe(200);
 	});
 
 	it('checks RBAC permissions against the default or a custom resource', async () => {
@@ -338,25 +339,25 @@ describe('request pipeline', () => {
 			{
 				method: 'GET',
 				path: '/v1/merchants/:merchantId/websites',
-				auth: ['staff', 'merchant'],
+				auth: ['admin', 'merchant'],
 				permission: 'websites.read',
 				handler: () => ({ ok: true }),
 			},
 			{
 				method: 'GET',
 				path: '/v1/settings',
-				auth: 'staff',
-				permission: 'platform.settings.write',
+				auth: 'admin',
+				permission: 'portal_settings.write',
 				handler: () => ({ ok: true }),
 			},
 			{
 				method: 'GET',
 				path: '/v1/custom',
 				auth: 'merchant',
-				permission: 'config.write',
+				permission: 'settings.write',
 				resource: (ctx) => ({ merchantId: ctx.query.m ?? null, websiteId: ctx.query.w ?? null }),
 				handler: (ctx) => {
-					ctx.authorize('merchant.delete');
+					if (ctx.query.deny) ctx.authorize('merchants.delete');
 					return { ok: true };
 				},
 			},
@@ -367,16 +368,16 @@ describe('request pipeline', () => {
 		expect((await call('GET', `/v1/merchants/${MERCHANT_2}/websites`, { headers: { 'x-test-merchant': OWNER } })).status).toBe(
 			403,
 		);
-		expect((await call('GET', `/v1/merchants/${MERCHANT_2}/websites`, { headers: { 'x-test-staff': SUPPORT } })).status).toBe(
+		expect((await call('GET', `/v1/merchants/${MERCHANT_2}/websites`, { headers: { 'x-test-admin': SUPPORT } })).status).toBe(
 			200,
 		);
-		expect((await call('GET', '/v1/settings', { headers: { 'x-test-staff': SUPPORT } })).status).toBe(403);
-		expect((await call('GET', '/v1/settings', { headers: { 'x-test-staff': STAFF } })).status).toBe(200);
+		expect((await call('GET', '/v1/settings', { headers: { 'x-test-admin': SUPPORT } })).status).toBe(403);
+		expect((await call('GET', '/v1/settings', { headers: { 'x-test-admin': STAFF } })).status).toBe(200);
 		expect((await call('GET', `/v1/custom?m=${MERCHANT}`, { headers: { 'x-test-merchant': OWNER } })).status).toBe(200);
-		const editor = JSON.stringify({ type: 'merchant_user', id: 'usr_2', merchantId: MERCHANT, roles: ['editor'] });
-		const denied = await call('GET', `/v1/custom?m=${MERCHANT}`, { headers: { 'x-test-merchant': editor } });
+		expect((await call('GET', `/v1/custom?m=${MERCHANT_2}`, { headers: { 'x-test-merchant': OWNER } })).status).toBe(403);
+		const denied = await call('GET', `/v1/custom?m=${MERCHANT}&deny=1`, { headers: { 'x-test-merchant': OWNER } });
 		expect(denied.status).toBe(403);
-		expect(denied.json.detail).toBe('Missing permission merchant.delete.');
+		expect(denied.json.detail).toBe('Missing permission merchants.delete.');
 	});
 
 	it('rate limits per route and subject with RateLimit headers', async () => {
@@ -423,7 +424,7 @@ describe('request pipeline', () => {
 			{
 				method: 'POST',
 				path: '/v1/things',
-				auth: ['staff', 'product'],
+				auth: ['admin', 'product'],
 				idempotent: true,
 				handler: (ctx) => created({ n: (counter += 1), key: ctx.idempotencyKey }, { location: '/v1/things/1' }),
 			},

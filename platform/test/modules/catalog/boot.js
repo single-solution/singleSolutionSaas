@@ -4,9 +4,10 @@
  */
 import { randomUUID } from 'node:crypto';
 import { createMemoryReplayStore, consumeWith, createKeyResolver, signAssertion, verifyLaunch } from '@ss/protocol';
+import { defineModule } from '../../../src/infra/modules.js';
 import { createPortal } from '../../../src/portal.js';
 import { createCatalogModule } from '../../../src/modules/catalog/index.js';
-import { PORTAL_URL, createClock, createTestLogger, testConfig } from '../../helpers.js';
+import { PORTAL_URL, createClock, createTestLogger, testConfig, testLogin, testSessionActor } from '../../helpers.js';
 import { fakeIntegration } from './fakes/modules.js';
 
 /** @type {Promise<any> | null} */
@@ -36,6 +37,7 @@ export const bootPortal = async ({
 		modules: [
 			createCatalogModule({ allowHosts: allowlist, ...(resolve ? { resolve } : {}), ...(fetch ? { fetch } : {}) }),
 			...(integration ? [integration.module] : []),
+			defineModule({ name: 'testsessions', ports: () => ({ sessionActor: testSessionActor }) }),
 			...modules,
 		],
 		logger,
@@ -50,17 +52,13 @@ export const bootPortal = async ({
 	}
 
 	/**
-	 * @param {{ kind?: 'staff' | 'merchant', roles?: string[], subject?: string, merchantId?: string }} [who]
+	 * A session cookie of an admin (by role; `null` = no known role) or of a merchant.
+	 * @param {{ kind?: 'admin' | 'merchant', role?: string | null, merchantId?: string }} [who]
 	 */
-	const session = async ({ kind = 'staff', roles = ['admin'], subject = 'stf_alice', merchantId } = {}) => {
-		const { token } = await portal.shared.sessions.create({
-			kind,
-			subject,
-			roles,
-			mfa: true,
-			...(merchantId ? { merchantId } : {}),
-		});
-		return `${portal.shared.cookies.name(kind)}=${token}`;
+	const session = async ({ kind = 'admin', role = 'owner', merchantId } = {}) => {
+		const login = testLogin({ kind, role, ...(merchantId ? { merchantId } : {}) });
+		const { token } = await portal.shared.sessions.create({ ...login, mfa: true });
+		return `${portal.shared.cookies.name(login.kind)}=${token}`;
 	};
 
 	/**
@@ -86,8 +84,9 @@ export const bootPortal = async ({
 		return { status: response.status, headers: response.headers, json: text ? JSON.parse(text) : null };
 	};
 
-	/** @param {string} method @param {string} path @param {{ body?: unknown, roles?: string[] }} [init] */
-	const staff = async (method, path, { body, roles } = {}) => call(method, path, { body, cookie: await session({ roles }) });
+	/** @param {string} method @param {string} path @param {{ body?: unknown, role?: string | null }} [init] */
+	const staff = async (method, path, { body, role } = {}) =>
+		call(method, path, { body, cookie: await session(role === undefined ? {} : { role }) });
 
 	/**
 	 * Product client assertion.

@@ -44,7 +44,7 @@ const SITE = `/v1/merchants/${M1}/websites/${W1}`;
 describe('pack asset uploads', () => {
 	it('stores assets whose bytes match the descriptor and refuses everything else', async () => {
 		const t = await boot();
-		const staff = await t.cookie({ kind: 'staff', roles: ['admin'] });
+		const staff = await t.cookie({ kind: 'admin', role: 'owner' });
 		const put = (/** @type {string} */ path, /** @type {Uint8Array | string} */ raw, type = 'text/javascript', c = staff) =>
 			t.request('PUT', `/v1/admin/packs/${PACK}/versions/1/assets/${path}`, {
 				raw,
@@ -257,7 +257,7 @@ describe('compile and serve', () => {
 			subscriptionId: chat.subscriptionId,
 			elementKey: 'launcher',
 			enabled: false,
-			actor: /** @type {any} */ ({ type: 'merchant_user', id: 'usr_owner', merchantId: M1, roles: ['owner'] }),
+			actor: /** @type {any} */ ({ type: 'merchant', id: M1, merchantId: M1 }),
 		});
 		expect((await elementsOf()).keys).toEqual(['bar:pack']);
 		// a service product without an https base URL delivers nothing
@@ -265,7 +265,7 @@ describe('compile and serve', () => {
 			subscriptionId: chat.subscriptionId,
 			elementKey: 'launcher',
 			enabled: true,
-			actor: /** @type {any} */ ({ type: 'merchant_user', id: 'usr_owner', merchantId: M1, roles: ['owner'] }),
+			actor: /** @type {any} */ ({ type: 'merchant', id: M1, merchantId: M1 }),
 		});
 		/** @type {any} */ (t.world.apps.get(SERVICE)).app.baseUrl = 'http://chat.example.net';
 		const insecure = await elementsOf();
@@ -388,7 +388,7 @@ describe('service widgets', () => {
 		});
 
 		// one asset route for both kinds: bytes must match the descriptor
-		const staff = await t.cookie({ kind: 'staff', roles: ['admin'] });
+		const staff = await t.cookie({ kind: 'admin', role: 'owner' });
 		const put = (/** @type {string} */ path, /** @type {Uint8Array | string} */ raw) =>
 			t.request('PUT', `${registered.uploadPath}${path}`, {
 				raw,

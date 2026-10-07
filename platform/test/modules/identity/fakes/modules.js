@@ -122,7 +122,7 @@ export const whoamiModule = defineModule({
 		{
 			method: 'GET',
 			path: '/v1/test/whoami',
-			auth: ['staff', 'merchant', 'product', 'websiteKey'],
+			auth: ['admin', 'merchant', 'product', 'websiteKey'],
 			handler: (c) =>
 				ok({
 					authMode: c.authMode,

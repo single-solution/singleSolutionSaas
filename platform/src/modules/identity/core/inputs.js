@@ -4,6 +4,7 @@
  * @module
  */
 import { isTimeZone, normaliseDomain } from '@ss/contracts';
+import { isCountryCode } from './countries.js';
 
 /** @typedef {{ path: string, message: string }} FieldError */
 /**
@@ -19,10 +20,9 @@ import { isTimeZone, normaliseDomain } from '@ss/contracts';
 export const PASSWORD_MIN = 12;
 export const PASSWORD_MAX = 1024;
 export const MAX_SCOPES = 32;
-export const MAX_GRANTS = 100;
-export const MERCHANT_ROLE_NAMES = Object.freeze(['owner', 'admin', 'billing', 'developer', 'editor']);
-export const ASSIGNABLE_MERCHANT_ROLES = Object.freeze(['admin', 'billing', 'developer', 'editor']);
-export const STAFF_ROLE_NAMES = Object.freeze(['superadmin', 'admin', 'support', 'finance']);
+export const ADMIN_ROLE_NAMES = Object.freeze(/** @type {const} */ (['owner', 'support', 'finance']));
+/** Merchant field lengths (PLAN 0.8.4: chosen by the builder, awaiting owner review). */
+export const MERCHANT_FIELD_MAX = Object.freeze({ name: 120, ownerName: 120, phone: 40, address: 300 });
 export const MAX_GRACE_SECONDS = 7 * 24 * 3600;
 export const DEFAULT_GRACE_SECONDS = 24 * 3600;
 
@@ -58,10 +58,6 @@ export const email = (value) => {
 	if (v.length === 0 || v.length > 254 || !EMAIL.test(v)) return bad('must be an e-mail address');
 	return okv(v);
 };
-
-/** The staff login name: an e-mail address, or `admin`. @type {Field<string>} */
-export const staffLoginName = (value) =>
-	typeof value === 'string' && value.trim().toLowerCase() === 'admin' ? okv('admin') : email(value);
 
 /**
  * A new password: 12..1024 characters, not only whitespace.
@@ -117,45 +113,6 @@ export const recoveryCode = (value) =>
 export const bool = (value) => (typeof value === 'boolean' ? okv(value) : bad('must be a boolean'));
 
 /**
- * Role names of a family, unique, non-empty unless `allowEmpty`.
- * @param {ReadonlyArray<string>} allowed
- * @param {{ allowEmpty?: boolean }} [options]
- * @returns {Field<string[]>}
- */
-export const roles =
-	(allowed, { allowEmpty = false } = {}) =>
-	(value) => {
-		if (!Array.isArray(value)) return bad('must be an array of roles');
-		if (!allowEmpty && value.length === 0) return bad('must name at least one role');
-		if (value.some((role) => typeof role !== 'string' || !allowed.includes(role)))
-			return bad(`roles must be among ${allowed.join(', ')}`);
-		if (new Set(value).size !== value.length) return bad('must not repeat roles');
-		return okv(/** @type {string[]} */ ([...value]));
-	};
-
-/**
- * Website-scoped grants `[{ websiteId, roles }]` with assignable merchant roles; one entry per website.
- * @type {Field<Array<{ websiteId: string, roles: string[] }>>}
- */
-export const grants = (value) => {
-	if (!Array.isArray(value) || value.length > MAX_GRANTS) return bad(`must be an array of at most ${MAX_GRANTS} grants`);
-	/** @type {Array<{ websiteId: string, roles: string[] }>} */
-	const out = [];
-	for (const grant of value) {
-		if (typeof grant !== 'object' || grant === null || Array.isArray(grant)) return bad('each grant is { websiteId, roles }');
-		const { websiteId, roles: grantRoles, ...rest } = /** @type {Record<string, unknown>} */ (grant);
-		if (Object.keys(rest).length > 0) return bad('each grant is { websiteId, roles }');
-		const id = idOf('web')(websiteId);
-		const r = roles(ASSIGNABLE_MERCHANT_ROLES)(grantRoles);
-		if (!id.ok) return bad(`websiteId ${id.message}`);
-		if (!r.ok) return bad(r.message);
-		if (out.some((g) => g.websiteId === id.value)) return bad('must not repeat a website');
-		out.push({ websiteId: id.value, roles: r.value });
-	}
-	return okv(out);
-};
-
-/**
  * Website-key scopes: 0..32 unique scope names (empty = the default scopes; the vocabulary is checked on issue,
  * `core/scopes.js`).
  * @type {Field<string[]>}
@@ -204,6 +161,23 @@ export const currency = (value) => {
 	const code = value.toUpperCase();
 	return CURRENCIES.size === 0 || CURRENCIES.has(code) ? okv(code) : bad('must be an ISO 4217 currency code such as EUR');
 };
+
+/**
+ * An ISO 3166-1 alpha-2 country code, upper-cased (`pk` → `PK`).
+ * @type {Field<string>}
+ */
+export const country = (value) =>
+	typeof value === 'string' && isCountryCode(value.trim().toUpperCase())
+		? okv(value.trim().toUpperCase())
+		: bad('must be an ISO 3166-1 alpha-2 country code such as PK');
+
+/**
+ * Optional free text: `null` or an empty string clears it, else 1..`max` characters.
+ * @param {number} max
+ * @returns {Field<string | null>}
+ */
+export const optionalText = (max) => (value) =>
+	value === null || (typeof value === 'string' && value.trim() === '') ? okv(null) : text(max)(value);
 
 /**
  * `null` (clear the setting) or a value of `field`.
@@ -311,65 +285,126 @@ export const secondFactor = (body, extra = {}) => {
 };
 
 /** @typedef {{ code?: string, recoveryCode?: string }} SecondFactor */
-/** @typedef {{ websiteId: string, roles: string[] }} GrantInput */
+
+/**
+ * The merchant fields (PLAN 0.2 Merchants), each optional for an edit.
+ * @typedef {{ name: string, ownerName: string, email: string, phone: string | null, address: string | null,
+ *   country: string | null }} MerchantFields
+ */
+
+const merchantSpec = Object.freeze({
+	name: text(MERCHANT_FIELD_MAX.name),
+	ownerName: text(MERCHANT_FIELD_MAX.ownerName),
+	phone: optionalText(MERCHANT_FIELD_MAX.phone),
+	address: optionalText(MERCHANT_FIELD_MAX.address),
+	country: nullable(country),
+});
+
+/**
+ * A closed object with at least one member.
+ * @param {unknown} b
+ * @param {Spec} spec
+ */
+const someOf = (b, spec) => {
+	const parsed = object(b, spec);
+	if (parsed.ok && Object.keys(parsed.value).length === 0)
+		return { ok: false, errors: [{ path: '', message: 'send at least one field' }] };
+	return parsed;
+};
 
 /** Body parsers per operation. */
 export const inputs = Object.freeze({
-	signup: /** @type {(b: unknown) => Parsed<{ email: string, password: string, merchantName: string, name?: string }>} */ (
-		(b) => object(b, { email, password: newPassword, merchantName: text(120), name: { optional: text(120) } })
+	signIn: /** @type {(b: unknown) => Parsed<{ email: string, password: string }>} */ ((b) => object(b, { email, password })),
+	twoStepSignIn: /** @type {(b: unknown) => Parsed<SecondFactor & { challenge: string }>} */ (
+		(b) => secondFactor(b, { challenge: token })
 	),
-	login: /** @type {(b: unknown) => Parsed<{ email: string, password: string, merchantId?: string }>} */ (
-		(b) => object(b, { email, password, merchantId: { optional: idOf('mer') } })
-	),
-	// staff sign in with their e-mail, or with the login name `admin` (the first admin, which may have no e-mail)
-	staffLogin: /** @type {(b: unknown) => Parsed<{ email: string, password: string }>} */ (
-		(b) => object(b, { email: staffLoginName, password })
-	),
-	firstAdmin: /** @type {(b: unknown) => Parsed<{ password: string }>} */ ((b) => object(b, { password: newPassword })),
-	staffProfile: /** @type {(b: unknown) => Parsed<{ name?: string, email?: string }>} */ (
-		(b) => object(b, { name: { optional: text(120) }, email: { optional: email } })
+	firstAdmin: /** @type {(b: unknown) => Parsed<{ name: string, email: string, password: string }>} */ (
+		(b) => object(b, { name: text(120), email, password: newPassword })
 	),
 	tokenOnly: /** @type {(b: unknown) => Parsed<{ token: string }>} */ ((b) => object(b, { token })),
 	emailOnly: /** @type {(b: unknown) => Parsed<{ email: string }>} */ ((b) => object(b, { email })),
 	resetConfirm: /** @type {(b: unknown) => Parsed<{ token: string, password: string }>} */ (
 		(b) => object(b, { token, password: newPassword })
 	),
-	inviteAccept: /** @type {(b: unknown) => Parsed<{ token: string, password: string, name?: string }>} */ (
-		(b) => object(b, { token, password, name: { optional: text(120) } })
+	setupConfirm: /** @type {(b: unknown) => Parsed<{ token: string, password: string, name?: string }>} */ (
+		(b) => object(b, { token, password: newPassword, name: { optional: text(120) } })
 	),
-	passwordChange: /** @type {(b: unknown) => Parsed<{ currentPassword: string, newPassword: string }>} */ (
-		(b) => object(b, { currentPassword: password, newPassword })
-	),
-	mfaChallenge: /** @type {(b: unknown) => Parsed<SecondFactor & { challenge: string }>} */ (
-		(b) => secondFactor(b, { challenge: token })
-	),
-	mfaCode: /** @type {(b: unknown) => Parsed<SecondFactor>} */ ((b) => secondFactor(b)),
-	mfaConfirm: /** @type {(b: unknown) => Parsed<{ code: string }>} */ ((b) => object(b, { code: otp })),
-	mfaDisable: /** @type {(b: unknown) => Parsed<SecondFactor & { password: string }>} */ ((b) => secondFactor(b, { password })),
-	switchMerchant: /** @type {(b: unknown) => Parsed<{ merchantId: string }>} */ ((b) => object(b, { merchantId: idOf('mer') })),
-	merchantUpdate: /** @type {(b: unknown) => Parsed<{ name: string }>} */ ((b) => object(b, { name: text(120) })),
-	invite: /** @type {(b: unknown) => Parsed<{ email: string, roles?: string[], grants?: GrantInput[] }>} */ (
+	passwordChange: /** @type {(b: unknown) => Parsed<SecondFactor & { currentPassword: string, newPassword: string }>} */ (
 		(b) =>
 			object(b, {
+				currentPassword: password,
+				newPassword,
+				code: { optional: otp },
+				recoveryCode: { optional: recoveryCode },
+			})
+	),
+	emailChange: /** @type {(b: unknown) => Parsed<SecondFactor & { email: string, password: string }>} */ (
+		(b) => object(b, { email, password, code: { optional: otp }, recoveryCode: { optional: recoveryCode } })
+	),
+	twoStepConfirm: /** @type {(b: unknown) => Parsed<{ code: string }>} */ ((b) => object(b, { code: otp })),
+	twoStepWithPassword: /** @type {(b: unknown) => Parsed<SecondFactor & { password: string }>} */ (
+		(b) => secondFactor(b, { password })
+	),
+	adminProfile: /** @type {(b: unknown) => Parsed<{ name: string }>} */ ((b) => object(b, { name: text(120) })),
+	merchantProfile: /** @type {(b: unknown) => Parsed<Partial<Omit<MerchantFields, 'email'>>>} */ (
+		(b) =>
+			someOf(b, {
+				name: { optional: merchantSpec.name },
+				ownerName: { optional: merchantSpec.ownerName },
+				phone: { optional: merchantSpec.phone },
+				address: { optional: merchantSpec.address },
+				country: { optional: merchantSpec.country },
+			})
+	),
+	merchantCreate: /** @type {(b: unknown) => Parsed<MerchantFields>} */ (
+		(b) => {
+			const parsed = object(b, {
+				name: merchantSpec.name,
+				ownerName: merchantSpec.ownerName,
 				email,
-				roles: { optional: roles(ASSIGNABLE_MERCHANT_ROLES, { allowEmpty: true }) },
-				grants: { optional: grants },
+				phone: { optional: merchantSpec.phone },
+				address: { optional: merchantSpec.address },
+				country: { optional: merchantSpec.country },
+			});
+			if (!parsed.ok) return parsed;
+			const v = /** @type {Record<string, any>} */ (parsed.value);
+			return { ok: true, value: { phone: null, address: null, country: null, ...v } };
+		}
+	),
+	merchantUpdate: /** @type {(b: unknown) => Parsed<Partial<MerchantFields>>} */ (
+		(b) =>
+			someOf(b, {
+				name: { optional: merchantSpec.name },
+				ownerName: { optional: merchantSpec.ownerName },
+				email: { optional: email },
+				phone: { optional: merchantSpec.phone },
+				address: { optional: merchantSpec.address },
+				country: { optional: merchantSpec.country },
 			})
 	),
-	memberUpdate: /** @type {(b: unknown) => Parsed<{ roles?: string[], grants?: GrantInput[] }>} */ (
+	merchantDelete: /** @type {(b: unknown) => Parsed<{ confirm: string }>} */ (
+		(b) => object(b, { confirm: text(MERCHANT_FIELD_MAX.name) })
+	),
+	bulk: /** @type {(b: unknown) => Parsed<{ action: 'suspend' | 'resume' | 'resend_setup_link', merchantIds: string[], reason?: string }>} */ (
 		(b) =>
 			object(b, {
-				roles: { optional: roles(ASSIGNABLE_MERCHANT_ROLES, { allowEmpty: true }) },
-				grants: { optional: grants },
+				action: oneOf(/** @type {const} */ (['suspend', 'resume', 'resend_setup_link'])),
+				merchantIds: (value) => {
+					if (!Array.isArray(value) || value.length === 0 || value.length > 50) return bad('must list 1..50 merchants');
+					const ids = value.map(idOf('mer'));
+					const failed = ids.find((r) => !r.ok);
+					if (failed && !failed.ok) return bad(failed.message);
+					return okv([...new Set(value.map(String))]);
+				},
+				reason: { optional: text(500) },
 			})
 	),
-	ownerTransfer: /** @type {(b: unknown) => Parsed<{ userId: string, password?: string }>} */ (
-		(b) => object(b, { userId: idOf('usr'), password: { optional: password } })
-	),
+	linkAction: /** @type {(b: unknown) => Parsed<{ copy?: boolean }>} */ ((b) => object(b ?? {}, { copy: { optional: bool } })),
 	website:
 		/** @type {(b: unknown, options?: { isPublicSuffix?: (domain: string) => boolean }) => Parsed<{ domain: string }>} */ (
 			(b, options) => object(b, { domain: domain(options) })
 		),
+	websiteRemove: /** @type {(b: unknown) => Parsed<{ confirm: string }>} */ ((b) => object(b, { confirm: text(253) })),
 	websiteSettings:
 		/** @type {(b: unknown) => Parsed<{ timeZone?: string | null, language?: string | null, currency?: string | null }>} */ (
 			(b) => {
@@ -400,21 +435,10 @@ export const inputs = Object.freeze({
 		(b) => object(b ?? {}, { reason: { optional: text(500) } })
 	),
 	reason: /** @type {(b: unknown) => Parsed<{ reason: string }>} */ ((b) => object(b, { reason: text(500) })),
-	websiteTransfer: /** @type {(b: unknown) => Parsed<{ toMerchantId: string, reason: string }>} */ (
-		(b) => object(b, { toMerchantId: idOf('mer'), reason: text(500) })
+	adminInvite: /** @type {(b: unknown) => Parsed<{ email: string, role: 'owner' | 'support' | 'finance', copy?: boolean }>} */ (
+		(b) => object(b, { email, role: oneOf(ADMIN_ROLE_NAMES), copy: { optional: bool } })
 	),
-	merchantCreate: /** @type {(b: unknown) => Parsed<{ name: string, ownerEmail: string, ownerName?: string }>} */ (
-		(b) => object(b, { name: text(120), ownerEmail: email, ownerName: { optional: text(120) } })
+	adminUpdate: /** @type {(b: unknown) => Parsed<{ email?: string, role?: 'owner' | 'support' | 'finance' }>} */ (
+		(b) => someOf(b, { email: { optional: email }, role: { optional: oneOf(ADMIN_ROLE_NAMES) } })
 	),
-	staffCreate: /** @type {(b: unknown) => Parsed<{ email: string, roles: string[], name?: string }>} */ (
-		(b) => object(b, { email, roles: roles(STAFF_ROLE_NAMES), name: { optional: text(120) } })
-	),
-	staffUpdate: /** @type {(b: unknown) => Parsed<{ roles?: string[], status?: 'active' | 'disabled' }>} */ (
-		(b) =>
-			object(b, {
-				roles: { optional: roles(STAFF_ROLE_NAMES) },
-				status: { optional: oneOf(/** @type {const} */ (['active', 'disabled'])) },
-			})
-	),
-	note: /** @type {(b: unknown) => Parsed<{ body: string }>} */ ((b) => object(b, { body: text(2000) })),
 });

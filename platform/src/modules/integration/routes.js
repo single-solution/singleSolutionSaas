@@ -77,8 +77,8 @@ export const integrationRoutes = (service) => [
 	defineRoute({
 		method: 'POST',
 		path: '/v1/admin/apps/:appId/deliveries/retry',
-		auth: 'staff',
-		permission: 'platform.jobs.manage',
+		auth: 'admin',
+		permission: 'products.manage',
 		resource: () => ({}),
 		idempotent: false,
 		handler: async (ctx) => ok(await service.retryNow(String(ctx.params.appId), auditContext(ctx))),

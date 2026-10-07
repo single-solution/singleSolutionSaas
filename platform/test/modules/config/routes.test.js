@@ -15,17 +15,11 @@ const as = {};
 beforeAll(async () => {
 	mongo = await startMongo();
 	app = await boot({ db: mongo.db('cfg_routes') });
-	as.ownerA = await app.login({ kind: 'merchant', subject: 'usr_owner_a', merchantId: MER_A, roles: ['owner'] });
-	as.ownerB = await app.login({ kind: 'merchant', subject: 'usr_owner_b', merchantId: MER_B, roles: ['owner'] });
-	as.editorA1 = await app.login({
-		kind: 'merchant',
-		subject: 'usr_ed',
-		merchantId: MER_A,
-		roles: [],
-		grants: [{ websiteId: WEB_A1, roles: ['editor'] }],
-	});
-	as.staff = await app.login({ kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
-	as.support = await app.login({ kind: 'staff', subject: 'stf_support', roles: ['support'], mfa: true });
+	as.ownerA = await app.login({ kind: 'merchant', subject: MER_A });
+	as.ownerB = await app.login({ kind: 'merchant', subject: MER_B });
+	as.staff = await app.login({ kind: 'admin', subject: 'adm_owner' });
+	as.support = await app.login({ kind: 'admin', subject: 'adm_support' });
+	as.finance = await app.login({ kind: 'admin', subject: 'adm_finance' });
 }, 120_000);
 afterAll(async () => {
 	await mongo?.stop();
@@ -43,14 +37,14 @@ describe('merchant console routes', () => {
 			body: { elements: { codes: true }, config: { codes: { prefix: 'R1' } }, reason: 'go live' },
 		});
 		expect(patched).toMatchObject({ status: 200, json: { version: 1, unchanged: false } });
-		await call('PATCH', SUB, { cookie: as.editorA1, body: { config: { codes: { prefix: 'R2' } } } });
+		await call('PATCH', SUB, { cookie: as.support, body: { config: { codes: { prefix: 'R2' } } } });
 		const invalid = await call('PATCH', SUB, { cookie: as.ownerA, body: { features: { 'codes.maxActive': { value: -1 } } } });
 		expect(invalid.status).toBe(422);
 		expect(invalid.json.errors[0]).toMatchObject({ path: '/features/codes.maxActive', code: 'invalid_value' });
 		const notObject = await call('PATCH', SUB, { cookie: as.ownerA, body: [1] });
 		expect(notObject.status).toBe(422);
 
-		const overview = await call('GET', SUB, { cookie: as.editorA1 });
+		const overview = await call('GET', SUB, { cookie: as.support });
 		expect(overview.json).toMatchObject({
 			subscriptionId: SUB_A1,
 			websiteId: WEB_A1,
@@ -191,10 +185,10 @@ describe('tenant isolation', () => {
 		}
 	});
 
-	it('a website-scoped editor is confined to its website', async () => {
+	it('Finance never reads or edits settings (PLAN 0.2)', async () => {
 		const other = `/v1/merchants/${MER_A}/websites/${WEB_A2}/subscriptions/${SUB_A2}/config`;
 		for (const [method, path, body] of subRoutes) {
-			const res = await app.call(method, `${other}${path}`, { cookie: as.editorA1, body });
+			const res = await app.call(method, `${other}${path}`, { cookie: as.finance, body });
 			expect([method, path, res.status]).toEqual([method, path, 403]);
 		}
 	});

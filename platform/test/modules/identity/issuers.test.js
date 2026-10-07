@@ -146,7 +146,7 @@ describe('identity issuers (routes and service)', () => {
 		);
 		const h = await boot({ identity: { issuers: { fetch } } });
 		const owner = await h.signupOwner('o@example.com');
-		const created = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'shop.example.com' });
+		const created = await owner.admin.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'shop.example.com' });
 		const websiteId = created.json.website.websiteId;
 		const path = `/v1/merchants/${owner.merchantId}/websites/${websiteId}/identity`;
 		return { h, owner, websiteId, path, fetched };
@@ -279,33 +279,18 @@ describe('identity issuers (routes and service)', () => {
 		expect(refreshed.json.issuer).toMatchObject({ lastError: null, keys: [{ kid: 'ed-1' }, { kid: 'ec-1' }] });
 	});
 
-	it('forgets the issuer when the website is deleted or transferred', async () => {
+	it('forgets the issuer when the website is removed', async () => {
 		const { h, owner, websiteId, path } = await setup();
 		await owner.client.send('PUT', path, { issuer: 'acme', publicJwks: [ED] });
 		expect(await h.service.identityFor(websiteId)).not.toBeNull();
-		await owner.client.del(`/v1/merchants/${owner.merchantId}/websites/${websiteId}`);
+		await owner.admin.del(`/v1/merchants/${owner.merchantId}/websites/${websiteId}`, { confirm: 'shop.example.com' });
 		expect(await h.service.identityFor(websiteId)).toBeNull();
-
-		const site = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'other.example.com' });
-		const otherId = site.json.website.websiteId;
-		await owner.client.send('PUT', `/v1/merchants/${owner.merchantId}/websites/${otherId}/identity`, {
-			issuer: 'acme',
-			publicJwks: [ED],
-		});
-		const target = await h.signupOwner('t@example.com');
-		const staff = await h.staffUser('staff@example.com');
-		const moved = await staff.client.post(`/v1/admin/websites/${otherId}/transfer`, {
-			toMerchantId: target.merchantId,
-			reason: 'sold',
-		});
-		expect(moved.status).toBe(200);
-		expect(await h.service.identityFor(otherId)).toBeNull();
 	});
 
 	it('does not fail a change when documents cannot be re-signed', async () => {
 		const h = await boot({ commerce: { fail: true } });
 		const owner = await h.signupOwner('o@example.com');
-		const created = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'shop.example.com' });
+		const created = await owner.admin.post(`/v1/merchants/${owner.merchantId}/websites`, { domain: 'shop.example.com' });
 		const path = `/v1/merchants/${owner.merchantId}/websites/${created.json.website.websiteId}/identity`;
 		expect((await owner.client.send('PUT', path, { issuer: 'acme', publicJwks: [ED] })).status).toBe(200);
 		expect(h.entries.some((e) => e.msg.includes('not re-signed'))).toBe(true);

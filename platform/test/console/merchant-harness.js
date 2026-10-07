@@ -5,7 +5,6 @@
  */
 import { vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
-import { totpCode } from '../../src/infra/auth.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
 import { createIdentityModule } from '../../src/modules/identity/index.js';
@@ -339,7 +338,14 @@ export const createWorld = async ({ db }) => {
 					: m,
 		),
 	);
-	const portal = createPortal({ config: await testConfig(), db, modules, logger: createTestLogger().logger });
+	// work right after responses runs at once (e-mails are sent after the response of the request that caused them)
+	const portal = createPortal({
+		config: await testConfig(),
+		db,
+		modules,
+		logger: createTestLogger().logger,
+		background: { mode: 'on', fallback: (task) => void task() },
+	});
 	await portal.ensureIndexes();
 	/** @param {string} to @param {string} template */
 	const tokenOf = (to, template) => {
@@ -347,30 +353,52 @@ export const createWorld = async ({ db }) => {
 		return decodeURIComponent(String(message?.data.link).split('#token=')[1] ?? '');
 	};
 
-	// staff (signed in with MFA) for seeding
+	// the first admin (an Owner, created from the sign-in page) seeds the world
 	const staff = browserOf(portal);
-	// the first admin (created from the sign-in page), given an e-mail in Account settings
 	const staffPassword = 'staff password 123!';
-	await staff.api.post('/v1/auth/staff/first-admin', { password: staffPassword });
-	await staff.api.request('PATCH', '/v1/me', { email: 'staff@ss.test' });
-	await staff.api.post('/v1/auth/staff/login', { email: 'staff@ss.test', password: staffPassword });
-	const enrol = await staff.api.post('/v1/auth/staff/mfa/enrol');
-	await staff.api.post('/v1/auth/staff/mfa/confirm', { code: totpCode(enrol.ok ? enrol.data.secret : '', Date.now()) });
+	const first = await staff.api.post('/v1/auth/first-admin', {
+		name: 'Olivia Owner',
+		email: 'staff@ss.test',
+		password: staffPassword,
+	});
+	if (!first.ok) throw new Error(`first admin: ${JSON.stringify(first.problem)}`);
 
 	/** Upload and activate the pack. */
 	const seedPack = () => uploadPack(staff.fetch);
 
 	/**
-	 * Sign a merchant up and verify it through the API (a signed-in browser).
+	 * A merchant created by the Owner whose login set its password from the setup link (a signed-in browser).
 	 * @param {string} email @param {string} merchantName
 	 */
 	const signup = async (email, merchantName, password = 'correct horse battery') => {
+		const created = await staff.api.post('/v1/admin/merchants', { name: merchantName, ownerName: 'Sam Seller', email });
+		if (!created.ok) throw new Error(`merchant: ${JSON.stringify(created.problem)}`);
 		const b = browserOf(portal);
-		await b.api.post('/v1/auth/merchant/signup', { email, password, merchantName });
-		await b.api.post('/v1/auth/merchant/verify-email', { token: tokenOf(email, 'verify_email') });
+		const set = await b.api.post('/v1/auth/set-password', { token: tokenOf(email, 'merchant_setup'), password });
+		if (!set.ok) throw new Error(`setup: ${JSON.stringify(set.problem)}`);
 		const me = await b.api.get('/v1/me');
 		if (!me.ok) throw new Error('signup');
-		return { b, me: me.data, merchantId: /** @type {string} */ (me.data.merchantId) };
+		return { b, me: me.data, merchantId: /** @type {string} */ (me.data.merchant.merchantId) };
+	};
+
+	/**
+	 * Add a website to a merchant (Owner and Support only).
+	 * @param {string} merchantId @param {string} domain
+	 */
+	const addWebsite = async (merchantId, domain) => {
+		const r = await staff.api.post(`/v1/merchants/${merchantId}/websites`, { domain });
+		if (!r.ok) throw new Error(`website: ${JSON.stringify(r.problem)}`);
+		return { website: r.data.website, twin: r.data.twin };
+	};
+
+	/**
+	 * Add a product to a website (Owner and Support only).
+	 * @param {string} merchantId @param {string} websiteId @param {Record<string, unknown>} body
+	 */
+	const subscribe = async (merchantId, websiteId, body) => {
+		const r = await staff.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, body);
+		if (!r.ok) throw new Error(`subscribe: ${JSON.stringify(r.problem)}`);
+		return r.data.subscription;
 	};
 
 	/** @param {string} merchantId @param {number} millicredits @param {string} reference */
@@ -383,7 +411,7 @@ export const createWorld = async ({ db }) => {
 		if (!r.ok) throw new Error(`credit: ${JSON.stringify(r.problem)}`);
 	};
 
-	return { portal, mail, tokenOf, staff, probe, seedPack, signup, credit };
+	return { portal, mail, tokenOf, staff, probe, seedPack, signup, credit, addWebsite, subscribe };
 };
 
 /** Silence React/jsdom noise (navigation is not implemented in jsdom) for the duration of a test. */

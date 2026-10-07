@@ -10,7 +10,7 @@ import { defineRoute, ok } from '../../infra/http.js';
 /** @typedef {import('../../infra/http.js').RequestContext} RequestContext */
 /** @typedef {import('../../infra/rbac.js').Actor} Actor */
 
-const CONSOLE = /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'staff']);
+const CONSOLE = /** @type {import('../../infra/http.js').AuthMode[]} */ (['merchant', 'admin']);
 const SUB = '/v1/merchants/:merchantId/websites/:websiteId/subscriptions/:subscriptionId/config';
 const ADMIN_SUB = '/v1/admin/subscriptions/:subscriptionId/config';
 const PLATFORM = '/v1/admin/config/platform/:appId';
@@ -56,14 +56,14 @@ export const configRoutes = (service) => [
 		method: 'GET',
 		path: SUB,
 		auth: CONSOLE,
-		permission: 'config.read',
+		permission: 'settings.read',
 		handler: async (c) => ok(await service.overview({ subscriptionId: P(c).subscriptionId, scope: subScope(c) })),
 	}),
 	defineRoute({
 		method: 'PATCH',
 		path: SUB,
 		auth: CONSOLE,
-		permission: 'config.write',
+		permission: 'settings.write',
 		handler: async (c) => {
 			const { reason, change } = split(c.body);
 			return ok(
@@ -82,7 +82,7 @@ export const configRoutes = (service) => [
 		method: 'GET',
 		path: `${SUB}/history`,
 		auth: CONSOLE,
-		permission: 'config.read',
+		permission: 'settings.read',
 		handler: async (c) =>
 			ok(
 				await service.history(
@@ -95,7 +95,7 @@ export const configRoutes = (service) => [
 		method: 'POST',
 		path: `${SUB}/rollback`,
 		auth: CONSOLE,
-		permission: 'config.write',
+		permission: 'settings.write',
 		handler: async (c) => {
 			const { reason, rest } = split(c.body);
 			return ok(
@@ -114,7 +114,7 @@ export const configRoutes = (service) => [
 		method: 'POST',
 		path: `${SUB}/preview`,
 		auth: CONSOLE,
-		permission: 'config.write',
+		permission: 'settings.write',
 		handler: async (c) => {
 			const { level, rest } = split(c.body);
 			return ok(
@@ -132,15 +132,15 @@ export const configRoutes = (service) => [
 	defineRoute({
 		method: 'GET',
 		path: ADMIN_SUB,
-		auth: 'staff',
-		permission: 'config.read',
+		auth: 'admin',
+		permission: 'settings.read',
 		handler: async (c) => ok(await service.overview({ subscriptionId: P(c).subscriptionId })),
 	}),
 	defineRoute({
 		method: 'PATCH',
 		path: ADMIN_SUB,
-		auth: 'staff',
-		permission: 'platform.config.write',
+		auth: 'admin',
+		permission: 'defaults.write',
 		handler: async (c) => {
 			const { reason, level, change } = split(c.body);
 			return ok(
@@ -157,8 +157,8 @@ export const configRoutes = (service) => [
 	defineRoute({
 		method: 'PUT',
 		path: `${ADMIN_SUB}/locks`,
-		auth: 'staff',
-		permission: 'platform.config.write',
+		auth: 'admin',
+		permission: 'defaults.write',
 		handler: async (c) => {
 			const { reason, level, rest } = split(c.body);
 			return ok(
@@ -180,8 +180,8 @@ export const configRoutes = (service) => [
 	defineRoute({
 		method: 'GET',
 		path: `${ADMIN_SUB}/history`,
-		auth: 'staff',
-		permission: 'config.read',
+		auth: 'admin',
+		permission: 'settings.read',
 		handler: async (c) =>
 			ok(
 				await service.history(
@@ -193,8 +193,8 @@ export const configRoutes = (service) => [
 	defineRoute({
 		method: 'POST',
 		path: `${ADMIN_SUB}/rollback`,
-		auth: 'staff',
-		permission: 'platform.config.write',
+		auth: 'admin',
+		permission: 'defaults.write',
 		handler: async (c) => {
 			const { reason, level, rest } = split(c.body);
 			return ok(
@@ -213,15 +213,15 @@ export const configRoutes = (service) => [
 	defineRoute({
 		method: 'GET',
 		path: PLATFORM,
-		auth: 'staff',
-		permission: 'platform.apps.read',
+		auth: 'admin',
+		permission: 'products.read',
 		handler: async (c) => ok(await service.getLayer({ target: { appId: P(c).appId }, level: 'platform' })),
 	}),
 	defineRoute({
 		method: 'PATCH',
 		path: PLATFORM,
-		auth: 'staff',
-		permission: 'platform.config.write',
+		auth: 'admin',
+		permission: 'defaults.write',
 		handler: async (c) => {
 			const { reason, change } = split(c.body);
 			return ok(await service.applyChange({ target: { appId: P(c).appId }, level: 'platform', change, reason, ...meta(c) }));
@@ -230,15 +230,15 @@ export const configRoutes = (service) => [
 	defineRoute({
 		method: 'GET',
 		path: `${PLATFORM}/history`,
-		auth: 'staff',
-		permission: 'platform.apps.read',
+		auth: 'admin',
+		permission: 'products.read',
 		handler: async (c) => ok(await service.history({ appId: P(c).appId }, { level: 'platform', ...pageOf(c) })),
 	}),
 	defineRoute({
 		method: 'POST',
 		path: `${PLATFORM}/rollback`,
-		auth: 'staff',
-		permission: 'platform.config.write',
+		auth: 'admin',
+		permission: 'defaults.write',
 		handler: async (c) => {
 			const { reason, rest } = split(c.body);
 			return ok(

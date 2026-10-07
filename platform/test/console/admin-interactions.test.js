@@ -2,10 +2,10 @@
 /**
  * Admin Console in the browser (jsdom): the views are rendered client-side against a live in-process Portal —
  * `fetch` is routed to `portal.handle` with a cookie jar, as a same-origin browser would — and driven through
- * their forms and dialogs: staff sign-in with TOTP enrolment and verification, suspend / resume, staff notes,
- * website transfer, product connect and pack folder upload, the Active / Inactive switch, the admin launch, admin
- * overrides and locks, platform policies and rollback, credit operations and ledger verification, audit search and
- * staff management.
+ * their forms and dialogs: Overview, Merchants (search, bulk actions, Add merchant), the merchant page (suspend and
+ * resume, setup links, two-step off, Details, websites and products, delete), Admins, Settings, Activity, My
+ * account, product connect and pack folder upload, the Active / Inactive switch, the admin launch, admin overrides
+ * and locks, platform policies and rollback, credit operations and ledger verification.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -19,27 +19,22 @@ import { createIdentityModule } from '../../src/modules/identity/index.js';
 import { createConsoleApi } from '../../src/console/api.js';
 import * as admin from '../../src/console/admin/loaders.js';
 import { adminApi, adminRoutes } from '../../src/console/admin/paths.js';
-import { adminFetch, staffSignInAgain, useAdminResource } from '../../src/console/admin/client.js';
+import { adminFetch, adminSignInAgain, useAdminResource } from '../../src/console/admin/client.js';
 import { AdminShell } from '../../src/console/admin/views/shell.js';
-import {
-	StaffForgotPasswordView,
-	StaffLoginView,
-	StaffMfaEnrol,
-	StaffResetPasswordView,
-} from '../../src/console/admin/views/auth.js';
-import { AccountView } from '../../src/console/admin/views/account.js';
+import { MyAccountView } from '../../src/console/admin/views/account.js';
+import { ActivityView } from '../../src/console/admin/views/activity.js';
+import { AdminsView } from '../../src/console/admin/views/admins.js';
+import { OverviewView } from '../../src/console/admin/views/overview.js';
 import { MerchantView, MerchantsView } from '../../src/console/admin/views/merchants.js';
-import { WebsitesView } from '../../src/console/admin/views/websites.js';
 import { AppView, AppsView } from '../../src/console/admin/views/apps.js';
 import { PoliciesView, SubscriptionAdminView } from '../../src/console/admin/views/config.js';
 import { FinanceView, LedgerView } from '../../src/console/admin/views/finance.js';
-import { AuditView, ConnectorsAdminView } from '../../src/console/admin/views/operations.js';
-import { StaffView } from '../../src/console/admin/views/staff.js';
+import { ConnectorsAdminView } from '../../src/console/admin/views/operations.js';
 import { SettingsView } from '../../src/console/admin/views/settings.js';
 import { IdChip } from '../../src/console/admin/views/common.js';
 import { ToastProvider } from '@ss/ui';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
-import { PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
+import { ENCRYPTION_KEY, PORTAL_URL, createTestLogger, startMongo, testConfig } from '../helpers.js';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
@@ -271,9 +266,10 @@ describe('admin console interactions (jsdom)', () => {
 		const portal = createPortal({
 			config: await testConfig({ STORAGE_DIR: ':memory:' }),
 			db: mongo.db('admin_ui'),
-			system: createSystemStore(mongo.db('admin_ui')),
+			system: createSystemStore(mongo.db('admin_ui'), { encryptionKey: ENCRYPTION_KEY }),
 			modules,
 			logger: createTestLogger().logger,
+			background: { mode: 'on', fallback: (task) => void task() },
 		});
 		await portal.ensureIndexes();
 		/** @param {string} to @param {string} template */
@@ -285,130 +281,48 @@ describe('admin console interactions (jsdom)', () => {
 		vi.stubGlobal('open', open);
 		const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-		// ---------------------------------------------------------------- staff sign-in in the browser
+		// ---------------------------------------------------------------- the first admin (an Owner)
 		const staff = browserOf(portal);
 		staff.use();
-		// first run: the sign-in page offers "Create admin"
-		render(<StaffLoginView firstRun />);
-		fill('Choose a password', 'short');
-		await press('Create admin');
-		expect(shows('Use at least 12 characters.')).toBe(true);
-		fill('Choose a password', 'first password 123!');
-		await press('Create admin');
-		await until(() => staff.calls.some((c) => c.path === adminApi.firstAdmin() && c.status === 201));
-		cleanup();
+		const created = await staff.api.post('/v1/auth/first-admin', {
+			name: 'Rita Root',
+			email: 'root@ss.test',
+			password: 'root password 123!',
+		});
+		expect(created.ok).toBe(true);
+		const session = await admin.loadAdminSession(staff.api);
+		if (!session.ok) throw new Error('admin session');
+		const me = session.admin;
 
-		// Account settings: e-mail and name (optional), password, two-factor sign-in
-		const firstMe = await admin.loadStaffSession(staff.api);
-		if (!firstMe.ok) throw new Error('first admin session');
+		// My account: the name
 		render(
 			<ToastProvider>
-				<AccountView staff={firstMe.staff} />
+				<MyAccountView {...await admin.loadMyAccount(staff.api)} />
 			</ToastProvider>,
 		);
-		fill('E-mail', 'root@ss.test');
-		await press('Save profile');
-		await until(() => staff.calls.some((c) => c.path === adminApi.me() && c.status === 200 && c.body?.email));
-		fill('Current password', 'first password 123!');
-		fill('New password', 'root password 123!');
-		await press('Change password');
-		await until(() => staff.calls.some((c) => c.path === adminApi.mePassword() && c.status === 204));
+		await until(() => shows('Your activity'));
+		fill('Name', 'Rita R.');
+		await press('Save');
+		await until(() => staff.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.me() && c.status === 200));
 		cleanup();
 
-		// password reset by e-mail (now that the admin has one)
-		render(<StaffForgotPasswordView />);
-		await press('Send the link');
-		expect(shows('Enter your e-mail address.')).toBe(true);
-		fill('E-mail', 'root@ss.test');
-		await press('Send the link');
-		await until(() => shows('Check your inbox'));
-		cleanup();
-		window.location.hash = `#token=${encodeURIComponent(tokenOf('root@ss.test', 'password_reset'))}`;
-		render(<StaffResetPasswordView />);
-		await until(() => shows('New password'));
-		fill('New password', 'short');
-		await press('Save password');
-		expect(shows('Use at least 12 characters.')).toBe(true);
-		fill('New password', 'root password 123!');
-		fill('Repeat the password', 'root password 123!');
-		await press('Save password');
-		await until(() => staff.calls.some((c) => c.path === adminApi.passwordResetConfirm() && c.status === 204));
-		cleanup();
-		render(<StaffResetPasswordView />);
-		await until(() => shows('This link is incomplete'));
-		cleanup();
-
-		render(<StaffLoginView next="/admin/staff" />);
-		await press('Continue');
-		expect(shows('Enter your e-mail address, or admin.')).toBe(true);
-		fill('E-mail or admin', 'admin');
-		fill('Password', 'wrong password!!');
-		await press('Continue');
-		await until(() => staff.calls.some((c) => c.path === adminApi.login() && c.status >= 400));
-		fill('Password', 'root password 123!');
-		await press('Continue');
-		await until(() => staff.calls.some((c) => c.path === adminApi.login() && c.status === 200));
-		cleanup();
-
-		// two-factor sign-in is optional until enrolled
-		const onEnrolled = vi.fn();
-		render(<StaffMfaEnrol onDone={onEnrolled} onRestart={() => undefined} />);
-		await press('Set up the authenticator');
-		const secret = String(
-			await until(() => staff.calls.find((c) => c.path === adminApi.mfaEnrol() && c.status === 200)?.body.secret),
-		);
-		await until(() => shows('Code from the app'));
-		fill('Code from the app', '12');
-		await press('Confirm');
-		expect(shows('Enter the 6-digit code from your app.')).toBe(true);
-		fill('Code from the app', totpCode(secret, Date.now()));
-		await press('Confirm');
-		await until(() => shows('Save your recovery codes now'));
-		expect(button('Done').disabled).toBe(true);
-		await act(async () => {
-			/** @type {HTMLInputElement} */ (document.querySelector('input[type="checkbox"]')).click();
-		});
-		await press('Done');
-		expect(onEnrolled).toHaveBeenCalled();
-		cleanup();
-		// sign in again: TOTP verification (and the recovery-code toggle)
-		await staff.api.post(adminApi.logout());
-		render(<StaffLoginView />);
-		fill('E-mail or admin', 'root@ss.test');
-		fill('Password', 'root password 123!');
-		await press('Continue');
-		await until(() => shows('Authentication code'));
-		await press('Use a recovery code instead');
-		fill('Recovery code', 'nope');
-		await press('Verify');
-		expect(shows('Enter a recovery code like abcde-fghij.')).toBe(true);
-		await press('Use the authenticator app instead');
-		fill('Authentication code', '000000');
-		await press('Verify');
-		await until(() => staff.calls.some((c) => c.path === adminApi.mfaVerify() && c.status >= 400));
-		fill('Authentication code', totpCode(secret, Date.now() + 30_000));
-		await press('Verify');
-		await until(() => staff.calls.some((c) => c.path === adminApi.mfaVerify() && c.status === 200));
-		cleanup();
-		const session = await admin.loadStaffSession(staff.api);
-		if (!session.ok) throw new Error('staff session');
-		const me = session.staff;
-
-		// ---------------------------------------------------------------- seed: merchants, a pack, a subscription
+		// ---------------------------------------------------------------- seed: merchants, a pack, a product on a website
 		const signup = async (/** @type {string} */ email, /** @type {string} */ name) => {
+			const made = await staff.api.post(adminApi.createMerchant(), { name, ownerName: 'Owner', email });
 			const b = browserOf(portal);
-			await b.api.post('/v1/auth/merchant/signup', { email, password: 'correct horse battery', merchantName: name });
-			await b.api.post('/v1/auth/merchant/verify-email', { token: tokenOf(email, 'verify_email') });
-			const who = await b.api.get('/v1/me');
-			return { b, merchantId: who.ok ? who.data.merchantId : '' };
+			await b.api.post('/v1/auth/set-password', {
+				token: tokenOf(email, 'merchant_setup'),
+				password: 'correct horse battery',
+			});
+			return { b, merchantId: made.ok ? made.data.merchant.merchantId : '' };
 		};
 		const owner = await signup('owner@shop.test', 'Shop & Co');
 		const other = await signup('other@else.test', 'Else Ltd');
 		const merchantId = owner.merchantId;
-		const site = await owner.b.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
+		const site = await staff.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
 		const websiteId = site.ok ? site.data.website.websiteId : '';
 		// the pack: its folder uploaded through the Apps page ("Add pack"), then activated with the switch
-		render(<AppsView {...await admin.loadApps(staff.api, {})} staff={me} />);
+		render(<AppsView {...await admin.loadApps(staff.api, {})} admin={me} />);
 		await press('Add pack');
 		await pickFolder(folderOf(manifest()));
 		await press('Upload');
@@ -419,7 +333,7 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 		render(
 			<ToastProvider>
-				<AppView {...await admin.loadApp(staff.api, appId)} staff={me} />
+				<AppView {...await admin.loadApp(staff.api, appId)} admin={me} />
 			</ToastProvider>,
 		);
 		await until(() => shows('Upload pack version'));
@@ -433,158 +347,197 @@ describe('admin console interactions (jsdom)', () => {
 			reference: 'seed-1',
 			note: 'seed',
 		});
-		const sub = await owner.b.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
+		const sub = await staff.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
 			appId,
 			planCode: 'basic',
 		});
 		const subscriptionId = sub.ok ? sub.data.subscription.subscriptionId : '';
 		expect(subscriptionId).toMatch(/^sub_/);
 
-		// ---------------------------------------------------------------- shell
+		// ---------------------------------------------------------------- shell and Overview
 		render(
-			<AdminShell staff={me}>
+			<AdminShell admin={me}>
 				<p>child</p>
 			</AdminShell>,
 		);
 		expect(shows('child')).toBe(true);
 		cleanup();
-
-		// ---------------------------------------------------------------- merchants: list, suspend / resume, notes
-		render(<MerchantsView {...await admin.loadMerchants(staff.api, {})} />);
-		expect(shows('Else Ltd')).toBe(true);
-		cleanup();
-		render(<MerchantView {...await admin.loadMerchant(staff.api, merchantId)} staff={me} />);
-		await press('Suspend');
-		expect(button('Suspend merchant').disabled).toBe(true);
-		type(confirmInput(), 'Shop & Co');
-		fill('Reason (audited, shown to staff)', 'chargeback fraud');
-		await press('Suspend merchant');
-		await until(() => shows('Suspended') && shows('chargeback fraud'));
-		await press('Resume');
-		type(confirmInput(), 'Shop & Co');
-		fill('Reason (audited, shown to staff)', 'cleared');
-		await press('Resume merchant');
-		await until(() => staff.calls.some((c) => c.path === adminApi.resume(merchantId) && c.status === 200));
-		fill('New note', 'Prefers e-mail over phone.');
-		await press('Add note');
-		await until(() => shows('Prefers e-mail over phone.') && shows('root@ss.test ·'));
+		render(<OverviewView {...await admin.loadOverview(staff.api)} admin={me} />);
+		expect(shows('E-mail sending is not set up') && shows('Set up e-mail sending')).toBe(true);
 		cleanup();
 
-		// ---------------------------------------------------------------- create a merchant, then manage it
+		// ---------------------------------------------------------------- merchants: search, bulk, Add merchant
 		render(
 			<ToastProvider>
-				<MerchantsView {...await admin.loadMerchants(staff.api, {})} staff={me} />
+				<MerchantsView {...await admin.loadMerchants(staff.api, {})} admin={me} />
 			</ToastProvider>,
 		);
-		await press('Create merchant');
-		fillDialog('Merchant name', 'Ops Made Ltd');
-		fillDialog('Owner e-mail', 'ops-owner@made.test');
-		fillDialog('Owner name (optional)', 'Olga');
-		await press('Create merchant');
+		expect(shows('Else Ltd') && shows('Shop & Co')).toBe(true);
+		fill('Search name, owner e-mail or domain', 'else');
+		await press('Filter');
+		cleanup();
+		render(
+			<ToastProvider>
+				<MerchantsView {...await admin.loadMerchants(staff.api, {})} admin={me} />
+			</ToastProvider>,
+		);
+		await act(async () => {
+			/** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Select Else Ltd"]')).click();
+		});
+		await press('Suspend');
+		fillDialog('Reason', 'chargeback');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Suspend')
+			).click();
+		});
+		await until(() => staff.calls.some((c) => c.path === adminApi.bulk() && c.status === 200));
+		await until(() => shows('1 done.'));
+		await act(async () => {
+			/** @type {HTMLInputElement} */ (document.querySelector('input[aria-label="Select Else Ltd"]')).click();
+		});
+		await press('Resume');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Resume')
+			).click();
+		});
+		await until(() => staff.calls.filter((c) => c.path === adminApi.bulk() && c.status === 200).length >= 2);
+		await press('Add merchant');
+		fillDialog('Business name', 'Ops Made Ltd');
+		fillDialog('Owner name', 'Olga');
+		fillDialog('Owner e-mail (login)', 'ops-owner@made.test');
+		fillDialog('Phone', '+92 300 1111111');
+		await act(async () => {
+			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Country'), 'PK');
+		});
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Add merchant')
+			).click();
+		});
 		const made = /** @type {any} */ (
 			await until(
 				() => staff.calls.find((c) => c.method === 'POST' && c.path === adminApi.createMerchant() && c.status === 201)?.body,
 			)
 		);
-		await until(() => shows('It works once'));
-		expect(made.setupLink).toMatch(/\/reset-password#token=/);
-		expect(tokenOf('ops-owner@made.test', 'merchant_welcome')).toBe(decodeURIComponent(made.setupLink.split('#token=')[1]));
 		const madeId = String(made.merchant.merchantId);
 		cleanup();
+
+		// ---------------------------------------------------------------- the merchant page
+		const writeText = vi.fn(async () => undefined);
+		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+		staff.use();
 		render(
 			<ToastProvider>
-				<MerchantView {...await admin.loadMerchant(staff.api, madeId)} staff={me} />
+				<MerchantView {...await admin.loadMerchant(staff.api, madeId)} admin={me} />
 			</ToastProvider>,
 		);
+		await until(() => shows('Setup pending'));
+		await press('Copy setup link');
+		await until(() => shows('Copy this link now.'));
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
+		});
+		await press('Resend setup link');
+		await until(() => staff.calls.filter((c) => c.path === adminApi.setupLink(madeId) && c.status === 200).length >= 2);
+		await press('Suspend');
+		fillDialog('Reason', 'unpaid');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Suspend')
+			).click();
+		});
+		await until(() => shows('Suspended: unpaid'));
+		await press('Resume');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Resume')
+			).click();
+		});
+		await until(() => staff.calls.some((c) => c.path === adminApi.resume(madeId) && c.status === 200));
+		// websites: add one, add a product, remove the product first, then the website
 		await press('Add website');
 		fillDialog('Domain', 'made.example.com');
-		await press('Add website');
-		await until(() => shows('Subscriptions and install code of this website.') && shows('Copy install code'));
-		const madeSite = String(
-			staff.calls.find((c) => c.method === 'POST' && c.path === `/v1/merchants/${madeId}/websites` && c.status === 201)?.body
-				.website.websiteId,
-		);
-		// credits on the merchant page
-		fill('Amount (credits)', '50');
-		fill('Reference', 'ops-made-1');
-		fill('Note', 'Opening balance');
-		await press('Review');
-		await press('Add credits');
-		await until(() => staff.calls.some((c) => c.path === adminApi.credit(madeId, 'credits') && c.status === 201));
-		await until(() => shows('50 credits') || shows('50.00'));
-		// subscribe: product, plan and elements (the add-on switched on too)
-		await press('Subscribe');
-		await until(() => shows('Subscribe to Notice bar'));
 		await act(async () => {
-			byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Trust badge').click();
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent?.includes('Add website'))
+			).click();
 		});
-		await press('Subscribe');
-		const madeSub = /** @type {any} */ (
+		const madeSite = String(
 			await until(
 				() =>
-					staff.calls.find(
-						(c) =>
-							c.method === 'POST' &&
-							c.path === `/v1/merchants/${madeId}/websites/${madeSite}/subscriptions` &&
-							c.status === 201,
-					)?.body.subscription,
-			)
-		);
-		await until(() =>
-			staff.calls.some(
-				(c) =>
-					c.method === 'PUT' &&
-					c.path.endsWith(`/subscriptions/${madeSub.subscriptionId}/elements/badge`) &&
-					c.status === 200,
+					staff.calls.find((c) => c.method === 'POST' && c.path === `/v1/merchants/${madeId}/websites` && c.status === 201)
+						?.body.website.websiteId,
 			),
 		);
-		await until(() => shows('Subscribed to Notice bar'));
-		// change plan (one plan: nothing to change) and cancel
-		await until(() => button('Change plan'));
-		await press('Change plan');
-		expect(button('Change plan').disabled).toBe(true);
-		await press('Cancel');
-		await until(() => !document.querySelector('[role="dialog"]'));
-		await press('Cancel');
-		await press('Cancel subscription');
+		await until(() => shows('made.example.com'));
+		await press('Add product');
+		await until(() => shows('Subscribe to Notice bar') || shows('Not enough credits'));
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Cancel')
+			).click();
+		});
+		// Details: the fields, the login e-mail until the password is set
+		await press('Details');
+		fill('Address', 'Industrial area');
+		fill('Owner e-mail (login)', 'olga@made.test');
+		await press('Save');
 		await until(() =>
-			staff.calls.some(
-				(c) => c.path === `/v1/merchants/${madeId}/subscriptions/${madeSub.subscriptionId}/cancel` && c.status === 200,
-			),
+			staff.calls.some((c) => c.method === 'PATCH' && c.path === adminApi.merchant(madeId) && c.status === 200),
 		);
-		await until(() => shows('Subscription cancelled'));
-		// remove the website
+		await press('Activity');
+		await until(() => shows('Merchant created'));
+		await press('Websites');
 		await press('Remove website');
 		type(confirmInput(), 'made.example.com');
-		await press('Remove website');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Remove website')
+			).click();
+		});
 		await until(() =>
 			staff.calls.some(
 				(c) => c.method === 'DELETE' && c.path === `/v1/merchants/${madeId}/websites/${madeSite}` && c.status === 200,
 			),
 		);
+		await until(() => !shows('made.example.com'));
+		// delete the merchant (no websites left): typed business name
+		await press('Delete');
+		type(confirmInput(), 'Ops Made Ltd');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Delete')
+			).click();
+		});
+		await until(() =>
+			staff.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.merchant(madeId) && c.status === 204),
+		);
 		cleanup();
-
-		// ---------------------------------------------------------------- websites: transfer
-		render(<WebsitesView {...await admin.loadWebsites(staff.api, { domain: 'shop.example.com' })} staff={me} />);
-		await press('Transfer');
-		fill('Target merchant id', 'nope');
-		await press('Continue');
-		expect(shows('Enter the target merchant id')).toBe(true);
-		fill('Target merchant id', merchantId);
-		await press('Continue');
-		expect(shows('already belongs')).toBe(true);
-		fill('Target merchant id', other.merchantId);
-		await press('Continue');
-		type(confirmInput(), 'shop.example.com');
-		fill('Reason (audited)', 'acquisition');
-		await press('Transfer website');
-		await until(() => staff.calls.some((c) => c.path === adminApi.transfer(websiteId) && c.status === 200));
+		// two-step off for a merchant with two-step on
+		// the bulk suspension ended the merchant's sessions: sign in again
+		await other.b.api.post('/v1/auth/sign-in', { email: 'other@else.test', password: 'correct horse battery' });
+		const started = await other.b.api.post('/v1/me/two-step/start');
+		await other.b.api.post('/v1/me/two-step/confirm', { code: totpCode(started.ok ? started.data.secret : '', Date.now()) });
+		render(
+			<ToastProvider>
+				<MerchantView {...await admin.loadMerchant(staff.api, other.merchantId)} admin={me} />
+			</ToastProvider>,
+		);
+		await press('Turn off two-step');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Turn off two-step')
+			).click();
+		});
+		await until(() => staff.calls.some((c) => c.path === adminApi.merchantTwoStepOff(other.merchantId) && c.status === 200));
 		cleanup();
-		// and back, so the rest of the flow uses the original owner
-		await staff.api.post(adminApi.transfer(websiteId), { toMerchantId: merchantId, reason: 'undo' });
+		vi.unstubAllGlobals();
+		staff.use();
 
 		// ---------------------------------------------------------------- apps: add (URL + connect secret), a new pack version, launch
-		render(<AppsView {...await admin.loadApps(staff.api, { status: 'active' })} staff={me} />);
+		render(<AppsView {...await admin.loadApps(staff.api, { status: 'active' })} admin={me} />);
 		expect(shows('notice-bar')).toBe(true);
 		await press('Add product');
 		fill('Product URL', 'https://product.example.com');
@@ -596,7 +549,7 @@ describe('admin console interactions (jsdom)', () => {
 
 		render(
 			<ToastProvider>
-				<AppView {...await admin.loadApp(staff.api, appId)} staff={me} />
+				<AppView {...await admin.loadApp(staff.api, appId)} admin={me} />
 			</ToastProvider>,
 		);
 		await press('Upload pack version');
@@ -610,7 +563,7 @@ describe('admin console interactions (jsdom)', () => {
 		const loaded = await admin.loadApp(staff.api, appId);
 		if (!loaded.ok) throw new Error('app');
 		const serviceApp = { ...loaded.app, kind: 'service', baseUrl: 'https://svc.example.com' };
-		render(<AppView {...loaded} app={serviceApp} manifest={manifest()} staff={me} />);
+		render(<AppView {...loaded} app={serviceApp} manifest={manifest()} admin={me} />);
 		expect(shows('Upload widgets')).toBe(true);
 		fill('Merchant id', merchantId);
 		await press(`Open ${serviceApp.name}`);
@@ -619,7 +572,7 @@ describe('admin console interactions (jsdom)', () => {
 
 		// ---------------------------------------------------------------- admin overrides, locks, history, rollback
 		const subPage = await admin.loadSubscription(staff.api, subscriptionId);
-		render(<SubscriptionAdminView {...subPage} staff={me} />);
+		render(<SubscriptionAdminView {...subPage} admin={me} />);
 		type(byLabel(document, 'Message'), 'Admin says hi');
 		await press('Save version');
 		expect(shows('Give a reason')).toBe(true);
@@ -678,7 +631,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => staff.calls.some((c) => c.path === adminApi.adminRollback(subscriptionId) && c.status === 200));
 		cleanup();
 
-		render(<PoliciesView {...await admin.loadPolicies(staff.api, appId)} staff={me} />);
+		render(<PoliciesView {...await admin.loadPolicies(staff.api, appId)} admin={me} />);
 		type(byLabel(document, 'Message'), 'Platform says hi');
 		fill('Reason', 'brand copy');
 		await press('Save version');
@@ -708,7 +661,7 @@ describe('admin console interactions (jsdom)', () => {
 		cleanup();
 
 		// ---------------------------------------------------------------- finance
-		render(<FinanceView {...await admin.loadFinance(staff.api)} staff={me} />);
+		render(<FinanceView {...await admin.loadFinance(staff.api)} admin={me} />);
 		fill('Merchant id', 'x');
 		await press('Open');
 		expect(shows('Enter a merchant id (mer_…).')).toBe(true);
@@ -717,7 +670,7 @@ describe('admin console interactions (jsdom)', () => {
 		expect(shows('Force settlement') || shows('Run reconciliation')).toBe(false);
 		cleanup();
 
-		render(<LedgerView {...await admin.loadLedger(staff.api, merchantId)} staff={me} />);
+		render(<LedgerView {...await admin.loadLedger(staff.api, merchantId)} admin={me} />);
 		await press('Review');
 		expect(shows('Enter an amount in credits')).toBe(true);
 		fill('Amount (credits)', '12.5');
@@ -755,7 +708,7 @@ describe('admin console interactions (jsdom)', () => {
 		await until(() => shows('Ledger chain intact'));
 		cleanup();
 
-		// ---------------------------------------------------------------- connectors, audit (fabricated rows)
+		// ---------------------------------------------------------------- connectors (fabricated rows)
 		const connectors = await admin.loadConnectors(staff.api, {});
 		render(
 			<ConnectorsAdminView
@@ -781,90 +734,134 @@ describe('admin console interactions (jsdom)', () => {
 		expect(shows('0/1 checks passed · auth (auth_failed)')).toBe(true);
 		cleanup();
 
-		render(
-			<AuditView
-				ok
-				available
-				filter={{ action: 'merchant.*' }}
-				page={{
-					items: [
-						{
-							auditId: 'aud_1',
-							at: new Date().toISOString(),
-							action: 'merchant.suspended',
-							actor: { type: 'staff', id: me.staffId },
-							target: { type: 'merchant', id: merchantId },
-							reason: 'fraud',
-						},
-						{
-							auditId: 'aud_2',
-							at: new Date().toISOString(),
-							action: 'website.updated',
-							actor: { type: 'merchant_user', id: 'usr_1' },
-							target: { type: 'website', id: websiteId },
-						},
-					],
-					nextCursor: null,
-				}}
-			/>,
-		);
-		expect(shows('merchant.suspended')).toBe(true);
-		expect(shows('usr_1')).toBe(true);
+		// ---------------------------------------------------------------- Activity: filters
+		render(<ActivityView {...await admin.loadActivity(staff.api, { merchantId })} />);
+		await until(() => shows('Merchant created'));
+		fill('Admin id', me.adminId);
+		fill('From (UTC day)', '2026-01-01');
+		await press('Filter');
 		cleanup();
 
-		// ---------------------------------------------------------------- settings: the mailer
+		// ---------------------------------------------------------------- Settings: e-mail sending, branding, support, security
 		render(
 			<ToastProvider>
-				<SettingsView {...await admin.loadSettings(staff.api, me)} />
+				<SettingsView {...await admin.loadSettings(staff.api)} />
 			</ToastProvider>,
 		);
 		fill('SMTP host', 'smtp.example.com');
-		fill('Port', '465');
+		fill('Port', '587');
 		fill('User', 'mailer');
 		fill('Password', 'smtp secret');
-		fill('From', 'Portal <no-reply@example.com>');
+		fill('Sender name', 'Portal');
+		fill('Sender address', 'no-reply@example.com');
 		await act(async () => {
 			/** @type {HTMLInputElement} */ (byLabel(document, 'Implicit TLS (port 465)')).click();
 		});
-		await press('Save mail settings');
+		await press('Save');
 		await until(() => staff.calls.some((c) => c.path === adminApi.settingsMail() && c.status === 200));
-		await until(() => shows('Remove mailer'));
-		await press('Remove mailer');
+		await until(() => shows('Send test e-mail'));
+		await press('Send test e-mail');
+		await until(() => staff.calls.some((c) => c.path === adminApi.settingsMailTest()));
+		await press('Turn e-mail sending off');
+		await until(() => staff.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
+		await press('Branding');
+		fill('Name', 'Acme Portal');
+		await press('Save');
+		await until(() => staff.calls.some((c) => c.path === adminApi.settingsBranding() && c.status === 200));
+		const logo = /** @type {HTMLInputElement} */ (document.querySelector('input[type="file"]'));
+		const svg = Object.assign(new NodeBlob(['<svg/>'], { type: 'image/svg+xml' }), { name: 'logo.svg' });
+		Object.defineProperty(logo, 'files', { value: [svg], configurable: true });
+		await act(async () => {
+			logo.dispatchEvent(new Event('change', { bubbles: true }));
+		});
+		await until(() => shows('Use a PNG, JPEG or WebP file.'));
+		const png = Object.assign(
+			new NodeBlob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3])], { type: 'image/png' }),
+			{ name: 'logo.png' },
+		);
+		Object.defineProperty(logo, 'files', { value: [png], configurable: true });
+		await act(async () => {
+			logo.dispatchEvent(new Event('change', { bubbles: true }));
+		});
+		await until(() => staff.calls.some((c) => c.path === adminApi.settingsLogo() && c.status === 200));
+		await until(() => shows('Remove logo'));
+		await press('Remove logo');
+		await until(() => staff.calls.some((c) => c.method === 'DELETE' && c.path === adminApi.settingsLogo()));
+		await press('Support contact');
+		fill('E-mail', 'help@acme.test');
+		fill('Phone', '+92 300 1234567');
+		await press('Save');
+		await until(() => staff.calls.some((c) => c.path === adminApi.settingsSupport() && c.status === 200));
+		await press('Security');
+		fill('Session length (hours)', '0');
+		await press('Save');
+		await until(() => staff.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 422));
+		fill('Session length (hours)', '24');
+		await act(async () => {
+			/** @type {HTMLElement} */ (document.querySelector('[role="switch"]')).click();
+		});
+		await press('Save');
+		await until(() => staff.calls.some((c) => c.path === adminApi.settingsSecurity() && c.status === 200));
+		cleanup();
+		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
+		expect(shows('Not permitted')).toBe(true);
+		cleanup();
+		// back to no two-step requirement for the rest of the flow
+		await staff.api.request('PUT', adminApi.settingsSecurity(), { sessionHours: 24, requireTwoStepForAdmins: false });
+
+		// ---------------------------------------------------------------- Admins
+		render(
+			<ToastProvider>
+				<AdminsView {...await admin.loadAdmins(staff.api, me)} />
+			</ToastProvider>,
+		);
+		await press('Invite');
+		fillDialog('E-mail', 'help@ss.test');
+		await act(async () => {
+			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'support');
+		});
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Invite')
+			).click();
+		});
+		await until(() => shows('help@ss.test') && staff.calls.some((c) => c.path === adminApi.admins() && c.status === 201));
+		await press('Copy invite link');
+		await until(() => shows('Copy this link now.'));
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (document.querySelector('[role="dialog"] button[aria-label="Close"]'))?.click();
+		});
+		await press('Resend invite');
+		await press('Correct invite e-mail');
+		fillDialog('E-mail', 'helpdesk@ss.test');
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Correct invite e-mail')
+			).click();
+		});
+		await until(() => shows('helpdesk@ss.test'));
+		await press('Change role');
+		await act(async () => {
+			type(byLabel(/** @type {HTMLElement} */ (document.querySelector('[role="dialog"]')), 'Role'), 'finance');
+		});
+		await act(async () => {
+			/** @type {HTMLButtonElement} */ (
+				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Change role')
+			).click();
+		});
+		await until(() =>
+			staff.calls.some((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/admins/') && c.status === 200),
+		);
+		await settle(2);
+		await press('Remove');
 		await act(async () => {
 			/** @type {HTMLButtonElement} */ (
 				[...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent === 'Remove')
 			).click();
 		});
-		await until(() => staff.calls.filter((c) => c.path === adminApi.settingsMail() && c.status === 200).length >= 2);
-		cleanup();
-		render(<SettingsView ok={false} problem={{ status: 403, title: 'Forbidden' }} />);
-		expect(shows('Settings are unavailable')).toBe(true);
-		cleanup();
-
-		// ---------------------------------------------------------------- staff management
-		render(<StaffView {...await admin.loadStaff(staff.api, me)} />);
-		await press('Invite staff');
-		await press('Send invitation');
-		expect(shows('Enter an e-mail address.')).toBe(true);
-		fill('E-mail', 'help@ss.test');
-		fill('Name (optional)', 'Help');
-		await press('Send invitation');
-		await until(() => shows('help@ss.test') && staff.calls.some((c) => c.path === adminApi.staffList() && c.status === 201));
-		await press('Roles');
-		await act(async () => {
-			/** @type {HTMLInputElement} */ ([...document.querySelectorAll('[role="dialog"] input[type="checkbox"]')][0]).click();
-		});
-		await press('Save roles');
-		await until(() => staff.calls.some((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/staff/')));
-		await settle(2);
-		await press('Deactivate');
-		type(confirmInput(), 'help@ss.test');
-		await press('Deactivate');
-		await until(() => shows('Reactivate'));
-		await press('Reactivate');
-		type(confirmInput(), 'help@ss.test');
-		await press('Reactivate');
-		await until(() => staff.calls.filter((c) => c.method === 'PATCH' && c.path.startsWith('/v1/admin/staff/')).length >= 3);
+		await until(() =>
+			staff.calls.some((c) => c.method === 'DELETE' && c.path.startsWith('/v1/admin/admins/') && c.status === 204),
+		);
 		cleanup();
 
 		// ---------------------------------------------------------------- client helpers, sign out
@@ -891,10 +888,10 @@ describe('admin console interactions (jsdom)', () => {
 		const anonymous = browserOf(portal);
 		vi.stubGlobal('fetch', anonymous.fetch);
 		expect((await adminFetch(adminApi.merchants())).status).toBe(401);
-		staffSignInAgain('/admin/x');
+		adminSignInAgain('/admin/x');
 		staff.use();
 		render(
-			<AdminShell staff={me}>
+			<AdminShell admin={me}>
 				<p>x</p>
 			</AdminShell>,
 		);
@@ -903,8 +900,8 @@ describe('admin console interactions (jsdom)', () => {
 				[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Sign out'))
 			).click();
 		});
-		await until(() => staff.calls.some((c) => c.path === adminApi.logout() && c.status === 204));
-		expect((await admin.loadStaffSession(staff.api)).ok).toBe(false);
+		await until(() => staff.calls.some((c) => c.path === adminApi.signOut() && c.status === 204));
+		expect((await admin.loadAdminSession(staff.api)).ok).toBe(false);
 		expect(adminRoutes.policies(appId)).toBe(`/admin/apps/${appId}/policies`);
 		errors.mockRestore();
 		vi.unstubAllGlobals();

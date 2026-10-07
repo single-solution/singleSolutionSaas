@@ -19,8 +19,8 @@ afterAll(async () => {
 });
 
 const MIN = 60_000;
-const OWNER = { type: 'merchant_user', id: 'usr_owner', merchantId: M1, roles: ['owner'] };
-const OWNER2 = { type: 'merchant_user', id: 'usr_owner2', merchantId: M2, roles: ['owner'] };
+const OWNER = { type: 'merchant', id: M1, merchantId: M1 };
+const OWNER2 = { type: 'merchant', id: M2, merchantId: M2 };
 
 /**
  * A commerce service whose collections fail on demand (simulated crashes).

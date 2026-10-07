@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLogger, isSensitiveKey, noopLogger, redact } from '../src/infra/logger.js';
 import {
+	ADMIN_ROLES,
 	ALL_PERMISSIONS,
 	MERCHANT_PERMISSIONS,
-	MERCHANT_ROLES,
-	STAFF_ROLE_BUNDLES,
+	PERMISSIONS,
+	ROLE_PERMISSIONS,
 	can,
-	permissionMatches,
 	permissionsFor,
-	validRoles,
+	validRole,
 	websitesVisible,
 } from '../src/infra/rbac.js';
 import { MERCHANT, MERCHANT_2, WEBSITE } from './helpers.js';
@@ -93,90 +93,93 @@ describe('logger', () => {
 	});
 });
 
-describe('rbac', () => {
-	const staff = (/** @type {string[]} */ roles) => /** @type {const} */ ({ type: 'staff', id: 'stf_1', roles });
-	const member = (/** @type {Partial<import('../src/infra/rbac.js').Actor>} */ extra) => ({
-		type: /** @type {const} */ ('merchant_user'),
-		id: 'usr_1',
-		merchantId: MERCHANT,
-		roles: [],
-		...extra,
+/**
+ * The rights table of PLAN 0.2 as data: for each permission, who may (`own` = a merchant on its own records).
+ * @type {Record<string, { owner: boolean, support: boolean, finance: boolean, merchant: boolean }>}
+ */
+const TABLE = {
+	'overview.read': { owner: true, support: true, finance: true, merchant: true },
+	'activity.read': { owner: true, support: true, finance: true, merchant: true },
+	'merchants.read': { owner: true, support: true, finance: true, merchant: true },
+	'merchants.write': { owner: true, support: true, finance: false, merchant: false },
+	'merchants.suspend': { owner: true, support: true, finance: false, merchant: false },
+	'merchants.setup_link': { owner: true, support: true, finance: false, merchant: false },
+	'two_step.turn_off': { owner: true, support: false, finance: false, merchant: false },
+	'merchants.delete': { owner: true, support: false, finance: false, merchant: false },
+	'websites.read': { owner: true, support: true, finance: true, merchant: true },
+	'websites.write': { owner: true, support: true, finance: false, merchant: false },
+	'products_on_websites.read': { owner: true, support: true, finance: true, merchant: true },
+	'products_on_websites.write': { owner: true, support: true, finance: false, merchant: false },
+	'tokens.manage': { owner: true, support: true, finance: false, merchant: true },
+	'dashboards.open': { owner: true, support: true, finance: false, merchant: true },
+	'features.write': { owner: true, support: true, finance: false, merchant: false },
+	'settings.read': { owner: true, support: true, finance: false, merchant: true },
+	'settings.write': { owner: true, support: true, finance: false, merchant: true },
+	'defaults.write': { owner: true, support: false, finance: false, merchant: false },
+	'products.manage': { owner: true, support: false, finance: false, merchant: false },
+	'products.read': { owner: true, support: true, finance: false, merchant: false },
+	'credits.add': { owner: true, support: false, finance: true, merchant: false },
+	'billing.read': { owner: true, support: true, finance: true, merchant: true },
+	'admins.manage': { owner: true, support: false, finance: false, merchant: false },
+	'portal_settings.write': { owner: true, support: false, finance: false, merchant: false },
+};
+
+describe('rbac (PLAN 0.2 rights table)', () => {
+	it('names every permission once and covers the whole table', () => {
+		expect(new Set(ALL_PERMISSIONS).size).toBe(ALL_PERMISSIONS.length);
+		expect([...ALL_PERMISSIONS].sort()).toEqual(Object.keys(TABLE).sort());
+		expect(Object.keys(PERMISSIONS)).toHaveLength(ALL_PERMISSIONS.length);
+		expect(ADMIN_ROLES).toEqual(['owner', 'support', 'finance']);
+		for (const role of ADMIN_ROLES) for (const p of ROLE_PERMISSIONS[role]) expect(ALL_PERMISSIONS).toContain(p);
+		for (const p of MERCHANT_PERMISSIONS) expect(ALL_PERMISSIONS).toContain(p);
 	});
 
-	it('matches permission patterns', () => {
-		expect(permissionMatches('*', 'anything.at.all')).toBe(true);
-		expect(permissionMatches('websites.*', 'websites.write')).toBe(true);
-		expect(permissionMatches('websites.*', 'websitesx.write')).toBe(false);
-		expect(permissionMatches('websites.read', 'websites.write')).toBe(false);
+	it('grants each admin role exactly its column', () => {
+		for (const role of ADMIN_ROLES) {
+			const actor = /** @type {const} */ ({ type: 'admin', id: `adm_${role}`, role });
+			for (const [permission, row] of Object.entries(TABLE)) {
+				expect([role, permission, can(actor, permission, { merchantId: MERCHANT })]).toEqual([role, permission, row[role]]);
+				expect(can(actor, permission)).toBe(row[role]);
+			}
+		}
 	});
 
-	it('platform roles', () => {
-		expect(can(staff(['superadmin']), 'platform.staff.manage')).toBe(true);
-		expect(can(staff(['admin']), 'platform.staff.manage')).toBe(false);
-		expect(can(staff(['admin']), 'platform.credits.adjust')).toBe(true);
-		expect(can(staff(['admin']), 'websites.write', { merchantId: MERCHANT })).toBe(true);
-		expect(can(staff(['support']), 'websites.read', { merchantId: MERCHANT })).toBe(true);
-		expect(can(staff(['support']), 'websites.write', { merchantId: MERCHANT })).toBe(false);
-		expect(can(staff(['support']), 'platform.staff.manage')).toBe(false);
-		expect(can(staff(['finance']), 'platform.credits.adjust')).toBe(true);
-		expect(can(staff(['finance']), 'config.write', { merchantId: MERCHANT })).toBe(false);
-		expect(can(staff(['nonexistent']), 'merchant.read')).toBe(false);
-		expect(can(staff([]), 'merchant.read')).toBe(false);
-		expect(can(staff(['admin']), '')).toBe(false);
+	it('grants a merchant its column on its own records only', () => {
+		const merchant = /** @type {const} */ ({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT });
+		for (const [permission, row] of Object.entries(TABLE)) {
+			expect([permission, can(merchant, permission, { merchantId: MERCHANT, websiteId: WEBSITE })]).toEqual([
+				permission,
+				row.merchant,
+			]);
+			// an unscoped check is the merchant's own
+			expect(can(merchant, permission)).toBe(row.merchant);
+			// another merchant's records: never
+			expect(can(merchant, permission, { merchantId: MERCHANT_2 })).toBe(false);
+		}
+		expect(can({ type: 'merchant', id: MERCHANT }, 'websites.read')).toBe(false);
 	});
 
-	it('merchant roles are confined to the own merchant', () => {
-		const owner = member({ roles: ['owner'] });
-		expect(can(owner, 'merchant.delete', { merchantId: MERCHANT })).toBe(true);
-		expect(can(owner, 'merchant.delete')).toBe(true); // unscoped → own merchant
-		expect(can(owner, 'websites.read', { merchantId: MERCHANT_2 })).toBe(false);
-		expect(can(owner, 'platform.merchants.read')).toBe(false);
-		expect(can(member({ roles: ['admin'] }), 'merchant.delete', { merchantId: MERCHANT })).toBe(false);
-		expect(can(member({ roles: ['admin'] }), 'merchant.team.manage', { merchantId: MERCHANT })).toBe(true);
-		expect(can(member({ roles: ['billing'] }), 'billing.manage', { merchantId: MERCHANT })).toBe(true);
-		expect(can(member({ roles: ['billing'] }), 'config.write', { merchantId: MERCHANT })).toBe(false);
-		expect(can(member({ roles: ['developer'] }), 'keys.manage', { merchantId: MERCHANT })).toBe(true);
-		expect(can(member({ roles: ['developer'] }), 'billing.manage', { merchantId: MERCHANT })).toBe(false);
-		expect(can(member({ roles: ['editor'] }), 'config.write', { merchantId: MERCHANT, websiteId: WEBSITE })).toBe(true);
-		expect(can(member({ roles: ['editor'] }), 'websites.delete', { merchantId: MERCHANT })).toBe(false);
-		expect(can({ type: 'merchant_user', id: 'u', roles: ['owner'] }, 'merchant.read')).toBe(false); // no merchantId
-		// explicit platform permissions are never honoured for merchant users
-		expect(can(member({ permissions: ['*', 'platform.staff.manage'] }), 'platform.staff.manage')).toBe(false);
-	});
-
-	it('website-scoped grants apply to that website only', () => {
-		const editor = member({ grants: [{ websiteId: WEBSITE, roles: ['editor'] }] });
-		expect(can(editor, 'config.write', { merchantId: MERCHANT, websiteId: WEBSITE })).toBe(true);
-		expect(can(editor, 'config.write', { merchantId: MERCHANT, websiteId: 'web_other' })).toBe(false);
-		expect(can(editor, 'config.write', { merchantId: MERCHANT })).toBe(false); // merchant-level operation
-		expect(can(editor, 'config.write', { merchantId: MERCHANT_2, websiteId: WEBSITE })).toBe(false);
-		expect(websitesVisible(editor, 'config.write')).toEqual([WEBSITE]);
-		expect(websitesVisible(member({ roles: ['owner'] }), 'config.write')).toBe('all');
-		expect(websitesVisible(staff(['admin']), 'websites.read')).toBe('all');
-		expect(websitesVisible(staff(['finance']), 'websites.write')).toEqual([]);
-		expect(websitesVisible({ type: 'system', id: 'cron' }, 'x')).toBe('all');
-		expect(websitesVisible({ type: 'product', id: 'app' }, 'x')).toEqual([]);
-		expect(websitesVisible(null, 'x')).toEqual([]);
-	});
-
-	it('products, website keys and system actors', () => {
+	it('an admin without a known role, products, website keys and nobody get nothing; the system gets everything', () => {
+		expect(can({ type: 'admin', id: 'adm_x' }, 'websites.read')).toBe(false);
+		expect(can({ type: 'admin', id: 'adm_x', role: /** @type {any} */ ('superadmin') }, 'websites.read')).toBe(false);
 		expect(can({ type: 'product', id: 'app_1' }, 'websites.read')).toBe(false);
 		expect(can({ type: 'product', id: 'app_1', permissions: ['websites.read'] }, 'websites.read')).toBe(true);
-		expect(can({ type: 'website', id: 'key_1', merchantId: MERCHANT }, 'config.read')).toBe(false);
-		expect(can({ type: 'system', id: 'cron' }, 'platform.staff.manage')).toBe(true);
-		expect(can(null, 'merchant.read')).toBe(false);
-		expect(permissionsFor(undefined)).toEqual([]);
+		expect(can({ type: 'website', id: 'key_1', merchantId: MERCHANT }, 'websites.read')).toBe(false);
+		expect(can(null, 'websites.read')).toBe(false);
+		expect(can({ type: 'system', id: 'job' }, 'admins.manage')).toBe(true);
+		expect(can({ type: 'admin', id: 'adm_o', role: 'owner' }, '')).toBe(false);
+		expect(permissionsFor(null)).toEqual([]);
 	});
 
-	it('bundles only reference known permissions; validRoles', () => {
-		for (const bundle of [...Object.values(STAFF_ROLE_BUNDLES), ...Object.values(MERCHANT_ROLES)]) {
-			for (const p of bundle) if (p !== '*') expect(ALL_PERMISSIONS).toContain(p);
-		}
-		for (const p of MERCHANT_ROLES.owner) expect(MERCHANT_PERMISSIONS).toContain(p);
-		expect(validRoles('platform', ['admin'])).toBe(true);
-		expect(validRoles('platform', ['owner'])).toBe(false);
-		expect(validRoles('merchant', ['owner', 'editor'])).toBe(true);
-		expect(validRoles('merchant', [])).toBe(false);
-		expect(validRoles('merchant', 'owner')).toBe(false);
+	it('lists visible websites: all for admins with the right, own for merchants, none otherwise', () => {
+		expect(websitesVisible({ type: 'admin', id: 'a', role: 'finance' }, 'websites.read')).toBe('all');
+		expect(websitesVisible({ type: 'admin', id: 'a', role: 'finance' }, 'tokens.manage')).toBe('none');
+		expect(websitesVisible({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'websites.read')).toBe('own');
+		expect(websitesVisible({ type: 'merchant', id: MERCHANT, merchantId: MERCHANT }, 'websites.write')).toBe('none');
+		expect(websitesVisible({ type: 'system', id: 's' }, 'x')).toBe('all');
+		expect(websitesVisible({ type: 'product', id: 'p' }, 'websites.read')).toBe('none');
+		expect(websitesVisible(null, 'websites.read')).toBe('none');
+		expect(validRole('owner')).toBe(true);
+		expect(validRole('admin')).toBe(false);
 	});
 });

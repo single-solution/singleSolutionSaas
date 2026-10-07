@@ -1,12 +1,11 @@
 /**
- * End-to-end smoke of the Merchant Console: boots the Portal in-process (every module, MongoMemory), signs a
- * merchant up through the console API client (public API only), seeds a listed product as staff, adds a website,
- * subscribes and configures it, then server-renders every main console page (renderToString) and checks that each
- * renders without errors or React warnings.
+ * End-to-end smoke of the Merchant Console: boots the Portal in-process (every module, MongoMemory), creates the
+ * first admin and a merchant (setup link) through the console API client (public API only), seeds a listed product,
+ * adds a website and a product as the admin, configures it as the merchant, then server-renders every main console
+ * page (renderToString) and checks that each renders without errors or React warnings.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/infra/db.js';
 import { createPortal } from '../../src/portal.js';
 import { modules as defaultModules } from '../../src/modules/index.js';
@@ -14,14 +13,14 @@ import { createIdentityModule } from '../../src/modules/identity/index.js';
 import * as loaders from '../../src/console/loaders.js';
 import { AccountView } from '../../src/console/views/account.js';
 import {
-	AcceptInviteView,
+	ConfirmEmailView,
 	ForgotPasswordView,
-	LoginView,
 	ResetPasswordView,
-	SignupView,
-	VerifyEmailView,
-	safeNext,
-} from '../../src/console/views/auth.js';
+	SetPasswordView,
+	SignInView,
+	contactLine,
+	homeOf,
+} from '../../src/console/views/sign-in.js';
 import { ConnectorsView, buildCredentials, credentialFields } from '../../src/console/views/connectors.js';
 import { CreditsView, SpendCapView } from '../../src/console/views/credits.js';
 import { KeysView } from '../../src/console/views/keys.js';
@@ -29,9 +28,8 @@ import { ProductsView, hourlyEstimate } from '../../src/console/views/products.j
 import { ConsoleShell, balanceState } from '../../src/console/views/shell.js';
 import { SubscriptionView, availability, requestedOn } from '../../src/console/views/subscription.js';
 import { ConfigurePanel, effectiveValues, featureLocks } from '../../src/console/views/configure.js';
-import { TeamView } from '../../src/console/views/team.js';
 import { UsageView, spendBreakdown } from '../../src/console/views/usage.js';
-import { OnboardingView, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
+import { WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
 import { createTestLogger, startMongo, testConfig } from '../helpers.js';
 import { browserOf as client, uploadPack, withMemoryStorage } from './merchant-harness.js';
 
@@ -80,7 +78,13 @@ describe('merchant console smoke', () => {
 			defaultModules.map((m) => (m.name === 'identity' ? createIdentityModule({ mailer }) : m)),
 		);
 		const { logger } = createTestLogger();
-		const portal = createPortal({ config: await testConfig(), db: mongo.db('console_smoke'), modules, logger });
+		const portal = createPortal({
+			config: await testConfig(),
+			db: mongo.db('console_smoke'),
+			modules,
+			logger,
+			background: { mode: 'on', fallback: (task) => void task() },
+		});
 		await portal.ensureIndexes();
 		/** @param {string} to @param {string} template */
 		const tokenOf = (to, template) => {
@@ -88,50 +92,50 @@ describe('merchant console smoke', () => {
 			return decodeURIComponent(String(message?.data.link).split('#token=')[1] ?? '');
 		};
 
-		// ---------------------------------------------------------------- sign up through the API client
+		// ---------------------------------------------------------------- the first admin, then a merchant (setup link)
+		const staff = client(portal);
+		const staffPassword = 'staff password 123!';
+		expect(
+			(await staff.api.post('/v1/auth/first-admin', { name: 'Olivia Owner', email: 'staff@ss.test', password: staffPassword }))
+				.ok,
+		).toBe(true);
 		const merchant = client(portal);
 		const anonymous = await merchant.api.get('/v1/me');
 		expect(anonymous).toMatchObject({ ok: false, status: 401 });
 		expect(await loaders.loadSession(merchant.api)).toMatchObject({ ok: false, status: 401 });
-		const signup = await merchant.api.post('/v1/auth/merchant/signup', {
+		expect(await loaders.loadSession(staff.api)).toMatchObject({ ok: false, status: 403, admin: true });
+		const created = await staff.api.post('/v1/admin/merchants', {
+			name: 'Shop & Co',
+			ownerName: 'Sam',
 			email: 'owner@shop.test',
+		});
+		expect(created.ok).toBe(true);
+		const set = await merchant.api.post('/v1/auth/set-password', {
+			token: tokenOf('owner@shop.test', 'merchant_setup'),
 			password: 'correct horse battery',
-			merchantName: 'Shop & Co',
 		});
-		expect(signup).toMatchObject({ ok: true, status: 202 });
-		const verified = await merchant.api.post('/v1/auth/merchant/verify-email', {
-			token: tokenOf('owner@shop.test', 'verify_email'),
-		});
-		expect(verified.ok).toBe(true);
+		expect(set.ok).toBe(true);
 		const session = await loaders.loadSession(merchant.api);
 		if (!session.ok) throw new Error('no session');
 		const merchantId = /** @type {string} */ (session.merchantId);
 
-		// onboarding before any website
-		expect(text(ssr(<OnboardingView {...await loaders.loadOnboarding(merchant.api, merchantId, undefined)} />))).toContain(
-			'Add your website',
-		);
-		expect(text(ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} />))).toContain(
-			'Add your first website',
-		);
+		// before any website: the welcome with the support contact
+		const branding = {
+			name: 'Single Solution',
+			accent: '#4f46e5',
+			logoUrl: null,
+			support: { email: 'help@ss.test', phone: null, whatsapp: null },
+		};
+		const welcome = text(ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} branding={branding} />));
+		expect(welcome).toContain('Your admin will add your websites and products.');
+		expect(welcome).toContain('help@ss.test');
 
-		const added = await merchant.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
+		const added = await staff.api.post(`/v1/merchants/${merchantId}/websites`, { domain: 'shop.example.com' });
 		expect(added.ok).toBe(true);
 		const websiteId = added.ok ? added.data.website.websiteId : '';
 		const twinId = added.ok ? added.data.twin.websiteId : '';
 
-		// ---------------------------------------------------------------- staff seeds a listed product and credits
-		const staff = client(portal);
-		// the first admin (created from the sign-in page), given an e-mail in Account settings
-		const staffPassword = 'staff password 123!';
-		await staff.api.post('/v1/auth/staff/first-admin', { password: staffPassword });
-		await staff.api.request('PATCH', '/v1/me', { email: 'staff@ss.test' });
-		expect((await staff.api.post('/v1/auth/staff/login', { email: 'staff@ss.test', password: staffPassword })).ok).toBe(true);
-		const enrol = await staff.api.post('/v1/auth/staff/mfa/enrol');
-		expect(
-			(await staff.api.post('/v1/auth/staff/mfa/confirm', { code: totpCode(enrol.ok ? enrol.data.secret : '', Date.now()) }))
-				.ok,
-		).toBe(true);
+		// ---------------------------------------------------------------- the admin seeds a listed product and credits
 		const appId = await uploadPack(staff.fetch);
 		const credit = await staff.api.post(`/v1/admin/merchants/${merchantId}/credits`, {
 			amountMillicredits: 250_000,
@@ -150,7 +154,7 @@ describe('merchant console smoke', () => {
 		expect(hourlyEstimate(catalogEntry, 'plus')).toBe(1750);
 		expect(hourlyEstimate(catalogEntry, null)).toBe(1750);
 
-		const subscribed = await merchant.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
+		const subscribed = await staff.api.post(`/v1/merchants/${merchantId}/websites/${websiteId}/subscriptions`, {
 			appId,
 			planCode: 'basic',
 		});
@@ -170,10 +174,6 @@ describe('merchant console smoke', () => {
 			).ok,
 		).toBe(true);
 		expect((await merchant.api.request('PUT', `/v1/merchants/${merchantId}/spend-cap`, { limit: 50_000 })).ok).toBe(true);
-		expect(
-			(await merchant.api.post(`/v1/merchants/${merchantId}/team/invites`, { email: 'dev@shop.test', roles: ['developer'] }))
-				.ok,
-		).toBe(true);
 
 		// ---------------------------------------------------------------- render the console
 		const frame = await loaders.loadFrame(merchant.api, merchantId);
@@ -189,7 +189,9 @@ describe('merchant console smoke', () => {
 		expect(shell).toContain('Websites');
 		expect(shell).toContain('child');
 
-		const websitesHtml = text(ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} />));
+		const websitesHtml = text(
+			ssr(<WebsitesView {...await loaders.loadWebsites(merchant.api, merchantId)} branding={branding} />),
+		);
 		expect(websitesHtml).toContain('shop.example.com');
 
 		const overview = await loaders.loadWebsiteOverview(merchant.api, merchantId, websiteId);
@@ -268,25 +270,22 @@ describe('merchant console smoke', () => {
 		const cap = await loaders.loadSpendCap(merchant.api, merchantId);
 		expect(text(ssr(<SpendCapView {...cap} />))).toContain('50 credits');
 
-		const team = await loaders.loadTeam(merchant.api, merchantId, session.me);
-		const teamHtml = text(ssr(<TeamView {...team} />));
-		expect(teamHtml).toContain('owner@shop.test');
-		expect(teamHtml).toContain('dev@shop.test');
-
 		const account = await loaders.loadAccount(merchant.api, merchantId);
-		expect(text(ssr(<AccountView {...account} />))).toContain('Two-factor authentication');
-
-		const onboarding = await loaders.loadOnboarding(merchant.api, merchantId, websiteId);
-		expect(text(ssr(<OnboardingView {...onboarding} />))).toContain('Connect resources for shop.example.com');
+		const accountHtml = text(ssr(<AccountView {...account} />));
+		expect(accountHtml).toContain('Business details');
+		expect(accountHtml).toContain('Two-step sign-in');
+		expect(accountHtml).toContain('Your activity');
 
 		// public pages
 		for (const view of [
-			<LoginView key="l" next="/credits" expired />,
-			<SignupView key="s" />,
-			<VerifyEmailView key="v" />,
-			<ForgotPasswordView key="f" />,
-			<ResetPasswordView key="r" />,
-			<AcceptInviteView key="a" />,
+			<SignInView key="l" branding={branding} firstAdmin={false} next="/credits" notice="expired" />,
+			<SignInView key="r" branding={branding} firstAdmin={false} notice="reset" />,
+			<SignInView key="e" branding={{ ...branding, logoUrl: '/branding/logo' }} firstAdmin={false} notice="email" />,
+			<SignInView key="c" branding={branding} firstAdmin />,
+			<ForgotPasswordView key="f" branding={branding} />,
+			<ResetPasswordView key="p" branding={branding} />,
+			<SetPasswordView key="s" branding={branding} />,
+			<ConfirmEmailView key="m" branding={branding} />,
 		])
 			ssr(view);
 
@@ -300,18 +299,22 @@ describe('merchant console smoke', () => {
 		const otherMerchant = await loaders.loadWebsites(merchant.api, 'mer_0123456789abcdefghjkmnpq');
 		expect(otherMerchant).toMatchObject({ ok: false, status: 403 });
 		expect(text(ssr(<WebsitesView {...otherMerchant} />))).toContain('No access');
-		expect((await loaders.loadSession(staff.api)).ok).toBe(false);
 
 		// the console client signs out like the browser does
-		expect((await merchant.api.post('/v1/auth/merchant/logout')).ok).toBe(true);
+		expect((await merchant.api.post('/v1/auth/sign-out')).ok).toBe(true);
 		expect((await merchant.api.get('/v1/me')).status).toBe(401);
 	});
 
 	it('pure helpers of the views', () => {
-		expect(safeNext('/credits')).toBe('/credits');
-		expect(safeNext('//evil.example')).toBe('/websites');
-		expect(safeNext('https://evil.example')).toBe('/websites');
-		expect(safeNext(null)).toBe('/websites');
+		expect(homeOf('merchant', '/credits')).toBe('/credits');
+		expect(homeOf('merchant', '//evil.example')).toBe('/websites');
+		expect(homeOf('merchant', 'https://evil.example')).toBe('/websites');
+		expect(homeOf('merchant', null)).toBe('/websites');
+		expect(homeOf('merchant', '/admin/merchants')).toBe('/websites');
+		expect(homeOf('admin', '/admin/merchants')).toBe('/admin/merchants');
+		expect(homeOf('admin', '/credits')).toBe('/admin');
+		expect(contactLine({ email: 'a@b.co', phone: '+1', whatsapp: '+2' })).toBe('a@b.co, +1, WhatsApp +2');
+		expect(contactLine(null)).toBe('support');
 		expect(balanceState(null)).toBeNull();
 		expect(balanceState({ balanceMillicredits: 0, burnRatePerHour: 1000, subscriptions: [] })).toBe('empty');
 		expect(balanceState({ balanceMillicredits: 5000, burnRatePerHour: 1000, hoursRemaining: 5 })).toBe('low');

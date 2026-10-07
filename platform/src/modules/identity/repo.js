@@ -6,6 +6,7 @@
 import { createId } from '@ss/contracts';
 import { findRecoveryCode, verifyTotp } from '../../infra/auth.js';
 import { problem } from '../../infra/http.js';
+import { afterResponse } from '../../infra/request-scope.js';
 import { isDuplicateKey } from '../../infra/util.js';
 import { hashToken, newToken, TOKEN_TTL_MS } from './core/tokens.js';
 import { C } from './schema.js';
@@ -30,22 +31,19 @@ import { C } from './schema.js';
  * @property {(actor: Actor | AuditActor, action: string, target: { type: string, id: string, merchantId?: string | null, websiteId?: string | null }, extra?: { before?: unknown, after?: unknown, reason?: string | null, meta?: Meta }) => Promise<string>} audit
  */
 
-/** @typedef {{ type: 'staff' | 'merchant_user' | 'product' | 'system', id: string }} AuditActor */
+/** @typedef {{ type: 'admin' | 'merchant' | 'product' | 'system', id: string, name?: string | null }} AuditActor */
 
 /**
  * @param {ModuleContext} ctx
  */
 export const createRepo = (ctx) => {
-	/** @type {MutableOps} */ const staff = ctx.collection(C.staff);
-	/** @type {MutableOps} */ const users = ctx.collection(C.users);
+	/** @type {MutableOps} */ const admins = ctx.collection(C.admins);
 	/** @type {MutableOps} */ const merchants = ctx.collection(C.merchants);
+	/** @type {MutableOps} */ const logins = ctx.collection(C.logins);
 	/** @type {MutableOps} */ const tokens = ctx.collection(C.tokens);
 	/** @type {MutableOps} */ const domains = ctx.collection(C.domains);
-	/** @type {TenantRepository} */ const memberships = ctx.collection(C.memberships);
-	/** @type {TenantRepository} */ const invites = ctx.collection(C.invites);
 	/** @type {TenantRepository} */ const websites = ctx.collection(C.websites);
 	/** @type {TenantRepository} */ const keys = ctx.collection(C.keys);
-	/** @type {TenantRepository} */ const notes = ctx.collection(C.notes);
 	const secret = ctx.config.sessionSecret;
 
 	/** @param {TenantRepository} repo */
@@ -56,17 +54,43 @@ export const createRepo = (ctx) => {
 	});
 
 	return Object.freeze({
-		staff,
-		users,
+		admins,
 		merchants,
+		logins,
 		tokens,
 		domains,
-		memberships: scoped(memberships),
-		invites: scoped(invites),
 		websites: scoped(websites),
 		keys: scoped(keys),
-		/** append-only (insert and reads only) */
-		notes: scoped(notes),
+		/**
+		 * Claim a login e-mail for an admin or a merchant (PLAN 0.2: unique across the whole Portal). Throws 409
+		 * `email_taken` when another login holds it.
+		 * @param {string} email
+		 * @param {'admin' | 'merchant'} kind
+		 * @param {string} subject
+		 */
+		claimLogin: async (email, kind, subject) => {
+			try {
+				await logins.insertOne({ _id: email, kind, subject });
+			} catch (error) {
+				if (isDuplicateKey(error)) throw problem('email_taken', 'This e-mail is already used by another login.');
+				throw error;
+			}
+		},
+		/**
+		 * Release a login e-mail (only the holder's claim is removed).
+		 * @param {string} email
+		 * @param {string} subject
+		 */
+		releaseLogin: (email, subject) => logins.deleteOne({ _id: email, subject }),
+		/**
+		 * The login holding an e-mail, or null.
+		 * @param {string} email
+		 * @returns {Promise<{ kind: 'admin' | 'merchant', subject: string } | null>}
+		 */
+		loginOf: async (email) => {
+			const doc = await logins.findOne({ _id: email });
+			return doc ? { kind: doc.kind, subject: doc.subject } : null;
+		},
 		/** @param {string} prefix */
 		id: (prefix) => createId(prefix, { randomBytes: ctx.randomBytes }),
 		/**
@@ -122,13 +146,13 @@ export const createRepo = (ctx) => {
 /** @typedef {ReturnType<typeof createRepo>} Repo */
 
 /**
- * Audit-log actor from an RBAC actor (website actors are recorded as system).
+ * Audit-log actor from an RBAC actor (website actors are recorded as system). An admin's name is kept with the entry.
  * @param {Actor | AuditActor} actor
  * @returns {AuditActor}
  */
 export const auditActor = (actor) => {
-	const type = actor.type === 'staff' || actor.type === 'merchant_user' || actor.type === 'product' ? actor.type : 'system';
-	return { type, id: actor.id };
+	const type = actor.type === 'admin' || actor.type === 'merchant' || actor.type === 'product' ? actor.type : 'system';
+	return { type, id: actor.id, ...(type === 'admin' && actor.name ? { name: actor.name } : {}) };
 };
 
 /** System actor for calls from other modules or jobs that pass none. */
@@ -198,15 +222,31 @@ export const failAttempt = async (ctx, account, meta, detail) => {
 	throw problem('invalid_credentials', detail);
 };
 
-/** Envelope AAD of a stored TOTP secret. */
+/** AAD of a stored two-step secret (sealed with `ENCRYPTION_KEY`, PLAN 0.4.8). */
 /** @param {string} subject */
 export const totpAad = (subject) => ({ subject, purpose: 'totp' });
 
 /**
- * Verify a TOTP code or a recovery code for an account document and burn it atomically (a TOTP step and a recovery
+ * Open a stored two-step secret; null when it was sealed under another `ENCRYPTION_KEY` (the person then signs in
+ * with a recovery code, or an Owner turns two-step off, PLAN 0.4.8).
+ * @param {ModuleContext} ctx
+ * @param {string} sealed
+ * @param {string} subject
+ * @returns {string | null}
+ */
+export const openTotpSecret = (ctx, sealed, subject) => {
+	try {
+		return ctx.secretBox.openText(sealed, { aad: totpAad(subject) });
+	} catch {
+		return null;
+	}
+};
+
+/**
+ * Verify a two-step code or a recovery code for a login document and burn it atomically (a code step and a recovery
  * code are each accepted once, even under concurrent requests).
  * @param {ModuleContext} ctx
- * @param {MutableOps} collection the account collection (staff or users)
+ * @param {MutableOps} collection the login's collection (admins or merchants)
  * @param {Record<string, any>} account
  * @param {{ code?: string, recoveryCode?: string }} input
  * @returns {Promise<boolean>}
@@ -214,7 +254,8 @@ export const totpAad = (subject) => ({ subject, purpose: 'totp' });
 export const checkSecondFactor = async (ctx, collection, account, input) => {
 	if (!account.totp) return false;
 	if (input.code !== undefined) {
-		const secret = ctx.envelope.openText(account.totp.secret, { aad: totpAad(String(account._id)) });
+		const secret = openTotpSecret(ctx, account.totp.secret, String(account._id));
+		if (secret === null) return false;
 		const lastStep = typeof account.totp.lastStep === 'number' ? account.totp.lastStep : null;
 		const result = verifyTotp(secret, input.code, { now: ctx.now, lastStep });
 		if (!result.ok) return false;
@@ -233,23 +274,22 @@ export const checkSecondFactor = async (ctx, collection, account, input) => {
 };
 
 /**
- * Send a mail; failures are logged, never thrown (flows that must not reveal account existence).
+ * Send an e-mail right after the response of the current request (F.19 `after()`), or at once outside a request.
+ * Without SMTP settings the e-mail is skipped (PLAN 0.5.10). Failures are logged, never thrown. Returns whether the
+ * e-mail was handed to the mailer.
  * @param {Deps} deps
  * @param {import('../../infra/mailer.js').MailMessage} message
+ * @returns {Promise<boolean>}
  */
-export const sendQuietly = async ({ ctx, mailer }, message) => {
-	try {
-		await mailer.send(message);
-	} catch (error) {
-		ctx.logger.warn('mail could not be sent', { template: message.template, error });
-	}
-};
-
-/**
- * Refuse flows that must send mail when no mailer is available (503).
- * @param {Mailer} mailer
- */
-export const requireMailer = (mailer) => {
-	if (mailer.available === false)
-		throw problem('unavailable', 'E-mail delivery is not configured.', { headers: { 'retry-after': '3600' } });
+export const sendLater = async ({ ctx, mailer }, message) => {
+	if (mailer.available === false) return false;
+	const send = async () => {
+		try {
+			await mailer.send(message);
+		} catch (error) {
+			ctx.logger.warn('mail could not be sent', { template: message.template, error });
+		}
+	};
+	if (!afterResponse(send)) await send();
+	return true;
 };

@@ -20,7 +20,7 @@ const config = {
 	// One route handler (app/api/[...path]) serves every server path; the public paths stay as they are. Checked before
 	// the console's catch-all page, which owns every other path.
 	rewrites: async () => ({
-		beforeFiles: ['/v1/:path*', '/w/:path*', '/.well-known/jwks.json'].map((source) => ({
+		beforeFiles: ['/v1/:path*', '/w/:path*', '/branding/logo', '/.well-known/jwks.json'].map((source) => ({
 			source,
 			destination: `/api${source}`,
 		})),

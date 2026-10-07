@@ -98,8 +98,8 @@ pnpm db:memory
 pnpm env:dev > .env.local && pnpm dev
 ```
 
-The Portal runs on http://localhost:4000. Open the staff login, http://localhost:4000/admin/login, and choose a password:
-you become the admin (login name `admin`). Keys and secrets are generated in the database on first start.
+The Portal runs on http://localhost:4000. Open http://localhost:4000/login and create the first admin (name, e-mail,
+password): you become the Owner. Keys and secrets are generated in the database on first start.
 
 ## Building a product
 
@@ -297,19 +297,22 @@ Access** (`0.0.0.0/0` for hosts without fixed IPs; every user has its own passwo
 ### 2. Storage for the Portal's delivery files
 
 Website scripts and pack files are stored in an S3-compatible bucket (Cloudflare R2, AWS S3, …). Create one bucket
-and an access key limited to it. **Optional to start:** the Portal runs with only `MONGODB_URI`; until the `STORAGE_*`
+and an access key limited to it. **Optional to start:** the Portal runs with only `MONGODB_URI`, `PORTAL_URL` and `ENCRYPTION_KEY`; until the `STORAGE_*`
 variables are set, only the website-script and pack routes answer 503.
 
 ### 3. Portal
 
-Set `MONGODB_URI` → deploy → open the staff login, `https://<your domain>/admin/login` → **choose a password**. You
-are now the admin (login name `admin`); add your e-mail, name and two-factor sign-in whenever you like in **Account
-settings**. Do it right after deploying: until an admin exists, whoever opens the staff login first becomes the admin.
+Set `MONGODB_URI`, `PORTAL_URL` (the Portal's https address, exactly the one products pinned) and `ENCRYPTION_KEY`
+(random, at least 32 characters) as production-only variables → deploy → open `<PORTAL_URL>/login` → **create the
+first admin**. You are now the Owner; turn on two-step sign-in in **My account**. Do it right after deploying: until
+an admin exists, whoever opens the login first becomes the Owner.
 Set `NODE_ENV=production` where the host does not set it, and the storage variables when you want website scripts:
 
 | Variable                    | Value                                                                       |
 | --------------------------- | --------------------------------------------------------------------------- |
 | `MONGODB_URI`               | the Atlas URI for `ss_portal`                                               |
+| `PORTAL_URL`                | the Portal's address, e.g. `https://portal.example.com` (no path)           |
+| `ENCRYPTION_KEY`            | random, at least 32 characters (`openssl rand -base64 32`)                  |
 | `STORAGE_ENDPOINT`          | the bucket's S3 endpoint (R2: `https://<account>.r2.cloudflarestorage.com`) |
 | `STORAGE_REGION`            | `auto` (the default; the bucket's region on AWS)                            |
 | `STORAGE_BUCKET`            | the bucket from step 2                                                      |

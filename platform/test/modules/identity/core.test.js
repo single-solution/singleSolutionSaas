@@ -10,30 +10,15 @@ import {
 	presentKey,
 	rotationRevokeAt,
 } from '../../../src/modules/identity/core/keys.js';
-import {
-	iso,
-	presentInvite,
-	presentMember,
-	presentMerchant,
-	presentStaff,
-	presentUser,
-	presentWebsite,
-} from '../../../src/modules/identity/core/present.js';
+import { COUNTRY_CODES, isCountryCode } from '../../../src/modules/identity/core/countries.js';
+import { iso, presentAdmin, presentMerchant, presentWebsite } from '../../../src/modules/identity/core/present.js';
 import {
 	decodeRevocationCursor,
 	encodeRevocationCursor,
 	revocationFilter,
 	revocationPage,
 } from '../../../src/modules/identity/core/revocations.js';
-import {
-	applyMemberChange,
-	checkOwnerTransfer,
-	grantsSomething,
-	isOwner,
-	statusTransition,
-	unknownGrantWebsites,
-} from '../../../src/modules/identity/core/team.js';
-import { hashToken, newToken, TOKEN_TTL_MS } from '../../../src/modules/identity/core/tokens.js';
+import { hashToken, newToken, SETUP_TTL_MS, TOKEN_TTL_MS } from '../../../src/modules/identity/core/tokens.js';
 
 const WEB = 'web_0123456789abcdefghjkmnpq';
 
@@ -75,36 +60,17 @@ describe('inputs: fields', () => {
 		expect(I.bool(true).ok).toBe(true);
 		expect(I.bool('true').ok).toBe(false);
 	});
-	it('roles and grants', () => {
-		const merchant = I.roles(I.ASSIGNABLE_MERCHANT_ROLES);
-		expect(merchant(['admin', 'editor'])).toEqual({ ok: true, value: ['admin', 'editor'] });
-		expect(merchant([]).ok).toBe(false);
-		expect(I.roles(I.ASSIGNABLE_MERCHANT_ROLES, { allowEmpty: true })([]).ok).toBe(true);
-		expect(merchant(['owner']).ok).toBe(false);
-		expect(merchant(['admin', 'admin']).ok).toBe(false);
-		expect(merchant('admin').ok).toBe(false);
-		expect(merchant([1]).ok).toBe(false);
-		expect(I.grants([{ websiteId: WEB, roles: ['editor'] }])).toEqual({
-			ok: true,
-			value: [{ websiteId: WEB, roles: ['editor'] }],
-		});
-		expect(I.grants([]).ok).toBe(true);
-		expect(I.grants('x').ok).toBe(false);
-		expect(I.grants(Array(101).fill({ websiteId: WEB, roles: ['editor'] })).ok).toBe(false);
-		expect(I.grants([null]).ok).toBe(false);
-		expect(I.grants([[]]).ok).toBe(false);
-		expect(I.grants([{ websiteId: WEB, roles: ['editor'], extra: 1 }]).ok).toBe(false);
-		expect(I.grants([{ websiteId: 'nope', roles: ['editor'] }])).toMatchObject({
-			ok: false,
-			message: expect.stringMatching(/^websiteId/),
-		});
-		expect(I.grants([{ websiteId: WEB, roles: [] }]).ok).toBe(false);
-		expect(
-			I.grants([
-				{ websiteId: WEB, roles: ['editor'] },
-				{ websiteId: WEB, roles: ['admin'] },
-			]).ok,
-		).toBe(false);
+	it('countries (ISO 3166-1 alpha-2) and optional texts', () => {
+		expect(COUNTRY_CODES).toHaveLength(249);
+		expect(isCountryCode('PK')).toBe(true);
+		expect(isCountryCode('UK')).toBe(false);
+		expect(I.country(' pk ')).toEqual({ ok: true, value: 'PK' });
+		expect(I.country('XX').ok).toBe(false);
+		expect(I.country(5).ok).toBe(false);
+		expect(I.optionalText(5)('')).toEqual({ ok: true, value: null });
+		expect(I.optionalText(5)(null)).toEqual({ ok: true, value: null });
+		expect(I.optionalText(5)(' ab ')).toEqual({ ok: true, value: 'ab' });
+		expect(I.optionalText(2)('abc').ok).toBe(false);
 	});
 	it('scopes, domains, timestamps, ints, enums', () => {
 		expect(I.scopes(['events.publish', 'config.*', 'events.subscribe:order.*@1']).ok).toBe(true);
@@ -156,37 +122,52 @@ describe('inputs: objects', () => {
 	});
 	it('every operation parser', () => {
 		const token = 'a'.repeat(43);
+		const merchant = { name: 'M', ownerName: 'O', email: 'a@b.co' };
 		const ok = /** @type {Array<[keyof typeof I.inputs, unknown]>} */ ([
-			['signup', { email: 'a@b.co', password: 'x'.repeat(12), merchantName: 'M', name: 'N' }],
-			['login', { email: 'a@b.co', password: 'p', merchantId: 'mer_0123456789' }],
-			['staffLogin', { email: 'a@b.co', password: 'p' }],
+			['signIn', { email: 'a@b.co', password: 'p' }],
+			['twoStepSignIn', { challenge: token, code: '123456' }],
+			['firstAdmin', { name: 'N', email: 'a@b.co', password: 'x'.repeat(12) }],
 			['tokenOnly', { token }],
 			['emailOnly', { email: 'a@b.co' }],
 			['resetConfirm', { token, password: 'x'.repeat(12) }],
-			['inviteAccept', { token, password: 'p', name: 'N' }],
-			['passwordChange', { currentPassword: 'p', newPassword: 'x'.repeat(12) }],
-			['mfaChallenge', { challenge: token, code: '123456' }],
-			['mfaCode', { recoveryCode: 'abcde-fghij' }],
-			['mfaConfirm', { code: '123456' }],
-			['mfaDisable', { password: 'p', code: '123456' }],
-			['switchMerchant', { merchantId: 'mer_0123456789' }],
-			['merchantUpdate', { name: 'N' }],
-			['invite', { email: 'a@b.co', roles: [], grants: [{ websiteId: WEB, roles: ['editor'] }] }],
-			['memberUpdate', { roles: ['admin'] }],
-			['ownerTransfer', { userId: 'usr_0123456789', password: 'p' }],
+			['setupConfirm', { token, password: 'x'.repeat(12), name: 'N' }],
+			['passwordChange', { currentPassword: 'p', newPassword: 'x'.repeat(12), code: '123456' }],
+			['emailChange', { email: 'a@b.co', password: 'p', recoveryCode: 'abcde-fghij' }],
+			['twoStepConfirm', { code: '123456' }],
+			['twoStepWithPassword', { password: 'p', code: '123456' }],
+			['adminProfile', { name: 'N' }],
+			['merchantProfile', { phone: '' }],
+			['merchantCreate', { ...merchant, country: 'PK' }],
+			['merchantUpdate', { email: 'b@b.co' }],
+			['merchantDelete', { confirm: 'M' }],
+			['bulk', { action: 'suspend', merchantIds: ['mer_0123456789'], reason: 'r' }],
+			['linkAction', undefined],
 			['website', { domain: 'a.example' }],
+			['websiteRemove', { confirm: 'a.example' }],
 			['keyIssue', { kind: 'sk', scopes: ['events.write'], expiresAt: '2030-01-01T00:00:00Z', allowSubdomains: false }],
 			['keyRotate', undefined],
 			['keyRevoke', undefined],
 			['reason', { reason: 'r' }],
-			['websiteTransfer', { toMerchantId: 'mer_0123456789', reason: 'r' }],
-			['staffCreate', { email: 'a@b.co', roles: ['support'], name: 'N' }],
-			['staffUpdate', { status: 'disabled' }],
+			['adminInvite', { email: 'a@b.co', role: 'finance', copy: true }],
+			['adminUpdate', { role: 'owner' }],
 		]);
 		for (const [name, body] of ok) expect(/** @type {any} */ (I.inputs[name])(body).ok, name).toBe(true);
 		for (const name of /** @type {Array<keyof typeof I.inputs>} */ (Object.keys(I.inputs)))
 			expect(/** @type {any} */ (I.inputs[name])({ unexpected: true }).ok, name).toBe(false);
 		expect(I.inputs.keyRotate({ graceSeconds: I.MAX_GRACE_SECONDS + 1 }).ok).toBe(false);
+		expect(I.inputs.merchantCreate(merchant)).toEqual({
+			ok: true,
+			value: { ...merchant, phone: null, address: null, country: null },
+		});
+		expect(I.inputs.merchantProfile({}).ok).toBe(false);
+		expect(I.inputs.adminUpdate({}).ok).toBe(false);
+		expect(I.inputs.adminInvite({ email: 'a@b.co', role: 'superadmin' }).ok).toBe(false);
+		expect(I.inputs.bulk({ action: 'suspend', merchantIds: [] }).ok).toBe(false);
+		expect(I.inputs.bulk({ action: 'suspend', merchantIds: ['nope'] }).ok).toBe(false);
+		expect(I.inputs.bulk({ action: 'resume', merchantIds: ['mer_0123456789', 'mer_0123456789'] })).toEqual({
+			ok: true,
+			value: { action: 'resume', merchantIds: ['mer_0123456789'] },
+		});
 	});
 });
 
@@ -195,15 +176,17 @@ describe('tokens and links', () => {
 		const t = newToken(() => new Uint8Array(32).fill(1));
 		expect(t).toHaveLength(43);
 		const secret = Buffer.alloc(32, 9);
-		expect(hashToken(secret, 'signup', t)).toMatch(/^[0-9a-f]{64}$/);
-		expect(hashToken(secret, 'signup', t)).not.toBe(hashToken(secret, 'invite', t));
-		expect(hashToken(secret, 'signup', t)).not.toBe(hashToken(Buffer.alloc(32, 8), 'signup', t));
-		expect(() => hashToken(secret, /** @type {any} */ ('other'), t)).toThrow(/purpose/);
+		expect(hashToken(secret, 'setup', t)).toMatch(/^[0-9a-f]{64}$/);
+		expect(hashToken(secret, 'setup', t)).not.toBe(hashToken(secret, 'password_reset', t));
+		expect(hashToken(secret, 'setup', t)).not.toBe(hashToken(Buffer.alloc(32, 8), 'setup', t));
+		expect(() => hashToken(secret, /** @type {any} */ ('invite'), t)).toThrow(/purpose/);
 		expect(TOKEN_TTL_MS.password_reset).toBe(30 * 60_000);
+		expect(SETUP_TTL_MS).toEqual({ merchant: 72 * 3_600_000, admin: 24 * 3_600_000 });
 	});
 	it('puts tokens in the fragment', () => {
-		expect(linkFor('https://p.test/', 'invite', 'a b')).toBe('https://p.test/invites/accept#token=a%20b');
-		expect(linkFor('https://p.test', 'staff_password_reset', 't')).toBe('https://p.test/staff/reset-password#token=t');
+		expect(linkFor('https://p.test/', 'setup', 'a b')).toBe('https://p.test/set-password#token=a%20b');
+		expect(linkFor('https://p.test', 'password_reset', 't')).toBe('https://p.test/reset-password#token=t');
+		expect(linkFor('https://p.test', 'email_change', 't')).toBe('https://p.test/confirm-email#token=t');
 	});
 });
 
@@ -309,80 +292,48 @@ describe('key rules', () => {
 	});
 });
 
-describe('team rules', () => {
-	const member = { userId: 'usr_1', roles: ['editor'], grants: [] };
-	it('owner protection and non-empty memberships', () => {
-		expect(isOwner({ roles: ['owner'] })).toBe(true);
-		expect(grantsSomething([], [])).toBe(false);
-		expect(grantsSomething([], [{ websiteId: WEB, roles: ['editor'] }])).toBe(true);
-		expect(applyMemberChange({ ...member, roles: ['owner'] }, { roles: ['admin'] })).toMatchObject({
-			ok: false,
-			code: 'owner_protected',
-		});
-		expect(applyMemberChange(member, { roles: [] })).toMatchObject({ ok: false, code: 'validation_failed' });
-		expect(applyMemberChange(member, { grants: [{ websiteId: WEB, roles: ['admin'] }] })).toEqual({
-			ok: true,
-			roles: ['editor'],
-			grants: [{ websiteId: WEB, roles: ['admin'] }],
-		});
-		expect(applyMemberChange(member, {})).toEqual({ ok: true, roles: ['editor'], grants: [] });
-	});
-	it('grants, ownership transfer and status transitions', () => {
-		expect(
-			unknownGrantWebsites(
-				[
-					{ websiteId: 'a', roles: [] },
-					{ websiteId: 'b', roles: [] },
-				],
-				new Set(['a']),
-			),
-		).toEqual(['b']);
-		expect(checkOwnerTransfer(null, 'usr_1')).toMatchObject({ ok: false, code: 'not_found' });
-		expect(checkOwnerTransfer(member, 'usr_1')).toMatchObject({ ok: false, code: 'conflict' });
-		expect(checkOwnerTransfer(member, 'usr_2')).toEqual({ ok: true });
-		expect(statusTransition('active', 'suspended')).toBe(true);
-		expect(statusTransition('active', 'active')).toBe(false);
-	});
-});
-
 describe('presentation', () => {
-	it('shapes records without secrets', () => {
+	it('shapes records without secrets; the suspension reason only for admins', () => {
 		const at = new Date(0);
 		expect(iso(null)).toBeNull();
 		expect(iso(at)).toBe(at.toISOString());
-		expect(presentMerchant({ _id: 'mer_1', name: 'M', status: 'active', createdAt: at })).toMatchObject({
-			ownerUserId: null,
-			suspension: null,
-		});
-		expect(
-			presentMerchant({ _id: 'mer_1', name: 'M', status: 'suspended', suspension: { reason: 'r', at, by: 's' } }).suspension,
-		).toEqual({
-			reason: 'r',
-			at: at.toISOString(),
-			by: 's',
-		});
-		expect(
-			presentWebsite({ _id: WEB, merchantId: 'mer_1', domain: 'd', env: 'live', twinId: 'web_2', status: 'active' }),
-		).toMatchObject({
-			deletedAt: null,
-		});
-		const user = presentUser({
-			_id: 'usr_1',
-			email: 'e',
-			status: 'active',
+		const merchant = {
+			_id: 'mer_1',
+			name: 'M',
+			email: 'e@x.co',
+			status: 'suspended',
+			suspension: { reason: 'r', at, by: 'adm_1' },
 			passwordHash: 'scrypt$x',
 			totp: { secret: 'sealed' },
 			recoveryHashes: ['h'],
+			createdAt: at,
+		};
+		expect(presentMerchant(merchant)).toMatchObject({
+			ownerName: null,
+			setupPending: false,
+			twoStep: { enabled: true, recoveryCodesLeft: 1 },
+			suspension: { reason: 'r', at: at.toISOString(), by: 'adm_1' },
 		});
-		expect(user).toMatchObject({ name: null, mfa: { enabled: true, recoveryCodesLeft: 1 } });
-		expect(JSON.stringify(user)).not.toMatch(/scrypt|sealed/);
-		expect(presentUser({ _id: 'usr_1', email: 'e', status: 'active', totp: { secret: 's' } }).mfa.recoveryCodesLeft).toBe(0);
-		expect(presentStaff({ _id: 'stf_1', email: 'e', status: 'active', passwordHash: 'x' })).toMatchObject({
-			roles: [],
-			passwordSet: true,
+		expect(presentMerchant(merchant, { forAdmin: false })).not.toHaveProperty('suspension');
+		expect(JSON.stringify(presentMerchant(merchant))).not.toMatch(/scrypt|sealed/);
+		expect(presentMerchant({ _id: 'mer_2', name: 'N', status: 'active' })).toMatchObject({
+			setupPending: true,
+			suspension: null,
 		});
-		expect(presentMember({ userId: 'usr_1' }, null)).toMatchObject({ email: null, roles: [], grants: [], status: 'unknown' });
-		expect(presentInvite({ _id: 'inv_1', email: 'e', status: 'pending' })).toMatchObject({ roles: [], grants: [] });
+		expect(presentMerchant({ _id: 'mer_3', name: 'D', status: 'deleted' }).setupPending).toBe(false);
+		expect(
+			presentWebsite({ _id: WEB, merchantId: 'mer_1', domain: 'd', env: 'live', twinId: 'web_2', status: 'active' }),
+		).toMatchObject({ deletedAt: null });
+		const admin = presentAdmin({
+			_id: 'adm_1',
+			email: 'e',
+			role: 'owner',
+			status: 'active',
+			passwordHash: 'x',
+			totp: { secret: 's' },
+		});
+		expect(admin).toMatchObject({ name: null, twoStep: { enabled: true, recoveryCodesLeft: 0 }, lastSignInAt: null });
+		expect(JSON.stringify(admin)).not.toContain('passwordHash');
 	});
 });
 

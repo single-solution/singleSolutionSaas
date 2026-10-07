@@ -113,3 +113,12 @@ export const startProduct = async ({ product, routes, close, tls, port, host = '
 		},
 	};
 };
+
+/** The `ENCRYPTION_KEY` of the Portal under test. */
+export const PORTAL_ENCRYPTION_KEY = 'e2e-portal-encryption-key-0123456789abcdef';
+
+/** Long sign-ins for the scripted clock (the Session length setting, here 720 hours). */
+export const LONG_SESSIONS = Object.freeze({
+	admin: Object.freeze({ idleMs: 720 * 3_600_000, absoluteMs: 720 * 3_600_000 }),
+	merchant: Object.freeze({ idleMs: 720 * 3_600_000, absoluteMs: 720 * 3_600_000 }),
+});

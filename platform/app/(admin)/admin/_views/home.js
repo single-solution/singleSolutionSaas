@@ -1,9 +1,10 @@
-import { redirect } from 'next/navigation';
-import { adminRoutes } from '../../../../src/console/admin/paths.js';
+import { loadOverview } from '../../../../src/console/admin/loaders.js';
+import { OverviewView } from '../../../../src/console/admin/views/overview.js';
+import { adminContext } from '../../_lib/server.js';
 
-export const metadata = { title: 'Merchants' };
+export const metadata = { title: 'Overview' };
 
-/** The admin home is the merchants list. */
-export default function AdminHome() {
-	redirect(adminRoutes.merchants());
+export default async function OverviewPage() {
+	const { api, admin } = await adminContext('/admin');
+	return <OverviewView {...await loadOverview(api)} admin={admin} />;
 }

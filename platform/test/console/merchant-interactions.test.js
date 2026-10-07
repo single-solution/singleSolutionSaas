@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Merchant Console in the browser (jsdom), part 1 — account pages, websites, team and the frame: the views are
- * rendered client-side against a live in-process Portal (`fetch` routed to `portal.handle` with a cookie jar) and
- * driven through their forms and dialogs: sign-up, e-mail verification, sign-in with the MFA challenge, password
- * reset, invite acceptance, onboarding, websites add/delete with typed confirmation, team invite/role/remove,
- * account rename/password/MFA enrol/recovery codes/disable/sessions, merchant and website switchers, sign-out and
- * the website's install code.
+ * Merchant Console in the browser (jsdom), part 1 — the public account pages, Account, websites and the frame: the
+ * views are rendered client-side against a live in-process Portal (`fetch` routed to `portal.handle` with a cookie jar)
+ * and driven through their forms and dialogs: the one sign-in page (with two-step, Create admin and the suspended
+ * message), Forgot password, reset and setup links, the e-mail confirmation, Account (details, sign-in e-mail,
+ * password, two-step with a QR code and recovery codes), the welcome, the website's install code, the frame and the
+ * client helpers.
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import * as hooks from 'next/dist/shared/lib/hooks-client-context.shared-runtime.js';
@@ -14,37 +14,20 @@ import { totpCode } from '../../src/infra/auth.js';
 import { closeMongoClients } from '../../src/infra/db.js';
 import * as loaders from '../../src/console/loaders.js';
 import { apiFetch, signInAgain, takeFragmentToken, useAction, useResource } from '../../src/console/client.js';
-import { AccountView, secondFactor } from '../../src/console/views/account.js';
+import { AccountView } from '../../src/console/views/account.js';
+import { QrCode } from '../../src/console/views/login-settings.js';
 import {
-	AcceptInviteView,
+	ConfirmEmailView,
 	ForgotPasswordView,
-	LoginView,
 	ResetPasswordView,
-	SignupView,
-	VerifyEmailView,
-} from '../../src/console/views/auth.js';
+	SetPasswordView,
+	SignInView,
+} from '../../src/console/views/sign-in.js';
 import { ConsoleShell } from '../../src/console/views/shell.js';
-import { TeamView } from '../../src/console/views/team.js';
-import { InstallCodeCard, OnboardingView, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
+import { InstallCodeCard, WebsiteOverviewView, WebsitesView } from '../../src/console/views/websites.js';
 import { act, byLabel, cleanup, render, type } from '@ss/ui/testing';
 import { startMongo } from '../helpers.js';
-import {
-	browserOf,
-	button,
-	buttons,
-	check,
-	clickEl,
-	createWorld,
-	dialog,
-	fill,
-	fillDialog,
-	press,
-	pressDialog,
-	quiet,
-	settle,
-	shows,
-	until,
-} from './merchant-harness.js';
+import { browserOf, button, clickEl, createWorld, fill, press, quiet, settle, shows, until } from './merchant-harness.js';
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 120_000 });
 
@@ -74,354 +57,312 @@ const setToken = (token) => {
 	window.location.hash = token ? `#token=${encodeURIComponent(token)}` : '';
 };
 
-describe('merchant console interactions (jsdom): account, websites, team', () => {
-	it('drives the account pages, websites, team and frame against a live Portal', async () => {
-		const restore = quiet();
-		const world = await createWorld({ db: mongo.db('merchant_ui_1') });
-		const { portal, tokenOf } = world;
-		const PASSWORD = 'correct horse battery';
+const PASSWORD = 'correct horse battery';
+const BRANDING = {
+	name: 'Single Solution',
+	accent: '#4f46e5',
+	logoUrl: null,
+	support: { email: 'help@ss.test', phone: '+92 300 1234567', whatsapp: null },
+};
 
-		// ---------------------------------------------------------------- sign up, verify, sign in (browser A)
+/** Two-step code of a secret now. @param {string} secret */
+const code = (secret) => totpCode(secret, Date.now());
+
+describe('merchant console interactions (jsdom): sign-in, Account, websites, frame', () => {
+	it('drives the public pages, Account, websites and the frame against a live Portal', async () => {
+		const restore = quiet();
+		const db = mongo.db('merchant_ui_1');
+		// ---------------------------------------------------------------- Create admin while no admin exists
+		{
+			const { createPortal } = await import('../../src/portal.js');
+			const { modules } = await import('../../src/modules/index.js');
+			const { testConfig, createTestLogger } = await import('../helpers.js');
+			const empty = createPortal({
+				config: await testConfig(),
+				db: mongo.db('merchant_ui_1_first'),
+				modules,
+				logger: createTestLogger().logger,
+			});
+			const first = browserOf(empty);
+			first.use();
+			render(<SignInView branding={BRANDING} firstAdmin />);
+			expect(shows('No admin exists yet.')).toBe(true);
+			await press('Create admin');
+			expect(shows('Enter your name.') && shows('Enter an e-mail address.')).toBe(true);
+			fill('Your name', 'Ada');
+			fill('E-mail', 'ada@portal.test');
+			fill('Password', 'short');
+			await press('Create admin');
+			expect(shows('Use at least 12 characters.')).toBe(true);
+			fill('Password', PASSWORD);
+			await press('Create admin');
+			await first.waitCall('POST', '/v1/auth/first-admin', (st) => st === 201);
+			cleanup();
+		}
+
+		const world = await createWorld({ db });
+		const { portal } = world;
+		const { merchantId } = await world.signup('owner@shop.test', 'Shop & Co');
+
+		// ---------------------------------------------------------------- the one sign-in page
 		const a = browserOf(portal);
 		a.use();
-		render(<SignupView />);
-		await press('Create account');
-		expect(shows('Enter the name of your business.')).toBe(true);
-		expect(shows('Enter your e-mail address.')).toBe(true);
-		expect(shows('Use at least 12 characters.')).toBe(true);
-		fill('Business name', 'Shop & Co');
-		fill('Your name', 'Olive Owner');
-		fill('E-mail', 'owner@shop.test');
-		fill('Password', PASSWORD);
-		await press('Create account');
-		await until(() => shows('Verification link sent'));
-		await press('Change it');
-		expect(shows('Create your account')).toBe(true);
-		cleanup();
-		// a server-side validation problem is mapped to the fields
-		render(<SignupView />);
-		fill('Business name', 'x'.repeat(400));
-		fill('E-mail', 'second@shop.test');
-		fill('Password', PASSWORD);
-		await press('Create account');
-		await a.waitCall('POST', '/v1/auth/merchant/signup', (s) => s >= 400);
-		cleanup();
-
-		setToken('');
-		render(<VerifyEmailView />);
-		await until(() => shows('This link is incomplete'));
-		cleanup();
-		setToken('not-a-real-token');
-		render(<VerifyEmailView />);
-		await until(() => shows('We could not verify your e-mail'));
-		cleanup();
-		setToken(tokenOf('owner@shop.test', 'verify_email'));
-		render(<VerifyEmailView />);
-		await until(() => shows('Verified — opening your console'));
-		expect(window.location.hash).toBe('');
-		cleanup();
-		// verification signs the browser in; start from a fresh browser to sign in by hand
-		await a.api.post('/v1/auth/merchant/logout');
-
-		render(<LoginView next="/credits" expired />);
-		expect(shows('Your session ended.')).toBe(true);
+		render(<SignInView branding={BRANDING} firstAdmin={false} next="/credits" notice="expired" />);
+		expect(shows('Your session ended. Sign in again.')).toBe(true);
 		await press('Sign in');
-		expect(shows('Enter your e-mail address.') && shows('Enter your password.')).toBe(true);
+		expect(shows('Enter an e-mail address.') && shows('Enter your password.')).toBe(true);
 		fill('E-mail', 'owner@shop.test');
 		fill('Password', 'wrong password!!');
 		await press('Sign in');
-		await a.waitCall('POST', '/v1/auth/merchant/login', (s) => s >= 400);
+		await a.waitCall('POST', '/v1/auth/sign-in', (st) => st === 401);
+		expect(shows('The e-mail or password is incorrect.')).toBe(true);
 		fill('Password', PASSWORD);
 		await press('Sign in');
-		await a.waitCall('POST', '/v1/auth/merchant/login', (s) => s === 200);
+		await a.waitCall('POST', '/v1/auth/sign-in', (st) => st === 200);
 		cleanup();
-		render(<LoginView reset />);
-		expect(shows('Your password was changed.')).toBe(true);
-		cleanup();
-		const session = await loaders.loadSession(a.api);
-		if (!session.ok) throw new Error('session');
-		const merchantId = /** @type {string} */ (session.merchantId);
+		for (const notice of /** @type {const} */ (['reset', 'email'])) {
+			render(<SignInView branding={BRANDING} firstAdmin={false} notice={notice} />);
+			expect(shows(notice === 'reset' ? 'Your password was changed.' : 'Your new sign-in e-mail is confirmed.')).toBe(true);
+			cleanup();
+		}
 
-		// ---------------------------------------------------------------- onboarding and websites
-		render(<WebsitesView {...await loaders.loadWebsites(a.api, merchantId)} />);
-		expect(shows('Add your first website')).toBe(true);
+		// ---------------------------------------------------------------- Account: details, e-mail, password, two-step
+		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
+		expect(shows('Business details') && shows('Your activity')).toBe(true);
+		fill('Phone', '+92 300 7654321');
+		type(byLabel(document, 'Country'), 'PK');
+		fill('Address', 'Mall Road, Lahore');
+		await press('Save');
+		await a.waitCall('PATCH', '/v1/me', (st) => st === 200);
+		await until(() => shows('Business details saved.'));
+		// the sign-in e-mail: a wrong password, then the confirmation link
+		fill('New e-mail', 'owner2@shop.test');
+		fill('Current password', 'wrong password!!');
+		await press('Change e-mail');
+		await a.waitCall('POST', '/v1/me/email', (st) => st === 401);
+		const passwordFields = /** @type {HTMLInputElement[]} */ ([...document.querySelectorAll('input[type="password"]')]);
+		type(/** @type {HTMLInputElement} */ (passwordFields[0]), PASSWORD);
+		await press('Change e-mail');
+		await until(() => shows('We sent a confirmation link to owner2@shop.test.'));
+		// the password: too short, then changed
+		type(/** @type {HTMLInputElement} */ (passwordFields[1]), PASSWORD);
+		fill('New password', 'short');
+		await press('Change password');
+		expect(shows('Use at least 12 characters.')).toBe(true);
+		fill('New password', 'a brand new passphrase');
+		await press('Change password');
+		await until(() => shows('Password changed.'));
+		// two-step: set up with the QR code, then save the recovery codes
+		await press('Set up two-step sign-in');
+		await press('Set up two-step sign-in');
+		const started = await a.waitCall('POST', '/v1/me/two-step/start', (st) => st === 200);
+		expect(document.querySelector('svg[aria-label="QR code"]')).not.toBeNull();
+		fill('Confirm a code', '000000');
+		await press('Turn it on');
+		await a.waitCall('POST', '/v1/me/two-step/confirm', (st) => st >= 400);
+		fill('Confirm a code', code(started.body.secret));
+		await press('Turn it on');
+		const confirmed = await a.waitCall('POST', '/v1/me/two-step/confirm', (st) => st === 200);
+		const recoveryCodes = /** @type {string[]} */ (confirmed.body.recoveryCodes);
+		expect(shows('Save your recovery codes now')).toBe(true);
+		expect(button('Done').disabled).toBe(true);
+		await clickEl(byLabel(document, 'I have stored the recovery codes safely'));
+		await press('Done');
 		cleanup();
-		render(<OnboardingView {...await loaders.loadOnboarding(a.api, merchantId, undefined)} />);
-		await press('Add website');
-		expect(shows('Enter the domain of your website')).toBe(true);
-		fill('Domain', 'not a domain');
-		await press('Add website');
-		await a.waitCall('POST', `/v1/merchants/${merchantId}/websites`, (s) => s >= 400);
-		fill('Domain', 'shop.example.com');
-		await press('Add website');
-		const added = await a.waitCall('POST', `/v1/merchants/${merchantId}/websites`, (s) => s === 201 || s === 200);
-		const websiteId = added.body.website.websiteId;
-		const twinId = added.body.twin.websiteId;
+		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
+		expect(shows('10 recovery codes left')).toBe(true);
+		await press('Make new recovery codes');
+		const codesForm = /** @type {HTMLElement} */ (document.querySelector('form[aria-label="Make new recovery codes"]'));
+		type(byLabel(codesForm, 'Current password'), 'a brand new passphrase');
+		type(byLabel(codesForm, 'Two-step or recovery code'), /** @type {string} */ (recoveryCodes[0]));
+		await press('Make new recovery codes', codesForm);
+		const fresh = await a.waitCall('POST', '/v1/me/two-step/recovery-codes', (st) => st === 200);
+		await clickEl(byLabel(document, 'I have stored the recovery codes safely'));
+		await press('Done');
+		await press('Turn two-step off');
+		await press('Cancel');
+		await press('Turn two-step off');
+		const offForm = /** @type {HTMLElement} */ (document.querySelector('form[aria-label="Turn two-step off"]'));
+		type(byLabel(offForm, 'Current password'), 'a brand new passphrase');
+		type(byLabel(offForm, 'Two-step or recovery code'), /** @type {string} */ (fresh.body.recoveryCodes[0]));
+		await press('Turn two-step off', offForm);
+		await a.waitCall('POST', '/v1/me/two-step/off', (st) => st === 200);
 		cleanup();
-		render(<OnboardingView {...await loaders.loadOnboarding(a.api, merchantId, websiteId)} />);
-		expect(shows('Connect resources for shop.example.com')).toBe(true);
-		cleanup();
-		render(<OnboardingView {...await loaders.loadOnboarding(a.api, merchantId, undefined)} />);
-		expect(shows('You already have websites.')).toBe(true);
-		cleanup();
-
-		withToasts(<WebsitesView {...await loaders.loadWebsites(a.api, merchantId)} />);
-		expect(shows('shop.example.com')).toBe(true);
-		await press('Add website');
-		fillDialog('Domain', 'blog.example.com');
-		await pressDialog('Add website');
-		await until(() => a.calls.filter((c) => c.method === 'POST' && c.path.endsWith('/websites') && c.status < 300).length >= 2);
-		cleanup();
-		withToasts(<WebsitesView {...await loaders.loadWebsites(a.api, merchantId)} />);
-		await press('Delete blog.example.com');
-		await pressDialog('Delete website');
-		expect(dialog().querySelector('[role="alert"]')?.textContent).toBe('Type blog.example.com to confirm.');
-		fillDialog('Type blog.example.com to confirm', 'blog.example.com');
-		await pressDialog('Delete website');
-		await until(() => shows('blog.example.com deleted'));
-		await until(() => !shows('Delete blog.example.com') && buttons('Delete blog.example.com').length === 0);
-		// a delete the server refuses (already gone) shows its problem
-		await press('Delete shop.example.com');
-		await pressDialog('Cancel');
-		cleanup();
-		const blog = a.calls.find((c) => c.method === 'POST' && c.body?.website?.domain === 'blog.example.com');
-		const stale = await loaders.loadWebsites(a.api, merchantId);
-		if (!stale.ok) throw new Error('websites');
-		withToasts(<WebsitesView {...stale} websites={[...stale.websites, { ...blog?.body.website, status: 'active' }]} />);
-		await press('Delete blog.example.com');
-		fillDialog('Type blog.example.com to confirm', 'blog.example.com');
-		await pressDialog('Delete website');
-		await a.waitCall(
-			'DELETE',
-			(p) => p.endsWith(blog?.body.website.websiteId),
-			(s) => s >= 400,
-		);
-		expect(dialog().textContent).toMatch(/./);
-		cleanup();
-
-		const twinOverview = await loaders.loadWebsiteOverview(a.api, merchantId, twinId);
-		render(<WebsiteOverviewView {...twinOverview} />);
-		expect(shows('test twin')).toBe(true);
-		// nothing compiled yet: the install code (the stable loader URL) is already there
-		expect(twinOverview.ok && twinOverview.snippet).toMatchObject({ version: null, immutable: null });
-		expect(twinOverview.ok && twinOverview.snippet.alias.tag).toContain(`/w/${twinId}/loader.js`);
-		expect(shows('Copy install code') && shows('Paste this before </head> on every page of your site.')).toBe(true);
-		cleanup();
-		render(<InstallCodeCard snippet={null} />);
-		expect(shows('Your install code appears here once the website is loaded.')).toBe(true);
-		cleanup();
-		// the install code: the loader tag in a code block, copied to the clipboard
-		const tag = `<script src="https://portal.test/w/${twinId}/loader.js" crossorigin="anonymous" defer></script>`;
-		const writeText = vi.fn(async () => undefined);
-		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-		render(<InstallCodeCard snippet={{ alias: { tag } }} />);
-		expect(document.querySelector('code')?.textContent).toBe(tag);
-		expect(shows('Paste this before </head> on every page of your site.')).toBe(true);
-		await press('Copy');
-		expect(writeText).toHaveBeenCalledWith(tag);
-		await until(() => shows('Copied'));
-		vi.unstubAllGlobals();
-		a.use();
+		render(<AccountView ok={false} problem={{ status: 401, title: 'Unauthorized', code: 'unauthorized' }} />);
 		cleanup();
 
-		// ---------------------------------------------------------------- team: invite, accept, edit, remove, revoke
-		const me1 = (await loaders.loadSession(a.api)).ok ? /** @type {any} */ (await loaders.loadSession(a.api)).me : null;
-		withToasts(<TeamView {...await loaders.loadTeam(a.api, merchantId, me1)} />);
-		await press('Invite');
-		fillDialog('E-mail', 'nope');
-		await pressDialog('Send invitation');
-		expect(shows('Enter an e-mail address.')).toBe(true);
-		fillDialog('E-mail', 'dev@shop.test');
-		await check('Editor — element settings and content', dialog());
-		await pressDialog('Send invitation');
-		expect(shows('Give at least one role.')).toBe(true);
-		await check('Only some websites', dialog());
-		await check('Developer', dialog());
-		await pressDialog('Send invitation');
-		await until(() => shows('Invitation sent to dev@shop.test'));
-		await until(() => shows('dev@shop.test'));
-		// an invitation the server refuses (role outside the list) maps its problem
-		await press('Invite');
-		fillDialog('E-mail', 'x'.repeat(300) + '@shop.test');
-		await pressDialog('Send invitation');
-		await until(() => a.calls.some((c) => c.path.endsWith('/team/invites') && c.status >= 400));
-		await pressDialog('Cancel');
-		// another pending invitation, revoked
-		await press('Invite');
-		fillDialog('E-mail', 'temp@shop.test');
-		await pressDialog('Send invitation');
-		// the "sent" toast names the address before the list refreshes: wait for the invitation's own row
-		const tempRow = /** @type {HTMLElement} */ (
-			await until(() =>
-				[...document.querySelectorAll('li')].find(
-					(li) =>
-						li.textContent?.includes('temp@shop.test') &&
-						[...li.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Revoke'),
-				),
-			)
-		);
-		await clickEl(button('Revoke', tempRow));
-		await pressDialog('Revoke invitation');
-		await until(() => a.calls.some((c) => c.method === 'DELETE' && c.path.includes('/team/invites/')));
-		cleanup();
-
-		// the invitee accepts (new account)
+		// ---------------------------------------------------------------- sign-in with two-step and a recovery code
+		const b = browserOf(portal);
+		await b.api.post('/v1/auth/sign-in', { email: 'owner@shop.test', password: 'a brand new passphrase' });
+		const twoStep = await b.api.post('/v1/me/two-step/start');
+		const secret = twoStep.ok ? twoStep.data.secret : '';
+		await new Promise((resolve) => setTimeout(resolve, 1100));
+		const on = await b.api.post('/v1/me/two-step/confirm', { code: code(secret) });
+		const codes = on.ok ? on.data.recoveryCodes : [];
 		const c = browserOf(portal);
 		c.use();
-		setToken('');
-		render(<AcceptInviteView />);
-		await until(() => shows('This invitation link is incomplete'));
-		cleanup();
-		setToken(tokenOf('dev@shop.test', 'invite'));
-		render(<AcceptInviteView />);
-		await until(() => shows('Accept invitation'));
-		await press('Accept invitation');
-		expect(shows('Enter a password')).toBe(true);
-		fill('Your name', 'Dev');
-		fill('Password', 'short');
-		await press('Accept invitation');
-		await c.waitCall('POST', '/v1/auth/invites/accept', (s) => s >= 400);
-		fill('Password', 'developer password 1');
-		await press('Accept invitation');
-		await c.waitCall('POST', '/v1/auth/invites/accept', (s) => s === 200);
-		cleanup();
-
-		a.use();
-		withToasts(<TeamView {...await loaders.loadTeam(a.api, merchantId, me1)} />);
-		expect(shows('Website roles')).toBe(true);
-		await press('Edit');
-		expect(/** @type {HTMLInputElement} */ (byLabel(dialog(), 'Only some websites')).checked).toBe(true);
-		await check('All websites', dialog());
-		await check('Billing — credits, statements, spend cap', dialog());
-		await pressDialog('Save');
-		await until(() => shows('Access updated'));
-		await press('Remove');
-		await pressDialog('Remove member');
-		await until(() => shows('Member removed'));
-		cleanup();
-		// a member without manage rights sees no actions; failures of the page render a problem
-		render(<TeamView ok={false} problem={{ status: 403, title: 'Forbidden', code: 'forbidden' }} />);
-		expect(shows('No access')).toBe(true);
-		cleanup();
-
-		// ---------------------------------------------------------------- account: rename, password, MFA
-		withToasts(<AccountView {...await loaders.loadAccount(a.api, merchantId)} />);
-		expect(shows('Two-factor authentication')).toBe(true);
-		fill('Organisation name', 'Shop & Co Ltd');
-		await press('Rename');
-		await until(() => shows('Organisation renamed'));
-		await press('Change password');
-		expect(shows('Enter your current password.')).toBe(true);
-		fill('Current password', 'not my password');
-		fill('New password', 'brand new password 1');
-		fill('Repeat the new password', 'brand new password 1');
-		await press('Change password');
-		await a.waitCall('POST', '/v1/me/password', (s) => s >= 400);
-		await press('Set up two-factor authentication');
-		const enrol = await a.waitCall('POST', '/v1/me/mfa/enrol', (s) => s === 200);
-		const secret = String(enrol.body.secret);
-		fillDialog('Code from the app', '12');
-		await pressDialog('Turn on');
-		expect(shows('Enter the 6-digit code from your app.')).toBe(true);
-		fillDialog('Code from the app', '000000');
-		await pressDialog('Turn on');
-		await a.waitCall('POST', '/v1/me/mfa/confirm', (s) => s >= 400);
-		fillDialog('Code from the app', totpCode(secret, Date.now()));
-		await pressDialog('Turn on');
-		const confirmed = await a.waitCall('POST', '/v1/me/mfa/confirm', (s) => s === 200);
-		let codes = /** @type {string[]} */ (confirmed.body.recoveryCodes);
-		await until(() => shows('Your recovery codes'));
-		await act(async () => {
-			/** @type {HTMLButtonElement} */ (button('Copy', dialog())).click();
-		});
-		await pressDialog('I have saved them');
-		await until(() => shows('recovery codes left'));
-		await press('New recovery codes');
-		await pressDialog('Generate');
-		expect(shows('Enter a current code (or a recovery code).')).toBe(true);
-		fillDialog('Code or recovery code', 'zzzzz-zzzzz');
-		await pressDialog('Generate');
-		await a.waitCall('POST', '/v1/me/mfa/recovery-codes', (s) => s >= 400);
-		fillDialog('Code or recovery code', String(codes[0]));
-		await pressDialog('Generate');
-		const regenerated = await a.waitCall('POST', '/v1/me/mfa/recovery-codes', (s) => s === 200);
-		codes = regenerated.body.recoveryCodes;
-		await until(() => shows('Your recovery codes'));
-		await pressDialog('I have saved them');
-		cleanup();
-
-		// ---------------------------------------------------------------- sign in with the MFA challenge (browser B)
-		const b = browserOf(portal);
-		b.use();
-		render(<LoginView />);
+		render(<SignInView branding={BRANDING} firstAdmin={false} />);
 		fill('E-mail', 'owner@shop.test');
-		fill('Password', PASSWORD);
+		fill('Password', 'a brand new passphrase');
 		await press('Sign in');
-		await until(() => shows('Authentication code'));
+		await until(() => shows('Two-step sign-in'));
 		await press('Verify');
 		expect(shows('Enter the 6-digit code from your app.')).toBe(true);
-		fill('Authentication code', '000000');
+		fill('Code from the app', '000000');
 		await press('Verify');
-		await b.waitCall('POST', '/v1/auth/merchant/login/mfa', (s) => s >= 400);
+		await c.waitCall('POST', '/v1/auth/sign-in/two-step', (st) => st === 401);
 		await press('Use a recovery code instead');
 		fill('Recovery code', 'nope');
 		await press('Verify');
 		expect(shows('Enter a recovery code like abcde-fghij.')).toBe(true);
-		fill('Recovery code', String(codes[0]));
+		fill('Recovery code', codes[0]);
 		await press('Verify');
-		await b.waitCall('POST', '/v1/auth/merchant/login/mfa', (s) => s === 200);
+		await c.waitCall('POST', '/v1/auth/sign-in/two-step', (st) => st === 200);
 		cleanup();
 
-		// another organisation invites the owner: accepting with MFA goes through the challenge
-		const other = await world.signup('other@else.test', 'Else Ltd');
-		await other.b.api.post(`/v1/merchants/${other.merchantId}/team/invites`, {
-			email: 'owner@shop.test',
-			roles: ['admin'],
-		});
-		setToken(tokenOf('owner@shop.test', 'invite'));
-		render(<AcceptInviteView />);
-		await until(() => shows('Accept invitation'));
+		// ---------------------------------------------------------------- a suspended merchant sees the support contact
+		const suspended = await world.staff.api.post(`/v1/admin/merchants/${merchantId}/suspend`, { reason: 'check' });
+		expect(suspended.ok).toBe(true);
+		const d = browserOf(portal);
+		d.use();
+		render(<SignInView branding={BRANDING} firstAdmin={false} />);
+		fill('E-mail', 'owner@shop.test');
+		fill('Password', 'a brand new passphrase');
+		await press('Sign in');
+		await until(() => shows('Your account is suspended. Contact help@ss.test, +92 300 1234567.'));
+		cleanup();
+		await world.staff.api.post(`/v1/admin/merchants/${merchantId}/resume`, {});
+
+		// ---------------------------------------------------------------- Forgot password, reset and setup links, e-mail confirmation
+		const f = browserOf(portal);
+		f.use();
+		render(<ForgotPasswordView branding={BRANDING} />);
+		fill('E-mail', 'not an e-mail');
+		await press('Send the link');
+		expect(shows('Enter an e-mail address.')).toBe(true);
+		fill('E-mail', 'owner@shop.test');
+		await press('Send the link');
+		await until(() => shows('If this e-mail has a login, a link is on its way.'));
+		cleanup();
+		setToken('');
+		render(<ResetPasswordView branding={BRANDING} />);
+		await until(() => shows('This link is incomplete.'));
+		cleanup();
+		setToken(world.tokenOf('owner@shop.test', 'password_reset'));
+		render(<ResetPasswordView branding={BRANDING} />);
+		await until(() => shows('Choose a new password'));
+		fill('New password', 'short');
+		await press('Save the new password');
+		expect(shows('Use at least 12 characters.')).toBe(true);
+		fill('New password', 'yet another passphrase');
+		await press('Save the new password');
+		await f.waitCall('POST', '/v1/auth/reset-password', (st) => st === 204);
+		cleanup();
+		// setup link of a new merchant, and of an invited admin (who also enters a name)
+		await world.staff.api.post('/v1/admin/merchants', { name: 'Beta', ownerName: 'Bea', email: 'bea@beta.test' });
+		setToken(world.tokenOf('bea@beta.test', 'merchant_setup'));
+		render(<SetPasswordView branding={BRANDING} />);
+		await until(() => shows('Choose the password you will sign in with.'));
 		fill('Password', PASSWORD);
-		await press('Accept invitation');
-		await until(() => shows('Two-factor verification'));
-		await press('Use a recovery code instead');
-		fill('Recovery code', String(codes[1]));
-		await press('Verify');
-		await b.waitCall('POST', '/v1/auth/merchant/login/mfa', (s) => s === 200);
+		await press('Save and sign in');
+		await f.waitCall('POST', '/v1/auth/set-password', (st) => st === 200);
+		cleanup();
+		await world.staff.api.post('/v1/admin/admins', { email: 'sue@portal.test', role: 'support' });
+		setToken(world.tokenOf('sue@portal.test', 'admin_invite'));
+		render(<SetPasswordView branding={BRANDING} />);
+		await until(() => shows('Enter your name and choose the password'));
+		fill('Password', PASSWORD);
+		await press('Save and sign in');
+		expect(shows('Enter your name.')).toBe(true);
+		fill('Your name', 'Sue');
+		await press('Save and sign in');
+		await f.waitCall('POST', '/v1/auth/set-password', (st) => st === 200);
+		cleanup();
+		setToken('a'.repeat(43));
+		render(<SetPasswordView branding={BRANDING} />);
+		await until(() => shows('This link is invalid or has expired.'));
+		cleanup();
+		setToken('');
+		render(<SetPasswordView branding={BRANDING} />);
+		await until(() => shows('This link is incomplete.'));
+		cleanup();
+		setToken(world.tokenOf('owner2@shop.test', 'email_change_confirm'));
+		render(<ConfirmEmailView branding={BRANDING} />);
+		await f.waitCall('POST', '/v1/auth/confirm-email', (st) => st === 200);
+		cleanup();
+		setToken('a'.repeat(43));
+		render(<ConfirmEmailView branding={BRANDING} />);
+		await until(() => shows('This link is invalid or has expired.'));
+		cleanup();
+		setToken('');
+		render(<ConfirmEmailView branding={BRANDING} />);
+		await until(() => shows('This link is incomplete.'));
 		cleanup();
 
-		// ---------------------------------------------------------------- the frame: switchers, banner, sign out
-		const me2 = /** @type {any} */ (await loaders.loadSession(b.api));
-		expect(me2.me.memberships.length).toBe(2);
-		const frame = await loaders.loadFrame(a.api, merchantId);
+		// ---------------------------------------------------------------- websites: the welcome, then the list and the install code
+		const e = browserOf(portal);
+		e.use();
+		await e.api.post('/v1/auth/sign-in', { email: 'bea@beta.test', password: PASSWORD });
+		const beta = /** @type {any} */ (await loaders.loadSession(e.api));
+		render(<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId)} branding={BRANDING} />);
+		expect(shows('Your admin will add your websites and products.') && shows('help@ss.test')).toBe(true);
+		cleanup();
+		const site = await world.addWebsite(beta.merchantId, 'beta.example.com');
+		render(<WebsitesView {...await loaders.loadWebsites(e.api, beta.merchantId)} branding={BRANDING} />);
+		expect(shows('beta.example.com')).toBe(true);
+		cleanup();
+		const twinOverview = await loaders.loadWebsiteOverview(e.api, beta.merchantId, site.twin.websiteId);
+		render(<WebsiteOverviewView {...twinOverview} />);
+		expect(shows('test twin')).toBe(true);
+		cleanup();
+		render(<InstallCodeCard snippet={null} />);
+		expect(shows('Your install code appears here once the website is loaded.')).toBe(true);
+		cleanup();
+		const tag = `<script src="https://portal.test/w/${site.twin.websiteId}/loader.js" crossorigin="anonymous" defer></script>`;
+		const writeText = vi.fn(async () => undefined);
+		vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+		render(<InstallCodeCard snippet={{ alias: { tag } }} />);
+		await press('Copy');
+		expect(writeText).toHaveBeenCalledWith(tag);
+		vi.unstubAllGlobals();
+		e.use();
+		cleanup();
+
+		// ---------------------------------------------------------------- the frame: website switcher, banners, sign out
+		const frame = await loaders.loadFrame(e.api, beta.merchantId);
 		const low = { balanceMillicredits: 5000, burnRatePerHour: 1000, hoursRemaining: 5, subscriptions: [] };
 		render(
-			<PathnameContext.Provider value={`/websites/${twinId}/keys`}>
-				<ConsoleShell me={me2.me} merchantId={me2.merchantId} websites={frame.websites} meter={low}>
+			<PathnameContext.Provider value={`/websites/${site.twin.websiteId}/keys`}>
+				<ConsoleShell
+					me={beta.me}
+					merchantId={beta.merchantId}
+					websites={frame.websites}
+					meter={low}
+					branding={{ name: 'Acme', accent: '#112233' }}
+					notifications={[
+						{ kind: 'identity_issuer_request', websiteId: site.website.websiteId, domain: 'beta.example.com', request: {} },
+					]}>
 					<p>child</p>
 				</ConsoleShell>
 			</PathnameContext.Provider>,
 		);
-		expect(shows('child') && shows('of credits left')).toBe(true);
-		expect(shows('shop.example.com · test')).toBe(true);
-		const [orgSelect, siteSelect] = /** @type {HTMLSelectElement[]} */ ([...document.querySelectorAll('select')]);
+		expect(shows('child') && shows('of credits left') && shows('Acme')).toBe(true);
+		expect(shows('beta.example.com · test')).toBe(true);
+		const [siteSelect] = /** @type {HTMLSelectElement[]} */ ([...document.querySelectorAll('select')]);
 		type(/** @type {HTMLSelectElement} */ (siteSelect), '');
-		type(/** @type {HTMLSelectElement} */ (siteSelect), websiteId);
-		const target = me2.me.memberships.find((/** @type {any} */ m) => m.merchantId !== me2.merchantId).merchantId;
-		type(/** @type {HTMLSelectElement} */ (orgSelect), target);
-		await b.waitCall('POST', '/v1/me/merchant', (s) => s === 200);
+		type(/** @type {HTMLSelectElement} */ (siteSelect), site.website.websiteId);
 		await clickEl(
 			/** @type {HTMLButtonElement} */ (
 				[...document.querySelectorAll('button')].find((x) => x.textContent?.includes('Sign out'))
 			),
 		);
-		await b.waitCall('POST', '/v1/auth/merchant/logout');
+		await e.waitCall('POST', '/v1/auth/sign-out');
 		cleanup();
 		render(
 			<PathnameContext.Provider value="/websites">
 				<ConsoleShell
-					me={me1}
-					merchantId={merchantId}
+					me={beta.me}
+					merchantId={beta.merchantId}
 					websites={frame.websites}
 					meter={{ balanceMillicredits: 0, burnRatePerHour: 1000, subscriptions: [{}] }}>
 					<p>x</p>
@@ -429,95 +370,9 @@ describe('merchant console interactions (jsdom): account, websites, team', () =>
 			</PathnameContext.Provider>,
 		);
 		expect(shows('Your credit balance is empty')).toBe(true);
-		await clickEl(
-			/** @type {HTMLButtonElement} */ (
-				[...document.querySelectorAll('button')].find((x) => x.textContent?.includes('Sign out'))
-			),
-		);
 		cleanup();
-
-		// ---------------------------------------------------------------- account: sessions, MFA off, password
-		const d = browserOf(portal);
-		d.use();
-		await d.api.post('/v1/auth/merchant/login', { email: 'owner@shop.test', password: PASSWORD }).then(async (r) => {
-			if (r.ok && r.data?.status === 'mfa_required')
-				await d.api.post('/v1/auth/merchant/login/mfa', { challenge: r.data.challenge, recoveryCode: codes[2] });
-		});
-		// a second session of the same user (browser E) to revoke
-		const e = browserOf(portal);
-		const login = await e.api.post('/v1/auth/merchant/login', { email: 'owner@shop.test', password: PASSWORD });
-		if (login.ok && login.data?.status === 'mfa_required')
-			await e.api.post('/v1/auth/merchant/login/mfa', { challenge: login.data.challenge, recoveryCode: codes[3] });
-		const account = await loaders.loadAccount(d.api, merchantId);
-		withToasts(<AccountView {...account} />);
-		await until(() => shows('This device'));
-		const otherRow = /** @type {HTMLTableRowElement} */ (
-			[...document.querySelectorAll('tbody tr')].find((tr) => !tr.textContent?.includes('This device'))
-		);
-		await clickEl(button('Sign out', otherRow));
-		await pressDialog('Sign out');
-		await until(() => shows('Session signed out'));
-		await press('Turn off');
-		await pressDialog('Turn off');
-		expect(shows('Enter your password and a code')).toBe(true);
-		fillDialog('Password', 'wrong password!!');
-		fillDialog('Code or recovery code', String(codes[4]));
-		await pressDialog('Turn off');
-		await d.waitCall('POST', '/v1/me/mfa/disable', (s) => s >= 400);
-		fillDialog('Password', PASSWORD);
-		fillDialog('Code or recovery code', String(codes[5]));
-		await pressDialog('Turn off');
-		await until(() => shows('Two-factor authentication turned off'));
-		fill('Current password', PASSWORD);
-		fill('New password', 'brand new password 1');
-		fill('Repeat the new password', 'brand new password 2');
-		await press('Change password');
-		expect(shows('The passwords do not match.')).toBe(true);
-		fill('Repeat the new password', 'brand new password 1');
-		await press('Change password');
-		await until(() => shows('Password changed'));
-		const currentRow = /** @type {HTMLTableRowElement} */ (
-			[...document.querySelectorAll('tbody tr')].find((tr) => tr.textContent?.includes('This device'))
-		);
-		await clickEl(button('Sign out', currentRow));
-		await d.waitCall('POST', '/v1/auth/merchant/logout');
-		cleanup();
-		render(<AccountView ok={false} problem={{ status: 401, title: 'Unauthorized', code: 'unauthorized' }} />);
-		expect(shows('Sign in')).toBe(true);
-		cleanup();
-
-		// ---------------------------------------------------------------- forgot / reset password
-		const f = browserOf(portal);
-		f.use();
-		render(<ForgotPasswordView />);
-		await press('Send reset link');
-		expect(shows('Enter your e-mail address.')).toBe(true);
-		fill('E-mail', 'owner@shop.test');
-		await press('Send reset link');
-		await until(() => shows('If an account exists for owner@shop.test'));
-		cleanup();
-		setToken('');
-		render(<ResetPasswordView />);
-		await until(() => shows('This link is incomplete'));
-		cleanup();
-		setToken('bogus-token');
-		render(<ResetPasswordView />);
-		await until(() => shows('Choose a new password'));
-		fill('New password', 'another password 12');
-		fill('Repeat the password', 'another password 12');
-		await press('Save password');
-		await f.waitCall('POST', '/v1/auth/merchant/password-reset/confirm', (s) => s >= 400);
-		cleanup();
-		setToken(tokenOf('owner@shop.test', 'password_reset'));
-		render(<ResetPasswordView />);
-		await until(() => shows('New password'));
-		fill('New password', 'short');
-		await press('Save password');
-		expect(shows('Use at least 12 characters.') && shows('The passwords do not match.')).toBe(true);
-		fill('New password', 'another password 12');
-		fill('Repeat the password', 'another password 12');
-		await press('Save password');
-		await f.waitCall('POST', '/v1/auth/merchant/password-reset/confirm', (s) => s < 300);
+		render(<QrCode text="otpauth://totp/x" size={64} />);
+		expect(document.querySelector('svg')?.getAttribute('width')).toBe('64');
 		cleanup();
 
 		// ---------------------------------------------------------------- client helpers
@@ -540,9 +395,6 @@ describe('merchant console interactions (jsdom): account, websites, team', () =>
 		signInAgain();
 		setToken('abc');
 		expect(takeFragmentToken()).toBe('abc');
-		expect(secondFactor('123456')).toEqual({ code: '123456' });
-		expect(secondFactor('abcde-fghij')).toEqual({ recoveryCode: 'abcde-fghij' });
-		expect(secondFactor('x')).toBeNull();
 		anonymous.use();
 		function Probe() {
 			const r = useResource('/v1/me', null);

@@ -33,7 +33,7 @@ import {
 import { Link } from '../../link.js';
 import { adminFetch, useAdminResource, usePagedList } from '../client.js';
 import { ID, adminApi, adminRoutes } from '../paths.js';
-import { ActionProblem, AdminProblem, Crumbs, IdChip, parseSignedCredits, staffCan } from './common.js';
+import { ActionProblem, AdminProblem, Crumbs, IdChip, parseSignedCredits, adminCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
@@ -45,7 +45,7 @@ export const CREDIT_KINDS = Object.freeze({
 });
 
 /**
- * @param {any} props loader result of `loadFinance` plus `staff`
+ * @param {any} props loader result of `loadFinance` plus `admin`
  */
 export function FinanceView(props) {
 	const [merchantId, setMerchantId] = useState('');
@@ -144,7 +144,7 @@ export function AlertsCard({ alerts }) {
 }
 
 /**
- * @param {any} props loader result of `loadLedger` plus `staff`
+ * @param {any} props loader result of `loadLedger` plus `admin`
  */
 export function LedgerView(props) {
 	const ok = props.ok === true;
@@ -158,8 +158,8 @@ export function LedgerView(props) {
 	const [verifying, setVerifying] = useState(false);
 	const [verifyProblem, setVerifyProblem] = useState(/** @type {Problem | null} */ (null));
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.finance(), label: 'Back to finance' }} />;
-	const { merchant, staff } = props;
-	const canAdjust = staffCan(staff, 'platform.credits.adjust');
+	const { merchant, admin } = props;
+	const canAdjust = adminCan(admin, 'credits.add');
 
 	const verify = async () => {
 		setVerifying(true);

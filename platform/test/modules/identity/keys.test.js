@@ -10,7 +10,7 @@ afterAll(teardownMongo, 60_000);
 /** @param {Awaited<ReturnType<typeof boot>>} h */
 const site = async (h, domain = 'shop.example.com') => {
 	const owner = await h.signupOwner(`owner@${domain}`);
-	const created = await owner.client.post(`/v1/merchants/${owner.merchantId}/websites`, { domain });
+	const created = await owner.admin.post(`/v1/merchants/${owner.merchantId}/websites`, { domain });
 	const websiteId = created.json.website.websiteId;
 	const base = `/v1/merchants/${owner.merchantId}/websites/${websiteId}/keys`;
 	return { ...owner, websiteId, twinId: created.json.twin.websiteId, base };

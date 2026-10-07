@@ -1,5 +1,5 @@
 /**
- * Authentication primitives for Portal consoles (staff and merchant users). Identity modules own the user records;
+ * Authentication primitives for Portal consoles (admins and merchants). Identity modules own the user records;
  * this module owns the mechanisms:
  *
  * - **Passwords**: scrypt (N = 2^15, r = 8, p = 1, 64-byte key, 16-byte per-user salt), self-describing hashes
@@ -7,8 +7,9 @@
  *   enumeration by timing) and `needsRehash` for parameter upgrades.
  * - **TOTP** (RFC 6238 over RFC 4226 HOTP, `node:crypto`): base32 secrets, ±1 step window, replay refusal via the
  *   last accepted step; **recovery codes** shown once and stored as HMAC hashes.
- * - **Sessions**: opaque 256-bit tokens, stored only as HMAC-SHA-256(session secret, token); idle + absolute expiry
- *   (TTL index on `expireAt`); rotation on privilege change (new token, old one deleted); revoke one / revoke all.
+ * - **Sessions**: opaque 256-bit tokens, stored only as HMAC-SHA-256(session secret, token); one lifetime from sign-in
+ *   (Settings → Security → Session length; TTL index on `expireAt`); rotation on privilege change (new token, old one
+ *   deleted); revoke one / revoke all.
  *   Cookies are `HttpOnly; Secure; SameSite=Lax; Path=/` with the `__Host-` prefix whenever Secure.
  * - **Login throttling** per account and per IP (Mongo documents with TTL), with progressive account lockouts.
  * - **CSRF** for cookie-authenticated mutations: strict `Sec-Fetch-Site` and `Origin` checks (see `checkCsrf`).
@@ -271,17 +272,15 @@ export const findRecoveryCode = (code, hashes, secret) => {
 // ---------------------------------------------------------------------------------------------------------------
 // Sessions
 
-/** @typedef {'staff' | 'merchant'} SessionKind */
+/** @typedef {'admin' | 'merchant'} SessionKind */
 
 /**
  * @typedef {object} Session
  * @property {string} id stable non-secret identifier (the stored hash) — safe for audit logs and session lists
  * @property {SessionKind} kind
- * @property {string} subject user id
- * @property {string | null} merchantId
- * @property {string[]} roles
- * @property {Array<{ websiteId: string, roles: string[] }>} grants
- * @property {boolean} mfa second factor completed
+ * @property {string} subject admin id or merchant id (one login = one admin or one merchant, PLAN 0.2)
+ * @property {string | null} merchantId the merchant id of a merchant session, else null
+ * @property {boolean} mfa false while an admin must still set two-step up (Require two-step for admins)
  * @property {Date} createdAt
  * @property {Date} lastSeenAt
  * @property {Date} expiresAt min(idle expiry, absolute expiry)
@@ -292,9 +291,6 @@ export const findRecoveryCode = (code, hashes, secret) => {
  * @typedef {object} SessionInput
  * @property {SessionKind} kind
  * @property {string} subject
- * @property {string | null} [merchantId]
- * @property {string[]} [roles]
- * @property {Array<{ websiteId: string, roles: string[] }>} [grants]
  * @property {boolean} [mfa]
  * @property {string | null} [ip]
  * @property {string | null} [userAgent]
@@ -311,9 +307,7 @@ const toSession = (doc) =>
 		id: String(doc._id),
 		kind: doc.kind,
 		subject: doc.subject,
-		merchantId: doc.merchantId ?? null,
-		roles: doc.roles ?? [],
-		grants: doc.grants ?? [],
+		merchantId: doc.kind === 'merchant' ? doc.subject : null,
 		mfa: doc.mfa === true,
 		createdAt: doc.createdAt,
 		lastSeenAt: doc.lastSeenAt,
@@ -349,9 +343,6 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 			_id: idOf(token),
 			kind: input.kind,
 			subject: input.subject,
-			merchantId: input.merchantId ?? null,
-			roles: input.roles ?? [],
-			grants: input.grants ?? [],
 			mfa: input.mfa === true,
 			ip: input.ip ?? null,
 			userAgent: input.userAgent ? String(input.userAgent).slice(0, 256) : null,
@@ -398,10 +389,10 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 			return toSession(doc);
 		},
 		/**
-		 * Replace the session with a new token (privilege change, MFA completion, role change). The absolute expiry
-		 * is kept; the old token stops working immediately.
+		 * Replace the session with a new token (two-step set up). The absolute expiry is kept; the old token stops
+		 * working immediately.
 		 * @param {unknown} token
-		 * @param {Partial<Pick<SessionInput, 'roles' | 'grants' | 'mfa' | 'merchantId'>>} [changes]
+		 * @param {Partial<Pick<SessionInput, 'mfa'>>} [changes]
 		 * @returns {Promise<{ token: string, session: Session } | null>}
 		 */
 		rotate: async (token, changes = {}) => {
@@ -412,9 +403,6 @@ export const createSessions = ({ repo, secret, policies, now = Date.now, randomB
 			return insert({
 				kind: doc.kind,
 				subject: doc.subject,
-				merchantId: changes.merchantId === undefined ? doc.merchantId : changes.merchantId,
-				roles: changes.roles ?? doc.roles,
-				grants: changes.grants ?? doc.grants,
 				mfa: changes.mfa ?? doc.mfa,
 				ip: doc.ip,
 				userAgent: doc.userAgent,
@@ -516,21 +504,15 @@ export const readCookie = (header, name) => {
 };
 
 /**
- * Build an RBAC actor from a session (the default `sessionActor` port; identity modules may override it to load
- * live roles).
+ * Build an RBAC actor from a session (the default `sessionActor` port, without a role; the identity module overrides
+ * it to load the live role and status).
  * @param {Session} session
  * @returns {Actor}
  */
 export const actorFromSession = (session) =>
-	session.kind === 'staff'
-		? { type: 'staff', id: session.subject, roles: session.roles }
-		: {
-				type: 'merchant_user',
-				id: session.subject,
-				roles: session.roles,
-				grants: session.grants,
-				...(session.merchantId ? { merchantId: session.merchantId } : {}),
-			};
+	session.kind === 'admin'
+		? { type: 'admin', id: session.subject }
+		: { type: 'merchant', id: session.subject, merchantId: session.subject };
 
 // ---------------------------------------------------------------------------------------------------------------
 // Login throttling

@@ -2,6 +2,7 @@
  * Small fakes of the modules `connectors` depends on (INTERFACES.md): identity.getWebsite, commerce
  * subscriptionsForWebsite/invalidate, catalog getManifest + the appKeys port, integration emitControl.
  */
+import { testSessionActor } from '../../../helpers.js';
 import { createKeyResolver } from '@ss/protocol';
 import { defineModule } from '../../../../src/infra/modules.js';
 import { problem } from '../../../../src/infra/http.js';
@@ -20,6 +21,7 @@ import { problem } from '../../../../src/infra/http.js';
 export const fakeModules = (state) => [
 	defineModule({
 		name: 'identity',
+		ports: () => ({ sessionActor: testSessionActor }),
 		service: () => ({
 			getWebsite: async (/** @type {string} */ websiteId) => {
 				const w = state.websites.get(websiteId);

@@ -5,7 +5,7 @@
  * Pipeline per request:
  *
  *   request id → route match (404 / 405, CORS preflight) → body read with a byte cap (413) → authentication
- *   (`staff` | `merchant` session cookie, `websiteKey`, `product` client assertion, `public`) → CSRF for
+ *   (`admin` | `merchant` session cookie, `websiteKey`, `product` client assertion, `public`) → CSRF for
  *   cookie-authenticated mutations (403) → RBAC permission (403) → rate limit (429 + `RateLimit-*`) → JSON body
  *   (415 / 400) → `Idempotency-Key` on POST (428 / 409 / replay) → handler → RFC 9457 problems for every error.
  *
@@ -19,7 +19,7 @@
  */
 import { createId } from '@ss/contracts';
 import { checkCsrf } from './auth.js';
-import { requestOrigin, runInRequestScope } from './request-scope.js';
+import { runInRequestScope } from './request-scope.js';
 import { hmacHex, isObject, sha256Hex } from './util.js';
 
 /** @typedef {import('./logger.js').Logger} Logger */
@@ -30,10 +30,10 @@ import { hmacHex, isObject, sha256Hex } from './util.js';
 /** @typedef {import('./stores.js').RateLimitStore} RateLimitStore */
 /** @typedef {import('@ss/contracts').ProblemFactory} ProblemFactory */
 
-/** @typedef {'staff' | 'merchant' | 'websiteKey' | 'product' | 'public'} AuthMode */
+/** @typedef {'admin' | 'merchant' | 'websiteKey' | 'product' | 'public'} AuthMode */
 /** @typedef {'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'} Method */
 
-export const AUTH_MODES = Object.freeze(/** @type {AuthMode[]} */ (['staff', 'merchant', 'websiteKey', 'product', 'public']));
+export const AUTH_MODES = Object.freeze(/** @type {AuthMode[]} */ (['admin', 'merchant', 'websiteKey', 'product', 'public']));
 const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -50,6 +50,7 @@ const IDEMPOTENCY_TTL_MS = 24 * 60 * 60_000;
  */
 export const INFRA_PROBLEMS = Object.freeze({
 	idempotency_replay_no_body: Object.freeze({ status: 409, title: 'Idempotent replay without a stored response' }),
+	two_step_required: Object.freeze({ status: 403, title: 'Two-step sign-in must be set up first' }),
 });
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -218,7 +219,8 @@ export const paginate = ({ cursor, limit, url } = {}, { defaultLimit = 20, maxLi
  * @property {AuthMode | AuthMode[]} auth one mode, or several tried in order (first credential present decides)
  * @property {string} [permission] RBAC permission checked against `resource(ctx)`
  * @property {(ctx: RequestContext) => Resource} [resource] default `{ merchantId: params.merchantId ?? actor.merchantId, websiteId: params.websiteId }`
- * @property {boolean} [mfa] staff sessions must have completed MFA (default true; false only for the MFA step itself)
+ * @property {boolean} [mfa] admin sessions must have no pending two-step setup (default true; false for the routes
+ *   that set two-step up, show the signed-in person and sign out)
  * @property {'pk' | 'sk'} [keyKind] websiteKey: restrict to one key kind
  * @property {string[]} [scopes] websiteKey: scopes the key must grant
  * @property {boolean | 'optional' | 'no-store'} [idempotent] POST: true = Idempotency-Key required (routes that create
@@ -433,7 +435,9 @@ const readBody = async (request, max) => {
  *   maxBodyBytes?: number,
  *   basePath?: string,
  *   afterResponse?: (input: AfterResponse) => void,
- * }} options `afterResponse` schedules the deferred tasks and any background work after each response
+ *   allowedOrigin: string,
+ * }} options `afterResponse` schedules the deferred tasks and any background work after each response;
+ *   `allowedOrigin` is the only origin cookie-authenticated writes may come from (`PORTAL_URL`, PLAN 0.8.1)
  * @returns {(request: Request) => Promise<Response>}
  */
 export const createApiHandler = ({
@@ -450,6 +454,7 @@ export const createApiHandler = ({
 	maxBodyBytes = 1024 * 1024,
 	basePath = '/api',
 	afterResponse,
+	allowedOrigin,
 }) => {
 	if (!idempotencySecret || idempotencySecret.length < 32)
 		throw new TypeError('idempotencySecret (at least 32 bytes) is required for request fingerprints');
@@ -613,7 +618,7 @@ export const createApiHandler = ({
 
 			// CSRF (cookie sessions only)
 			if (auth.cookie) {
-				const csrf = checkCsrf({ method, headers: request.headers, allowedOrigin: requestOrigin(request) });
+				const csrf = checkCsrf({ method, headers: request.headers, allowedOrigin });
 				if (!csrf.ok) return fail(problem('forbidden', 'Cross-site request refused.'));
 			}
 

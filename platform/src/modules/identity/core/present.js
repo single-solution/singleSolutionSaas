@@ -6,14 +6,37 @@
 /** @param {Date | null | undefined} d */
 export const iso = (d) => (d instanceof Date ? d.toISOString() : null);
 
-/** @param {Record<string, any>} m */
-export const presentMerchant = (m) => ({
+/** @param {Record<string, any>} a two-step state of a login */
+export const twoStepOf = (a) => ({
+	enabled: Boolean(a.totp),
+	recoveryCodesLeft: a.totp ? (a.recoveryHashes ?? []).length : 0,
+});
+
+/**
+ * A merchant as admins and the merchant itself see it (PLAN 0.2 Merchants). The suspension reason is internal: it is
+ * shown to admins only (`forAdmin`).
+ * @param {Record<string, any>} m
+ * @param {{ forAdmin?: boolean }} [options]
+ */
+export const presentMerchant = (m, { forAdmin = true } = {}) => ({
 	merchantId: String(m._id),
 	name: m.name,
+	ownerName: m.ownerName ?? null,
+	email: m.email ?? null,
+	phone: m.phone ?? null,
+	address: m.address ?? null,
+	country: m.country ?? null,
 	status: m.status,
-	ownerUserId: m.ownerUserId ?? null,
-	suspension: m.suspension ? { reason: m.suspension.reason, at: iso(m.suspension.at), by: m.suspension.by } : null,
+	setupPending: m.status !== 'deleted' && !m.passwordHash,
+	twoStep: twoStepOf(m),
+	...(forAdmin
+		? {
+				suspension: m.suspension ? { reason: m.suspension.reason, at: iso(m.suspension.at), by: m.suspension.by } : null,
+				lastSignInAt: iso(m.lastSignInAt),
+			}
+		: {}),
 	createdAt: iso(m.createdAt),
+	deletedAt: iso(m.deletedAt),
 });
 
 /** @param {Record<string, any>} w */
@@ -24,7 +47,7 @@ export const presentWebsite = (w) => ({
 	env: w.env,
 	twinId: w.twinId,
 	status: w.status,
-	// website settings (F.16): products read them from the entitlement document's `website` section
+	// website settings (F.16) until the switch (PLAN 0.12 step 5)
 	timeZone: w.settings?.timeZone ?? null,
 	language: w.settings?.language ?? null,
 	currency: w.settings?.currency ?? null,
@@ -32,53 +55,14 @@ export const presentWebsite = (w) => ({
 	deletedAt: iso(w.deletedAt),
 });
 
-/** @param {Record<string, any>} u */
-const mfaOf = (u) => ({ enabled: Boolean(u.totp), recoveryCodesLeft: u.totp ? (u.recoveryHashes ?? []).length : 0 });
-
-/** @param {Record<string, any>} u */
-export const presentUser = (u) => ({
-	userId: String(u._id),
-	email: u.email,
-	name: u.name ?? null,
-	status: u.status,
-	mfa: mfaOf(u),
-	createdAt: iso(u.createdAt),
-});
-
-/** @param {Record<string, any>} s */
-export const presentStaff = (s) => ({
-	staffId: String(s._id),
-	login: s.login ?? null,
-	email: s.email ?? null,
-	name: s.name ?? null,
-	roles: [...(s.roles ?? [])],
-	status: s.status,
-	mfa: mfaOf(s),
-	passwordSet: Boolean(s.passwordHash),
-	createdAt: iso(s.createdAt),
-});
-
-/**
- * @param {Record<string, any>} m membership
- * @param {Record<string, any> | null | undefined} user
- */
-export const presentMember = (m, user) => ({
-	userId: m.userId,
-	email: user?.email ?? null,
-	name: user?.name ?? null,
-	roles: [...(m.roles ?? [])],
-	grants: (m.grants ?? []).map((/** @type {any} */ g) => ({ websiteId: g.websiteId, roles: [...g.roles] })),
-	status: user?.status ?? 'unknown',
-	createdAt: iso(m.createdAt),
-});
-
-/** @param {Record<string, any>} i */
-export const presentInvite = (i) => ({
-	inviteId: String(i._id),
-	email: i.email,
-	roles: [...(i.roles ?? [])],
-	grants: (i.grants ?? []).map((/** @type {any} */ g) => ({ websiteId: g.websiteId, roles: [...g.roles] })),
-	status: i.status,
-	expiresAt: iso(i.expiresAt),
-	createdAt: iso(i.createdAt),
+/** @param {Record<string, any>} a */
+export const presentAdmin = (a) => ({
+	adminId: String(a._id),
+	name: a.name ?? null,
+	email: a.email,
+	role: a.role,
+	status: a.status,
+	twoStep: twoStepOf(a),
+	lastSignInAt: iso(a.lastSignInAt),
+	createdAt: iso(a.createdAt),
 });

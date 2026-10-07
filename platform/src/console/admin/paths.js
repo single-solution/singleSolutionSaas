@@ -1,6 +1,6 @@
 /**
- * Admin Console URLs and the staff API paths it calls (ids are URL-encoded). Every admin route lives under
- * `/admin`; the staff session is the separate `__Host-ss_staff` cookie (PLAN §11, infra auth).
+ * Admin Console URLs and the admin API paths it calls (ids are URL-encoded). Every admin route lives under `/admin`;
+ * the admin session is the separate `__Host-ss_admin` cookie. Admins sign in on the one sign-in page (`/login`).
  * @module
  */
 
@@ -18,11 +18,10 @@ export const query = (params) => {
 
 /** Admin Console page URLs. */
 export const adminRoutes = Object.freeze({
-	login: (next = '') => (next ? `/admin/login?next=${e(next)}` : '/admin/login'),
-	forgotPassword: () => '/admin/forgot-password',
+	login: (next = '') => (next ? `/login?next=${e(next)}` : '/login'),
+	overview: () => '/admin',
 	merchants: (/** @type {{ status?: string | null, q?: string | null }} */ q = {}) => `/admin/merchants${query(q)}`,
-	merchant: (/** @type {string} */ id) => `/admin/merchants/${e(id)}`,
-	websites: (/** @type {{ domain?: string | null, env?: string | null }} */ q = {}) => `/admin/websites${query(q)}`,
+	merchant: (/** @type {string} */ id, /** @type {string | null} */ tab = null) => `/admin/merchants/${e(id)}${query({ tab })}`,
 	apps: (/** @type {{ status?: string | null, kind?: string | null }} */ q = {}) => `/admin/apps${query(q)}`,
 	app: (/** @type {string} */ id) => `/admin/apps/${e(id)}`,
 	policies: (/** @type {string} */ id) => `/admin/apps/${e(id)}/policies`,
@@ -32,45 +31,48 @@ export const adminRoutes = Object.freeze({
 	ledger: (/** @type {string} */ merchantId) => `/admin/finance/${e(merchantId)}`,
 	connectors: (/** @type {{ merchantId?: string | null, kind?: string | null, status?: string | null }} */ q = {}) =>
 		`/admin/connectors${query(q)}`,
-	audit: (/** @type {{ actorId?: string | null, targetId?: string | null, action?: string | null }} */ q = {}) =>
-		`/admin/audit${query(q)}`,
-	staff: () => '/admin/staff',
+	activity: (
+		/** @type {{ merchantId?: string | null, adminId?: string | null, from?: string | null, to?: string | null }} */ q = {},
+	) => `/admin/activity${query(q)}`,
+	admins: () => '/admin/admins',
 	settings: () => '/admin/settings',
 	account: () => '/admin/account',
 });
 
-/** Staff API paths. */
+/** Admin API paths. */
 export const adminApi = Object.freeze({
 	me: () => '/v1/me',
-	mePassword: () => '/v1/me/password',
-	logout: () => '/v1/auth/staff/logout',
-	login: () => '/v1/auth/staff/login',
-	firstAdmin: () => '/v1/auth/staff/first-admin',
-	mfaVerify: () => '/v1/auth/staff/mfa/verify',
-	mfaEnrol: () => '/v1/auth/staff/mfa/enrol',
-	mfaConfirm: () => '/v1/auth/staff/mfa/confirm',
-	passwordReset: () => '/v1/auth/staff/password-reset',
-	passwordResetConfirm: () => '/v1/auth/staff/password-reset/confirm',
+	signOut: () => '/v1/auth/sign-out',
+	myActivity: () => '/v1/me/activity',
+	overview: () => '/v1/admin/overview',
 
 	// identity
 	merchants: (/** @type {{ status?: string | null, q?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
 		`/v1/admin/merchants${query(q)}`,
 	merchant: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}`,
-	/** `POST { name, ownerEmail, ownerName? }` → `{ merchant, owner, setupLink, setupLinkExpiresAt, mailed }` */
+	/** `POST { name, ownerName, email, phone?, address?, country? }` → `{ merchant, setup: { link, expiresAt, mailed } }` */
 	createMerchant: () => '/v1/admin/merchants',
+	bulk: () => '/v1/admin/merchants/bulk',
 	suspend: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/suspend`,
 	resume: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/resume`,
-	/** `GET` staff notes (newest first) / `POST { body }` (append-only) */
-	notes: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/notes`,
-	team: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/team`,
-	websiteLookup: (/** @type {{ domain: string, env?: string | null }} */ q) => `/v1/admin/websites${query(q)}`,
-	transfer: (/** @type {string} */ w) => `/v1/admin/websites/${e(w)}/transfer`,
-	staffList: () => '/v1/admin/staff',
-	// system settings (kept in the database; never environment variables)
-	settings: () => '/v1/admin/system/settings',
-	settingsMail: () => '/v1/admin/system/settings/mail',
-	staffMember: (/** @type {string} */ s) => `/v1/admin/staff/${e(s)}`,
-	staffMfaReset: (/** @type {string} */ s) => `/v1/admin/staff/${e(s)}/mfa/reset`,
+	/** `POST { copy? }` → `{ link (copy only), expiresAt, mailed }` */
+	setupLink: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/setup-link`,
+	merchantTwoStepOff: (/** @type {string} */ m) => `/v1/admin/merchants/${e(m)}/two-step/off`,
+	websites: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/websites`,
+	website: (/** @type {string} */ m, /** @type {string} */ w) => `/v1/merchants/${e(m)}/websites/${e(w)}`,
+	merchantActivity: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/activity`,
+	admins: () => '/v1/admin/admins',
+	admin: (/** @type {string} */ a) => `/v1/admin/admins/${e(a)}`,
+	adminInvite: (/** @type {string} */ a) => `/v1/admin/admins/${e(a)}/invite`,
+	adminTwoStepOff: (/** @type {string} */ a) => `/v1/admin/admins/${e(a)}/two-step/off`,
+	// settings (kept in the database; never environment variables)
+	settings: () => '/v1/admin/settings',
+	settingsMail: () => '/v1/admin/settings/mail',
+	settingsMailTest: () => '/v1/admin/settings/mail/test',
+	settingsBranding: () => '/v1/admin/settings/branding',
+	settingsLogo: () => '/v1/admin/settings/branding/logo',
+	settingsSupport: () => '/v1/admin/settings/support',
+	settingsSecurity: () => '/v1/admin/settings/security',
 
 	// catalog
 	apps: (/** @type {{ status?: string | null, kind?: string | null, cursor?: string | null, limit?: number }} */ q = {}) =>
@@ -121,15 +123,16 @@ export const adminApi = Object.freeze({
 	) => `/v1/admin/connectors${query(q)}`,
 
 	// system
-	/** newest-first audit entries `{ items, nextCursor }` */
-	audit: (
-		/** @type {{ actorId?: string | null, targetId?: string | null, action?: string | null, cursor?: string | null }} */ q = {},
-	) => `/v1/admin/audit${query(q)}`,
+	/** newest-first Activity entries `{ items, nextCursor }` */
+	activity: (
+		/** @type {{ merchantId?: string | null, adminId?: string | null, from?: string | null, to?: string | null, cursor?: string | null }} */ q = {},
+	) => `/v1/admin/activity${query(q)}`,
 });
 
 /** Id shapes accepted from query strings (anything else is ignored). */
 export const ID = Object.freeze({
 	merchant: /^mer_[0-9a-z]{10,64}$/,
+	admin: /^adm_[0-9a-z]{10,64}$/,
 	website: /^web_[0-9a-z]{10,64}$/,
 	app: /^app_[0-9a-z]{10,64}$/,
 	subscription: /^sub_[0-9a-z]{10,64}$/,

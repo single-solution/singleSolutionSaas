@@ -1,23 +1,21 @@
 /**
- * Collections of the `identity` module. Control-plane records only (PLAN §1a): accounts, memberships, websites,
- * domain claims, website-key metadata and hashed one-time tokens. No password, token or key is stored in clear:
- * passwords are scrypt hashes, TOTP secrets are sealed with the envelope, one-time tokens and recovery codes are
- * HMACs, `sk_` keys are `hashSecretKey` HMACs and `pk_` keys are not stored at all.
+ * Collections of the `identity` module (PLAN 0.2): admins, merchants (one record = business details + one login),
+ * the login e-mails (unique across admins and merchants), one-time tokens, websites, domain claims and — until the
+ * switch (PLAN 0.12 step 5) — website-key metadata and identity issuers. No password, token or key is stored in clear:
+ * passwords are scrypt hashes, two-step secrets are sealed with `ENCRYPTION_KEY`, one-time tokens and recovery codes
+ * are HMACs, `sk_` keys are `hashSecretKey` HMACs and `pk_` keys are not stored at all.
  * @module
  */
 import { defineCollection } from '../../infra/db.js';
 
 export const C = Object.freeze({
-	staff: 'identity_staff',
-	users: 'identity_users',
+	admins: 'identity_admins',
 	merchants: 'identity_merchants',
-	memberships: 'identity_memberships',
-	invites: 'identity_invites',
+	logins: 'identity_logins',
 	tokens: 'identity_tokens',
 	websites: 'identity_websites',
 	domains: 'identity_domains',
 	keys: 'identity_website_keys',
-	notes: 'identity_merchant_notes',
 	issuers: 'identity_issuers',
 	issuerRequests: 'identity_issuer_requests',
 });
@@ -25,50 +23,33 @@ export const C = Object.freeze({
 export const collections = Object.freeze([
 	defineCollection({
 		module: 'identity',
-		name: C.staff,
+		name: C.admins,
 		description:
-			'Staff users (platform roles, optional TOTP; the first admin has `login: "admin"` and may have no e-mail). `_id` = staffId.',
-		indexes: [{ keys: { email: 1 }, unique: true }],
-	}),
-	defineCollection({
-		module: 'identity',
-		name: C.users,
-		description: 'Merchant users (global accounts; membership per merchant). `_id` = userId.',
-		indexes: [{ keys: { email: 1 }, unique: true }],
+			'Admins: name, login e-mail, one role (owner | support | finance), status invited | active, optional two-step. The first admin carries `firstAdmin: true` (unique), so only one can be created that way. `_id` = adminId.',
+		indexes: [
+			{ keys: { email: 1 }, unique: true },
+			{ keys: { firstAdmin: 1 }, name: 'first_admin', unique: true, partialFilterExpression: { firstAdmin: true } },
+			{ keys: { role: 1, status: 1 } },
+		],
 	}),
 	defineCollection({
 		module: 'identity',
 		name: C.merchants,
 		description:
-			'Merchants (tenant roots): name, `nameKey` (normalised name for prefix search), status active|suspended, owner. `_id` = merchantId.',
-		indexes: [{ keys: { status: 1, _id: 1 } }, { keys: { nameKey: 1, _id: 1 } }],
+			'Merchants: business details plus exactly one login (owner e-mail, password, optional two-step); status active | suspended | deleted; `nameKey` for prefix search. `_id` = merchantId.',
+		indexes: [{ keys: { status: 1, _id: 1 } }, { keys: { nameKey: 1, _id: 1 } }, { keys: { email: 1 } }],
 	}),
 	defineCollection({
 		module: 'identity',
-		name: C.memberships,
-		description: 'Merchant team members: merchant-wide roles and website-scoped grants.',
-		tenant: 'merchant',
-		indexes: [{ keys: { merchantId: 1, userId: 1 }, unique: true }, { keys: { userId: 1, createdAt: 1 } }],
-	}),
-	defineCollection({
-		module: 'identity',
-		name: C.invites,
-		description: 'Pending team invitations; only the HMAC of the invite token is stored.',
-		tenant: 'merchant',
-		indexes: [
-			{ keys: { tokenHash: 1 }, unique: true },
-			{
-				keys: { merchantId: 1, email: 1 },
-				name: 'pending_email',
-				unique: true,
-				partialFilterExpression: { status: 'pending' },
-			},
-		],
+		name: C.logins,
+		description:
+			'Login e-mails, unique across admins and merchants (`_id` = the lower-cased e-mail): `{ kind: admin | merchant, subject }`. Claimed before a login is created or changed, released when it is erased.',
 	}),
 	defineCollection({
 		module: 'identity',
 		name: C.tokens,
-		description: 'Single-use tokens (signup, password reset, MFA challenges); `_id` = HMAC of the token.',
+		description:
+			'Single-use tokens (setup links, password resets, e-mail changes, two-step sign-in steps); `_id` = HMAC of the token.',
 		timestamps: false,
 		ttl: { field: 'expireAt', afterSeconds: 0 },
 		indexes: [{ keys: { purpose: 1, subject: 1 } }],
@@ -76,10 +57,12 @@ export const collections = Object.freeze([
 	defineCollection({
 		module: 'identity',
 		name: C.websites,
-		description: 'Websites (live + test twin share the domain, distinct ids).',
+		description:
+			'Websites: one exact domain each, unique among active websites (a test twin shares it until the switch, PLAN 0.12 step 5).',
 		tenant: 'merchant',
 		indexes: [
 			{ keys: { merchantId: 1, status: 1, createdAt: 1 } },
+			{ keys: { domain: 1, status: 1 } },
 			{
 				keys: { domain: 1, env: 1 },
 				name: 'active_domain_env',
@@ -91,7 +74,7 @@ export const collections = Object.freeze([
 	defineCollection({
 		module: 'identity',
 		name: C.domains,
-		description: 'Global domain claims (`_id` = normalised domain); deleted websites keep the claim for a cooldown.',
+		description: 'Domain claims of active websites (`_id` = normalised domain); released at once when the website is removed.',
 	}),
 	defineCollection({
 		module: 'identity',
@@ -99,14 +82,6 @@ export const collections = Object.freeze([
 		description: 'Website key metadata (sk_: HMAC only; pk_: nothing) and revocation schedule. `_id` = keyId.',
 		tenant: 'merchant',
 		indexes: [{ keys: { merchantId: 1, websiteId: 1, createdAt: -1 } }, { keys: { revokeAt: 1, _id: 1 } }],
-	}),
-	defineCollection({
-		module: 'identity',
-		name: C.notes,
-		description: 'Staff notes on merchants (append-only; author staff id, body ≤ 2000 chars).',
-		tenant: 'merchant',
-		appendOnly: true,
-		indexes: [{ keys: { merchantId: 1, createdAt: -1, _id: -1 } }],
 	}),
 	defineCollection({
 		module: 'identity',

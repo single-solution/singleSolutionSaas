@@ -1,6 +1,7 @@
 /**
  * Fake identity, catalog and commerce modules implementing the INTERFACES.md functions the integration module uses.
  */
+import { testSessionActor } from '../../../helpers.js';
 import { createKeyResolver } from '@ss/protocol';
 import { problem } from '../../../../src/infra/http.js';
 import { defineModule } from '../../../../src/infra/modules.js';
@@ -45,6 +46,7 @@ export const createWorld = () => {
 			},
 		}),
 		ports: () => ({
+			sessionActor: testSessionActor,
 			websiteKeyRevoked: (/** @type {any} */ claims) => {
 				if (state.failures.revocation) throw new Error('identity down');
 				return state.revoked.has(claims.keyId);

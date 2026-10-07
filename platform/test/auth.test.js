@@ -122,7 +122,7 @@ describe('TOTP (RFC 6238)', () => {
 
 describe('cookies', () => {
 	it('serialises HttpOnly SameSite=Lax cookies with the __Host- prefix when secure', () => {
-		expect(sessionCookieName('staff', true)).toBe('__Host-ss_staff');
+		expect(sessionCookieName('admin', true)).toBe('__Host-ss_admin');
 		expect(sessionCookieName('merchant', false)).toBe('ss_merchant');
 		expect(serializeCookie('__Host-ss_staff', 'abc', { secure: true, maxAgeSeconds: 60.7 })).toBe(
 			'__Host-ss_staff=abc; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=60',
@@ -166,33 +166,21 @@ describe('CSRF', () => {
 describe('actorFromSession', () => {
 	const base = {
 		id: 'h',
-		subject: 'usr_1',
-		roles: ['owner'],
-		grants: [],
 		mfa: true,
 		createdAt: new Date(),
 		lastSeenAt: new Date(),
 		expiresAt: new Date(),
 		absoluteExpiresAt: new Date(),
 	};
-	it('maps staff and merchant sessions', () => {
-		expect(actorFromSession({ ...base, kind: 'staff', merchantId: null, roles: ['admin'] })).toEqual({
-			type: 'staff',
-			id: 'usr_1',
-			roles: ['admin'],
+	it('maps admin and merchant sessions (one login = one admin or one merchant)', () => {
+		expect(actorFromSession({ ...base, kind: 'admin', subject: 'adm_1', merchantId: null })).toEqual({
+			type: 'admin',
+			id: 'adm_1',
 		});
-		expect(actorFromSession({ ...base, kind: 'merchant', merchantId: MERCHANT })).toEqual({
-			type: 'merchant_user',
-			id: 'usr_1',
-			roles: ['owner'],
-			grants: [],
+		expect(actorFromSession({ ...base, kind: 'merchant', subject: MERCHANT, merchantId: MERCHANT })).toEqual({
+			type: 'merchant',
+			id: MERCHANT,
 			merchantId: MERCHANT,
-		});
-		expect(actorFromSession({ ...base, kind: 'merchant', merchantId: null })).toEqual({
-			type: 'merchant_user',
-			id: 'usr_1',
-			roles: ['owner'],
-			grants: [],
 		});
 	});
 });

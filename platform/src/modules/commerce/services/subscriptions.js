@@ -37,7 +37,7 @@ import { overlaySwitches, resolverState, sameElements, statusOf, withHold } from
  * @property {string} type
  * @property {string} id
  * @property {string} [merchantId]
- * @property {string[]} [roles]
+ * @property {string | null} [role]
  */
 /** @typedef {{ actor: Actor, requestId?: string | null, ip?: string | null }} Caller */
 
@@ -503,7 +503,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		if (sub.cancelledAt) throw problem('gone', 'The subscription is cancelled.');
 		const { product } = await deps.manifestOf(sub.appId, sub.manifestVersion);
 		if (!product.elements[elementKey]) throw problem('not_found', `No element ${elementKey} in this product.`);
-		const staff = caller.actor.type === 'staff' || caller.actor.type === 'system';
+		const staff = caller.actor.type === 'admin' || caller.actor.type === 'system';
 		const layer = staff ? 'admin' : 'website';
 		for (let attempt = 0; attempt < 5; attempt += 1) {
 			const switches = { website: { ...(sub.switches?.website ?? {}) }, admin: { ...(sub.switches?.admin ?? {}) } };
@@ -549,7 +549,7 @@ export const createSubscriptions = ({ ctx, repo, deps, ledger }) => {
 		const book = currentPriceBook(product, now);
 		if (!book) throw problem('conflict', 'The product has no effective price book.');
 		const candidate = { ...sub, planCode };
-		const staff = caller.actor.type === 'staff' || caller.actor.type === 'system';
+		const staff = caller.actor.type === 'admin' || caller.actor.type === 'system';
 		const conflicts = staff
 			? { notInPlan: [], unmet: [] }
 			: configurationConflicts(product, candidate, await deps.layersFor(sub));

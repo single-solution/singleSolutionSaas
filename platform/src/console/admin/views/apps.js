@@ -38,14 +38,14 @@ import {
 import { Link } from '../../link.js';
 import { adminFetch, adminUpload, useAdminResource, usePagedList } from '../client.js';
 import { ID, adminApi, adminRoutes } from '../paths.js';
-import { ActionProblem, AdminProblem, Crumbs, IdChip, localProblem, staffCan } from './common.js';
+import { ActionProblem, AdminProblem, Crumbs, IdChip, localProblem, adminCan } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
 
 const STATUSES = ['active', 'inactive'];
 
 /**
- * @param {any} props loader result of `loadApps` plus `staff`
+ * @param {any} props loader result of `loadApps` plus `admin`
  */
 export function AppsView(props) {
 	const ok = props.ok === true;
@@ -56,7 +56,7 @@ export function AppsView(props) {
 	);
 	const [dialog, setDialog] = useState(/** @type {null | 'add' | 'pack'} */ (null));
 	if (!ok) return <AdminProblem problem={props.problem} />;
-	const canManage = staffCan(props.staff, 'platform.apps.manage');
+	const canManage = adminCan(props.admin, 'products.manage');
 	return (
 		<div className="space-y-6">
 			<PageHeader
@@ -420,7 +420,7 @@ export const hasWidgets = (/** @type {any} */ manifest) =>
 	(manifest?.elements ?? []).some((/** @type {any} */ e) => (e.modes ?? []).includes('A'));
 
 /**
- * @param {any} props loader result of `loadApp` plus `staff`
+ * @param {any} props loader result of `loadApp` plus `admin`
  */
 export function AppView(props) {
 	const toast = useToast();
@@ -432,9 +432,9 @@ export function AppView(props) {
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
 	const [retrying, setRetrying] = useState(false);
 	if (!ok) return <AdminProblem problem={props.problem} back={{ href: adminRoutes.apps(), label: 'Back to apps' }} />;
-	const { staff, manifest } = props;
-	const canManage = staffCan(staff, 'platform.apps.manage');
-	const canLaunch = staffCan(staff, 'platform.launch.admin');
+	const { admin, manifest } = props;
+	const canManage = adminCan(admin, 'products.manage');
+	const canLaunch = adminCan(admin, 'dashboards.open');
 	const upload = app.kind === 'pack' ? 'Upload pack version' : hasWidgets(manifest) ? 'Upload widgets' : null;
 
 	const setStatus = async (/** @type {boolean} */ active) => {
@@ -499,7 +499,7 @@ export function AppView(props) {
 								{upload}
 							</Button>
 						) : null}
-						{app.kind === 'service' && staffCan(staff, 'platform.jobs.manage') ? (
+						{app.kind === 'service' && adminCan(admin, 'products.manage') ? (
 							<Button
 								variant="secondary"
 								onClick={() => void retryDeliveries()}
@@ -540,7 +540,7 @@ export function AppView(props) {
 				</div>
 			</Card>
 
-			{canLaunch && app.kind === 'service' ? <LaunchCard app={app} staff={staff} /> : null}
+			{canLaunch && app.kind === 'service' ? <LaunchCard app={app} admin={admin} /> : null}
 
 			{upload ? <PackDialog open={uploading} onClose={() => setUploading(false)} title={upload} onDone={reload} /> : null}
 		</div>
@@ -550,10 +550,10 @@ export function AppView(props) {
 /**
  * Open the product as admin (production): scoped to one merchant (optionally one website) or app-wide (`all`,
  * superadmin/admin).
- * @param {{ app: any, staff: any }} props
+ * @param {{ app: any, admin: any }} props
  */
-function LaunchCard({ app, staff }) {
-	const allowAll = (staff?.roles ?? []).some((/** @type {string} */ r) => r === 'superadmin' || r === 'admin');
+function LaunchCard({ app, admin }) {
+	const allowAll = adminCan(admin, 'products.manage');
 	const [scope, setScope] = useState('merchant');
 	const [merchantId, setMerchantId] = useState('');
 	const [websiteId, setWebsiteId] = useState('');

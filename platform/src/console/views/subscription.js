@@ -17,7 +17,6 @@ import {
 	Icon,
 	KeyValueList,
 	PageHeader,
-	RadioGroup,
 	StatusBadge,
 	Switch,
 	Tabs,
@@ -29,6 +28,7 @@ import {
 	humanize,
 	useToast,
 } from '@ss/ui';
+import { MERCHANT } from '../../texts/console.js';
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
@@ -84,34 +84,18 @@ export const availability = (sub, product, key) => {
 };
 
 /**
- * Plan change and lifecycle calls of a subscription, shared by the Merchant Console and the Admin Console
- * (`fetcher = adminFetch`).
- * @param {typeof apiFetch} fetcher
- * @param {string} merchantId
- * @param {string} subscriptionId
- */
-export const subscriptionCalls = (fetcher, merchantId, subscriptionId) => ({
-	/** @param {string} planCode '' = no plan */
-	changePlan: (planCode) =>
-		fetcher(`${api.subscription(merchantId, subscriptionId)}/plan`, { method: 'PUT', body: { planCode: planCode || null } }),
-	/** @param {'pause' | 'resume' | 'cancel'} action */
-	lifecycle: (action) => fetcher(`${api.subscription(merchantId, subscriptionId)}/${action}`, { method: 'POST', body: {} }),
-});
-
-/**
  * @param {any} props loader result of `loadSubscription`
  */
 export function SubscriptionView(props) {
 	const toast = useToast();
-	const [sub, setSub] = useState(props.ok ? props.subscription : null);
+	const [sub] = useState(props.ok ? props.subscription : null);
 	const [overview, setOverview] = useState(props.ok ? props.overview : null);
 	const [effective, setEffective] = useState(props.ok ? props.effective : null);
 	const [history, setHistory] = useState(props.ok ? props.history : { items: [], nextCursor: null });
 	const [tab, setTab] = useState('elements');
 	const [pending, setPending] = useState(/** @type {string | null} */ (null));
 	const [problem, setProblem] = useState(/** @type {Problem | null} */ (null));
-	const [confirm, setConfirm] = useState(/** @type {null | 'cancel' | 'pause' | 'plan' | { rollback: number }} */ (null));
-	const [planChoice, setPlanChoice] = useState(props.ok ? (props.subscription?.planCode ?? '') : '');
+	const [confirm, setConfirm] = useState(/** @type {null | { rollback: number }} */ (null));
 	const [loadingMore, setLoadingMore] = useState(false);
 	if (!props.ok || !sub) return <PageProblem problem={props.problem} />;
 	const { merchantId, website, product, meterLine } = props;
@@ -130,57 +114,6 @@ export function SubscriptionView(props) {
 		if (h.ok) setHistory(h.data);
 	};
 
-	/** @param {string} key @param {boolean} enabled */
-	const toggle = async (key, enabled) => {
-		setPending(key);
-		setProblem(null);
-		const result = await apiFetch(`${api.subscription(merchantId, sub.subscriptionId)}/elements/${encodeURIComponent(key)}`, {
-			method: 'PUT',
-			body: { enabled },
-		});
-		setPending(null);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setSub(result.data.subscription);
-		toast.show({
-			title: `${product?.elements?.find((/** @type {any} */ e) => e.key === key)?.name ?? key} ${enabled ? 'switched on' : 'switched off'}`,
-		});
-		await refreshConfig();
-	};
-	/** @param {'pause' | 'resume' | 'cancel'} action */
-	const lifecycle = async (action) => {
-		setPending(action);
-		setProblem(null);
-		const result = await subscriptionCalls(apiFetch, merchantId, sub.subscriptionId).lifecycle(action);
-		setPending(null);
-		setConfirm(null);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setSub(result.data.subscription);
-		toast.show({
-			title:
-				action === 'pause' ? 'Subscription paused' : action === 'resume' ? 'Subscription resumed' : 'Subscription cancelled',
-		});
-		await refreshConfig();
-	};
-	const changePlan = async () => {
-		setPending('plan');
-		setProblem(null);
-		const result = await subscriptionCalls(apiFetch, merchantId, sub.subscriptionId).changePlan(planChoice);
-		setPending(null);
-		setConfirm(null);
-		if (!result.ok) {
-			setProblem(result.problem);
-			return;
-		}
-		setSub(result.data.subscription);
-		toast.show({ title: 'Plan changed', description: planChoice ? `Now on ${planChoice}.` : 'No plan.' });
-		await refreshConfig();
-	};
 	const launch = async () => {
 		setPending('launch');
 		setProblem(null);
@@ -220,18 +153,11 @@ export function SubscriptionView(props) {
 
 	const elements = /** @type {any[]} */ (product?.elements ?? []);
 	const plans = /** @type {any[]} */ (product?.plans ?? []);
-	const estimateFor = (/** @type {string} */ code) =>
-		code
-			? (plans.find((p) => p.code === code)?.includedHourlyMillicredits ?? 0)
-			: (product?.price?.allElementsHourlyMillicredits ?? 0);
 	const adminLocks = overview?.layers?.admin?.elements ?? {};
 	const canLaunch = product?.kind === 'service';
 
 	const elementsPanel = (
-		<Card
-			title="Elements"
-			subtitle="Switch elements on or off. Each running element is billed per started hour."
-			padded={false}>
+		<Card title="Elements" subtitle={MERCHANT.featuresByAdmin} padded={false}>
 			{elements.length === 0 ? (
 				<div className="p-5">
 					<EmptyState compact title="This product lists no elements" />
@@ -248,8 +174,7 @@ export function SubscriptionView(props) {
 							<li key={el.key} className="px-5 py-4">
 								<Switch
 									checked={on}
-									onChange={(next) => void toggle(el.key, next)}
-									disabled={!live || pending !== null || avail === 'unavailable'}
+									disabled
 									locked={locked}
 									lockedLabel="Set by admin"
 									label={el.name}
@@ -300,21 +225,6 @@ export function SubscriptionView(props) {
 				) : (
 					<div className="space-y-5">
 						<PlanComparison product={product} />
-						<RadioGroup
-							legend="Choose a plan"
-							value={planChoice}
-							onChange={setPlanChoice}
-							disabled={!live}
-							options={plans.map((p) => ({
-								value: p.code,
-								label: `${p.name ?? p.code} — ${formatCreditsPerHour(p.includedHourlyMillicredits)}`,
-							}))}
-						/>
-						<div className="flex justify-end">
-							<Button disabled={!live || planChoice === (sub.planCode ?? '')} onClick={() => setConfirm('plan')}>
-								Change plan
-							</Button>
-						</div>
 					</div>
 				)}
 			</Card>
@@ -357,7 +267,7 @@ export function SubscriptionView(props) {
 									</p>
 									<p className="text-xs text-muted">
 										{formatDateTime(v.at)} ·{' '}
-										{v.actor?.type === 'staff' ? 'Platform staff' : v.actor?.type === 'system' ? 'System' : 'Your team'}
+										{v.actor?.type === 'admin' ? 'Your admin' : v.actor?.type === 'system' ? 'System' : 'You'}
 										{v.reason ? ` · “${v.reason}”` : ''}
 									</p>
 									<ul className="space-y-0.5">
@@ -389,42 +299,18 @@ export function SubscriptionView(props) {
 	);
 
 	const confirmProps =
-		confirm === 'cancel'
+		confirm && typeof confirm === 'object'
 			? {
-					title: `Cancel ${name}?`,
-					body: 'All elements stop at once and billing ends with the current hour. You can subscribe again later.',
-					label: 'Cancel subscription',
-					danger: true,
-					run: () => lifecycle('cancel'),
+					title: confirm.rollback === 0 ? 'Restore defaults?' : `Roll back to version ${confirm.rollback}?`,
+					body:
+						confirm.rollback === 0
+							? 'Every website override is removed; settings follow your plan and organisation defaults.'
+							: 'The settings of that version become a new version. Nothing is deleted.',
+					label: 'Roll back',
+					danger: false,
+					run: () => rollback(/** @type {{ rollback: number }} */ (confirm).rollback),
 				}
-			: confirm === 'pause'
-				? {
-						title: `Pause ${name}?`,
-						body: 'Elements stop showing on your site. Paused hours are never billed.',
-						label: 'Pause',
-						danger: false,
-						run: () => lifecycle('pause'),
-					}
-				: confirm === 'plan'
-					? {
-							title: `Switch to ${planChoice || 'no plan'}?`,
-							body: `New estimate: ${formatCreditsPerHour(estimateFor(planChoice))} (now ${formatCreditsPerHour(meterLine?.burnRatePerHour ?? estimateFor(sub.planCode ?? ''))}).`,
-							label: 'Change plan',
-							danger: false,
-							run: changePlan,
-						}
-					: confirm && typeof confirm === 'object'
-						? {
-								title: confirm.rollback === 0 ? 'Restore defaults?' : `Roll back to version ${confirm.rollback}?`,
-								body:
-									confirm.rollback === 0
-										? 'Every website override is removed; settings follow your plan and organisation defaults.'
-										: 'The settings of that version become a new version. Nothing is deleted.',
-								label: 'Roll back',
-								danger: false,
-								run: () => rollback(/** @type {{ rollback: number }} */ (confirm).rollback),
-							}
-						: null;
+			: null;
 
 	return (
 		<div className="space-y-6">
@@ -453,21 +339,6 @@ export function SubscriptionView(props) {
 								disabled={!live}
 								icon={<Icon name="external" size={14} />}>
 								Open in product
-							</Button>
-						) : null}
-						{sub.status === 'active' ? (
-							<Button variant="secondary" onClick={() => setConfirm('pause')} disabled={pending !== null}>
-								Pause
-							</Button>
-						) : null}
-						{sub.status === 'paused' ? (
-							<Button onClick={() => void lifecycle('resume')} loading={pending === 'resume'}>
-								Resume
-							</Button>
-						) : null}
-						{live ? (
-							<Button variant="ghost" onClick={() => setConfirm('cancel')} disabled={pending !== null}>
-								Cancel subscription
 							</Button>
 						) : null}
 					</>

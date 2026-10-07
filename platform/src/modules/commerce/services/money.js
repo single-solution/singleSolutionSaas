@@ -63,7 +63,7 @@ export const createMoney = ({ ctx, repo, deps, ledger, settlement }) => {
 	/** @param {Caller} caller */
 	const assertStaff = (caller) => {
 		const actor = /** @type {any} */ (caller.actor);
-		if (!actor || (actor.type !== 'system' && !(actor.type === 'staff' && ctx.rbac.can(actor, 'platform.credits.adjust'))))
+		if (!actor || (actor.type !== 'system' && !(actor.type === 'admin' && ctx.rbac.can(actor, 'credits.add'))))
 			throw problem('forbidden', 'Only staff can move credits.');
 	};
 

@@ -29,6 +29,8 @@ import { platformError } from './errors.js';
  * @property {import('@ss/contracts').ProblemFactory} problems
  * @property {import('./crypto.js').PortalKeys} keys Portal signer(s), JWKS, resolver over our own keys
  * @property {import('./crypto.js').Envelope} envelope seal/open client credentials
+ * @property {import('./crypto.js').Envelope} secretBox seal/open the Portal's stored secrets with `ENCRYPTION_KEY`
+ *   (SMTP password, two-step secrets; PLAN 0.4.8)
  * @property {ReturnType<typeof import('./crypto.js').createSecretHasher>} secretHasher website secret keys at rest
  * @property {import('./audit.js').Audit} audit
  * @property {import('./jobs.js').Jobs} jobs
@@ -37,11 +39,11 @@ import { platformError } from './errors.js';
  *   transaction; pass `{ session }` to every repository call inside it
  * @property {import('./authenticators.js').WebsiteKeyVerifier} verifyWebsiteKey the `websiteKey` authenticator's
  *   verification, for keys carried outside the `Authorization` header (throws infra problems)
- * @property {import('./mailer.js').Mailer} mailer platform mailer (verify e-mail, password reset, invite, staff setup)
+ * @property {import('./mailer.js').Mailer} mailer platform mailer (setup links, invites, resets, e-mail changes, two-step notices)
  * @property {import('./auth.js').Sessions} sessions
  * @property {import('./auth.js').LoginThrottle} loginThrottle
  * @property {import('@ss/protocol').ReplayStore} replayStore
- * @property {{ name: (kind: 'staff' | 'merchant') => string, set: (kind: 'staff' | 'merchant', token: string, maxAgeSeconds: number) => string, clear: (kind: 'staff' | 'merchant') => string }} cookies
+ * @property {{ name: (kind: 'admin' | 'merchant') => string, set: (kind: 'admin' | 'merchant', token: string, maxAgeSeconds: number) => string, clear: (kind: 'admin' | 'merchant') => string }} cookies
  * @property {{ can: typeof import('./rbac.js').can, websitesVisible: typeof import('./rbac.js').websitesVisible }} rbac
  * @property {import('./system.js').SystemStore | null} system generated secrets and recorded settings (admin settings,
  *   key rotation); null when the Portal was built without one (tests)

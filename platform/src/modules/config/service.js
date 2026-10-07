@@ -380,7 +380,7 @@ export const createConfigService = (ctx) => {
 	 * @param {unknown} reason
 	 */
 	const reasonFor = (level, actor, reason) => {
-		const parsed = parseReason(reason, STAFF_LEVELS.has(level) && actor?.type === 'staff');
+		const parsed = parseReason(reason, STAFF_LEVELS.has(level) && actor?.type === 'admin');
 		if (!parsed.ok)
 			throw fail('validation_failed', parsed.message, [{ path: '/reason', message: parsed.message, code: 'invalid_reason' }]);
 		return parsed.value;

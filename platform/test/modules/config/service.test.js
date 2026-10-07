@@ -25,8 +25,8 @@ const fresh = (options) => {
 	return boot({ db: mongo.db(`cfg_svc_${n}`), fakes: createFakes(options) });
 };
 
-const staff = /** @type {any} */ ({ type: 'staff', id: 'stf_admin', roles: ['admin'] });
-const merchantA = /** @type {any} */ ({ type: 'merchant_user', id: 'usr_a', merchantId: MER_A, roles: ['owner'] });
+const staff = /** @type {any} */ ({ type: 'admin', id: 'adm_owner', role: 'owner' });
+const merchantA = /** @type {any} */ ({ type: 'merchant', id: MER_A, merchantId: MER_A });
 
 /**
  * @param {Promise<unknown>} promise
@@ -275,7 +275,7 @@ describe('versioning and rollback', () => {
 		expect(page1.items.map((i) => i.version)).toEqual([3, 2]);
 		expect(page1.items[0]).toMatchObject({
 			kind: 'change',
-			actor: { type: 'merchant_user', id: 'usr_a', merchantId: MER_A },
+			actor: { type: 'merchant', id: MER_A, merchantId: MER_A },
 			manifestVersion: '1.4.0',
 		});
 		expect(page1.items[0]?.diff.map((/** @type {any} */ d) => d.key)).toEqual(['codes.maxActive', 'codes.prefix']);

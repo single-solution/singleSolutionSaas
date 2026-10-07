@@ -1,6 +1,6 @@
 /**
  * Admin Console page loaders: the data each page needs, read through the in-process {@link ConsoleApi} with the
- * staff session cookie (public staff API only — "every UI action is an API call"). A loader resolves to
+ * admin session cookie (public admin API only — "every UI action is an API call"). A loader resolves to
  * `{ ok: true, ... }` or `{ ok: false, status, problem }` (the first required call that failed); optional reads
  * degrade to empty values (`section(...)` keeps the problem so the page can say why a section is empty). Loaders never
  * throw for API failures. Query-string inputs are validated here; anything malformed is ignored.
@@ -33,17 +33,6 @@ const firstFailure = (...results) => {
 	return null;
 };
 
-/**
- * An optional section of a page: its data (or the fallback) and the problem that emptied it.
- * @template T
- * @param {ApiResult<T>} result
- * @param {T} fallback
- */
-const section = (result, fallback) => ({
-	data: result.ok ? result.data : fallback,
-	problem: result.ok ? null : result.problem,
-});
-
 /** @param {ApiResult<any>} r */
 const itemsOf = (r) => /** @type {any[]} */ (orElse(r, { items: [] })?.items ?? []);
 
@@ -69,129 +58,79 @@ const oneOf = (value, allowed) => (typeof value === 'string' && allowed.includes
 const CURSOR = /^[A-Za-z0-9_=-]{1,512}$/;
 const FREE_TEXT = /^[^<>]{1,120}$/;
 
-/** Problem of a staff session that has not completed its second factor. */
-export const MFA_PENDING = 'mfa_pending';
-
 /**
- * The signed-in staff member (console frame). A half-signed session (password only) is reported as
- * `{ ok: false, status: 401, problem: { code: 'mfa_pending' } }` so pages send it back to the sign-in flow.
+ * The signed-in admin (console frame). A signed-in merchant gets `{ ok: false, status: 403, merchant: true }` (the page
+ * sends them to the merchant console).
  * @param {ConsoleApi} api
  */
-export const loadStaffSession = async (api) => {
+export const loadAdminSession = async (api) => {
 	const me = await api.get(paths.me());
-	if (!me.ok) {
-		if (me.status === 403 && /two-factor/i.test(me.problem.detail ?? ''))
-			return /** @type {LoadFailure} */ ({
-				ok: false,
-				status: 401,
-				problem: { status: 401, code: MFA_PENDING, title: 'Two-factor authentication required' },
-			});
-		return /** @type {LoadFailure} */ ({ ok: false, status: me.status, problem: me.problem });
-	}
-	if (me.data?.kind !== 'staff')
-		return /** @type {LoadFailure} */ ({
+	if (!me.ok) return /** @type {LoadFailure & { merchant?: boolean }} */ ({ ok: false, status: me.status, problem: me.problem });
+	if (me.data?.kind !== 'admin')
+		return /** @type {LoadFailure & { merchant?: boolean }} */ ({
 			ok: false,
-			status: 401,
-			problem: { status: 401, title: 'Unauthorized', detail: 'The admin console needs a staff account.' },
+			status: 403,
+			merchant: me.data?.kind === 'merchant',
+			problem: { status: 403, title: 'Forbidden', detail: 'The admin console needs an admin login.' },
 		});
-	return { ok: /** @type {const} */ (true), me: me.data, staff: /** @type {any} */ (me.data.staff) };
+	return {
+		ok: /** @type {const} */ (true),
+		me: me.data,
+		admin: /** @type {any} */ (me.data.admin),
+		twoStepRequired: me.data.twoStepRequired === true,
+	};
 };
 
-const DOMAIN = /^(?=.{1,253}$)[a-z0-9-]+(\.[a-z0-9-]+)+$/;
-
 /**
- * Merchants page. The search box takes a merchant id (exact lookup), a domain (owner of the live or test website)
- * or a name / e-mail prefix (`GET /v1/admin/merchants?q=`: case- and accent-insensitive name prefix, or a team
- * member's e-mail prefix when it contains `@`).
+ * Merchants page: search by business name, owner e-mail or website domain (prefixes), filter by status, paged at 50.
  * @param {ConsoleApi} api
  * @param {{ status?: string, q?: string, cursor?: string }} [filter]
  */
 export const loadMerchants = async (api, filter = {}) => {
 	const status = oneOf(filter.status, ['active', 'suspended']);
 	const q = pick(filter.q?.trim(), FREE_TEXT);
-	const byId = pick(q, ID.merchant);
-	const domain = !byId && q && !q.includes('@') ? pick(q.toLowerCase(), DOMAIN) : null;
-	const search = q && !byId && !domain ? q : null;
-	const [list, exact, live, test] = await Promise.all([
-		api.get(paths.merchants({ status, q: search, cursor: pick(filter.cursor, CURSOR), limit: 100 })),
-		byId ? api.get(paths.merchant(byId)) : null,
-		domain ? api.get(paths.websiteLookup({ domain, env: 'live' })) : null,
-		domain ? api.get(paths.websiteLookup({ domain, env: 'test' })) : null,
-	]);
+	const list = await api.get(paths.merchants({ status, q, cursor: pick(filter.cursor, CURSOR), limit: 50 }));
 	const failed = firstFailure(list);
 	if (failed) return failed;
-	const owners = [...new Set([...(live ? itemsOf(live) : []), ...(test ? itemsOf(test) : [])].map((w) => w.merchantId))];
-	const found = await Promise.all(owners.map((id) => api.get(paths.merchant(id))));
-	const matches = [...(exact && exact.ok ? [exact.data] : []), ...found.flatMap((r) => (r.ok ? [r.data] : []))];
-	return {
-		ok: /** @type {const} */ (true),
-		filter: { status, q },
-		mode: byId ? 'id' : domain ? 'domain' : search ? 'search' : 'all',
-		page: pageOf(list),
-		matches,
-	};
+	return { ok: /** @type {const} */ (true), filter: { status, q }, page: pageOf(list) };
 };
 
 /**
- * Merchant detail: profile and websites, team, subscriptions, balance and meter, staff notes, finance
- * alerts.
+ * Merchant page: the merchant, its websites with their products, balance, receipts and activity.
  * @param {ConsoleApi} api
  * @param {string} merchantId
  */
 export const loadMerchant = async (api, merchantId) => {
-	const [merchant, team, subscriptions, balance, meter, notes, alerts, catalog] = await Promise.all([
+	const [merchant, websites, subscriptions, balance, activity, catalog] = await Promise.all([
 		api.get(paths.merchant(merchantId)),
-		api.get(paths.team(merchantId)),
+		api.get(paths.websites(merchantId)),
 		api.get(paths.subscriptions(merchantId)),
 		api.get(paths.balance(merchantId)),
-		api.get(paths.meter(merchantId)),
-		api.get(paths.notes(merchantId)),
-		api.get(paths.alerts({ merchantId })),
+		api.get(paths.merchantActivity(merchantId)),
 		api.get(paths.catalog()),
 	]);
 	const failed = firstFailure(merchant);
 	if (failed) return failed;
-	const data = /** @type {any} */ (merchant.ok ? merchant.data : {});
 	return {
 		ok: /** @type {const} */ (true),
-		merchant: data,
-		websites: /** @type {any[]} */ (data.websites ?? []),
-		members: /** @type {any[]} */ (orElse(team, { members: [] })?.members ?? []),
-		invites: /** @type {any[]} */ (orElse(team, { invites: [] })?.invites ?? []),
+		merchant: /** @type {any} */ (merchant.ok ? merchant.data : {}),
+		websites: itemsOf(websites).filter((w) => w.env === 'live'),
 		subscriptions: itemsOf(subscriptions),
 		balance: orElse(balance, null),
-		meter: orElse(meter, null),
-		notes: section(notes, { items: [] }),
-		alerts: itemsOf(alerts),
+		activity: pageOf(activity),
 		catalog: itemsOf(catalog),
 	};
 };
 
 /**
- * Website lookup by domain (live or test).
+ * Admin Overview.
  * @param {ConsoleApi} api
- * @param {{ domain?: string, env?: string }} [filter]
  */
-export const loadWebsites = async (api, filter = {}) => {
-	const domain = pick(filter.domain?.trim().toLowerCase(), /^[a-z0-9.-]{1,253}$/);
-	const env = oneOf(filter.env, ['live', 'test']) ?? 'live';
-	if (!domain) return { ok: /** @type {const} */ (true), filter: { domain: null, env }, results: [], merchants: {} };
-	const lookup = await api.get(paths.websiteLookup({ domain, env }));
-	if (!lookup.ok && lookup.status !== 400 && lookup.status !== 422) return /** @type {LoadFailure} */ (firstFailure(lookup));
-	const results = itemsOf(lookup);
-	const owners = await Promise.all(results.map((w) => api.get(paths.merchant(w.merchantId))));
-	/** @type {Record<string, any>} */
-	const merchants = {};
-	owners.forEach((r, i) => {
-		if (r.ok) merchants[/** @type {any} */ (results[i]).merchantId] = r.data;
-	});
-	return {
-		ok: /** @type {const} */ (true),
-		filter: { domain, env },
-		results,
-		merchants,
-		lookupProblem: lookup.ok ? null : lookup.problem,
-	};
+export const loadOverview = async (api) => {
+	const overview = await api.get(paths.overview());
+	const failed = firstFailure(overview);
+	if (failed) return failed;
+	return { ok: /** @type {const} */ (true), overview: /** @type {any} */ (overview.ok ? overview.data : null) };
 };
 
 /**
@@ -339,48 +278,57 @@ export const loadConnectors = async (api, filter = {}) => {
 	return { ok: /** @type {const} */ (true), filter: { merchantId, kind, status }, page: pageOf(list) };
 };
 
-const AUDIT_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
-const ACTION = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*(\.\*)?$/;
-
 /**
- * Audit log: newest-first entries filtered by actor, target or action (`credits.*` matches a prefix).
+ * Activity: newest-first entries filtered by merchant, admin and UTC days.
  * @param {ConsoleApi} api
- * @param {{ actorId?: string, targetId?: string, action?: string }} [filter]
+ * @param {{ merchantId?: string, adminId?: string, from?: string, to?: string }} [filter]
  */
-export const loadAudit = async (api, filter = {}) => {
+export const loadActivity = async (api, filter = {}) => {
+	const day = /^\d{4}-\d{2}-\d{2}$/;
 	const f = {
-		actorId: pick(filter.actorId, AUDIT_ID),
-		targetId: pick(filter.targetId, AUDIT_ID),
-		action: pick(filter.action, ACTION),
+		merchantId: pick(filter.merchantId, ID.merchant),
+		adminId: pick(filter.adminId, ID.admin),
+		from: pick(filter.from, day),
+		to: pick(filter.to, day),
 	};
-	const list = await api.get(paths.audit(f));
+	const list = await api.get(paths.activity(f));
 	const failed = firstFailure(list);
 	if (failed) return failed;
 	return { ok: /** @type {const} */ (true), filter: f, page: pageOf(list) };
 };
 
 /**
- * Portal settings (needs `platform.settings.write`): the Portal URL (the request's origin) and the mailer.
+ * Settings (Owner): e-mail sending, branding, support contact, security.
  * @param {ConsoleApi} api
- * @param {any} staff the signed-in staff member
  */
-export const loadSettings = async (api, staff) => {
+export const loadSettings = async (api) => {
 	const settings = await api.get(paths.settings());
 	const failed = firstFailure(settings);
 	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), me: staff, settings: /** @type {any} */ (settings).data };
+	return { ok: /** @type {const} */ (true), settings: /** @type {any} */ (settings.ok ? settings.data : null) };
 };
 
 /**
- * Staff users (needs `platform.staff.manage`).
+ * Admins (Owner).
  * @param {ConsoleApi} api
- * @param {any} staff the signed-in staff member
+ * @param {any} admin the signed-in admin
  */
-export const loadStaff = async (api, staff) => {
-	const list = await api.get(paths.staffList());
+export const loadAdmins = async (api, admin) => {
+	const list = await api.get(paths.admins());
 	const failed = firstFailure(list);
 	if (failed) return failed;
-	return { ok: /** @type {const} */ (true), me: staff, items: itemsOf(list) };
+	return { ok: /** @type {const} */ (true), me: admin, items: itemsOf(list) };
+};
+
+/**
+ * My account: the admin and their own activity.
+ * @param {ConsoleApi} api
+ */
+export const loadMyAccount = async (api) => {
+	const [me, activity] = await Promise.all([api.get(paths.me()), api.get(paths.myActivity())]);
+	const failed = firstFailure(me);
+	if (failed) return failed;
+	return { ok: /** @type {const} */ (true), me: /** @type {any} */ (me.ok ? me.data : null), activity: pageOf(activity) };
 };
 
 /**

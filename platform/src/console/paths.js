@@ -8,9 +8,7 @@ const e = encodeURIComponent;
 /** Console page URLs. */
 export const routes = Object.freeze({
 	login: (next = '') => (next ? `/login?next=${e(next)}` : '/login'),
-	signup: () => '/signup',
 	forgotPassword: () => '/forgot-password',
-	onboarding: (websiteId = '') => (websiteId ? `/onboarding?website=${e(websiteId)}` : '/onboarding'),
 	websites: () => '/websites',
 	website: (/** @type {string} */ id) => `/websites/${e(id)}`,
 	products: (/** @type {string} */ id) => `/websites/${e(id)}/products`,
@@ -21,7 +19,6 @@ export const routes = Object.freeze({
 	identity: (/** @type {string} */ id) => `/websites/${e(id)}/identity`,
 	credits: () => '/credits',
 	spendCap: () => '/spend-policies',
-	team: () => '/team',
 	account: () => '/account',
 });
 
@@ -84,7 +81,7 @@ export const api = Object.freeze({
 		/** @type {{ from?: string | null, to?: string | null, websiteId?: string | null }} */ q = {},
 	) => `/v1/merchants/${e(m)}/statement${query(q)}`,
 	spendCap: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/spend-cap`,
-	team: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/team`,
+	activity: (/** @type {string} */ m) => `/v1/merchants/${e(m)}/activity`,
 	connectors: (
 		/** @type {string} */ m,
 		/** @type {{ websiteId?: string | null, kind?: string | null, cursor?: string | null }} */ q = {},

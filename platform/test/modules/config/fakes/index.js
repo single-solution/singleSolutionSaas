@@ -3,6 +3,7 @@
  * Commerce resolves previews with the real `@ss/entitlements` resolver.
  * @module
  */
+import { testSessionActor } from '../../../helpers.js';
 import { normaliseProduct, resolveEntitlement } from '@ss/entitlements';
 import { defineModule } from '../../../../src/infra/modules.js';
 import { problem } from '../../../../src/infra/http.js';
@@ -122,6 +123,7 @@ export const createFakes = ({ withPreview = true, withInvalidateApp = true, merc
 
 	const identity = defineModule({
 		name: 'identity',
+		ports: () => ({ sessionActor: testSessionActor }),
 		service: () => ({
 			/** @param {string} websiteId */
 			getWebsite: async (websiteId) => {

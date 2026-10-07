@@ -2,6 +2,7 @@
  * Fake modules implementing the INTERFACES.md functions commerce depends on (identity, catalog, config, connectors,
  * integration). State lives in a mutable `world` the tests change directly.
  */
+import { testSessionActor } from '../../../helpers.js';
 import { createKeyResolver } from '@ss/protocol';
 import { problem } from '../../../../src/infra/http.js';
 import { defineModule } from '../../../../src/infra/modules.js';
@@ -41,6 +42,7 @@ export const createWorld = () => ({
 export const fakeModules = (world, { withConfig = true, withConnectors = true, withIntegration = true } = {}) => [
 	defineModule({
 		name: 'identity',
+		ports: () => ({ sessionActor: testSessionActor }),
 		service: () => ({
 			getMerchant: async (/** @type {string} */ id) =>
 				world.merchants.get(id) ?? Promise.reject(problem('not_found', 'No such merchant.')),

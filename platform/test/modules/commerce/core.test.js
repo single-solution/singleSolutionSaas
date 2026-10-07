@@ -69,7 +69,7 @@ describe('ledger chain', () => {
 			entryKey: 'deposit:a',
 			reference: 'a',
 			note: 'n',
-			actor: { type: 'staff', id: 'stf' },
+			actor: { type: 'admin', id: 'adm' },
 		},
 		{
 			type: /** @type {const} */ ('settlement'),
@@ -132,7 +132,7 @@ describe('ledger chain', () => {
 		expect(entryHash(e.prevHash, { ...rest, note: 'changed' })).not.toBe(hash);
 		expect(entryHash(e.prevHash, { ...rest, at: e.at.toISOString() })).toBe(hash);
 		expect(ledgerActor(null)).toBeNull();
-		expect(ledgerActor({ type: 'staff', id: 'a', ...{ roles: ['x'] } })).toEqual({ type: 'staff', id: 'a' });
+		expect(ledgerActor({ type: 'admin', id: 'a', ...{ role: 'owner' } })).toEqual({ type: 'admin', id: 'a' });
 	});
 
 	it('validates drafts', () => {

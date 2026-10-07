@@ -20,33 +20,33 @@ let n = 0;
 const idem = () => ({ 'idempotency-key': `k-${(n += 1)}` });
 
 describe('commerce routes and tenant isolation', () => {
-	it('enforces merchant, website-grant, staff and product boundaries on every route', async () => {
+	it('enforces merchant, admin role (PLAN 0.2) and product boundaries on every route', async () => {
 		const clock = createClock(T0);
 		const h = await bootCommerce({ mongo, dbName: 'cm_routes', clock });
 		await h.credit(M1, 100_000);
 		await h.credit(M2, 100_000);
-		const owner1 = await h.login({ kind: 'merchant', subject: 'usr_o1', merchantId: M1, roles: ['owner'] });
-		const owner2 = await h.login({ kind: 'merchant', subject: 'usr_o2', merchantId: M2, roles: ['owner'] });
-		const billing1 = await h.login({ kind: 'merchant', subject: 'usr_b1', merchantId: M1, roles: ['billing'] });
-		const editorW2 = await h.login({
-			kind: 'merchant',
-			subject: 'usr_e1',
-			merchantId: M1,
-			roles: [],
-			grants: [{ websiteId: W2, roles: ['editor'] }],
-		});
-		let admin = await h.login({ kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
-		const staffLogin = () => h.login({ kind: 'staff', subject: 'stf_support', roles: ['support'], mfa: true });
+		const owner1 = await h.login({ kind: 'merchant', subject: M1 });
+		const owner2 = await h.login({ kind: 'merchant', subject: M2 });
+		const admin = await h.login({ kind: 'admin', subject: 'adm_owner' });
+		const support = await h.login({ kind: 'admin', subject: 'adm_support' });
 
-		// subscribe
+		// products on websites: Owner and Support add them; merchants only view (PLAN 0.2)
+		expect(
+			(
+				await h.call('POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, {
+					headers: { ...owner1, ...idem() },
+					body: { appId: APP, planCode: 'starter' },
+				})
+			).status,
+		).toBe(403);
 		const created = await h.call('POST', `/v1/merchants/${M1}/websites/${W1}/subscriptions`, {
-			headers: { ...owner1, ...idem() },
+			headers: { ...admin, ...idem() },
 			body: { appId: APP, planCode: 'starter' },
 		});
 		expect(created.status).toBe(201);
 		const sub1 = created.json.subscription.subscriptionId;
 		const other = await h.call('POST', `/v1/merchants/${M2}/websites/${W3}/subscriptions`, {
-			headers: { ...owner2, ...idem() },
+			headers: { ...support, ...idem() },
 			body: { appId: APP },
 		});
 		expect(other.status).toBe(201);
@@ -54,7 +54,7 @@ describe('commerce routes and tenant isolation', () => {
 		expect(
 			(
 				await h.call('POST', `/v1/merchants/${M1}/websites/${W3}/subscriptions`, {
-					headers: { ...owner1, ...idem() },
+					headers: { ...admin, ...idem() },
 					body: { appId: APP2 },
 				})
 			).status,
@@ -62,7 +62,7 @@ describe('commerce routes and tenant isolation', () => {
 		expect(
 			(
 				await h.call('POST', `/v1/merchants/${M1}/websites/${W2}/subscriptions`, {
-					headers: { ...owner1, ...idem() },
+					headers: { ...admin, ...idem() },
 					body: { appId: 'nope' },
 				})
 			).status,
@@ -70,15 +70,7 @@ describe('commerce routes and tenant isolation', () => {
 		expect(
 			(
 				await h.call('POST', `/v1/merchants/${M1}/websites/${W2}/subscriptions`, {
-					headers: { ...editorW2, ...idem() },
-					body: { appId: APP2 },
-				})
-			).status,
-		).toBe(403);
-		expect(
-			(
-				await h.call('POST', `/v1/merchants/${M1}/websites/${W2}/subscriptions`, {
-					headers: { ...billing1, ...idem() },
+					headers: { ...admin, ...idem() },
 					body: { appId: APP2 },
 				})
 			).status,
@@ -122,38 +114,31 @@ describe('commerce routes and tenant isolation', () => {
 		expect(list.json.items.map((/** @type {any} */ s) => s.websiteId).sort()).toEqual([W1, W2]);
 		expect(list.json.items.some((/** @type {any} */ s) => s.subscriptionId === sub3)).toBe(false);
 		expect((await h.call('GET', base1, { headers: owner1 })).json.subscription.subscriptionId).toBe(sub1);
-		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: owner1, body: { enabled: true } })).status).toBe(200);
-		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: owner1, body: { enabled: 'yes' } })).status).toBe(422);
-		expect((await h.call('PUT', `${base1}/elements/ai_copy`, { headers: owner1, body: { enabled: true } })).status).toBe(403);
+		// switching features is Owner and Support only (merchants see them read-only)
+		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: owner1, body: { enabled: true } })).status).toBe(403);
+		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: support, body: { enabled: true } })).status).toBe(200);
+		expect((await h.call('PUT', `${base1}/elements/reports`, { headers: admin, body: { enabled: 'yes' } })).status).toBe(422);
 		expect((await h.call('PUT', `${base1}/elements/ai_copy`, { headers: admin, body: { enabled: true } })).status).toBe(200);
-		expect((await h.call('PUT', `${base1}/plan`, { headers: owner1, body: {} })).status).toBe(422);
+		expect((await h.call('PUT', `${base1}/plan`, { headers: owner1, body: { planCode: 'pro' } })).status).toBe(403);
+		expect((await h.call('PUT', `${base1}/plan`, { headers: admin, body: {} })).status).toBe(422);
 		expect(
-			(await h.call('PUT', `${base1}/plan`, { headers: owner1, body: { planCode: 'pro' } })).json.subscription.planCode,
+			(await h.call('PUT', `${base1}/plan`, { headers: admin, body: { planCode: 'pro' } })).json.subscription.planCode,
 		).toBe('pro');
 		expect(
-			(await h.call('POST', `${base1}/pause`, { headers: { ...owner1, ...idem() }, body: { reason: 'Bad Reason' } })).status,
+			(await h.call('POST', `${base1}/pause`, { headers: { ...admin, ...idem() }, body: { reason: 'Bad Reason' } })).status,
 		).toBe(422);
 		expect(
-			(await h.call('POST', `${base1}/pause`, { headers: { ...owner1, ...idem() }, body: { reason: 'holiday' } })).json
+			(await h.call('POST', `${base1}/pause`, { headers: { ...admin, ...idem() }, body: { reason: 'holiday' } })).json
 				.subscription.status,
 		).toBe('paused');
-		expect((await h.call('POST', `${base1}/resume`, { headers: { ...owner1, ...idem() } })).json.subscription.status).toBe(
+		expect((await h.call('POST', `${base1}/resume`, { headers: { ...admin, ...idem() } })).json.subscription.status).toBe(
 			'active',
 		);
 
-		// website-scoped grants see only their website
-		expect((await h.call('GET', base1, { headers: editorW2 })).status).toBe(403);
-		expect((await h.call('GET', `/v1/merchants/${M1}/subscriptions`, { headers: editorW2 })).status).toBe(403);
-		const scoped = await h.call('GET', `/v1/merchants/${M1}/subscriptions?websiteId=${W2}`, { headers: editorW2 });
-		expect(scoped.json.items.map((/** @type {any} */ s) => s.websiteId)).toEqual([W2]);
-		expect((await h.call('GET', `/v1/merchants/${M1}/balance`, { headers: editorW2 })).status).toBe(403);
-
 		// money views
-		clock.set(T0 + 2 * HOUR + 5 * 60_000); // staff sessions idle out after 30 min: sign in again
-		admin = await h.login({ kind: 'staff', subject: 'stf_admin', roles: ['admin'], mfa: true });
-		const support = await staffLogin();
+		clock.set(T0 + 2 * HOUR + 5 * 60_000);
 		// settlement happens on read: the balance below settles M1's complete hours first
-		const balance = await h.call('GET', `/v1/merchants/${M1}/balance`, { headers: billing1 });
+		const balance = await h.call('GET', `/v1/merchants/${M1}/balance`, { headers: owner1 });
 		expect(balance.json.balanceMillicredits).toBeLessThan(100_000);
 		const meter = await h.call('GET', `/v1/merchants/${M1}/meter`, { headers: owner1 });
 		expect(meter.json).toMatchObject({ merchantId: M1, burnRatePerHour: 1750 }); // pro without the ai resource
@@ -169,14 +154,14 @@ describe('commerce routes and tenant isolation', () => {
 		// monthly spend cap
 		const cap = `/v1/merchants/${M1}/spend-cap`;
 		expect((await h.call('PUT', cap, { headers: owner2, body: { limit: 5 } })).status).toBe(403);
-		expect((await h.call('PUT', cap, { headers: billing1, body: { limit: 0 } })).status).toBe(422);
-		expect((await h.call('PUT', cap, { headers: billing1, body: { limit: 1_000_000 } })).json.limit).toBe(1_000_000);
+		expect((await h.call('PUT', cap, { headers: owner1, body: { limit: 0 } })).status).toBe(422);
+		expect((await h.call('PUT', cap, { headers: owner1, body: { limit: 1_000_000 } })).json.limit).toBe(1_000_000);
 		expect((await h.call('GET', cap, { headers: owner1 })).json).toMatchObject({ limit: 1_000_000, reached: false });
 		expect((await h.call('DELETE', cap, { headers: owner2 })).status).toBe(403);
-		expect((await h.call('DELETE', cap, { headers: billing1 })).status).toBe(204);
+		expect((await h.call('DELETE', cap, { headers: admin })).status).toBe(204);
 		expect((await h.call('GET', cap, { headers: owner1 })).json.limit).toBeNull();
 
-		// admin: staff only, permission checked
+		// adding credits: Owner and Finance only
 		const credit = (/** @type {Record<string, string>} */ who, /** @type {string} */ segment, /** @type {unknown} */ body) =>
 			h.call('POST', `/v1/admin/merchants/${M1}/${segment}`, { headers: { ...who, ...idem() }, body });
 		expect((await credit(owner1, 'credits', { amountMillicredits: 5, reference: 'x', note: 'n' })).status).toBe(401);
@@ -204,9 +189,10 @@ describe('commerce routes and tenant isolation', () => {
 			expect.arrayContaining(['credits.added', 'credits.adjusted', 'credits.refunded']),
 		);
 
-		const page1 = await h.call('GET', `/v1/admin/merchants/${M1}/ledger?limit=2`, { headers: support });
-		expect(page1.status).toBe(403); // support lacks platform.finance.read
-		const finance = await h.login({ kind: 'staff', subject: 'stf_fin', roles: ['finance'], mfa: true });
+		// Support sees receipts and charges (view); Finance too
+		expect((await h.call('GET', `/v1/admin/merchants/${M1}/ledger?limit=2`, { headers: support })).status).toBe(200);
+		const finance = await h.login({ kind: 'admin', subject: 'adm_finance' });
+		expect((await credit(finance, 'credits', { amountMillicredits: 5, reference: 'fin-1', note: 'n' })).status).toBe(201);
 		const first = await h.call('GET', `/v1/admin/merchants/${M1}/ledger?limit=2`, { headers: finance });
 		expect(first.json.items.map((/** @type {any} */ e) => e.seq)).toEqual([1, 2]);
 		const next = await h.call('GET', `/v1/admin/merchants/${M1}/ledger?limit=2&cursor=${first.json.nextCursor}`, {
@@ -252,10 +238,10 @@ describe('commerce routes and tenant isolation', () => {
 
 		// cancel last
 		expect(
-			(await h.call('POST', `${base1}/cancel`, { headers: { ...owner1, ...idem() }, body: { reason: 'done' } })).json
+			(await h.call('POST', `${base1}/cancel`, { headers: { ...admin, ...idem() }, body: { reason: 'done' } })).json
 				.subscription.status,
 		).toBe('cancelled');
 		expect((await h.call('GET', `/v1/product/entitlements?websiteId=${W1}`, { headers: await app1() })).status).toBe(410);
-		expect(STAFF.type).toBe('staff');
+		expect(STAFF.type).toBe('admin');
 	});
 });

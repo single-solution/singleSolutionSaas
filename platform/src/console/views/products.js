@@ -26,6 +26,7 @@ import {
 import { apiFetch } from '../client.js';
 import { Link } from '../link.js';
 import { api, routes } from '../paths.js';
+import { MERCHANT } from '../../texts/console.js';
 import { PageProblem, WebsiteHeader } from './common.js';
 
 /** @typedef {import('@ss/ui').Problem} Problem */
@@ -294,9 +295,8 @@ export function SubscribeDialog({
  */
 export function ProductsView(props) {
 	const [comparing, setComparing] = useState(/** @type {any} */ (null));
-	const [subscribing, setSubscribing] = useState(/** @type {any} */ (null));
 	if (!props.ok) return <PageProblem problem={props.problem} />;
-	const { merchantId, website, catalog, subscriptions, balanceMillicredits, resources } = props;
+	const { website, catalog, subscriptions, resources } = props;
 	const connected = new Set(/** @type {any[]} */ (resources).filter((r) => r.status === 'connected').map((r) => r.kind));
 	/** @param {string} appId */
 	const subscriptionOf = (appId) =>
@@ -373,7 +373,7 @@ export function ProductsView(props) {
 											Manage
 										</ButtonLink>
 									) : (
-										<Button onClick={() => setSubscribing(product)}>Subscribe</Button>
+										<span className="text-sm text-muted">{MERCHANT.productsByAdmin}</span>
 									)}
 									{product.plans.length > 0 ? (
 										<Button variant="secondary" onClick={() => setComparing(product)}>
@@ -394,17 +394,6 @@ export function ProductsView(props) {
 				description="Included elements are on by default; add-ons can be switched on at their hourly price.">
 				{comparing ? <PlanComparison product={comparing} /> : null}
 			</Dialog>
-			{subscribing ? (
-				<SubscribeDialog
-					key={subscribing.appId}
-					merchantId={merchantId}
-					website={website}
-					products={[subscribing]}
-					balanceMillicredits={balanceMillicredits}
-					onClose={() => setSubscribing(null)}
-					onSubscribed={(sub) => window.location.assign(routes.subscription(website.websiteId, sub.subscriptionId))}
-				/>
-			) : null}
 		</div>
 	);
 }
